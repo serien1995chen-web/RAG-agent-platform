@@ -11,3 +11,5 @@ pnpm-lock.yaml
 /README.md
 # 由 openapi:generate 生成，保持生成器输出格式。
 packages/contracts/openapi/client-types.d.ts
+# Next.js 生成文件，格式由框架维护。
+projects/app/next-env.d.ts

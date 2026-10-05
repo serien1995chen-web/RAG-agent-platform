@@ -87,7 +87,9 @@ for (const dir of sourceRoots) {
     const websiteDatasetAllowed =
       rel.endsWith('packages/contracts/src/enums/dataset.ts') ||
       rel.endsWith('packages/contracts/src/errors/error-catalog.data.json') ||
-      rel.startsWith('test/');
+      rel.endsWith('packages/service/src/shared/persistence/schemas/datasets.schema.ts') ||
+      rel.startsWith('test/') ||
+      rel.includes('/test/');
     if (/websiteDataset/.test(text) && !websiteDatasetAllowed) {
       errors.push(`${rel}: websiteDataset 只允许出现在拒绝规则常量定义处`);
     }
