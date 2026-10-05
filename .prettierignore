@@ -1,0 +1,9 @@
+node_modules
+dist
+.next
+.turbo
+coverage
+artifacts
+pnpm-lock.yaml
+*.json
+*.generated.*

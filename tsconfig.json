@@ -1,0 +1,18 @@
+{
+  "extends": "./tsconfig.base.json",
+  "files": [],
+  "references": [
+    { "path": "packages/contracts" },
+    { "path": "packages/service" },
+    { "path": "packages/parse" },
+    { "path": "packages/chunk" },
+    { "path": "packages/qa" },
+    { "path": "packages/search" },
+    { "path": "packages/acl" },
+    { "path": "packages/dal" },
+    { "path": "packages/web" },
+    { "path": "sdk/storage" },
+    { "path": "sdk/otel" },
+    { "path": "projects/app" }
+  ]
+}

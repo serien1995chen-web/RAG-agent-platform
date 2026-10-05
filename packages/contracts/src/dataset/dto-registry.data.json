@@ -1,0 +1,995 @@
+{
+  "generatedFrom": "12.8.2",
+  "dtos": [
+    {
+      "name": "ApiResponse<T>",
+      "fields": "code:int=200(optional,default); statusText:string(required); message:string=\"\"(optional,default); messageKey:string(required); params:ErrorParams(optional,default); data?:T|null; errorType?:string|null; retryable?:string|null; severity?:string|null; requestId:string(required); zodError?:JsonValue(optional)",
+      "section": "p0-01"
+    },
+    {
+      "name": "ApiError",
+      "fields": "code:int(501001-501071,required); statusText:string(required); messageKey:string(required); params:ErrorParams(required); message:string(required); errorType:string(required); retryable:string(required); severity:string(required); requestId:string(required); zodError?:JsonValue(optional)",
+      "section": "p0-01"
+    },
+    {
+      "name": "Pagination",
+      "fields": "page:int=1(≥1); cursor?:string(≤64); limit:int=20(1-100); sortBy?:enum(updateTime,createTime,name); sortOrder?:enum(asc,desc)=desc",
+      "section": "p0-01"
+    },
+    {
+      "name": "DatasetListQuery",
+      "fields": "parentId?:ObjectId; type?:enum(dataset,folder); page:int=1(optional,default); limit:int=20(optional,default)",
+      "section": "p0-01"
+    },
+    {
+      "name": "DatasetListResponse",
+      "fields": "total:int; list:DatasetSummary[]",
+      "section": "p0-01"
+    },
+    {
+      "name": "DatasetCreateBody",
+      "fields": "name:string(1-100,required); type:enum(dataset,folder,required); models:ModelSelection(required); chunkPolicy?:ChunkPolicy; parentId?:ObjectId",
+      "section": "p0-01"
+    },
+    {
+      "name": "DatasetCreateResponse",
+      "fields": "datasetId:ObjectId(required); state:enum(ready,running,error)",
+      "section": "p0-01"
+    },
+    {
+      "name": "DatasetDetailQuery",
+      "fields": "datasetId:ObjectId(required)",
+      "section": "p0-01"
+    },
+    {
+      "name": "DatasetDetailResponse",
+      "fields": "dataset:DatasetSummary(required); permissionSnapshot:PermissionSnapshot(required); stats:DatasetStats(required)",
+      "section": "p0-01"
+    },
+    {
+      "name": "DatasetUpdateBody",
+      "fields": "datasetId:ObjectId(required); version:int(required); name?:string(1-100); chunkPolicy?:ChunkPolicy; autoSync?:bool",
+      "section": "p0-01"
+    },
+    {
+      "name": "DatasetDeleteBody",
+      "fields": "datasetId:ObjectId(required); Idempotency-Key:string(header,required)",
+      "section": "p0-01"
+    },
+    {
+      "name": "DeleteJobResponse",
+      "fields": "jobId:string(required); state:enum(marked,queued,deleting,completed,failed)",
+      "section": "p0-01"
+    },
+    {
+      "name": "RebuildEmbeddingBody",
+      "fields": "datasetId:ObjectId(required); modelRef:ModelReference",
+      "section": "p0-01"
+    },
+    {
+      "name": "CollectionListQuery",
+      "fields": "datasetId:ObjectId(required); parentId?:ObjectId; type?:enum(folder,virtual,file,link,externalFile,apiFile,images); page:int=1(optional,default); limit:int=20(optional,default)",
+      "section": "p0-01"
+    },
+    {
+      "name": "CollectionCreateFolderBody",
+      "fields": "datasetId:ObjectId(required); parentId?:ObjectId; name:string(1-100,required)",
+      "section": "p0-01"
+    },
+    {
+      "name": "CollectionCreateFileBody",
+      "fields": "datasetId:ObjectId(required); fileId:string(required); chunkPolicy?:ChunkPolicy; rawText?:string(≤10MiB); customPdfParse?:bool=false",
+      "section": "p0-01"
+    },
+    {
+      "name": "CollectionCreateLinkBody",
+      "fields": "datasetId:ObjectId(required); link:string(≤2048,required); selector?:string(≤200); chunkPolicy?:ChunkPolicy",
+      "section": "p0-01"
+    },
+    {
+      "name": "CollectionCreateTextBody",
+      "fields": "datasetId:ObjectId(required); text:string(required); chunkPolicy?:ChunkPolicy",
+      "section": "p0-01"
+    },
+    {
+      "name": "CollectionCreateEmptyBody",
+      "fields": "datasetId:ObjectId(required); parentId?:ObjectId; name:string(1-100,required); type:enum(virtual,file)=virtual; chunkPolicy?:ChunkPolicy",
+      "section": "p0-01"
+    },
+    {
+      "name": "CollectionCreateImagesBody",
+      "fields": "datasetId:ObjectId(required); images:string[]≤10(required); trainingType?:enum(chunk,qa,auto,image,imageParse); autoIndexes?:bool=false; imageIndex?:bool=false",
+      "section": "p0-01"
+    },
+    {
+      "name": "CollectionUpdateBody",
+      "fields": "collectionId:ObjectId(required); version:int(required); parentId?:ObjectId; name?:string(1-100); tagIds?:ObjectId[]≤200",
+      "section": "p0-01"
+    },
+    {
+      "name": "CollectionRetrainBody",
+      "fields": "collectionId:ObjectId(required); policy:ChunkPolicy(required); Idempotency-Key:string(header,required)",
+      "section": "p0-01"
+    },
+    {
+      "name": "CollectionSyncBody",
+      "fields": "collectionId:ObjectId(required); Idempotency-Key:string(header,required)",
+      "section": "p0-01"
+    },
+    {
+      "name": "CollectionTrainingStatusQuery",
+      "fields": "collectionId:ObjectId(required)",
+      "section": "p0-01"
+    },
+    {
+      "name": "CollectionPathsQuery",
+      "fields": "sourceId:ObjectId(required); type:enum(dataset,collection,required)",
+      "section": "p0-01"
+    },
+    {
+      "name": "PathNode",
+      "fields": "id:ObjectId; name:string(required); parentId?:ObjectId|null",
+      "section": "p0-01"
+    },
+    {
+      "name": "DataListQuery",
+      "fields": "collectionId:ObjectId(required); page:int=1(optional,default); limit:int=20(optional,default); search?:string(≤200)",
+      "section": "p0-01"
+    },
+    {
+      "name": "DataDetailQuery",
+      "fields": "dataId:ObjectId(required)",
+      "section": "p0-01"
+    },
+    {
+      "name": "DataUpdateBody",
+      "fields": "dataId:ObjectId(required); version:int(required); q?:string; a?:string; indexes?:IndexPatch[]",
+      "section": "p0-01"
+    },
+    {
+      "name": "DataDeleteBody",
+      "fields": "dataId:ObjectId(required); Idempotency-Key:string(header,required)",
+      "section": "p0-01"
+    },
+    {
+      "name": "InsertDataBody",
+      "fields": "collectionId:ObjectId(required); q:string(1-4000,required); a?:string(≤8000); indexes?:IndexInput[]; metadata?:IndexMetadata",
+      "section": "p0-01"
+    },
+    {
+      "name": "InsertImagesBody",
+      "fields": "collectionId:ObjectId(required); files:string[]≤maxImagesPerRequest(10,required); trainingType?:enum; autoIndexes?:bool",
+      "section": "p0-01"
+    },
+    {
+      "name": "PushDataBody",
+      "fields": "data:InsertDataBody[]≤200(required); total≤10MB",
+      "section": "p0-01"
+    },
+    {
+      "name": "IndexCreateBody",
+      "fields": "dataId:ObjectId(required); type:enum(default,imageEmbedding,summary,question,image,custom,required)=custom; text:string(1-8000,required)",
+      "section": "p0-01"
+    },
+    {
+      "name": "IndexUpdateBody",
+      "fields": "dataId:ObjectId(required); indexId:string(required); text:string(1-8000,required); version:int(required)",
+      "section": "p0-01"
+    },
+    {
+      "name": "IndexDeleteBody",
+      "fields": "dataId:ObjectId(required); indexId:string(required); Idempotency-Key:string(header,required)",
+      "section": "p0-01"
+    },
+    {
+      "name": "TrainingDetailQuery",
+      "fields": "taskId:ObjectId(required)",
+      "section": "p0-01"
+    },
+    {
+      "name": "TrainingErrorsQuery",
+      "fields": "taskId?:ObjectId; collectionId?:ObjectId; datasetId?:ObjectId; cursor?:string; limit:int=20(optional,default)(1-50); at least one scope",
+      "section": "p0-01"
+    },
+    {
+      "name": "TrainingResumeBody",
+      "fields": "taskId:ObjectId(required); reason:string(1-200,required); Idempotency-Key:string(header,required)",
+      "section": "p0-01"
+    },
+    {
+      "name": "TrainingUpdateBody",
+      "fields": "dataId?:ObjectId; collectionId?:ObjectId; datasetId?:ObjectId; mode:enum(parse,chunk,qa,image,imageParse,required); at least one scope",
+      "section": "p0-01"
+    },
+    {
+      "name": "TrainingDeleteBody",
+      "fields": "collectionId?:ObjectId; dataId?:ObjectId; exactly one",
+      "section": "p0-01"
+    },
+    {
+      "name": "TrainingQueueQuery",
+      "fields": "datasetId:ObjectId(required)",
+      "section": "p0-01"
+    },
+    {
+      "name": "DeleteJobQuery",
+      "fields": "jobId:string(required)",
+      "section": "p0-01"
+    },
+    {
+      "name": "DeleteFailuresQuery",
+      "fields": "jobId:string(required); cursor?:string; limit:int=20(optional,default)",
+      "section": "p0-01"
+    },
+    {
+      "name": "DeleteRetryBody",
+      "fields": "jobId:string(required); Idempotency-Key:string(header,required)",
+      "section": "p0-01"
+    },
+    {
+      "name": "SearchTestBody",
+      "fields": "datasetId:ObjectId(required); text?:string(≤4000); queryImageUrls?:string[]≤10; searchMode?:enum=embedding; limit?=10(1-50); similarity?=0(0-1); usingReRank?=false; embeddingWeight?=0.5; rerankWeight?=0.5; collectionFilterMatch?:string(≤2000); text or images required",
+      "section": "p0-01"
+    },
+    {
+      "name": "DatasetSearchSubject",
+      "fields": "subjectRef:string(required); onBehalfOfTmbId?:ObjectId(optional); datasetIds:ObjectId[]≥1(required); collectionIds?:ObjectId[](optional); tagIds?:ObjectId[](optional); textQueries?:string[](optional); imageQueries?:ImageQuery[]≤10(optional); models:ModelSelection(required); searchMode:enum(embedding,fullTextRecall,mixedRecall,required); limit:int=10(optional,default); maxTokens:int=4000(optional,default); similarity:number=0(optional,default); weights?:SearchWeights(optional); budgets?:SearchBudgets(optional); versionPolicy?:SearchVersionPolicy(optional)",
+      "section": "p0-01"
+    },
+    {
+      "name": "ImageQuery",
+      "fields": "key?:string≤512; url?:string≤2048; weight?:number(0-1); key or url required",
+      "section": "p0-01"
+    },
+    {
+      "name": "Citation",
+      "fields": "dataId:string(required); chunkIndex:int(≥0,required); datasetId:string(required); collectionId:string(required); collectionName:string(required); sourceName:string(required); sourceType:enum(file,link,apiFile,externalFile,images,virtual,required); quoteText:string(required); imagePreviewUrls?:string[](optional); updateTime:string(required); scores:CitationScore[](required)",
+      "section": "p0-01"
+    },
+    {
+      "name": "SearchResult",
+      "fields": "citations:Citation[](required); stats:SearchStats(required)",
+      "section": "p0-01"
+    },
+    {
+      "name": "PresignUploadBody",
+      "fields": "datasetId:ObjectId(required); filename:string(1-255,required); size:int(≥1,required); mime:string(required)",
+      "section": "p0-01"
+    },
+    {
+      "name": "PresignUploadResponse",
+      "fields": "uploadUrl:string(required); fileId:string(required); expiresAt:string(required)",
+      "section": "p0-01"
+    },
+    {
+      "name": "CompleteMultipartBody",
+      "fields": "fileId:string(required); parts:MultipartPart[]≤10000(required); hash:string(required)",
+      "section": "p0-01"
+    },
+    {
+      "name": "UploadPartForm",
+      "fields": "uploadId:string(required); partNumber:int(1-10000,required); chunk:binary(≤分片上限,required); checksum:string(required)",
+      "section": "p0-01"
+    },
+    {
+      "name": "UploadPartResponse",
+      "fields": "etag:string(required); partNumber:int(required); size:int(required)",
+      "section": "p0-01"
+    },
+    {
+      "name": "AbortMultipartBody",
+      "fields": "fileId:string(required); uploadId:string(required)",
+      "section": "p0-01"
+    },
+    {
+      "name": "PreviewChunksBody",
+      "fields": "fileRef:string(required); chunkPolicy:ChunkPolicy(required)",
+      "section": "p0-01"
+    },
+    {
+      "name": "PresignSearchTestImageBody",
+      "fields": "filename:string(required); size:int(required); mime:string(required)",
+      "section": "p0-01"
+    },
+    {
+      "name": "PreviewUrlsBody",
+      "fields": "keys:string[]≤10 same-team temp keys(required)",
+      "section": "p0-01"
+    },
+    {
+      "name": "TagListQuery",
+      "fields": "datasetId:ObjectId(required)",
+      "section": "p0-01"
+    },
+    {
+      "name": "TagCreateBody",
+      "fields": "datasetId:ObjectId(required); name:string(1-30,required)",
+      "section": "p0-01"
+    },
+    {
+      "name": "TagUpdateBody",
+      "fields": "datasetId:ObjectId(required); tagId:ObjectId(required); name:string(1-30,required); version:int(required)",
+      "section": "p0-01"
+    },
+    {
+      "name": "TagDeleteBody",
+      "fields": "datasetId:ObjectId(required); tagId:ObjectId(required); Idempotency-Key:string(header,required)",
+      "section": "p0-01"
+    },
+    {
+      "name": "TagBindingBody",
+      "fields": "datasetId:ObjectId(required); tagId:ObjectId(required); collectionIds:ObjectId[]≤200(required)",
+      "section": "p0-01"
+    },
+    {
+      "name": "DatasetMoveBody",
+      "fields": "datasetId:ObjectId(required); targetParentId?:ObjectId; version:int(required)",
+      "section": "p0-01"
+    },
+    {
+      "name": "CollectionMoveBody",
+      "fields": "collectionId:ObjectId(required); targetParentId?:ObjectId; version:int(required)",
+      "section": "p0-01"
+    },
+    {
+      "name": "DatasetImportForm",
+      "fields": "file:binary(csv 或 xlsx 或 jsonl，≤20MB,required); datasetId:ObjectId(required); targetCollectionId?:ObjectId; mapping?:ImportMapping",
+      "section": "p0-01"
+    },
+    {
+      "name": "MigrationDryRunBody",
+      "fields": "version:string(required); scope:ScopeSelector(required)",
+      "section": "p0-01"
+    },
+    {
+      "name": "MigrationApplyBody",
+      "fields": "version:string(required); scope:ScopeSelector(required); Idempotency-Key:string(header,required)",
+      "section": "p0-01"
+    },
+    {
+      "name": "MigrationResumeBody",
+      "fields": "runId:string(required); cursor:string(required); Idempotency-Key:string(header,required)",
+      "section": "p0-01"
+    },
+    {
+      "name": "ReconcileReportsQuery",
+      "fields": "window:string(required); scope:ScopeSelector(required); state?:enum(running,completed,failed,pending_review); page:int=1(optional,default)",
+      "section": "p0-01"
+    },
+    {
+      "name": "HealthResponse",
+      "fields": "status:string(required); checks:HealthCheck[](required); durationMs:int(≥0,required)",
+      "section": "p0-01"
+    },
+    {
+      "name": "ChunkPolicy",
+      "fields": "mode:enum(auto,paragraph,custom)=auto; chunkSize:int=1000(64-8000); minSize:int=100(1-4000); maxSize:int=8000(500-8000); overlapRatio:number=0.15(0-0.9); paragraphDeep:int=5(1-5); customRegs:string[]≤5; lengthUnit:enum(char,token)=token; forceSplit:bool=true; maxChunks:int=50000(1-50000)",
+      "section": "p0-01"
+    },
+    {
+      "name": "QARequest",
+      "fields": "teamId:string(derived,required)(required); datasetId:ObjectId(required); collectionId:ObjectId(required); chunkText:string(required); qaTemplateId:string=qa.default(optional,default); qaTemplateVersion:int=1(optional,default); qaPrompt?:string(≤4000,optional); models:ModelSelection(required); limits:QALimits(optional,default)",
+      "section": "p0-01"
+    },
+    {
+      "name": "ApiDatasetCatalogBody",
+      "fields": "datasetId:ObjectId(required); apiConfig:ApiDatasetConfig(required); parentId?:ObjectId(optional)",
+      "section": "p0-01"
+    },
+    {
+      "name": "ApiDatasetPathNamesBody",
+      "fields": "datasetId:ObjectId(required); apiConfig:ApiDatasetConfig(required); nodeId:string(required)",
+      "section": "p0-01"
+    },
+    {
+      "name": "ApiDatasetListBody",
+      "fields": "datasetId:ObjectId(required); apiConfig:ApiDatasetConfig(required); parentId?:ObjectId; keyword?:string(≤100)",
+      "section": "p0-01"
+    },
+    {
+      "name": "ApiDatasetExistIdQuery",
+      "fields": "datasetId:ObjectId(required); apiConfigId:string(required)",
+      "section": "p0-01"
+    },
+    {
+      "name": "CreateDatasetWithFilesBody",
+      "fields": "datasetParams:DatasetCreateBody(required); files:string[]≤10(required)",
+      "section": "p0-01"
+    },
+    {
+      "name": "VirtualCollectionQuery",
+      "fields": "collectionId:ObjectId(required)",
+      "section": "p0-01"
+    },
+    {
+      "name": "CollectionCreateExternalFileBody",
+      "fields": "datasetId:ObjectId(required); provider:enum(required); fileKey:string(required); config?:ExternalFileConfig",
+      "section": "p0-01"
+    },
+    {
+      "name": "CollectionCreateApiFileBody",
+      "fields": "datasetId:ObjectId(required); apiConfig:ApiDatasetConfig(required); path:string(required); chunkPolicy?:ChunkPolicy",
+      "section": "p0-01"
+    },
+    {
+      "name": "CollectionCreateBackupForm",
+      "fields": "file:binary(csv 或 xlsx，≤20MB,required); datasetId:ObjectId(required); parentId?:ObjectId; mapping?:ImportMapping",
+      "section": "p0-01"
+    },
+    {
+      "name": "CollectionCreateTemplateForm",
+      "fields": "file:binary(required); datasetId:ObjectId(required); templateId:string(required)",
+      "section": "p0-01"
+    },
+    {
+      "name": "CollectionDeleteBody",
+      "fields": "collectionId:ObjectId(required); Idempotency-Key:string(header,required)",
+      "section": "p0-01"
+    },
+    {
+      "name": "ExtensionEnvelope",
+      "fields": "requestId:string(required); extensionId:string(required); payload:ExtensionPayload(required); idempotencyKey?:string(optional)",
+      "section": "p0-01"
+    },
+    {
+      "name": "DatasetPathsQuery",
+      "fields": "sourceId:ObjectId(required); type:enum(dataset,folder,required)",
+      "section": "p0-01"
+    },
+    {
+      "name": "ResumeInheritPermissionBody",
+      "fields": "datasetId:ObjectId(required); version:int(required)",
+      "section": "p0-01"
+    },
+    {
+      "name": "DatasetExportQuery",
+      "fields": "datasetId:ObjectId(required); format:enum(jsonl,zip)=zip",
+      "section": "p0-01"
+    },
+    {
+      "name": "CollectionExportQuery",
+      "fields": "collectionId:ObjectId(required); format:enum(jsonl)=jsonl",
+      "section": "p0-01"
+    },
+    {
+      "name": "QAResult",
+      "fields": "items:QAResultItem[]≤20(required); usage:TokenUsage(required); fallback:enum(none,chunk_split,default=none,required)",
+      "section": "p0-01"
+    },
+    {
+      "name": "DatasetSummary",
+      "fields": "datasetId:ObjectId(required); name:string(1-100,required); type:enum(knowledge,folder,external,api,feishu,yuque,dingtalk,required); parentId?:ObjectId|null; vectorModel:string(required); agentModel?:string|null; vlmModel?:string|null; chunkPolicy:ChunkPolicy(required); inheritPermission:bool(required); autoSync:bool(required); deleteTime?:Date|null; createTime:Date(required); updateTime:Date(required)",
+      "section": "p0-01"
+    },
+    {
+      "name": "ModelSelection",
+      "fields": "embeddingModel:string(required); llmModel?:string(optional); vlmModel?:string(optional); rerankModel?:string(optional)",
+      "section": "p0-01"
+    },
+    {
+      "name": "IndexInput",
+      "fields": "type:enum(default,imageEmbedding,summary,question,image,custom,required); text:string(1-8000,required); metadata?:IndexMetadata(optional)",
+      "section": "p0-01"
+    },
+    {
+      "name": "IndexPatch",
+      "fields": "indexId:string(1-128,required); text:string(1-8000,required); version:int(≥1,required)",
+      "section": "p0-01"
+    },
+    {
+      "name": "ImportReport",
+      "fields": "success:int(≥0,required); skipped:int(≥0,required); failed:int(≥0,required); errors:ImportError[](required)",
+      "section": "p0-01"
+    },
+    {
+      "name": "PermissionSnapshot",
+      "fields": "owner:ObjectId(required); permissionMask:int(0-15,required); inherited:bool(required); version:int(≥1,required); collaboratorSummary?:PermissionCollaborator[](optional); source:enum(local,migrated,owner-transfer,required)",
+      "section": "p0-01"
+    },
+    {
+      "name": "ScopeSelector",
+      "fields": "teamIds?:ObjectId[](optional); datasetIds?:ObjectId[](optional); collectionIds?:ObjectId[](optional); operationTypes?:enum(migrate,reconcile,report,cleanup)[](optional); 至少一个范围字段必填(required)",
+      "section": "p0-01"
+    },
+    {
+      "name": "ApiDatasetConfig",
+      "fields": "provider:enum(doc2x,somark,textin,custom,required); credentialRef:string(1-256,required); endpointRef?:string(1-512,optional); timeoutMs:int(100-1800000,default=60000); capabilities:ApiDatasetCapabilities[](required)",
+      "section": "p0-01"
+    },
+    {
+      "name": "ImportMapping",
+      "fields": "sourceFormat:enum(csv,xlsx,jsonl,required); columns:ImportColumnMapping[](1-100,required); sheetName?:string(1-128,optional); headerRow:int(≥0,default=0)",
+      "section": "p0-01"
+    },
+    {
+      "name": "ExternalFileConfig",
+      "fields": "provider:enum(doc2x,somark,textin,custom,required); externalFileId:string(1-512,required); path?:string(1-2048,optional); metadata?:MetadataMap(optional); capabilities:ApiDatasetCapabilities[](required)",
+      "section": "p0-01"
+    },
+    {
+      "name": "PermissionCollaborator",
+      "fields": "collaboratorType:enum(member,group,org,owner,required); collaboratorId:ObjectId(required); permissionMask:int(0-15,required)",
+      "section": "p0-01"
+    },
+    {
+      "name": "ImportError",
+      "fields": "row:int(≥0,required); code:string(1-32,required); messageKey:string(1-128,required); params:ErrorParams(required)",
+      "section": "p0-01"
+    },
+    {
+      "name": "ImportColumnMapping",
+      "fields": "sourceColumn:string(1-128,required); targetField:string(1-128,required); targetType:enum(string,number,bool,date,array,required); required:bool(default=false); transform?:string(≤256,optional)",
+      "section": "p0-01"
+    },
+    {
+      "name": "ApiDatasetCapabilities",
+      "fields": "name:string(1-64,required); supported:bool(required); constraints?:MetadataMap(optional)",
+      "section": "p0-01"
+    },
+    {
+      "name": "ErrorParams",
+      "fields": "path?:string(≤512,optional); reason?:string(≤256,optional); details?:MetadataMap(optional)",
+      "section": "p0-01"
+    },
+    {
+      "name": "MetadataMap",
+      "fields": "key:string(1-128,required); value:JsonValue(required)",
+      "section": "p0-01"
+    },
+    {
+      "name": "JsonValue",
+      "fields": "递归联合:string|number|boolean|null|JsonValue[]|MetadataMap(required); maxDepth:int(default=5); maxSerializedBytes:int(default=65536)",
+      "section": "p0-01"
+    },
+    {
+      "name": "IndexMetadata",
+      "fields": "source?:string(≤128,optional); tags?:string[](≤20,optional); attributes?:MetadataMap(optional)",
+      "section": "p0-01"
+    },
+    {
+      "name": "SearchWeights",
+      "fields": "embedding:number(0-1,default=0.5); rerank:number(0-1,default=0.5)",
+      "section": "p0-01"
+    },
+    {
+      "name": "SearchBudgets",
+      "fields": "totalTimeoutMs:int(1000-30000,default=30000); recallTimeoutMs:int(500-5000,default=5000); rerankTimeoutMs:int(1000-10000,default=10000)",
+      "section": "p0-01"
+    },
+    {
+      "name": "SearchVersionPolicy",
+      "fields": "mode:enum(latest,pinned,default=latest); pinned?:string(1-128,optional)",
+      "section": "p0-01"
+    },
+    {
+      "name": "SearchStats",
+      "fields": "searchMode:string(required); usingReRank:bool(required); usingSimilarityFilter:bool(required); embeddingTokens:int(≥0,required); rerankInputTokens:int(≥0,required); degraded:DegradedInfo[](required); durationMs:int(≥0,required)",
+      "section": "p0-01"
+    },
+    {
+      "name": "DegradedInfo",
+      "fields": "stage:string(1-64,required); reason:string(1-256,required)",
+      "section": "p0-01"
+    },
+    {
+      "name": "CitationScore",
+      "fields": "type:enum(embedding,fullText,reRank,rrf,required); value:number(required); index:int(≥0,required)",
+      "section": "p0-01"
+    },
+    {
+      "name": "QAResultItem",
+      "fields": "q:string(1-2000,required); a:string(≤8000,required); sourceChunkHash:string(1-128,required)",
+      "section": "p0-01"
+    },
+    {
+      "name": "TokenUsage",
+      "fields": "inputTokens:int(≥0,required); outputTokens:int(≥0,required)",
+      "section": "p0-01"
+    },
+    {
+      "name": "QALimits",
+      "fields": "maxQaPerChunk:int(1-100,default=5); maxChunkCount:int(1-50000,default=50000)",
+      "section": "p0-01"
+    },
+    {
+      "name": "MultipartPart",
+      "fields": "partNumber:int(1-10000,required); etag:string(1-256,required)",
+      "section": "p0-01"
+    },
+    {
+      "name": "ExtensionPayload",
+      "fields": "schemaRef:string(1-256,required); data:JsonValue(required)",
+      "section": "p0-01"
+    },
+    {
+      "name": "HealthCheck",
+      "fields": "name:string(1-64,required); status:enum(ok,degraded,failed,required); durationMs:int(≥0,required)",
+      "section": "p0-01"
+    },
+    {
+      "name": "DatasetStats",
+      "fields": "collections:int(≥0,required); datas:int(≥0,required)",
+      "section": "p0-01"
+    },
+    {
+      "name": "NoRequestBody",
+      "fields": "无字段(required)",
+      "section": "p0-01"
+    },
+    {
+      "name": "DatasetExportResponse",
+      "fields": "contentType:enum(application/zip,required); body:binary(required)",
+      "section": "p0-01"
+    },
+    {
+      "name": "CollectionExportResponse",
+      "fields": "contentType:enum(text/plain,application/x-ndjson,required); body:binary(required)",
+      "section": "p0-01"
+    },
+    {
+      "name": "ApiACL004RequestData",
+      "fields": "datasetId:ObjectId(required); collaborators:JsonValue[](required); version:int(required)",
+      "section": "p0-01"
+    },
+    {
+      "name": "ApiACL005RequestData",
+      "fields": "datasetId:ObjectId(required); targetTmbId:ObjectId(required); transferId:JsonValue(required)",
+      "section": "p0-01"
+    },
+    {
+      "name": "ApiDS004ResponseData",
+      "fields": "version:int(required)",
+      "section": "p0-01"
+    },
+    {
+      "name": "ApiDS006ResponseData",
+      "fields": "taskId:ObjectId(required); state:string(required)",
+      "section": "p0-01"
+    },
+    {
+      "name": "ApiCOL001ResponseData",
+      "fields": "total:int(required); list:JsonValue[](required)",
+      "section": "p0-01"
+    },
+    {
+      "name": "ApiCOL002ResponseData",
+      "fields": "collectionId:ObjectId(required)",
+      "section": "p0-01"
+    },
+    {
+      "name": "ApiCOL003ResponseData",
+      "fields": "collectionId:ObjectId(required); insertLen:int(required)",
+      "section": "p0-01"
+    },
+    {
+      "name": "ApiCOL004ResponseData",
+      "fields": "collectionId:ObjectId(required); state:string(required)",
+      "section": "p0-01"
+    },
+    {
+      "name": "ApiCOL005ResponseData",
+      "fields": "collectionId:ObjectId(required); insertLen:int(required)",
+      "section": "p0-01"
+    },
+    {
+      "name": "ApiCOL006ResponseData",
+      "fields": "collectionId:ObjectId(required)",
+      "section": "p0-01"
+    },
+    {
+      "name": "ApiCOL007ResponseData",
+      "fields": "collectionId:ObjectId(required)",
+      "section": "p0-01"
+    },
+    {
+      "name": "ApiCOL008ResponseData",
+      "fields": "collectionId:ObjectId(required); items:JsonValue[](required)",
+      "section": "p0-01"
+    },
+    {
+      "name": "ApiCOL009ResponseData",
+      "fields": "collectionId:ObjectId(required); insertLen:int(required)",
+      "section": "p0-01"
+    },
+    {
+      "name": "ApiCOL010ResponseData",
+      "fields": "collectionId:ObjectId(required); insertLen:int(required)",
+      "section": "p0-01"
+    },
+    {
+      "name": "ApiCOL011ResponseData",
+      "fields": "sourceRef:string(required); trainingStatus:string(required); remainingTraining:int(required)",
+      "section": "p0-01"
+    },
+    {
+      "name": "ApiCOL012ResponseData",
+      "fields": "version:int(required)",
+      "section": "p0-01"
+    },
+    {
+      "name": "ApiCOL014ResponseData",
+      "fields": "taskId:ObjectId(required)",
+      "section": "p0-01"
+    },
+    {
+      "name": "ApiCOL015ResponseData",
+      "fields": "jobId:string(required)",
+      "section": "p0-01"
+    },
+    {
+      "name": "ApiCOL016ResponseData",
+      "fields": "trainingState:JsonValue(required); stage:string(required); remaining:int(required)",
+      "section": "p0-01"
+    },
+    {
+      "name": "ApiDATA001ResponseData",
+      "fields": "total:int(required); list:JsonValue[](required)",
+      "section": "p0-01"
+    },
+    {
+      "name": "ApiDATA002ResponseData",
+      "fields": "data:JsonValue(required); indexes:JsonValue(required); metadata:JsonValue(required)",
+      "section": "p0-01"
+    },
+    {
+      "name": "ApiDATA003ResponseData",
+      "fields": "dataId:ObjectId(required); version:int(required)",
+      "section": "p0-01"
+    },
+    {
+      "name": "ApiDATA004ResponseData",
+      "fields": "dataId:ObjectId(required); state:string(required)",
+      "section": "p0-01"
+    },
+    {
+      "name": "ApiDATA005ResponseData",
+      "fields": "dataId:ObjectId(required)",
+      "section": "p0-01"
+    },
+    {
+      "name": "ApiDATA006ResponseData",
+      "fields": "items:JsonValue[](required)",
+      "section": "p0-01"
+    },
+    {
+      "name": "ApiDATA007ResponseData",
+      "fields": "queued:JsonValue(required)",
+      "section": "p0-01"
+    },
+    {
+      "name": "ApiIDX001ResponseData",
+      "fields": "indexId:string(required)",
+      "section": "p0-01"
+    },
+    {
+      "name": "ApiIDX002ResponseData",
+      "fields": "indexId:string(required); version:int(required)",
+      "section": "p0-01"
+    },
+    {
+      "name": "ApiIDX003ResponseData",
+      "fields": "indexId:string(required); state:string(required)",
+      "section": "p0-01"
+    },
+    {
+      "name": "ApiTASK001ResponseData",
+      "fields": "task:JsonValue(required); derivedState:JsonValue(required)",
+      "section": "p0-01"
+    },
+    {
+      "name": "ApiTASK002ResponseData",
+      "fields": "total:int(required); list:JsonValue[](required); cursor:string(required)",
+      "section": "p0-01"
+    },
+    {
+      "name": "ApiTASK003ResponseData",
+      "fields": "taskId:ObjectId(required); retryCount:int(required)",
+      "section": "p0-01"
+    },
+    {
+      "name": "ApiDEL001ResponseData",
+      "fields": "state:string(required); stage:string(required); progress:int(required)",
+      "section": "p0-01"
+    },
+    {
+      "name": "ApiDEL002ResponseData",
+      "fields": "total:int(required); list:JsonValue[](required); cursor:string(required)",
+      "section": "p0-01"
+    },
+    {
+      "name": "ApiDEL003ResponseData",
+      "fields": "accepted:bool(required)",
+      "section": "p0-01"
+    },
+    {
+      "name": "ApiSEARCH001ResponseData",
+      "fields": "searchRes:JsonValue(required); usingSimilarityFilter:bool(required)",
+      "section": "p0-01"
+    },
+    {
+      "name": "ApiFILE002ResponseData",
+      "fields": "fileRef:string(required)",
+      "section": "p0-01"
+    },
+    {
+      "name": "ApiFILE003ResponseData",
+      "fields": "aborted:bool(required)",
+      "section": "p0-01"
+    },
+    {
+      "name": "ApiFILE004ResponseData",
+      "fields": "chunks:JsonValue[](required)",
+      "section": "p0-01"
+    },
+    {
+      "name": "ApiROOT001ResponseData",
+      "fields": "report:JsonValue(required)",
+      "section": "p0-01"
+    },
+    {
+      "name": "ApiROOT002ResponseData",
+      "fields": "runId:string(required)",
+      "section": "p0-01"
+    },
+    {
+      "name": "ApiROOT003ResponseData",
+      "fields": "runId:string(required); cursor:string(required)",
+      "section": "p0-01"
+    },
+    {
+      "name": "ApiROOT004ResponseData",
+      "fields": "total:int(required); list:JsonValue[](required)",
+      "section": "p0-01"
+    },
+    {
+      "name": "ApiFILE005ResponseData",
+      "fields": "url:string(required); key:string(required); expiresAt:string(date-time)(required)",
+      "section": "p0-01"
+    },
+    {
+      "name": "ApiFILE006ResponseData",
+      "fields": "previewUrls:JsonValue[](required)",
+      "section": "p0-01"
+    },
+    {
+      "name": "ApiTAG001ResponseData",
+      "fields": "list:JsonValue[](required)",
+      "section": "p0-01"
+    },
+    {
+      "name": "ApiTAG002ResponseData",
+      "fields": "tagId:ObjectId(required)",
+      "section": "p0-01"
+    },
+    {
+      "name": "ApiTAG003ResponseData",
+      "fields": "tagId:ObjectId(required); version:int(required)",
+      "section": "p0-01"
+    },
+    {
+      "name": "ApiTAG004ResponseData",
+      "fields": "affectedCollections:int(required)",
+      "section": "p0-01"
+    },
+    {
+      "name": "ApiTAG005ResponseData",
+      "fields": "updated:JsonValue(required); skipped:JsonValue(required)",
+      "section": "p0-01"
+    },
+    {
+      "name": "ApiTAG006ResponseData",
+      "fields": "updated:JsonValue(required); skipped:JsonValue(required)",
+      "section": "p0-01"
+    },
+    {
+      "name": "ApiPATH003ResponseData",
+      "fields": "version:int(required)",
+      "section": "p0-01"
+    },
+    {
+      "name": "ApiPATH004ResponseData",
+      "fields": "version:int(required)",
+      "section": "p0-01"
+    },
+    {
+      "name": "ApiACL001ResponseData",
+      "fields": "permissionMask:int(required); inheritEnabled:JsonValue(required); source:JsonValue(required)",
+      "section": "p0-01"
+    },
+    {
+      "name": "ApiACL002ResponseData",
+      "fields": "permissionMask:int(required)",
+      "section": "p0-01"
+    },
+    {
+      "name": "ApiACL003ResponseData",
+      "fields": "list:JsonValue[](required)",
+      "section": "p0-01"
+    },
+    {
+      "name": "ApiACL004ResponseData",
+      "fields": "snapshot:JsonValue(required)",
+      "section": "p0-01"
+    },
+    {
+      "name": "ApiACL005ResponseData",
+      "fields": "before:JsonValue(required); after:JsonValue(required)",
+      "section": "p0-01"
+    },
+    {
+      "name": "ApiIMP001ResponseData",
+      "fields": "report:JsonValue(required)",
+      "section": "p0-01"
+    },
+    {
+      "name": "ApiAPIDS001ResponseData",
+      "fields": "nodes:JsonValue[](required)",
+      "section": "p0-01"
+    },
+    {
+      "name": "ApiAPIDS002ResponseData",
+      "fields": "path:string(required)",
+      "section": "p0-01"
+    },
+    {
+      "name": "ApiAPIDS003ResponseData",
+      "fields": "list:JsonValue[](required); isImported:bool(required)",
+      "section": "p0-01"
+    },
+    {
+      "name": "ApiAPIDS004ResponseData",
+      "fields": "fileIds:JsonValue[](required)",
+      "section": "p0-01"
+    },
+    {
+      "name": "ApiTASK004ResponseData",
+      "fields": "acceptedCount:int(required)",
+      "section": "p0-01"
+    },
+    {
+      "name": "ApiTASK005ResponseData",
+      "fields": "deletedCount:int(required)",
+      "section": "p0-01"
+    },
+    {
+      "name": "ApiTASK006ResponseData",
+      "fields": "modes:JsonValue[](required)",
+      "section": "p0-01"
+    },
+    {
+      "name": "ApiTASK007ResponseData",
+      "fields": "total:int(required); list:JsonValue[](required); cursor:string(required)",
+      "section": "p0-01"
+    },
+    {
+      "name": "ApiTASK008ResponseData",
+      "fields": "errors:JsonValue[](required)",
+      "section": "p0-01"
+    },
+    {
+      "name": "ApiTASK009ResponseData",
+      "fields": "hasError:bool(required)",
+      "section": "p0-01"
+    },
+    {
+      "name": "ApiAGG001ResponseData",
+      "fields": "datasetId:ObjectId(required); collections:JsonValue(required)",
+      "section": "p0-01"
+    },
+    {
+      "name": "ApiVIRT001ResponseData",
+      "fields": "virtual:bool(required); sourceRef:string(required)",
+      "section": "p0-01"
+    },
+    {
+      "name": "ApiCOL017ResponseData",
+      "fields": "collectionId:ObjectId(required); type:string(required)",
+      "section": "p0-01"
+    },
+    {
+      "name": "ApiIMP002ResponseData",
+      "fields": "report:JsonValue(required)",
+      "section": "p0-01"
+    }
+  ]
+}

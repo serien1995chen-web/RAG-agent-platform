@@ -1,0 +1,30 @@
+{
+  "name": "@kb/app",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "dev": "node -e \"console.log('@kb/app dev host lands in Round 2 (Phase 4-6)');\"",
+    "build": "tsc -p tsconfig.json --noEmit",
+    "build:workers": "node -e \"console.log('build:workers lands in Round 2 (Phase 4-5)');\"",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run --passWithNoTests",
+    "test:unit": "vitest run --passWithNoTests",
+    "test:integration": "vitest run --passWithNoTests",
+    "test:contract": "vitest run --passWithNoTests",
+    "lint": "eslint src"
+  },
+  "dependencies": {
+    "@kb/contracts": "workspace:*",
+    "@kb/service": "workspace:*",
+    "@kb/web": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}

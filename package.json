@@ -1,0 +1,44 @@
+{
+  "name": "rag-agent-platform",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@10.33.4",
+  "engines": {
+    "node": ">=22.23.2",
+    "pnpm": ">=10.33.4"
+  },
+  "scripts": {
+    "dev": "turbo run dev --filter=@kb/app",
+    "build": "turbo run build",
+    "build:workers": "turbo run build:workers --filter=@kb/app",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "test:unit": "turbo run test:unit",
+    "test:integration": "turbo run test:integration",
+    "test:contract": "vitest run --config test/contract/vitest.config.ts",
+    "test:e2e": "vitest run --config test/e2e/vitest.config.ts --passWithNoTests",
+    "openapi:generate": "node scripts/generate-openapi.mjs",
+    "openapi:check": "node scripts/check-openapi.mjs",
+    "architecture:check": "node scripts/check-architecture.mjs",
+    "forbidden-files:check": "node scripts/check-forbidden-files.mjs",
+    "sbom:generate": "node scripts/generate-sbom.mjs",
+    "license:check": "node scripts/check-licenses.mjs"
+  },
+  "devDependencies": {
+    "@eslint/js": "catalog:",
+    "@types/node": "catalog:",
+    "@vitest/coverage-v8": "catalog:",
+    "eslint": "catalog:",
+    "prettier": "catalog:",
+    "tsdown": "catalog:",
+    "tsx": "catalog:",
+    "turbo": "catalog:",
+    "typescript": "catalog:",
+    "typescript-eslint": "catalog:",
+    "vitest": "catalog:"
+  }
+}
