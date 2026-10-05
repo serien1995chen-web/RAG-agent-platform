@@ -5,20 +5,20 @@
 
 ## 1. 冲突与差异
 
-| ID | 类别 | 内容 | 处理建议 | 状态 |
-| --- | --- | --- | --- | --- |
-| C-001 | 设计文档计数 | 路由数量：12.8.1 写 84 条（53+31），附录 A8 表 86 行，12.9 与 ACC-API-009 写 87 条（53+31+3） | 以 12.9 实际登记的 87 条为契约口径，生成注册表并逐条核对 | 已按 87 条落地 |
-| C-002 | 路由框架未冻结 | 任务书使用 `pages/api`；设计文档只冻结 Next.js 版本与接口分组 | 采用 Pages Router，登记 SKEL-ADR-002（proposed） | 待评审 |
-| C-003 | 目录形态未冻结 | 任务书要求 `packages/ + sdk/ + projects/app`；设计文档 18.1 允许调整目录名 | 按任务书执行，登记 SKEL-ADR-001（proposed） | 待评审 |
-| C-004 | 骨架期错误语义 | 设计文档未定义「路由/Port 尚未实现」的业务码 | 采用骨架级 501999（HTTP 501，不进入业务矩阵），登记 SKEL-ADR-007（proposed） | 待评审 |
-| C-005 | 设计文档占位符 | 任务书 `<设计文档路径>` 与 `<FastGPT 仓库路径>` 未替换 | 本会话按已核验路径执行：设计文档 SHA-256 `28DFBF...33BA`；参照仓库 `D:\Fastgpt\FastGPT` @ `83e2b803` | 待用户确认 |
-| C-006 | README 复制风险 | 现有 README 定位句与 FastGPT README 对应段落逐字相同 | 使用 `docs/architecture/readme-rewrite-proposal.md` 的提案；经用户确认后再改，并建议同步 GitHub description | 待用户确认 |
-| C-007 | LICENSE | 仓库无 LICENSE | 本轮不添加；如需开源由用户指定许可证类型 | 待用户决策 |
-| C-008 | Docker Desktop 未运行 | `IntegratedWslDistros` 已含 `Ubuntu-22.04`，但 `docker-desktop` 发行版 Stopped，WSL 内 `docker` 命令不可用 | Phase 4 前由用户启动 Docker Desktop 并复核四个镜像 tag；不执行 pull | 待用户操作 |
-| C-009 | 镜像 tag 写法 | 任务书写作 `pgvector/pgvector:0.8.0-pg15`、`minio/minio:RELEASE...`；6.3 节同时登记 CN registry 镜像 | Compose 采用本地已 pull 的标准 tag（`pgvector/pgvector`、`minio/minio`），不触发拉取；Phase 4 复核后再定 | 待 Docker 复核 |
-| C-010 | 设计文档治理遗留 | 6.1 已补 liteparse/jieba integrity 与四个镜像 digest，但文档版本号与 A23 变更记录未同步 | 记录为文档治理项，不阻塞骨架；后续单独提交修正 | 记录 |
-| C-011 | 远端写权限 | 任务书禁止在未授权时 push / 建 PR / 改 main | 本轮只创建本地功能分支与本地 commit；push 与 PR 等待用户明确授权 | 待用户授权 |
-| C-012 | 依赖安装职责 | `pnpm install` 及新增/升级依赖只能由用户在 WSL 执行 | Phase 1 骨架就位后暂停，由用户执行并回传结果；Codex 只运行只读门禁 | 待用户操作 |
+| ID    | 类别                  | 内容                                                                                                       | 处理建议                                                                                                    | 状态           |
+| ----- | --------------------- | ---------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- | -------------- |
+| C-001 | 设计文档计数          | 路由数量：12.8.1 写 84 条（53+31），附录 A8 表 86 行，12.9 与 ACC-API-009 写 87 条（53+31+3）              | 以 12.9 实际登记的 87 条为契约口径，生成注册表并逐条核对                                                    | 已按 87 条落地 |
+| C-002 | 路由框架未冻结        | 任务书使用 `pages/api`；设计文档只冻结 Next.js 版本与接口分组                                              | 采用 Pages Router，登记 SKEL-ADR-002（proposed）                                                            | 待评审         |
+| C-003 | 目录形态未冻结        | 任务书要求 `packages/ + sdk/ + projects/app`；设计文档 18.1 允许调整目录名                                 | 按任务书执行，登记 SKEL-ADR-001（proposed）                                                                 | 待评审         |
+| C-004 | 骨架期错误语义        | 设计文档未定义「路由/Port 尚未实现」的业务码                                                               | 采用骨架级 501999（HTTP 501，不进入业务矩阵），登记 SKEL-ADR-007（proposed）                                | 待评审         |
+| C-005 | 设计文档占位符        | 任务书 `<设计文档路径>` 与 `<FastGPT 仓库路径>` 未替换                                                     | 本会话按已核验路径执行：设计文档 SHA-256 `28DFBF...33BA`；参照仓库 `D:\Fastgpt\FastGPT` @ `83e2b803`        | 待用户确认     |
+| C-006 | README 复制风险       | 现有 README 定位句与 FastGPT README 对应段落逐字相同                                                       | 使用 `docs/architecture/readme-rewrite-proposal.md` 的提案；经用户确认后再改，并建议同步 GitHub description | 待用户确认     |
+| C-007 | LICENSE               | 仓库无 LICENSE                                                                                             | 本轮不添加；如需开源由用户指定许可证类型                                                                    | 待用户决策     |
+| C-008 | Docker Desktop 未运行 | `IntegratedWslDistros` 已含 `Ubuntu-22.04`，但 `docker-desktop` 发行版 Stopped，WSL 内 `docker` 命令不可用 | Phase 4 前由用户启动 Docker Desktop 并复核四个镜像 tag；不执行 pull                                         | 待用户操作     |
+| C-009 | 镜像 tag 写法         | 任务书写作 `pgvector/pgvector:0.8.0-pg15`、`minio/minio:RELEASE...`；6.3 节同时登记 CN registry 镜像       | Compose 采用本地已 pull 的标准 tag（`pgvector/pgvector`、`minio/minio`），不触发拉取；Phase 4 复核后再定    | 待 Docker 复核 |
+| C-010 | 设计文档治理遗留      | 6.1 已补 liteparse/jieba integrity 与四个镜像 digest，但文档版本号与 A23 变更记录未同步                    | 记录为文档治理项，不阻塞骨架；后续单独提交修正                                                              | 记录           |
+| C-011 | 远端写权限            | 任务书禁止在未授权时 push / 建 PR / 改 main                                                                | 本轮只创建本地功能分支与本地 commit；push 与 PR 等待用户明确授权                                            | 待用户授权     |
+| C-012 | 依赖安装职责          | `pnpm install` 及新增/升级依赖只能由用户在 WSL 执行                                                        | Phase 1 骨架就位后暂停，由用户执行并回传结果；Codex 只运行只读门禁                                          | 待用户操作     |
 
 ## 2. 任务书与设计文档的显式差异
 

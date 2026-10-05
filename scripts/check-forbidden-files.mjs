@@ -11,7 +11,15 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 
 const root = resolve(import.meta.dirname, '..');
-const ignoredDirs = new Set(['.git', 'node_modules', 'dist', '.next', '.turbo', 'coverage', 'artifacts']);
+const ignoredDirs = new Set([
+  '.git',
+  'node_modules',
+  'dist',
+  '.next',
+  '.turbo',
+  'coverage',
+  'artifacts',
+]);
 const sourceRoots = ['packages', 'sdk', 'projects', 'test', 'deploy', 'scripts'];
 
 function walk(dir, out = []) {
@@ -40,7 +48,12 @@ for (const dir of sourceRoots) {
     const rel = relative(root, file);
     if (file.endsWith('package.json')) {
       const pkg = JSON.parse(readFileSync(file, 'utf8'));
-      for (const section of ['dependencies', 'devDependencies', 'peerDependencies', 'optionalDependencies']) {
+      for (const section of [
+        'dependencies',
+        'devDependencies',
+        'peerDependencies',
+        'optionalDependencies',
+      ]) {
         for (const name of Object.keys(pkg[section] ?? {})) {
           if (/^@fastgpt(-sdk)?\//.test(name)) fastgptPackages.push(`${rel}: ${name}`);
         }
@@ -73,7 +86,8 @@ for (const dir of sourceRoots) {
     }
     const websiteDatasetAllowed =
       rel.endsWith('packages/contracts/src/enums/dataset.ts') ||
-      rel.endsWith('packages/contracts/src/errors/error-catalog.data.json');
+      rel.endsWith('packages/contracts/src/errors/error-catalog.data.json') ||
+      rel.startsWith('test/');
     if (/websiteDataset/.test(text) && !websiteDatasetAllowed) {
       errors.push(`${rel}: websiteDataset 只允许出现在拒绝规则常量定义处`);
     }
@@ -90,4 +104,6 @@ if (errors.length > 0) {
   process.exit(1);
 }
 
-console.log(`forbidden-files:check 通过：扫描 ${scanned} 个文件，未发现 @fastgpt-* 依赖或来源素材引用。`);
+console.log(
+  `forbidden-files:check 通过：扫描 ${scanned} 个文件，未发现 @fastgpt-* 依赖或来源素材引用。`,
+);

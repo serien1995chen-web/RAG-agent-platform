@@ -2,12 +2,7 @@ import js from '@eslint/js';
 import tseslint from 'typescript-eslint';
 
 const infraModules = ['mongoose', 'pg', 'ioredis', 'bullmq', 'minio', 'next'];
-const infraPatterns = [
-  ...infraModules,
-  '@aws-sdk/*',
-  '@opentelemetry/*',
-  'pino',
-];
+const infraPatterns = [...infraModules, '@aws-sdk/*', '@opentelemetry/*', 'pino'];
 
 export default tseslint.config(
   {

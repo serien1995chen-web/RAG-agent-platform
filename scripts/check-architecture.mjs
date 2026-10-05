@@ -103,11 +103,7 @@ for (const file of files) {
       const resolved = resolve(dirname(file), spec);
       localDeps.push(resolved);
       const targetModule = moduleOf(resolved);
-      if (
-        currentModule !== null &&
-        targetModule !== null &&
-        targetModule !== currentModule
-      ) {
+      if (currentModule !== null && targetModule !== null && targetModule !== currentModule) {
         errors.push(`${relFile}: 跨模块直接导入 "${spec}"（应通过 Port 或公开导出）`);
       }
     }
@@ -155,4 +151,6 @@ if (errors.length > 0) {
   process.exit(1);
 }
 
-console.log(`architecture:check 通过：扫描 ${files.length} 个 service 源文件，未发现禁止依赖或循环依赖。`);
+console.log(
+  `architecture:check 通过：扫描 ${files.length} 个 service 源文件，未发现禁止依赖或循环依赖。`,
+);

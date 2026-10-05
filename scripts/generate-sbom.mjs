@@ -45,4 +45,6 @@ const sbom = {
 
 const outPath = join(artifactsDir, 'sbom.json');
 writeFileSync(outPath, `${JSON.stringify(sbom, null, 2)}\n`, 'utf8');
-console.log(`sbom:generate 完成：${relative(root, outPath)}（${components.length} 个 workspace 组件）。`);
+console.log(
+  `sbom:generate 完成：${relative(root, outPath)}（${components.length} 个 workspace 组件）。`,
+);

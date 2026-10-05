@@ -7,27 +7,27 @@
 
 ## 1. 冻结决策（ADR-001 至 ADR-019）
 
-| ADR | 主题 | 最终结论 | 状态 | 关联章节 |
-| --- | --- | --- | --- | --- |
-| ADR-001 | 权威输入与追溯 | 主基线 1542 行为唯一权威输入 | 已冻结 | 0.1、0.8、21.1-21.3、22 |
-| ADR-002 | pgvector DDL | TEXT 主键、cosine、TIMESTAMPTZ、主基线索引名 | 已冻结 | 10.5、10.16、21.13 |
-| ADR-003 | 向量租户谓词 | 所有向量查询带 teamId、datasetId、collectionId | 已冻结 | 7.6、10.16、13.2 |
-| ADR-004 | 跨存储删除 | Mongo 先提交，S3/PG 异步清理，补偿与对账收敛 | 已冻结 | 10.11、14.5-14.7 |
-| ADR-005 | 事件失败策略 | DatasetEventPort 默认阻塞，关键回调白名单 | 已冻结 | 7.7、12.10、14 |
-| ADR-006 | retryCount | 剩余预算；领取递减；0 为 final_error；人工恢复重置 3 | 已冻结 | 8.11、8.13、10.7 |
-| ADR-007 | 图片描述与索引 | imageDescMap 与六类 Index 类型 | 已冻结 | 7.2.3、10.5、10.7 |
-| ADR-008 | API 兼容 | 不提供 FastGPT 历史运行时别名；三个图片路径除外 | 已冻结 | 2.6、12.9、21.8.1 |
-| ADR-009 | 错误与响应 | 旧字段兼容并新增 messageKey/params/retryable/severity/requestId | 已冻结 | 12.3-12.4、21.11 |
-| ADR-010 | Port 契约 | 统一完整端口契约和默认空实现 | 已冻结 | 7.6、21.9 |
-| ADR-011 | 图片与 auto | 图片路径兼容；auto 改写 chunk+autoIndexes；insertData q 非空 | 已冻结 | 8.2、8.7、12.9 |
-| ADR-012 | TTL | Training 7 天；图片单一绝对到期时间；正式引用后清空 TTL | 已冻结 | 10.7、10.9、21.18 |
-| ADR-013 | ACL | dataset_acl、权限位、显式空权限、继承、Owner、CAS、迁移 | 已冻结 | 10.10、13.3-13.6 |
-| ADR-014 | 运行时角色 | all/http/worker 角色与独立 leader lock | 已冻结 | 5.4、6.3-6.5 |
-| ADR-015 | Provider 矩阵 | 仅支持 pgvector + Mongo fulltext | 已冻结 | 6.1、10.16、11.5 |
-| ADR-016 | 唯一性 | externalFileIdNormalized 与 dedupKey 部分唯一索引 | 已冻结 | 10.4、10.5、21.13 |
-| ADR-017 | 审计与用量映射 | operationLogs、usages/usage_items、tracks 与双读窗口 | 已冻结 | 10.15、15.4、21.12 |
-| ADR-018 | 前端契约 | 同团队临时 key、图片上传、预览、训练状态与错误字段 | 已冻结 | 12.9、14.8、15 |
-| ADR-019 | 许可证策略 | 许可证白名单与禁止素材规则 | 已冻结 | 6.2、18.10、20.3 |
+| ADR     | 主题           | 最终结论                                                        | 状态   | 关联章节                |
+| ------- | -------------- | --------------------------------------------------------------- | ------ | ----------------------- |
+| ADR-001 | 权威输入与追溯 | 主基线 1542 行为唯一权威输入                                    | 已冻结 | 0.1、0.8、21.1-21.3、22 |
+| ADR-002 | pgvector DDL   | TEXT 主键、cosine、TIMESTAMPTZ、主基线索引名                    | 已冻结 | 10.5、10.16、21.13      |
+| ADR-003 | 向量租户谓词   | 所有向量查询带 teamId、datasetId、collectionId                  | 已冻结 | 7.6、10.16、13.2        |
+| ADR-004 | 跨存储删除     | Mongo 先提交，S3/PG 异步清理，补偿与对账收敛                    | 已冻结 | 10.11、14.5-14.7        |
+| ADR-005 | 事件失败策略   | DatasetEventPort 默认阻塞，关键回调白名单                       | 已冻结 | 7.7、12.10、14          |
+| ADR-006 | retryCount     | 剩余预算；领取递减；0 为 final_error；人工恢复重置 3            | 已冻结 | 8.11、8.13、10.7        |
+| ADR-007 | 图片描述与索引 | imageDescMap 与六类 Index 类型                                  | 已冻结 | 7.2.3、10.5、10.7       |
+| ADR-008 | API 兼容       | 不提供 FastGPT 历史运行时别名；三个图片路径除外                 | 已冻结 | 2.6、12.9、21.8.1       |
+| ADR-009 | 错误与响应     | 旧字段兼容并新增 messageKey/params/retryable/severity/requestId | 已冻结 | 12.3-12.4、21.11        |
+| ADR-010 | Port 契约      | 统一完整端口契约和默认空实现                                    | 已冻结 | 7.6、21.9               |
+| ADR-011 | 图片与 auto    | 图片路径兼容；auto 改写 chunk+autoIndexes；insertData q 非空    | 已冻结 | 8.2、8.7、12.9          |
+| ADR-012 | TTL            | Training 7 天；图片单一绝对到期时间；正式引用后清空 TTL         | 已冻结 | 10.7、10.9、21.18       |
+| ADR-013 | ACL            | dataset_acl、权限位、显式空权限、继承、Owner、CAS、迁移         | 已冻结 | 10.10、13.3-13.6        |
+| ADR-014 | 运行时角色     | all/http/worker 角色与独立 leader lock                          | 已冻结 | 5.4、6.3-6.5            |
+| ADR-015 | Provider 矩阵  | 仅支持 pgvector + Mongo fulltext                                | 已冻结 | 6.1、10.16、11.5        |
+| ADR-016 | 唯一性         | externalFileIdNormalized 与 dedupKey 部分唯一索引               | 已冻结 | 10.4、10.5、21.13       |
+| ADR-017 | 审计与用量映射 | operationLogs、usages/usage_items、tracks 与双读窗口            | 已冻结 | 10.15、15.4、21.12      |
+| ADR-018 | 前端契约       | 同团队临时 key、图片上传、预览、训练状态与错误字段              | 已冻结 | 12.9、14.8、15          |
+| ADR-019 | 许可证策略     | 许可证白名单与禁止素材规则                                      | 已冻结 | 6.2、18.10、20.3        |
 
 ## 2. 骨架期决策（proposed）
 

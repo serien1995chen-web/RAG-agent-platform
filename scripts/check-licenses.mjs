@@ -69,4 +69,6 @@ if (errors.length > 0) {
   process.exit(1);
 }
 
-console.log(`license:check 通过：${packages.length} 个 workspace 包，${catalog.size} 个 catalog 登记项。`);
+console.log(
+  `license:check 通过：${packages.length} 个 workspace 包，${catalog.size} 个 catalog 登记项。`,
+);

@@ -7,3 +7,7 @@ artifacts
 pnpm-lock.yaml
 *.json
 *.generated.*
+# 根 README 需经用户确认后才能改写（Phase 0 提案）。
+/README.md
+# 由 openapi:generate 生成，保持生成器输出格式。
+packages/contracts/openapi/client-types.d.ts
