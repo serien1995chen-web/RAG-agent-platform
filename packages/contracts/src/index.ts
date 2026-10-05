@@ -90,3 +90,32 @@ export {
   validateRouteRegistry,
 } from './openapi/route-registry';
 export type { RouteEntry } from './openapi/route-registry';
+
+export {
+  CitationSchema,
+  CitationScoreSchema,
+  DegradedInfoSchema,
+  ImageQuerySchema,
+  ModelSelectionSchema,
+  SEARCH_BATCH_LIMIT,
+  SearchBudgetsSchema,
+  SearchRequestSchema,
+  SearchResultSchema,
+  SearchStatsSchema,
+  SearchVersionPolicySchema,
+  SearchWeightsSchema,
+  buildIndexVersion,
+} from './dataset/search/types';
+export type {
+  Citation,
+  CitationScore,
+  DegradedInfo,
+  ImageQuery,
+  ModelSelection,
+  SearchBudgets,
+  SearchRequest,
+  SearchResult,
+  SearchStats,
+  SearchVersionPolicy,
+  SearchWeights,
+} from './dataset/search/types';
