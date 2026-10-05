@@ -1,0 +1,1236 @@
+{
+  "generatedFrom": "12.9",
+  "routes": [
+    {
+      "routeId": "API-DS-001",
+      "method": "GET",
+      "path": "/api/core/dataset/list",
+      "group": "core",
+      "requestDto": "DatasetListQuery",
+      "responseDto": "DatasetListResponse",
+      "errorCodes": [
+        501004,
+        501016,
+        501027
+      ],
+      "implemented": true,
+      "source": "public/Token/Read"
+    },
+    {
+      "routeId": "API-DS-002",
+      "method": "POST",
+      "path": "/api/core/dataset/create",
+      "group": "core",
+      "requestDto": "DatasetCreateBody",
+      "responseDto": "DatasetCreateResponse",
+      "errorCodes": [
+        501001,
+        501027,
+        501066
+      ],
+      "implemented": true,
+      "source": "public/Token/Team Dataset Create"
+    },
+    {
+      "routeId": "API-DS-003",
+      "method": "GET",
+      "path": "/api/core/dataset/detail",
+      "group": "core",
+      "requestDto": "DatasetDetailQuery",
+      "responseDto": "DatasetDetailResponse",
+      "errorCodes": [
+        501027,
+        501070
+      ],
+      "implemented": true,
+      "source": "public/Token/Read"
+    },
+    {
+      "routeId": "API-DS-004",
+      "method": "POST",
+      "path": "/api/core/dataset/update",
+      "group": "core",
+      "requestDto": "DatasetUpdateBody",
+      "responseDto": "ApiResponse<ApiDS004ResponseData>",
+      "errorCodes": [
+        501004,
+        501061,
+        501067
+      ],
+      "implemented": false,
+      "source": "public/Token/Write 或 Manage"
+    },
+    {
+      "routeId": "API-DS-005",
+      "method": "POST",
+      "path": "/api/core/dataset/delete",
+      "group": "core",
+      "requestDto": "DatasetDeleteBody",
+      "responseDto": "DeleteJobResponse",
+      "errorCodes": [
+        501061,
+        501068,
+        501070
+      ],
+      "implemented": false,
+      "source": "public/Token/Owner"
+    },
+    {
+      "routeId": "API-DS-006",
+      "method": "POST",
+      "path": "/api/core/dataset/rebuildEmbedding",
+      "group": "core",
+      "requestDto": "RebuildEmbeddingBody",
+      "responseDto": "ApiResponse<ApiDS006ResponseData>",
+      "errorCodes": [
+        501013,
+        501069
+      ],
+      "implemented": false,
+      "source": "public/Token/Owner"
+    },
+    {
+      "routeId": "API-COL-001",
+      "method": "GET",
+      "path": "/api/core/dataset/collection/list",
+      "group": "core",
+      "requestDto": "CollectionListQuery",
+      "responseDto": "ApiResponse<ApiCOL001ResponseData>",
+      "errorCodes": [
+        501027,
+        501070
+      ],
+      "implemented": false,
+      "source": "public/Token/Read"
+    },
+    {
+      "routeId": "API-COL-002",
+      "method": "POST",
+      "path": "/api/core/dataset/collection/create/folder",
+      "group": "core",
+      "requestDto": "CollectionCreateFolderBody",
+      "responseDto": "ApiResponse<ApiCOL002ResponseData>",
+      "errorCodes": [
+        501004,
+        501061
+      ],
+      "implemented": false,
+      "source": "public/Token/Write"
+    },
+    {
+      "routeId": "API-COL-003",
+      "method": "POST",
+      "path": "/api/core/dataset/collection/create/file",
+      "group": "core",
+      "requestDto": "CollectionCreateFileBody",
+      "responseDto": "ApiResponse<ApiCOL003ResponseData>",
+      "errorCodes": [
+        501017,
+        501030,
+        501061,
+        501065
+      ],
+      "implemented": false,
+      "source": "public/Token/Write"
+    },
+    {
+      "routeId": "API-COL-004",
+      "method": "POST",
+      "path": "/api/core/dataset/collection/create/link",
+      "group": "core",
+      "requestDto": "CollectionCreateLinkBody",
+      "responseDto": "ApiResponse<ApiCOL004ResponseData>",
+      "errorCodes": [
+        501017,
+        501019,
+        501031,
+        501032,
+        501033,
+        501034,
+        501035,
+        501036,
+        501065
+      ],
+      "implemented": false,
+      "source": "public/Token/Write"
+    },
+    {
+      "routeId": "API-COL-005",
+      "method": "POST",
+      "path": "/api/core/dataset/collection/create/text",
+      "group": "core",
+      "requestDto": "CollectionCreateTextBody",
+      "responseDto": "ApiResponse<ApiCOL005ResponseData>",
+      "errorCodes": [
+        501030,
+        501065
+      ],
+      "implemented": false,
+      "source": "public/Token/Write"
+    },
+    {
+      "routeId": "API-COL-006",
+      "method": "POST",
+      "path": "/api/core/dataset/collection/create/externalFile",
+      "group": "core",
+      "requestDto": "CollectionCreateExternalFileBody",
+      "responseDto": "ApiResponse<ApiCOL006ResponseData>",
+      "errorCodes": [
+        501017,
+        501019,
+        501061
+      ],
+      "implemented": false,
+      "source": "public/Token/Write"
+    },
+    {
+      "routeId": "API-COL-007",
+      "method": "POST",
+      "path": "/api/core/dataset/collection/create/apiFile",
+      "group": "core",
+      "requestDto": "CollectionCreateApiFileBody",
+      "responseDto": "ApiResponse<ApiCOL007ResponseData>",
+      "errorCodes": [
+        501017,
+        501019,
+        501039,
+        501061
+      ],
+      "implemented": false,
+      "source": "public/Token/Write"
+    },
+    {
+      "routeId": "API-COL-008",
+      "method": "POST",
+      "path": "/api/core/dataset/collection/create/images",
+      "group": "core",
+      "requestDto": "CollectionCreateImagesBody",
+      "responseDto": "ApiResponse<ApiCOL008ResponseData>",
+      "errorCodes": [
+        501009,
+        501010,
+        501061,
+        501065
+      ],
+      "implemented": false,
+      "source": "public/Token/Write"
+    },
+    {
+      "routeId": "API-COL-009",
+      "method": "POST",
+      "path": "/api/core/dataset/collection/create/backup",
+      "group": "core",
+      "requestDto": "CollectionCreateBackupForm",
+      "responseDto": "ApiResponse<ApiCOL009ResponseData>",
+      "errorCodes": [
+        501030,
+        501056,
+        501058,
+        501059
+      ],
+      "implemented": false,
+      "source": "public/Token/Write"
+    },
+    {
+      "routeId": "API-COL-010",
+      "method": "POST",
+      "path": "/api/core/dataset/collection/create/template",
+      "group": "core",
+      "requestDto": "CollectionCreateTemplateForm",
+      "responseDto": "ApiResponse<ApiCOL010ResponseData>",
+      "errorCodes": [
+        501030,
+        501037
+      ],
+      "implemented": false,
+      "source": "public/Token/Write"
+    },
+    {
+      "routeId": "API-COL-011",
+      "method": "GET",
+      "path": "/api/core/dataset/collection/detail",
+      "group": "core",
+      "requestDto": "CollectionTrainingStatusQuery",
+      "responseDto": "ApiResponse<ApiCOL011ResponseData>",
+      "errorCodes": [
+        501027,
+        501070
+      ],
+      "implemented": false,
+      "source": "public/Token/Read"
+    },
+    {
+      "routeId": "API-COL-012",
+      "method": "POST",
+      "path": "/api/core/dataset/collection/update",
+      "group": "core",
+      "requestDto": "CollectionUpdateBody",
+      "responseDto": "ApiResponse<ApiCOL012ResponseData>",
+      "errorCodes": [
+        501004,
+        501067
+      ],
+      "implemented": false,
+      "source": "public/Token/Write"
+    },
+    {
+      "routeId": "API-COL-013",
+      "method": "POST",
+      "path": "/api/core/dataset/collection/delete",
+      "group": "core",
+      "requestDto": "CollectionDeleteBody",
+      "responseDto": "DeleteJobResponse",
+      "errorCodes": [
+        501068,
+        501070
+      ],
+      "implemented": false,
+      "source": "public/Token/Write/Owner"
+    },
+    {
+      "routeId": "API-COL-014",
+      "method": "POST",
+      "path": "/api/core/dataset/collection/retrain",
+      "group": "core",
+      "requestDto": "CollectionRetrainBody",
+      "responseDto": "ApiResponse<ApiCOL014ResponseData>",
+      "errorCodes": [
+        501069,
+        501071
+      ],
+      "implemented": false,
+      "source": "public/Token/Write"
+    },
+    {
+      "routeId": "API-COL-015",
+      "method": "POST",
+      "path": "/api/core/dataset/collection/sync",
+      "group": "core",
+      "requestDto": "CollectionSyncBody",
+      "responseDto": "ApiResponse<ApiCOL015ResponseData>",
+      "errorCodes": [
+        501019,
+        501020,
+        501061
+      ],
+      "implemented": false,
+      "source": "public/Token/Write"
+    },
+    {
+      "routeId": "API-COL-016",
+      "method": "GET",
+      "path": "/api/core/dataset/collection/trainingStatus",
+      "group": "core",
+      "requestDto": "CollectionTrainingStatusQuery",
+      "responseDto": "ApiResponse<ApiCOL016ResponseData>",
+      "errorCodes": [
+        501027,
+        501070
+      ],
+      "implemented": false,
+      "source": "public/Token/Read"
+    },
+    {
+      "routeId": "API-DATA-001",
+      "method": "GET",
+      "path": "/api/core/dataset/data/list",
+      "group": "core",
+      "requestDto": "DataListQuery",
+      "responseDto": "ApiResponse<ApiDATA001ResponseData>",
+      "errorCodes": [
+        501027,
+        501070
+      ],
+      "implemented": false,
+      "source": "public/Token/Read"
+    },
+    {
+      "routeId": "API-DATA-002",
+      "method": "GET",
+      "path": "/api/core/dataset/data/detail",
+      "group": "core",
+      "requestDto": "DataDetailQuery",
+      "responseDto": "ApiResponse<ApiDATA002ResponseData>",
+      "errorCodes": [
+        501027,
+        501070
+      ],
+      "implemented": false,
+      "source": "public/Token/Read"
+    },
+    {
+      "routeId": "API-DATA-003",
+      "method": "POST",
+      "path": "/api/core/dataset/data/update",
+      "group": "core",
+      "requestDto": "DataUpdateBody",
+      "responseDto": "ApiResponse<ApiDATA003ResponseData>",
+      "errorCodes": [
+        501003,
+        501067
+      ],
+      "implemented": false,
+      "source": "public/Token/Write"
+    },
+    {
+      "routeId": "API-DATA-004",
+      "method": "POST",
+      "path": "/api/core/dataset/data/delete",
+      "group": "core",
+      "requestDto": "DataDeleteBody",
+      "responseDto": "ApiResponse<ApiDATA004ResponseData>",
+      "errorCodes": [
+        501027,
+        501070
+      ],
+      "implemented": false,
+      "source": "public/Token/Write"
+    },
+    {
+      "routeId": "API-DATA-005",
+      "method": "POST",
+      "path": "/api/core/dataset/data/insertData",
+      "group": "core",
+      "requestDto": "InsertDataBody",
+      "responseDto": "ApiResponse<ApiDATA005ResponseData>",
+      "errorCodes": [
+        501003,
+        501071
+      ],
+      "implemented": false,
+      "source": "public/Token/Write"
+    },
+    {
+      "routeId": "API-DATA-006",
+      "method": "POST",
+      "path": "/api/core/dataset/data/insertImages",
+      "group": "core",
+      "requestDto": "InsertImagesBody",
+      "responseDto": "ApiResponse<ApiDATA006ResponseData>",
+      "errorCodes": [
+        501009,
+        501010,
+        501011,
+        501065
+      ],
+      "implemented": false,
+      "source": "public/Token/Write"
+    },
+    {
+      "routeId": "API-DATA-007",
+      "method": "POST",
+      "path": "/api/core/dataset/data/pushData",
+      "group": "core",
+      "requestDto": "PushDataBody",
+      "responseDto": "ApiResponse<ApiDATA007ResponseData>",
+      "errorCodes": [
+        501030,
+        501065
+      ],
+      "implemented": false,
+      "source": "public/Token/Write"
+    },
+    {
+      "routeId": "API-IDX-001",
+      "method": "POST",
+      "path": "/api/core/dataset/index/create",
+      "group": "core",
+      "requestDto": "IndexCreateBody",
+      "responseDto": "ApiResponse<ApiIDX001ResponseData>",
+      "errorCodes": [
+        501041,
+        501067
+      ],
+      "implemented": false,
+      "source": "public/Token/Write"
+    },
+    {
+      "routeId": "API-IDX-002",
+      "method": "POST",
+      "path": "/api/core/dataset/index/update",
+      "group": "core",
+      "requestDto": "IndexUpdateBody",
+      "responseDto": "ApiResponse<ApiIDX002ResponseData>",
+      "errorCodes": [
+        501067
+      ],
+      "implemented": false,
+      "source": "public/Token/Write"
+    },
+    {
+      "routeId": "API-IDX-003",
+      "method": "POST",
+      "path": "/api/core/dataset/index/delete",
+      "group": "core",
+      "requestDto": "IndexDeleteBody",
+      "responseDto": "ApiResponse<ApiIDX003ResponseData>",
+      "errorCodes": [
+        501042
+      ],
+      "implemented": false,
+      "source": "public/Token/Write"
+    },
+    {
+      "routeId": "API-TASK-001",
+      "method": "GET",
+      "path": "/api/core/dataset/training/detail",
+      "group": "core",
+      "requestDto": "TrainingDetailQuery",
+      "responseDto": "ApiResponse<ApiTASK001ResponseData>",
+      "errorCodes": [
+        501027,
+        501070
+      ],
+      "implemented": false,
+      "source": "public/Token/Read"
+    },
+    {
+      "routeId": "API-TASK-002",
+      "method": "GET",
+      "path": "/api/core/dataset/training/errors",
+      "group": "core",
+      "requestDto": "TrainingErrorsQuery",
+      "responseDto": "ApiResponse<ApiTASK002ResponseData>",
+      "errorCodes": [
+        501027,
+        501070
+      ],
+      "implemented": false,
+      "source": "public/Token/Read"
+    },
+    {
+      "routeId": "API-TASK-003",
+      "method": "POST",
+      "path": "/api/core/dataset/training/resume",
+      "group": "core",
+      "requestDto": "TrainingResumeBody",
+      "responseDto": "ApiResponse<ApiTASK003ResponseData>",
+      "errorCodes": [
+        501006
+      ],
+      "implemented": false,
+      "source": "public/Token/Write"
+    },
+    {
+      "routeId": "API-DEL-001",
+      "method": "GET",
+      "path": "/api/core/dataset/delete-jobs/{jobId}",
+      "group": "core",
+      "requestDto": "DeleteJobQuery",
+      "responseDto": "ApiResponse<ApiDEL001ResponseData>",
+      "errorCodes": [
+        501027,
+        501070
+      ],
+      "implemented": false,
+      "source": "public/Token/Dataset Owner 或 Root"
+    },
+    {
+      "routeId": "API-DEL-002",
+      "method": "GET",
+      "path": "/api/core/dataset/delete-jobs/{jobId}/failures",
+      "group": "core",
+      "requestDto": "DeleteFailuresQuery",
+      "responseDto": "ApiResponse<ApiDEL002ResponseData>",
+      "errorCodes": [
+        501027,
+        501070
+      ],
+      "implemented": false,
+      "source": "public/Token/Owner 或 Root"
+    },
+    {
+      "routeId": "API-DEL-003",
+      "method": "POST",
+      "path": "/api/core/dataset/delete-jobs/{jobId}/retry",
+      "group": "core",
+      "requestDto": "DeleteRetryBody",
+      "responseDto": "ApiResponse<ApiDEL003ResponseData>",
+      "errorCodes": [
+        501024,
+        501040
+      ],
+      "implemented": false,
+      "source": "public/Token/Owner 或 Root"
+    },
+    {
+      "routeId": "API-SEARCH-001",
+      "method": "POST",
+      "path": "/api/core/dataset/searchTest",
+      "group": "core",
+      "requestDto": "SearchTestBody",
+      "responseDto": "ApiResponse<ApiSEARCH001ResponseData>",
+      "errorCodes": [
+        501011,
+        501027,
+        501049,
+        501050
+      ],
+      "implemented": true,
+      "source": "public/Token/Read"
+    },
+    {
+      "routeId": "API-FILE-001",
+      "method": "POST",
+      "path": "/api/core/dataset/file/presignUpload",
+      "group": "core",
+      "requestDto": "PresignUploadBody",
+      "responseDto": "PresignUploadResponse",
+      "errorCodes": [
+        501065,
+        501071
+      ],
+      "implemented": false,
+      "source": "public/Token/Write"
+    },
+    {
+      "routeId": "API-FILE-002",
+      "method": "POST",
+      "path": "/api/core/dataset/file/completeMultipart",
+      "group": "core",
+      "requestDto": "CompleteMultipartBody",
+      "responseDto": "ApiResponse<ApiFILE002ResponseData>",
+      "errorCodes": [
+        501060
+      ],
+      "implemented": false,
+      "source": "public/Token/Write"
+    },
+    {
+      "routeId": "API-FILE-003",
+      "method": "POST",
+      "path": "/api/core/dataset/file/abortMultipart",
+      "group": "core",
+      "requestDto": "AbortMultipartBody",
+      "responseDto": "ApiResponse<ApiFILE003ResponseData>",
+      "errorCodes": [
+        501061,
+        501070
+      ],
+      "implemented": false,
+      "source": "public/Token/Write"
+    },
+    {
+      "routeId": "API-FILE-004",
+      "method": "POST",
+      "path": "/api/core/dataset/file/previewChunks",
+      "group": "core",
+      "requestDto": "PreviewChunksBody",
+      "responseDto": "ApiResponse<ApiFILE004ResponseData>",
+      "errorCodes": [
+        501017,
+        501056
+      ],
+      "implemented": false,
+      "source": "dev/Token/Write"
+    },
+    {
+      "routeId": "API-ROOT-001",
+      "method": "POST",
+      "path": "/api/admin/dataset/migrations/dry-run",
+      "group": "admin",
+      "requestDto": "MigrationDryRunBody",
+      "responseDto": "ApiResponse<ApiROOT001ResponseData>",
+      "errorCodes": [
+        501024,
+        501025
+      ],
+      "implemented": false,
+      "source": "root/Root/Admin"
+    },
+    {
+      "routeId": "API-ROOT-002",
+      "method": "POST",
+      "path": "/api/admin/dataset/migrations/apply",
+      "group": "admin",
+      "requestDto": "MigrationApplyBody",
+      "responseDto": "ApiResponse<ApiROOT002ResponseData>",
+      "errorCodes": [
+        501024,
+        501025
+      ],
+      "implemented": false,
+      "source": "root/Root/Admin"
+    },
+    {
+      "routeId": "API-ROOT-003",
+      "method": "POST",
+      "path": "/api/admin/dataset/migrations/resume",
+      "group": "admin",
+      "requestDto": "MigrationResumeBody",
+      "responseDto": "ApiResponse<ApiROOT003ResponseData>",
+      "errorCodes": [
+        501024,
+        501025
+      ],
+      "implemented": false,
+      "source": "root/Root/Admin"
+    },
+    {
+      "routeId": "API-ROOT-004",
+      "method": "GET",
+      "path": "/api/admin/dataset/reconcile/reports",
+      "group": "admin",
+      "requestDto": "ReconcileReportsQuery",
+      "responseDto": "ApiResponse<ApiROOT004ResponseData>",
+      "errorCodes": [
+        501027,
+        501070
+      ],
+      "implemented": false,
+      "source": "root / 授权租户管理员"
+    },
+    {
+      "routeId": "API-FILE-005",
+      "method": "POST",
+      "path": "/api/core/dataset/file/presignSearchTestImage",
+      "group": "core",
+      "requestDto": "PresignSearchTestImageBody",
+      "responseDto": "ApiResponse<ApiFILE005ResponseData>",
+      "errorCodes": [
+        501065,
+        501071
+      ],
+      "implemented": false,
+      "source": "public/Token/Write"
+    },
+    {
+      "routeId": "API-FILE-006",
+      "method": "POST",
+      "path": "/api/core/dataset/file/getSearchTestImagePreviewUrls",
+      "group": "core",
+      "requestDto": "PreviewUrlsBody",
+      "responseDto": "ApiResponse<ApiFILE006ResponseData>",
+      "errorCodes": [
+        501011,
+        501061
+      ],
+      "implemented": false,
+      "source": "public/Token/Read"
+    },
+    {
+      "routeId": "API-HEALTH-001",
+      "method": "GET",
+      "path": "/healthz/live",
+      "group": "health",
+      "requestDto": "NoRequestBody",
+      "responseDto": "HealthResponse",
+      "errorCodes": [],
+      "implemented": false,
+      "source": "internal/无认证或内网"
+    },
+    {
+      "routeId": "API-HEALTH-002",
+      "method": "GET",
+      "path": "/readyz",
+      "group": "health",
+      "requestDto": "NoRequestBody",
+      "responseDto": "HealthResponse",
+      "errorCodes": [
+        501016
+      ],
+      "implemented": false,
+      "source": "internal/无认证或内网"
+    },
+    {
+      "routeId": "API-HEALTH-003",
+      "method": "GET",
+      "path": "/startupz",
+      "group": "health",
+      "requestDto": "NoRequestBody",
+      "responseDto": "HealthResponse",
+      "errorCodes": [
+        501016
+      ],
+      "implemented": false,
+      "source": "internal/无认证或内网"
+    },
+    {
+      "routeId": "API-EXT-001",
+      "method": "GET/POST",
+      "path": "/proApi/core/dataset/**",
+      "group": "extension",
+      "requestDto": "ExtensionEnvelope",
+      "responseDto": "ExtensionEnvelope",
+      "errorCodes": [
+        501020,
+        501047
+      ],
+      "implemented": false,
+      "source": "extension/调用者上下文"
+    },
+    {
+      "routeId": "API-TAG-001",
+      "method": "GET",
+      "path": "/api/core/dataset/tag/list",
+      "group": "core",
+      "requestDto": "TagListQuery",
+      "responseDto": "ApiResponse<ApiTAG001ResponseData>",
+      "errorCodes": [
+        501027,
+        501070
+      ],
+      "implemented": false,
+      "source": "public/Token/Read"
+    },
+    {
+      "routeId": "API-TAG-002",
+      "method": "POST",
+      "path": "/api/core/dataset/tag/create",
+      "group": "core",
+      "requestDto": "TagCreateBody",
+      "responseDto": "ApiResponse<ApiTAG002ResponseData>",
+      "errorCodes": [
+        501043,
+        501044
+      ],
+      "implemented": false,
+      "source": "public/Token/Write"
+    },
+    {
+      "routeId": "API-TAG-003",
+      "method": "POST",
+      "path": "/api/core/dataset/tag/update",
+      "group": "core",
+      "requestDto": "TagUpdateBody",
+      "responseDto": "ApiResponse<ApiTAG003ResponseData>",
+      "errorCodes": [
+        501043
+      ],
+      "implemented": false,
+      "source": "public/Token/Manage"
+    },
+    {
+      "routeId": "API-TAG-004",
+      "method": "POST",
+      "path": "/api/core/dataset/tag/delete",
+      "group": "core",
+      "requestDto": "TagDeleteBody",
+      "responseDto": "ApiResponse<ApiTAG004ResponseData>",
+      "errorCodes": [
+        501061,
+        501070
+      ],
+      "implemented": false,
+      "source": "public/Token/Manage"
+    },
+    {
+      "routeId": "API-TAG-005",
+      "method": "POST",
+      "path": "/api/core/dataset/tag/addToCollections",
+      "group": "core",
+      "requestDto": "TagBindingBody",
+      "responseDto": "ApiResponse<ApiTAG005ResponseData>",
+      "errorCodes": [
+        501045
+      ],
+      "implemented": false,
+      "source": "public/Token/Write"
+    },
+    {
+      "routeId": "API-TAG-006",
+      "method": "POST",
+      "path": "/api/core/dataset/tag/removeFromCollections",
+      "group": "core",
+      "requestDto": "TagBindingBody",
+      "responseDto": "ApiResponse<ApiTAG006ResponseData>",
+      "errorCodes": [
+        501045
+      ],
+      "implemented": false,
+      "source": "public/Token/Write"
+    },
+    {
+      "routeId": "API-PATH-001",
+      "method": "GET",
+      "path": "/api/core/dataset/paths",
+      "group": "core",
+      "requestDto": "DatasetPathsQuery",
+      "responseDto": "ApiResponse<PathNode[]>",
+      "errorCodes": [
+        501027,
+        501070
+      ],
+      "implemented": false,
+      "source": "public/Token/Read"
+    },
+    {
+      "routeId": "API-PATH-002",
+      "method": "GET",
+      "path": "/api/core/dataset/collection/paths",
+      "group": "core",
+      "requestDto": "CollectionPathsQuery",
+      "responseDto": "ApiResponse<PathNode[]>",
+      "errorCodes": [
+        501027,
+        501070
+      ],
+      "implemented": false,
+      "source": "public/Token/Read"
+    },
+    {
+      "routeId": "API-PATH-003",
+      "method": "POST",
+      "path": "/api/core/dataset/move",
+      "group": "core",
+      "requestDto": "DatasetMoveBody",
+      "responseDto": "ApiResponse<ApiPATH003ResponseData>",
+      "errorCodes": [
+        501046
+      ],
+      "implemented": false,
+      "source": "public/Token/Write"
+    },
+    {
+      "routeId": "API-PATH-004",
+      "method": "POST",
+      "path": "/api/core/dataset/collection/move",
+      "group": "core",
+      "requestDto": "CollectionMoveBody",
+      "responseDto": "ApiResponse<ApiPATH004ResponseData>",
+      "errorCodes": [
+        501046
+      ],
+      "implemented": false,
+      "source": "public/Token/Write"
+    },
+    {
+      "routeId": "API-ACL-001",
+      "method": "GET",
+      "path": "/api/core/dataset/getPermission",
+      "group": "core",
+      "requestDto": "DatasetDetailQuery",
+      "responseDto": "ApiResponse<ApiACL001ResponseData>",
+      "errorCodes": [
+        501027,
+        501070
+      ],
+      "implemented": false,
+      "source": "public/Token/Read"
+    },
+    {
+      "routeId": "API-ACL-002",
+      "method": "POST",
+      "path": "/api/core/dataset/resumeInheritPermission",
+      "group": "core",
+      "requestDto": "ResumeInheritPermissionBody",
+      "responseDto": "ApiResponse<ApiACL002ResponseData>",
+      "errorCodes": [
+        501008
+      ],
+      "implemented": false,
+      "source": "public/Token/Manage"
+    },
+    {
+      "routeId": "API-ACL-003",
+      "method": "GET",
+      "path": "/proApi/core/dataset/collaborator/list",
+      "group": "extension",
+      "requestDto": "DatasetDetailQuery",
+      "responseDto": "ApiResponse<ApiACL003ResponseData>",
+      "errorCodes": [
+        501020
+      ],
+      "implemented": false,
+      "source": "extension/调用者上下文/Manage"
+    },
+    {
+      "routeId": "API-ACL-004",
+      "method": "POST",
+      "path": "/proApi/core/dataset/collaborator/update",
+      "group": "extension",
+      "requestDto": "ApiACL004RequestData",
+      "responseDto": "ApiResponse<ApiACL004ResponseData>",
+      "errorCodes": [
+        501008,
+        501047
+      ],
+      "implemented": false,
+      "source": "extension/调用者上下文/Manage"
+    },
+    {
+      "routeId": "API-ACL-005",
+      "method": "POST",
+      "path": "/proApi/core/dataset/changeOwner",
+      "group": "extension",
+      "requestDto": "ApiACL005RequestData",
+      "responseDto": "ApiResponse<ApiACL005ResponseData>",
+      "errorCodes": [
+        501008
+      ],
+      "implemented": false,
+      "source": "extension/调用者上下文/Owner"
+    },
+    {
+      "routeId": "API-EXP-001",
+      "method": "GET",
+      "path": "/api/core/dataset/exportAll",
+      "group": "core",
+      "requestDto": "DatasetExportQuery",
+      "responseDto": "DatasetExportResponse",
+      "errorCodes": [
+        501027,
+        501070
+      ],
+      "implemented": false,
+      "source": "public/Token/Read"
+    },
+    {
+      "routeId": "API-EXP-002",
+      "method": "GET",
+      "path": "/api/core/dataset/collection/export",
+      "group": "core",
+      "requestDto": "CollectionExportQuery",
+      "responseDto": "CollectionExportResponse",
+      "errorCodes": [
+        501027,
+        501070
+      ],
+      "implemented": false,
+      "source": "public/Token/Read"
+    },
+    {
+      "routeId": "API-IMP-001",
+      "method": "POST",
+      "path": "/api/core/dataset/collection/import",
+      "group": "core",
+      "requestDto": "DatasetImportForm",
+      "responseDto": "ApiResponse<ApiIMP001ResponseData>",
+      "errorCodes": [
+        501058,
+        501059
+      ],
+      "implemented": false,
+      "source": "public/Token/Write"
+    },
+    {
+      "routeId": "API-APIDS-001",
+      "method": "POST",
+      "path": "/api/core/dataset/apiDataset/getCatalog",
+      "group": "core",
+      "requestDto": "ApiDatasetCatalogBody",
+      "responseDto": "ApiResponse<ApiAPIDS001ResponseData>",
+      "errorCodes": [
+        501017,
+        501039
+      ],
+      "implemented": false,
+      "source": "public/Token/Write"
+    },
+    {
+      "routeId": "API-APIDS-002",
+      "method": "POST",
+      "path": "/api/core/dataset/apiDataset/getPathNames",
+      "group": "core",
+      "requestDto": "ApiDatasetPathNamesBody",
+      "responseDto": "ApiResponse<ApiAPIDS002ResponseData>",
+      "errorCodes": [
+        501017
+      ],
+      "implemented": false,
+      "source": "public/Token/Write"
+    },
+    {
+      "routeId": "API-APIDS-003",
+      "method": "POST",
+      "path": "/api/core/dataset/apiDataset/list",
+      "group": "core",
+      "requestDto": "ApiDatasetListBody",
+      "responseDto": "ApiResponse<ApiAPIDS003ResponseData>",
+      "errorCodes": [
+        501017,
+        501039
+      ],
+      "implemented": false,
+      "source": "public/Token/Write"
+    },
+    {
+      "routeId": "API-APIDS-004",
+      "method": "GET",
+      "path": "/api/core/dataset/apiDataset/listExistId",
+      "group": "core",
+      "requestDto": "ApiDatasetExistIdQuery",
+      "responseDto": "ApiResponse<ApiAPIDS004ResponseData>",
+      "errorCodes": [
+        501061,
+        501070
+      ],
+      "implemented": false,
+      "source": "public/Token/Write"
+    },
+    {
+      "routeId": "API-TASK-004",
+      "method": "PUT",
+      "path": "/api/core/dataset/training/updateTrainingData",
+      "group": "core",
+      "requestDto": "TrainingUpdateBody",
+      "responseDto": "ApiResponse<ApiTASK004ResponseData>",
+      "errorCodes": [
+        501006,
+        501048
+      ],
+      "implemented": false,
+      "source": "public/Token/Write"
+    },
+    {
+      "routeId": "API-TASK-005",
+      "method": "POST",
+      "path": "/api/core/dataset/training/deleteTrainingData",
+      "group": "core",
+      "requestDto": "TrainingDeleteBody",
+      "responseDto": "ApiResponse<ApiTASK005ResponseData>",
+      "errorCodes": [
+        501027,
+        501070
+      ],
+      "implemented": false,
+      "source": "public/Token/Manage"
+    },
+    {
+      "routeId": "API-TASK-006",
+      "method": "GET",
+      "path": "/api/core/dataset/training/queue",
+      "group": "core",
+      "requestDto": "TrainingQueueQuery",
+      "responseDto": "ApiResponse<ApiTASK006ResponseData>",
+      "errorCodes": [
+        501027,
+        501070
+      ],
+      "implemented": false,
+      "source": "public/Token/Read"
+    },
+    {
+      "routeId": "API-TASK-007",
+      "method": "POST",
+      "path": "/api/core/dataset/training/errors",
+      "group": "core",
+      "requestDto": "TrainingErrorsQuery",
+      "responseDto": "ApiResponse<ApiTASK007ResponseData>",
+      "errorCodes": [
+        501027,
+        501070
+      ],
+      "implemented": false,
+      "source": "public/Token/Read"
+    },
+    {
+      "routeId": "API-TASK-008",
+      "method": "POST",
+      "path": "/api/core/dataset/training/collectionErrors",
+      "group": "core",
+      "requestDto": "CollectionTrainingStatusQuery",
+      "responseDto": "ApiResponse<ApiTASK008ResponseData>",
+      "errorCodes": [
+        501027,
+        501070
+      ],
+      "implemented": false,
+      "source": "public/Token/Read"
+    },
+    {
+      "routeId": "API-TASK-009",
+      "method": "GET",
+      "path": "/api/core/dataset/training/hasError",
+      "group": "core",
+      "requestDto": "TrainingQueueQuery",
+      "responseDto": "ApiResponse<ApiTASK009ResponseData>",
+      "errorCodes": [
+        501027,
+        501070
+      ],
+      "implemented": false,
+      "source": "public/Token/Read"
+    },
+    {
+      "routeId": "API-AGG-001",
+      "method": "POST",
+      "path": "/api/core/dataset/createWithFiles",
+      "group": "core",
+      "requestDto": "CreateDatasetWithFilesBody",
+      "responseDto": "ApiResponse<ApiAGG001ResponseData>",
+      "errorCodes": [
+        501010,
+        501030
+      ],
+      "implemented": false,
+      "source": "public/Token/Team Dataset Create"
+    },
+    {
+      "routeId": "API-VIRT-001",
+      "method": "GET",
+      "path": "/api/core/dataset/collection/virtual",
+      "group": "core",
+      "requestDto": "VirtualCollectionQuery",
+      "responseDto": "ApiResponse<ApiVIRT001ResponseData>",
+      "errorCodes": [
+        501027,
+        501070
+      ],
+      "implemented": false,
+      "source": "public/Token/Read"
+    },
+    {
+      "routeId": "API-SEARCH-002",
+      "method": "POST",
+      "path": "/api/internal/dataset/search",
+      "group": "internal",
+      "requestDto": "DatasetSearchSubject",
+      "responseDto": "SearchResult",
+      "errorCodes": [
+        501049,
+        501050,
+        501051,
+        501052,
+        501064
+      ],
+      "implemented": false,
+      "source": "internal/服务身份（teamId 由主体解析）"
+    },
+    {
+      "routeId": "API-COL-017",
+      "method": "POST",
+      "path": "/api/core/dataset/collection/create/empty",
+      "group": "core",
+      "requestDto": "CollectionCreateEmptyBody",
+      "responseDto": "ApiResponse<ApiCOL017ResponseData>",
+      "errorCodes": [
+        501004,
+        501061
+      ],
+      "implemented": false,
+      "source": "public/Token/Write"
+    },
+    {
+      "routeId": "API-FILE-007",
+      "method": "POST",
+      "path": "/api/core/dataset/file/uploadPart",
+      "group": "core",
+      "requestDto": "UploadPartForm",
+      "responseDto": "UploadPartResponse",
+      "errorCodes": [
+        501060,
+        501061,
+        501065
+      ],
+      "implemented": false,
+      "source": "public/Token/Write"
+    },
+    {
+      "routeId": "API-IMP-002",
+      "method": "POST",
+      "path": "/api/core/dataset/import",
+      "group": "core",
+      "requestDto": "DatasetImportForm",
+      "responseDto": "ApiResponse<ApiIMP002ResponseData>",
+      "errorCodes": [
+        501030,
+        501058,
+        501059,
+        501061
+      ],
+      "implemented": false,
+      "source": "public/Token/Write"
+    }
+  ]
+}

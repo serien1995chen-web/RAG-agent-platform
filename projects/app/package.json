@@ -1,0 +1,38 @@
+{
+  "name": "@kb/app",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "dev": "next dev -p 3000",
+    "start": "next start -p 3000",
+    "build": "next build",
+    "build:workers": "node -e \"console.log('build:workers lands in Round 2 (Phase 4-5)');\"",
+    "typecheck": "next typegen && tsc -p tsconfig.json --noEmit",
+    "test": "vitest run --passWithNoTests",
+    "test:unit": "vitest run --passWithNoTests test/unit",
+    "test:integration": "vitest run --passWithNoTests test/integration",
+    "test:contract": "vitest run --passWithNoTests test/contract",
+    "lint": "eslint src"
+  },
+  "dependencies": {
+    "@kb/contracts": "workspace:*",
+    "@kb/otel": "workspace:*",
+    "@kb/service": "workspace:*",
+    "@kb/storage": "workspace:*",
+    "@kb/web": "workspace:*",
+    "next": "catalog:",
+    "react": "catalog:",
+    "react-dom": "catalog:"
+  },
+  "devDependencies": {
+    "@types/react": "catalog:",
+    "@types/react-dom": "catalog:",
+    "@types/node": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}

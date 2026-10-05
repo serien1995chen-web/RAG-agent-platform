@@ -1,0 +1,117 @@
+name: rag-agent-platform
+
+# 镜像使用本地已 pull 的 CN registry 全名与 tag，禁止 latest；Compose 不做 pull。
+services:
+  mongo:
+    image: registry.cn-hangzhou.aliyuncs.com/fastgpt/mongo:5.0.32
+    restart: unless-stopped
+    ports:
+      - '27017:27017'
+    volumes:
+      - mongo-data:/data/db
+    healthcheck:
+      test: ['CMD', 'mongo', '--quiet', '--eval', "db.adminCommand('ping').ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: registry.cn-hangzhou.aliyuncs.com/fastgpt/redis:7.2-alpine
+    restart: unless-stopped
+    command: ['redis-server', '--appendonly', 'yes']
+    ports:
+      - '6379:6379'
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  pgvector:
+    image: registry.cn-hangzhou.aliyuncs.com/fastgpt/pgvector:0.8.0-pg15
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-kb}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-kb_dev_password}
+      POSTGRES_DB: ${POSTGRES_DB:-kb}
+    ports:
+      - '5432:5432'
+    volumes:
+      - pg-data:/var/lib/postgresql/data
+      - ./init/pgvector.sql:/docker-entrypoint-initdb.d/01-pgvector.sql:ro
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-kb} -d ${POSTGRES_DB:-kb}']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  minio:
+    image: registry.cn-hangzhou.aliyuncs.com/fastgpt/minio:RELEASE.2025-09-07T16-13-09Z
+    restart: unless-stopped
+    command: ['server', '/data', '--console-address', ':9001']
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+    ports:
+      - '9000:9000'
+      - '9001:9001'
+    volumes:
+      - minio-data:/data
+    healthcheck:
+      test: ['CMD', 'curl', '-f', 'http://localhost:9000/minio/health/live']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  app:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      mongo:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      pgvector:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      APP_WORKER_MODE: ${APP_WORKER_MODE:-all}
+      KB_INSTANCE_ID: ${KB_INSTANCE_ID:-docker-1}
+      KB_DEPENDENCY_BASELINE_ID: ${KB_DEPENDENCY_BASELINE_ID:-kb-baseline-6.1}
+      KB_VERSION_CHECK_POLICY: ${KB_VERSION_CHECK_POLICY:-strict}
+      KB_CONNECT_TIMEOUT_MS: ${KB_CONNECT_TIMEOUT_MS:-5000}
+      KB_REQUEST_TIMEOUT_MS: ${KB_REQUEST_TIMEOUT_MS:-2000}
+      KB_MONGO_URI: mongodb://mongo:27017/rag_agent_platform
+      KB_REDIS_URL: redis://redis:6379
+      KB_PG_URL: postgresql://${POSTGRES_USER:-kb}:${POSTGRES_PASSWORD:-kb_dev_password}@pgvector:5432/${POSTGRES_DB:-kb}
+      KB_S3_ENDPOINT: http://minio:9000
+      KB_S3_REGION: ${KB_S3_REGION:-us-east-1}
+      KB_S3_BUCKET: ${KB_S3_BUCKET:-kb-local}
+      KB_S3_ACCESS_KEY_REF: env:MINIO_ROOT_USER
+      KB_S3_SECRET_KEY_REF: env:MINIO_ROOT_PASSWORD
+      KB_LOG_LEVEL: ${KB_LOG_LEVEL:-info}
+      KB_MONGO_POOL_SIZE: ${KB_MONGO_POOL_SIZE:-10}
+      KB_REDIS_CONNECTIONS: ${KB_REDIS_CONNECTIONS:-2}
+      KB_PG_POOL_SIZE: ${KB_PG_POOL_SIZE:-10}
+      KB_S3_CONCURRENCY: ${KB_S3_CONCURRENCY:-4}
+      KB_PROVIDER_CONCURRENCY: ${KB_PROVIDER_CONCURRENCY:-4}
+      KB_BATCH_SIZE: ${KB_BATCH_SIZE:-100}
+      KB_QUEUE_CONCURRENCY: ${KB_QUEUE_CONCURRENCY:-4}
+      KB_PROVIDER_TIMEOUT_MS: ${KB_PROVIDER_TIMEOUT_MS:-30000}
+      KB_PROVIDER_MAX_RETRIES: ${KB_PROVIDER_MAX_RETRIES:-3}
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+    ports:
+      - '3000:3000'
+
+volumes:
+  mongo-data:
+  redis-data:
+  pg-data:
+  minio-data:

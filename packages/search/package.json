@@ -1,0 +1,26 @@
+{
+  "name": "@kb/search",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json --noEmit",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run --passWithNoTests",
+    "test:unit": "vitest run --passWithNoTests test/unit",
+    "test:integration": "vitest run --passWithNoTests test/integration",
+    "test:contract": "vitest run --passWithNoTests test/contract",
+    "lint": "eslint src"
+  },
+  "dependencies": {
+    "@kb/contracts": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}

@@ -1,0 +1,928 @@
+{
+  "generatedFrom": "12.4/12.4.1/12.4.2",
+  "errors": [
+    {
+      "code": 501001,
+      "messageKey": "dataset.unsupported_type",
+      "httpStatus": 400,
+      "retryable": "no-retry",
+      "severity": "warning",
+      "description": "websiteDataset/未知类型",
+      "params": [
+        "type"
+      ],
+      "paramsSchema": "{type}"
+    },
+    {
+      "code": 501002,
+      "messageKey": "dataset.external_file.duplicate",
+      "httpStatus": 409,
+      "retryable": "no-retry",
+      "severity": "warning",
+      "description": "externalFileIdNormalized 冲突",
+      "params": [
+        "externalFileIdNormalized",
+        "collectionId",
+        "datasetId"
+      ],
+      "paramsSchema": "{externalFileIdNormalized,collectionId,datasetId}"
+    },
+    {
+      "code": 501003,
+      "messageKey": "dataset.data.duplicate",
+      "httpStatus": 409,
+      "retryable": "no-retry",
+      "severity": "warning",
+      "description": "dedupKey 冲突",
+      "params": [
+        "dedupKey",
+        "datasetId",
+        "collectionId"
+      ],
+      "paramsSchema": "{dedupKey,datasetId,collectionId}"
+    },
+    {
+      "code": 501004,
+      "messageKey": "dataset.collection.invalid_parent",
+      "httpStatus": 400,
+      "retryable": "no-retry",
+      "severity": "warning",
+      "description": "父子不一致",
+      "params": [
+        "parentId",
+        "datasetId"
+      ],
+      "paramsSchema": "{parentId,datasetId}"
+    },
+    {
+      "code": 501005,
+      "messageKey": "dataset.task.invalid_state",
+      "httpStatus": 409,
+      "retryable": "no-retry",
+      "severity": "warning",
+      "description": "非法任务流转",
+      "params": [
+        "taskId",
+        "from",
+        "to"
+      ],
+      "paramsSchema": "{taskId,from,to}"
+    },
+    {
+      "code": 501006,
+      "messageKey": "dataset.task.retry_exhausted",
+      "httpStatus": 409,
+      "retryable": "manual",
+      "severity": "error",
+      "description": "retryCount=0",
+      "params": [
+        "taskId",
+        "retryCount"
+      ],
+      "paramsSchema": "{taskId,retryCount}"
+    },
+    {
+      "code": 501007,
+      "messageKey": "dataset.acl.explicit_deny",
+      "httpStatus": 403,
+      "retryable": "no-retry",
+      "severity": "warning",
+      "description": "显式空权限",
+      "params": [
+        "datasetId",
+        "tmbId"
+      ],
+      "paramsSchema": "{datasetId,tmbId}"
+    },
+    {
+      "code": 501008,
+      "messageKey": "dataset.acl.last_owner",
+      "httpStatus": 409,
+      "retryable": "no-retry",
+      "severity": "error",
+      "description": "删除最后 Owner",
+      "params": [
+        "datasetId",
+        "ownerTmbId"
+      ],
+      "paramsSchema": "{datasetId,ownerTmbId}"
+    },
+    {
+      "code": 501009,
+      "messageKey": "dataset.image.invalid_temp_key",
+      "httpStatus": 400,
+      "retryable": "no-retry",
+      "severity": "warning",
+      "description": "非本团队临时 key",
+      "params": [
+        "keyHash",
+        "teamId"
+      ],
+      "paramsSchema": "{keyHash,teamId}"
+    },
+    {
+      "code": 501010,
+      "messageKey": "dataset.image.capability_missing",
+      "httpStatus": 400,
+      "retryable": "no-retry",
+      "severity": "error",
+      "description": "缺 VLM 或图片 Embedding",
+      "params": [
+        "capability",
+        "datasetId"
+      ],
+      "paramsSchema": "{capability,datasetId}"
+    },
+    {
+      "code": 501011,
+      "messageKey": "dataset.image.expired_temp_key",
+      "httpStatus": 410,
+      "retryable": "no-retry",
+      "severity": "warning",
+      "description": "临时 key 过期",
+      "params": [
+        "keyHash",
+        "expiredAt"
+      ],
+      "paramsSchema": "{keyHash,expiredAt}"
+    },
+    {
+      "code": 501012,
+      "messageKey": "dataset.vector.tenant_context_missing",
+      "httpStatus": 500,
+      "retryable": "manual",
+      "severity": "fatal",
+      "description": "Adapter 缺租户字段",
+      "params": [
+        "missing[]"
+      ],
+      "paramsSchema": "{missing[]}"
+    },
+    {
+      "code": 501013,
+      "messageKey": "dataset.vector.dimension_mismatch",
+      "httpStatus": 500,
+      "retryable": "manual",
+      "severity": "fatal",
+      "description": "维度与 DDL 不一致",
+      "params": [
+        "expected",
+        "actual"
+      ],
+      "paramsSchema": "{expected,actual}"
+    },
+    {
+      "code": 501014,
+      "messageKey": "dataset.vector.store_unavailable",
+      "httpStatus": 503,
+      "retryable": "retryable",
+      "severity": "error",
+      "description": "pgvector 不可用",
+      "params": [
+        "operation",
+        "store"
+      ],
+      "paramsSchema": "{operation,store}"
+    },
+    {
+      "code": 501015,
+      "messageKey": "dataset.storage.object_missing",
+      "httpStatus": 404,
+      "retryable": "no-retry",
+      "severity": "warning",
+      "description": "S3 对象不存在",
+      "params": [
+        "objectKeyHash",
+        "bucket"
+      ],
+      "paramsSchema": "{objectKeyHash,bucket}"
+    },
+    {
+      "code": 501016,
+      "messageKey": "dataset.storage.unavailable",
+      "httpStatus": 503,
+      "retryable": "retryable",
+      "severity": "error",
+      "description": "S3/Mongo 存储故障",
+      "params": [
+        "store",
+        "operation"
+      ],
+      "paramsSchema": "{store,operation}"
+    },
+    {
+      "code": 501017,
+      "messageKey": "dataset.provider.not_configured",
+      "httpStatus": 400,
+      "retryable": "no-retry",
+      "severity": "warning",
+      "description": "Provider 未配置",
+      "params": [
+        "provider"
+      ],
+      "paramsSchema": "{provider}"
+    },
+    {
+      "code": 501018,
+      "messageKey": "dataset.provider.timeout",
+      "httpStatus": 503,
+      "retryable": "retryable",
+      "severity": "warning",
+      "description": "Provider 超时",
+      "params": [
+        "provider",
+        "timeoutMs"
+      ],
+      "paramsSchema": "{provider,timeoutMs}"
+    },
+    {
+      "code": 501019,
+      "messageKey": "dataset.provider.rejected",
+      "httpStatus": 502,
+      "retryable": "no-retry",
+      "severity": "error",
+      "description": "Provider 明确拒绝",
+      "params": [
+        "provider",
+        "status"
+      ],
+      "paramsSchema": "{provider,status}"
+    },
+    {
+      "code": 501020,
+      "messageKey": "dataset.extension.disabled",
+      "httpStatus": 400,
+      "retryable": "no-retry",
+      "severity": "warning",
+      "description": "扩展未启用",
+      "params": [
+        "extension"
+      ],
+      "paramsSchema": "{extension}"
+    },
+    {
+      "code": 501021,
+      "messageKey": "dataset.extension.timeout",
+      "httpStatus": 503,
+      "retryable": "manual",
+      "severity": "error",
+      "description": "同步扩展超时",
+      "params": [
+        "extension",
+        "timeoutMs"
+      ],
+      "paramsSchema": "{extension,timeoutMs}"
+    },
+    {
+      "code": 501022,
+      "messageKey": "dataset.extension.failed",
+      "httpStatus": 500,
+      "retryable": "manual",
+      "severity": "error",
+      "description": "同步回调失败",
+      "params": [
+        "extension",
+        "event"
+      ],
+      "paramsSchema": "{extension,event}"
+    },
+    {
+      "code": 501023,
+      "messageKey": "dataset.license.unapproved",
+      "httpStatus": 400,
+      "retryable": "manual",
+      "severity": "fatal",
+      "description": "未批准依赖或素材",
+      "params": [
+        "artifact",
+        "license"
+      ],
+      "paramsSchema": "{artifact,license}"
+    },
+    {
+      "code": 501024,
+      "messageKey": "dataset.migration.busy",
+      "httpStatus": 409,
+      "retryable": "retryable",
+      "severity": "warning",
+      "description": "迁移锁冲突",
+      "params": [
+        "migrationId",
+        "scope"
+      ],
+      "paramsSchema": "{migrationId,scope}"
+    },
+    {
+      "code": 501025,
+      "messageKey": "dataset.migration.invalid_cursor",
+      "httpStatus": 400,
+      "retryable": "no-retry",
+      "severity": "warning",
+      "description": "恢复游标非法",
+      "params": [
+        "cursor"
+      ],
+      "paramsSchema": "{cursor}"
+    },
+    {
+      "code": 501026,
+      "messageKey": "dataset.reconcile.failed",
+      "httpStatus": 500,
+      "retryable": "retryable",
+      "severity": "error",
+      "description": "对账失败",
+      "params": [
+        "window",
+        "scope"
+      ],
+      "paramsSchema": "{window,scope}"
+    },
+    {
+      "code": 501027,
+      "messageKey": "dataset.admin.forbidden",
+      "httpStatus": 403,
+      "retryable": "no-retry",
+      "severity": "warning",
+      "description": "Root/Admin 权限不足",
+      "params": [
+        "requiredRole"
+      ],
+      "paramsSchema": "{requiredRole}"
+    },
+    {
+      "code": 501028,
+      "messageKey": "dataset.audit.unavailable",
+      "httpStatus": 503,
+      "retryable": "retryable",
+      "severity": "warning",
+      "description": "Audit 写入失败",
+      "params": [
+        "event"
+      ],
+      "paramsSchema": "{event}"
+    },
+    {
+      "code": 501029,
+      "messageKey": "dataset.notification.failed",
+      "httpStatus": 502,
+      "retryable": "retryable",
+      "severity": "warning",
+      "description": "通知失败",
+      "params": [
+        "channel",
+        "notificationId"
+      ],
+      "paramsSchema": "{channel,notificationId}"
+    },
+    {
+      "code": 501030,
+      "messageKey": "dataset.import.too_large",
+      "httpStatus": 413,
+      "retryable": "no-retry",
+      "severity": "warning",
+      "description": "请求或字段超限",
+      "params": [
+        "limit",
+        "actual"
+      ],
+      "paramsSchema": "{limit,actual}"
+    },
+    {
+      "code": 501031,
+      "messageKey": "dataset.link.invalid_protocol",
+      "httpStatus": 400,
+      "retryable": "no-retry",
+      "severity": "warning",
+      "description": "链接协议不受支持（仅 http/https）",
+      "params": [
+        "urlHash",
+        "protocol"
+      ],
+      "paramsSchema": "{urlHash,protocol}"
+    },
+    {
+      "code": 501032,
+      "messageKey": "dataset.link.blocked_address",
+      "httpStatus": 403,
+      "retryable": "no-retry",
+      "severity": "error",
+      "description": "内网、loopback、元数据地址或 DNS 重绑定被拦截",
+      "params": [
+        "urlHash",
+        "reason"
+      ],
+      "paramsSchema": "{urlHash,reason}"
+    },
+    {
+      "code": 501033,
+      "messageKey": "dataset.link.redirect_limit",
+      "httpStatus": 400,
+      "retryable": "no-retry",
+      "severity": "warning",
+      "description": "跳转次数超过 5 跳或跳转到非 http(s)",
+      "params": [
+        "urlHash",
+        "hops"
+      ],
+      "paramsSchema": "{urlHash,hops}"
+    },
+    {
+      "code": 501034,
+      "messageKey": "dataset.link.timeout",
+      "httpStatus": 504,
+      "retryable": "retryable",
+      "severity": "warning",
+      "description": "链接读取超时（可重试）",
+      "params": [
+        "urlHash",
+        "timeoutMs"
+      ],
+      "paramsSchema": "{urlHash,timeoutMs}"
+    },
+    {
+      "code": 501035,
+      "messageKey": "dataset.link.unsupported_content_type",
+      "httpStatus": 400,
+      "retryable": "no-retry",
+      "severity": "warning",
+      "description": "链接 Content-Type 不受支持",
+      "params": [
+        "contentType",
+        "urlHash"
+      ],
+      "paramsSchema": "{contentType,urlHash}"
+    },
+    {
+      "code": 501036,
+      "messageKey": "dataset.link.empty_content",
+      "httpStatus": 422,
+      "retryable": "no-retry",
+      "severity": "warning",
+      "description": "静态正文占比过低或为空（renderRequired=true）",
+      "params": [
+        "urlHash",
+        "textRatio"
+      ],
+      "paramsSchema": "{urlHash,textRatio}"
+    },
+    {
+      "code": 501037,
+      "messageKey": "dataset.template.not_found",
+      "httpStatus": 404,
+      "retryable": "no-retry",
+      "severity": "warning",
+      "description": "导入模板或 QA 模板不存在",
+      "params": [
+        "templateId"
+      ],
+      "paramsSchema": "{templateId}"
+    },
+    {
+      "code": 501038,
+      "messageKey": "dataset.insert.pure_image_rejected",
+      "httpStatus": 400,
+      "retryable": "no-retry",
+      "severity": "warning",
+      "description": "insertData 不接受纯图片，请使用 insertImages",
+      "params": [
+        "route"
+      ],
+      "paramsSchema": "{route}"
+    },
+    {
+      "code": 501039,
+      "messageKey": "dataset.api_dataset.provider_error",
+      "httpStatus": 502,
+      "retryable": "retryable",
+      "severity": "error",
+      "description": "第三方知识库目录或文件接口失败",
+      "params": [
+        "provider",
+        "status"
+      ],
+      "paramsSchema": "{provider,status}"
+    },
+    {
+      "code": 501040,
+      "messageKey": "dataset.delete.retry_unavailable",
+      "httpStatus": 409,
+      "retryable": "no-retry",
+      "severity": "warning",
+      "description": "当前删除任务没有可重试的失败项",
+      "params": [
+        "jobId"
+      ],
+      "paramsSchema": "{jobId}"
+    },
+    {
+      "code": 501041,
+      "messageKey": "dataset.index.invalid_type",
+      "httpStatus": 400,
+      "retryable": "no-retry",
+      "severity": "warning",
+      "description": "索引类型非法或不允许由客户端写入",
+      "params": [
+        "type"
+      ],
+      "paramsSchema": "{type}"
+    },
+    {
+      "code": 501042,
+      "messageKey": "dataset.index.system_index_forbidden",
+      "httpStatus": 403,
+      "retryable": "no-retry",
+      "severity": "warning",
+      "description": "系统索引不可修改或删除",
+      "params": [
+        "indexId",
+        "dataId"
+      ],
+      "paramsSchema": "{indexId,dataId}"
+    },
+    {
+      "code": 501043,
+      "messageKey": "dataset.tag.duplicate_name",
+      "httpStatus": 409,
+      "retryable": "no-retry",
+      "severity": "warning",
+      "description": "同一 Dataset 下标签名称已存在",
+      "params": [
+        "name",
+        "datasetId"
+      ],
+      "paramsSchema": "{name,datasetId}"
+    },
+    {
+      "code": 501044,
+      "messageKey": "dataset.tag.limit_exceeded",
+      "httpStatus": 400,
+      "retryable": "no-retry",
+      "severity": "warning",
+      "description": "标签数量超过 200 上限",
+      "params": [
+        "limit",
+        "current"
+      ],
+      "paramsSchema": "{limit,current}"
+    },
+    {
+      "code": 501045,
+      "messageKey": "dataset.tag.binding_conflict",
+      "httpStatus": 409,
+      "retryable": "retryable",
+      "severity": "warning",
+      "description": "标签绑定并发冲突，可重试",
+      "params": [
+        "tagId",
+        "conflictCount"
+      ],
+      "paramsSchema": "{tagId,conflictCount}"
+    },
+    {
+      "code": 501046,
+      "messageKey": "dataset.path.cycle_detected",
+      "httpStatus": 409,
+      "retryable": "no-retry",
+      "severity": "warning",
+      "description": "移动目标位于自身子树或超过最大深度",
+      "params": [
+        "resourceId",
+        "targetParentId",
+        "depth"
+      ],
+      "paramsSchema": "{resourceId,targetParentId,depth}"
+    },
+    {
+      "code": 501047,
+      "messageKey": "dataset.acl.collaborator_conflict",
+      "httpStatus": 409,
+      "retryable": "retryable",
+      "severity": "warning",
+      "description": "协作者并发更新冲突，读取最新版本后重试",
+      "params": [
+        "datasetId",
+        "expectedVersion"
+      ],
+      "paramsSchema": "{datasetId,expectedVersion}"
+    },
+    {
+      "code": 501048,
+      "messageKey": "dataset.task.scope_invalid",
+      "httpStatus": 400,
+      "retryable": "no-retry",
+      "severity": "warning",
+      "description": "训练任务重试范围非法",
+      "params": [
+        "scope",
+        "allowed[]"
+      ],
+      "paramsSchema": "{scope,allowed[]}"
+    },
+    {
+      "code": 501049,
+      "messageKey": "dataset.search.query_required",
+      "httpStatus": 400,
+      "retryable": "no-retry",
+      "severity": "warning",
+      "description": "缺少文本或图片查询",
+      "params": [
+        "allowed[]"
+      ],
+      "paramsSchema": "{allowed[]}"
+    },
+    {
+      "code": 501050,
+      "messageKey": "dataset.search.filter_invalid",
+      "httpStatus": 400,
+      "retryable": "no-retry",
+      "severity": "warning",
+      "description": "过滤表达式、权重或索引版本非法",
+      "params": [
+        "field",
+        "value",
+        "rangeOrVersion"
+      ],
+      "paramsSchema": "{field,value,rangeOrVersion}"
+    },
+    {
+      "code": 501051,
+      "messageKey": "dataset.search.budget_exceeded",
+      "httpStatus": 413,
+      "retryable": "no-retry",
+      "severity": "warning",
+      "description": "Token 预算或候选预算不足",
+      "params": [
+        "maxTokens",
+        "used"
+      ],
+      "paramsSchema": "{maxTokens,used}"
+    },
+    {
+      "code": 501052,
+      "messageKey": "dataset.search.concurrent_limit",
+      "httpStatus": 429,
+      "retryable": "retryable",
+      "severity": "warning",
+      "description": "检索并发超过租户上限",
+      "params": [
+        "limit",
+        "current"
+      ],
+      "paramsSchema": "{limit,current}"
+    },
+    {
+      "code": 501053,
+      "messageKey": "dataset.parse.chunk_limit_exceeded",
+      "httpStatus": 413,
+      "retryable": "no-retry",
+      "severity": "warning",
+      "description": "分块数量或单块长度超过上限",
+      "params": [
+        "maxChunks",
+        "actual",
+        "chunkSize"
+      ],
+      "paramsSchema": "{maxChunks,actual,chunkSize}"
+    },
+    {
+      "code": 501054,
+      "messageKey": "dataset.qa.generation_failed",
+      "httpStatus": 502,
+      "retryable": "retryable",
+      "severity": "error",
+      "description": "QA 生成调用失败（模型 429/5xx/超时）",
+      "params": [
+        "model",
+        "taskId",
+        "reason"
+      ],
+      "paramsSchema": "{model,taskId,reason}"
+    },
+    {
+      "code": 501055,
+      "messageKey": "dataset.qa.parse_failed",
+      "httpStatus": 500,
+      "retryable": "manual",
+      "severity": "warning",
+      "description": "QA 输出无法解析，已回退 chunk 切分",
+      "params": [
+        "taskId",
+        "fallback"
+      ],
+      "paramsSchema": "{taskId,fallback}"
+    },
+    {
+      "code": 501056,
+      "messageKey": "dataset.parse.unsupported_format",
+      "httpStatus": 400,
+      "retryable": "no-retry",
+      "severity": "warning",
+      "description": "文件格式不在支持矩阵内",
+      "params": [
+        "extension"
+      ],
+      "paramsSchema": "{extension}"
+    },
+    {
+      "code": 501057,
+      "messageKey": "dataset.parse.failed",
+      "httpStatus": 422,
+      "retryable": "manual",
+      "severity": "error",
+      "description": "解析器无法处理文件内容",
+      "params": [
+        "extension",
+        "reason"
+      ],
+      "paramsSchema": "{extension,reason}"
+    },
+    {
+      "code": 501058,
+      "messageKey": "dataset.import.header_invalid",
+      "httpStatus": 400,
+      "retryable": "no-retry",
+      "severity": "warning",
+      "description": "CSV/XLSX 表头不合法（q、a 缺失或重复）",
+      "params": [
+        "missingHeaders[]",
+        "duplicateHeaders[]"
+      ],
+      "paramsSchema": "{missingHeaders[],duplicateHeaders[]}"
+    },
+    {
+      "code": 501059,
+      "messageKey": "dataset.import.sheet_invalid",
+      "httpStatus": 400,
+      "retryable": "no-retry",
+      "severity": "warning",
+      "description": "工作表结构不合法或超过预检限制",
+      "params": [
+        "sheetName",
+        "reason",
+        "limit"
+      ],
+      "paramsSchema": "{sheetName,reason,limit}"
+    },
+    {
+      "code": 501060,
+      "messageKey": "dataset.file.upload_interrupted",
+      "httpStatus": 409,
+      "retryable": "retryable",
+      "severity": "warning",
+      "description": "multipart 上传未完成或被中断",
+      "params": [
+        "fileId",
+        "uploadId",
+        "missingParts[]"
+      ],
+      "paramsSchema": "{fileId,uploadId,missingParts[]}"
+    },
+    {
+      "code": 501061,
+      "messageKey": "dataset.file.scope_forbidden",
+      "httpStatus": 403,
+      "retryable": "no-retry",
+      "severity": "error",
+      "description": "文件对象不属于当前团队或 Dataset",
+      "params": [
+        "fileId",
+        "datasetId"
+      ],
+      "paramsSchema": "{fileId,datasetId}"
+    },
+    {
+      "code": 501062,
+      "messageKey": "dataset.external.not_configured",
+      "httpStatus": 400,
+      "retryable": "no-retry",
+      "severity": "warning",
+      "description": "外部依赖（身份/模型/容量/Provider/备份）未配置",
+      "params": [
+        "dependency"
+      ],
+      "paramsSchema": "{dependency}"
+    },
+    {
+      "code": 501063,
+      "messageKey": "dataset.external.mock_mode_forbidden",
+      "httpStatus": 503,
+      "retryable": "manual",
+      "severity": "fatal",
+      "description": "生产流量命中 mock 模式，已按配置拒绝",
+      "params": [
+        "dependency",
+        "environment"
+      ],
+      "paramsSchema": "{dependency,environment}"
+    },
+    {
+      "code": 501064,
+      "messageKey": "dataset.search.rerank_failed",
+      "httpStatus": 503,
+      "retryable": "retryable",
+      "severity": "error",
+      "description": "strict 模式下 Rerank 调用失败",
+      "params": [
+        "model",
+        "reason",
+        "requestId"
+      ],
+      "paramsSchema": "{model,reason,requestId}"
+    },
+    {
+      "code": 501065,
+      "messageKey": "dataset.link.size_exceeded",
+      "httpStatus": 413,
+      "retryable": "no-retry",
+      "severity": "warning",
+      "description": "链接内容超过大小上限",
+      "params": [
+        "limitBytes",
+        "actualBytes",
+        "urlHash"
+      ],
+      "paramsSchema": "{limitBytes,actualBytes,urlHash}"
+    },
+    {
+      "code": 501066,
+      "messageKey": "dataset.duplicate_name",
+      "httpStatus": 409,
+      "retryable": "no-retry",
+      "severity": "warning",
+      "description": "同一团队下 Dataset 名称重复",
+      "params": [
+        "name",
+        "parentId"
+      ],
+      "paramsSchema": "{name,parentId}"
+    },
+    {
+      "code": 501067,
+      "messageKey": "dataset.version_conflict",
+      "httpStatus": 409,
+      "retryable": "retryable",
+      "severity": "warning",
+      "description": "版本 CAS 冲突，刷新后重试",
+      "params": [
+        "resourceType",
+        "resourceId",
+        "expectedVersion",
+        "actualVersion"
+      ],
+      "paramsSchema": "{resourceType,resourceId,expectedVersion,actualVersion}"
+    },
+    {
+      "code": 501068,
+      "messageKey": "dataset.delete_in_progress",
+      "httpStatus": 409,
+      "retryable": "retryable",
+      "severity": "warning",
+      "description": "已有删除任务在执行",
+      "params": [
+        "jobId",
+        "state"
+      ],
+      "paramsSchema": "{jobId,state}"
+    },
+    {
+      "code": 501069,
+      "messageKey": "dataset.rebuild_in_progress",
+      "httpStatus": 409,
+      "retryable": "no-retry",
+      "severity": "warning",
+      "description": "已有重建任务在执行",
+      "params": [
+        "taskId",
+        "state"
+      ],
+      "paramsSchema": "{taskId,state}"
+    },
+    {
+      "code": 501070,
+      "messageKey": "dataset.resource_not_found",
+      "httpStatus": 404,
+      "retryable": "no-retry",
+      "severity": "warning",
+      "description": "目标资源不存在或不可见",
+      "params": [
+        "resourceType",
+        "resourceId"
+      ],
+      "paramsSchema": "{resourceType,resourceId}"
+    },
+    {
+      "code": 501071,
+      "messageKey": "dataset.quota_exceeded",
+      "httpStatus": 429,
+      "retryable": "retryable",
+      "severity": "warning",
+      "description": "租户配额或并发超限",
+      "params": [
+        "quota",
+        "limit",
+        "current"
+      ],
+      "paramsSchema": "{quota,limit,current}"
+    }
+  ]
+}
