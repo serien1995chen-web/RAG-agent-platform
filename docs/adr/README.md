@@ -91,7 +91,17 @@
 - 替代方案：复用 501020/501022 等业务码（语义不准确，已否决）；返回 200 空对象（违反任务书与设计文档禁止伪造成功的要求，已否决）。
 - 升级条件：Phase 5 起随路由实现逐步消除；Round 2 总验收时统计剩余 501999 数量并登记。
 
+### SKEL-ADR-008：API 查询 Port 与 datasets.version 派生字段
+
+- 状态：proposed
+- 背景：设计文档 7.6 的 `PORT-DATA-001 KnowledgeBaseRepository` 只列 create/get/update/softDelete，但 12.9 的 `API-DS-001/003` 需要列表查询与子项计数；10.3 的 `datasets` 字段字典没有 version 字段，而 `DatasetUpdateBody.version` 与 Repository CAS 契约要求版本控制。
+- 决策：
+  - 新增派生查询 Port `KnowledgeBaseQueryRepository`（listByTeam/findByDatasetId/countChildren），落点 `packages/service/src/modules/knowledge-base/domain/dataset-query.ts`；路由不得直接查库。
+  - `datasets` Schema 增加 `version`（默认 1）并作为 CAS 字段；`DatasetSummaryValue.version` 对 API 暴露。
+  - 二者均为骨架期派生实现，待设计文档 P2 系列修订时回填登记。
+- 影响：Phase 4 Schema、Phase 5 最小 Dataset 路由与 Repository 实现；迁移与文档回填在后续阶段完成。
+
 ## 3. 待办与状态
 
-- 以上 SKEL-ADR-001 至 006 均需在 Phase 0/Phase 1 评审后决定是否转 `frozen`。
+- 以上 SKEL-ADR-001 至 008 均需在架构评审后决定是否转 `frozen`。
 - 设计文档 P1-06 补值已应用（integrity 与四个基础设施镜像 digest 已登记）；文档版本号与 A23 变更记录尚未同步，属文档治理遗留项。

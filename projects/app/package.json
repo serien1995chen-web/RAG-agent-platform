@@ -8,6 +8,7 @@
   },
   "scripts": {
     "dev": "next dev -p 3000",
+    "start": "next start -p 3000",
     "build": "next build",
     "build:workers": "node -e \"console.log('build:workers lands in Round 2 (Phase 4-5)');\"",
     "typecheck": "tsc -p tsconfig.json --noEmit",
