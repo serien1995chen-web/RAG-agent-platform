@@ -20,6 +20,8 @@ export interface DatasetDoc {
   inheritPermission: boolean;
   autoSync: boolean;
   deleteTime: Date | null;
+  /** 派生 CAS 字段：10.3 未登记 version，但 DatasetUpdateBody 与 Repository 契约要求版本控制。 */
+  version: number;
   createTime: Date;
   updateTime: Date;
 }
@@ -48,6 +50,7 @@ export const DatasetSchema = new Schema<DatasetDoc>(
     inheritPermission: { type: Boolean, default: true, required: true },
     autoSync: { type: Boolean, default: false, required: true },
     deleteTime: { type: Date, default: null },
+    version: { type: Number, default: 1, required: true },
     createTime: { type: Date, default: () => new Date(), required: true },
     updateTime: { type: Date, default: () => new Date(), required: true },
   },

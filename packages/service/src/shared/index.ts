@@ -81,3 +81,4 @@ export {
   createInfrastructureClients,
 } from './runtime/infrastructure-clients';
 export type { InfrastructureClients } from './runtime/infrastructure-clients';
+export { createDegradedDatasetSearchPort } from './runtime/degraded-search-port';

@@ -17,6 +17,11 @@ export const ProviderSelectionSchema = z.object({
 
 export const SystemConfigSchema = z.object({
   appWorkerMode: WorkerModeSchema,
+  environment: z.enum(['development', 'test', 'production']),
+  /** 仅开发/测试环境使用的固定主体；生产环境必须为 null（设计文档 9.2 identity 约束）。 */
+  devIdentity: z
+    .object({ teamId: z.string().min(1).max(128), tmbId: z.string().min(1).max(128) })
+    .nullable(),
   instanceId: z.string().min(1).max(128),
   dependencyBaselineId: z.string().min(1).max(128),
   versionCheckPolicy: VersionCheckPolicySchema,

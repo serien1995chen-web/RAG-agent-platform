@@ -35,6 +35,8 @@ export const ENV_KEYS = {
   maxRequestBodyBytes: 'KB_MAX_REQUEST_BODY_BYTES',
   maxRawTextBytes: 'KB_MAX_RAW_TEXT_BYTES',
   maxImagesPerRequest: 'KB_MAX_IMAGES_PER_REQUEST',
+  devTeamId: 'KB_DEV_TEAM_ID',
+  devTmbId: 'KB_DEV_TMB_ID',
 } as const;
 
 export type EnvSource = Readonly<Record<string, string | undefined>>;

@@ -29,6 +29,19 @@ function collectIssues(label: string, issues: readonly { path: PropertyKey[]; me
 export function loadConfigFromEnv(env: EnvSource = process.env): AppConfig {
   const systemCandidate = {
     appWorkerMode: readString(env, ENV_KEYS.appWorkerMode),
+    environment:
+      readString(env, 'NODE_ENV') === 'production'
+        ? 'production'
+        : readString(env, 'NODE_ENV') === 'test'
+          ? 'test'
+          : readString(env, 'NODE_ENV') === 'development'
+            ? 'development'
+            : 'production',
+    devIdentity: (() => {
+      const teamId = readString(env, ENV_KEYS.devTeamId);
+      const tmbId = readString(env, ENV_KEYS.devTmbId);
+      return teamId && tmbId ? { teamId, tmbId } : null;
+    })(),
     instanceId: readString(env, ENV_KEYS.instanceId),
     dependencyBaselineId: readString(env, ENV_KEYS.dependencyBaselineId),
     versionCheckPolicy: readString(env, ENV_KEYS.versionCheckPolicy) ?? 'strict',

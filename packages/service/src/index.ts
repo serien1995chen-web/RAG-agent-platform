@@ -11,6 +11,7 @@ export {
   ConfigValidationException,
   createApiError,
   createInfrastructureClients,
+  createDegradedDatasetSearchPort,
   createSkeletonError,
   closeInfrastructureClients,
   collectionNameOf,
@@ -159,15 +160,25 @@ export {
   KNOWLEDGE_BASE_INVARIANTS,
   KnowledgeBaseApplicationService,
   KNOWLEDGE_BASE_JOB_DEFINITIONS,
+  DatasetApiService,
+  MongoKnowledgeBaseRepository,
   createKnowledgeBaseAdapter,
   createKnowledgeBaseJobHandler,
   createKnowledgeBaseRepository,
   validateKnowledgeBase,
 } from './modules/knowledge-base';
 export type {
+  CreateDatasetInput,
+  DatasetApiServiceDeps,
+  DatasetDetailResult,
+  DatasetListQueryInput,
+  DatasetListResult,
+  DatasetSummaryValue,
   KnowledgeBase,
   KnowledgeBaseJobHandler,
+  KnowledgeBaseQueryRepository,
   KnowledgeBaseServiceDeps,
+  ListDatasetsInput,
 } from './modules/knowledge-base';
 
 export {

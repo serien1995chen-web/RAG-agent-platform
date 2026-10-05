@@ -71,8 +71,8 @@ export interface KnowledgeBaseSnapshot {
   name: string;
   intro?: string;
   vectorModel: string;
-  agentModel?: string;
-  vlmModel?: string;
+  agentModel?: string | null;
+  vlmModel?: string | null;
   inheritPermission: boolean;
   autoSync: boolean;
   deleteTime: string | null;

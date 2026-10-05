@@ -5,6 +5,7 @@ export {
   ApiErrorException,
   classifyRetryableError,
   createApiError,
+  createInternalError,
   createSkeletonError,
   toApiResponse,
 } from '@kb/contracts';

@@ -6,7 +6,12 @@ import {
   type ErrorFamily,
   type Retryability,
 } from '../common/api-response';
-import { getErrorMeta, SKELETON_NOT_IMPLEMENTED, type ErrorCatalogEntry } from './error-catalog';
+import {
+  getErrorMeta,
+  SKELETON_INTERNAL_ERROR,
+  SKELETON_NOT_IMPLEMENTED,
+  type ErrorCatalogEntry,
+} from './error-catalog';
 
 export class ApiErrorException extends Error {
   readonly error: ApiError;
@@ -100,6 +105,15 @@ export function createSkeletonError(
     code: SKELETON_NOT_IMPLEMENTED,
     requestId,
     params: { ...target },
+  });
+}
+
+/** 未映射的内部错误统一入口：HTTP 500 + 501998，不返回原始堆栈。 */
+export function createInternalError(operation: string, requestId: string): ApiError {
+  return createApiError({
+    code: SKELETON_INTERNAL_ERROR,
+    requestId,
+    params: { operation },
   });
 }
 

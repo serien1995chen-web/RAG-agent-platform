@@ -38,6 +38,8 @@ export type {
 export {
   ERROR_CATALOG,
   ERROR_CATALOG_BY_CODE,
+  SKELETON_INTERNAL_ERROR,
+  SKELETON_INTERNAL_ERROR_META,
   SKELETON_NOT_IMPLEMENTED,
   SKELETON_NOT_IMPLEMENTED_META,
   getErrorMeta,
@@ -48,6 +50,7 @@ export {
   ApiErrorException,
   classifyRetryableError,
   createApiError,
+  createInternalError,
   createSkeletonError,
   toApiResponse,
 } from './errors/error-factory';

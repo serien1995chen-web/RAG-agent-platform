@@ -1,10 +1,22 @@
-import { HealthProbeService, type AppConfig, type RequestContext } from '@kb/service';
+import {
+  DatasetApiService,
+  HealthProbeService,
+  MongoKnowledgeBaseRepository,
+  createDegradedDatasetSearchPort,
+  type AppConfig,
+  type DatasetSearchPort,
+  type RequestContext,
+} from '@kb/service';
+import { createDefaultExtensionRegistry, type ExtensionRegistry } from '../extensions';
 import type { RuntimeClients } from './clients';
 
 export interface AppRuntime {
   config: AppConfig;
   clients: RuntimeClients;
   health: HealthProbeService;
+  extensions: ExtensionRegistry;
+  datasetApi: DatasetApiService;
+  datasetSearch: DatasetSearchPort;
   startedAt: number;
   startup: { state: 'starting' | 'ready' | 'failed'; issues: string[] };
 }
@@ -69,10 +81,20 @@ async function bootstrap(): Promise<AppRuntime> {
   const config = getAppConfig();
   const clients = await createRuntimeClients(config);
   const health = buildHealthService(config, clients);
+  const extensions = createDefaultExtensionRegistry({
+    environment: config.system.environment,
+    devIdentity: config.system.devIdentity,
+  });
+  const datasetApi = new DatasetApiService({
+    repository: new MongoKnowledgeBaseRepository(clients.mongo),
+  });
   const runtime: AppRuntime = {
     config,
     clients,
     health,
+    extensions,
+    datasetApi,
+    datasetSearch: createDegradedDatasetSearchPort(),
     startedAt: Date.now(),
     startup: { state: 'starting', issues: [] },
   };

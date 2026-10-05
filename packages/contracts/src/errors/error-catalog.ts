@@ -26,6 +26,9 @@ export const ERROR_CATALOG_BY_CODE: ReadonlyMap<number, ErrorCatalogEntry> = new
  */
 export const SKELETON_NOT_IMPLEMENTED = 501999 as const;
 
+/** 骨架期未知内部错误（HTTP 500）；不属于 501001-501071 业务矩阵。 */
+export const SKELETON_INTERNAL_ERROR = 501998 as const;
+
 export const SKELETON_NOT_IMPLEMENTED_META: ErrorCatalogEntry = {
   code: SKELETON_NOT_IMPLEMENTED,
   messageKey: 'skeleton.not_implemented',
@@ -37,7 +40,19 @@ export const SKELETON_NOT_IMPLEMENTED_META: ErrorCatalogEntry = {
   paramsSchema: '{route|port|operation}',
 };
 
+export const SKELETON_INTERNAL_ERROR_META: ErrorCatalogEntry = {
+  code: SKELETON_INTERNAL_ERROR,
+  messageKey: 'skeleton.internal_error',
+  httpStatus: 500,
+  retryable: 'manual',
+  severity: 'fatal',
+  description: '骨架期未映射的内部错误；不得暴露原始堆栈或敏感信息。',
+  params: ['operation'],
+  paramsSchema: '{operation}',
+};
+
 export function getErrorMeta(code: number): ErrorCatalogEntry | undefined {
   if (code === SKELETON_NOT_IMPLEMENTED) return SKELETON_NOT_IMPLEMENTED_META;
+  if (code === SKELETON_INTERNAL_ERROR) return SKELETON_INTERNAL_ERROR_META;
   return ERROR_CATALOG_BY_CODE.get(code);
 }

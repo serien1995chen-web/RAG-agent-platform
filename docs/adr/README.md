@@ -80,11 +80,13 @@
 - 影响：扩展契约测试直接断言 `/api/proApi/...`；若未来需对外保持设计文档路径，可通过反向代理或 rewrite 收敛，不改核心分发逻辑。
 - 升级条件：Phase 5 实现扩展 API 前由架构评审确认。
 
-### SKEL-ADR-007：骨架期未实现路由与 Port 默认实现使用骨架级错误码 501999
+### SKEL-ADR-007：骨架期未实现与内部错误使用骨架级错误码 501998 / 501999
 
 - 状态：proposed
 - 背景：设计文档 12.4/12.4.1 冻结的业务码矩阵只覆盖 501001-501071，未定义「骨架期尚未实现」的稳定语义；任务书要求未实现路由返回稳定错误而不是 200 空对象，Port 默认空实现也必须返回稳定错误。
-- 决策：骨架期新增 `SKELETON_NOT_IMPLEMENTED = 501999`、HTTP 501、`no-retry`/`warning`，messageKey 为 `skeleton.not_implemented`，params 携带 `route` 或 `port`。该编码不属于 501001-501071 业务矩阵，仅表示工程骨架占位；任一路由或 Port 实现完成时必须移除该占位。
+- 决策：骨架期新增两个骨架级编码，均不属于 501001-501071 业务矩阵：
+  - `SKELETON_NOT_IMPLEMENTED = 501999`、HTTP 501、`no-retry`/`warning`，messageKey `skeleton.not_implemented`，params 携带 `route`/`port`/`operation`；任一路由或 Port 实现完成时必须移除该占位。
+  - `SKELETON_INTERNAL_ERROR = 501998`、HTTP 500、`manual`/`fatal`，messageKey `skeleton.internal_error`，params 携带 `operation`；仅用于未映射的未知异常，不得用于业务语义。
 - 影响：OpenAPI 快照与契约测试把未实现路由登记为 501 响应；业务错误矩阵保持冻结、不新增未登记业务码。
 - 替代方案：复用 501020/501022 等业务码（语义不准确，已否决）；返回 200 空对象（违反任务书与设计文档禁止伪造成功的要求，已否决）。
 - 升级条件：Phase 5 起随路由实现逐步消除；Round 2 总验收时统计剩余 501999 数量并登记。
