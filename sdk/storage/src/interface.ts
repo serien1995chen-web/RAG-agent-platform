@@ -1,6 +1,9 @@
 /**
  * ObjectStorePort（设计文档 7.6 / 10.9.1，CR-REF-06）。
  * 对象 key 由系统生成、不对外暴露；所有访问必须校验租户归属。
+ * key 前缀只允许 temp/{teamId}、image/{teamId}、dataset/{datasetId}；
+ * 跨团队/跨 Dataset 访问返回 501061；对象不存在返回 501015；
+ * 其他存储故障返回 501016，错误参数不得包含完整内部 key。
  */
 export interface ObjectRef {
   bucket: string;
