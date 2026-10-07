@@ -38,6 +38,7 @@ jobs:
           --health-interval 10s --health-timeout 5s --health-retries 10
       minio:
         image: registry.cn-hangzhou.aliyuncs.com/fastgpt/minio@sha256:a63b19df59e6ec7c02ebba6e7a1097b7e032da7947b18db7ff67dae8e84fd44d
+        command: server /data
         env:
           MINIO_ROOT_USER: minioadmin
           MINIO_ROOT_PASSWORD: minioadmin
