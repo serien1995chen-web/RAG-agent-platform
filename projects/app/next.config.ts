@@ -5,7 +5,14 @@ const nextConfig: NextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
   // workspace 包以 TS 源码导出，由 Next 统一编译。
-  transpilePackages: ['@kb/contracts', '@kb/service', '@kb/storage', '@kb/otel', '@kb/web'],
+  transpilePackages: [
+    '@kb/contracts',
+    '@kb/dal',
+    '@kb/service',
+    '@kb/storage',
+    '@kb/otel',
+    '@kb/web',
+  ],
   // 探针对外路径固定为设计文档 12.9 的 /healthz/live、/readyz、/startupz。
   async rewrites() {
     return [
