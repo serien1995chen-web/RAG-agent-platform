@@ -16,4 +16,35 @@ export class MigrationApplicationService {
   ): Promise<{ diff: unknown; state: string }> {
     return this.deps.repository.dryRun(input, context);
   }
+
+  applyMigration(
+    input: {
+      version: string;
+      scope: unknown;
+      idempotencyKey: string;
+      options: PortCallOptions;
+    },
+    context: RequestContext,
+  ): Promise<{ runId: string; cursor: string | null; state: string }> {
+    return this.deps.repository.apply(input, context);
+  }
+
+  resumeMigration(
+    input: {
+      runId: string;
+      cursor: string;
+      idempotencyKey: string;
+      options: PortCallOptions;
+    },
+    context: RequestContext,
+  ): Promise<{ runId: string; cursor: string | null; state: string }> {
+    return this.deps.repository.resume(input, context);
+  }
+
+  rollbackMigration(
+    input: { runId: string; options: PortCallOptions },
+    context: RequestContext,
+  ): Promise<{ state: string }> {
+    return this.deps.repository.rollback(input, context);
+  }
 }

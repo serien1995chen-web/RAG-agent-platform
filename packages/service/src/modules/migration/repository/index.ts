@@ -1,7 +1,9 @@
 import { createUnimplementedPort } from '../../../ports/defaults';
 import type { MigrationRegistryPort } from '../../../ports/capabilities';
+import type { Connection } from 'mongoose';
+import { MongoMigrationRepository } from './mongo-migration.repository';
 
-/** Repository 骨架：Phase 4 接入 Mongo/pgvector/全文实现，当前返回稳定未实现错误。 */
-export function createMigrationRunRepository(): MigrationRegistryPort {
+export function createMigrationRunRepository(connection?: Connection): MigrationRegistryPort {
+  if (connection) return new MongoMigrationRepository(connection);
   return createUnimplementedPort<MigrationRegistryPort>('MigrationRegistryPort');
 }
