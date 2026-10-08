@@ -43,3 +43,15 @@ export function evaluatePermission(input: PermissionEvaluationInput): number {
 export function canRemoveOwner(ownerCount: number, removingCount = 1): boolean {
   return ownerCount - removingCount >= 1;
 }
+
+export {
+  ACL_PERMISSION_ALL,
+  ACL_PERMISSION_MANAGE,
+  ACL_PERMISSION_OWNER,
+  ACL_PERMISSION_READ,
+  ACL_PERMISSION_WRITE,
+  allowsLastOwnerRemoval,
+  maskTruthTable,
+  mergeTruthTableMasks,
+} from './truth-table';
+export type { TruthTableInput } from './truth-table';

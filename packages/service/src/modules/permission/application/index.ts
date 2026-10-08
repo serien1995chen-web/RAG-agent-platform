@@ -17,4 +17,23 @@ export class PermissionApplicationService {
   ): Promise<PermissionSnapshotValue> {
     return this.deps.repository.getPermission(input, context);
   }
+
+  resumeInherit(
+    input: { datasetId: string; version: number; options: PortCallOptions },
+    context: RequestContext,
+  ): Promise<PermissionSnapshotValue> {
+    return this.deps.repository.resumeInherit(input, context);
+  }
+
+  updateCollaborators(
+    input: {
+      datasetId: string;
+      expectedVersion: number;
+      collaborators: Parameters<DatasetPermissionPort['updateCollaborators']>[0]['collaborators'];
+      options: PortCallOptions;
+    },
+    context: RequestContext,
+  ): Promise<PermissionSnapshotValue> {
+    return this.deps.repository.updateCollaborators(input, context);
+  }
 }

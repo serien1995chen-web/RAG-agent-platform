@@ -1,7 +1,9 @@
 import { createUnimplementedPort } from '../../../ports/defaults';
 import type { DatasetPermissionPort } from '../../../ports/capabilities';
+import type { Connection } from 'mongoose';
+import { MongoDatasetAclRepository } from './mongo-dataset-acl.repository';
 
-/** Repository 骨架：Phase 4 接入 Mongo/pgvector/全文实现，当前返回稳定未实现错误。 */
-export function createDatasetAclRepository(): DatasetPermissionPort {
+export function createDatasetAclRepository(connection?: Connection): DatasetPermissionPort {
+  if (connection) return new MongoDatasetAclRepository(connection);
   return createUnimplementedPort<DatasetPermissionPort>('DatasetPermissionPort');
 }
