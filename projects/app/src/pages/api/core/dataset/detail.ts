@@ -1,6 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { authenticateRequest } from '../../../../runtime/auth';
-import { getRuntime } from '../../../../runtime/health';
+import { getRuntime } from '../../../../runtime';
 import { parseDto, successResponse, withApiHandler } from '../../../../shared/api';
 import type { ApiHandlerContext } from '../../../../shared/api';
 
@@ -15,17 +15,15 @@ export default withApiHandler(
     const { context } = await authenticateRequest(runtime, request, requestId);
     const query = parseDto<DatasetDetailQuery>('DatasetDetailQuery', request.query);
     const detail = await runtime.datasetApi.getDatasetDetail(query.datasetId, context);
+    const permissionSnapshot = await runtime.datasetPermission.getPermission(
+      { datasetId: query.datasetId, options: { timeoutMs: 5_000 } },
+      context,
+    );
     response.status(200).json(
       successResponse(
         {
           dataset: detail.dataset,
-          permissionSnapshot: {
-            owner: context.tenant.tmbId,
-            permissionMask: 15,
-            inherited: true,
-            version: detail.dataset.version,
-            source: 'local' as const,
-          },
+          permissionSnapshot,
           stats: detail.stats,
         },
         requestId,
