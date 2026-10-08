@@ -20,4 +20,30 @@ export class ProcessingApplicationService {
   ): Promise<{ taskId: string; jobId: string }> {
     return this.deps.repository.enqueue(input, context);
   }
+
+  claimJob(
+    input: { taskId: string; options: PortCallOptions },
+    context: RequestContext,
+  ): Promise<{ taskId: string; lockTime: string }> {
+    return this.deps.repository.claim(input, context);
+  }
+
+  renewJob(
+    input: { taskId: string; lockTime: string; options: PortCallOptions },
+    context: RequestContext,
+  ): Promise<{ lockTime: string }> {
+    return this.deps.repository.renew(input, context);
+  }
+
+  finishJob(
+    input: {
+      taskId: string;
+      state: 'success' | 'failed' | 'blocked' | 'final_error';
+      errorMsg?: string;
+      options: PortCallOptions;
+    },
+    context: RequestContext,
+  ): Promise<void> {
+    return this.deps.repository.finish(input, context);
+  }
 }
