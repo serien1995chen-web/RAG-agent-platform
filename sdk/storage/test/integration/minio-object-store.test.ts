@@ -46,4 +46,34 @@ describe('MinioObjectStore integration', () => {
       ),
     ).rejects.toMatchObject({ error: { code: 501061 } });
   });
+
+  it('prepares and aborts a multipart upload idempotently', async () => {
+    const context = { teamId: 'team-a' };
+    const key = `temp/team-a/${Date.now()}-multipart.bin`;
+
+    const prepared = await store.prepareMultipart(
+      { ref: { bucket: 'kb-integration-test', key }, parts: 2 },
+      context,
+    );
+    expect(prepared.multipartUploadId).toBeTruthy();
+
+    const aborted = await store.abort({ ref: { bucket: 'kb-integration-test', key } }, context);
+    expect(aborted.aborted).toBe(true);
+
+    const again = await store.abort({ ref: { bucket: 'kb-integration-test', key } }, context);
+    expect(again.aborted).toBe(true);
+  });
+
+  it('maps a missing object to 501015 without leaking the internal key', async () => {
+    const key = `temp/team-a/${Date.now()}-missing.txt`;
+    try {
+      await store.get({ ref: { bucket: 'kb-integration-test', key } }, { teamId: 'team-a' });
+      throw new Error('expected missing object error');
+    } catch (error) {
+      const apiError = (error as { error?: { code: number; params: Record<string, unknown> } })
+        .error;
+      expect(apiError?.code).toBe(501015);
+      expect(JSON.stringify(apiError?.params)).not.toContain(`${key}`);
+    }
+  });
 });

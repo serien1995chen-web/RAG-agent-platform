@@ -1,11 +1,26 @@
 import type { HealthResponse } from '@kb/contracts';
 import type { HealthProbePort, ProbeResult } from '../../ports/capabilities';
 import type { RequestContext } from '../../ports/types';
+import {
+  baselineVersionOf,
+  judgeDependencyVersion,
+  type BaselineDependency,
+} from '../config/dependency-baseline';
+import type { VersionCheckPolicy } from '../config/system-config.schema';
 
 export interface DependencyProbe {
   name: string;
   required: boolean;
   check(): Promise<ProbeResult>;
+}
+
+export interface VersionedProbeOptions {
+  name: string;
+  required: boolean;
+  dependency: BaselineDependency;
+  policy: VersionCheckPolicy;
+  /** 只读取版本号；读取失败抛错即视为探针失败。 */
+  readVersion(): Promise<string | null>;
 }
 
 export interface HealthSummary {
@@ -24,6 +39,28 @@ export class HealthProbeService implements HealthProbePort {
 
   register(probe: DependencyProbe): void {
     this.probes.set(probe.name, probe);
+  }
+
+  /**
+   * 注册带版本判定的依赖探针（设计文档 6.6 / 6.9）：
+   * 版本只用于内部判定，不进入探针响应；strict 不兼容 → failed，degraded/offline → degraded。
+   */
+  registerVersionedProbe(options: VersionedProbeOptions): void {
+    const expected = baselineVersionOf(options.dependency);
+    this.register({
+      name: options.name,
+      required: options.required,
+      check: async () => {
+        const startedAt = Date.now();
+        const actual = await options.readVersion();
+        const verdict = judgeDependencyVersion(actual, expected, options.policy);
+        return {
+          name: options.name,
+          status: verdict === 'reject' ? 'failed' : verdict,
+          durationMs: Date.now() - startedAt,
+        };
+      },
+    });
   }
 
   private async runProbe(probe: DependencyProbe): Promise<ProbeResult> {
@@ -57,17 +94,24 @@ export class HealthProbeService implements HealthProbePort {
     return this.runByRequired(false);
   }
 
+  /** 探针响应只允许 name/status/durationMs，杜绝版本、密钥、连接串与租户信息泄漏。 */
+  private sanitize(check: ProbeResult): ProbeResult {
+    return { name: check.name, status: check.status, durationMs: check.durationMs };
+  }
+
   summarize(required: ProbeResult[], optional: ProbeResult[]): HealthSummary {
     const startedAt = Date.now();
-    const failedRequired = required.some((check) => check.status === 'failed');
+    const requiredChecks = required.map((check) => this.sanitize(check));
+    const optionalChecks = optional.map((check) => this.sanitize(check));
+    const failedRequired = requiredChecks.some((check) => check.status === 'failed');
     const degraded =
       !failedRequired &&
-      (optional.some((check) => check.status !== 'ok') ||
-        required.some((check) => check.status === 'degraded'));
+      (optionalChecks.some((check) => check.status !== 'ok') ||
+        requiredChecks.some((check) => check.status === 'degraded'));
     return {
       response: {
         status: failedRequired ? 'failed' : degraded ? 'degraded' : 'ok',
-        checks: [...required, ...optional],
+        checks: [...requiredChecks, ...optionalChecks],
         durationMs: Date.now() - startedAt,
       },
       httpStatus: failedRequired ? 503 : 200,

@@ -1,6 +1,7 @@
+import { ApiErrorException, createApiError } from '@kb/contracts';
 import { Client } from 'minio';
 import type { ObjectRef, ObjectStorePort, TenantObjectContext } from '../interface';
-import { assertObjectKeyScope } from '../tenant-scope';
+import { assertObjectKeyScope, objectKeyHash } from '../tenant-scope';
 
 export interface MinioObjectStoreConfig {
   endPoint: string;
@@ -12,7 +13,26 @@ export interface MinioObjectStoreConfig {
   bucket: string;
 }
 
-/** S3 兼容（MinIO）实现骨架：真实读写 + 租户前缀校验。 */
+function isNotFound(error: unknown): boolean {
+  if (typeof error !== 'object' || error === null) return false;
+  const record = error as { code?: unknown; statusCode?: unknown; status?: unknown };
+  return (
+    record.code === 'NoSuchKey' ||
+    record.code === 'NotFound' ||
+    record.statusCode === 404 ||
+    record.status === 404
+  );
+}
+
+function isNoSuchUpload(error: unknown): boolean {
+  if (typeof error !== 'object' || error === null) return false;
+  return (error as { code?: unknown }).code === 'NoSuchUpload';
+}
+
+/**
+ * S3 兼容（MinIO）实现（设计文档 7.6 / 10.9.1）：
+ * 真实读写 + 触网前租户前缀校验 + 统一错误映射（不泄露内部路径）。
+ */
 export class MinioObjectStore implements ObjectStorePort {
   private readonly client: Client;
   private readonly bucket: string;
@@ -32,11 +52,41 @@ export class MinioObjectStore implements ObjectStorePort {
     });
   }
 
+  private async mapErrors<T>(
+    operation: string,
+    work: () => Promise<T>,
+    ref?: ObjectRef,
+  ): Promise<T> {
+    try {
+      return await work();
+    } catch (error) {
+      if (error instanceof ApiErrorException) throw error;
+      if (ref !== undefined && isNotFound(error)) {
+        throw new ApiErrorException(
+          createApiError({
+            code: 501015,
+            requestId: 'object-store',
+            params: { objectKeyHash: objectKeyHash(ref.key), bucket: ref.bucket },
+          }),
+        );
+      }
+      throw new ApiErrorException(
+        createApiError({
+          code: 501016,
+          requestId: 'object-store',
+          params: { store: 's3', operation },
+        }),
+      );
+    }
+  }
+
   async ensureBucket(): Promise<void> {
-    if (this.bucketReady) return;
-    const exists = await this.client.bucketExists(this.bucket);
-    if (!exists) await this.client.makeBucket(this.bucket, this.region);
-    this.bucketReady = true;
+    return this.mapErrors('ensureBucket', async () => {
+      if (this.bucketReady) return;
+      const exists = await this.client.bucketExists(this.bucket);
+      if (!exists) await this.client.makeBucket(this.bucket, this.region);
+      this.bucketReady = true;
+    });
   }
 
   async put(
@@ -44,15 +94,21 @@ export class MinioObjectStore implements ObjectStorePort {
     context: TenantObjectContext,
   ): Promise<ObjectRef> {
     assertObjectKeyScope(input.ref, context);
-    await this.ensureBucket();
-    const buffer = Buffer.from(input.body);
-    const result = await this.client.putObject(
-      this.bucket,
-      input.ref.key,
-      buffer,
-      buffer.byteLength,
+    return this.mapErrors(
+      'put',
+      async () => {
+        await this.ensureBucket();
+        const buffer = Buffer.from(input.body);
+        const result = await this.client.putObject(
+          this.bucket,
+          input.ref.key,
+          buffer,
+          buffer.byteLength,
+        );
+        return { ...input.ref, size: buffer.byteLength, etag: result.etag };
+      },
+      input.ref,
     );
-    return { ...input.ref, size: buffer.byteLength, etag: result.etag };
   }
 
   async get(
@@ -60,10 +116,16 @@ export class MinioObjectStore implements ObjectStorePort {
     context: TenantObjectContext,
   ): Promise<{ ref: ObjectRef; body: Uint8Array }> {
     assertObjectKeyScope(input.ref, context);
-    const stream = await this.client.getObject(this.bucket, input.ref.key);
-    const chunks: Buffer[] = [];
-    for await (const chunk of stream) chunks.push(Buffer.from(chunk as Buffer));
-    return { ref: input.ref, body: Buffer.concat(chunks) };
+    return this.mapErrors(
+      'get',
+      async () => {
+        const stream = await this.client.getObject(this.bucket, input.ref.key);
+        const chunks: Buffer[] = [];
+        for await (const chunk of stream) chunks.push(Buffer.from(chunk as Buffer));
+        return { ref: input.ref, body: Buffer.concat(chunks) };
+      },
+      input.ref,
+    );
   }
 
   async delete(
@@ -71,15 +133,27 @@ export class MinioObjectStore implements ObjectStorePort {
     context: TenantObjectContext,
   ): Promise<{ deleted: boolean }> {
     assertObjectKeyScope(input.ref, context);
-    await this.client.removeObject(this.bucket, input.ref.key);
-    return { deleted: true };
+    return this.mapErrors(
+      'delete',
+      async () => {
+        await this.client.removeObject(this.bucket, input.ref.key);
+        return { deleted: true };
+      },
+      input.ref,
+    );
   }
 
   async promote(input: { ref: ObjectRef }, context: TenantObjectContext): Promise<ObjectRef> {
     assertObjectKeyScope(input.ref, context);
-    // versionId 为空表示操作当前版本（MinIO 8 typings 要求显式传入）。
-    await this.client.removeObjectTagging(this.bucket, input.ref.key, { versionId: '' });
-    return { ...input.ref, ttlExpireAt: null };
+    return this.mapErrors(
+      'promote',
+      async () => {
+        // versionId 为空表示操作当前版本；清除 TTL 标记后正式引用不再因 TTL 删除。
+        await this.client.removeObjectTagging(this.bucket, input.ref.key, { versionId: '' });
+        return { ...input.ref, ttlExpireAt: null };
+      },
+      input.ref,
+    );
   }
 
   async prepareMultipart(
@@ -87,9 +161,19 @@ export class MinioObjectStore implements ObjectStorePort {
     context: TenantObjectContext,
   ): Promise<ObjectRef> {
     assertObjectKeyScope(input.ref, context);
-    await this.ensureBucket();
-    const uploadId = await this.client.initiateNewMultipartUpload(this.bucket, input.ref.key, {});
-    return { ...input.ref, multipartUploadId: uploadId };
+    return this.mapErrors(
+      'prepareMultipart',
+      async () => {
+        await this.ensureBucket();
+        const uploadId = await this.client.initiateNewMultipartUpload(
+          this.bucket,
+          input.ref.key,
+          {},
+        );
+        return { ...input.ref, multipartUploadId: uploadId };
+      },
+      input.ref,
+    );
   }
 
   async abort(
@@ -97,7 +181,18 @@ export class MinioObjectStore implements ObjectStorePort {
     context: TenantObjectContext,
   ): Promise<{ aborted: boolean }> {
     assertObjectKeyScope(input.ref, context);
-    await this.client.removeIncompleteUpload(this.bucket, input.ref.key);
-    return { aborted: true };
+    return this.mapErrors(
+      'abort',
+      async () => {
+        try {
+          await this.client.removeIncompleteUpload(this.bucket, input.ref.key);
+        } catch (error) {
+          // 幂等清理：没有待中止的分片上传时视为已完成。
+          if (!isNoSuchUpload(error)) throw error;
+        }
+        return { aborted: true };
+      },
+      input.ref,
+    );
   }
 }

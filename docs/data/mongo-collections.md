@@ -1,33 +1,46 @@
-# MongoDB 集合与索引（骨架版）
+# MongoDB 集合与索引（P2 冻结版）
 
-> 权威依据：设计文档 10.2-10.10、18.8；所有 Schema 位于 `packages/service/src/shared/persistence/schemas/`。
+> 权威依据：设计文档 3.4.0 §10.2-10.17、§18.8；所有 Schema 位于 `packages/service/src/shared/persistence/schemas/`。
 
-## 1. 八个集合
+## 1. 二十个集合
 
-| 集合                  | 领域对象         | 关键字段                                                                                                                                | 索引（均由 defineIndex 声明）                                                                        |
-| --------------------- | ---------------- | --------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
-| `datasets`            | KnowledgeBase    | teamId、createdBy、parentId、type、name、vectorModel、indexVersion、chunkPolicy、inheritPermission、autoSync、deleteTime、version(派生) | `ds_datasets_team_parent_idx`、`ds_datasets_team_delete_update_idx`、`ds_datasets_team_autosync_idx` |
-| `dataset_collections` | SourceCollection | teamId、datasetId、parentId、type、tagIds、sourceRef、externalFileIdNormalized、trainingPolicy、trainingState                           | 树/类型/标签索引 + `ds_dataset_collections_team_external_file_unique`（部分唯一）                    |
-| `dataset_datas`       | KnowledgeItem    | teamId、datasetId、collectionId、q/a/imageId、indexes[]、dedupKey、rebuilding                                                           | chunk、`indexes.dataId`、`ds_dataset_datas_team_dedup_unique`（部分唯一）                            |
-| `dataset_data_texts`  | 全文投影         | teamId、datasetId、collectionId、dataId、fullTextToken                                                                                  | `teamId_1_fullTextToken_text`（default_language=none）、scope、dataId hashed                         |
-| `dataset_trainings`   | ProcessingJob    | teamId、datasetId、collectionId、mode、retryCount、lockTime、weight、expireAt                                                           | claim、scope、TTL `ds_dataset_trainings_expire_ttl_idx`（7 天）                                      |
-| `dataset_tags`        | CollectionTag    | teamId、datasetId、name                                                                                                                 | `ds_dataset_tags_team_name_unique`                                                                   |
-| `image_assets`        | ImageAsset       | imageId、teamId、datasetId、objectKey、ttlExpireAt、persistent、state                                                                   | `ds_image_assets_team_image_unique`、TTL/持久化、scope                                               |
-| `dataset_acl`         | 资源 ACL         | teamId、resourceType/Id、collaboratorType/Id、permission、permissionMask、inheritEnabled、version、source                               | collaborator 唯一 + resource/collaborator 查询索引                                                   |
+| 集合                      | 领域对象            | 关键字段                                                                                                                                           | 索引（均由 defineIndex 声明）                                                                                                                                                                               |
+| ------------------------- | ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `datasets`                | KnowledgeBase       | teamId、createdBy、parentId、type、name、vectorModel、indexVersion、chunkPolicy、inheritPermission、autoSync、deleteTime、version(项目级 CAS 扩展) | `ds_datasets_team_parent_idx`、`ds_datasets_team_delete_update_idx`、`ds_datasets_team_autosync_idx`                                                                                                        |
+| `dataset_collections`     | SourceCollection    | teamId、datasetId、parentId、type、tagIds、sourceRef、externalFileIdNormalized、trainingPolicy、trainingState                                      | 树/类型/标签索引 + `ds_dataset_collections_team_external_file_unique`（部分唯一）                                                                                                                           |
+| `dataset_datas`           | KnowledgeItem       | teamId、datasetId、collectionId、q/a/imageId、indexes[]、dedupKey、rebuilding                                                                      | `ds_dataset_datas_team_chunk_idx`、`ds_dataset_datas_team_index_ref_idx`、`ds_dataset_datas_team_dedup_unique`（部分唯一）                                                                                  |
+| `dataset_data_texts`      | 全文投影            | teamId、datasetId、collectionId、dataId、fullTextToken                                                                                             | `teamId_1_fullTextToken_text`（default_language=none）、`ds_dataset_data_texts_scope_idx`、`ds_dataset_data_texts_data_hashed_idx`                                                                          |
+| `dataset_trainings`       | ProcessingJob       | teamId、datasetId、collectionId、mode、retryCount、lockTime、weight、expireAt                                                                      | claim、scope、TTL `ds_dataset_trainings_expire_ttl_idx`（7 天）                                                                                                                                             |
+| `dataset_tags`            | CollectionTag       | teamId、datasetId、name                                                                                                                            | `ds_dataset_tags_team_name_unique`                                                                                                                                                                          |
+| `image_assets`            | ImageAsset          | imageId、teamId、datasetId、objectKey、ttlExpireAt、persistent、state                                                                              | `ds_image_assets_team_image_unique`、TTL/持久化、scope                                                                                                                                                      |
+| `dataset_acl`             | 资源 ACL            | teamId、resourceType/Id、collaboratorType/Id、permission、permissionMask、inheritEnabled、version、source                                          | collaborator 唯一 + resource/collaborator 查询索引                                                                                                                                                          |
+| `s3_ttl_records`          | S3TtlRecord         | teamId、bucketName、objectKey、expireAt、state、attempt、nextAttemptAt、resourceRef、operationId                                                   | `ds_s3_ttl_records_expire_state_idx`、`ds_s3_ttl_records_bucket_object_unique`（唯一）、`ds_s3_ttl_records_operation_unique`（唯一）、`ds_s3_ttl_records_team_state_idx`                                    |
+| `cross_store_operations`  | CrossStoreOperation | operationId、teamId、resourceRef、operation、stage、attempt、lease、nextAttemptAt                                                                  | `ds_cross_store_operations_team_operation_unique`（唯一）、`ds_cross_store_operations_stage_next_idx`、`ds_cross_store_operations_team_create_idx`                                                          |
+| `dataset_delete_jobs`     | DeleteJob           | jobId、teamId、datasetId、state、stage、progress、attempt、lease                                                                                   | `ds_dataset_delete_jobs_team_job_unique`（唯一）、`ds_dataset_delete_jobs_state_update_idx`、`ds_dataset_delete_jobs_team_dataset_state_idx`                                                                |
+| `dataset_delete_failures` | DeleteFailure       | teamId、jobId、resourceType、resourceId、stage、attempt、errorClass、retryable、lastError                                                          | `ds_dataset_delete_failures_resource_idx`、`ds_dataset_delete_failures_team_create_idx`                                                                                                                     |
+| `reconcile_reports`       | ReconcileReport     | scope、teamId、windowStart/windowEnd、state、counts、findings、sampleHash、dedupKey、reviewer                                                      | `ds_reconcile_reports_window_scope_idx`、`ds_reconcile_reports_team_create_idx`、`ds_reconcile_reports_dedup_unique`（唯一）                                                                                |
+| `dataset_migrations`      | MigrationRegistry   | version、name、state、attempts、dryRun、resumeToken、rollbackInfo、scope、writeMode                                                                | `ds_dataset_migrations_version_unique`（唯一）、`ds_dataset_migrations_scope_running_unique`（部分唯一 state=running）、`ds_dataset_migrations_state_update_idx`、`ds_dataset_migrations_scope_version_idx` |
+| `dataset_migration_logs`  | MigrationLog        | migrationId、version、batchId、teamId、resourceRef、dataId、state、attempts、operations、error                                                     | `ds_dataset_migration_logs_batch_idx`、`ds_dataset_migration_logs_team_resource_idx`、`ds_dataset_migration_logs_migration_data_unique`（部分唯一 dataId 非空）                                             |
+| `operationLogs`           | Audit               | teamId、tmbId、timestamp、event、metadata；extension 可附加 requestId/operation/resourceType/resourceId/result/beforeHash/afterHash/params         | `ds_operation_logs_team_time_idx`、`ds_operation_logs_team_resource_idx`、`ds_operation_logs_team_actor_idx`；长期保留                                                                                      |
+| `usages`                  | Usage               | teamId、tmbId、source、appName、totalPoints、time、appId、skillId、datasetId、list                                                                 | `ds_usages_team_time_idx`、`ds_usages_team_source_idx`、`ds_usages_team_dataset_idx`、`ds_usages_time_ttl_idx`（TTL 360 天）                                                                                |
+| `usage_items`             | UsageItem           | teamId、usageId、name、amount、itemType、time、inputTokens/outputTokens/charsLength/duration/pages/count、model、dedupKey                          | `ds_usage_items_team_dedup_unique`（部分唯一）、`ds_usage_items_team_usage_idx`、`ds_usage_items_team_model_time_idx`、`ds_usage_items_time_ttl_idx`（TTL 360 天）                                          |
+| `tracks`                  | Track               | event、uid、teamId、tmbId、createTime、data                                                                                                        | `ds_tracks_team_time_idx`、`ds_tracks_event_time_idx`；无 TTL（SaaS/扩展策略）                                                                                                                              |
+| `dataset_qa_templates`    | QATemplate          | templateId、version、locale、contentHash、status、teamId（null=全局）                                                                              | `ds_dataset_qa_templates_template_version_locale_unique`（唯一）                                                                                                                                            |
 
 ## 2. 规则
 
 1. 所有集合必须携带 `teamId`；Repository/Adapter 查询缺少 teamId 谓词时抛稳定错误。
 2. 禁止字段级 `index/unique` 与直接 `schema.index()`；统一经 `defineIndex(schema, { key, options, deprecated })`。
-3. 部分唯一索引条件为字段为非空字符串（`externalFileIdNormalized`、`dedupKey`）。
-4. TTL 常量来自 ADR-012（Training 7 天）；图片单一绝对到期时间由 `ttlExpireAt` 表达。
-5. `datasets.version` 为派生 CAS 字段：10.3 未登记，但更新 DTO 与 Repository 契约要求版本控制（SKEL-ADR-008 proposed）。
+3. 部分唯一索引条件为字段为非空字符串（`externalFileIdNormalized`、`dedupKey`、`dataId`）；`dataset_migrations.scope` 的唯一性以 `state=running` 为部分条件。
+4. TTL 常量：Training 7 天（604800s）；`usages`/`usage_items` 360 天（31104000s）；`s3_ttl_records` 不建立 Mongo TTL 索引，删除动作由小时级清理任务显式执行；Migration Log 无自动 TTL。
+5. `datasets.version` 为设计文档 3.4.0 §10.3 已登记的项目级 CAS 扩展字段，用于 `DatasetUpdateBody` 与 `KnowledgeBaseRepository` 的版本条件更新，不再标记为未登记。
+6. 既有 8 个集合的索引名不得变更；新增集合的唯一索引使用 `ds_<collection>_..._unique`，普通索引使用 `ds_<collection>_..._idx`。
+7. 未登记索引、客户自建索引不得自动删除；同名不同键阻止清理（§17.3）。
 
 ## 3. 集成验证
 
 ```bash
-docker compose -f deploy/docker-compose.yml up -d --pull never
-pnpm --filter @kb/service test:integration
+pnpm test:integration
 ```
 
-覆盖：8 集合创建、defineIndex 声明、部分唯一索引/TTL 参数、websiteDataset 与 mode=auto 被 Schema 拒绝。
+覆盖：20 集合创建、每个 Schema 至少一个 `defineIndex` 声明、唯一/TTL/部分索引参数（31104000/604800/running/dedupKey/dataId）、`websiteDataset` 与 `mode=auto` 被 Schema 拒绝。

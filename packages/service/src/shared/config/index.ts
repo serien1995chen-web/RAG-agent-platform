@@ -5,6 +5,14 @@ import {
 import { ENV_KEYS, readBoolean, readNumber, readString, type EnvSource } from './env';
 import { ConfigValidationException } from './config-error';
 import {
+  DEFAULT_EXTERNAL_MOCK_MODE,
+  ExternalMockModeSchema,
+  assertAllowRuntimeOverride,
+  assertKnownDependencyBaseline,
+  assertVersionCheckPolicyAllowed,
+  type ExternalMockModeConfig,
+} from './dependency-baseline';
+import {
   PlatformCapacityProfileSchema,
   type PlatformCapacityProfile,
 } from './platform-capacity-profile.schema';
@@ -16,10 +24,39 @@ export interface AppConfig {
   datasetRuntime: ReturnType<typeof DatasetRuntimeConfigSchema.parse>;
   capacity: PlatformCapacityProfile;
   role: RuntimeRole;
+  /** 设计文档 3.8.1：外部依赖 mock/real 模式（按依赖，默认 mock）。 */
+  externalMockMode: ExternalMockModeConfig;
+  /** 设计文档 17.3：废弃索引清理默认关闭，删除仍须显式 deprecated 声明。 */
+  mongoDeprecatedIndexCleanup: boolean;
 }
 
 function collectIssues(label: string, issues: readonly { path: PropertyKey[]; message: string }[]) {
   return issues.map((issue) => `${label}.${issue.path.map(String).join('.')}: ${issue.message}`);
+}
+
+function readExternalMockMode(env: EnvSource): ExternalMockModeConfig {
+  const raw = readString(env, ENV_KEYS.externalMockMode);
+  if (raw === undefined) return { ...DEFAULT_EXTERNAL_MOCK_MODE };
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    throw new ConfigValidationException([`${ENV_KEYS.externalMockMode} 必须为合法 JSON`]);
+  }
+  const result = ExternalMockModeSchema.safeParse(parsed);
+  if (!result.success) {
+    throw new ConfigValidationException(collectIssues('externalMockMode', result.error.issues));
+  }
+  return result.data;
+}
+
+function readDeprecatedIndexCleanup(env: EnvSource): boolean {
+  const raw = readString(env, ENV_KEYS.mongoDeprecatedIndexCleanup);
+  const value = readBoolean(env, ENV_KEYS.mongoDeprecatedIndexCleanup);
+  if (raw !== undefined && value === undefined) {
+    throw new ConfigValidationException([`${ENV_KEYS.mongoDeprecatedIndexCleanup} 非法值：${raw}`]);
+  }
+  return value ?? false;
 }
 
 /**
@@ -76,6 +113,9 @@ export function loadConfigFromEnv(env: EnvSource = process.env): AppConfig {
   if (!system.success) {
     throw new ConfigValidationException(collectIssues('system', system.error.issues));
   }
+  assertKnownDependencyBaseline(system.data.dependencyBaselineId);
+  assertAllowRuntimeOverride(system.data.allowRuntimeOverride, system.data.environment);
+  assertVersionCheckPolicyAllowed(system.data.versionCheckPolicy, system.data.environment);
 
   const runtimeCandidate = {
     ...DEFAULT_DATASET_RUNTIME_CONFIG,
@@ -124,6 +164,8 @@ export function loadConfigFromEnv(env: EnvSource = process.env): AppConfig {
     datasetRuntime: datasetRuntime.data,
     capacity: capacity.data,
     role: resolveRuntimeRole(system.data.appWorkerMode),
+    externalMockMode: readExternalMockMode(env),
+    mongoDeprecatedIndexCleanup: readDeprecatedIndexCleanup(env),
   };
 }
 
@@ -143,6 +185,27 @@ export function validateStartupConfig(
 export { ENV_KEYS } from './env';
 export type { EnvSource } from './env';
 export { ConfigValidationException } from './config-error';
+export {
+  DEFAULT_EXTERNAL_MOCK_MODE,
+  DEPENDENCY_BASELINE,
+  DEPENDENCY_BASELINE_ID,
+  ExternalMockModeSchema,
+  MOCKED_DEPENDENCIES,
+  assertAllowRuntimeOverride,
+  assertKnownDependencyBaseline,
+  assertMockModeAllowed,
+  assertVersionCheckPolicyAllowed,
+  baselineVersionOf,
+  judgeDependencyVersion,
+  versionMatches,
+} from './dependency-baseline';
+export type {
+  BaselineDependency,
+  DependencyBaselineEntry,
+  ExternalMockModeConfig,
+  MockedDependency,
+  VersionVerdict,
+} from './dependency-baseline';
 export { resolveSecretRef } from './secret-ref';
 export { resolveRuntimeRole } from './runtime-role';
 export type { RuntimeRole } from './runtime-role';
