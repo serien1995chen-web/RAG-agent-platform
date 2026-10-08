@@ -4,6 +4,7 @@ import type { KnowledgeBaseRepository } from '../../../ports/repositories';
 import type { KnowledgeBaseSnapshot, RequestContext } from '../../../ports/types';
 import { DatasetSchema, type DatasetDoc } from '../../../shared/persistence/schemas';
 import type {
+  DatasetUpdateInput,
   DatasetListQueryInput,
   DatasetListResult,
   DatasetSummaryValue,
@@ -13,6 +14,7 @@ import type {
 /** 10.3：type=dataset 在物理层对应 knowledge/external/api/feishu/yuque/dingtalk。 */
 const DATASET_TYPES = ['knowledge', 'external', 'api', 'feishu', 'yuque', 'dingtalk'] as const;
 const WRITE_TIMEOUT_MS = 10_000;
+const ALLOWED_TYPES = new Set<string>([...DATASET_TYPES, 'folder']);
 
 function toOid(value: string, field: string, requestId: string): Types.ObjectId {
   if (!Types.ObjectId.isValid(value)) {
@@ -25,6 +27,54 @@ function toOid(value: string, field: string, requestId: string): Types.ObjectId 
     );
   }
   return new Types.ObjectId(value);
+}
+
+function duplicateNameError(
+  name: string,
+  parentId: Types.ObjectId | null,
+  requestId: string,
+): ApiErrorException {
+  return new ApiErrorException(
+    createApiError({
+      code: 501066,
+      requestId,
+      params: { name, parentId: parentId ? String(parentId) : null },
+    }),
+  );
+}
+
+function typeError(type: string, requestId: string): ApiErrorException {
+  return new ApiErrorException(createApiError({ code: 501001, requestId, params: { type } }));
+}
+
+function versionConflict(
+  datasetId: string,
+  expectedVersion: number,
+  actualVersion: number,
+  requestId: string,
+): ApiErrorException {
+  return new ApiErrorException(
+    createApiError({
+      code: 501067,
+      requestId,
+      params: {
+        resourceType: 'dataset',
+        resourceId: datasetId,
+        expectedVersion,
+        actualVersion,
+      },
+    }),
+  );
+}
+
+function invalidParent(parentId: string, datasetId: string, requestId: string): ApiErrorException {
+  return new ApiErrorException(
+    createApiError({
+      code: 501004,
+      requestId,
+      params: { parentId, datasetId },
+    }),
+  );
 }
 
 /**
@@ -55,6 +105,9 @@ export class MongoKnowledgeBaseRepository
       parentId: doc.parentId ? String(doc.parentId) : null,
       vectorModel: doc.vectorModel,
       indexVersion: doc.indexVersion,
+      agentModel: doc.agentModel ?? null,
+      vlmModel: doc.vlmModel ?? null,
+      chunkPolicy: doc.chunkPolicy,
       inheritPermission: doc.inheritPermission,
       autoSync: doc.autoSync,
       deleteTime: doc.deleteTime ? doc.deleteTime.toISOString() : null,
@@ -75,20 +128,27 @@ export class MongoKnowledgeBaseRepository
     context: RequestContext,
   ): Promise<{ datasetId: string; version: number }> {
     const teamId = this.teamId(context);
+    if (!ALLOWED_TYPES.has(input.dataset.type)) {
+      throw typeError(input.dataset.type, context.requestId);
+    }
     const parentId = input.dataset.parentId
       ? toOid(input.dataset.parentId, 'parentId', context.requestId)
       : null;
     if (parentId) {
-      const parent = await this.model.exists({ _id: parentId, teamId, deleteTime: null });
+      const parent = await this.model.findOne({ _id: parentId, teamId, deleteTime: null }).lean();
       if (!parent) {
-        throw new ApiErrorException(
-          createApiError({
-            code: 501004,
-            requestId: context.requestId,
-            params: { parentId: String(parentId), datasetId: '' },
-          }),
-        );
+        throw invalidParent(String(parentId), '', context.requestId);
       }
+      if (parent.type !== 'folder') throw invalidParent(String(parentId), '', context.requestId);
+    }
+    const duplicate = await this.model.exists({
+      teamId,
+      parentId,
+      name: input.dataset.name,
+      deleteTime: null,
+    });
+    if (duplicate) {
+      throw duplicateNameError(input.dataset.name, parentId, context.requestId);
     }
     const now = new Date();
     const doc = await this.model.create({
@@ -146,36 +206,146 @@ export class MongoKnowledgeBaseRepository
     },
     context: RequestContext,
   ): Promise<{ version: number }> {
-    const allowed = ['name', 'intro', 'autoSync', 'inheritPermission', 'vectorModel'] as const;
     const patch: Record<string, unknown> = { updateTime: new Date() };
-    for (const key of allowed) {
-      if (input.patch[key] !== undefined) patch[key] = input.patch[key];
+    for (const key of ['name', 'intro', 'autoSync', 'inheritPermission', 'vectorModel'] as const) {
+      const value = input.patch[key];
+      if (value !== undefined) patch[key] = value;
     }
+    return this.applyUpdate(
+      {
+        datasetId: input.datasetId,
+        version: input.version,
+        patch,
+        options: input.options,
+      },
+      context,
+    );
+  }
+
+  async updateDataset(
+    input: DatasetUpdateInput,
+    context: RequestContext,
+  ): Promise<{ version: number }> {
+    const datasetId = toOid(input.datasetId, 'datasetId', context.requestId);
+    const teamId = this.teamId(context);
+    const current = await this.model.findOne({ _id: datasetId, teamId, deleteTime: null }).lean();
+    if (!current) {
+      throw new ApiErrorException(
+        createApiError({
+          code: 501070,
+          requestId: context.requestId,
+          params: { resourceType: 'dataset', resourceId: input.datasetId },
+        }),
+      );
+    }
+    if (current.version !== input.version) {
+      throw versionConflict(input.datasetId, input.version, current.version, context.requestId);
+    }
+
+    const patch: Record<string, unknown> = { updateTime: new Date() };
+    if (input.patch.parentId !== undefined) {
+      const parentId = input.patch.parentId
+        ? toOid(input.patch.parentId, 'parentId', context.requestId)
+        : null;
+      if (parentId?.equals(datasetId)) {
+        throw new ApiErrorException(
+          createApiError({
+            code: 501046,
+            requestId: context.requestId,
+            params: {
+              resourceId: input.datasetId,
+              targetParentId: String(parentId),
+              depth: 1,
+            },
+          }),
+        );
+      }
+      if (parentId) {
+        const parent = await this.model.findOne({ _id: parentId, teamId, deleteTime: null }).lean();
+        if (!parent || parent.type !== 'folder') {
+          throw invalidParent(String(parentId), input.datasetId, context.requestId);
+        }
+      }
+      patch.parentId = parentId;
+    }
+    for (const key of [
+      'type',
+      'name',
+      'intro',
+      'vectorModel',
+      'agentModel',
+      'vlmModel',
+      'chunkPolicy',
+      'inheritPermission',
+      'autoSync',
+    ] as const) {
+      const value = input.patch[key];
+      if (value !== undefined) patch[key] = value;
+    }
+    if (typeof patch.type === 'string' && !ALLOWED_TYPES.has(patch.type)) {
+      throw typeError(patch.type, context.requestId);
+    }
+    if (typeof input.patch.name === 'string') {
+      const parentId = Object.prototype.hasOwnProperty.call(patch, 'parentId')
+        ? (patch.parentId as Types.ObjectId | null)
+        : current.parentId;
+      const duplicate = await this.model.exists({
+        _id: { $ne: datasetId },
+        teamId,
+        parentId,
+        name: input.patch.name,
+        deleteTime: null,
+      });
+      if (duplicate) {
+        throw duplicateNameError(input.patch.name, parentId, context.requestId);
+      }
+    }
+    return this.applyUpdate(
+      {
+        datasetId: input.datasetId,
+        version: input.version,
+        patch,
+        options: input.options,
+      },
+      context,
+    );
+  }
+
+  private async applyUpdate(
+    input: {
+      datasetId: string;
+      version: number;
+      patch: Record<string, unknown>;
+      options: { timeoutMs: number };
+    },
+    context: RequestContext,
+  ): Promise<{ version: number }> {
+    const datasetId = toOid(input.datasetId, 'datasetId', context.requestId);
+    const teamId = this.teamId(context);
     const updated = await this.model
       .findOneAndUpdate(
         {
-          _id: toOid(input.datasetId, 'datasetId', context.requestId),
-          teamId: this.teamId(context),
+          _id: datasetId,
+          teamId,
           deleteTime: null,
           version: input.version,
         },
-        { $set: patch, $inc: { version: 1 } },
+        { $set: input.patch, $inc: { version: 1 } },
         { new: true },
       )
       .lean();
     if (!updated) {
-      throw new ApiErrorException(
-        createApiError({
-          code: 501067,
-          requestId: context.requestId,
-          params: {
-            resourceType: 'dataset',
-            resourceId: input.datasetId,
-            expectedVersion: input.version,
-            actualVersion: -1,
-          },
-        }),
-      );
+      const current = await this.model.findOne({ _id: datasetId, teamId, deleteTime: null }).lean();
+      if (!current) {
+        throw new ApiErrorException(
+          createApiError({
+            code: 501070,
+            requestId: context.requestId,
+            params: { resourceType: 'dataset', resourceId: input.datasetId },
+          }),
+        );
+      }
+      throw versionConflict(input.datasetId, input.version, current.version, context.requestId);
     }
     return { version: updated.version };
   }
@@ -184,15 +354,10 @@ export class MongoKnowledgeBaseRepository
     input: { datasetId: string; version: number; options: { timeoutMs: number } },
     context: RequestContext,
   ): Promise<{ deleteJobId: string }> {
-    const updated = await this.model.findOneAndUpdate(
-      {
-        _id: toOid(input.datasetId, 'datasetId', context.requestId),
-        teamId: this.teamId(context),
-        deleteTime: null,
-      },
-      { $set: { deleteTime: new Date(), updateTime: new Date() } },
-    );
-    if (!updated) {
+    const datasetId = toOid(input.datasetId, 'datasetId', context.requestId);
+    const teamId = this.teamId(context);
+    const current = await this.model.findOne({ _id: datasetId, teamId, deleteTime: null }).lean();
+    if (!current) {
       throw new ApiErrorException(
         createApiError({
           code: 501070,
@@ -200,6 +365,32 @@ export class MongoKnowledgeBaseRepository
           params: { resourceType: 'dataset', resourceId: input.datasetId },
         }),
       );
+    }
+    if (current.version !== input.version) {
+      throw versionConflict(input.datasetId, input.version, current.version, context.requestId);
+    }
+    const updated = await this.model.findOneAndUpdate(
+      {
+        _id: datasetId,
+        teamId,
+        deleteTime: null,
+        version: input.version,
+      },
+      { $set: { deleteTime: new Date(), updateTime: new Date() }, $inc: { version: 1 } },
+      { new: true },
+    );
+    if (!updated) {
+      const latest = await this.model.findOne({ _id: datasetId, teamId }).lean();
+      if (!latest) {
+        throw new ApiErrorException(
+          createApiError({
+            code: 501070,
+            requestId: context.requestId,
+            params: { resourceType: 'dataset', resourceId: input.datasetId },
+          }),
+        );
+      }
+      throw versionConflict(input.datasetId, input.version, latest.version, context.requestId);
     }
     return { deleteJobId: `${context.tenant.teamId}:${input.datasetId}:delete` };
   }
@@ -255,6 +446,29 @@ export class MongoKnowledgeBaseRepository
       parentId: toOid(datasetId, 'datasetId', context.requestId),
       deleteTime: null,
     });
+  }
+
+  async countDescendants(datasetId: string, context: RequestContext): Promise<number> {
+    const rootId = toOid(datasetId, 'datasetId', context.requestId);
+    const teamId = this.teamId(context);
+    const queue = [rootId];
+    const seen = new Set<string>();
+    let count = 0;
+    while (queue.length > 0) {
+      const parentId = queue.shift()!;
+      const children = await this.model
+        .find({ teamId, parentId, deleteTime: null })
+        .select({ _id: 1 })
+        .lean();
+      for (const child of children) {
+        const id = String(child._id);
+        if (seen.has(id)) continue;
+        seen.add(id);
+        count += 1;
+        queue.push(child._id);
+      }
+    }
+    return count;
   }
 
   static writeTimeoutMs(): number {

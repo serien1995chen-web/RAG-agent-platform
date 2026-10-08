@@ -1,3 +1,4 @@
+import type { ChunkPolicyValue } from '../../../shared/persistence/schemas';
 import type { RequestContext } from '../../../ports/types';
 
 /**
@@ -13,6 +14,9 @@ export interface DatasetSummaryValue {
   parentId: string | null;
   vectorModel: string;
   indexVersion: string;
+  agentModel: string | null;
+  vlmModel: string | null;
+  chunkPolicy: ChunkPolicyValue;
   inheritPermission: boolean;
   autoSync: boolean;
   deleteTime: string | null;
@@ -40,4 +44,22 @@ export interface KnowledgeBaseQueryRepository {
     context: RequestContext,
   ): Promise<DatasetSummaryValue | null>;
   countChildren(datasetId: string, context: RequestContext): Promise<number>;
+}
+
+export interface DatasetUpdateInput {
+  datasetId: string;
+  version: number;
+  patch: {
+    parentId?: string | null;
+    type?: string;
+    name?: string;
+    intro?: string;
+    vectorModel?: string;
+    agentModel?: string | null;
+    vlmModel?: string | null;
+    chunkPolicy?: ChunkPolicyValue;
+    inheritPermission?: boolean;
+    autoSync?: boolean;
+  };
+  options: { timeoutMs: number };
 }

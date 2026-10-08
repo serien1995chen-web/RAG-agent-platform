@@ -2,13 +2,19 @@ import { ApiErrorException, createApiError } from '@kb/contracts';
 import type { KnowledgeBaseRepository } from '../../../ports/repositories';
 import type { RequestContext } from '../../../ports/types';
 import type {
+  DatasetUpdateInput,
   DatasetListResult,
   DatasetSummaryValue,
   KnowledgeBaseQueryRepository,
 } from '../domain/dataset-query';
+import type { ChunkPolicyValue } from '../../../shared/persistence/schemas';
+
+export interface KnowledgeBaseWriteRepository {
+  updateDataset(input: DatasetUpdateInput, context: RequestContext): Promise<{ version: number }>;
+}
 
 export interface DatasetApiServiceDeps {
-  repository: KnowledgeBaseRepository & KnowledgeBaseQueryRepository;
+  repository: KnowledgeBaseRepository & KnowledgeBaseQueryRepository & KnowledgeBaseWriteRepository;
 }
 
 export interface CreateDatasetInput {
@@ -28,6 +34,15 @@ export interface ListDatasetsInput {
 export interface DatasetDetailResult {
   dataset: DatasetSummaryValue;
   stats: { collections: number; datas: number };
+}
+
+export interface UpdateDatasetInput {
+  datasetId: string;
+  version: number;
+  name?: string;
+  chunkPolicy?: ChunkPolicyValue;
+  autoSync?: boolean;
+  parentId?: string | null;
 }
 
 /** API-DS-001/002/003 的应用编排：路由只做校验与错误映射。 */
@@ -87,5 +102,25 @@ export class DatasetApiService {
     }
     const collections = await this.deps.repository.countChildren(datasetId, context);
     return { dataset, stats: { collections, datas: 0 } };
+  }
+
+  async updateDataset(
+    input: UpdateDatasetInput,
+    context: RequestContext,
+  ): Promise<{ version: number }> {
+    return this.deps.repository.updateDataset(
+      {
+        datasetId: input.datasetId,
+        version: input.version,
+        patch: {
+          ...(input.name !== undefined ? { name: input.name } : {}),
+          ...(input.chunkPolicy !== undefined ? { chunkPolicy: input.chunkPolicy } : {}),
+          ...(input.autoSync !== undefined ? { autoSync: input.autoSync } : {}),
+          ...(input.parentId !== undefined ? { parentId: input.parentId } : {}),
+        },
+        options: { timeoutMs: 10_000 },
+      },
+      context,
+    );
   }
 }
