@@ -18,7 +18,7 @@ import {
   type RequestContext,
   type TaskResult,
 } from '@kb/service';
-import { Worker, type Job } from 'bullmq';
+import { DelayedError, Worker, type Job } from 'bullmq';
 // Plan D4 冻结 @kb/service barrel（不在 25 条文件清单内）；心跳常量按相对路径引用包内实现。
 import { PROCESSING_HEARTBEAT_MS } from '../../../../packages/service/src/modules/processing/domain/lease';
 import type { ExtendedAppRuntime } from './bootstrap';
@@ -129,14 +129,23 @@ function failureState(error: unknown): { state: FinishState; retryable: string }
   return { state: 'blocked', retryable };
 }
 
+/**
+ * 可重试结果的重投（PR #7 Review 修复）：把 Job 移入 delayed 并抛 DelayedError，
+ * Worker 不会将其标记失败；任务事实 lockTime 复位后可被重新领取。
+ */
+async function requeueJob(job: Job, token: string | undefined): Promise<never> {
+  await job.moveToDelayed(Date.now(), token);
+  throw new DelayedError();
+}
+
 /** 链上处理器（设计 12.10）：claim → handler → 心跳续租 → finish。 */
-function createChainProcessor(
+export function createChainProcessor(
   runtime: ExtendedAppRuntime,
   handler: RuntimeJobHandler,
-): (job: Job) => Promise<void> {
+): (job: Job, token?: string) => Promise<void> {
   const timeoutMs = runtime.config.system.timeouts.requestMs;
   const options = { timeoutMs };
-  return async (job) => {
+  return async (job, token) => {
     const { envelope, taskId } = parseEnvelope(job);
     if (envelope.teamId.length === 0 || envelope.mode.length === 0 || taskId === undefined) {
       throw invalidEnvelope(envelope);
@@ -186,6 +195,24 @@ function createChainProcessor(
       clearInterval(heartbeat);
     }
 
+    if (result.state === 'retry') {
+      // 可重试结果：先写回任务事实（lockTime 复位），再把 Job 重投，避免任务悬置。
+      try {
+        await runtime.processingService.finishJob(
+          { taskId, state: 'failed', errorMsg: result.errorMsg ?? 'dataset.task.retry', options },
+          context,
+        );
+      } catch (error) {
+        runtime.clients.logger.log('queue-workers.finish_failed', {
+          jobId: envelope.jobId,
+          error: errorLabel(error),
+        });
+      }
+      runtime.clients.logger.log('queue-workers.job_retry', { jobId: envelope.jobId });
+      await requeueJob(job, token);
+      return;
+    }
+
     try {
       await runtime.processingService.finishJob(
         {
@@ -210,24 +237,18 @@ function createChainProcessor(
  * 生命周期处理器：delete/sync/reconcile/migration 只做 payload→Port 调用，
  * 任务状态回写留在各自 Port/Repository；失败分类决定是否交回 BullMQ 重试。
  */
-function createLifecycleProcessor(
+export function createLifecycleProcessor(
   runtime: ExtendedAppRuntime,
   handler: RuntimeJobHandler,
-): (job: Job) => Promise<void> {
+): (job: Job, token?: string) => Promise<void> {
   const timeoutMs = runtime.config.system.timeouts.requestMs;
-  return async (job) => {
+  return async (job, token) => {
     const { envelope } = parseEnvelope(job);
     if (envelope.mode.length === 0) throw invalidEnvelope(envelope);
     const context = lifecycleContext(envelope, timeoutMs);
+    let result: TaskResult;
     try {
-      const result = await handler.handle(envelope, context);
-      if (result.state !== 'success') {
-        runtime.clients.logger.log('queue-workers.lifecycle_non_success', {
-          jobId: envelope.jobId,
-          mode: envelope.mode,
-          state: result.state,
-        });
-      }
+      result = await handler.handle(envelope, context);
     } catch (error) {
       const { state, retryable } = failureState(error);
       runtime.clients.logger.log('queue-workers.lifecycle_failed', {
@@ -237,6 +258,22 @@ function createLifecycleProcessor(
         retryable,
       });
       if (retryable === 'retryable') throw error;
+      return;
+    }
+    if (result.state === 'retry') {
+      runtime.clients.logger.log('queue-workers.lifecycle_retry', {
+        jobId: envelope.jobId,
+        mode: envelope.mode,
+      });
+      await requeueJob(job, token);
+      return;
+    }
+    if (result.state !== 'success') {
+      runtime.clients.logger.log('queue-workers.lifecycle_non_success', {
+        jobId: envelope.jobId,
+        mode: envelope.mode,
+        state: result.state,
+      });
     }
   };
 }
@@ -250,7 +287,7 @@ function firstDefinition(definitions: readonly JobDefinition[], name: string): J
 function createWorkerUnit(
   runtime: ExtendedAppRuntime,
   queueName: string,
-  processor: (job: Job) => Promise<void>,
+  processor: (job: Job, token?: string) => Promise<void>,
   concurrency: number,
 ): RuntimeUnit {
   const worker = new Worker(queueName, processor, {
