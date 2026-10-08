@@ -273,6 +273,9 @@ importers:
       '@kb/contracts':
         specifier: workspace:*
         version: link:../contracts
+      '@kb/dal':
+        specifier: workspace:*
+        version: link:../dal
       '@node-rs/jieba':
         specifier: 'catalog:'
         version: 2.0.1
@@ -353,6 +356,9 @@ importers:
       '@kb/web':
         specifier: workspace:*
         version: link:../../packages/web
+      bullmq:
+        specifier: 'catalog:'
+        version: 5.52.2
       next:
         specifier: 'catalog:'
         version: 16.3.0(@opentelemetry/api@1.9.1)(@types/node@24.19.1)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)

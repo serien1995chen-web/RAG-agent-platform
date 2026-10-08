@@ -13,7 +13,7 @@ RUN pnpm install --frozen-lockfile
 
 FROM deps AS build
 COPY . .
-RUN pnpm build
+RUN pnpm build && pnpm build:workers
 
 FROM base AS runner
 ENV NODE_ENV=production

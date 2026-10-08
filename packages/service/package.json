@@ -18,6 +18,7 @@
   "dependencies": {
     "@kb/chunk": "workspace:*",
     "@kb/contracts": "workspace:*",
+    "@kb/dal": "workspace:*",
     "@node-rs/jieba": "catalog:",
     "bullmq": "catalog:",
     "ioredis": "catalog:",
