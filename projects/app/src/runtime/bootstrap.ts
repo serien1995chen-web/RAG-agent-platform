@@ -5,6 +5,7 @@ import {
   ProcessingApplicationService,
   SourceCollectionApplicationService,
   createDatasetAclRepository,
+  createDefaultPorts,
   createDeleteJobRepository,
   createKnowledgeItemIndexAdapter,
   createKnowledgeItemRepository,
@@ -12,6 +13,7 @@ import {
   createProcessingJobRepository,
   createSourceCollectionRepository,
   type FullTextStore,
+  type ServicePorts,
   type VectorController,
 } from '@kb/service';
 import { closeRuntimeClients, type RuntimeClients } from './clients';
@@ -21,6 +23,7 @@ export interface RuntimeBootstrapOptions {
   getBaseRuntime?: () => Promise<AppRuntime>;
   drain?: () => Promise<void>;
   closeClients?: (clients: RuntimeClients) => Promise<void>;
+  ports?: ServicePorts;
 }
 
 export interface ExtendedAppRuntime extends AppRuntime {
@@ -36,6 +39,7 @@ export interface ExtendedAppRuntime extends AppRuntime {
   datasetPermission: ReturnType<typeof createDatasetAclRepository>;
   vectorController: VectorController;
   fullTextStore?: FullTextStore;
+  ports: ServicePorts;
   drain: () => Promise<void>;
   shutdown: () => Promise<void>;
 }
@@ -57,6 +61,7 @@ export async function bootstrapRuntime(
     connection: clients.mongo,
   });
 
+  const ports = options.ports ?? createDefaultPorts();
   const datasetApi = new DatasetApiService({ repository: knowledgeBaseRepository });
   const collectionService = new SourceCollectionApplicationService({
     repository: collectionRepository,
@@ -86,6 +91,7 @@ export async function bootstrapRuntime(
     datasetPermission,
     vectorController: adapters,
     ...(adapters.fullText ? { fullTextStore: adapters.fullText } : {}),
+    ports,
     drain,
     async shutdown(): Promise<void> {
       if (closed) return;

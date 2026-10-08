@@ -1,4 +1,6 @@
 import { bootstrapRuntime, type ExtendedAppRuntime } from './bootstrap';
+import { createDrainCoordinator } from './drain';
+import { startWorkerRuntime } from './worker';
 
 let runtimePromise: Promise<ExtendedAppRuntime> | undefined;
 
@@ -13,5 +15,7 @@ export async function closeRuntime(): Promise<void> {
   runtimePromise = undefined;
 }
 
-export { bootstrapRuntime } from './bootstrap';
+export { bootstrapRuntime, createDrainCoordinator, startWorkerRuntime };
 export type { ExtendedAppRuntime, RuntimeBootstrapOptions } from './bootstrap';
+export type { DrainCoordinator, DrainPhase, DrainResult, DrainState, RuntimeUnit } from './drain';
+export type { WorkerRuntimeHandle, WorkerRuntimeOptions } from './worker';
