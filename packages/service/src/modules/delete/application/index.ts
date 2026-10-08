@@ -1,7 +1,6 @@
 import type { RequestContext } from '../../../ports/types';
 import type { DeleteJobRepository } from '../../../ports/repositories';
-import type { PortCallOptions } from '../../../ports/types';
-import type { DeleteJobSnapshot } from '../../../ports/types';
+import type { DeleteJobSnapshot, PageResult, PortCallOptions } from '../../../ports/types';
 
 export interface DeleteServiceDeps {
   repository: DeleteJobRepository;
@@ -16,5 +15,19 @@ export class DeleteApplicationService {
     context: RequestContext,
   ): Promise<DeleteJobSnapshot> {
     return this.deps.repository.get(input, context);
+  }
+
+  listFailures(
+    input: { jobId: string; cursor?: string; limit: number; options: PortCallOptions },
+    context: RequestContext,
+  ): Promise<PageResult<{ resourceType: string; resourceId: string; reason: string }>> {
+    return this.deps.repository.listFailures(input, context);
+  }
+
+  retryJob(
+    input: { jobId: string; options: PortCallOptions },
+    context: RequestContext,
+  ): Promise<{ accepted: boolean }> {
+    return this.deps.repository.retry(input, context);
   }
 }

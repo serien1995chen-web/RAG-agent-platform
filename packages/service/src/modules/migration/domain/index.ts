@@ -10,6 +10,9 @@ export interface MigrationRun {
   cursor: string | null;
 }
 
+export { assertResumeCursor, assertScopeTenant, migrationNameOf, scopeTeamId } from './registry';
+export type { MigrationState } from './registry';
+
 export const MIGRATION_RUN_INVARIANTS = [
   'teamId 必填且不可随请求覆盖',
   '跨对象引用必须同租户',

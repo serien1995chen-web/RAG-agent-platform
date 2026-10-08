@@ -1,4 +1,15 @@
 import type { ProcessingJobSnapshot } from '../../../ports/types';
+export {
+  PROCESSING_EPOCH_LOCK_TIME,
+  PROCESSING_HEARTBEAT_MS,
+  PROCESSING_LEASE_MS,
+  PROCESSING_PERMANENT_LOCK_TIME,
+  canClaim,
+  initialRetryCount,
+  isPermanentlyLocked,
+  retryBudget,
+} from './lease';
+export type { ProcessingBudgetKind } from './lease';
 /**
  * ProcessingJob 领域骨架（设计文档 7.2 / 7.4）。
  * 该层只允许实体、值对象、不变量与 Port 引用；禁止导入基础设施客户端。

@@ -4,6 +4,7 @@ import {
   buildIdempotencyScopeKey,
   buildParseJobId,
 } from '../../packages/dal/src/index';
+import { canRemoveOwner } from '../../packages/acl/src/index';
 
 describe('REP: idempotency and stable job ids', () => {
   it('lets exactly one concurrent identical request win', async () => {
@@ -17,5 +18,11 @@ describe('REP: idempotency and stable job ids', () => {
   it('produces deterministic, collision-free job ids from scope inputs', () => {
     expect(buildParseJobId('t1', 'd1', 'c1', 1)).toBe(buildParseJobId('t1', 'd1', 'c1', 1));
     expect(buildParseJobId('t1', 'd1', 'c1', 1)).not.toBe(buildParseJobId('t1', 'd1', 'c1', 2));
+  });
+
+  it('keeps last-owner protection deterministic under repeated checks', () => {
+    expect(canRemoveOwner(2, 1)).toBe(true);
+    expect(canRemoveOwner(1, 1)).toBe(false);
+    expect(canRemoveOwner(0, 1)).toBe(false);
   });
 });

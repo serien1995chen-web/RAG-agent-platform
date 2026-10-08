@@ -12,9 +12,12 @@ export type {
   DatasetApiServiceDeps,
   DatasetDetailResult,
   ListDatasetsInput,
+  KnowledgeBaseWriteRepository,
+  UpdateDatasetInput,
 } from './application/dataset-api.service';
 export { MongoKnowledgeBaseRepository } from './repository/mongo-knowledge-base.repository';
 export type {
+  DatasetUpdateInput,
   DatasetListQueryInput,
   DatasetListResult,
   DatasetSummaryValue,

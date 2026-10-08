@@ -1,7 +1,9 @@
 import { createUnimplementedPort } from '../../../ports/defaults';
 import type { ProcessingJobRepository } from '../../../ports/repositories';
+import type { Connection } from 'mongoose';
+import { MongoProcessingJobRepository } from './mongo-processing-job.repository';
 
-/** Repository 骨架：Phase 4 接入 Mongo/pgvector/全文实现，当前返回稳定未实现错误。 */
-export function createProcessingJobRepository(): ProcessingJobRepository {
+export function createProcessingJobRepository(connection?: Connection): ProcessingJobRepository {
+  if (connection) return new MongoProcessingJobRepository(connection);
   return createUnimplementedPort<ProcessingJobRepository>('ProcessingJobRepository');
 }

@@ -1,7 +1,9 @@
 import { createUnimplementedPort } from '../../../ports/defaults';
 import type { KnowledgeItemRepository } from '../../../ports/repositories';
+import type { Connection } from 'mongoose';
+import { MongoKnowledgeItemRepository } from './mongo-knowledge-item.repository';
 
-/** Repository 骨架：Phase 4 接入 Mongo/pgvector/全文实现，当前返回稳定未实现错误。 */
-export function createKnowledgeItemRepository(): KnowledgeItemRepository {
+export function createKnowledgeItemRepository(connection?: Connection): KnowledgeItemRepository {
+  if (connection) return new MongoKnowledgeItemRepository(connection);
   return createUnimplementedPort<KnowledgeItemRepository>('KnowledgeItemRepository');
 }
