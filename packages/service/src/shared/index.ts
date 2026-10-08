@@ -76,6 +76,10 @@ export type {
 export { HealthProbeService, liveProbeResponse } from './health';
 export type { DependencyProbe, HealthSummary } from './health';
 
+export { tenantScopedModel } from './persistence/tenant-scoped-model';
+export type { TenantScopedModel } from './persistence/tenant-scoped-model';
+export { withMongoTransaction } from './persistence/with-mongo-transaction';
+
 export {
   closeInfrastructureClients,
   createInfrastructureClients,
