@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   ApiErrorException,
   DEFAULT_PORT_IDS,
+  createKnowledgeItemIndexAdapter,
   createDefaultPorts,
 } from '../../packages/service/src/index';
 import type { RequestContext } from '../../packages/service/src/index';
@@ -89,5 +90,17 @@ describe('Port 契约（设计文档 7.6 / ADR-010）', () => {
         ) => Promise<unknown>
       )('dataset.test.event', {}),
     ).rejects.toBeInstanceOf(ApiErrorException);
+  });
+
+  it('P2 真实装配工厂在注入连接后不再返回占位对象', () => {
+    const connection = {
+      models: {},
+      model: () => ({}),
+    };
+    const adapters = createKnowledgeItemIndexAdapter({
+      connection: connection as never,
+    });
+    expect(adapters.fullText).toBeDefined();
+    expect(typeof adapters.fullText?.search).toBe('function');
   });
 });

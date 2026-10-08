@@ -38,6 +38,7 @@ describe('E2E smoke: contract -> application -> projection adapter', () => {
   it('runs the Dataset create/list flow through the application service', async () => {
     const repository = {
       create: async () => ({ datasetId: dataset.datasetId, version: 1 }),
+      updateDataset: async () => ({ version: 2 }),
       listByTeam: async () => ({ total: 1, list: [dataset] }),
       findByDatasetId: async () => dataset,
       countChildren: async () => 0,
@@ -50,6 +51,12 @@ describe('E2E smoke: contract -> application -> projection adapter', () => {
     expect(created.state).toBe('ready');
     const listed = await service.listDatasets({ page: 1, limit: 20 }, context);
     expect(listed.total).toBe(1);
+
+    const updated = await service.updateDataset(
+      { datasetId: dataset.datasetId, version: 1, autoSync: true },
+      context,
+    );
+    expect(updated.version).toBe(2);
   });
 
   it('parses a SearchRequest and validates the SearchResult envelope', async () => {

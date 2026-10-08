@@ -3,6 +3,7 @@ import type { SearchRequest } from '../../packages/contracts/src/index';
 import { createSafeLogger, initTracing } from '../../sdk/otel/src/index';
 import {
   HealthProbeService,
+  classifyRetryableError,
   createDegradedDatasetSearchPort,
 } from '../../packages/service/src/index';
 import type { RequestContext } from '../../packages/service/src/index';
@@ -58,5 +59,10 @@ describe('FI: dependency and exporter failures never fake success', () => {
     expect(status.enabled).toBe(false);
     const logger = createSafeLogger({ name: 'fault-test', level: 'info' });
     expect(() => logger.log('dataset.fault.event', { token: 'secret' })).not.toThrow();
+  });
+
+  it('classifies transport failures as retryable without faking success', () => {
+    expect(classifyRetryableError({ code: 'ECONNRESET' })).toBe('retryable');
+    expect(classifyRetryableError({ code: 400 })).toBe('manual');
   });
 });

@@ -13,6 +13,15 @@ describe('TEN: cross-tenant guards', () => {
     }
   });
 
+  it('rejects a partial tenant context before any storage access', () => {
+    const result = validateTenantContext(
+      { teamId: 'team-a', tmbId: '', authType: 'token', isRoot: false },
+      'req-partial-tenant',
+    );
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error.code).toBe(501012);
+  });
+
   it('rejects cross-team object keys before touching storage (501061)', () => {
     expect(() =>
       assertObjectKeyScope({ bucket: 'b', key: 'temp/team-b/file' }, { teamId: 'team-a' }),
