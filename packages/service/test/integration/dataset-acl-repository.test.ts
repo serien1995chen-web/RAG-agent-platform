@@ -133,6 +133,38 @@ describe('MongoDatasetAclRepository (P2-14 / PORT-PERM-001..003)', () => {
     ).rejects.toMatchObject({ error: { code: 501008 } });
   });
 
+  it('inherits a member grant from an ancestor dataset', async () => {
+    await acl.create({
+      teamId,
+      resourceType: 'dataset',
+      resourceId: new mongoose.Types.ObjectId(datasetId),
+      collaboratorType: 'member',
+      collaboratorId: new mongoose.Types.ObjectId(memberId),
+      permission: 1,
+      permissionMask: 1,
+      inheritEnabled: true,
+      source: 'local',
+    });
+    const child = await datasets.create({
+      teamId,
+      createdBy: new mongoose.Types.ObjectId(ownerId),
+      parentId: new mongoose.Types.ObjectId(datasetId),
+      type: 'knowledge',
+      name: 'acl-child',
+      vectorModel: 'bge-m3',
+      indexVersion: 'bge-m3:1536:v1',
+      inheritPermission: true,
+      deleteTime: null,
+    });
+
+    const inherited = await repository.getPermission(
+      { datasetId: String(child._id), options: { timeoutMs: 5_000 } },
+      context,
+    );
+    expect(inherited.permissionMask).toBe(1);
+    expect(inherited.inherited).toBe(true);
+  });
+
   it('resumes inheritance with CAS and deletes ACL with the resource transaction', async () => {
     const updated = await repository.resumeInherit(
       { datasetId, version: 1, options: { timeoutMs: 5_000 } },

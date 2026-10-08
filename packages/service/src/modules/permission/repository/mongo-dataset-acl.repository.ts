@@ -121,19 +121,27 @@ export class MongoDatasetAclRepository implements DatasetPermissionPort {
         .lean();
       parentId = parent?.parentId ?? null;
     }
+    const collaboratorIds: (string | Types.ObjectId)[] = [tmbId];
+    if (Types.ObjectId.isValid(tmbId)) collaboratorIds.push(new Types.ObjectId(tmbId));
     const inheritedRows = await this.acl.find({
       teamId,
       resourceType: 'dataset',
       resourceId: { $in: [dataset._id, ...parentIds] },
       inheritEnabled: true,
       $or: [
-        { collaboratorType: 'member', collaboratorId: tmbId },
-        { collaboratorType: 'group', collaboratorId: { $in: [tmbId, '*'] } },
-        { collaboratorType: 'org', collaboratorId: { $in: [tmbId, '*'] } },
+        { collaboratorType: 'member', collaboratorId: { $in: collaboratorIds } },
+        { collaboratorType: 'group', collaboratorId: { $in: [...collaboratorIds, '*'] } },
+        { collaboratorType: 'org', collaboratorId: { $in: [...collaboratorIds, '*'] } },
       ],
     });
     for (const row of inheritedRows) {
-      if (row.collaboratorType === 'member' && String(row.collaboratorId) === tmbId) continue;
+      if (
+        row.collaboratorType === 'member' &&
+        String(row.collaboratorId) === tmbId &&
+        String(row.resourceId) === String(dataset._id)
+      ) {
+        continue;
+      }
       masks.push(row.permissionMask);
     }
     return mergePermissionMasks(...masks);
