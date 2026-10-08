@@ -41,6 +41,7 @@ export function createDatasetSyncScheduler(
   const logger = runtime.clients.logger;
 
   let reconcileTimer: ReturnType<typeof setTimeout> | undefined;
+  let reconcileInFlight: Promise<void> | undefined;
   let closed = false;
 
   const reconcile = async (): Promise<void> => {
@@ -64,21 +65,35 @@ export function createDatasetSyncScheduler(
       });
     }
     if (!closed) {
-      reconcileTimer = setTimeout(() => void reconcile(), reconcileIntervalMs);
+      reconcileTimer = setTimeout(runReconcile, reconcileIntervalMs);
     }
+  };
+
+  const runReconcile = (): void => {
+    reconcileInFlight = reconcile().finally(() => {
+      reconcileInFlight = undefined;
+    });
+    void reconcileInFlight;
   };
 
   const renewTimer = setInterval(
     () => {
       if (closed || !lock.isHeld()) return;
-      void lock.renew().then((renewed) => {
-        if (!renewed) logger.log('dataset-sync-scheduler.lock_lost', {});
-      });
+      void lock
+        .renew()
+        .then((renewed) => {
+          if (!renewed) logger.log('dataset-sync-scheduler.lock_lost', {});
+        })
+        .catch((error: unknown) => {
+          logger.log('dataset-sync-scheduler.renew_failed', {
+            error: error instanceof Error ? error.name : typeof error,
+          });
+        });
     },
     Math.max(1, Math.floor(lockTtlMs / 3)),
   );
 
-  void reconcile();
+  runReconcile();
 
   return {
     name: 'dataset-sync-scheduler',
@@ -87,6 +102,9 @@ export function createDatasetSyncScheduler(
       closed = true;
       if (reconcileTimer !== undefined) clearTimeout(reconcileTimer);
       clearInterval(renewTimer);
+      // 等待在途 reconcile 完成后再释放 leader lock，避免旧 leader 与新 leader 并发写入。
+      const inFlight = reconcileInFlight;
+      if (inFlight) await inFlight.catch(() => undefined);
       await lock.release();
       await queue.close();
     },
