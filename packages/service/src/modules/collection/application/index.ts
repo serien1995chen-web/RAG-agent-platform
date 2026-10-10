@@ -61,3 +61,6 @@ export class SourceCollectionApplicationService {
     );
   }
 }
+
+export { DatasetSyncApplicationService } from './sync.service';
+export type { DatasetSyncServiceDeps } from './sync.service';
