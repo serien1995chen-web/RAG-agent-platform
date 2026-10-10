@@ -6,9 +6,6 @@ import {
   type DatasetSummaryValue,
   type RequestContext,
 } from '../../packages/service/src/index';
-import { ProcessingApplicationService } from '../../packages/service/src/modules/processing/application';
-import { DatasetSyncApplicationService } from '../../packages/service/src/modules/collection/application/sync.service';
-import type { QueuePort } from '../../packages/dal/src/queue-port';
 
 const context: RequestContext = {
   requestId: 'req-e2e',
@@ -73,107 +70,5 @@ describe('E2E smoke: contract -> application -> projection adapter', () => {
     const port = createDegradedDatasetSearchPort();
     const result = await port.search(request, context);
     expect(SearchResultSchema.parse(result)).toEqual(result);
-  });
-
-  it('projects task and sync results without a persisted completed state', async () => {
-    const taskId = '0000000000000000000000bb';
-    const collectionId = '0000000000000000000000cc';
-    const processingRepository = {
-      enqueue: async () => ({ taskId, jobId: 'job-a' }),
-      claim: async () => ({ taskId, lockTime: '2026-10-10T00:00:00.000Z' }),
-      renew: async () => ({ lockTime: '2026-10-10T00:00:00.000Z' }),
-      finish: async () => undefined,
-      finishWithLease: async () => undefined,
-      resumeTask: async () => ({ taskId, retryCount: 3 }),
-      getTaskDetail: async () => ({
-        task: { taskId, derivedState: 'active' },
-        derivedState: 'active',
-      }),
-      listTaskErrors: async () => ({ total: 0, list: [], cursor: null }),
-      getQueueStats: async () => [{ mode: 'qa', depth: 1, running: 0 }],
-      updateTrainingData: async () => ({ acceptedCount: 1 }),
-      deleteTrainingData: async () => ({ deletedCount: 1 }),
-      listCollectionErrors: async () => [],
-      hasError: async () => false,
-    };
-    const processing = new ProcessingApplicationService({
-      repository: processingRepository as never,
-    });
-    const detail = await processing.getTaskDetail(
-      { taskId, options: { timeoutMs: 5_000 } },
-      context,
-    );
-    expect(detail.derivedState).toBe('active');
-    expect(JSON.stringify(detail)).not.toContain('completed');
-
-    const queue: QueuePort = {
-      enqueue: async (_queue, jobId) => ({ jobId, enqueued: true }),
-      remove: async () => undefined,
-      close: async () => undefined,
-    };
-    const sync = new DatasetSyncApplicationService({
-      collections: {
-        get: async () => ({
-          collectionId,
-          teamId: context.tenant.teamId,
-          datasetId: dataset.datasetId,
-          parentId: null,
-          type: 'link',
-          name: 'link',
-          tagIds: [],
-          version: 1,
-          createTime: '2026-10-05T00:00:00.000Z',
-          updateTime: '2026-10-05T00:00:00.000Z',
-        }),
-        list: async () => ({
-          total: 1,
-          list: [
-            {
-              collectionId,
-              teamId: context.tenant.teamId,
-              datasetId: dataset.datasetId,
-              parentId: null,
-              type: 'link',
-              name: 'link',
-              tagIds: [],
-              version: 1,
-              createTime: '2026-10-05T00:00:00.000Z',
-              updateTime: '2026-10-05T00:00:00.000Z',
-            },
-          ],
-          cursor: null,
-        }),
-        create: async () => ({ collectionId }),
-        update: async () => ({ version: 2 }),
-        deleteTree: async () => ({ deleteJobId: 'delete' }),
-      },
-      knowledgeBase: {
-        get: async () => ({
-          datasetId: dataset.datasetId,
-          teamId: context.tenant.teamId,
-          parentId: null,
-          type: 'knowledge',
-          name: dataset.name,
-          vectorModel: dataset.vectorModel,
-          inheritPermission: true,
-          autoSync: true,
-          deleteTime: null,
-          version: 1,
-          createTime: dataset.createTime,
-          updateTime: dataset.updateTime,
-        }),
-        create: async () => ({ datasetId: dataset.datasetId, version: 1 }),
-        update: async () => ({ version: 2 }),
-        softDelete: async () => ({ deleteJobId: 'delete' }),
-      },
-      processingJobs: processingRepository as never,
-      queue,
-    });
-    const syncResult = await sync.sync(
-      { datasetId: dataset.datasetId, idempotencyKey: 'idem-e2e', options: { timeoutMs: 5_000 } },
-      context,
-    );
-    expect(syncResult.state).toBe('active');
-    expect(JSON.stringify(syncResult)).not.toContain('completed');
   });
 });

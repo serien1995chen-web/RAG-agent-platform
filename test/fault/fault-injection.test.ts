@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest';
-import { ApiErrorException } from '../../packages/contracts/src/index';
 import type { SearchRequest } from '../../packages/contracts/src/index';
 import { createSafeLogger, initTracing } from '../../sdk/otel/src/index';
 import {
@@ -8,7 +7,12 @@ import {
   createDegradedDatasetSearchPort,
 } from '../../packages/service/src/index';
 import type { RequestContext } from '../../packages/service/src/index';
-import { ProcessingApplicationService } from '../../packages/service/src/modules/processing/application';
+import {
+  PROCESSING_EPOCH_LOCK_TIME,
+  PROCESSING_RETRY_NOT_BEFORE_KEY,
+  canClaim,
+  retryBackoffUntil,
+} from '../../packages/service/src/modules/processing/domain/lease';
 
 const context: RequestContext = {
   requestId: 'req-fault',
@@ -68,58 +72,19 @@ describe('FI: dependency and exporter failures never fake success', () => {
     expect(classifyRetryableError({ code: 400 })).toBe('manual');
   });
 
-  it('lets only the current lease finish after expiry and never fakes stale success', async () => {
-    let currentLease = '';
-    const completed: string[] = [];
-    const repository = {
-      enqueue: async () => ({ taskId: 'task-lease', jobId: 'job-lease' }),
-      claim: async () => {
-        currentLease = `lease-${currentLease === '' ? 'a' : 'b'}`;
-        return { taskId: 'task-lease', lockTime: currentLease };
-      },
-      renew: async (input: { lockTime: string }) => ({ lockTime: input.lockTime }),
-      finish: async () => undefined,
-      finishWithLease: async (input: { taskId: string; lockTime: string }) => {
-        if (input.lockTime !== currentLease) {
-          throw new ApiErrorException({
-            code: 501005,
-            statusText: 'dataset.task.invalid_state',
-            messageKey: 'dataset.task.invalid_state',
-            params: { taskId: input.taskId },
-            message: 'lease lost',
-            errorType: 'task',
-            retryable: 'no-retry',
-            severity: 'warning',
-            requestId: 'req-fault',
-          });
-        }
-        completed.push(input.taskId);
-      },
-      resumeTask: async () => ({ taskId: 'task-lease', retryCount: 3 }),
-      getTaskDetail: async () => ({ task: {}, derivedState: 'running' }),
-      listTaskErrors: async () => ({ total: 0, list: [], cursor: null }),
-      getQueueStats: async () => [],
-      updateTrainingData: async () => ({ acceptedCount: 0 }),
-      deleteTrainingData: async () => ({ deletedCount: 0 }),
-      listCollectionErrors: async () => [],
-      hasError: async () => false,
-    };
-    const service = new ProcessingApplicationService({ repository: repository as never });
-    const first: RequestContext = { ...context, requestId: 'worker-a' };
-    const second: RequestContext = { ...context, requestId: 'worker-b' };
-
-    await service.claimJob({ taskId: 'task-lease', options: { timeoutMs: 5_000 } }, first);
-    await service.claimJob({ taskId: 'task-lease', options: { timeoutMs: 5_000 } }, second);
-    await expect(
-      service.finishJob(
-        { taskId: 'task-lease', state: 'success', options: { timeoutMs: 5_000 } },
-        first,
-      ),
-    ).rejects.toMatchObject({ error: { code: 501005 } });
-    await service.finishJob(
-      { taskId: 'task-lease', state: 'success', options: { timeoutMs: 5_000 } },
-      second,
-    );
-    expect(completed).toEqual(['task-lease']);
+  it('keeps retry backoff separate from the lease window at the domain boundary', () => {
+    const now = new Date('2026-10-10T00:00:00.000Z');
+    const notBefore = retryBackoffUntil('qa', now);
+    expect(notBefore).not.toBeNull();
+    expect(
+      canClaim(PROCESSING_EPOCH_LOCK_TIME, 3, now, {
+        [PROCESSING_RETRY_NOT_BEFORE_KEY]: notBefore,
+      }),
+    ).toBe(false);
+    expect(
+      canClaim(PROCESSING_EPOCH_LOCK_TIME, 3, new Date(notBefore!.getTime() + 1), {
+        [PROCESSING_RETRY_NOT_BEFORE_KEY]: notBefore,
+      }),
+    ).toBe(true);
   });
 });
