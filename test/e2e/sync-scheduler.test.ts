@@ -6,6 +6,7 @@ import {
   type QueueName,
   type QueuePort,
 } from '../../packages/dal/src';
+import { bootstrapRuntime } from '../../projects/app/src/runtime/bootstrap';
 import type {
   CollectionSnapshot,
   KnowledgeBaseSnapshot,
@@ -371,26 +372,62 @@ describe('autoSync chain and scheduler (P3-06)', () => {
     expect(schedulers.has('unknown')).toBe(false);
   });
 
-  it('serves API-COL-015 as a real route', async () => {
-    const queue = new FakeQueue();
-    state.runtime = {
-      clients: { redis: {} },
-      collectionRepository: {
-        get: async () => linkCollection(),
-      },
-      knowledgeBaseRepository: {
-        get: async () => dataset(true),
-        update: async () => ({ version: 2 }),
-      },
-      processingRepository: {
-        enqueue: async () => ({ taskId: 'task', jobId: 'job' }),
+  it('wires the production runtime to the real dataset sync service', async () => {
+    const events: string[] = [];
+    const models: Record<string, unknown> = {};
+    const mongo = {
+      models,
+      model: (name: string) => {
+        models[name] ??= { modelName: name };
+        return models[name];
       },
     };
-    vi.spyOn(BullMqQueueAdapter.prototype, 'enqueue').mockImplementation(
-      async (queueName, jobId, payload, options) =>
-        queue.enqueue(queueName, jobId, payload, options),
-    );
-    vi.spyOn(BullMqQueueAdapter.prototype, 'close').mockResolvedValue(undefined);
+    const base = {
+      clients: {
+        mongo,
+        redis: {},
+        pg: {},
+      },
+    };
+    const sync = vi
+      .spyOn(DatasetSyncApplicationService.prototype, 'sync')
+      .mockResolvedValue({ state: 'active', changed: 0, removed: 0 });
+    vi.spyOn(BullMqQueueAdapter.prototype, 'close').mockImplementation(async () => {
+      events.push('queue');
+    });
+
+    const runtime = await bootstrapRuntime({
+      getBaseRuntime: async () => base as never,
+      drain: async () => {
+        events.push('drain');
+      },
+      closeClients: async () => {
+        events.push('clients');
+      },
+    });
+
+    expect(runtime.ports.datasetSync).toBeInstanceOf(DatasetSyncApplicationService);
+    expect(runtime.ports.datasetSync).toBe(runtime.datasetSyncService);
+    await expect(
+      runtime.ports.datasetSync.sync(
+        { datasetId, idempotencyKey: 'idem-bootstrap', options: { timeoutMs: 5_000 } },
+        context,
+      ),
+    ).resolves.toEqual({ state: 'active', changed: 0, removed: 0 });
+    expect(sync).toHaveBeenCalled();
+
+    await runtime.shutdown();
+    expect(events).toEqual(['drain', 'queue', 'clients']);
+  });
+
+  it('serves API-COL-015 as a real route', async () => {
+    state.runtime = {
+      datasetSyncService: {
+        enqueueManualSync: async () => ({
+          jobId: buildSyncJobId(context.tenant.teamId, datasetId),
+        }),
+      },
+    };
 
     const route = await import('../../projects/app/src/pages/api/core/dataset/collection/sync');
     const recorder = responseRecorder();

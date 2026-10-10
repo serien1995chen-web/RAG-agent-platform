@@ -16,6 +16,8 @@ import {
   type ServicePorts,
   type VectorController,
 } from '@kb/service';
+import { BullMqQueueAdapter } from '@kb/dal';
+import { DatasetSyncApplicationService } from '../../../../packages/service/src/modules/collection/application/sync.service';
 import { closeRuntimeClients, type RuntimeClients } from './clients';
 import { getRuntime as getBaseRuntime, type AppRuntime } from './health';
 
@@ -34,6 +36,7 @@ export interface ExtendedAppRuntime extends AppRuntime {
   knowledgeItemService: KnowledgeItemApplicationService;
   processingRepository: ReturnType<typeof createProcessingJobRepository>;
   processingService: ProcessingApplicationService;
+  datasetSyncService: DatasetSyncApplicationService;
   deleteRepository: ReturnType<typeof createDeleteJobRepository>;
   migrationRepository: ReturnType<typeof createMigrationRunRepository>;
   datasetPermission: ReturnType<typeof createDatasetAclRepository>;
@@ -61,7 +64,6 @@ export async function bootstrapRuntime(
     connection: clients.mongo,
   });
 
-  const ports = options.ports ?? createDefaultPorts();
   const datasetApi = new DatasetApiService({ repository: knowledgeBaseRepository });
   const collectionService = new SourceCollectionApplicationService({
     repository: collectionRepository,
@@ -72,6 +74,17 @@ export async function bootstrapRuntime(
   const processingService = new ProcessingApplicationService({
     repository: processingRepository,
   });
+  const syncQueue = new BullMqQueueAdapter({ connection: clients.redis });
+  const datasetSyncService = new DatasetSyncApplicationService({
+    collections: collectionRepository,
+    knowledgeBase: knowledgeBaseRepository,
+    processingJobs: processingRepository,
+    queue: syncQueue,
+  });
+  const ports: ServicePorts = {
+    ...(options.ports ?? createDefaultPorts()),
+    datasetSync: datasetSyncService,
+  };
   const drain = options.drain ?? (async () => undefined);
   const closeClients = options.closeClients ?? closeRuntimeClients;
 
@@ -86,6 +99,7 @@ export async function bootstrapRuntime(
     knowledgeItemService,
     processingRepository,
     processingService,
+    datasetSyncService,
     deleteRepository,
     migrationRepository,
     datasetPermission,
@@ -97,6 +111,7 @@ export async function bootstrapRuntime(
       if (closed) return;
       closed = true;
       await drain();
+      await syncQueue.close();
       await closeClients(clients);
     },
   };
