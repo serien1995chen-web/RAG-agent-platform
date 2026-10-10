@@ -3,8 +3,14 @@ import {
   MemoryIdempotencyStore,
   buildIdempotencyScopeKey,
   buildParseJobId,
+  buildSyncJobId,
 } from '../../packages/dal/src/index';
 import { canRemoveOwner } from '../../packages/acl/src/index';
+import {
+  PROCESSING_PERMANENT_LOCK_TIME,
+  canClaim,
+  manualRecoveryRetryCount,
+} from '../../packages/service/src/modules/processing/domain/lease';
 
 describe('REP: idempotency and stable job ids', () => {
   it('lets exactly one concurrent identical request win', async () => {
@@ -24,5 +30,13 @@ describe('REP: idempotency and stable job ids', () => {
     expect(canRemoveOwner(2, 1)).toBe(true);
     expect(canRemoveOwner(1, 1)).toBe(false);
     expect(canRemoveOwner(0, 1)).toBe(false);
+  });
+
+  it('keeps stable sync ids and recovery caps deterministic', () => {
+    expect(buildSyncJobId('team-a', 'dataset-a')).toBe(buildSyncJobId('team-a', 'dataset-a'));
+    expect(manualRecoveryRetryCount()).toBe(3);
+    expect(canClaim(PROCESSING_PERMANENT_LOCK_TIME, 3, new Date('2049-12-31T23:59:59Z'))).toBe(
+      false,
+    );
   });
 });

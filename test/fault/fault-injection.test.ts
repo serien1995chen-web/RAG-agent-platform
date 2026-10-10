@@ -7,6 +7,12 @@ import {
   createDegradedDatasetSearchPort,
 } from '../../packages/service/src/index';
 import type { RequestContext } from '../../packages/service/src/index';
+import {
+  PROCESSING_EPOCH_LOCK_TIME,
+  PROCESSING_RETRY_NOT_BEFORE_KEY,
+  canClaim,
+  retryBackoffUntil,
+} from '../../packages/service/src/modules/processing/domain/lease';
 
 const context: RequestContext = {
   requestId: 'req-fault',
@@ -64,5 +70,21 @@ describe('FI: dependency and exporter failures never fake success', () => {
   it('classifies transport failures as retryable without faking success', () => {
     expect(classifyRetryableError({ code: 'ECONNRESET' })).toBe('retryable');
     expect(classifyRetryableError({ code: 400 })).toBe('manual');
+  });
+
+  it('keeps retry backoff separate from the lease window at the domain boundary', () => {
+    const now = new Date('2026-10-10T00:00:00.000Z');
+    const notBefore = retryBackoffUntil('qa', now);
+    expect(notBefore).not.toBeNull();
+    expect(
+      canClaim(PROCESSING_EPOCH_LOCK_TIME, 3, now, {
+        [PROCESSING_RETRY_NOT_BEFORE_KEY]: notBefore,
+      }),
+    ).toBe(false);
+    expect(
+      canClaim(PROCESSING_EPOCH_LOCK_TIME, 3, new Date(notBefore!.getTime() + 1), {
+        [PROCESSING_RETRY_NOT_BEFORE_KEY]: notBefore,
+      }),
+    ).toBe(true);
   });
 });
