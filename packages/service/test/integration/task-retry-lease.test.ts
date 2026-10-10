@@ -373,6 +373,45 @@ describe('task retry, lease and durable recovery (P3-05/P3-09)', () => {
     expect(await model.countDocuments({ teamId: teamB })).toBe(1);
   });
 
+  it('returns the same task for concurrent first enqueue of one stable jobId', async () => {
+    const second = await createConnection();
+    try {
+      const job = {
+        jobId: 'concurrent-stable-enqueue',
+        teamId: String(teamA),
+        datasetId: String(datasetId),
+        collectionId: String(collectionId),
+        mode: 'chunk' as const,
+        expireAt: null,
+        weight: 0,
+      };
+      const results = await Promise.allSettled([
+        repository.enqueue(
+          { job, options: { timeoutMs: 5_000 } },
+          requestContext(teamA, 'enqueue-a'),
+        ),
+        second.repository.enqueue(
+          { job, options: { timeoutMs: 5_000 } },
+          requestContext(teamA, 'enqueue-b'),
+        ),
+      ]);
+
+      expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(2);
+      const taskIds = results
+        .filter(
+          (result): result is PromiseFulfilledResult<{ taskId: string; jobId: string }> =>
+            result.status === 'fulfilled',
+        )
+        .map((result) => result.value.taskId);
+      expect(new Set(taskIds).size).toBe(1);
+      expect(await model.countDocuments({ teamId: teamA, payload: { __jobId: job.jobId } })).toBe(
+        1,
+      );
+    } finally {
+      await second.connection.close();
+    }
+  });
+
   it('allows only one concurrent claim across independent repository connections', async () => {
     const second = await createConnection();
     try {

@@ -52,6 +52,15 @@ function retryExhausted(taskId: string, retryCount: number, requestId: string): 
   );
 }
 
+function isDuplicateKeyError(error: unknown): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    (error as { code?: unknown }).code === 11000
+  );
+}
+
 type ProcessingFinishState = 'success' | 'failed' | 'blocked' | 'final_error';
 
 interface FinishInput {
@@ -268,33 +277,41 @@ export class MongoProcessingJobRepository implements ProcessingJobRepository {
       ? toOid(input.job.collectionId, 'collectionId', context.requestId)
       : datasetId;
     const taskId = deterministicTaskId(teamId, input.job.jobId);
-    const doc = await this.model
-      .findOneAndUpdate(
-        { _id: taskId, teamId },
-        {
-          $setOnInsert: {
-            datasetId,
-            collectionId,
-            dataId: input.job.dataId ?? null,
-            mode: input.job.mode,
-            retryCount: retryBudget(budgetKind),
-            lockTime: PROCESSING_EPOCH_LOCK_TIME,
-            errorMsg: input.job.errorMsg ?? null,
-            weight: input.job.weight ?? 0,
-            expireAt: Number.isNaN(expireAt.getTime())
-              ? new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000)
-              : expireAt,
-            billId: null,
-            payload: { __jobId: input.job.jobId },
-            imageDescMap: null,
-            indexes: [],
-            createTime: now,
-            updateTime: now,
+    let doc: PersistedTrainingTask | null;
+    try {
+      doc = (await this.model
+        .findOneAndUpdate(
+          { _id: taskId, teamId },
+          {
+            $setOnInsert: {
+              datasetId,
+              collectionId,
+              dataId: input.job.dataId ?? null,
+              mode: input.job.mode,
+              retryCount: retryBudget(budgetKind),
+              lockTime: PROCESSING_EPOCH_LOCK_TIME,
+              errorMsg: input.job.errorMsg ?? null,
+              weight: input.job.weight ?? 0,
+              expireAt: Number.isNaN(expireAt.getTime())
+                ? new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000)
+                : expireAt,
+              billId: null,
+              payload: { __jobId: input.job.jobId },
+              imageDescMap: null,
+              indexes: [],
+              createTime: now,
+              updateTime: now,
+            },
           },
-        },
-        { upsert: true, new: true, setDefaultsOnInsert: true },
-      )
-      .lean();
+          { upsert: true, new: true, setDefaultsOnInsert: true },
+        )
+        .lean()) as PersistedTrainingTask | null;
+    } catch (error) {
+      if (!isDuplicateKeyError(error)) throw error;
+      doc = (await this.model
+        .findOne({ _id: taskId, teamId })
+        .lean()) as PersistedTrainingTask | null;
+    }
     if (
       !doc ||
       !doc.datasetId.equals(datasetId) ||
