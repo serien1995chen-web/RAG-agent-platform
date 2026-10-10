@@ -1,4 +1,5 @@
 import { ApiErrorException, createApiError } from '@kb/contracts';
+import { createHash } from 'node:crypto';
 import { Types, type Connection, type Model } from 'mongoose';
 import type { ProcessingJobRepository } from '../../../ports/repositories';
 import type { ProcessingJobSnapshot, RequestContext } from '../../../ports/types';
@@ -14,9 +15,11 @@ import {
   PROCESSING_EPOCH_LOCK_TIME,
   PROCESSING_LEASE_MS,
   PROCESSING_PERMANENT_LOCK_TIME,
-  initialRetryCount,
+  PROCESSING_RETRY_NOT_BEFORE_KEY,
   manualRecoveryRetryCount,
-  retryLockTime,
+  retryBackoffUntil,
+  retryBudget,
+  type ProcessingBudgetKind,
 } from '../domain/lease';
 
 function toOid(value: string, field: string, requestId: string): Types.ObjectId {
@@ -101,6 +104,14 @@ interface ErrorCursor {
 
 type PersistedTrainingTask = DatasetTrainingDoc & { _id: Types.ObjectId };
 
+function deterministicTaskId(teamId: Types.ObjectId, jobId: string): Types.ObjectId {
+  const digest = createHash('sha256')
+    .update(`${String(teamId)}:${jobId}`)
+    .digest('hex')
+    .slice(0, 24);
+  return new Types.ObjectId(digest);
+}
+
 function taskJobId(doc: PersistedTrainingTask): string {
   const payload = doc.payload ?? {};
   const value = payload['__jobId'];
@@ -147,7 +158,12 @@ function toTaskView(doc: PersistedTrainingTask): ProcessingTaskView {
     retryCount: doc.retryCount,
     lockTime: doc.lockTime.toISOString(),
     weight: doc.weight,
-    derivedState: deriveProcessingState(doc),
+    derivedState: deriveProcessingState({
+      retryCount: doc.retryCount,
+      lockTime: doc.lockTime,
+      errorMsg: doc.errorMsg,
+      payload: doc.payload,
+    }),
     error: safeError(doc),
   };
 }
@@ -202,6 +218,28 @@ export class MongoProcessingJobRepository implements ProcessingJobRepository {
     },
     context: RequestContext,
   ): Promise<{ taskId: string; jobId: string }> {
+    return this.enqueueWithBudgetKind(input, context, 'initial');
+  }
+
+  async enqueueWithBudget(
+    input: {
+      job: Omit<ProcessingJobSnapshot, 'taskId' | 'retryCount' | 'lockTime'>;
+      budgetKind: ProcessingBudgetKind;
+      options: { timeoutMs: number };
+    },
+    context: RequestContext,
+  ): Promise<{ taskId: string; jobId: string }> {
+    return this.enqueueWithBudgetKind(input, context, input.budgetKind);
+  }
+
+  private async enqueueWithBudgetKind(
+    input: {
+      job: Omit<ProcessingJobSnapshot, 'taskId' | 'retryCount' | 'lockTime'>;
+      options: { timeoutMs: number };
+    },
+    context: RequestContext,
+    budgetKind: ProcessingBudgetKind,
+  ): Promise<{ taskId: string; jobId: string }> {
     if (!input.job.jobId) {
       throw new ApiErrorException(
         createApiError({
@@ -225,29 +263,52 @@ export class MongoProcessingJobRepository implements ProcessingJobRepository {
     const expireAt = input.job.expireAt
       ? new Date(input.job.expireAt)
       : new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+    const datasetId = toOid(input.job.datasetId, 'datasetId', context.requestId);
     const collectionId = input.job.collectionId
       ? toOid(input.job.collectionId, 'collectionId', context.requestId)
-      : toOid(input.job.datasetId, 'datasetId', context.requestId);
-    const doc = await this.model.create({
-      teamId,
-      datasetId: toOid(input.job.datasetId, 'datasetId', context.requestId),
-      collectionId,
-      dataId: input.job.dataId ?? null,
-      mode: input.job.mode,
-      retryCount: initialRetryCount(),
-      lockTime: PROCESSING_EPOCH_LOCK_TIME,
-      errorMsg: input.job.errorMsg ?? null,
-      weight: input.job.weight ?? 0,
-      expireAt: Number.isNaN(expireAt.getTime())
-        ? new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000)
-        : expireAt,
-      billId: null,
-      payload: { __jobId: input.job.jobId },
-      imageDescMap: null,
-      indexes: [],
-      createTime: now,
-      updateTime: now,
-    } as unknown as DatasetTrainingDoc);
+      : datasetId;
+    const taskId = deterministicTaskId(teamId, input.job.jobId);
+    const doc = await this.model
+      .findOneAndUpdate(
+        { _id: taskId, teamId },
+        {
+          $setOnInsert: {
+            datasetId,
+            collectionId,
+            dataId: input.job.dataId ?? null,
+            mode: input.job.mode,
+            retryCount: retryBudget(budgetKind),
+            lockTime: PROCESSING_EPOCH_LOCK_TIME,
+            errorMsg: input.job.errorMsg ?? null,
+            weight: input.job.weight ?? 0,
+            expireAt: Number.isNaN(expireAt.getTime())
+              ? new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000)
+              : expireAt,
+            billId: null,
+            payload: { __jobId: input.job.jobId },
+            imageDescMap: null,
+            indexes: [],
+            createTime: now,
+            updateTime: now,
+          },
+        },
+        { upsert: true, new: true, setDefaultsOnInsert: true },
+      )
+      .lean();
+    if (
+      !doc ||
+      !doc.datasetId.equals(datasetId) ||
+      !doc.collectionId.equals(collectionId) ||
+      doc.mode !== input.job.mode ||
+      taskJobId(doc) !== input.job.jobId
+    ) {
+      throw invalidState(
+        input.job.jobId,
+        'existing',
+        'conflicting_stable_job_id',
+        context.requestId,
+      );
+    }
     return { taskId: String(doc._id), jobId: input.job.jobId };
   }
 
@@ -265,9 +326,27 @@ export class MongoProcessingJobRepository implements ProcessingJobRepository {
           teamId: this.teamId(context),
           retryCount: { $gt: 0 },
           lockTime: { $lt: PROCESSING_PERMANENT_LOCK_TIME },
-          $or: [{ lockTime: PROCESSING_EPOCH_LOCK_TIME }, { lockTime: { $lte: leaseCutoff } }],
+          $and: [
+            {
+              $or: [{ lockTime: PROCESSING_EPOCH_LOCK_TIME }, { lockTime: { $lte: leaseCutoff } }],
+            },
+            {
+              $or: [
+                { [`payload.${PROCESSING_RETRY_NOT_BEFORE_KEY}`]: { $exists: false } },
+                { [`payload.${PROCESSING_RETRY_NOT_BEFORE_KEY}`]: null },
+                { [`payload.${PROCESSING_RETRY_NOT_BEFORE_KEY}`]: { $lte: now } },
+              ],
+            },
+          ],
         },
-        { $inc: { retryCount: -1 }, $set: { lockTime: now, updateTime: now } },
+        {
+          $inc: { retryCount: -1 },
+          $set: {
+            lockTime: now,
+            updateTime: now,
+            [`payload.${PROCESSING_RETRY_NOT_BEFORE_KEY}`]: null,
+          },
+        },
         { new: true },
       )
       .lean();
@@ -371,6 +450,7 @@ export class MongoProcessingJobRepository implements ProcessingJobRepository {
             lockTime: PROCESSING_EPOCH_LOCK_TIME,
             errorMsg: null,
             updateTime: now,
+            [`payload.${PROCESSING_RETRY_NOT_BEFORE_KEY}`]: null,
           },
         },
         { new: true },
@@ -518,17 +598,35 @@ export class MongoProcessingJobRepository implements ProcessingJobRepository {
       ...scopeFilter,
     };
     const now = new Date();
+    const leaseCutoff = new Date(now.getTime() - PROCESSING_LEASE_MS);
     const result = await this.model.updateMany(
       {
         ...baseFilter,
         retryCount: { $gt: 0 },
         lockTime: { $lt: PROCESSING_PERMANENT_LOCK_TIME },
+        errorMsg: { $ne: null },
+        $and: [
+          {
+            $or: [{ lockTime: PROCESSING_EPOCH_LOCK_TIME }, { lockTime: { $lte: leaseCutoff } }],
+          },
+          {
+            $or: [
+              { [`payload.${PROCESSING_RETRY_NOT_BEFORE_KEY}`]: { $exists: false } },
+              { [`payload.${PROCESSING_RETRY_NOT_BEFORE_KEY}`]: null },
+              { [`payload.${PROCESSING_RETRY_NOT_BEFORE_KEY}`]: { $lte: now } },
+            ],
+          },
+        ],
       },
-      { $set: { lockTime: PROCESSING_EPOCH_LOCK_TIME, errorMsg: null, updateTime: now } },
+      {
+        $set: {
+          lockTime: PROCESSING_EPOCH_LOCK_TIME,
+          errorMsg: null,
+          updateTime: now,
+          [`payload.${PROCESSING_RETRY_NOT_BEFORE_KEY}`]: null,
+        },
+      },
     );
-    if (result.modifiedCount === 0 && (await this.model.exists(baseFilter))) {
-      throw retryExhausted('', 0, context.requestId);
-    }
     return { acceptedCount: result.modifiedCount };
   }
 
@@ -645,7 +743,9 @@ export class MongoProcessingJobRepository implements ProcessingJobRepository {
     const nextLockTime =
       permanentlyLocked || current.retryCount <= 0
         ? PROCESSING_PERMANENT_LOCK_TIME
-        : retryLockTime(current.mode, now);
+        : PROCESSING_EPOCH_LOCK_TIME;
+    const retryNotBefore =
+      permanentlyLocked || current.retryCount <= 0 ? null : retryBackoffUntil(current.mode, now);
     const errorMsg =
       input.state === 'blocked' ? blockedErrorMsg(input.errorMsg) : (input.errorMsg ?? input.state);
     const updated = await this.model.findOneAndUpdate(
@@ -655,6 +755,7 @@ export class MongoProcessingJobRepository implements ProcessingJobRepository {
           errorMsg,
           lockTime: nextLockTime,
           updateTime: now,
+          [`payload.${PROCESSING_RETRY_NOT_BEFORE_KEY}`]: retryNotBefore,
         },
       },
       { new: true },

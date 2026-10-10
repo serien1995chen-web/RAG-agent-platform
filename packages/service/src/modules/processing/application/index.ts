@@ -3,6 +3,7 @@ import type { RequestContext } from '../../../ports/types';
 import type { ProcessingJobRepository } from '../../../ports/repositories';
 import type { PortCallOptions } from '../../../ports/types';
 import type { ProcessingJobSnapshot } from '../../../ports/types';
+import type { ProcessingBudgetKind } from '../domain/lease';
 
 const PROCESSING_LEASE_TOKEN = Symbol('processingLeaseToken');
 
@@ -101,6 +102,17 @@ interface ProcessingLeaseAwareRepository {
   ): Promise<boolean>;
 }
 
+interface ProcessingBudgetAwareRepository {
+  enqueueWithBudget(
+    input: {
+      job: Omit<ProcessingJobSnapshot, 'taskId' | 'retryCount' | 'lockTime'>;
+      budgetKind: ProcessingBudgetKind;
+      options: PortCallOptions;
+    },
+    context: RequestContext,
+  ): Promise<{ taskId: string; jobId: string }>;
+}
+
 type ProcessingContext = RequestContext & {
   [PROCESSING_LEASE_TOKEN]?: ProcessingLeaseToken;
 };
@@ -119,6 +131,14 @@ function hasLeaseCapabilities(
     typeof candidate.deleteTrainingData === 'function' &&
     typeof candidate.listCollectionErrors === 'function' &&
     typeof candidate.hasError === 'function'
+  );
+}
+
+function hasBudgetCapabilities(
+  repository: ProcessingJobRepository,
+): repository is ProcessingJobRepository & ProcessingBudgetAwareRepository {
+  return (
+    typeof (repository as Partial<ProcessingBudgetAwareRepository>).enqueueWithBudget === 'function'
   );
 }
 
@@ -143,11 +163,16 @@ export class ProcessingApplicationService {
   enqueueJob(
     input: {
       job: Omit<ProcessingJobSnapshot, 'taskId' | 'retryCount' | 'lockTime'>;
+      budgetKind?: ProcessingBudgetKind;
       options: PortCallOptions;
     },
     context: RequestContext,
   ): Promise<{ taskId: string; jobId: string }> {
-    return this.deps.repository.enqueue(input, context);
+    const { budgetKind, ...enqueueInput } = input;
+    if (budgetKind !== undefined && hasBudgetCapabilities(this.deps.repository)) {
+      return this.deps.repository.enqueueWithBudget({ ...enqueueInput, budgetKind }, context);
+    }
+    return this.deps.repository.enqueue(enqueueInput, context);
   }
 
   claimJob(
