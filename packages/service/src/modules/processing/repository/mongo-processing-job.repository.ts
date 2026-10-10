@@ -7,10 +7,13 @@ import {
   type DatasetTrainingDoc,
 } from '../../../shared/persistence/schemas';
 import {
+  blockedErrorMsg,
   PROCESSING_EPOCH_LOCK_TIME,
   PROCESSING_LEASE_MS,
   PROCESSING_PERMANENT_LOCK_TIME,
   initialRetryCount,
+  manualRecoveryRetryCount,
+  retryLockTime,
 } from '../domain/lease';
 
 function toOid(value: string, field: string, requestId: string): Types.ObjectId {
@@ -41,6 +44,19 @@ function retryExhausted(taskId: string, retryCount: number, requestId: string): 
   return new ApiErrorException(
     createApiError({ code: 501006, requestId, params: { taskId, retryCount } }),
   );
+}
+
+type ProcessingFinishState = 'success' | 'failed' | 'blocked' | 'final_error';
+
+interface FinishInput {
+  taskId: string;
+  state: ProcessingFinishState;
+  errorMsg?: string;
+  options: { timeoutMs: number };
+}
+
+interface FinishInputWithLease extends FinishInput {
+  lockTime: string;
 }
 
 export class MongoProcessingJobRepository implements ProcessingJobRepository {
@@ -204,20 +220,42 @@ export class MongoProcessingJobRepository implements ProcessingJobRepository {
     return { lockTime: renewed.lockTime.toISOString() };
   }
 
-  async finish(
-    input: {
-      taskId: string;
-      state: 'success' | 'failed' | 'blocked' | 'final_error';
-      errorMsg?: string;
-      options: { timeoutMs: number };
-    },
+  async finish(input: FinishInput, context: RequestContext): Promise<void> {
+    return this.finishTask(input, context);
+  }
+
+  async finishWithLease(input: FinishInputWithLease, context: RequestContext): Promise<void> {
+    return this.finishTask(input, context, input.lockTime);
+  }
+
+  async resumeTask(
+    input: { taskId: string; options: { timeoutMs: number } },
     context: RequestContext,
-  ): Promise<void> {
+  ): Promise<{ taskId: string; retryCount: number }> {
     const taskId = toOid(input.taskId, 'taskId', context.requestId);
     const teamId = this.teamId(context);
-    if (input.state === 'success') {
-      const result = await this.model.deleteOne({ _id: taskId, teamId });
-      if (result.deletedCount === 0) {
+    const now = new Date();
+    const resumed = await this.model
+      .findOneAndUpdate(
+        {
+          _id: taskId,
+          teamId,
+          lockTime: { $gte: PROCESSING_PERMANENT_LOCK_TIME },
+        },
+        {
+          $set: {
+            retryCount: manualRecoveryRetryCount(),
+            lockTime: PROCESSING_EPOCH_LOCK_TIME,
+            errorMsg: null,
+            updateTime: now,
+          },
+        },
+        { new: true },
+      )
+      .lean();
+    if (!resumed) {
+      const current = await this.model.findOne({ _id: taskId, teamId }).lean();
+      if (!current) {
         throw new ApiErrorException(
           createApiError({
             code: 501070,
@@ -226,30 +264,103 @@ export class MongoProcessingJobRepository implements ProcessingJobRepository {
           }),
         );
       }
+      throw retryExhausted(input.taskId, current.retryCount, context.requestId);
+    }
+    return { taskId: String(resumed._id), retryCount: resumed.retryCount };
+  }
+
+  private parseLeaseToken(taskId: string, lockTime: string, requestId: string): Date {
+    const parsed = new Date(lockTime);
+    if (Number.isNaN(parsed.getTime())) {
+      throw invalidState(taskId, lockTime, 'invalid_lock_time', requestId);
+    }
+    return parsed;
+  }
+
+  private async missingOrInvalidFinish(
+    taskId: Types.ObjectId,
+    resourceId: string,
+    teamId: Types.ObjectId,
+    requestId: string,
+    from: string,
+    to: string,
+  ): Promise<never> {
+    const exists = await this.model.exists({ _id: taskId, teamId });
+    if (!exists) {
+      throw new ApiErrorException(
+        createApiError({
+          code: 501070,
+          requestId,
+          params: { resourceType: 'task', resourceId },
+        }),
+      );
+    }
+    throw invalidState(resourceId, from, to, requestId);
+  }
+
+  private async finishTask(
+    input: FinishInput,
+    context: RequestContext,
+    lockTime?: string,
+  ): Promise<void> {
+    const taskId = toOid(input.taskId, 'taskId', context.requestId);
+    const teamId = this.teamId(context);
+    const leaseFilter =
+      lockTime === undefined
+        ? {}
+        : { lockTime: this.parseLeaseToken(input.taskId, lockTime, context.requestId) };
+    if (input.state === 'success') {
+      const result = await this.model.deleteOne({ _id: taskId, teamId, ...leaseFilter });
+      if (result.deletedCount === 0) {
+        return this.missingOrInvalidFinish(
+          taskId,
+          input.taskId,
+          teamId,
+          context.requestId,
+          'running',
+          'success',
+        );
+      }
       return;
     }
     const now = new Date();
+    const current = await this.model.findOne({ _id: taskId, teamId, ...leaseFilter }).lean();
+    if (!current) {
+      return this.missingOrInvalidFinish(
+        taskId,
+        input.taskId,
+        teamId,
+        context.requestId,
+        'running',
+        input.state,
+      );
+    }
+    const permanentlyLocked = input.state === 'blocked' || input.state === 'final_error';
+    const nextLockTime =
+      permanentlyLocked || current.retryCount <= 0
+        ? PROCESSING_PERMANENT_LOCK_TIME
+        : retryLockTime(current.mode, now);
+    const errorMsg =
+      input.state === 'blocked' ? blockedErrorMsg(input.errorMsg) : (input.errorMsg ?? input.state);
     const updated = await this.model.findOneAndUpdate(
-      { _id: taskId, teamId },
+      { _id: taskId, teamId, ...leaseFilter },
       {
         $set: {
-          errorMsg: input.errorMsg ?? input.state,
-          lockTime:
-            input.state === 'blocked' || input.state === 'final_error'
-              ? PROCESSING_PERMANENT_LOCK_TIME
-              : PROCESSING_EPOCH_LOCK_TIME,
+          errorMsg,
+          lockTime: nextLockTime,
           updateTime: now,
         },
       },
       { new: true },
     );
     if (!updated) {
-      throw new ApiErrorException(
-        createApiError({
-          code: 501070,
-          requestId: context.requestId,
-          params: { resourceType: 'task', resourceId: input.taskId },
-        }),
+      return this.missingOrInvalidFinish(
+        taskId,
+        input.taskId,
+        teamId,
+        context.requestId,
+        lockTime ?? 'unknown',
+        input.state,
       );
     }
   }
