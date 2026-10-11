@@ -249,10 +249,7 @@ function detectBodyEncoding(bytes: Uint8Array, headerCharset: string | undefined
   if (declared === 'utf-16' || declared === 'utf-16le') return 'utf-16le';
   if (declared === 'utf-16be') return 'utf-16be';
 
-  if (startsWithBytes(bytes, [0xef, 0xbb, 0xbf])) return 'utf-8';
-  if (startsWithBytes(bytes, [0xff, 0xfe])) return 'utf-16le';
-  if (startsWithBytes(bytes, [0xfe, 0xff])) return 'utf-16be';
-
+  // Plan v2 RK-04 顺序：Content-Type charset → HTML meta charset → BOM → 统计探测 → UTF-8。
   const head = new TextDecoder('utf-8', { fatal: false })
     .decode(bytes.subarray(0, 4096))
     .toLowerCase();
@@ -263,6 +260,10 @@ function detectBodyEncoding(bytes: Uint8Array, headerCharset: string | undefined
     if (meta === 'utf-16be') return 'utf-16be';
     return 'utf-8';
   }
+
+  if (startsWithBytes(bytes, [0xef, 0xbb, 0xbf])) return 'utf-8';
+  if (startsWithBytes(bytes, [0xff, 0xfe])) return 'utf-16le';
+  if (startsWithBytes(bytes, [0xfe, 0xff])) return 'utf-16be';
 
   const decoded = new TextDecoder('utf-8', { fatal: false }).decode(bytes.subarray(0, 8192));
   let replacement = 0;

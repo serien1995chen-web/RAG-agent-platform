@@ -281,6 +281,21 @@ describe('TEST-LINK-CHARSET-001 (RK-04) charset decode', () => {
     expect(result.rawText).toBe('中文');
   });
 
+  it('HTML meta charset wins over a conflicting BOM (Plan v2 order)', async () => {
+    const gbk = Buffer.from([0xd6, 0xd0, 0xce, 0xc4]); // 中文 (GBK)
+    const bytes = new Uint8Array(
+      Buffer.concat([
+        Buffer.from([0xef, 0xbb, 0xbf]),
+        Buffer.from('<meta charset="gbk"><p>', 'utf8'),
+        gbk,
+        Buffer.from('</p>', 'utf8'),
+      ]),
+    );
+    const p = provider(async () => bytesResponse(bytes, 'text/html'));
+    const result = await p.read(request('http://example.com/conflict'), context);
+    expect(result.rawText).toContain('中文');
+  });
+
   it('decodes UTF-8 BOM bytes', async () => {
     const utf8 = Buffer.concat([Buffer.from([0xef, 0xbb, 0xbf]), Buffer.from('中文', 'utf8')]);
     const p = provider(async () => bytesResponse(new Uint8Array(utf8), 'text/plain'));
