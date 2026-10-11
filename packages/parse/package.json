@@ -16,7 +16,17 @@
     "lint": "eslint src"
   },
   "dependencies": {
-    "@kb/contracts": "workspace:*"
+    "@kb/contracts": "workspace:*",
+    "cheerio": "catalog:",
+    "file-type": "catalog:",
+    "joplin-turndown-plugin-gfm": "catalog:",
+    "mammoth": "catalog:",
+    "mime-types": "catalog:",
+    "papaparse": "catalog:",
+    "pdfjs-dist": "catalog:",
+    "turndown": "catalog:",
+    "xlsx": "catalog:",
+    "yauzl": "catalog:"
   },
   "devDependencies": {
     "@types/node": "catalog:",

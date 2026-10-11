@@ -5,3 +5,15 @@ import type { CollectionRepository } from '../../../ports/repositories';
 export function createSourceCollectionAdapter(): CollectionRepository {
   return createUnimplementedPort<CollectionRepository>('CollectionRepository-adapter');
 }
+
+export {
+  SourceProviderRegistry,
+  SOURCE_PROVIDER_TYPES,
+  createSourceProviderRegistry,
+  createTextSourceProvider,
+  createFileSourceProvider,
+  createLinkSourceProvider,
+  createApiDatasetSourceProvider,
+  createExternalSourceProvider,
+} from './source-provider/index';
+export type { SourceProviderType, SourceProviderRegistryDeps } from './source-provider/index';

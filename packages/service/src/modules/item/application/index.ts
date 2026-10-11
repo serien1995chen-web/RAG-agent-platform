@@ -40,3 +40,6 @@ export class KnowledgeItemApplicationService {
     return this.deps.repository.get(input, context);
   }
 }
+
+export { ImageApplicationService, normalizeImageMode } from './image.service';
+export type { CreateImageInput, ImageApplicationServiceDeps, ImageMode } from './image.service';
