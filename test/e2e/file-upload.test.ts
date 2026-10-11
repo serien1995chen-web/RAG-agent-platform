@@ -289,3 +289,54 @@ describe('P4-07 file and multipart routes', () => {
     expect((result.body as { code?: number }).code).toBe(501061);
   });
 });
+
+// 真实 MinIO 链路：默认跳过，运行 `P4_REAL_MINIO=1 pnpm test:e2e` 时启用（依赖本地 compose minio）。
+describe.skipIf(process.env.P4_REAL_MINIO !== '1')('P4-07 real MinIO multipart chain', () => {
+  it('presigns, uploads a part and completes a multipart upload against real MinIO', async () => {
+    const { MinioObjectStore } = await import('../../sdk/storage/src/adapters/minio-object-store');
+    const store = new MinioObjectStore({
+      endPoint: '127.0.0.1',
+      port: 9000,
+      useSSL: false,
+      accessKey: 'minioadmin',
+      secretKey: 'minioadmin',
+      region: 'us-east-1',
+      bucket: 'kb-source',
+    });
+    const teamId = '000000000000000000000001';
+    const datasetIdReal = '000000000000000000000010';
+    const key = `dataset/${datasetIdReal}/real-${Date.now()}.bin`;
+    const objectContext = { teamId, datasetId: datasetIdReal };
+    const prepared = await store.prepareMultipart(
+      {
+        ref: { bucket: 'kb-source', key },
+        parts: 1,
+      },
+      objectContext,
+    );
+    expect(prepared.multipartUploadId).toBeTruthy();
+    const part = await store.uploadPart(
+      {
+        ref: { bucket: 'kb-source', key, multipartUploadId: prepared.multipartUploadId },
+        partNumber: 1,
+        body: Buffer.from('real-minio-part'),
+      },
+      objectContext,
+    );
+    expect(part.etag).toBeTruthy();
+    const completed = await store.completeMultipart(
+      {
+        ref: { bucket: 'kb-source', key, multipartUploadId: prepared.multipartUploadId },
+        parts: [{ partNumber: 1, etag: part.etag }],
+      },
+      objectContext,
+    );
+    expect(completed.etag).toBeTruthy();
+    const url = await store.presignPut(
+      { ref: { bucket: 'kb-source', key }, expiresSeconds: 60 },
+      objectContext,
+    );
+    expect(url).toContain('kb-source');
+    await store.delete({ ref: { bucket: 'kb-source', key } }, objectContext);
+  }, 30000);
+});
