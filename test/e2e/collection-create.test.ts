@@ -318,4 +318,36 @@ describe('P4-08 collection/create routes', () => {
     expect(compensated.some((entry) => entry.startsWith('collection:'))).toBe(true);
     expect(compensated.some((entry) => entry.startsWith('dataset:'))).toBe(true);
   });
+
+  it('parses a real template CSV and returns real insertLen', async () => {
+    vi.resetModules();
+    vi.doMock('../../projects/app/src/shared/api', async () => {
+      const actual = await vi.importActual<SharedApiModule>('../../projects/app/src/shared/api');
+      return {
+        ...actual,
+        parseDto: (name: string, value: unknown) => {
+          if (name === 'CollectionCreateTemplateForm') return value;
+          return actual.parseDto(name, value);
+        },
+      };
+    });
+    const template =
+      await import('../../projects/app/src/pages/api/core/dataset/collection/create/template');
+    const result = await invoke(template, {
+      method: 'POST',
+      url: '/api/core/dataset/collection/create/template',
+      body: {
+        datasetId,
+        templateId: 'tpl-1',
+        file: {
+          name: 't.csv',
+          data: Buffer.from('q,a\n1,2\n3,4').toString('base64'),
+        },
+      },
+    });
+    expect(result.status).toBe(200);
+    expect(envelopeData(result.body)).toMatchObject({ insertLen: 2 });
+    vi.doUnmock('../../projects/app/src/shared/api');
+    vi.resetModules();
+  });
 });
