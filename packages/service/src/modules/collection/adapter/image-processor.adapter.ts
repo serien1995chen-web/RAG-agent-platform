@@ -2,6 +2,7 @@
  * P4-06 image-processor adapter（设计文档 9.7 / 10.9）。
  * 把 ImageTrainingProcessorPort 适配为内部调用（VLM 描述 + 图片 Embedding）；
  * 能力缺失返回稳定 no-retry 分类；外部能力走 3.8.1 mock 合同。
+ * 保留 embedding 在返回值中（对外结构仍满足 ImageTaskResult）。
  */
 import { ApiErrorException, createApiError } from '@kb/contracts';
 import type {
@@ -10,6 +11,11 @@ import type {
   TaskEnvelope,
 } from '../../../ports/capabilities';
 import type { ObjectRef, RequestContext } from '../../../ports/types';
+
+/** 内部结果类型：在 ImageTaskResult 基础上保留 embedding（RK-08a）。 */
+export interface ImageProcessingOutcome extends ImageTaskResult {
+  embedding?: number[];
+}
 
 export interface ImageCapabilityPort {
   describeImage(
@@ -53,7 +59,13 @@ export function createImageProcessorAdapter(
           { imageRef, options: { timeoutMs: 30000 } },
           context,
         );
-        return { imageId, state: 'success', description: result.description };
+        const outcome: ImageProcessingOutcome = {
+          imageId,
+          state: 'success',
+          description: result.description,
+          embedding: result.embedding,
+        };
+        return outcome;
       } catch {
         return { imageId, state: 'failed', errorMsg: 'image_processor_failed' };
       }

@@ -1,16 +1,24 @@
 /**
  * P4-06 图片上传、TTL 与 image/imageParse 生产端（设计文档 9.7 / 10.9 / BR-WRITE-004/005）。
  * 上传 -> 7 天 TTL -> image/imageParse Task -> imageDescMap/imageEmbedding -> Data/Index -> 移除 TTL。
- * 单图结果键 teamId:datasetId:imageId:mode 幂等；单图失败必须可见，不隐藏。
+ * 单图结果键 teamId:datasetId:imageId:mode 幂等（operationId 由 buildImageJobId 派生）；
+ * 单图失败必须可见，不隐藏。embedding 由处理器返回并写入图片向量（RK-08a）。
  */
+import { buildImageJobId } from '@kb/dal';
 import type {
   FullTextStore,
+  ImageTaskResult,
   ImageTrainingProcessorPort,
   TaskResult,
   VectorController,
 } from '../../../ports/capabilities';
 import type { KnowledgeItemRepository } from '../../../ports/repositories';
-import type { KnowledgeItemSnapshot, PortCallOptions, RequestContext } from '../../../ports/types';
+import type {
+  KnowledgeItemIndexValue,
+  KnowledgeItemSnapshot,
+  PortCallOptions,
+  RequestContext,
+} from '../../../ports/types';
 
 export type ImageMode = 'image' | 'imageParse';
 
@@ -71,8 +79,6 @@ export interface CreateImageInput {
   options: PortCallOptions;
 }
 
-let operationSeq = 0;
-
 /** BR-WRITE-005：auto 在输入预处理层改写为 chunk + autoIndexes=true，绝不持久化 mode=auto。 */
 export function normalizeImageMode(mode: ImageMode | 'auto'): {
   mode: 'image' | 'imageParse' | 'chunk';
@@ -86,6 +92,13 @@ export class ImageApplicationService {
   constructor(private readonly deps: ImageApplicationServiceDeps) {}
 
   async createImage(input: CreateImageInput, context: RequestContext): Promise<TaskResult> {
+    // 稳定 operationId：teamId:datasetId:imageId:mode（重复处理不产生第二条 Data / 不重复计费）。
+    const operationId = buildImageJobId(
+      context.tenant.teamId,
+      input.datasetId,
+      input.imageId,
+      input.mode,
+    );
     await this.deps.assets.createTemporary(
       {
         imageId: input.imageId,
@@ -95,12 +108,12 @@ export class ImageApplicationService {
         bucketName: input.bucketName,
         mimeType: input.mimeType,
         size: input.size,
-        operationId: 'image-op-' + String((operationSeq += 1)),
+        operationId,
       },
       context,
     );
     try {
-      const processed = await this.deps.processor.processImage(
+      const processed = (await this.deps.processor.processImage(
         {
           taskId: input.dataId,
           teamId: context.tenant.teamId,
@@ -112,7 +125,8 @@ export class ImageApplicationService {
         },
         { bucket: input.bucketName, key: input.objectKey },
         context,
-      );
+      )) as ImageTaskResult & { embedding?: number[] };
+
       if (processed.state !== 'success') {
         await this.deps.assets.markFailed(
           input.imageId,
@@ -125,8 +139,25 @@ export class ImageApplicationService {
           errorMsg: processed.errorMsg ?? 'image_failed',
         };
       }
+
       const now = new Date().toISOString();
       const text = processed.description ?? '';
+      const embedding =
+        processed.embedding && processed.embedding.length > 0
+          ? processed.embedding
+          : (input.vector ?? []);
+
+      const indexes: KnowledgeItemIndexValue[] = [
+        { indexId: input.dataId + ':image', type: 'image', dataId: input.dataId, text },
+      ];
+      if (embedding.length > 0) {
+        indexes.push({
+          indexId: input.dataId + ':imageEmbedding',
+          type: 'imageEmbedding',
+          dataId: input.dataId,
+          text,
+        });
+      }
       const item: KnowledgeItemSnapshot = {
         dataId: input.dataId,
         teamId: context.tenant.teamId,
@@ -134,13 +165,15 @@ export class ImageApplicationService {
         collectionId: input.collectionId,
         imageId: input.imageId,
         q: text,
-        indexes: [{ indexId: input.dataId + ':image', type: 'image', dataId: input.dataId, text }],
+        metadata: { imageDescMap: { [input.mode]: text } },
+        indexes,
         rebuilding: false,
         version: 1,
         createTime: now,
         updateTime: now,
       };
-      if (input.vector && input.vector.length > 0) {
+
+      if (embedding.length > 0) {
         await this.deps.vectors.insert(
           {
             records: [
@@ -149,9 +182,9 @@ export class ImageApplicationService {
                 teamId: context.tenant.teamId,
                 datasetId: input.datasetId,
                 collectionId: input.collectionId,
-                indexId: input.dataId + ':image',
+                indexId: input.dataId + ':imageEmbedding',
                 indexVersion: '1',
-                vector: input.vector,
+                vector: embedding,
               },
             ],
             options: input.options,

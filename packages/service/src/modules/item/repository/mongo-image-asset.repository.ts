@@ -6,6 +6,7 @@ import {
   type S3TtlRecordDoc,
 } from '../../../shared/persistence/schemas';
 import type { RequestContext } from '../../../ports/types';
+import { withMongoTransaction } from '../../../shared/persistence/with-mongo-transaction';
 
 export type ImageAssetState = 'temporary' | 'referenced' | 'deleting' | 'deleted' | 'failed';
 
@@ -133,24 +134,28 @@ export class MongoImageAssetRepository {
   ): Promise<ImageAssetRecord | null> {
     const teamId = toOid(context.tenant.teamId, 'teamId', context);
     const collection = toOid(collectionId, 'collectionId', context);
-    const doc = await this.imageModel
-      .findOneAndUpdate(
-        { teamId, imageId },
-        {
-          $set: {
-            state: 'referenced',
-            persistent: true,
-            ttlExpireAt: null,
-            collectionId: collection,
-            updateTime: new Date(),
+    // 同一 Mongo 事务内保证「state=referenced + ttlExpireAt=null + 删除 s3_ttl_records」原子。
+    return withMongoTransaction(this.connection, async (session) => {
+      const doc = await this.imageModel
+        .findOneAndUpdate(
+          { teamId, imageId },
+          {
+            $set: {
+              state: 'referenced',
+              persistent: true,
+              ttlExpireAt: null,
+              collectionId: collection,
+              updateTime: new Date(),
+            },
           },
-        },
-        { new: true },
-      )
-      .lean<ImageAssetDoc | null>();
-    if (!doc) return null;
-    await this.deleteTtl({ objectKey: doc.objectKey }, context);
-    return toRecord(doc);
+          { new: true },
+        )
+        .session(session)
+        .lean<ImageAssetDoc | null>();
+      if (!doc) return null;
+      await this.ttlModel.deleteOne({ teamId, objectKey: doc.objectKey }).session(session);
+      return toRecord(doc);
+    });
   }
 
   async markFailed(imageId: string, reason: string, context: RequestContext): Promise<void> {

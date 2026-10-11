@@ -1,4 +1,4 @@
-import { MongoMemoryServer } from 'mongodb-memory-server';
+import { MongoMemoryReplSet } from 'mongodb-memory-server';
 import mongoose from 'mongoose';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
@@ -39,12 +39,12 @@ function ctx(teamId: string): RequestContext {
   };
 }
 
-let mongo: MongoMemoryServer;
+let mongo: MongoMemoryReplSet;
 let connection: mongoose.Connection;
 let assets: MongoImageAssetRepository;
 
 beforeAll(async () => {
-  mongo = await MongoMemoryServer.create();
+  mongo = await MongoMemoryReplSet.create({ replSet: { count: 1 } });
   connection = mongoose.createConnection(mongo.getUri(), { dbName: 'image-test' });
   await connection.asPromise();
   assets = new MongoImageAssetRepository(connection);
@@ -264,5 +264,162 @@ describe('TEST-IMAGE-AUTO-001 image pipeline and handler', () => {
     expect(b.state).toBe('success');
     expect(seen).toEqual(['image', 'imageParse']);
     expect(whitelistImagePayload({ imageRef: {}, secret: 'x' })).not.toHaveProperty('secret');
+  });
+});
+
+
+describe('TEST-IMAGE-AUTO-001 (RK-08a) embedding, index type, imageDescMap, stable operationId, idempotency', () => {
+  interface RecordedAsset {
+    imageId: string;
+    teamId: string;
+    datasetId: string;
+    collectionId: string | null;
+    objectKey: string;
+    mimeType: string;
+    size: number;
+    ttlExpireAt: Date | null;
+    persistent: boolean;
+    state: 'temporary' | 'referenced' | 'deleting' | 'deleted' | 'failed';
+  }
+
+  function makeHarness() {
+    const ops: string[] = [];
+    const vectorCalls: Array<{ records: Array<{ indexId: string; vector: number[] }> }> = [];
+    const itemCalls: Array<{ dataId: string; metadata?: unknown; indexes: Array<{ type: string }> }> = [];
+    const base = (imageId: string): RecordedAsset => ({
+      imageId,
+      teamId: teamA,
+      datasetId,
+      collectionId,
+      objectKey: 'team/x.png',
+      mimeType: 'image/png',
+      size: 10,
+      ttlExpireAt: new Date(Date.now() + DEFAULT_IMAGE_TTL_MS),
+      persistent: false,
+      state: 'temporary',
+    });
+    const assets = {
+      createTemporary: async (input: { imageId: string; operationId: string }) => {
+        ops.push(input.operationId);
+        return base(input.imageId);
+      },
+      findById: async () => null,
+      promoteToReferenced: async (imageId: string) => ({
+        ...base(imageId),
+        state: 'referenced' as const,
+        persistent: true,
+        ttlExpireAt: null,
+      }),
+      markFailed: async () => undefined,
+    };
+    const items = {
+      bulkUpsert: async (input: { items: Array<{ dataId: string; metadata?: unknown; indexes: Array<{ type: string }> }> }) => {
+        itemCalls.push(input.items[0]!);
+        return { upserted: 1, duplicates: 0 };
+      },
+    } as unknown as KnowledgeItemRepository;
+    const vectors = {
+      insert: async (input: { records: Array<{ indexId: string; vector: number[] }> }) => {
+        vectorCalls.push({ records: input.records });
+        return { inserted: 1 };
+      },
+    } as unknown as VectorController;
+    const fullText = { write: async () => undefined } as unknown as FullTextStore;
+    return { ops, vectorCalls, itemCalls, assets, items, vectors, fullText };
+  }
+
+  const baseProcessor = (embedding?: number[]): ImageTrainingProcessorPort => ({
+    processImage: async (task) => ({
+      imageId: task.payload.imageRef.key,
+      state: 'success',
+      description: '图像描述',
+      ...(embedding ? { embedding } : {}),
+    }),
+  } as unknown as ImageTrainingProcessorPort);
+
+  it('persists the processor embedding as an imageEmbedding vector with imageDescMap', async () => {
+    const h = makeHarness();
+    const service = new ImageApplicationService({
+      assets: h.assets as never,
+      items: h.items,
+      vectors: h.vectors,
+      fullText: h.fullText,
+      processor: baseProcessor([0.11, 0.22, 0.33]),
+    });
+    await service.createImage(
+      {
+        imageId: 'img-e',
+        datasetId,
+        collectionId,
+        dataId: 'data-e',
+        bucketName: 'kb-images',
+        objectKey: 'team/img-e.png',
+        mimeType: 'image/png',
+        size: 10,
+        mode: 'image',
+        options: { timeoutMs: 5000 },
+      },
+      ctx(teamA),
+    );
+    expect(h.vectorCalls[0]?.records[0]?.vector).toEqual([0.11, 0.22, 0.33]);
+    expect(h.vectorCalls[0]?.records[0]?.indexId).toBe('data-e:imageEmbedding');
+    const item = h.itemCalls[0];
+    expect(item?.indexes.map((index) => index.type)).toEqual(['image', 'imageEmbedding']);
+    expect((item?.metadata as { imageDescMap?: { image?: string } })?.imageDescMap?.image).toBe('图像描述');
+  });
+
+  it('uses a stable operationId derived from buildImageJobId (no process-local counter)', async () => {
+    const h = makeHarness();
+    const service = new ImageApplicationService({
+      assets: h.assets as never,
+      items: h.items,
+      vectors: h.vectors,
+      fullText: h.fullText,
+      processor: baseProcessor(),
+    });
+    const input = {
+      imageId: 'img-op',
+      datasetId,
+      collectionId,
+      dataId: 'data-op',
+      bucketName: 'kb-images',
+      objectKey: 'team/img-op.png',
+      mimeType: 'image/png',
+      size: 10,
+      mode: 'image' as const,
+      options: { timeoutMs: 5000 },
+    };
+    await service.createImage(input, ctx(teamA));
+    await service.createImage(input, ctx(teamA));
+    expect(h.ops).toHaveLength(2);
+    expect(h.ops[0]).toBe(h.ops[1]);
+    expect(h.ops[0]).toBe(teamA + ':' + datasetId + ':img-op:image');
+  });
+
+  it('is idempotent for the same image/mode: repeated processing reuses one Data id', async () => {
+    const h = makeHarness();
+    const service = new ImageApplicationService({
+      assets: h.assets as never,
+      items: h.items,
+      vectors: h.vectors,
+      fullText: h.fullText,
+      processor: baseProcessor([0.5]),
+    });
+    const input = {
+      imageId: 'img-idem',
+      datasetId,
+      collectionId,
+      dataId: 'data-idem',
+      bucketName: 'kb-images',
+      objectKey: 'team/img-idem.png',
+      mimeType: 'image/png',
+      size: 10,
+      mode: 'imageParse' as const,
+      options: { timeoutMs: 5000 },
+    };
+    await service.createImage(input, ctx(teamA));
+    await service.createImage(input, ctx(teamA));
+    const distinctDataIds = new Set(h.itemCalls.map((entry) => entry.dataId));
+    expect(distinctDataIds.size).toBe(1);
   });
 });
