@@ -8,7 +8,7 @@ import type {
   SourceReadResult,
 } from '../../../../ports/capabilities';
 import type { RequestContext } from '../../../../ports/types';
-import { hashSourceText, sourceError } from './shared';
+import { hashSourceText, sourceError } from './link-provider';
 
 export interface ApiDatasetHttpClient {
   get(

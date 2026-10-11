@@ -4,9 +4,12 @@
  */
 import { randomUUID } from 'node:crypto';
 import mammoth from 'mammoth';
-import type { ParseHandler } from '../format-registry';
-import { parseFailedError } from '../format-registry';
-import { makeResult, normalizeRawText } from './core';
+import {
+  makeResult,
+  normalizeRawText,
+  parseFailedError,
+  type ParseHandler,
+} from '../format-registry';
 import { convertHtmlToMarkdown, extractImageSources } from './html';
 
 export const parseDocx: ParseHandler = async (context) => {
@@ -37,7 +40,7 @@ export const parseDocx: ParseHandler = async (context) => {
         storedRefs.push(stored);
       }
     }
-    const markdown = normalizeRawText(convertHtmlToMarkdown(html));
+    const markdown = normalizeRawText(await convertHtmlToMarkdown(html));
     return makeResult('docx', markdown, { imageRefs: storedRefs });
   } catch {
     throw parseFailedError('docx', 'docx_convert_failed', requestId);

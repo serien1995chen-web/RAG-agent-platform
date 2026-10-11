@@ -4,8 +4,7 @@
  * overlap 仅在相邻文本块之间生效，表格/自定义分隔边界不重叠。
  */
 import { ApiErrorException, createApiError } from '@kb/contracts';
-import type { ChunkOutput, ChunkPolicy } from './types';
-import { contentHashOfChunk } from './types';
+import { contentHashOfChunk, type ChunkOutput, type ChunkPolicy } from './token-count';
 import type { Segment } from './paragraph';
 import { buildSegments, normalizeChunkText } from './paragraph';
 import type { Counter } from './token-count';

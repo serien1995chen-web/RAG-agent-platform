@@ -8,7 +8,7 @@ import type {
   SourceReadResult,
 } from '../../../../ports/capabilities';
 import type { RequestContext } from '../../../../ports/types';
-import { hashSourceText } from './shared';
+import { hashSourceText } from './link-provider';
 
 export function createTextSourceProvider(): DatasetSourceProvider {
   const read = async (

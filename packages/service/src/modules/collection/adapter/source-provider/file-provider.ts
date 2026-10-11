@@ -12,7 +12,7 @@ import type {
   SourceReadResult,
 } from '../../../../ports/capabilities';
 import type { ObjectRef, RequestContext } from '../../../../ports/types';
-import { sourceError } from './shared';
+import { sourceError } from './link-provider';
 
 export interface FileParserLike {
   parse(request: DocumentParseContext): Promise<ParseResult>;

@@ -6,12 +6,17 @@ import type { objectStoreLike, ParseHandlerContext } from './format-registry';
 import { parseFailedError, unsupportedFormatError } from './format-registry';
 import type { ParseFormatRegistry } from './format-registry';
 import { createParserRegistry } from './parsers/index';
-import type { DocumentParserPort, ParseRequest, ParseResult } from './types';
+import type { DocumentParserPort, ParseRequest, ParseResult } from './format-registry';
 
 export const PACKAGE_NAME = '@kb/parse' as const;
 
-export { contentHashOf, PARSE_FORMAT_MATRIX, resolveParseFormat } from './types';
-export type { DocumentParserPort, ParseFormatSpec, ParseRequest, ParseResult } from './types';
+export { contentHashOf, PARSE_FORMAT_MATRIX, resolveParseFormat } from './format-registry';
+export type {
+  DocumentParserPort,
+  ParseFormatSpec,
+  ParseRequest,
+  ParseResult,
+} from './format-registry';
 
 export { createParserRegistry } from './parsers/index';
 export { ParseFormatRegistry, normalizeExtension, normalizeMimeType } from './format-registry';

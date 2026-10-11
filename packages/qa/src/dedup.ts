@@ -1,9 +1,20 @@
 /**
- * @kb/qa 去重与单块上限（设计文档 9.9.1 规则 2、3）。
- * 同一 Collection 内按去重键保留首条；单块超过 maxQaPerChunk 丢弃超出并计数告警。
+ * @kb/qa 去重键、去重与单块上限（设计文档 9.9.1 规则 2、3）。
+ * 去重键 qa:sha256(NFKC(trim(q)) + NUL + NFKC(trim(a)))；同一 Collection 内保留首条；
+ * 单块超过 maxQaPerChunk 丢弃超出并计数告警。
  */
-import { buildQaDedupKey } from './dedup-key';
-import type { QaResultItem } from './types';
+import { createHash } from 'node:crypto';
+import type { QaResultItem } from './parser';
+
+export function normalizeQaText(text: string): string {
+  return text.normalize('NFKC').trim();
+}
+
+export function buildQaDedupKey(q: string, a: string): string {
+  const payload = `${normalizeQaText(q)}\u0000${normalizeQaText(a)}`;
+  const hash = createHash('sha256').update(payload).digest('hex');
+  return `qa:${hash}`;
+}
 
 export interface DedupOutcome {
   items: QaResultItem[];

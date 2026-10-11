@@ -2,10 +2,13 @@
  * @kb/parse PPTX 解析（设计 9.8.1）：每页一段，备注并入正文；失败 501057。
  * 以最小 zip/XML 读取实现（不引入未登记依赖），避免与来源项目 anydoc 关联。
  */
-import type { ParseHandler } from '../format-registry';
-import { parseFailedError } from '../format-registry';
-import { makeResult, normalizeRawText } from './core';
-import { openZipEntries } from './zip-reader';
+import {
+  makeResult,
+  normalizeRawText,
+  openZipEntries,
+  parseFailedError,
+  type ParseHandler,
+} from '../format-registry';
 
 const XML_TEXT_RE = /<a:t>([\s\S]*?)<\/a:t>/g;
 const SLIDE_RE = /^ppt\/slides\/slide(\d+)\.xml$/;

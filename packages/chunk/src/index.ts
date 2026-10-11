@@ -3,14 +3,25 @@
  * 算法实现阶段必须保证相同输入与策略产生完全相同的 chunk 序列。
  */
 import { chunkText as runChunk } from './chunker';
-import type { ChunkInput, ChunkOutput } from './types';
+import type { ChunkInput, ChunkOutput } from './token-count';
 
 export const PACKAGE_NAME = '@kb/chunk' as const;
 
-export { DEFAULT_CHUNK_POLICY, countCodePoints, contentHashOfChunk } from './types';
-export type { ChunkInput, ChunkItem, ChunkOutput, ChunkPolicy } from './types';
-export { createCounter, countTokens } from './token-count';
-export type { Counter, LengthUnit } from './token-count';
+export {
+  DEFAULT_CHUNK_POLICY,
+  contentHashOfChunk,
+  countCodePoints,
+  countTokens,
+  createCounter,
+} from './token-count';
+export type {
+  ChunkInput,
+  ChunkItem,
+  ChunkOutput,
+  ChunkPolicy,
+  Counter,
+  LengthUnit,
+} from './token-count';
 export { buildSegments, normalizeChunkText } from './paragraph';
 export type { Segment, SegmentKind, SegmentOptions } from './paragraph';
 export { CHUNK_LIMIT_ERROR_CODE, chunkLimitError } from './chunker';

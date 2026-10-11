@@ -3,10 +3,16 @@
  * 多表按 Sheet 分隔，合并单元格展平；预检超限 501053。
  */
 import * as XLSX from 'xlsx';
-import type { ParseHandler } from '../format-registry';
-import { parseError, parseFailedError } from '../format-registry';
-import { makeResult, normalizeRawText, toMarkdownTable } from './core';
-import { openZipEntries, ZipLimitError } from './zip-reader';
+import {
+  ZipLimitError,
+  makeResult,
+  normalizeRawText,
+  openZipEntries,
+  parseError,
+  parseFailedError,
+  toMarkdownTable,
+  type ParseHandler,
+} from '../format-registry';
 
 const MAX_SHEETS = 200;
 const MAX_SHEET_BYTES = 64 * 1024 * 1024;

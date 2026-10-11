@@ -3,7 +3,7 @@
  * 不得引用来源项目文案；内容与 contentHash 登记在 dataset_qa_templates。
  */
 import { createHash } from 'node:crypto';
-import type { QaRequest } from './types';
+import type { QaRequest } from './parser';
 
 export const DEFAULT_TEMPLATE_ID = 'qa.default' as const;
 export const DEFAULT_TEMPLATE_VERSION = 1 as const;

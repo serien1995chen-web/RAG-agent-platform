@@ -1,9 +1,55 @@
 /**
- * @kb/qa 输出解析（设计文档 9.9.1 规则 1）。
+ * @kb/qa 输出解析与冻结类型（设计文档 9.9.1）。
  * 优先匹配 Q<i>: … A<i>: … 结构；JSON 片段用 jsonrepair 修复；解析失败或为空返回空 items。
+ * 本文件承载 @kb/qa 的共享类型，作为叶子模块供 dedup/prompt/index 复用，避免循环依赖。
  */
 import { jsonrepair } from 'jsonrepair';
-import type { QaResultItem } from './types';
+
+export interface QaLimits {
+  maxQaPerChunk: number;
+  maxChunkCount: number;
+}
+
+export interface QaRequest {
+  teamId: string;
+  datasetId: string;
+  collectionId: string;
+  chunkText: string;
+  qaTemplateId: string;
+  qaTemplateVersion: number;
+  qaPrompt?: string;
+  models: { llmModel: string; embeddingModel: string; vectorModel: string };
+  limits: QaLimits;
+}
+
+export interface QaResultItem {
+  q: string;
+  a: string;
+  sourceChunkHash: string;
+}
+
+export interface QaResult {
+  items: QaResultItem[];
+  usage: { inputTokens: number; outputTokens: number };
+  fallback: 'none' | 'chunk_split';
+}
+
+export interface QaModelInput {
+  model: string;
+  prompt: string;
+  chunkText: string;
+  timeoutMs: number;
+}
+
+export interface QaModelOutput {
+  content: string;
+  usage: { inputTokens: number; outputTokens: number };
+}
+
+/** 模型调用通过 Provider Port 注入，错误按 9.9.1 分类（429/5xx/超时 retryable）。 */
+export interface QaModelPort {
+  generate(input: QaModelInput): Promise<QaModelOutput>;
+}
 
 const QA_PAIR_RE =
   /Q(\d+)\s*[:：]\s*([\s\S]*?)\s*A\1\s*[:：]\s*([\s\S]*?)(?=\s*Q\d+\s*[:：]|\s*$)/g;

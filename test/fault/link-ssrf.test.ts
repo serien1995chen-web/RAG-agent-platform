@@ -1,4 +1,4 @@
-import { ApiErrorException } from '@kb/contracts';
+import { ApiErrorException } from '../../packages/contracts/src/index';
 import { describe, expect, it } from 'vitest';
 import {
   createLinkSourceProvider,

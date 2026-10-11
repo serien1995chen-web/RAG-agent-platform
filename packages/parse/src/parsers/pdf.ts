@@ -4,9 +4,12 @@
  */
 import { createRequire } from 'node:module';
 import * as pdfjs from 'pdfjs-dist/legacy/build/pdf.mjs';
-import type { ParseHandler } from '../format-registry';
-import { parseFailedError } from '../format-registry';
-import { makeResult, normalizeRawText } from './core';
+import {
+  makeResult,
+  normalizeRawText,
+  parseFailedError,
+  type ParseHandler,
+} from '../format-registry';
 
 // pdfjs 在 Node 下解析文本层无需外部字体；禁用 worker 以避免浏览器环境依赖。
 const require = createRequire(import.meta.url);

@@ -3,7 +3,9 @@
  * 只读取用户提交的单个 URL，不做站点递归爬取。
  * 每跳重新校验地址策略；DNS 固定解析结果建连；审计只记 urlHash/host/结果分类。
  */
+import { createHash } from 'node:crypto';
 import { isIP } from 'node:net';
+import { ApiErrorException, createApiError } from '@kb/contracts';
 import { Agent } from 'undici';
 import type {
   DatasetSourceProvider,
@@ -11,7 +13,6 @@ import type {
   SourceReadResult,
 } from '../../../../ports/capabilities';
 import type { RequestContext } from '../../../../ports/types';
-import { hashSourceText, hashUrl, sourceError, type SourceAuditSink } from './shared';
 
 export interface LinkLimits {
   maxUrlLength: number;
@@ -535,3 +536,32 @@ export function htmlToMarkdown(input: string, base?: URL): string {
     .replace(/\n{3,}/g, '\n\n')
     .trim();
 }
+
+// ---------------------------------------------------------------------------
+// 来源 Provider 公共工具（原 shared.ts 合并至此；审计只记 urlHash/host/结果分类）
+// ---------------------------------------------------------------------------
+
+export function hashSourceText(text: string): string {
+  return 'sha256:' + createHash('sha256').update(text, 'utf8').digest('hex');
+}
+
+export function hashUrl(url: string): string {
+  return 'sha256:' + createHash('sha256').update(url, 'utf8').digest('hex');
+}
+
+export function sourceError(
+  code: number,
+  requestId: string,
+  params: Record<string, unknown> = {},
+): ApiErrorException {
+  return new ApiErrorException(createApiError({ code, requestId, params }));
+}
+
+export interface SourceReadAudit {
+  event: 'source.read' | 'source.blocked' | 'source.retry' | 'source.failed';
+  urlHash?: string;
+  host?: string;
+  outcome: string;
+}
+
+export type SourceAuditSink = (entry: SourceReadAudit) => void;

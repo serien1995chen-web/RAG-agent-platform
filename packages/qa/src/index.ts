@@ -5,10 +5,10 @@
 import { createHash } from 'node:crypto';
 import { ApiErrorException, createApiError } from '@kb/contracts';
 import { dedupeQaItems } from './dedup';
-import { buildQaDedupKey, normalizeQaText } from './dedup-key';
+import { buildQaDedupKey, normalizeQaText } from './dedup';
 import { parseQaOutput } from './parser';
 import { buildQaPrompt, resolvePrompt, type QaTemplateRegistryPort } from './prompt';
-import type { QaModelPort, QaRequest, QaResult } from './types';
+import type { QaModelPort, QaRequest, QaResult } from './parser';
 
 export const PACKAGE_NAME = '@kb/qa' as const;
 
@@ -22,7 +22,7 @@ export type {
   QaRequest,
   QaResult,
   QaResultItem,
-} from './types';
+} from './parser';
 export {
   DEFAULT_QA_PROMPT,
   DEFAULT_QA_PROMPT_HASH,

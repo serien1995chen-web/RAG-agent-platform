@@ -14,7 +14,7 @@ import { createApiDatasetSourceProvider, type ApiDatasetHttpClient } from './api
 import { createExternalSourceProvider } from './external-provider';
 import { createFileSourceProvider, type FileParserLike } from './file-provider';
 import { createLinkSourceProvider, type LinkLimits, type LinkFetcher } from './link-provider';
-import { sourceError } from './shared';
+import { sourceError } from './link-provider';
 import { createTextSourceProvider } from './text-provider';
 
 export { createTextSourceProvider } from './text-provider';
@@ -23,7 +23,7 @@ export type { FileParserLike, FileSourceProviderDeps } from './file-provider';
 export { createLinkSourceProvider, DEFAULT_LINK_LIMITS, isBlockedAddress } from './link-provider';
 export { createApiDatasetSourceProvider } from './api-dataset-provider';
 export { createExternalSourceProvider } from './external-provider';
-export { hashSourceText, hashUrl } from './shared';
+export { hashSourceText, hashUrl } from './link-provider';
 
 export const SOURCE_PROVIDER_TYPES = ['file', 'link', 'text', 'apiFile', 'externalFile'] as const;
 export type SourceProviderType = (typeof SOURCE_PROVIDER_TYPES)[number];

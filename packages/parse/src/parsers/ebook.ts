@@ -2,11 +2,14 @@
  * @kb/parse 电子书（EPUB）解析（设计 9.8.1）：经 DocumentParserPort 自研扩展点实现，按段落。
  * 仅使用自研扩展点实现，不引入来源项目 SDK；不支持格式返回 501056。
  */
-import type { ParseHandler } from '../format-registry';
-import { parseFailedError } from '../format-registry';
+import {
+  makeResult,
+  normalizeRawText,
+  openZipEntries,
+  parseFailedError,
+  type ParseHandler,
+} from '../format-registry';
 import { convertHtmlToMarkdown } from './html';
-import { makeResult, normalizeRawText } from './core';
-import { openZipEntries } from './zip-reader';
 
 const CONTAINER_RE = /full-path\s*=\s*"([^"]+)"/i;
 const ITEMREFS_RE = /<itemref\b[^>]*idref\s*=\s*"([^"]+)"/gi;
@@ -61,13 +64,13 @@ export const parseEbook: ParseHandler = async (context) => {
     for (const href of spineHrefs) {
       const entry = byName.get(href);
       if (!entry) continue;
-      const markdown = convertHtmlToMarkdown(entry.readUtf8()).trim();
+      const markdown = (await convertHtmlToMarkdown(entry.readUtf8())).trim();
       if (markdown.length > 0) sections.push(markdown);
     }
     if (sections.length === 0) {
       for (const entry of entries) {
         if (!/\.x?html?$/i.test(entry.name)) continue;
-        const markdown = convertHtmlToMarkdown(entry.readUtf8()).trim();
+        const markdown = (await convertHtmlToMarkdown(entry.readUtf8())).trim();
         if (markdown.length > 0) sections.push(markdown);
       }
     }
