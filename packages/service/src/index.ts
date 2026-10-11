@@ -189,6 +189,7 @@ export {
   createSourceCollectionAdapter,
   createSourceCollectionJobHandler,
   createSourceCollectionRepository,
+  createSourceProviderRegistry,
   validateSourceCollection,
 } from './modules/collection';
 export type {
