@@ -19,6 +19,7 @@
     "@kb/chunk": "workspace:*",
     "@kb/contracts": "workspace:*",
     "@kb/dal": "workspace:*",
+    "@kb/parse": "workspace:*",
     "@node-rs/jieba": "catalog:",
     "axios": "catalog:",
     "bullmq": "catalog:",

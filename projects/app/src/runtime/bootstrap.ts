@@ -1,13 +1,17 @@
 import {
   DatasetApiService,
+  DataUpdateService,
   FileUploadService,
   ImageApplicationService,
   KnowledgeItemApplicationService,
+  ModelRuntimeAdapter,
   MongoKnowledgeBaseRepository,
   ProcessingApplicationService,
   SourceCollectionApplicationService,
   createDatasetAclRepository,
   createDefaultPorts,
+  createApiDatasetClient,
+  createParseRuntimeAdapter,
   createSourceProviderRegistry,
   createDeleteJobRepository,
   createImageAssetRepository,
@@ -43,6 +47,8 @@ export interface ExtendedAppRuntime extends AppRuntime {
   datasetSyncService: DatasetSyncApplicationService;
   imageApplicationService: ImageApplicationService;
   fileUploadService: FileUploadService;
+  modelRuntime: ModelRuntimeAdapter;
+  dataUpdateService: DataUpdateService;
   deleteRepository: ReturnType<typeof createDeleteJobRepository>;
   migrationRepository: ReturnType<typeof createMigrationRunRepository>;
   datasetPermission: ReturnType<typeof createDatasetAclRepository>;
@@ -83,6 +89,8 @@ export async function bootstrapRuntime(
   const syncQueue = new BullMqQueueAdapter({ connection: clients.redis });
   const sourceProviders = createSourceProviderRegistry({
     objectStore: clients.objectStore as unknown as ServicePorts['objectStore'],
+    fileParser: createParseRuntimeAdapter(),
+    apiDataset: { configured: true, client: createApiDatasetClient() },
   });
   const datasetSyncService = new DatasetSyncApplicationService({
     collections: collectionRepository,
@@ -94,7 +102,11 @@ export async function bootstrapRuntime(
     ...(options.ports ?? createDefaultPorts()),
     datasetSync: datasetSyncService,
     datasetSourceProvider: sourceProviders,
-  };
+    vectorController: adapters,
+    objectStore: clients.objectStore as unknown as ServicePorts['objectStore'],
+    ...(adapters.fullText ? { fullTextStore: adapters.fullText } : {}),
+    queue: syncQueue,
+  } as ServicePorts;
   const imageApplicationService = new ImageApplicationService({
     assets: createImageAssetRepository(clients.mongo) as NonNullable<
       ReturnType<typeof createImageAssetRepository>
@@ -105,6 +117,21 @@ export async function bootstrapRuntime(
     processor: ports.imageTrainingProcessor,
   });
   const fileUploadService = new FileUploadService();
+  const modelMode = (
+    base.config as unknown as {
+      system?: { dependencyBaseline?: { model?: 'mock' | 'real' } };
+    }
+  )?.system?.dependencyBaseline?.model;
+  const modelRuntime = new ModelRuntimeAdapter({
+    mode: modelMode === 'real' ? 'real' : 'mock',
+    modelRegistry: ports.modelRegistry,
+  });
+  const dataUpdateService = new DataUpdateService({
+    items: knowledgeItemRepository,
+    vectors: adapters,
+    fullText: adapters.fullText ?? ports.fullTextStore,
+    modelRuntime,
+  });
   const drain = options.drain ?? (async () => undefined);
   const closeClients = options.closeClients ?? closeRuntimeClients;
 
@@ -122,6 +149,8 @@ export async function bootstrapRuntime(
     datasetSyncService,
     imageApplicationService,
     fileUploadService,
+    modelRuntime,
+    dataUpdateService,
     deleteRepository,
     migrationRepository,
     datasetPermission,

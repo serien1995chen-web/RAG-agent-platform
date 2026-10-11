@@ -43,3 +43,7 @@ export class KnowledgeItemApplicationService {
 
 export { ImageApplicationService, normalizeImageMode } from './image.service';
 export type { CreateImageInput, ImageApplicationServiceDeps, ImageMode } from './image.service';
+export { DataUpdateService } from './data-update.service';
+export type { DataUpdateServiceDeps, DataUpdateInput } from './data-update.service';
+export { ModelRuntimeAdapter } from './model-runtime.adapter';
+export type { ModelRuntimeDeps, ModelRuntimeMode } from './model-runtime.adapter';

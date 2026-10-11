@@ -9,6 +9,8 @@ export { KnowledgeItemApplicationService } from './application';
 export type { KnowledgeItemServiceDeps } from './application';
 export { ImageApplicationService, normalizeImageMode } from './application';
 export type { ImageApplicationServiceDeps } from './application';
+export { DataUpdateService, ModelRuntimeAdapter } from './application';
+export type { DataUpdateServiceDeps, DataUpdateInput, ModelRuntimeDeps } from './application';
 export { createKnowledgeItemRepository } from './repository';
 export { createImageAssetRepository } from './repository';
 export { createKnowledgeItemAdapter } from './adapter';

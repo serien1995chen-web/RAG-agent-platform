@@ -202,6 +202,8 @@ export {
   createSourceCollectionJobHandler,
   createSourceCollectionRepository,
   createSourceProviderRegistry,
+  createParseRuntimeAdapter,
+  createApiDatasetClient,
   validateSourceCollection,
 } from './modules/collection';
 export type {
@@ -216,6 +218,8 @@ export {
   KnowledgeItemApplicationService,
   ImageApplicationService,
   normalizeImageMode,
+  DataUpdateService,
+  ModelRuntimeAdapter,
   KNOWLEDGE_ITEM_JOB_DEFINITIONS,
   InsertDataService,
   createKnowledgeItemAdapter,
