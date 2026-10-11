@@ -4,7 +4,7 @@ import { defineConfig } from 'vitest/config';
 const resolvePath = (relative: string): string => fileURLToPath(new URL(relative, import.meta.url));
 
 export default defineConfig({
-  root: import.meta.dirname,
+  root: fileURLToPath(new URL('.', import.meta.url)),
   resolve: {
     alias: {
       '@kb/contracts': resolvePath('../../packages/contracts/src/index.ts'),

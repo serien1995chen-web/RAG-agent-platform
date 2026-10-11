@@ -48,11 +48,11 @@ beforeAll(async () => {
   connection = mongoose.createConnection(mongo.getUri(), { dbName: 'image-test' });
   await connection.asPromise();
   assets = new MongoImageAssetRepository(connection);
-});
+}, 60_000);
 
 afterAll(async () => {
-  await connection.close();
-  await mongo.stop();
+  if (connection) await connection.close();
+  if (mongo) await mongo.stop();
 });
 
 describe('TEST-IMAGE-DESC-001 image asset TTL lifecycle', () => {
