@@ -249,4 +249,44 @@ describe('P4-09 data write routes', () => {
     });
     expect((result.body as { code?: number }).code).toBe(501009);
   });
+
+  it('[TEST-API-INSERT-001] DataUpdateService persists q/a via bulkUpsert with version bump', async () => {
+    const { DataUpdateService, ModelRuntimeAdapter } =
+      await import('../../packages/service/src/index');
+    let captured: { q?: string; a?: string; version?: number } | undefined;
+    const service = new DataUpdateService({
+      items: {
+        bulkUpsert: async (input: {
+          items: Array<{ q?: string; a?: string; version?: number }>;
+        }) => {
+          captured = input.items[0];
+          return { upserted: 1, duplicates: 0 };
+        },
+      } as never,
+      vectors: { insert: async () => ({ inserted: 1 }) } as never,
+      fullText: { write: async () => undefined } as never,
+      modelRuntime: new ModelRuntimeAdapter({ mode: 'mock' }),
+    });
+    const result = await service.updateItem(
+      {
+        dataId,
+        datasetId,
+        collectionId,
+        version: 1,
+        q: 'new-q',
+        a: 'new-a',
+        existing: {
+          q: 'old-q',
+          a: 'old-a',
+          indexes: [{ indexId: `${dataId}:default`, type: 'default', dataId, text: 'old' }],
+        },
+        options: { timeoutMs: 1000 },
+      },
+      context,
+    );
+    expect(result.version).toBe(2);
+    expect(captured?.q).toBe('new-q');
+    expect(captured?.a).toBe('new-a');
+    expect(captured?.version).toBe(2);
+  });
 });

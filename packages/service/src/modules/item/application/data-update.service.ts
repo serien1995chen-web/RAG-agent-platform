@@ -76,9 +76,28 @@ export class DataUpdateService {
       },
       context,
     );
-    // 2) Mongo CAS 切换引用
-    const updated = await this.deps.items.updateIndexes(
-      { dataId: input.dataId, version: input.version, indexes, options: input.options },
+    // 2) Mongo 切换引用：KnowledgeItemRepository 无 q/a CAS 原语，
+    //    以版本前置校验 + bulkUpsert 持久化 q/a/indexes（真正写入 q/a，非仅 indexes）。
+    const now = new Date().toISOString();
+    await this.deps.items.bulkUpsert(
+      {
+        items: [
+          {
+            dataId: input.dataId,
+            teamId: context.tenant.teamId,
+            datasetId: input.datasetId,
+            collectionId: input.collectionId,
+            q,
+            a,
+            indexes,
+            rebuilding: false,
+            version: nextVersion,
+            createTime: now,
+            updateTime: now,
+          },
+        ],
+        options: input.options,
+      },
       context,
     );
     // 3) FullText 写
@@ -92,6 +111,6 @@ export class DataUpdateService {
       },
       context,
     );
-    return { dataId: input.dataId, version: updated.version };
+    return { dataId: input.dataId, version: nextVersion };
   }
 }
