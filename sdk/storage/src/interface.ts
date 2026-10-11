@@ -35,5 +35,21 @@ export interface ObjectStorePort {
     input: { ref: ObjectRef; parts: number },
     context: TenantObjectContext,
   ): Promise<ObjectRef>;
+  uploadPart(
+    input: { ref: ObjectRef; partNumber: number; body: Uint8Array; checksum?: string },
+    context: TenantObjectContext,
+  ): Promise<{ etag: string; partNumber: number; size: number }>;
+  completeMultipart(
+    input: { ref: ObjectRef; parts: Array<{ partNumber: number; etag: string }> },
+    context: TenantObjectContext,
+  ): Promise<ObjectRef>;
+  presignPut(
+    input: { ref: ObjectRef; expiresSeconds: number },
+    context: TenantObjectContext,
+  ): Promise<string>;
+  presignGet(
+    input: { ref: ObjectRef; expiresSeconds: number },
+    context: TenantObjectContext,
+  ): Promise<string>;
   abort(input: { ref: ObjectRef }, context: TenantObjectContext): Promise<{ aborted: boolean }>;
 }

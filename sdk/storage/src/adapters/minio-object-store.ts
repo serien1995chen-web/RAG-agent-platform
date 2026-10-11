@@ -1,6 +1,7 @@
 import { ApiErrorException, createApiError } from '@kb/contracts';
 import { Client } from 'minio';
 import type { ObjectRef, ObjectStorePort, TenantObjectContext } from '../interface';
+import { presignObjectUrl } from '../presign';
 import { assertObjectKeyScope, objectKeyHash } from '../tenant-scope';
 
 export interface MinioObjectStoreConfig {
@@ -174,6 +175,85 @@ export class MinioObjectStore implements ObjectStorePort {
       },
       input.ref,
     );
+  }
+
+  async uploadPart(
+    input: { ref: ObjectRef; partNumber: number; body: Uint8Array; checksum?: string },
+    context: TenantObjectContext,
+  ): Promise<{ etag: string; partNumber: number; size: number }> {
+    assertObjectKeyScope(input.ref, context);
+    const uploadId = input.ref.multipartUploadId;
+    if (!uploadId) {
+      throw new ApiErrorException(
+        createApiError({
+          code: 501060,
+          requestId: 'object-store',
+          params: { objectKeyHash: objectKeyHash(input.ref.key) },
+        }),
+      );
+    }
+    return this.mapErrors(
+      'uploadPart',
+      async () => {
+        const buffer = Buffer.from(input.body);
+        const result = await this.client.uploadPart({
+          bucketName: this.bucket,
+          objectName: input.ref.key,
+          uploadID: uploadId,
+          partNumber: input.partNumber,
+          headers: {},
+        }, buffer);
+        return { etag: result.etag, partNumber: result.part, size: buffer.byteLength };
+      },
+      input.ref,
+    );
+  }
+
+  async completeMultipart(
+    input: { ref: ObjectRef; parts: Array<{ partNumber: number; etag: string }> },
+    context: TenantObjectContext,
+  ): Promise<ObjectRef> {
+    assertObjectKeyScope(input.ref, context);
+    const uploadId = input.ref.multipartUploadId;
+    if (!uploadId) {
+      throw new ApiErrorException(
+        createApiError({
+          code: 501060,
+          requestId: 'object-store',
+          params: { objectKeyHash: objectKeyHash(input.ref.key) },
+        }),
+      );
+    }
+    return this.mapErrors(
+      'completeMultipart',
+      async () => {
+        const result = await this.client.completeMultipartUpload(
+          this.bucket,
+          input.ref.key,
+          uploadId,
+          input.parts.map((part) => ({ part: part.partNumber, etag: part.etag })),
+        );
+        return { ...input.ref, etag: result.etag };
+      },
+      input.ref,
+    );
+  }
+
+  async presignPut(
+    input: { ref: ObjectRef; expiresSeconds: number },
+    context: TenantObjectContext,
+  ): Promise<string> {
+    assertObjectKeyScope(input.ref, context);
+    // presignObjectUrl 断言租户归属后签发 GET；PUT 上传签名按同一 scope 规则签发。
+    await presignObjectUrl(this.client, input.ref, context, input.expiresSeconds);
+    return this.client.presignedPutObject(this.bucket, input.ref.key, input.expiresSeconds);
+  }
+
+  async presignGet(
+    input: { ref: ObjectRef; expiresSeconds: number },
+    context: TenantObjectContext,
+  ): Promise<string> {
+    return presignObjectUrl(this.client, input.ref, context, input.expiresSeconds);
   }
 
   async abort(

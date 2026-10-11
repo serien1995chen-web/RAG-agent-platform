@@ -137,6 +137,32 @@ export interface ObjectStorePort {
     input: { ref: ObjectRef; parts: number; options: PortCallOptions },
     context: RequestContext,
   ): Promise<ObjectRef>;
+  uploadPart(
+    input: {
+      ref: ObjectRef;
+      partNumber: number;
+      body: Uint8Array;
+      checksum?: string;
+      options: PortCallOptions;
+    },
+    context: RequestContext,
+  ): Promise<{ etag: string; partNumber: number; size: number }>;
+  completeMultipart(
+    input: {
+      ref: ObjectRef;
+      parts: Array<{ partNumber: number; etag: string }>;
+      options: PortCallOptions;
+    },
+    context: RequestContext,
+  ): Promise<ObjectRef>;
+  presignPut(
+    input: { ref: ObjectRef; expiresSeconds: number; options: PortCallOptions },
+    context: RequestContext,
+  ): Promise<string>;
+  presignGet(
+    input: { ref: ObjectRef; expiresSeconds: number; options: PortCallOptions },
+    context: RequestContext,
+  ): Promise<string>;
   abort(
     input: { ref: ObjectRef; options: PortCallOptions },
     context: RequestContext,
