@@ -42,6 +42,21 @@ function responseRecorder() {
   return { response, result: () => ({ status, body: body as Record<string, unknown> }) };
 }
 
+function request(input: {
+  method: string;
+  url: string;
+  body?: unknown;
+  query?: Record<string, unknown>;
+}): NextApiRequest {
+  return {
+    method: input.method,
+    url: input.url,
+    query: input.query ?? {},
+    body: input.body,
+    headers: {},
+  } as unknown as NextApiRequest;
+}
+
 beforeEach(() => {
   state.enqueued = [];
   state.runtime = {
@@ -89,16 +104,52 @@ describe('P4-12 ingest full chain', () => {
 describe.skipIf(!process.env.KB_MONGO_URI)(
   'P4-12 real bootstrap full chain [TEST-E2E-INGEST-001][ACC-FLOW-001]',
   () => {
-    it('[TEST-E2E-INGEST-001][ACC-FLOW-001] parser→chunk→vector→fullText→search retrievable', async () => {
+    it('[TEST-E2E-INGEST-001][ACC-FLOW-001] routes: parser/chunk + insertData + search retrievable', async () => {
       const { bootstrapRuntime } = await import('../../projects/app/src/runtime/bootstrap');
-      const { InsertDataService } = await import('../../packages/service/src/index');
       const runtime = await bootstrapRuntime();
+      state.runtime = runtime;
       const teamId = context.tenant.teamId;
       try {
         const dataset = await runtime.datasetApi.createDataset(
           { name: `chain-${Date.now()}`, type: 'dataset', vectorModel: 'bge-m3' },
           context,
         );
+        // 1) 真实 Parser/Chunk 经 previewChunks API 路由：先把字节写入真实对象存储。
+        const key = `dataset/${dataset.datasetId}/chain.txt`;
+        await runtime.clients.objectStore.put(
+          { ref: { bucket: 'kb-source', key }, body: Buffer.from('hello chain content') },
+          { teamId, datasetId: dataset.datasetId },
+        );
+        const previewChunks =
+          await import('../../projects/app/src/pages/api/core/dataset/file/previewChunks');
+        const previewRec = responseRecorder();
+        await previewChunks.default(
+          request({
+            method: 'POST',
+            url: '/api/core/dataset/file/previewChunks',
+            body: {
+              fileRef: key,
+              chunkPolicy: {
+                mode: 'custom',
+                chunkSize: 64,
+                minSize: 64,
+                maxSize: 8000,
+                overlapRatio: 0,
+                paragraphDeep: 1,
+                customRegs: [],
+                lengthUnit: 'char',
+                forceSplit: true,
+                maxChunks: 1000,
+              },
+            },
+          }),
+          previewRec.response,
+        );
+        expect(previewRec.result().status).toBe(200);
+        const chunks = (previewRec.result().body.data as { chunks: unknown[] }).chunks;
+        expect(chunks.length).toBeGreaterThan(0);
+
+        // 2) 真实插入经 insertData API 路由（真实向量 + 全文）。
         const collection = await runtime.collectionRepository.create(
           {
             collection: {
@@ -115,35 +166,26 @@ describe.skipIf(!process.env.KB_MONGO_URI)(
           context,
         );
         const nonce = `${Date.now().toString(16)}${Math.floor(Math.random() * 0xffffffff).toString(16)}`;
-        const dataId = nonce.padEnd(24, '0').slice(0, 24);
         const question = `hello chain ${nonce}`;
-        const vector = await runtime.modelRuntime.embedText(
-          { text: question, options: { timeoutMs: 5000 } },
-          context,
+        const insertData =
+          await import('../../projects/app/src/pages/api/core/dataset/data/insertData');
+        const insertRec = responseRecorder();
+        await insertData.default(
+          request({
+            method: 'POST',
+            url: '/api/core/dataset/data/insertData',
+            body: { collectionId: collection.collectionId, q: question, a: 'answer' },
+          }),
+          insertRec.response,
         );
-        const insert = new InsertDataService({
-          items: runtime.knowledgeItemRepository,
-          vectors: runtime.vectorController,
-          fullText: runtime.ports.fullTextStore,
-        });
-        await insert.insertDirect(
-          {
-            dataId,
-            datasetId: dataset.datasetId,
-            collectionId: collection.collectionId,
-            q: question,
-            a: 'answer',
-            indexType: 'question',
-            vector,
-            options: { timeoutMs: 10000 },
-          },
-          context,
-        );
-        const result = await runtime.datasetSearch.search(
+        expect(insertRec.result().status).toBe(200);
+
+        // 3) 既有 Search 入口（扩展 runtime 的真实 DatasetSearchPort）命中已导入 Data。
+        const searchResult = await runtime.datasetSearch.search(
           {
             requestId: context.requestId,
             teamId,
-            tmbId: context.tmbId,
+            tmbId: context.tenant.tmbId,
             datasetIds: [dataset.datasetId],
             textQueries: [question],
             models: { embeddingModel: 'bge-m3' },
@@ -154,7 +196,7 @@ describe.skipIf(!process.env.KB_MONGO_URI)(
           },
           context,
         );
-        expect(result.citations.some((citation) => citation.dataId === dataId)).toBe(true);
+        expect(searchResult.citations.length).toBeGreaterThan(0);
       } finally {
         await runtime.shutdown();
       }
