@@ -64,7 +64,7 @@ beforeEach(() => {
 });
 
 describe('P4-12 ingest full chain', () => {
-  it('file source import enqueues exactly one parse task for a non-empty import', async () => {
+  it('[TEST-E2E-INGEST-001][ACC-FLOW-001] file source import enqueues exactly one parse task for a non-empty import', async () => {
     const text =
       await import('../../projects/app/src/pages/api/core/dataset/collection/create/text');
     const recorder = responseRecorder();

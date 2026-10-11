@@ -53,7 +53,7 @@ beforeEach(() => {
 });
 
 describe('P4-12 ingest tenant isolation', () => {
-  it('rejects cross-team temp keys without leaking internal paths', () => {
+  it('[TEST-TENANT-INGEST-001][ACC-RULE-003] rejects cross-team temp keys without leaking internal paths', () => {
     try {
       assertObjectKeyScope(
         { bucket: 'kb-source', key: 'temp/team-b/secret.png' },
@@ -66,7 +66,7 @@ describe('P4-12 ingest tenant isolation', () => {
     }
   });
 
-  it('accepts same-team temp keys and same-dataset keys', () => {
+  it('[TEST-TENANT-INGEST-001] accepts same-team temp keys and same-dataset keys', () => {
     expect(() =>
       assertObjectKeyScope(
         { bucket: 'kb-source', key: 'temp/team-a/file.png' },
@@ -81,7 +81,7 @@ describe('P4-12 ingest tenant isolation', () => {
     ).not.toThrow();
   });
 
-  it('rejects path traversal keys', () => {
+  it('[TEST-TENANT-INGEST-001] rejects path traversal keys', () => {
     expect(() =>
       assertObjectKeyScope(
         { bucket: 'kb-source', key: 'temp/team-a/../team-b/file' },
@@ -90,7 +90,7 @@ describe('P4-12 ingest tenant isolation', () => {
     ).toThrow();
   });
 
-  it('rejects a cross-team temp key through the real preview route', async () => {
+  it('[TEST-TENANT-INGEST-001][ACC-RULE-003] rejects a cross-team temp key through the real preview route', async () => {
     const route =
       await import('../../projects/app/src/pages/api/core/dataset/file/getSearchTestImagePreviewUrls');
     const recorder = responseRecorder();
@@ -109,7 +109,7 @@ describe('P4-12 ingest tenant isolation', () => {
     expect(JSON.stringify(recorder.result().body)).not.toContain('secret.png');
   });
 
-  it('serves a same-team temp key through the real preview route', async () => {
+  it('[TEST-TENANT-INGEST-001] serves a same-team temp key through the real preview route', async () => {
     const route =
       await import('../../projects/app/src/pages/api/core/dataset/file/getSearchTestImagePreviewUrls');
     const recorder = responseRecorder();

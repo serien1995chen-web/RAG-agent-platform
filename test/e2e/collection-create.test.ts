@@ -115,7 +115,7 @@ function envelopeData(body: Record<string, unknown>): Record<string, unknown> {
 }
 
 describe('P4-08 collection/create routes', () => {
-  it('serves the nine routes without 501999 and separates sources', async () => {
+  it('[TEST-E2E-INGEST-001][TEST-API-IMPORT-001] serves the nine routes without 501999 and separates sources', async () => {
     const file =
       await import('../../projects/app/src/pages/api/core/dataset/collection/create/file');
     const link =

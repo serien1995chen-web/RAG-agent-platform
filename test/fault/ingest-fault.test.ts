@@ -51,7 +51,7 @@ const collection = {
 };
 
 describe('P4-12 ingest fault classification', () => {
-  it('surfaces parser failures as stable errors and does not fabricate success', async () => {
+  it('[TEST-FI-INGEST-001][ACC-PARSE-001] surfaces parser failures as stable errors and does not fabricate success', async () => {
     const service = new ImportSourceService({
       collections: { create: async () => ({ collectionId: 'c1' }) } as never,
       sourceProvider: {
@@ -99,7 +99,7 @@ describe('P4-12 ingest fault classification', () => {
     expect(created).toBe(0);
   });
 
-  it('does not enqueue when QueuePort is missing (501062 before side effects)', async () => {
+  it('[TEST-FI-INGEST-001][ACC-RULE-003] does not enqueue when QueuePort is missing (501062 before side effects)', async () => {
     let created = 0;
     const service = new ImportSourceService({
       collections: {
@@ -123,7 +123,7 @@ describe('P4-12 ingest fault classification', () => {
     expect(created).toBe(0);
   });
 
-  it('surfaces a provider parser failure through the real text route with no side effects', async () => {
+  it('[TEST-FI-INGEST-001][ACC-INGEST-001] surfaces a provider parser failure through the real text route with no side effects', async () => {
     let created = 0;
     routeState.runtime = {
       collectionRepository: {

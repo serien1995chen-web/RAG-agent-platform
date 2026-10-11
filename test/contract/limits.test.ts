@@ -17,7 +17,7 @@ const limits = requestLimitsFromConfig({
 });
 
 describe('P4-11 three-layer request limits', () => {
-  it('maps config fields into proxy/decompressed/business/item limits', () => {
+  it('[TEST-API-LIMIT-001][TEST-API-RAW-001] maps config fields into proxy/decompressed/business/item limits', () => {
     expect(limits).toEqual({
       maxRequestBodyBytes: 10 * 1024 * 1024,
       maxDecompressedBytes: 10 * 1024 * 1024,
