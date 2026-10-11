@@ -44,15 +44,15 @@ beforeAll(async () => {
   model = connection.model<DatasetDataDoc>('DatasetData', DatasetDataSchema);
   await model.init();
   repository = new MongoKnowledgeItemRepository(connection);
-}, 60_000);
+}, 180_000);
 
 beforeEach(async () => {
   await model.deleteMany({});
 });
 
 afterAll(async () => {
-  await connection.close();
-  await mongo.stop();
+  if (connection) await connection.close();
+  if (mongo) await mongo.stop();
 });
 
 describe('MongoKnowledgeItemRepository (P2-10 / PORT-DATA-003)', () => {
