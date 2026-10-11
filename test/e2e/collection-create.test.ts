@@ -87,6 +87,9 @@ beforeEach(() => {
   state.runtime = {
     collectionRepository: collections,
     processingRepository: { enqueue: async () => ({ taskId: 't', jobId: 'j' }) },
+    imageApplicationService: {
+      createImage: async () => ({ state: 'success', producedItems: 1 }),
+    },
     knowledgeItemRepository: { bulkUpsert: async () => ({ upserted: 1, duplicates: 0 }) },
     ports: {
       collectionRepository: collections,
@@ -179,7 +182,7 @@ describe('P4-08 collection/create routes', () => {
     });
     expect(imagesResult.status).toBe(200);
     const imageItems = envelopeData(imagesResult.body).items as Array<Record<string, unknown>>;
-    expect(imageItems[0]).toMatchObject({ mode: 'chunk', autoIndexes: true });
+    expect(imageItems[0]).toMatchObject({ state: 'success', producedItems: 1, autoIndexes: true });
 
     const aggregateResult = await invoke(createWithFiles, {
       method: 'POST',

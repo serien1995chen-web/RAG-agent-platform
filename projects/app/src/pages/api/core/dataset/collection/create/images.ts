@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import type { CollectionSnapshot } from '@kb/service';
 import { ApiErrorException, createApiError } from '@kb/contracts';
 import type { NextApiRequest, NextApiResponse } from 'next';
@@ -27,7 +28,7 @@ function sourceCollection(input: {
 }
 
 const MAX_IMAGES_PER_REQUEST = 10;
-const PORT_OPTIONS = { timeoutMs: 10_000 } as const;
+const PORT_OPTIONS = { timeoutMs: 30_000 } as const;
 function apiError(
   code: number,
   requestId: string,
@@ -44,6 +45,10 @@ function normalizeTrainingType(mode: string | undefined): {
     return { mode, autoIndexes: false };
   }
   return { mode: 'chunk', autoIndexes: false };
+}
+function stableImageDataId(collectionId: string, file: string): string {
+  const digest = createHash('sha256').update(`${collectionId}\u0000${file}`).digest('hex');
+  return digest.slice(0, 24);
 }
 
 interface CollectionCreateImagesBody {
@@ -81,12 +86,43 @@ export default withApiHandler(
       context,
     );
     const normalized = normalizeTrainingType(body.trainingType);
-    const items = body.images.map((imageId) => ({
-      imageId,
-      state: 'pending',
-      mode: normalized.mode,
-      autoIndexes: normalized.autoIndexes,
-    }));
+    const mode = normalized.mode === 'imageParse' ? 'imageParse' : 'image';
+    // 真实图片生产端：逐图调用 ImageApplicationService，产生 ImageAsset/Data/Task；单图失败可见。
+    const items: Array<Record<string, unknown>> = [];
+    for (const imageId of body.images) {
+      try {
+        const result = await runtime.imageApplicationService.createImage(
+          {
+            imageId,
+            datasetId: body.datasetId,
+            collectionId: created.collectionId,
+            dataId: stableImageDataId(created.collectionId, imageId),
+            bucketName: 'kb-image',
+            objectKey: imageId,
+            mimeType: 'image/*',
+            size: 0,
+            mode,
+            options: PORT_OPTIONS,
+          },
+          context,
+        );
+        items.push({
+          imageId,
+          state: result.state,
+          producedItems: result.producedItems,
+          ...(result.errorMsg !== undefined ? { errorMsg: result.errorMsg } : {}),
+          autoIndexes: normalized.autoIndexes,
+        });
+      } catch (error) {
+        items.push({
+          imageId,
+          state: 'failed',
+          producedItems: 0,
+          errorMsg: error instanceof Error ? error.message : 'image_failed',
+          autoIndexes: normalized.autoIndexes,
+        });
+      }
+    }
     response
       .status(200)
       .json(successResponse({ collectionId: created.collectionId, items }, requestId));
