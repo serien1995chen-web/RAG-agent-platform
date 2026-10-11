@@ -1,5 +1,6 @@
 import {
   DatasetApiService,
+  FileUploadService,
   ImageApplicationService,
   KnowledgeItemApplicationService,
   MongoKnowledgeBaseRepository,
@@ -41,6 +42,7 @@ export interface ExtendedAppRuntime extends AppRuntime {
   processingService: ProcessingApplicationService;
   datasetSyncService: DatasetSyncApplicationService;
   imageApplicationService: ImageApplicationService;
+  fileUploadService: FileUploadService;
   deleteRepository: ReturnType<typeof createDeleteJobRepository>;
   migrationRepository: ReturnType<typeof createMigrationRunRepository>;
   datasetPermission: ReturnType<typeof createDatasetAclRepository>;
@@ -102,6 +104,7 @@ export async function bootstrapRuntime(
     fullText: adapters.fullText ?? ports.fullTextStore,
     processor: ports.imageTrainingProcessor,
   });
+  const fileUploadService = new FileUploadService();
   const drain = options.drain ?? (async () => undefined);
   const closeClients = options.closeClients ?? closeRuntimeClients;
 
@@ -118,6 +121,7 @@ export async function bootstrapRuntime(
     processingService,
     datasetSyncService,
     imageApplicationService,
+    fileUploadService,
     deleteRepository,
     migrationRepository,
     datasetPermission,

@@ -24,12 +24,6 @@ function apiError(
   return new ApiErrorException(createApiError({ code, requestId, params }));
 }
 
-function objectStoreOf(runtime: unknown) {
-  const store = (runtime as { clients?: { objectStore?: { presignPut?: unknown } } }).clients
-    ?.objectStore;
-  return store && typeof store.presignPut === 'function' ? store : null;
-}
-
 /** API-FILE-001 POST /api/core/dataset/file/presignUpload */
 export default withApiHandler(
   async (request: NextApiRequest, response: NextApiResponse, { requestId }: ApiHandlerContext) => {
@@ -39,24 +33,34 @@ export default withApiHandler(
     if (body.size > MAX_RAW_TEXT_BYTES) {
       throw apiError(501065, requestId, { limitBytes: MAX_RAW_TEXT_BYTES, actualBytes: body.size });
     }
-    const store = objectStoreOf(runtime);
-    if (!store) throw apiError(501017, requestId, { provider: 's3' });
+    const store = runtime.clients.objectStore;
     const fileId = randomUUID();
     const key = `dataset/${body.datasetId}/${fileId}`;
-    const uploadUrl = await (
-      store as { presignPut: (i: unknown, c: unknown) => Promise<string> }
-    ).presignPut(
-      { ref: { bucket: 'kb-source', key }, expiresSeconds: 900 },
-      { teamId: context.tenant.teamId, datasetId: body.datasetId },
+    const objectContext = { teamId: context.tenant.teamId, datasetId: body.datasetId };
+    // 真实创建 multipart session：prepareMultipart → uploadId，写入 FileUploadService。
+    const prepared = await store.prepareMultipart(
+      { ref: { bucket: 'kb-source', key }, parts: 1 },
+      objectContext,
     );
-    response
-      .status(200)
-      .json(
-        successResponse(
-          { uploadUrl, fileId, expiresAt: new Date(Date.now() + 900_000).toISOString() },
-          requestId,
-        ),
-      );
+    const uploadId = prepared.multipartUploadId ?? fileId;
+    runtime.fileUploadService.createSession({
+      fileId,
+      teamId: context.tenant.teamId,
+      datasetId: body.datasetId,
+      key,
+      uploadId,
+      bucket: 'kb-source',
+    });
+    response.status(200).json(
+      successResponse(
+        {
+          uploadUrl: `/api/core/dataset/file/uploadPart?fileId=${fileId}`,
+          fileId,
+          expiresAt: new Date(Date.now() + 900_000).toISOString(),
+        },
+        requestId,
+      ),
+    );
   },
   { validationErrorCode: 501065 },
 );

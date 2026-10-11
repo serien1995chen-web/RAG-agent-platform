@@ -2,6 +2,8 @@ export { SOURCE_COLLECTION_INVARIANTS, validateSourceCollection } from './domain
 export type { SourceCollection } from './domain';
 export { SourceCollectionApplicationService } from './application';
 export type { SourceCollectionServiceDeps } from './application';
+export { FileUploadService } from './application/file-upload.service';
+export type { MultipartSessionValue, MultipartPartValue } from './application/file-upload.service';
 export { createSourceCollectionRepository } from './repository';
 export type { SourceCollectionRepository } from './repository';
 export { createSourceCollectionAdapter } from './adapter';

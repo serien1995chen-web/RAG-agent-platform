@@ -197,6 +197,7 @@ export {
   SourceCollectionApplicationService,
   SOURCE_COLLECTION_JOB_DEFINITIONS,
   ImportSourceService,
+  FileUploadService,
   createSourceCollectionAdapter,
   createSourceCollectionJobHandler,
   createSourceCollectionRepository,

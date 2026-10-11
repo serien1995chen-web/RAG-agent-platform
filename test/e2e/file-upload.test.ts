@@ -1,5 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { FileUploadService } from '../../packages/service/src/index';
 import type { RequestContext } from '../../packages/service/src/ports/types';
 import type * as SharedApiModule from '../../projects/app/src/shared/api';
 
@@ -68,16 +69,8 @@ function request(input: {
 beforeEach(async () => {
   state.objects.clear();
   state.deletes = 0;
-  (
-    globalThis as unknown as {
-      __p4FileSessions?: {
-        sessions: Map<string, unknown>;
-        parts: Map<string, unknown>;
-        checksums: Map<string, unknown>;
-      };
-    }
-  ).__p4FileSessions = { sessions: new Map(), parts: new Map(), checksums: new Map() };
   state.runtime = {
+    fileUploadService: new FileUploadService(),
     clients: {
       objectStore: {
         get: async () => ({ body: Buffer.from('abcdef') }),
@@ -155,20 +148,6 @@ describe('P4-07 file and multipart routes', () => {
     expect(JSON.stringify(data(presign.body))).not.toContain('bucket');
     expect(JSON.stringify(data(presign.body))).not.toContain('kb-source');
 
-    (
-      globalThis as unknown as {
-        __p4FileSessions: { sessions: Map<string, unknown> };
-      }
-    ).__p4FileSessions.sessions.set(fileId, {
-      fileId,
-      teamId: context.tenant.teamId,
-      datasetId,
-      key: `dataset/${datasetId}/${fileId}`,
-      uploadId: fileId,
-      bucket: 'kb-source',
-      createdAt: Date.now(),
-    });
-
     const partOne = await invoke(uploadPart, {
       method: 'POST',
       url: '/api/core/dataset/file/uploadPart',
@@ -203,10 +182,17 @@ describe('P4-07 file and multipart routes', () => {
     expect(complete.status).toBe(200);
     expect(JSON.stringify(complete.body)).not.toContain('dataset/');
 
+    // complete 成功后 session 已清理；abort 用于进行中的会话，这里开一个新会话再中止。
+    const presign2 = await invoke(presignUpload, {
+      method: 'POST',
+      url: '/api/core/dataset/file/presignUpload',
+      body: { datasetId, filename: 'b.txt', size: 5, mime: 'text/plain' },
+    });
+    const fileId2 = data(presign2.body).fileId as string;
     const abort = await invoke(abortMultipart, {
       method: 'POST',
       url: '/api/core/dataset/file/abortMultipart',
-      body: { fileId, uploadId: fileId },
+      body: { fileId: fileId2, uploadId: fileId2 },
     });
     expect(abort.status).toBe(200);
     expect(data(abort.body).aborted).toBe(true);
