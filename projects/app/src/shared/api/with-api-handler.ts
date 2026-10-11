@@ -32,6 +32,7 @@ export interface ApiRouteOptions {
 }
 
 const IDEMPOTENT_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
+const DEFAULT_RAW_BODY_LIMIT = 10 * 1024 * 1024;
 
 type StatusWriter = (code: number) => NextApiResponse;
 type JsonWriter = (body: unknown) => NextApiResponse;
@@ -46,6 +47,26 @@ function idempotencyUnavailable(requestId: string): ApiErrorException {
       code: 501016,
       requestId,
       params: { store: 'redis', operation: 'idempotency' },
+    }),
+  );
+}
+
+/** 代理层原始字节上限：解析/副作用前先按 Content-Length 拒绝。 */
+function enforceProxyLimit(request: NextApiRequest, requestId: string): void {
+  const header = request.headers['content-length'];
+  const raw = Array.isArray(header) ? header[0] : header;
+  if (raw === undefined) return;
+  const contentLength = Number(raw);
+  if (!Number.isFinite(contentLength) || contentLength <= DEFAULT_RAW_BODY_LIMIT) return;
+  throw new ApiErrorException(
+    createApiError({
+      code: 501030,
+      requestId,
+      params: {
+        limitBytes: DEFAULT_RAW_BODY_LIMIT,
+        actualBytes: contentLength,
+        layer: 'proxy',
+      },
     }),
   );
 }
@@ -111,6 +132,7 @@ export function withApiHandler(
     const idempotencyKey = readIdempotencyKey(request);
     if (idempotencyKey === null || !IDEMPOTENT_METHODS.has(method)) {
       try {
+        enforceProxyLimit(request, requestId);
         await handler(request, response, { requestId });
       } catch (error) {
         writeErrorResponse(rawStatus, rawJson, requestId, operation, error, options);
@@ -145,6 +167,7 @@ export function withApiHandler(
     }
 
     try {
+      enforceProxyLimit(request, requestId);
       const result = await executeWithIdempotency({
         store: idempotencyContext.store,
         scopeKey: buildIdempotencyScopeKey(
