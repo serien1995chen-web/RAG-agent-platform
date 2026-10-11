@@ -190,6 +190,7 @@ export {
   createSourceCollectionJobHandler,
   createSourceCollectionRepository,
   createSourceProviderRegistry,
+  createDefaultFileParser,
   validateSourceCollection,
 } from './modules/collection';
 export type {

@@ -16,6 +16,7 @@ import { createFileSourceProvider, type FileParserLike } from './file-provider';
 import { createLinkSourceProvider, type LinkLimits, type LinkFetcher } from './link-provider';
 import { sourceError, type SourceAuditSink } from './link-provider';
 import { createTextSourceProvider } from './text-provider';
+import { createDefaultDocumentParser } from '@kb/parse';
 
 export { createTextSourceProvider } from './text-provider';
 export { createFileSourceProvider } from './file-provider';
@@ -114,4 +115,10 @@ export function createSourceProviderRegistry(
   deps: SourceProviderRegistryDeps = {},
 ): SourceProviderRegistry {
   return new SourceProviderRegistry(deps);
+}
+
+/** 真实文件解析适配：以 @kb/parse 默认解析器满足 FileParserLike。 */
+export function createDefaultFileParser(): FileParserLike {
+  const parser = createDefaultDocumentParser();
+  return { parse: (request) => parser.parse(request) };
 }
