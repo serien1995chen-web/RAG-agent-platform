@@ -2,52 +2,106 @@
  * @kb/qa — QA 生成、Schema 校验、去重与回退（CR-FEATURE-06，设计文档 9.9.1）。
  * 输出解析失败必须回退 chunk_split 并记录指标，不得伪造 QA。
  */
-import { createHash } from 'node:crypto';
-import { ApiErrorException, createSkeletonError } from '@kb/contracts';
+import { createHash } from "node:crypto";
+import { ApiErrorException, createApiError } from "@kb/contracts";
+import { dedupeQaItems } from "./dedup";
+import { buildQaDedupKey, normalizeQaText } from "./dedup-key";
+import { parseQaOutput } from "./parser";
+import { buildQaPrompt, resolvePrompt, type QaTemplateRegistryPort } from "./prompt";
+import type { QaModelPort, QaRequest, QaResult } from "./types";
 
-export const PACKAGE_NAME = '@kb/qa' as const;
+export const PACKAGE_NAME = "@kb/qa" as const;
 
-export interface QaLimits {
-  maxQaPerChunk: number;
-  maxChunkCount: number;
+export const DEFAULT_QA_TIMEOUT_MS = 10 * 60 * 1000;
+
+export type { QaLimits, QaModelInput, QaModelOutput, QaModelPort, QaRequest, QaResult, QaResultItem } from "./types";
+export {
+  DEFAULT_QA_PROMPT,
+  DEFAULT_QA_PROMPT_HASH,
+  DEFAULT_TEMPLATE_ID,
+  DEFAULT_TEMPLATE_LOCALE,
+  DEFAULT_TEMPLATE_VERSION,
+  buildQaPrompt,
+  createDefaultTemplateRegistry,
+  resolvePrompt,
+} from "./prompt";
+export type { QaTemplate, QaTemplateRegistryPort } from "./prompt";
+export { parseQaOutput } from "./parser";
+export { dedupeQaItems, limitChunkCount } from "./dedup";
+export type { DedupOutcome } from "./dedup";
+
+export { buildQaDedupKey, normalizeQaText };
+
+export interface GenerateQaOptions {
+  templateRegistry: QaTemplateRegistryPort;
+  model: QaModelPort;
+  /** 解析失败时回退 chunk 结果（fallback=chunk_split）；缺省仅标记 fallback。 */
+  fallbackToChunkSplit?: (request: QaRequest) => Promise<Pick<QaResult, "items">> | Pick<QaResult, "items">;
+  timeoutMs?: number;
 }
 
-export interface QaRequest {
-  teamId: string;
-  datasetId: string;
-  collectionId: string;
-  chunkText: string;
-  qaTemplateId: string;
-  qaTemplateVersion: number;
-  qaPrompt?: string;
-  models: { llmModel: string; embeddingModel: string; vectorModel: string };
-  limits: QaLimits;
+function qaError(code: number, params: Record<string, unknown>, requestId: string): ApiErrorException {
+  return new ApiErrorException(createApiError({ code, requestId, params }));
 }
 
-export interface QaResultItem {
-  q: string;
-  a: string;
-  sourceChunkHash: string;
+function isRetryableModelError(error: unknown): boolean {
+  if (error instanceof ApiErrorException) return error.error.retryable === "retryable";
+  if (typeof error === "object" && error !== null) {
+    const record = error as Record<string, unknown>;
+    if (record.retryable === "retryable") return true;
+    const status = record.status ?? record.statusCode ?? record.httpStatus;
+    if (typeof status === "number") return status === 429 || status >= 500;
+    if (record.name === "AbortError" || record.name === "TimeoutError") return true;
+  }
+  return false;
 }
 
-export interface QaResult {
-  items: QaResultItem[];
-  usage: { inputTokens: number; outputTokens: number };
-  fallback: 'none' | 'chunk_split';
+function chunkHashOf(text: string): string {
+  return createHash("sha256").update(text, "utf8").digest("hex");
 }
 
-export function normalizeQaText(text: string): string {
-  return text.normalize('NFKC').trim();
-}
+/**
+ * 编排：模板解析 → 模型调用 → 输出解析 → 去重 → 回退。
+ * 模板未注册 → 501037；模型 429/5xx/超时 → 501054（retryable）；
+ * 解析失败/为空 → fallback=chunk_split（501055 语义），不伪造 QA。
+ */
+export async function generateQa(request: QaRequest, options: GenerateQaOptions): Promise<QaResult> {
+  const requestId = request.collectionId + ":" + request.qaTemplateId + "@" + String(request.qaTemplateVersion);
+  const template = await options.templateRegistry.find(
+    request.qaTemplateId,
+    request.qaTemplateVersion,
+  );
+  if (!template || template.status !== "active") {
+    throw qaError(501037, { templateId: request.qaTemplateId }, requestId);
+  }
 
-/** qa:sha256(NFKC(trim(q)) + NUL + NFKC(trim(a)))（设计文档 9.9.1）。 */
-export function buildQaDedupKey(q: string, a: string): string {
-  const hash = createHash('sha256')
-    .update(`${normalizeQaText(q)}\u0000${normalizeQaText(a)}`)
-    .digest('hex');
-  return `qa:${hash}`;
-}
+  const prompt = buildQaPrompt(resolvePrompt(template, request), request.chunkText);
+  let output;
+  try {
+    output = await options.model.generate({
+      model: request.models.llmModel,
+      prompt,
+      chunkText: request.chunkText,
+      timeoutMs: options.timeoutMs ?? DEFAULT_QA_TIMEOUT_MS,
+    });
+  } catch (error) {
+    const reason = isRetryableModelError(error) ? "model_retryable_error" : "model_error";
+    throw qaError(
+      501054,
+      { model: request.models.llmModel, taskId: requestId, reason },
+      requestId,
+    );
+  }
 
-export function generateQa(_request: QaRequest): Promise<QaResult> {
-  return Promise.reject(new ApiErrorException(createSkeletonError({ operation: 'qa' }, 'qa')));
+  const sourceChunkHash = chunkHashOf(request.chunkText);
+  const parsed = parseQaOutput(output.content, sourceChunkHash);
+  if (parsed.length === 0) {
+    const fallbackItems = options.fallbackToChunkSplit
+      ? (await options.fallbackToChunkSplit(request)).items
+      : [];
+    return { items: fallbackItems, usage: output.usage, fallback: "chunk_split" };
+  }
+
+  const deduped = dedupeQaItems(parsed, request.limits.maxQaPerChunk);
+  return { items: deduped.items, usage: output.usage, fallback: "none" };
 }
