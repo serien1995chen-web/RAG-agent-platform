@@ -2,8 +2,8 @@
  * @kb/qa 去重与单块上限（设计文档 9.9.1 规则 2、3）。
  * 同一 Collection 内按去重键保留首条；单块超过 maxQaPerChunk 丢弃超出并计数告警。
  */
-import { buildQaDedupKey } from "./dedup-key";
-import type { QaResultItem } from "./types";
+import { buildQaDedupKey } from './dedup-key';
+import type { QaResultItem } from './types';
 
 export interface DedupOutcome {
   items: QaResultItem[];
@@ -36,7 +36,10 @@ export function dedupeQaItems(items: readonly QaResultItem[], maxQaPerChunk: num
 }
 
 /** 块数上限：超过 maxChunkCount 时截断并计数。 */
-export function limitChunkCount<T>(items: readonly T[], maxChunkCount: number): { items: T[]; truncated: number } {
+export function limitChunkCount<T>(
+  items: readonly T[],
+  maxChunkCount: number,
+): { items: T[]; truncated: number } {
   if (items.length <= maxChunkCount) return { items: [...items], truncated: 0 };
   return { items: items.slice(0, maxChunkCount), truncated: items.length - maxChunkCount };
 }

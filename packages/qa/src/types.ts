@@ -28,7 +28,7 @@ export interface QaResultItem {
 export interface QaResult {
   items: QaResultItem[];
   usage: { inputTokens: number; outputTokens: number };
-  fallback: "none" | "chunk_split";
+  fallback: 'none' | 'chunk_split';
 }
 
 export interface QaModelInput {

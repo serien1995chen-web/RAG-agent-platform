@@ -1,8 +1,8 @@
-import { deflateRawSync } from "node:zlib";
-import * as XLSX from "xlsx";
-import { describe, expect, it } from "vitest";
-import { createDefaultDocumentParser, type DocumentParseContext } from "../../src/index";
-import { unsupportedFormatError } from "../../src/format-registry";
+import { deflateRawSync } from 'node:zlib';
+import * as XLSX from 'xlsx';
+import { describe, expect, it } from 'vitest';
+import { createDefaultDocumentParser, type DocumentParseContext } from '../../src/index';
+import { unsupportedFormatError } from '../../src/format-registry';
 
 // ---- minimal ZIP writer (stored/deflated) for binary fixtures ----
 interface ZipFile {
@@ -26,7 +26,7 @@ function buildZip(files: ZipFile[]): Buffer {
   const centralParts: Buffer[] = [];
   let offset = 0;
   for (const file of files) {
-    const nameBytes = Buffer.from(file.name, "utf8");
+    const nameBytes = Buffer.from(file.name, 'utf8');
     const compressed = deflateRawSync(file.data);
     const crc = crc32(file.data);
     const localHeader = Buffer.alloc(30);
@@ -68,13 +68,13 @@ function buildZip(files: ZipFile[]): Buffer {
 function pdfWithText(text: string): Buffer {
   const content = `BT /F1 18 Tf 72 720 Td (${text}) Tj ET`;
   const objects = [
-    "<< /Type /Catalog /Pages 2 0 R >>",
-    "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
-    "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>",
+    '<< /Type /Catalog /Pages 2 0 R >>',
+    '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>',
     `<< /Length ${Buffer.byteLength(content)} >>\nstream\n${content}\nendstream`,
-    "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+    '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
   ];
-  let body = "%PDF-1.4\n";
+  let body = '%PDF-1.4\n';
   const offsets: number[] = [];
   objects.forEach((object, index) => {
     offsets.push(Buffer.byteLength(body));
@@ -82,20 +82,20 @@ function pdfWithText(text: string): Buffer {
   });
   const xrefOffset = Buffer.byteLength(body);
   body += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
-  for (const offset of offsets) body += `${offset.toString().padStart(10, "0")} 00000 n \n`;
+  for (const offset of offsets) body += `${offset.toString().padStart(10, '0')} 00000 n \n`;
   body += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF`;
-  return Buffer.from(body, "latin1");
+  return Buffer.from(body, 'latin1');
 }
 
 function pdfWithoutText(): Buffer {
-  const content = "0 0 0 rg 10 10 100 100 re f";
+  const content = '0 0 0 rg 10 10 100 100 re f';
   const objects = [
-    "<< /Type /Catalog /Pages 2 0 R >>",
-    "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
-    "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R >>",
+    '<< /Type /Catalog /Pages 2 0 R >>',
+    '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R >>',
     `<< /Length ${Buffer.byteLength(content)} >>\nstream\n${content}\nendstream`,
   ];
-  let body = "%PDF-1.4\n";
+  let body = '%PDF-1.4\n';
   const offsets: number[] = [];
   objects.forEach((object, index) => {
     offsets.push(Buffer.byteLength(body));
@@ -103,17 +103,17 @@ function pdfWithoutText(): Buffer {
   });
   const xrefOffset = Buffer.byteLength(body);
   body += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
-  for (const offset of offsets) body += `${offset.toString().padStart(10, "0")} 00000 n \n`;
+  for (const offset of offsets) body += `${offset.toString().padStart(10, '0')} 00000 n \n`;
   body += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF`;
-  return Buffer.from(body, "latin1");
+  return Buffer.from(body, 'latin1');
 }
 
 function docxBytes(text: string): Buffer {
   const contentTypes = `<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>`;
   const documentXml = `<?xml version="1.0" encoding="UTF-8"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>${text}</w:t></w:r></w:p></w:body></w:document>`;
   return buildZip([
-    { name: "[Content_Types].xml", data: Buffer.from(contentTypes) },
-    { name: "word/document.xml", data: Buffer.from(documentXml) },
+    { name: '[Content_Types].xml', data: Buffer.from(contentTypes) },
+    { name: 'word/document.xml', data: Buffer.from(documentXml) },
   ]);
 }
 
@@ -121,8 +121,8 @@ function pptxBytes(slideText: string, notes: string): Buffer {
   const slide = `<?xml version="1.0" encoding="UTF-8"?><p:sld xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"><p:cSld><p:spTree><p:sp><p:txBody><a:p><a:r><a:t>${slideText}</a:t></a:r></a:p></p:txBody></p:sp></p:spTree></p:cSld></p:sld>`;
   const notesXml = `<?xml version="1.0" encoding="UTF-8"?><p:notes xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"><p:cSld><p:spTree><p:sp><p:txBody><a:p><a:r><a:t>${notes}</a:t></a:r></a:p></p:txBody></p:sp></p:spTree></p:cSld></p:notes>`;
   return buildZip([
-    { name: "ppt/slides/slide1.xml", data: Buffer.from(slide) },
-    { name: "ppt/notesSlides/notesSlide1.xml", data: Buffer.from(notesXml) },
+    { name: 'ppt/slides/slide1.xml', data: Buffer.from(slide) },
+    { name: 'ppt/notesSlides/notesSlide1.xml', data: Buffer.from(notesXml) },
   ]);
 }
 
@@ -131,26 +131,29 @@ function epubBytes(title: string, body: string): Buffer {
   const opf = `<?xml version="1.0"?><package xmlns="http://www.idpf.org/2007/opf" version="3.0"><manifest><item id="c1" href="chapter1.xhtml" media-type="application/xhtml+xml"/></manifest><spine><itemref idref="c1"/></spine></package>`;
   const chapter = `<html xmlns="http://www.w3.org/1999/xhtml"><head><title>${title}</title></head><body><h1>${title}</h1><p>${body}</p></body></html>`;
   return buildZip([
-    { name: "META-INF/container.xml", data: Buffer.from(container) },
-    { name: "OEBPS/content.opf", data: Buffer.from(opf) },
-    { name: "OEBPS/chapter1.xhtml", data: Buffer.from(chapter) },
+    { name: 'META-INF/container.xml', data: Buffer.from(container) },
+    { name: 'OEBPS/content.opf', data: Buffer.from(opf) },
+    { name: 'OEBPS/chapter1.xhtml', data: Buffer.from(chapter) },
   ]);
 }
 
 function xlsxBytes(): Buffer {
   const workbook = XLSX.utils.book_new();
   const sheet = XLSX.utils.aoa_to_sheet([
-    ["q", "a"],
-    ["问题1", "答案1"],
+    ['q', 'a'],
+    ['问题1', '答案1'],
   ]);
-  XLSX.utils.book_append_sheet(workbook, sheet, "QA");
-  return XLSX.write(workbook, { type: "buffer", bookType: "xlsx" }) as Buffer;
+  XLSX.utils.book_append_sheet(workbook, sheet, 'QA');
+  return XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' }) as Buffer;
 }
 
-function request(extension: string, extra: Partial<DocumentParseContext> = {}): DocumentParseContext {
+function request(
+  extension: string,
+  extra: Partial<DocumentParseContext> = {},
+): DocumentParseContext {
   return {
-    teamId: "team-1",
-    datasetId: "ds-1",
+    teamId: 'team-1',
+    datasetId: 'ds-1',
     fileRef: `fixture.${extension}`,
     extension,
     timeoutMs: 30000,
@@ -160,104 +163,104 @@ function request(extension: string, extra: Partial<DocumentParseContext> = {}): 
 
 const parser = createDefaultDocumentParser();
 
-describe("TEST-PARSE-FORMAT-001 nine-format parsing matrix", () => {
-  it("parses txt with encoding detection", async () => {
-    const result = await parser.parse(request("txt", { bytes: Buffer.from("hello 世界", "utf8") }));
-    expect(result.format).toBe("text");
-    expect(result.rawText).toBe("hello 世界");
+describe('TEST-PARSE-FORMAT-001 nine-format parsing matrix', () => {
+  it('parses txt with encoding detection', async () => {
+    const result = await parser.parse(request('txt', { bytes: Buffer.from('hello 世界', 'utf8') }));
+    expect(result.format).toBe('text');
+    expect(result.rawText).toBe('hello 世界');
     expect(result.scanRequired).toBe(false);
   });
 
-  it("parses markdown preserving headings", async () => {
-    const markdown = "# 标题\n\n正文 | 表格";
-    const result = await parser.parse(request("md", { bytes: Buffer.from(markdown) }));
-    expect(result.format).toBe("markdown");
-    expect(result.rawText).toContain("# 标题");
+  it('parses markdown preserving headings', async () => {
+    const markdown = '# 标题\n\n正文 | 表格';
+    const result = await parser.parse(request('md', { bytes: Buffer.from(markdown) }));
+    expect(result.format).toBe('markdown');
+    expect(result.rawText).toContain('# 标题');
   });
 
-  it("converts html to markdown and drops scripts", async () => {
+  it('converts html to markdown and drops scripts', async () => {
     const html = `<!doctype html><html><head><title>Doc</title></head><body><script>bad()</script><h1>标题</h1><p>段落</p><table><tr><th>A</th></tr><tr><td>1</td></tr></table></body></html>`;
-    const result = await parser.parse(request("html", { bytes: Buffer.from(html) }));
-    expect(result.format).toBe("html");
-    expect(result.rawText).not.toContain("bad()");
-    expect(result.rawText).toContain("标题");
+    const result = await parser.parse(request('html', { bytes: Buffer.from(html) }));
+    expect(result.format).toBe('html');
+    expect(result.rawText).not.toContain('bad()');
+    expect(result.rawText).toContain('标题');
     expect(result.rawText).toMatch(/\|\s+A\s+\|/);
   });
 
-  it("parses csv into a markdown table", async () => {
-    const result = await parser.parse(request("csv", { bytes: Buffer.from("q,a\n问题,答案\n") }));
-    expect(result.format).toBe("csv");
-    expect(result.rawText).toContain("| q | a |");
-    expect(result.rawText).toContain("| 问题 | 答案 |");
+  it('parses csv into a markdown table', async () => {
+    const result = await parser.parse(request('csv', { bytes: Buffer.from('q,a\n问题,答案\n') }));
+    expect(result.format).toBe('csv');
+    expect(result.rawText).toContain('| q | a |');
+    expect(result.rawText).toContain('| 问题 | 答案 |');
   });
 
-  it("rejects csv with invalid headers as 501058", async () => {
+  it('rejects csv with invalid headers as 501058', async () => {
     const error = await parser
-      .parse(request("csv", { bytes: Buffer.from("question,answer\n1,2\n") }))
+      .parse(request('csv', { bytes: Buffer.from('question,answer\n1,2\n') }))
       .catch((thrown: unknown) => thrown);
     expect((error as { error: { code: number } }).error.code).toBe(501058);
   });
 
-  it("parses xlsx into sheet-scoped markdown", async () => {
-    const result = await parser.parse(request("xlsx", { bytes: xlsxBytes() }));
-    expect(result.format).toBe("xlsx");
-    expect(result.rawText).toContain("## QA");
-    expect(result.rawText).toContain("| q | a |");
+  it('parses xlsx into sheet-scoped markdown', async () => {
+    const result = await parser.parse(request('xlsx', { bytes: xlsxBytes() }));
+    expect(result.format).toBe('xlsx');
+    expect(result.rawText).toContain('## QA');
+    expect(result.rawText).toContain('| q | a |');
   });
 
-  it("parses docx text into markdown", async () => {
-    const result = await parser.parse(request("docx", { bytes: docxBytes("合同正文") }));
-    expect(result.format).toBe("docx");
-    expect(result.rawText).toContain("合同正文");
+  it('parses docx text into markdown', async () => {
+    const result = await parser.parse(request('docx', { bytes: docxBytes('合同正文') }));
+    expect(result.format).toBe('docx');
+    expect(result.rawText).toContain('合同正文');
   });
 
-  it("parses pptx slides with notes merged", async () => {
-    const result = await parser.parse(request("pptx", { bytes: pptxBytes("要点一", "演讲备注") }));
-    expect(result.format).toBe("pptx");
-    expect(result.rawText).toContain("## Slide 1");
-    expect(result.rawText).toContain("要点一");
-    expect(result.rawText).toContain("演讲备注");
+  it('parses pptx slides with notes merged', async () => {
+    const result = await parser.parse(request('pptx', { bytes: pptxBytes('要点一', '演讲备注') }));
+    expect(result.format).toBe('pptx');
+    expect(result.rawText).toContain('## Slide 1');
+    expect(result.rawText).toContain('要点一');
+    expect(result.rawText).toContain('演讲备注');
   });
 
-  it("parses epub chapters by spine order", async () => {
-    const result = await parser.parse(request("epub", { bytes: epubBytes("第一章", "章节正文") }));
-    expect(result.format).toBe("ebook");
-    expect(result.rawText).toContain("第一章");
-    expect(result.rawText).toContain("章节正文");
+  it('parses epub chapters by spine order', async () => {
+    const result = await parser.parse(request('epub', { bytes: epubBytes('第一章', '章节正文') }));
+    expect(result.format).toBe('ebook');
+    expect(result.rawText).toContain('第一章');
+    expect(result.rawText).toContain('章节正文');
   });
 
-  it("parses a PDF text layer", async () => {
-    const result = await parser.parse(request("pdf", { bytes: pdfWithText("Hello PDF") }));
-    expect(result.format).toBe("pdf");
-    expect(result.rawText).toContain("Hello PDF");
+  it('parses a PDF text layer', async () => {
+    const result = await parser.parse(request('pdf', { bytes: pdfWithText('Hello PDF') }));
+    expect(result.format).toBe('pdf');
+    expect(result.rawText).toContain('Hello PDF');
     expect(result.scanRequired).toBe(false);
   });
 
-  it("marks a text-less PDF as scanRequired", async () => {
-    const result = await parser.parse(request("pdf", { bytes: pdfWithoutText() }));
-    expect(result.format).toBe("pdf");
+  it('marks a text-less PDF as scanRequired', async () => {
+    const result = await parser.parse(request('pdf', { bytes: pdfWithoutText() }));
+    expect(result.format).toBe('pdf');
     expect(result.scanRequired).toBe(true);
   });
 
-  it("rejects a damaged file as 501057", async () => {
+  it('rejects a damaged file as 501057', async () => {
     const error = await parser
-      .parse(request("docx", { bytes: Buffer.from("not a zip") }))
+      .parse(request('docx', { bytes: Buffer.from('not a zip') }))
       .catch((thrown: unknown) => thrown);
     expect((error as { error: { code: number } }).error.code).toBe(501057);
   });
 
-  it("rejects an unregistered format as 501056", async () => {
+  it('rejects an unregistered format as 501056', async () => {
     const error = await parser
-      .parse(request("rtf", { bytes: Buffer.from("{\\rtf1}") }))
+      .parse(request('rtf', { bytes: Buffer.from('{\\rtf1}') }))
       .catch((thrown: unknown) => thrown);
     expect((error as { error: { code: number } }).error.code).toBe(501056);
-    expect(unsupportedFormatError("rtf", "x").error.code).toBe(501056);
+    expect(unsupportedFormatError('rtf', 'x').error.code).toBe(501056);
   });
 
-  it("is deterministic: same input yields the same content hash", async () => {
-    const bytes = Buffer.from("stable content");
-    const first = await parser.parse(request("txt", { bytes }));
-    const second = await parser.parse(request("txt", { bytes }));
+  it('is deterministic: same input yields the same content hash', async () => {
+    const bytes = Buffer.from('stable content');
+    const first = await parser.parse(request('txt', { bytes }));
+    const second = await parser.parse(request('txt', { bytes }));
     expect(first.contentHash).toBe(second.contentHash);
   });
 });

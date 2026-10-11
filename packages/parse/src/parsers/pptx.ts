@@ -2,10 +2,10 @@
  * @kb/parse PPTX 解析（设计 9.8.1）：每页一段，备注并入正文；失败 501057。
  * 以最小 zip/XML 读取实现（不引入未登记依赖），避免与来源项目 anydoc 关联。
  */
-import type { ParseHandler } from "../format-registry";
-import { parseFailedError } from "../format-registry";
-import { makeResult, normalizeRawText } from "./core";
-import { openZipEntries } from "./zip-reader";
+import type { ParseHandler } from '../format-registry';
+import { parseFailedError } from '../format-registry';
+import { makeResult, normalizeRawText } from './core';
+import { openZipEntries } from './zip-reader';
 
 const XML_TEXT_RE = /<a:t>([\s\S]*?)<\/a:t>/g;
 const SLIDE_RE = /^ppt\/slides\/slide(\d+)\.xml$/;
@@ -19,16 +19,16 @@ function xmlToText(xml: string): string {
   while ((match = XML_TEXT_RE.exec(xml)) !== null) {
     if (match[1]) parts.push(decodeXmlEntities(match[1]));
   }
-  return parts.join(" ").replace(/\s+/g, " ").trim();
+  return parts.join(' ').replace(/\s+/g, ' ').trim();
 }
 
 function decodeXmlEntities(value: string): string {
   return value
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&quot;/g, "\"")
-    .replace(/&apos;/g, "\x27")
-    .replace(/&amp;/g, "&");
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, '\x27')
+    .replace(/&amp;/g, '&');
 }
 
 function indexOf(match: RegExpExecArray | null): number {
@@ -53,17 +53,19 @@ export const parsePptx: ParseHandler = async (context) => {
         imageRefs.push(name);
       }
     }
-    if (slideText.size === 0) throw parseFailedError("pptx", "no_slides", requestId);
+    if (slideText.size === 0) throw parseFailedError('pptx', 'no_slides', requestId);
     const slideNumbers = [...slideText.keys()].sort((a, b) => a - b);
     const sections = slideNumbers.map((number) => {
-      const body = slideText.get(number) ?? "";
-      const notes = notesText.get(number) ?? "";
+      const body = slideText.get(number) ?? '';
+      const notes = notesText.get(number) ?? '';
       const hasNotes = notes.length > 0;
-      return hasNotes ? `## Slide ${number}\n\n${body}\n\n备注：${notes}` : `## Slide ${number}\n\n${body}`;
+      return hasNotes
+        ? `## Slide ${number}\n\n${body}\n\n备注：${notes}`
+        : `## Slide ${number}\n\n${body}`;
     });
-    return makeResult("pptx", normalizeRawText(sections.join("\n\n")), { imageRefs });
+    return makeResult('pptx', normalizeRawText(sections.join('\n\n')), { imageRefs });
   } catch (error) {
-    if (error instanceof Error && error.name === "ApiErrorException") throw error;
-    throw parseFailedError("pptx", "pptx_parse_failed", requestId);
+    if (error instanceof Error && error.name === 'ApiErrorException') throw error;
+    throw parseFailedError('pptx', 'pptx_parse_failed', requestId);
   }
 };

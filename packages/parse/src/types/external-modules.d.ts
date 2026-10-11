@@ -2,7 +2,7 @@
  * @kb/parse 本地类型声明：为无自带类型的已登记解析依赖提供最小契约。
  * 不新增运行时依赖，仅补齐 TypeScript 声明（papaparse/turndown/joplin-gfm/yauzl）。
  */
-declare module "papaparse" {
+declare module 'papaparse' {
   export interface ParseError {
     code?: string;
     message?: string;
@@ -14,7 +14,7 @@ declare module "papaparse" {
     errors: ParseError[];
   }
   export interface ParseConfig {
-    skipEmptyLines?: boolean | "greedy";
+    skipEmptyLines?: boolean | 'greedy';
     header?: boolean;
   }
   export function parse<T>(input: string, config?: ParseConfig): ParseResult<T>;
@@ -22,10 +22,10 @@ declare module "papaparse" {
   export default Papa;
 }
 
-declare module "turndown" {
+declare module 'turndown' {
   export interface TurndownOptions {
-    headingStyle?: "setext" | "atx";
-    codeBlockStyle?: "indented" | "fenced";
+    headingStyle?: 'setext' | 'atx';
+    codeBlockStyle?: 'indented' | 'fenced';
     bulletListMarker?: string;
   }
   export interface TurndownPlugin {
@@ -38,8 +38,8 @@ declare module "turndown" {
   }
 }
 
-declare module "joplin-turndown-plugin-gfm" {
-  import type { TurndownPlugin } from "turndown";
+declare module 'joplin-turndown-plugin-gfm' {
+  import type { TurndownPlugin } from 'turndown';
   export const gfm: TurndownPlugin;
   export const tables: TurndownPlugin;
   export const strikethrough: TurndownPlugin;
@@ -47,7 +47,7 @@ declare module "joplin-turndown-plugin-gfm" {
   export const highlightedCodeBlock: TurndownPlugin;
 }
 
-declare module "yauzl" {
+declare module 'yauzl' {
   export interface Entry {
     fileName: string;
     uncompressedSize: number;
@@ -60,9 +60,9 @@ declare module "yauzl" {
       callback: (error: Error | null, stream?: NodeJS.ReadableStream) => void,
     ): void;
     close(): void;
-    on(event: "entry", listener: (entry: Entry) => void): this;
-    on(event: "end", listener: () => void): this;
-    on(event: "error", listener: (error: Error) => void): this;
+    on(event: 'entry', listener: (entry: Entry) => void): this;
+    on(event: 'end', listener: () => void): this;
+    on(event: 'error', listener: (error: Error) => void): this;
   }
   export function fromBuffer(
     buffer: Buffer,

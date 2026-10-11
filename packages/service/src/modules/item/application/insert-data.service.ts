@@ -1,13 +1,13 @@
-import { ApiErrorException, createApiError } from "@kb/contracts";
-import type { FullTextStore, VectorController, VectorSearchHit } from "../../../ports/capabilities";
-import type { KnowledgeItemRepository } from "../../../ports/repositories";
+import { ApiErrorException, createApiError } from '@kb/contracts';
+import type { FullTextStore, VectorController, VectorSearchHit } from '../../../ports/capabilities';
+import type { KnowledgeItemRepository } from '../../../ports/repositories';
 import type {
   KnowledgeItemSnapshot,
   ObjectRef,
   PortCallOptions,
   RequestContext,
-} from "../../../ports/types";
-import { buildQaDedupKey, normalizeQaText } from "../domain/dedup-key";
+} from '../../../ports/types';
+import { buildQaDedupKey, normalizeQaText } from '../domain/dedup-key';
 
 export interface InsertDataServiceDeps {
   items: KnowledgeItemRepository;
@@ -43,7 +43,7 @@ export interface InsertDirectResult {
  * 顺序固定为「写向量 → Mongo 事务写主数据与全文 → 提交 → 事件」；不经过 Parser 或 Training Queue。
  */
 export class InsertDataService {
-  readonly pathKind = "direct-insert" as const;
+  readonly pathKind = 'direct-insert' as const;
   readonly usesParser = false;
   readonly usesTrainingQueue = false;
 
@@ -56,24 +56,35 @@ export class InsertDataService {
     return this.deps.items.bulkUpsert({ items: [input.item], options: input.options }, context);
   }
 
-  async insertDirect(input: InsertDirectInput, context: RequestContext): Promise<InsertDirectResult> {
-    const question = normalizeQaText(input.q ?? "");
+  async insertDirect(
+    input: InsertDirectInput,
+    context: RequestContext,
+  ): Promise<InsertDirectResult> {
+    const question = normalizeQaText(input.q ?? '');
     if (question.length === 0 && (input.imageId || input.imageRef)) {
       throw new ApiErrorException(
-        createApiError({ code: 501038, requestId: context.requestId, params: { route: "insertData" } }),
+        createApiError({
+          code: 501038,
+          requestId: context.requestId,
+          params: { route: 'insertData' },
+        }),
       );
     }
     if (question.length === 0) {
       throw new ApiErrorException(
-        createApiError({ code: 501058, requestId: context.requestId, params: { missingHeaders: ["q"], duplicateHeaders: [] } }),
+        createApiError({
+          code: 501058,
+          requestId: context.requestId,
+          params: { missingHeaders: ['q'], duplicateHeaders: [] },
+        }),
       );
     }
-    const answer = normalizeQaText(input.a ?? "");
+    const answer = normalizeQaText(input.a ?? '');
     const dedupKey = buildQaDedupKey(question, answer);
-    const text = answer.length > 0 ? question + "\n" + answer : question;
-    const indexType = input.indexType ?? "qa";
-    const indexId = input.dataId + ":" + indexType;
-    const indexVersion = "1";
+    const text = answer.length > 0 ? question + '\n' + answer : question;
+    const indexType = input.indexType ?? 'qa';
+    const indexId = input.dataId + ':' + indexType;
+    const indexVersion = '1';
     const now = new Date().toISOString();
     const item: KnowledgeItemSnapshot = {
       dataId: input.dataId,
@@ -110,7 +121,10 @@ export class InsertDataService {
     const run = <T>(work: () => Promise<T>): Promise<T> =>
       this.deps.withTransaction ? this.deps.withTransaction(work) : work();
     const upsert = await run(async () => {
-      const result = await this.deps.items.bulkUpsert({ items: [item], options: input.options }, context);
+      const result = await this.deps.items.bulkUpsert(
+        { items: [item], options: input.options },
+        context,
+      );
       await this.deps.fullText.write(
         {
           datasetId: input.datasetId,
@@ -124,8 +138,17 @@ export class InsertDataService {
       return result;
     });
 
-    this.deps.emit?.({ type: "data.inserted", dataId: input.dataId, teamId: context.tenant.teamId });
-    return { dataId: input.dataId, inserted: upsert.upserted, duplicates: upsert.duplicates, dedupKey };
+    this.deps.emit?.({
+      type: 'data.inserted',
+      dataId: input.dataId,
+      teamId: context.tenant.teamId,
+    });
+    return {
+      dataId: input.dataId,
+      inserted: upsert.upserted,
+      duplicates: upsert.duplicates,
+      dedupKey,
+    };
   }
 
   writeProjection(

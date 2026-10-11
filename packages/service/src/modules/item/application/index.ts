@@ -41,5 +41,5 @@ export class KnowledgeItemApplicationService {
   }
 }
 
-export { ImageApplicationService, normalizeImageMode } from "./image.service";
-export type { CreateImageInput, ImageApplicationServiceDeps, ImageMode } from "./image.service";
+export { ImageApplicationService, normalizeImageMode } from './image.service';
+export type { CreateImageInput, ImageApplicationServiceDeps, ImageMode } from './image.service';

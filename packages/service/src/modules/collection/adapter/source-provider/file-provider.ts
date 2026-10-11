@@ -4,15 +4,15 @@
  * 解析器由调用方注入（workspace 依赖假设 A1：@kb/service 未声明 @kb/parse，故不在本包内新建依赖）。
  * 未声明依赖段；无扩展名返回 501035。
  */
-import type { DocumentParseContext, ParseResult } from "@kb/parse";
+import type { DocumentParseContext, ParseResult } from '@kb/parse';
 import type {
   DatasetSourceProvider,
   ObjectStorePort,
   SourceReadRequest,
   SourceReadResult,
-} from "../../../../ports/capabilities";
-import type { ObjectRef, RequestContext } from "../../../../ports/types";
-import { sourceError } from "./shared";
+} from '../../../../ports/capabilities';
+import type { ObjectRef, RequestContext } from '../../../../ports/types';
+import { sourceError } from './shared';
 
 export interface FileParserLike {
   parse(request: DocumentParseContext): Promise<ParseResult>;
@@ -28,21 +28,27 @@ const UNSUPPORTED_CONTENT = 501035;
 const PARSE_FAILED = 501057;
 
 function extensionOf(sourceRef: string): string {
-  const clean = sourceRef.split("?")[0] ?? sourceRef;
-  const dot = clean.lastIndexOf(".");
-  return dot >= 0 ? clean.slice(dot + 1).toLowerCase() : "";
+  const clean = sourceRef.split('?')[0] ?? sourceRef;
+  const dot = clean.lastIndexOf('.');
+  return dot >= 0 ? clean.slice(dot + 1).toLowerCase() : '';
 }
 
 export function createFileSourceProvider(deps: FileSourceProviderDeps): DatasetSourceProvider {
-  const read = async (request: SourceReadRequest, context: RequestContext): Promise<SourceReadResult> => {
+  const read = async (
+    request: SourceReadRequest,
+    context: RequestContext,
+  ): Promise<SourceReadResult> => {
     const ref: ObjectRef = {
-      bucket: deps.resolveBucket ? deps.resolveBucket(request) : "kb-source",
+      bucket: deps.resolveBucket ? deps.resolveBucket(request) : 'kb-source',
       key: request.sourceRef,
     };
     const stored = await deps.objectStore.get({ ref, options: request.options }, context);
     const extension = extensionOf(request.sourceRef);
     if (extension.length === 0) {
-      throw sourceError(UNSUPPORTED_CONTENT, context.requestId, { contentType: "unknown", urlHash: "" });
+      throw sourceError(UNSUPPORTED_CONTENT, context.requestId, {
+        contentType: 'unknown',
+        urlHash: '',
+      });
     }
     const parseContext: DocumentParseContext = {
       teamId: context.tenant.teamId,
@@ -54,10 +60,17 @@ export function createFileSourceProvider(deps: FileSourceProviderDeps): DatasetS
     };
     try {
       const parsed = await deps.parser.parse(parseContext);
-      return { rawText: parsed.rawText, contentHash: parsed.contentHash, fileRef: request.sourceRef };
+      return {
+        rawText: parsed.rawText,
+        contentHash: parsed.contentHash,
+        fileRef: request.sourceRef,
+      };
     } catch (error) {
-      if (error instanceof Error && error.name === "ApiErrorException") throw error;
-      throw sourceError(PARSE_FAILED, context.requestId, { extension, reason: "file_parse_failed" });
+      if (error instanceof Error && error.name === 'ApiErrorException') throw error;
+      throw sourceError(PARSE_FAILED, context.requestId, {
+        extension,
+        reason: 'file_parse_failed',
+      });
     }
   };
 

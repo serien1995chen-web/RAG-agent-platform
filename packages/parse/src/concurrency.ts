@@ -19,7 +19,7 @@ export interface ConcurrencyLimiterOptions {
 export class ConcurrencyLimiterError extends Error {
   constructor(message: string) {
     super(message);
-    this.name = "ConcurrencyLimiterError";
+    this.name = 'ConcurrencyLimiterError';
   }
 }
 

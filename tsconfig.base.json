@@ -17,6 +17,7 @@
     "declaration": true,
     "sourceMap": true,
     "noEmit": true,
+    "typeRoots": ["./types", "./node_modules/@types"],
     "paths": {
       "@kb/contracts": ["./packages/contracts/src/index.ts"],
       "@kb/service": ["./packages/service/src/index.ts"],

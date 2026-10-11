@@ -1,7 +1,7 @@
-import { ApiErrorException, createApiError } from "@kb/contracts";
-import type { TaskEnvelope, TaskResult, TrainingProcessorPort } from "../../../ports/capabilities";
-import type { ProcessingJobRepository } from "../../../ports/repositories";
-import type { PortCallOptions, ProcessingJobSnapshot, RequestContext } from "../../../ports/types";
+import { ApiErrorException, createApiError } from '@kb/contracts';
+import type { TaskEnvelope, TaskResult, TrainingProcessorPort } from '../../../ports/capabilities';
+import type { ProcessingJobRepository } from '../../../ports/repositories';
+import type { PortCallOptions, ProcessingJobSnapshot, RequestContext } from '../../../ports/types';
 
 export interface PushDataServiceDeps {
   jobs: ProcessingJobRepository;
@@ -30,7 +30,7 @@ export interface PushBatchResult {
  * 重复 push 按业务键（jobId）去重，不重复创建 Data/Training；不得伪装成直接插入。
  */
 export class PushDataService {
-  readonly pathKind = "queue-push" as const;
+  readonly pathKind = 'queue-push' as const;
   readonly usesParser = false;
   readonly usesTrainingQueue = true;
 
@@ -45,7 +45,7 @@ export class PushDataService {
 
   enqueueJob(
     input: {
-      job: Omit<ProcessingJobSnapshot, "taskId" | "retryCount" | "lockTime">;
+      job: Omit<ProcessingJobSnapshot, 'taskId' | 'retryCount' | 'lockTime'>;
       options: PortCallOptions;
     },
     context: RequestContext,
@@ -62,17 +62,17 @@ export class PushDataService {
         createApiError({
           code: 501052,
           requestId: context.requestId,
-          params: { limit: this.maxItems, actual: input.items.length, batch: "pushData" },
+          params: { limit: this.maxItems, actual: input.items.length, batch: 'pushData' },
         }),
       );
     }
-    const bytes = Buffer.byteLength(JSON.stringify(input.items), "utf8");
+    const bytes = Buffer.byteLength(JSON.stringify(input.items), 'utf8');
     if (bytes > this.maxBytes) {
       throw new ApiErrorException(
         createApiError({
           code: 501065,
           requestId: context.requestId,
-          params: { limitBytes: this.maxBytes, actualBytes: bytes, urlHash: "" },
+          params: { limitBytes: this.maxBytes, actualBytes: bytes, urlHash: '' },
         }),
       );
     }
@@ -86,7 +86,7 @@ export class PushDataService {
         continue;
       }
       seen.add(item.jobId);
-      const job: Omit<ProcessingJobSnapshot, "taskId" | "retryCount" | "lockTime"> = {
+      const job: Omit<ProcessingJobSnapshot, 'taskId' | 'retryCount' | 'lockTime'> = {
         jobId: item.jobId,
         teamId: context.tenant.teamId,
         datasetId: input.datasetId,

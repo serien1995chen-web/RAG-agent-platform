@@ -1,13 +1,13 @@
-import { Types, type Connection, type Model } from "mongoose";
+import { Types, type Connection, type Model } from 'mongoose';
 import {
   ImageAssetSchema,
   S3TtlRecordSchema,
   type ImageAssetDoc,
   type S3TtlRecordDoc,
-} from "../../../shared/persistence/schemas";
-import type { RequestContext } from "../../../ports/types";
+} from '../../../shared/persistence/schemas';
+import type { RequestContext } from '../../../ports/types';
 
-export type ImageAssetState = "temporary" | "referenced" | "deleting" | "deleted" | "failed";
+export type ImageAssetState = 'temporary' | 'referenced' | 'deleting' | 'deleted' | 'failed';
 
 export interface ImageAssetRecord {
   imageId: string;
@@ -38,8 +38,8 @@ export const DEFAULT_IMAGE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
 function toOid(value: string, field: string, context: RequestContext): Types.ObjectId {
   if (!Types.ObjectId.isValid(value)) {
-    const error = new Error("invalid_object_id:" + field) as Error & { code?: string };
-    error.code = "501070";
+    const error = new Error('invalid_object_id:' + field) as Error & { code?: string };
+    error.code = '501070';
     void context;
     throw error;
   }
@@ -69,16 +69,21 @@ export class MongoImageAssetRepository {
   constructor(private readonly connection: Connection) {
     this.imageModel =
       (connection.models.ImageAsset as Model<ImageAssetDoc>) ??
-      connection.model<ImageAssetDoc>("ImageAsset", ImageAssetSchema);
+      connection.model<ImageAssetDoc>('ImageAsset', ImageAssetSchema);
     this.ttlModel =
       (connection.models.S3TtlRecord as Model<S3TtlRecordDoc>) ??
-      connection.model<S3TtlRecordDoc>("S3TtlRecord", S3TtlRecordSchema);
+      connection.model<S3TtlRecordDoc>('S3TtlRecord', S3TtlRecordSchema);
   }
 
-  async createTemporary(input: CreateTemporaryInput, context: RequestContext): Promise<ImageAssetRecord> {
-    const teamId = toOid(context.tenant.teamId, "teamId", context);
-    const datasetId = toOid(input.datasetId, "datasetId", context);
-    const collectionId = input.collectionId ? toOid(input.collectionId, "collectionId", context) : null;
+  async createTemporary(
+    input: CreateTemporaryInput,
+    context: RequestContext,
+  ): Promise<ImageAssetRecord> {
+    const teamId = toOid(context.tenant.teamId, 'teamId', context);
+    const datasetId = toOid(input.datasetId, 'datasetId', context);
+    const collectionId = input.collectionId
+      ? toOid(input.collectionId, 'collectionId', context)
+      : null;
     const now = new Date();
     const ttlMs = input.ttlMs ?? DEFAULT_IMAGE_TTL_MS;
     const ttlExpireAt = new Date(now.getTime() + ttlMs);
@@ -95,7 +100,7 @@ export class MongoImageAssetRepository {
           size: input.size,
           ttlExpireAt,
           persistent: false,
-          state: "temporary",
+          state: 'temporary',
           createTime: now,
         },
         $set: { updateTime: now },
@@ -116,7 +121,7 @@ export class MongoImageAssetRepository {
   }
 
   async findById(imageId: string, context: RequestContext): Promise<ImageAssetRecord | null> {
-    const teamId = toOid(context.tenant.teamId, "teamId", context);
+    const teamId = toOid(context.tenant.teamId, 'teamId', context);
     const doc = await this.imageModel.findOne({ teamId, imageId }).lean<ImageAssetDoc | null>();
     return doc ? toRecord(doc) : null;
   }
@@ -126,14 +131,14 @@ export class MongoImageAssetRepository {
     collectionId: string,
     context: RequestContext,
   ): Promise<ImageAssetRecord | null> {
-    const teamId = toOid(context.tenant.teamId, "teamId", context);
-    const collection = toOid(collectionId, "collectionId", context);
+    const teamId = toOid(context.tenant.teamId, 'teamId', context);
+    const collection = toOid(collectionId, 'collectionId', context);
     const doc = await this.imageModel
       .findOneAndUpdate(
         { teamId, imageId },
         {
           $set: {
-            state: "referenced",
+            state: 'referenced',
             persistent: true,
             ttlExpireAt: null,
             collectionId: collection,
@@ -149,19 +154,21 @@ export class MongoImageAssetRepository {
   }
 
   async markFailed(imageId: string, reason: string, context: RequestContext): Promise<void> {
-    const teamId = toOid(context.tenant.teamId, "teamId", context);
+    const teamId = toOid(context.tenant.teamId, 'teamId', context);
     await this.imageModel.updateOne(
       { teamId, imageId },
-      { $set: { state: "failed", updateTime: new Date(), errorMsg: reason } },
+      { $set: { state: 'failed', updateTime: new Date(), errorMsg: reason } },
     );
   }
 
   async purge(imageId: string, context: RequestContext): Promise<{ deleted: boolean }> {
-    const teamId = toOid(context.tenant.teamId, "teamId", context);
+    const teamId = toOid(context.tenant.teamId, 'teamId', context);
     const doc = await this.imageModel
       .findOneAndUpdate(
         { teamId, imageId },
-        { $set: { state: "deleted", persistent: false, ttlExpireAt: null, updateTime: new Date() } },
+        {
+          $set: { state: 'deleted', persistent: false, ttlExpireAt: null, updateTime: new Date() },
+        },
         { new: true },
       )
       .lean<ImageAssetDoc | null>();
@@ -182,7 +189,7 @@ export class MongoImageAssetRepository {
     },
     context: RequestContext,
   ): Promise<void> {
-    const teamId = toOid(context.tenant.teamId, "teamId", context);
+    const teamId = toOid(context.tenant.teamId, 'teamId', context);
     const now = new Date();
     await this.ttlModel.updateOne(
       { bucketName: input.bucketName, objectKey: input.objectKey },
@@ -192,7 +199,7 @@ export class MongoImageAssetRepository {
           bucketName: input.bucketName,
           objectKey: input.objectKey,
           resourceRef: {
-            resourceType: input.resourceType ?? "image",
+            resourceType: input.resourceType ?? 'image',
             resourceId: input.resourceId ?? input.objectKey,
             version: 1,
           },
@@ -200,7 +207,7 @@ export class MongoImageAssetRepository {
         },
         $set: {
           expireAt: input.expireAt,
-          state: "pending",
+          state: 'pending',
           attempt: 0,
           nextAttemptAt: input.expireAt,
           operationId: input.operationId,
@@ -211,13 +218,18 @@ export class MongoImageAssetRepository {
     );
   }
 
-  async deleteTtl(input: { objectKey: string }, context: RequestContext): Promise<{ deleted: number }> {
-    const teamId = toOid(context.tenant.teamId, "teamId", context);
+  async deleteTtl(
+    input: { objectKey: string },
+    context: RequestContext,
+  ): Promise<{ deleted: number }> {
+    const teamId = toOid(context.tenant.teamId, 'teamId', context);
     const result = await this.ttlModel.deleteOne({ teamId, objectKey: input.objectKey });
     return { deleted: result.deletedCount ?? 0 };
   }
 }
 
-export function createImageAssetRepository(connection?: Connection): MongoImageAssetRepository | null {
+export function createImageAssetRepository(
+  connection?: Connection,
+): MongoImageAssetRepository | null {
   return connection ? new MongoImageAssetRepository(connection) : null;
 }

@@ -15,5 +15,5 @@ export {
   createLinkSourceProvider,
   createApiDatasetSourceProvider,
   createExternalSourceProvider,
-} from "./source-provider/index";
-export type { SourceProviderType, SourceProviderRegistryDeps } from "./source-provider/index";
+} from './source-provider/index';
+export type { SourceProviderType, SourceProviderRegistryDeps } from './source-provider/index';

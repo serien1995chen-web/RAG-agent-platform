@@ -1,4 +1,3 @@
-
 /**
  * P4-06 图片上传、TTL 与 image/imageParse 生产端（设计文档 9.7 / 10.9 / BR-WRITE-004/005）。
  * 上传 -> 7 天 TTL -> image/imageParse Task -> imageDescMap/imageEmbedding -> Data/Index -> 移除 TTL。
@@ -9,11 +8,11 @@ import type {
   ImageTrainingProcessorPort,
   TaskResult,
   VectorController,
-} from "../../../ports/capabilities";
-import type { KnowledgeItemRepository } from "../../../ports/repositories";
-import type { KnowledgeItemSnapshot, PortCallOptions, RequestContext } from "../../../ports/types";
+} from '../../../ports/capabilities';
+import type { KnowledgeItemRepository } from '../../../ports/repositories';
+import type { KnowledgeItemSnapshot, PortCallOptions, RequestContext } from '../../../ports/types';
 
-export type ImageMode = "image" | "imageParse";
+export type ImageMode = 'image' | 'imageParse';
 
 export interface ImageAssetRecord {
   imageId: string;
@@ -25,23 +24,30 @@ export interface ImageAssetRecord {
   size: number;
   ttlExpireAt: Date | null;
   persistent: boolean;
-  state: "temporary" | "referenced" | "deleting" | "deleted" | "failed";
+  state: 'temporary' | 'referenced' | 'deleting' | 'deleted' | 'failed';
 }
 
 export interface ImageApplicationServiceDeps {
   assets: {
-    createTemporary(input: {
-      imageId: string;
-      datasetId: string;
-      collectionId?: string | null;
-      objectKey: string;
-      bucketName: string;
-      mimeType: string;
-      size: number;
-      operationId: string;
-    }, context: RequestContext): Promise<ImageAssetRecord>;
+    createTemporary(
+      input: {
+        imageId: string;
+        datasetId: string;
+        collectionId?: string | null;
+        objectKey: string;
+        bucketName: string;
+        mimeType: string;
+        size: number;
+        operationId: string;
+      },
+      context: RequestContext,
+    ): Promise<ImageAssetRecord>;
     findById(imageId: string, context: RequestContext): Promise<ImageAssetRecord | null>;
-    promoteToReferenced(imageId: string, collectionId: string, context: RequestContext): Promise<ImageAssetRecord | null>;
+    promoteToReferenced(
+      imageId: string,
+      collectionId: string,
+      context: RequestContext,
+    ): Promise<ImageAssetRecord | null>;
     markFailed(imageId: string, reason: string, context: RequestContext): Promise<void>;
   };
   items: KnowledgeItemRepository;
@@ -68,8 +74,11 @@ export interface CreateImageInput {
 let operationSeq = 0;
 
 /** BR-WRITE-005：auto 在输入预处理层改写为 chunk + autoIndexes=true，绝不持久化 mode=auto。 */
-export function normalizeImageMode(mode: ImageMode | "auto"): { mode: "image" | "imageParse" | "chunk"; autoIndexes: boolean } {
-  if (mode === "auto") return { mode: "chunk", autoIndexes: true };
+export function normalizeImageMode(mode: ImageMode | 'auto'): {
+  mode: 'image' | 'imageParse' | 'chunk';
+  autoIndexes: boolean;
+} {
+  if (mode === 'auto') return { mode: 'chunk', autoIndexes: true };
   return { mode, autoIndexes: false };
 }
 
@@ -86,7 +95,7 @@ export class ImageApplicationService {
         bucketName: input.bucketName,
         mimeType: input.mimeType,
         size: input.size,
-        operationId: "image-op-" + String((operationSeq += 1)),
+        operationId: 'image-op-' + String((operationSeq += 1)),
       },
       context,
     );
@@ -104,12 +113,20 @@ export class ImageApplicationService {
         { bucket: input.bucketName, key: input.objectKey },
         context,
       );
-      if (processed.state !== "success") {
-        await this.deps.assets.markFailed(input.imageId, processed.errorMsg ?? "image_failed", context);
-        return { state: "failed", producedItems: 0, errorMsg: processed.errorMsg ?? "image_failed" };
+      if (processed.state !== 'success') {
+        await this.deps.assets.markFailed(
+          input.imageId,
+          processed.errorMsg ?? 'image_failed',
+          context,
+        );
+        return {
+          state: 'failed',
+          producedItems: 0,
+          errorMsg: processed.errorMsg ?? 'image_failed',
+        };
       }
       const now = new Date().toISOString();
-      const text = processed.description ?? "";
+      const text = processed.description ?? '';
       const item: KnowledgeItemSnapshot = {
         dataId: input.dataId,
         teamId: context.tenant.teamId,
@@ -117,7 +134,7 @@ export class ImageApplicationService {
         collectionId: input.collectionId,
         imageId: input.imageId,
         q: text,
-        indexes: [{ indexId: input.dataId + ":image", type: "image", dataId: input.dataId, text }],
+        indexes: [{ indexId: input.dataId + ':image', type: 'image', dataId: input.dataId, text }],
         rebuilding: false,
         version: 1,
         createTime: now,
@@ -132,8 +149,8 @@ export class ImageApplicationService {
                 teamId: context.tenant.teamId,
                 datasetId: input.datasetId,
                 collectionId: input.collectionId,
-                indexId: input.dataId + ":image",
-                indexVersion: "1",
+                indexId: input.dataId + ':image',
+                indexVersion: '1',
                 vector: input.vector,
               },
             ],
@@ -144,18 +161,28 @@ export class ImageApplicationService {
       }
       await this.deps.items.bulkUpsert({ items: [item], options: input.options }, context);
       await this.deps.fullText.write(
-        { datasetId: input.datasetId, collectionId: input.collectionId, dataId: input.dataId, text, options: input.options },
+        {
+          datasetId: input.datasetId,
+          collectionId: input.collectionId,
+          dataId: input.dataId,
+          text,
+          options: input.options,
+        },
         context,
       );
       await this.deps.assets.promoteToReferenced(input.imageId, input.collectionId, context);
-      this.deps.emit?.({ type: "image.referenced", dataId: input.dataId, teamId: context.tenant.teamId });
-      return { state: "success", producedItems: 1 };
+      this.deps.emit?.({
+        type: 'image.referenced',
+        dataId: input.dataId,
+        teamId: context.tenant.teamId,
+      });
+      return { state: 'success', producedItems: 1 };
     } catch (error) {
-      await this.deps.assets.markFailed(input.imageId, "image_pipeline_failed", context);
+      await this.deps.assets.markFailed(input.imageId, 'image_pipeline_failed', context);
       return {
-        state: "failed",
+        state: 'failed',
         producedItems: 0,
-        errorMsg: error instanceof Error ? error.message : "image_pipeline_failed",
+        errorMsg: error instanceof Error ? error.message : 'image_pipeline_failed',
       };
     }
   }

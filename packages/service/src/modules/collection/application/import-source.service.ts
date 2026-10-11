@@ -4,9 +4,9 @@ import type {
   TaskEnvelope,
   TaskResult,
   TrainingProcessorPort,
-} from "../../../ports/capabilities";
-import type { CollectionRepository } from "../../../ports/repositories";
-import type { CollectionSnapshot, PortCallOptions, RequestContext } from "../../../ports/types";
+} from '../../../ports/capabilities';
+import type { CollectionRepository } from '../../../ports/repositories';
+import type { CollectionSnapshot, PortCallOptions, RequestContext } from '../../../ports/types';
 
 export interface ImportSourceServiceDeps {
   collections: CollectionRepository;
@@ -19,7 +19,7 @@ export interface ImportSourceServiceDeps {
 }
 
 export interface CreateFromSourceInput {
-  collection: Omit<CollectionSnapshot, "collectionId" | "version" | "createTime" | "updateTime">;
+  collection: Omit<CollectionSnapshot, 'collectionId' | 'version' | 'createTime' | 'updateTime'>;
   sourceType: string;
   sourceRef: string;
   options: PortCallOptions;
@@ -29,7 +29,7 @@ export interface CreateFromSourceResult {
   collectionId: string;
   insertLen: number;
   remainingTraining: number;
-  status: "ready";
+  status: 'ready';
   taskId?: string;
 }
 
@@ -39,7 +39,7 @@ export interface CreateFromSourceResult {
  * 空文本/纯空白/过滤后无内容：创建 Collection 且 insertLen=0、remainingTraining=0、ready，不创建 Task/Data。
  */
 export class ImportSourceService {
-  readonly pathKind = "source-import" as const;
+  readonly pathKind = 'source-import' as const;
   readonly usesParser = true;
   readonly usesTrainingQueue = true;
 
@@ -74,7 +74,10 @@ export class ImportSourceService {
 
   async createCollection(
     input: {
-      collection: Omit<CollectionSnapshot, "collectionId" | "version" | "createTime" | "updateTime">;
+      collection: Omit<
+        CollectionSnapshot,
+        'collectionId' | 'version' | 'createTime' | 'updateTime'
+      >;
       options: PortCallOptions;
     },
     context: RequestContext,
@@ -106,14 +109,19 @@ export class ImportSourceService {
     const rawText = this.rawTextOf(read, context);
     if (rawText.trim().length === 0) {
       // 空导入：无 Task/Data，Collection ready（BR-WRITE-007）。
-      return { collectionId: collection.collectionId, insertLen: 0, remainingTraining: 0, status: "ready" };
+      return {
+        collectionId: collection.collectionId,
+        insertLen: 0,
+        remainingTraining: 0,
+        status: 'ready',
+      };
     }
     const task: TaskEnvelope = {
-      taskId: collection.collectionId + ":parse",
+      taskId: collection.collectionId + ':parse',
       teamId: context.tenant.teamId,
       datasetId: input.collection.datasetId,
       collectionId: collection.collectionId,
-      mode: "parse",
+      mode: 'parse',
       payload: { sourceType: input.sourceType, contentHash: read.contentHash },
     };
     if (this.deps.enqueue) {
@@ -122,7 +130,7 @@ export class ImportSourceService {
         collectionId: collection.collectionId,
         insertLen: 0,
         remainingTraining: 1,
-        status: "ready",
+        status: 'ready',
         taskId: queued.taskId,
       };
     }
@@ -131,7 +139,7 @@ export class ImportSourceService {
       collectionId: collection.collectionId,
       insertLen: 0,
       remainingTraining: 1,
-      status: "ready",
+      status: 'ready',
       taskId: task.taskId,
     };
   }
@@ -142,6 +150,6 @@ export class ImportSourceService {
 
   private rawTextOf(read: SourceReadResult, context: RequestContext): string {
     if (this.deps.resolveRawText) return this.deps.resolveRawText(read, context);
-    return read.rawText ?? "";
+    return read.rawText ?? '';
   }
 }

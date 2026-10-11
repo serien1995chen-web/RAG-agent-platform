@@ -1,9 +1,9 @@
 /**
  * @kb/chunk 长度计数：token 模式使用与模型一致的 gpt-tokenizer，char 模式按 Unicode code point。
  */
-import { decode, encode } from "gpt-tokenizer";
+import { decode, encode } from 'gpt-tokenizer';
 
-export type LengthUnit = "char" | "token";
+export type LengthUnit = 'char' | 'token';
 
 export interface Counter {
   /** 文本长度（按当前单位）。 */
@@ -22,16 +22,16 @@ function countTokens(text: string): number {
 }
 
 export function createCounter(unit: LengthUnit): Counter {
-  if (unit === "char") {
+  if (unit === 'char') {
     return {
       length: countCodePoints,
-      tail: (text, limit) => (limit <= 0 ? "" : [...text].slice(-limit).join("")),
+      tail: (text, limit) => (limit <= 0 ? '' : [...text].slice(-limit).join('')),
     };
   }
   return {
     length: countTokens,
     tail: (text, limit) => {
-      if (limit <= 0 || text.length === 0) return "";
+      if (limit <= 0 || text.length === 0) return '';
       const tokens = encode(text);
       return decode(tokens.slice(-limit));
     },

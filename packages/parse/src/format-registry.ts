@@ -3,16 +3,25 @@
  * 以 PARSE_FORMAT_MATRIX 为唯一权威，建立「扩展名/MIME → 解析器实现」映射；
  * 未登记格式返回 501056，解析失败返回 501057，不得静默降级为纯文本。
  */
-import { ApiErrorException, createApiError } from "@kb/contracts";
+import { ApiErrorException, createApiError } from '@kb/contracts';
 import {
   PARSE_FORMAT_MATRIX,
   resolveParseFormat,
   type ParseFormatSpec,
   type ParseRequest,
   type ParseResult,
-} from "./types";
+} from './types';
 
-export type ParseFormat = "text" | "markdown" | "html" | "pdf" | "docx" | "pptx" | "xlsx" | "csv" | "ebook";
+export type ParseFormat =
+  | 'text'
+  | 'markdown'
+  | 'html'
+  | 'pdf'
+  | 'docx'
+  | 'pptx'
+  | 'xlsx'
+  | 'csv'
+  | 'ebook';
 
 export interface ParseHandlerContext {
   request: ParseRequest;
@@ -37,26 +46,26 @@ export interface ParseFormatRegistration {
 }
 
 const MIME_BY_FORMAT: Record<ParseFormat, readonly string[]> = {
-  text: ["text/plain"],
-  markdown: ["text/markdown", "text/x-markdown"],
-  html: ["text/html", "application/xhtml+xml"],
-  pdf: ["application/pdf"],
-  docx: ["application/vnd.openxmlformats-officedocument.wordprocessingml.document"],
-  pptx: ["application/vnd.openxmlformats-officedocument.presentationml.presentation"],
-  xlsx: ["application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"],
-  csv: ["text/csv", "application/csv"],
-  ebook: ["application/epub+zip"],
+  text: ['text/plain'],
+  markdown: ['text/markdown', 'text/x-markdown'],
+  html: ['text/html', 'application/xhtml+xml'],
+  pdf: ['application/pdf'],
+  docx: ['application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
+  pptx: ['application/vnd.openxmlformats-officedocument.presentationml.presentation'],
+  xlsx: ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'],
+  csv: ['text/csv', 'application/csv'],
+  ebook: ['application/epub+zip'],
 };
 
 /** 归一化扩展名：去前导点、小写。 */
 export function normalizeExtension(extension: string): string {
-  return extension.replace(/^\./, "").trim().toLowerCase();
+  return extension.replace(/^\./, '').trim().toLowerCase();
 }
 
 /** 归一化 MIME：去 parameters（; charset=...）并小写。 */
 export function normalizeMimeType(mimeType: string | undefined): string | undefined {
   if (!mimeType) return undefined;
-  const base = mimeType.split(";")[0];
+  const base = mimeType.split(';')[0];
   return base ? base.trim().toLowerCase() : undefined;
 }
 
@@ -72,7 +81,11 @@ export function unsupportedFormatError(extension: string, requestId: string): Ap
   return parseError(501056, requestId, { extension: normalizeExtension(extension) || extension });
 }
 
-export function parseFailedError(extension: string, reason: string, requestId: string): ApiErrorException {
+export function parseFailedError(
+  extension: string,
+  reason: string,
+  requestId: string,
+): ApiErrorException {
   return parseError(501057, requestId, { extension: normalizeExtension(extension), reason });
 }
 
@@ -85,10 +98,10 @@ export class ParseFormatRegistry {
   register(format: ParseFormat, handler: ParseHandler): void {
     const spec = PARSE_FORMAT_MATRIX.find((item) => item.format === format);
     if (!spec) {
-      throw parseError(501056, format, { extension: format, reason: "format_not_in_matrix" });
+      throw parseError(501056, format, { extension: format, reason: 'format_not_in_matrix' });
     }
     if (this.byFormat.has(format)) {
-      throw parseError(501056, format, { extension: format, reason: "format_already_registered" });
+      throw parseError(501056, format, { extension: format, reason: 'format_already_registered' });
     }
     this.byFormat.set(format, { spec, handler });
     for (const extension of spec.extensions) {

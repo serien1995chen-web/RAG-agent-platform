@@ -2,28 +2,28 @@
  * @kb/parse — 文档解析与 9 种格式矩阵（CR-FEATURE-04，设计文档 9.8.1）。
  * 未注册格式返回 501056；备选解析器通过 DocumentParserPort 扩展，禁止引入来源项目 anydoc SDK。
  */
-import type { objectStoreLike, ParseHandlerContext } from "./format-registry";
-import { parseFailedError, unsupportedFormatError } from "./format-registry";
-import type { ParseFormatRegistry } from "./format-registry";
-import { createParserRegistry } from "./parsers/index";
-import type { DocumentParserPort, ParseRequest, ParseResult } from "./types";
+import type { objectStoreLike, ParseHandlerContext } from './format-registry';
+import { parseFailedError, unsupportedFormatError } from './format-registry';
+import type { ParseFormatRegistry } from './format-registry';
+import { createParserRegistry } from './parsers/index';
+import type { DocumentParserPort, ParseRequest, ParseResult } from './types';
 
-export const PACKAGE_NAME = "@kb/parse" as const;
+export const PACKAGE_NAME = '@kb/parse' as const;
 
-export { contentHashOf, PARSE_FORMAT_MATRIX, resolveParseFormat } from "./types";
-export type { DocumentParserPort, ParseFormatSpec, ParseRequest, ParseResult } from "./types";
+export { contentHashOf, PARSE_FORMAT_MATRIX, resolveParseFormat } from './types';
+export type { DocumentParserPort, ParseFormatSpec, ParseRequest, ParseResult } from './types';
 
-export { createParserRegistry } from "./parsers/index";
-export { ParseFormatRegistry, normalizeExtension, normalizeMimeType } from "./format-registry";
+export { createParserRegistry } from './parsers/index';
+export { ParseFormatRegistry, normalizeExtension, normalizeMimeType } from './format-registry';
 export type {
   ParseFormat,
   ParseFormatRegistration,
   ParseHandler,
   ParseHandlerContext,
   objectStoreLike,
-} from "./format-registry";
-export { ConcurrencyLimiterError, createLimiter, mapWithConcurrency } from "./concurrency";
-export type { ConcurrencyLimiter, ConcurrencyLimiterOptions } from "./concurrency";
+} from './format-registry';
+export { ConcurrencyLimiterError, createLimiter, mapWithConcurrency } from './concurrency';
+export type { ConcurrencyLimiter, ConcurrencyLimiterOptions } from './concurrency';
 
 /**
  * 解析所需上下文：兼容既有 DocumentParserPort.parse(request) 调用面。
@@ -64,7 +64,8 @@ export function createDefaultDocumentParser(): DocumentParserPort {
         throw unsupportedFormatError(request.extension, request.fileRef);
       }
       const context = toHandlerContext(request);
-      if (!context) throw parseFailedError(request.extension, "parse_bytes_missing", request.fileRef);
+      if (!context)
+        throw parseFailedError(request.extension, 'parse_bytes_missing', request.fileRef);
       return registration.handler(context);
     },
   };

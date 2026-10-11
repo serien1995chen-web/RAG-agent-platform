@@ -8,24 +8,24 @@ import type {
   PdfEnhanceProviderPort,
   SourceReadRequest,
   SourceReadResult,
-} from "../../../../ports/capabilities";
-import type { RequestContext } from "../../../../ports/types";
-import { createApiDatasetSourceProvider, type ApiDatasetHttpClient } from "./api-dataset-provider";
-import { createExternalSourceProvider } from "./external-provider";
-import { createFileSourceProvider, type FileParserLike } from "./file-provider";
-import { createLinkSourceProvider, type LinkLimits, type LinkFetcher } from "./link-provider";
-import { sourceError } from "./shared";
-import { createTextSourceProvider } from "./text-provider";
+} from '../../../../ports/capabilities';
+import type { RequestContext } from '../../../../ports/types';
+import { createApiDatasetSourceProvider, type ApiDatasetHttpClient } from './api-dataset-provider';
+import { createExternalSourceProvider } from './external-provider';
+import { createFileSourceProvider, type FileParserLike } from './file-provider';
+import { createLinkSourceProvider, type LinkLimits, type LinkFetcher } from './link-provider';
+import { sourceError } from './shared';
+import { createTextSourceProvider } from './text-provider';
 
-export { createTextSourceProvider } from "./text-provider";
-export { createFileSourceProvider } from "./file-provider";
-export type { FileParserLike, FileSourceProviderDeps } from "./file-provider";
-export { createLinkSourceProvider, DEFAULT_LINK_LIMITS, isBlockedAddress } from "./link-provider";
-export { createApiDatasetSourceProvider } from "./api-dataset-provider";
-export { createExternalSourceProvider } from "./external-provider";
-export { hashSourceText, hashUrl } from "./shared";
+export { createTextSourceProvider } from './text-provider';
+export { createFileSourceProvider } from './file-provider';
+export type { FileParserLike, FileSourceProviderDeps } from './file-provider';
+export { createLinkSourceProvider, DEFAULT_LINK_LIMITS, isBlockedAddress } from './link-provider';
+export { createApiDatasetSourceProvider } from './api-dataset-provider';
+export { createExternalSourceProvider } from './external-provider';
+export { hashSourceText, hashUrl } from './shared';
 
-export const SOURCE_PROVIDER_TYPES = ["file", "link", "text", "apiFile", "externalFile"] as const;
+export const SOURCE_PROVIDER_TYPES = ['file', 'link', 'text', 'apiFile', 'externalFile'] as const;
 export type SourceProviderType = (typeof SOURCE_PROVIDER_TYPES)[number];
 
 export interface SourceProviderRegistryDeps {
@@ -43,16 +43,23 @@ export class SourceProviderRegistry {
   private readonly providers = new Map<string, DatasetSourceProvider>();
 
   constructor(deps: SourceProviderRegistryDeps = {}) {
-    this.providers.set("text", createTextSourceProvider());
+    this.providers.set('text', createTextSourceProvider());
     if (deps.objectStore && deps.fileParser) {
-      this.providers.set("file", createFileSourceProvider({ objectStore: deps.objectStore, parser: deps.fileParser }));
+      this.providers.set(
+        'file',
+        createFileSourceProvider({ objectStore: deps.objectStore, parser: deps.fileParser }),
+      );
     }
     this.providers.set(
-      "link",
-      createLinkSourceProvider({ fetcher: deps.linkFetcher, resolveHost: deps.resolveHost, limits: deps.linkLimits }),
+      'link',
+      createLinkSourceProvider({
+        fetcher: deps.linkFetcher,
+        resolveHost: deps.resolveHost,
+        limits: deps.linkLimits,
+      }),
     );
     this.providers.set(
-      "apiFile",
+      'apiFile',
       createApiDatasetSourceProvider({
         configured: deps.apiDataset?.configured ?? false,
         client: deps.apiDataset?.client,
@@ -60,7 +67,7 @@ export class SourceProviderRegistry {
       }),
     );
     this.providers.set(
-      "externalFile",
+      'externalFile',
       createExternalSourceProvider({
         configured: deps.pdfProviderConfigured ?? false,
         pdfProvider: deps.pdfProvider,
@@ -75,7 +82,10 @@ export class SourceProviderRegistry {
   read(request: SourceReadRequest, context: RequestContext): Promise<SourceReadResult> {
     const provider = this.resolve(request.sourceType);
     if (!provider) {
-      throw sourceError(501035, context.requestId, { contentType: request.sourceType, urlHash: "" });
+      throw sourceError(501035, context.requestId, {
+        contentType: request.sourceType,
+        urlHash: '',
+      });
     }
     return provider.read(request, context);
   }
@@ -83,12 +93,17 @@ export class SourceProviderRegistry {
   preview(request: SourceReadRequest, context: RequestContext): Promise<SourceReadResult> {
     const provider = this.resolve(request.sourceType);
     if (!provider) {
-      throw sourceError(501035, context.requestId, { contentType: request.sourceType, urlHash: "" });
+      throw sourceError(501035, context.requestId, {
+        contentType: request.sourceType,
+        urlHash: '',
+      });
     }
     return provider.preview(request, context);
   }
 }
 
-export function createSourceProviderRegistry(deps: SourceProviderRegistryDeps = {}): SourceProviderRegistry {
+export function createSourceProviderRegistry(
+  deps: SourceProviderRegistryDeps = {},
+): SourceProviderRegistry {
   return new SourceProviderRegistry(deps);
 }
