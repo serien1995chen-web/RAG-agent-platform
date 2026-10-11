@@ -88,13 +88,16 @@ export default withApiHandler(
     const runtime = (await getRuntime()) as ExtendedAppRuntime;
     const { context } = await authenticateRequest(runtime, request, requestId);
     const body = parseDto<CollectionCreateApiFileBody>('CollectionCreateApiFileBody', request.body);
+    // 先校验 Dataset 归属，再走 Provider。
+    await runtime.datasetApi.getDatasetDetail(body.datasetId, context);
     let provider;
     try {
       provider = resolveSourceProvider(runtime, requestId);
     } catch {
       throw apiError(501017, requestId, { provider: 'apiFile' });
     }
-    const sourceRef = JSON.stringify({ config: body.apiConfig, path: body.path });
+    // 不再把 {config,path} JSON 当 URL；Provider 未配置时返回稳定 501062/501017。
+    const sourceRef = body.path;
     const service = createImportSourceService(runtime, provider);
     const result = await service.createCollectionFromSource(
       {

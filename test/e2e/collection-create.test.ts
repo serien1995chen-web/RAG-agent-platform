@@ -94,7 +94,10 @@ beforeEach(() => {
       trainingProcessor: { process: async () => ({ state: 'success' }) },
       queue: { enqueue: async () => undefined },
     },
-    datasetApi: { createDataset: async () => ({ datasetId, version: 1 }) },
+    datasetApi: {
+      createDataset: async () => ({ datasetId, version: 1 }),
+      getDatasetDetail: async () => ({ dataset: { datasetId, teamId: context.tenant.teamId } }),
+    },
   };
 });
 

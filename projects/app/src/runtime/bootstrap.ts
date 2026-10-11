@@ -10,8 +10,6 @@ import {
   SourceCollectionApplicationService,
   createDatasetAclRepository,
   createDefaultPorts,
-  createApiDatasetClient,
-  createApiDatasetRuntimeClient,
   createParseRuntimeAdapter,
   createSourceProviderRegistry,
   createDeleteJobRepository,
@@ -91,7 +89,8 @@ export async function bootstrapRuntime(
   const sourceProviders = createSourceProviderRegistry({
     objectStore: clients.objectStore as unknown as ServicePorts['objectStore'],
     fileParser: createParseRuntimeAdapter(),
-    apiDataset: { configured: true, client: createApiDatasetClient() },
+    // 未接入受控 API Dataset 配置前不谎报 configured；调用方按未配置得到稳定 501062/501017。
+    apiDataset: { configured: false },
   });
   const datasetSyncService = new DatasetSyncApplicationService({
     collections: collectionRepository,
@@ -107,10 +106,6 @@ export async function bootstrapRuntime(
     objectStore: clients.objectStore as unknown as ServicePorts['objectStore'],
     ...(adapters.fullText ? { fullTextStore: adapters.fullText } : {}),
     queue: syncQueue,
-    apiDatasetClient: createApiDatasetRuntimeClient({
-      configured: true,
-      client: createApiDatasetClient(),
-    }),
   } as ServicePorts;
   const imageApplicationService = new ImageApplicationService({
     assets: createImageAssetRepository(clients.mongo) as NonNullable<
