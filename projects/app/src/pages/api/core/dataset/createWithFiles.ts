@@ -70,20 +70,43 @@ export default withApiHandler(
       context,
     );
     const collections: Array<{ fileId: string; collectionId: string }> = [];
-    for (const fileId of body.files) {
-      const created = await runtime.collectionRepository.create(
-        {
-          collection: sourceCollection({
-            teamId: context.tenant.teamId,
-            datasetId: dataset.datasetId,
-            name: fileId,
-            sourceRef: fileId,
-          }),
-          options: PORT_OPTIONS,
-        },
-        context,
-      );
-      collections.push({ fileId, collectionId: created.collectionId });
+    try {
+      for (const fileId of body.files) {
+        const created = await runtime.collectionRepository.create(
+          {
+            collection: sourceCollection({
+              teamId: context.tenant.teamId,
+              datasetId: dataset.datasetId,
+              name: fileId,
+              sourceRef: fileId,
+            }),
+            options: PORT_OPTIONS,
+          },
+          context,
+        );
+        collections.push({ fileId, collectionId: created.collectionId });
+      }
+    } catch (error) {
+      // 反向补偿：聚合创建失败不留半成品 Collection/Dataset。
+      for (const created of collections) {
+        try {
+          await runtime.collectionRepository.deleteTree(
+            { collectionId: created.collectionId, options: PORT_OPTIONS },
+            context,
+          );
+        } catch {
+          // 补偿尽力而为；原始失败仍向上抛出。
+        }
+      }
+      try {
+        await runtime.knowledgeBaseRepository.softDelete(
+          { datasetId: dataset.datasetId, version: 1, options: PORT_OPTIONS },
+          context,
+        );
+      } catch {
+        // 忽略补偿二次失败。
+      }
+      throw error;
     }
     response
       .status(200)

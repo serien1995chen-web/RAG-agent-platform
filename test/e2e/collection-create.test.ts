@@ -272,4 +272,50 @@ describe('P4-08 collection/create routes', () => {
     });
     expect((result.body as { code?: number }).code).toBe(501009);
   });
+
+  it('compensates a partially-created aggregate (no half-finished dataset)', async () => {
+    const compensated: string[] = [];
+    let created = 0;
+    state.runtime = {
+      datasetApi: { createDataset: async () => ({ datasetId, version: 1 }) },
+      collectionRepository: {
+        create: async () => {
+          created += 1;
+          if (created === 2) throw new Error('collection-create-failed');
+          return { collectionId: '000000000000000000000099' };
+        },
+        deleteTree: async (input: { collectionId: string }) => {
+          compensated.push(`collection:${input.collectionId}`);
+          return { deleteJobId: 'job-1' };
+        },
+      },
+      knowledgeBaseRepository: {
+        softDelete: async (input: { datasetId: string }) => {
+          compensated.push(`dataset:${input.datasetId}`);
+          return { deleteJobId: 'job-2' };
+        },
+      },
+      processingRepository: { enqueue: async () => ({ taskId: 't', jobId: 'j' }) },
+      ports: {
+        datasetSourceProvider: {
+          read: async () => ({ rawText: 'x', contentHash: 'h' }),
+          preview: async () => ({ rawText: 'x', contentHash: 'h' }),
+        },
+        trainingProcessor: { process: async () => ({ state: 'success' }) },
+      },
+    };
+    const createWithFiles =
+      await import('../../projects/app/src/pages/api/core/dataset/createWithFiles');
+    const result = await invoke(createWithFiles, {
+      method: 'POST',
+      url: '/api/core/dataset/createWithFiles',
+      body: {
+        datasetParams: { name: 'ds', type: 'dataset', models: { embeddingModel: 'bge-m3' } },
+        files: ['f1', 'f2'],
+      },
+    });
+    expect(result.status).not.toBe(200);
+    expect(compensated.some((entry) => entry.startsWith('collection:'))).toBe(true);
+    expect(compensated.some((entry) => entry.startsWith('dataset:'))).toBe(true);
+  });
 });
