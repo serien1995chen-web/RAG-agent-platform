@@ -64,6 +64,8 @@ export interface Counter {
   length(text: string): number;
   /** 取末尾不超过 limit 个单位的片段（用于 overlap）。 */
   tail(text: string, limit: number): string;
+  /** 按当前单位切分为多段，每段 length<=limit（token 模式按 tokenizer token 序列切）。 */
+  split(text: string, limit: number): string[];
 }
 
 function countTokens(text: string): number {
@@ -76,6 +78,15 @@ export function createCounter(unit: LengthUnit): Counter {
     return {
       length: countCodePoints,
       tail: (text, limit) => (limit <= 0 ? '' : [...text].slice(-limit).join('')),
+      split: (text, limit) => {
+        if (limit <= 0) return [text];
+        const points = [...text];
+        const out: string[] = [];
+        for (let offset = 0; offset < points.length; offset += limit) {
+          out.push(points.slice(offset, offset + limit).join(''));
+        }
+        return out.length > 0 ? out : [''];
+      },
     };
   }
   return {
@@ -84,6 +95,15 @@ export function createCounter(unit: LengthUnit): Counter {
       if (limit <= 0 || text.length === 0) return '';
       const tokens = encode(text);
       return decode(tokens.slice(-limit));
+    },
+    split: (text, limit) => {
+      if (limit <= 0 || text.length === 0) return text.length === 0 ? [] : [text];
+      const tokens = encode(text);
+      const out: string[] = [];
+      for (let offset = 0; offset < tokens.length; offset += limit) {
+        out.push(decode(tokens.slice(offset, offset + limit)));
+      }
+      return out.length > 0 ? out : [''];
     },
   };
 }

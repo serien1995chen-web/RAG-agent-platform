@@ -67,12 +67,8 @@ function expandOversized(segments: Segment[], policy: ChunkPolicy, counter: Coun
           chunkSize: policy.chunkSize,
         });
       }
-      const points = [...sentence];
-      for (let offset = 0; offset < points.length; offset += policy.chunkSize) {
-        expanded.push({
-          text: points.slice(offset, offset + policy.chunkSize).join(''),
-          kind: 'text',
-        });
+      for (const piece of counter.split(sentence, policy.chunkSize)) {
+        expanded.push({ text: piece, kind: 'text' });
       }
     }
   }
@@ -102,12 +98,7 @@ function flush(state: MergeState): void {
 
 function buildSingleSegment(segment: Segment, counter: Counter, limit: number): string[] {
   if (counter.length(segment.text) <= limit) return [segment.text];
-  const points = [...segment.text];
-  const pieces: string[] = [];
-  for (let offset = 0; offset < points.length; offset += limit) {
-    pieces.push(points.slice(offset, offset + limit).join(''));
-  }
-  return pieces;
+  return counter.split(segment.text, limit);
 }
 
 function mergeSegments(segments: Segment[], policy: ChunkPolicy, counter: Counter): string[] {
@@ -131,9 +122,14 @@ function mergeSegments(segments: Segment[], policy: ChunkPolicy, counter: Counte
       segment.kind === 'text'
     ) {
       const tail = counter.tail(previous, overlapUnit);
-      if (tail.length > 0 && !segment.text.startsWith(tail)) {
+      const tailLength = tail.length > 0 ? counter.length(tail) : 0;
+      if (
+        tailLength > 0 &&
+        tailLength + counter.length(segment.text) <= policy.chunkSize &&
+        !segment.text.startsWith(tail)
+      ) {
         state.current.push({ text: tail, kind: 'text' });
-        state.currentLength += counter.length(tail);
+        state.currentLength += tailLength;
       }
     }
     state.current.push(segment);
@@ -177,15 +173,28 @@ function mergeSegments(segments: Segment[], policy: ChunkPolicy, counter: Counte
   return state.chunks;
 }
 
-/** 尾部/头部过小的块尽量与相邻块合并，避免产生孤立碎片。 */
+/** 小于 minSize 的块优先与后块合并，其次与前块合并，避免产生孤立碎片。 */
 function coalesceSmall(chunks: string[], policy: ChunkPolicy, counter: Counter): string[] {
   if (chunks.length <= 1) return chunks;
   const result: string[] = [];
-  for (const chunk of chunks) {
+  for (let index = 0; index < chunks.length; index += 1) {
+    const chunk = chunks[index] ?? '';
+    if (counter.length(chunk) >= policy.minSize) {
+      result.push(chunk);
+      continue;
+    }
+    const next = chunks[index + 1];
+    if (
+      next !== undefined &&
+      counter.length(chunk) + 1 + counter.length(next) <= policy.chunkSize
+    ) {
+      result.push(`${chunk}\n${next}`);
+      index += 1;
+      continue;
+    }
     const previous = result[result.length - 1];
     if (
       previous !== undefined &&
-      counter.length(chunk) < policy.minSize &&
       counter.length(previous) + 1 + counter.length(chunk) <= policy.chunkSize
     ) {
       result[result.length - 1] = `${previous}\n${chunk}`;

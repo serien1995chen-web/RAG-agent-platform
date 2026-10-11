@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_CHUNK_POLICY, chunkText, type ChunkPolicy } from '../../src/index';
+import {
+  DEFAULT_CHUNK_POLICY,
+  chunkText,
+  createCounter,
+  type ChunkPolicy,
+} from '../../src/index';
 
 function policy(overrides: Partial<ChunkPolicy> = {}): ChunkPolicy {
   return { ...DEFAULT_CHUNK_POLICY, lengthUnit: 'char', ...overrides };
@@ -73,5 +78,47 @@ describe('TEST-CHUNK-BOUNDARY-001 deterministic boundaries', () => {
     const first = chunkText({ text, policy: policy({ chunkSize: 64, minSize: 1 }) });
     const second = chunkText({ text, policy: policy({ chunkSize: 64, minSize: 1 }) });
     expect(second).toEqual(first);
+  });
+});
+
+
+describe('TEST-CHUNK-BOUNDARY-001 (RK-06) token slicing and next-first coalesce', () => {
+  it('keeps every chunk within chunkSize in token mode', () => {
+    const text = '\u{1D11E}'.repeat(200);
+    const result = chunkText({
+      text,
+      policy: {
+        ...DEFAULT_CHUNK_POLICY,
+        lengthUnit: 'token',
+        chunkSize: 64,
+        minSize: 1,
+        overlapRatio: 0,
+        forceSplit: true,
+      },
+    });
+    const counter = createCounter('token');
+    expect(result.chunks.length).toBeGreaterThan(1);
+    for (const chunk of result.chunks) {
+      expect(counter.length(chunk.text)).toBeLessThanOrEqual(64);
+    }
+    expect(result.chunks.map((chunk) => chunk.text).join('')).toBe(text);
+  });
+
+  it('coalesces undersized leading blocks forward into the same chunk', () => {
+    const text = '短。\n\n小结。\n\n' + '长段落内容'.repeat(60);
+    const result = chunkText({
+      text,
+      policy: {
+        ...DEFAULT_CHUNK_POLICY,
+        lengthUnit: 'char',
+        chunkSize: 200,
+        minSize: 50,
+        overlapRatio: 0,
+      },
+    });
+    // 两个小于 minSize 的前导块应向前并入同一块，而不是各自孤立成块。
+    expect(result.chunks[0]?.text).toContain('短。');
+    expect(result.chunks[0]?.text).toContain('小结。');
+    expect([...(result.chunks[0]?.text ?? '')].length).toBeGreaterThan(4);
   });
 });
