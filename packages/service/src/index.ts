@@ -6,6 +6,17 @@
 export const PACKAGE_NAME = '@kb/service' as const;
 
 export {
+  RAW_BODY_TOO_LARGE,
+  PAYLOAD_BYTES_EXCEEDED,
+  requestLimitsFromConfig,
+  checkProxyBytes,
+  checkDecompressedBytes,
+  checkBusinessBytes,
+  checkItemCount,
+} from './shared/http/limits';
+export type { RequestLimitConfig, RequestLimitDecision } from './shared/http/limits';
+
+export {
   ApiErrorException,
   classifyRetryableError,
   ConfigValidationException,
