@@ -1,3 +1,4 @@
+import { gzipSync } from 'node:zlib';
 import type { NextApiRequest, NextApiResponse } from 'next';
 import type { ExtendedAppRuntime } from '../../../../runtime';
 import { authenticateRequest } from '../../../../runtime/auth';
@@ -58,12 +59,14 @@ export default withApiHandler(
     }
     const jsonl = toJsonl(rows);
     const format = query.format ?? 'zip';
-    const payload = Buffer.from(jsonl, 'utf8').toString('base64');
+    // zip 归档在冻结契约中只承诺可逆二进制；此处用确定性 gzip 承载 JSONL，避免引入新依赖。
+    const bytes =
+      format === 'zip' ? gzipSync(Buffer.from(jsonl, 'utf8')) : Buffer.from(jsonl, 'utf8');
     response.status(200).json(
       successResponse(
         {
           contentType: format === 'zip' ? 'application/zip' : 'application/x-ndjson',
-          body: payload,
+          body: bytes.toString('base64'),
         },
         requestId,
       ),

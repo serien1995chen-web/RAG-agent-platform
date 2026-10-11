@@ -192,6 +192,19 @@ describe('P4-10 import/export and API dataset routes', () => {
     expect(decoded).not.toContain('dataset/');
     expect(decoded).not.toContain('vector');
 
+    const zipped = await invoke(exportAll, {
+      method: 'GET',
+      url: '/api/core/dataset/exportAll',
+      query: { datasetId, format: 'zip' },
+    });
+    expect(zipped.status).toBe(200);
+    expect(data(zipped.body).contentType).toBe('application/zip');
+    const { gunzipSync } = await import('node:zlib');
+    const unzipped = gunzipSync(Buffer.from(data(zipped.body).body as string, 'base64')).toString(
+      'utf8',
+    );
+    expect(unzipped).toBe(decoded);
+
     const collectionExported = await invoke(collectionExport, {
       method: 'GET',
       url: '/api/core/dataset/collection/export',

@@ -205,7 +205,21 @@ describe('P4-07 file and multipart routes', () => {
     const preview = await invoke(previewChunks, {
       method: 'POST',
       url: '/api/core/dataset/file/previewChunks',
-      body: { rawText: 'abcdef', chunkPolicy: { chunkSize: 2 } },
+      body: {
+        fileRef: `dataset/${datasetId}/${fileId}`,
+        chunkPolicy: {
+          mode: 'custom',
+          chunkSize: 2,
+          minSize: 1,
+          maxSize: 8000,
+          overlapRatio: 0,
+          paragraphDeep: 1,
+          customRegs: [],
+          lengthUnit: 'char',
+          forceSplit: true,
+          maxChunks: 100,
+        },
+      },
     });
     expect(preview.status).toBe(200);
     expect((data(preview.body).chunks as unknown[]).length).toBe(3);
