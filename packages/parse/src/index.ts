@@ -2,79 +2,70 @@
  * @kb/parse — 文档解析与 9 种格式矩阵（CR-FEATURE-04，设计文档 9.8.1）。
  * 未注册格式返回 501056；备选解析器通过 DocumentParserPort 扩展，禁止引入来源项目 anydoc SDK。
  */
-import { ApiErrorException, createSkeletonError } from '@kb/contracts';
+import type { objectStoreLike, ParseHandlerContext } from "./format-registry";
+import { parseFailedError, unsupportedFormatError } from "./format-registry";
+import type { ParseFormatRegistry } from "./format-registry";
+import { createParserRegistry } from "./parsers/index";
+import type { DocumentParserPort, ParseRequest, ParseResult } from "./types";
 
-export const PACKAGE_NAME = '@kb/parse' as const;
+export const PACKAGE_NAME = "@kb/parse" as const;
 
-export interface ParseFormatSpec {
-  format: string;
-  extensions: readonly string[];
-  parser: string;
-  fallback: string;
+export { contentHashOf, PARSE_FORMAT_MATRIX, resolveParseFormat } from "./types";
+export type { DocumentParserPort, ParseFormatSpec, ParseRequest, ParseResult } from "./types";
+
+export { createParserRegistry } from "./parsers/index";
+export { ParseFormatRegistry, normalizeExtension, normalizeMimeType } from "./format-registry";
+export type {
+  ParseFormat,
+  ParseFormatRegistration,
+  ParseHandler,
+  ParseHandlerContext,
+  objectStoreLike,
+} from "./format-registry";
+export { ConcurrencyLimiterError, createLimiter, mapWithConcurrency } from "./concurrency";
+export type { ConcurrencyLimiter, ConcurrencyLimiterOptions } from "./concurrency";
+
+/**
+ * 解析所需上下文：兼容既有 DocumentParserPort.parse(request) 调用面。
+ * bytes/objectStore/enhanceScannedPdf 由集成层（P4-04）注入，不改变 Port 形状。
+ */
+export interface DocumentParseContext extends ParseRequest {
+  bytes?: Uint8Array;
+  objectStore?: objectStoreLike;
+  enhanceScannedPdf?: (bytes: Uint8Array, request: ParseRequest) => Promise<ParseResult>;
 }
 
-/** 设计文档 9.8.1 冻结的 9 类格式矩阵。 */
-export const PARSE_FORMAT_MATRIX: readonly ParseFormatSpec[] = [
-  { format: 'text', extensions: ['txt'], parser: 'native-text', fallback: 'rawText' },
-  {
-    format: 'markdown',
-    extensions: ['md', 'markdown'],
-    parser: 'native-markdown',
-    fallback: 'rawText',
-  },
-  {
-    format: 'html',
-    extensions: ['html', 'htm'],
-    parser: 'html-to-markdown',
-    fallback: 'plain-text',
-  },
-  {
-    format: 'pdf',
-    extensions: ['pdf'],
-    parser: 'pdf-text-layer',
-    fallback: 'pdf-enhance-provider',
-  },
-  { format: 'docx', extensions: ['docx'], parser: 'docx-parser', fallback: 'none' },
-  { format: 'pptx', extensions: ['pptx'], parser: 'pptx-parser', fallback: 'none' },
-  { format: 'xlsx', extensions: ['xlsx'], parser: 'xlsx-precheck', fallback: 'none' },
-  { format: 'csv', extensions: ['csv'], parser: 'csv-parser', fallback: 'none' },
-  { format: 'ebook', extensions: ['epub'], parser: 'document-parser-port', fallback: 'none' },
-];
-
-export interface ParseRequest {
-  teamId: string;
-  datasetId: string;
-  fileRef: string;
-  extension: string;
-  mimeType?: string;
-  timeoutMs: number;
-}
-
-export interface ParseResult {
-  format: string;
-  rawText: string;
-  scanRequired: boolean;
-  imageRefs: string[];
-  contentHash: string;
-}
-
-/** 扩展格式必须实现该 Port；未注册格式不得静默降级为普通文本。 */
-export interface DocumentParserPort {
-  parse(request: ParseRequest): Promise<ParseResult>;
-}
-
-export function resolveParseFormat(extension: string): ParseFormatSpec | null {
-  const normalized = extension.replace(/^\./, '').toLowerCase();
-  return (
-    PARSE_FORMAT_MATRIX.find((spec) =>
-      (spec.extensions as readonly string[]).includes(normalized),
-    ) ?? null
-  );
-}
-
-export function createDefaultDocumentParser(): DocumentParserPort {
+function toHandlerContext(request: ParseRequest): ParseHandlerContext | null {
+  const context = request as DocumentParseContext;
+  if (!(context.bytes instanceof Uint8Array)) return null;
   return {
-    parse: () =>
-      Promise.reject(new ApiErrorException(createSkeletonError({ operation: 'parse' }, 'parse'))),
+    request,
+    bytes: context.bytes,
+    mimeType: request.mimeType,
+    objectStore: context.objectStore,
+    enhanceScannedPdf: context.enhanceScannedPdf,
+  };
+}
+
+/**
+ * 真实解析入口：按扩展名/MIME 分派到 9 类解析器之一。
+ * 未登记格式抛 501056；缺少字节上下文时以稳定 501057 拒绝，绝不静默返回空文本。
+ */
+export function createDefaultDocumentParser(): DocumentParserPort {
+  const registry: ParseFormatRegistry = createParserRegistry();
+  return {
+    async parse(request: ParseRequest): Promise<ParseResult> {
+      const format = registry.resolve(request.extension, request.mimeType);
+      if (!format) {
+        throw unsupportedFormatError(request.extension, request.fileRef);
+      }
+      const registration = registry.get(format);
+      if (!registration) {
+        throw unsupportedFormatError(request.extension, request.fileRef);
+      }
+      const context = toHandlerContext(request);
+      if (!context) throw parseFailedError(request.extension, "parse_bytes_missing", request.fileRef);
+      return registration.handler(context);
+    },
   };
 }
