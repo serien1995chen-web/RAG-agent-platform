@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { FileUploadService } from '../../packages/service/src/index';
@@ -143,7 +144,7 @@ describe('P4-07 file and multipart routes', () => {
     const presign = await invoke(presignUpload, {
       method: 'POST',
       url: '/api/core/dataset/file/presignUpload',
-      body: { datasetId, filename: 'a.txt', size: 10, mime: 'text/plain' },
+      body: { datasetId, filename: 'a.txt', size: 5, mime: 'text/plain' },
     });
     expect(presign.status).toBe(200);
     const fileId = data(presign.body).fileId as string;
@@ -180,7 +181,13 @@ describe('P4-07 file and multipart routes', () => {
     const complete = await invoke(completeMultipart, {
       method: 'POST',
       url: '/api/core/dataset/file/completeMultipart',
-      body: { fileId, parts: [{ partNumber: 1, etag: firstEtag }], hash: 'h' },
+      body: {
+        fileId,
+        parts: [{ partNumber: 1, etag: firstEtag }],
+        hash: createHash('sha256')
+          .update(`1:${String(firstEtag)}:sum-1`)
+          .digest('hex'),
+      },
     });
     expect(complete.status).toBe(200);
     expect(JSON.stringify(complete.body)).not.toContain('dataset/');
@@ -373,7 +380,11 @@ describe.skipIf(process.env.P4_REAL_MINIO !== '1')(
       const complete = await invoke(completeMultipart, {
         method: 'POST',
         url: '/api/core/dataset/file/completeMultipart',
-        body: { fileId, parts: [{ partNumber: 1, etag }], hash: 'h' },
+        body: {
+          fileId,
+          parts: [{ partNumber: 1, etag }],
+          hash: createHash('sha256').update(`1:${etag}:c1`).digest('hex'),
+        },
       });
       expect(complete.status).toBe(200);
     }, 30000);

@@ -52,6 +52,7 @@ export default withApiHandler(
       key,
       uploadId,
       bucket: 'kb-source',
+      expectedSize: body.size,
     });
     response.status(200).json(
       successResponse(

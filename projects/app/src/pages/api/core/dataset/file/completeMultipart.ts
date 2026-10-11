@@ -38,6 +38,7 @@ export default withApiHandler(
       body.fileId,
       context.tenant.teamId,
       body.parts,
+      body.hash,
       requestId,
     );
     const objectContext = { teamId: context.tenant.teamId, datasetId: session.datasetId };

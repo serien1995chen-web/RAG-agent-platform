@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { ApiErrorException, createApiError } from '@kb/contracts';
 
 export interface MultipartSessionValue {
@@ -7,6 +8,7 @@ export interface MultipartSessionValue {
   key: string;
   uploadId: string;
   bucket: string;
+  expectedSize?: number;
 }
 
 export interface MultipartPartValue {
@@ -78,6 +80,7 @@ export class FileUploadService {
     fileId: string,
     teamId: string,
     parts: Array<{ partNumber: number; etag: string }>,
+    hash: string,
     requestId: string,
   ): MultipartSessionValue {
     const session = this.getSession(fileId, teamId);
@@ -131,6 +134,28 @@ export class FileUploadService {
     if (recorded.some((part) => !part.checksum)) {
       throw new ApiErrorException(
         createApiError({ code: 501060, requestId, params: { reason: 'missing_checksum' } }),
+      );
+    }
+    // 期望总大小：session 记录的值必须与实际累计一致。
+    const actualSize = this.totalSize(fileId);
+    if (session.expectedSize !== undefined && actualSize !== session.expectedSize) {
+      throw new ApiErrorException(
+        createApiError({
+          code: 501060,
+          requestId,
+          params: { reason: 'size_mismatch', expected: session.expectedSize, actual: actualSize },
+        }),
+      );
+    }
+    // 真实 hash 校验：以服务端记录的分片序号/ETag/checksum 计算期望 hash 再比对。
+    const expectedHash = createHash('sha256')
+      .update(
+        recorded.map((part) => `${part.partNumber}:${part.etag}:${part.checksum ?? ''}`).join('\n'),
+      )
+      .digest('hex');
+    if (hash !== expectedHash) {
+      throw new ApiErrorException(
+        createApiError({ code: 501060, requestId, params: { reason: 'hash_mismatch' } }),
       );
     }
     return session;
