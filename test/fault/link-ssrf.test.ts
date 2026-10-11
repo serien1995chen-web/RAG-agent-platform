@@ -219,3 +219,143 @@ describe('TEST-LINK-CANCEL-001 and retry classification', () => {
     expect(calls).toBe(1);
   });
 });
+
+
+// ---------------------------------------------------------------------------
+// RK-03 字节级 IPv6 拦截 / RK-04 大小、字符集、取消
+// ---------------------------------------------------------------------------
+
+function bytesResponse(bytes: Uint8Array, contentType: string, contentLength?: string): LinkFetchResponse {
+  return {
+    status: 200,
+    headers: {
+      get: (name: string) => {
+        const key = name.toLowerCase();
+        if (key === 'content-type') return contentType;
+        if (key === 'content-length') return contentLength ?? null;
+        return null;
+      },
+    },
+    text: async () => Buffer.from(bytes).toString('utf8'),
+    arrayBuffer: async () => bytes.slice().buffer,
+  };
+}
+
+describe('TEST-LINK-SSRF-001 (RK-03) byte-level IPv6 embedded IPv4', () => {
+  const cases = [
+    'http://[::127.0.0.1]/',
+    'http://[::ffff:127.0.0.1]/',
+    'http://[64:ff9b::7f00:1]/',
+    'http://[64:ff9b::a00:1]/',
+    'http://[2002:7f00:1::]/',
+    'http://[::169.254.169.254]/',
+  ];
+  it('blocks IPv4-compatible/mapped, NAT64, 6to4 and metadata-embedded addresses with 501032 and no request', async () => {
+    let fetched = 0;
+    const p = provider(async () => {
+      fetched += 1;
+      return htmlResponse('x');
+    });
+    for (const url of cases) {
+      expect(await code(() => p.read(request(url), context))).toBe(501032);
+    }
+    expect(fetched).toBe(0);
+  });
+});
+
+describe('TEST-LINK-CHARSET-001 (RK-04) charset decode', () => {
+  it('decodes GBK bytes using the Content-Type charset', async () => {
+    const gbk = new Uint8Array([0x3c, 0x70, 0x3e, 0xd6, 0xd0, 0xce, 0xc4, 0x3c, 0x2f, 0x70, 0x3e]);
+    const p = provider(async () => bytesResponse(gbk, 'text/html; charset=gbk'));
+    const result = await p.read(request('http://example.com/gbk'), context);
+    expect(result.rawText).toContain('中文');
+  });
+
+  it('decodes UTF-16LE BOM bytes', async () => {
+    const utf16 = new Uint8Array([0xff, 0xfe, 0x2d, 0x4e, 0x87, 0x65]);
+    const p = provider(async () => bytesResponse(utf16, 'text/plain'));
+    const result = await p.read(request('http://example.com/u16'), context);
+    expect(result.rawText).toBe('中文');
+  });
+
+  it('decodes UTF-8 BOM bytes', async () => {
+    const utf8 = Buffer.concat([Buffer.from([0xef, 0xbb, 0xbf]), Buffer.from('中文', 'utf8')]);
+    const p = provider(async () => bytesResponse(new Uint8Array(utf8), 'text/plain'));
+    const result = await p.read(request('http://example.com/u8'), context);
+    expect(result.rawText).toBe('中文');
+  });
+});
+
+describe('TEST-LINK-LIMIT-001 (RK-04) size enforcement', () => {
+  it('rejects over Content-Length without reading the body', async () => {
+    let bodyRead = false;
+    const response: LinkFetchResponse = {
+      status: 200,
+      headers: {
+        get: (name: string) => (name.toLowerCase() === 'content-length' ? '20000000' : 'text/html'),
+      },
+      text: async () => {
+        bodyRead = true;
+        return 'x';
+      },
+      arrayBuffer: async () => {
+        bodyRead = true;
+        return new Uint8Array([1]).buffer;
+      },
+    };
+    const p = provider(async () => response);
+    expect(await code(() => p.read(request('http://example.com/big'), context))).toBe(501065);
+    expect(bodyRead).toBe(false);
+  });
+
+  it('rejects a stream that exceeds maxBytes while reading', async () => {
+    const chunk = new Uint8Array(100);
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(chunk);
+        controller.enqueue(chunk);
+        controller.close();
+      },
+    });
+    const response: LinkFetchResponse = {
+      status: 200,
+      headers: { get: (name: string) => (name.toLowerCase() === 'content-type' ? 'text/plain' : null) },
+      text: async () => '',
+      body: stream,
+    };
+    const p = createLinkSourceProvider({
+      fetcher: async () => response,
+      resolveHost: async () => ['93.184.216.34'],
+      limits: { maxBytes: 150, retryBackoffMs: [] },
+    });
+    expect(await code(() => p.read(request('http://example.com/stream'), context))).toBe(501065);
+  });
+});
+
+describe('TEST-LINK-CANCEL-001 (RK-04) caller cancellation', () => {
+  it('passes an aborted caller signal to fetch and never logs a request body', async () => {
+    const controller = new AbortController();
+    controller.abort();
+    let observedAborted = false;
+    const audits: Array<Record<string, unknown>> = [];
+    const p = createLinkSourceProvider({
+      fetcher: async (_url, init) => {
+        observedAborted = init.signal.aborted;
+        const err = new Error('aborted') as Error & { name: string };
+        err.name = 'AbortError';
+        throw err;
+      },
+      resolveHost: async () => ['93.184.216.34'],
+      signal: controller.signal,
+      audit: (entry) => audits.push(entry as unknown as Record<string, unknown>),
+      sleep: async () => {},
+      limits: { retryBackoffMs: [0] },
+    });
+    expect(await code(() => p.read(request('http://example.com/cancel'), context))).toBe(501034);
+    expect(observedAborted).toBe(true);
+    for (const entry of audits) {
+      expect(Object.keys(entry)).not.toContain('body');
+      expect(Object.keys(entry)).not.toContain('query');
+    }
+  });
+});

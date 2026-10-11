@@ -2,6 +2,8 @@
  * P4-04 link 来源 Provider 与 SSRF 防护（设计 8.1.1，SOL-ISS-04 冻结）。
  * 只读取用户提交的单个 URL，不做站点递归爬取。
  * 每跳重新校验地址策略；DNS 固定解析结果建连；审计只记 urlHash/host/结果分类。
+ * 地址拦截使用字节级 IPv6 解析，内嵌 IPv4（IPv4-compatible/mapped、NAT64、6to4、Teredo）
+ * 与直接 IPv4 共用同一拦截判定；大小/字符集/读取超时/取消按 8.1.1 实现。
  */
 import { createHash } from 'node:crypto';
 import { isIP } from 'node:net';
@@ -40,6 +42,8 @@ export interface LinkFetchResponse {
   status: number;
   headers: { get(name: string): string | null };
   text(): Promise<string>;
+  arrayBuffer?(): Promise<ArrayBuffer>;
+  body?: ReadableStream<Uint8Array> | null;
 }
 
 export type LinkFetcher = (
@@ -59,6 +63,8 @@ export interface LinkSourceProviderDeps {
   limits?: Partial<LinkLimits>;
   sleep?: (ms: number) => Promise<void>;
   clock?: () => number;
+  /** 调用方取消信号；透传/合并到 fetch，abort 后不再读正文或写正文审计。 */
+  signal?: AbortSignal;
 }
 
 function normalizeHost(hostname: string): string {
@@ -72,16 +78,38 @@ const BLOCKED_LITERAL_HOSTS = new Set(['169.254.169.254', '100.100.100.200', 'fd
 const HTML_CONTENT_TYPES = new Set(['text/html', 'application/xhtml+xml']);
 const PLAIN_CONTENT_TYPES = new Set(['text/plain']);
 
+/** 单一真值来源：IPv4 拦截判定；直接 IPv4 与所有内嵌 IPv4 共用。 */
+function isBlockedIpv4Int(value: number): boolean {
+  const ranges: Array<[number, number]> = [
+    [0x00000000, 0x00ffffff],
+    [0x0a000000, 0x0affffff],
+    [0x64400000, 0x647fffff],
+    [0x7f000000, 0x7fffffff],
+    [0xa9fe0000, 0xa9ffffff],
+    [0xac100000, 0xac1fffff],
+    [0xc0000000, 0xc00000ff],
+    [0xc0000200, 0xc00002ff],
+    [0xc0a80000, 0xc0a8ffff],
+    [0xc6120000, 0xc613ffff],
+    [0xc6336400, 0xc63364ff],
+    [0xcb007100, 0xcb0071ff],
+    [0xe0000000, 0xefffffff],
+    [0xf0000000, 0xffffffff],
+  ];
+  return ranges.some(([start, end]) => value >= start && value <= end);
+}
+
 function ipv4ToInt(ip: string): number | null {
   const parts = ip.split('.');
   if (parts.length !== 4) return null;
   let value = 0;
   for (const part of parts) {
+    if (!/^\d{1,3}$/.test(part)) return null;
     const byte = Number(part);
     if (!Number.isInteger(byte) || byte < 0 || byte > 255) return null;
     value = value * 256 + byte;
   }
-  return value;
+  return value >>> 0;
 }
 
 function decodeIpv4Literal(host: string): string | null {
@@ -106,38 +134,90 @@ function decodeIpv4Literal(host: string): string | null {
   return bytes.join('.');
 }
 
-/** 判断地址是否命中拦截集合。 */
+/** 把 IPv6 文本解析为 8 个 16 位组；支持 "::" 压缩与尾部内嵌 IPv4；失败返回 null。 */
+function parseIpv6(raw: string): number[] | null {
+  let s = raw.startsWith('[') && raw.endsWith(']') ? raw.slice(1, -1) : raw;
+  s = s.split('%')[0] ?? s;
+  const v4groups: number[] = [];
+  const lastColon = s.lastIndexOf(':');
+  const tailToken = lastColon >= 0 ? s.slice(lastColon + 1) : s;
+  if (tailToken.includes('.')) {
+    const v = ipv4ToInt(tailToken);
+    if (v === null) return null;
+    v4groups.push((v >>> 16) & 0xffff, v & 0xffff);
+    s = s.slice(0, lastColon + 1);
+  }
+  const dbl = s.split('::');
+  if (dbl.length > 2) return null;
+  const parseGroups = (str: string): number[] | null => {
+    if (str === '') return [];
+    const out: number[] = [];
+    for (const h of str.split(':')) {
+      if (h === '') continue;
+      if (!/^[0-9a-f]{1,4}$/i.test(h)) return null;
+      out.push(Number.parseInt(h, 16));
+    }
+    return out;
+  };
+  const left = parseGroups(dbl[0] ?? '');
+  if (!left) return null;
+  const right = dbl.length === 2 ? parseGroups(dbl[1] ?? '') : [];
+  if (!right) return null;
+  const target = 8 - v4groups.length;
+  let groups: number[];
+  if (dbl.length === 2) {
+    const fill = target - left.length - right.length;
+    if (fill < 0) return null;
+    groups = [...left, ...new Array<number>(fill).fill(0), ...right];
+  } else {
+    groups = [...left];
+  }
+  groups = [...groups, ...v4groups];
+  return groups.length === 8 ? groups : null;
+}
+
+/** 提取可在 IPv6 中内嵌的 IPv4 值（32 位）。 */
+function embeddedIpv4Candidates(groups: number[]): number[] {
+  const g = (i: number): number => groups[i] ?? 0;
+  const v4 = (hi: number, lo: number): number => (((hi << 16) | lo) & 0xffffffff) >>> 0;
+  const first5Zero = [0, 1, 2, 3, 4].every((i) => g(i) === 0);
+  const first6Zero = first5Zero && g(5) === 0;
+  const out: number[] = [];
+  if (first5Zero && g(5) === 0xffff) out.push(v4(g(6), g(7))); // IPv4-mapped ::ffff:0:0/96
+  if (first6Zero) {
+    const cand = v4(g(6), g(7));
+    if (cand > 1) out.push(cand); // IPv4-compatible ::a.b.c.d（排除 :: 与 ::1）
+  }
+  if (g(0) === 0x0064 && g(1) === 0xff9b && [2, 3, 4, 5].every((i) => g(i) === 0)) {
+    out.push(v4(g(6), g(7))); // NAT64 64:ff9b::/96
+  }
+  if (g(0) === 0x2002) out.push(v4(g(1), g(2))); // 6to4 2002::/16
+  if (g(0) === 0x2001 && g(1) === 0x0000) {
+    out.push(v4(g(2), g(3))); // Teredo 服务器 IPv4
+    out.push((~v4(g(6), g(7))) >>> 0); // Teredo 混淆后的客户端 IPv4
+  }
+  return out;
+}
+
+/** 判断地址是否命中拦截集合（loopback/private/linkLocal/uniqueLocal/reserved/multicast/broadcast/unspecified/CGNAT 及内嵌 IPv4）。 */
 export function isBlockedAddress(address: string): boolean {
-  const normalized = address.startsWith('::ffff:') ? address.slice(7) : address;
+  const normalized = address.startsWith('[') && address.endsWith(']') ? address.slice(1, -1) : address;
   if (BLOCKED_LITERAL_HOSTS.has(normalized)) return true;
   if (isIP(normalized) === 4) {
     const value = ipv4ToInt(normalized);
-    if (value === null) return true;
-    const ranges: Array<[number, number]> = [
-      [0x00000000, 0x00ffffff],
-      [0x0a000000, 0x0affffff],
-      [0x64400000, 0x647fffff],
-      [0x7f000000, 0x7fffffff],
-      [0xa9fe0000, 0xa9ffffff],
-      [0xac100000, 0xac1fffff],
-      [0xc0000000, 0xc00000ff],
-      [0xc0000200, 0xc00002ff],
-      [0xc0a80000, 0xc0a8ffff],
-      [0xc6120000, 0xc613ffff],
-      [0xc6336400, 0xc63364ff],
-      [0xcb007100, 0xcb0071ff],
-      [0xe0000000, 0xefffffff],
-      [0xf0000000, 0xffffffff],
-    ];
-    return ranges.some(([start, end]) => value >= start && value <= end);
+    return value === null ? true : isBlockedIpv4Int(value);
   }
   if (isIP(normalized) === 6) {
-    const lower = normalized.toLowerCase();
-    if (lower === '::' || lower === '::1') return true;
-    if (/^fe[89ab]/.test(lower)) return true;
-    if (lower.startsWith('fc') || lower.startsWith('fd')) return true;
-    if (lower.startsWith('ff')) return true;
-    if (lower.startsWith('2001:db8')) return true;
+    const groups = parseIpv6(normalized);
+    if (!groups) return true;
+    if (groups.every((x) => x === 0)) return true; // ::
+    if (groups.slice(0, 7).every((x) => x === 0) && groups[7] === 1) return true; // ::1
+    const g0 = groups[0] ?? 0;
+    if ((g0 & 0xffc0) === 0xfe80) return true; // fe80::/10
+    if ((g0 & 0xfe00) === 0xfc00) return true; // fc00::/7
+    if ((g0 & 0xff00) === 0xff00) return true; // ff00::/8
+    if (g0 === 0x2001 && (groups[1] ?? 0) === 0x0db8) return true; // 2001:db8::/32
+    if (embeddedIpv4Candidates(groups).some((cand) => isBlockedIpv4Int(cand))) return true;
     return false;
   }
   return true;
@@ -148,6 +228,90 @@ export function isCloudMetadataHost(hostname: string): boolean {
   return CLOUD_METADATA_HOSTS.some(
     (prefix) => lower === prefix.replace(/\.$/, '') || lower.startsWith(prefix),
   );
+}
+
+// ---------------------------------------------------------------------------
+// 字符集探测/解码（Node 内建 TextDecoder，不新增依赖）
+// ---------------------------------------------------------------------------
+
+type BodyEncoding = 'utf-8' | 'utf-16le' | 'utf-16be' | 'gb18030';
+
+function startsWithBytes(bytes: Uint8Array, prefix: readonly number[]): boolean {
+  if (bytes.length < prefix.length) return false;
+  return prefix.every((byte, i) => bytes[i] === byte);
+}
+
+function detectBodyEncoding(bytes: Uint8Array, headerCharset: string | undefined): BodyEncoding {
+  const declared = (headerCharset ?? '').toLowerCase();
+  if (declared === 'utf-8' || declared === 'utf8') return 'utf-8';
+  if (declared === 'gbk' || declared === 'gb2312' || declared === 'gb18030') return 'gb18030';
+  if (declared === 'utf-16' || declared === 'utf-16le') return 'utf-16le';
+  if (declared === 'utf-16be') return 'utf-16be';
+
+  if (startsWithBytes(bytes, [0xef, 0xbb, 0xbf])) return 'utf-8';
+  if (startsWithBytes(bytes, [0xff, 0xfe])) return 'utf-16le';
+  if (startsWithBytes(bytes, [0xfe, 0xff])) return 'utf-16be';
+
+  const head = new TextDecoder('utf-8', { fatal: false })
+    .decode(bytes.subarray(0, 4096))
+    .toLowerCase();
+  const meta = /<meta[^>]+charset\s*=\s*["']?\s*([a-z0-9_-]+)/i.exec(head)?.[1];
+  if (meta) {
+    if (meta === 'gbk' || meta === 'gb2312' || meta === 'gb18030') return 'gb18030';
+    if (meta === 'utf-16le') return 'utf-16le';
+    if (meta === 'utf-16be') return 'utf-16be';
+    return 'utf-8';
+  }
+
+  const decoded = new TextDecoder('utf-8', { fatal: false }).decode(bytes.subarray(0, 8192));
+  let replacement = 0;
+  for (const char of decoded) if (char === '\ufffd') replacement += 1;
+  if (decoded.length > 0 && replacement / decoded.length > 0.01) return 'gb18030';
+  return 'utf-8';
+}
+
+/** 解码正文：非法字节以 U+FFFD 替换（告警由调用方记录），并去 BOM。 */
+function decodeBody(bytes: Uint8Array, encoding: BodyEncoding): string {
+  let text = new TextDecoder(encoding, { fatal: false }).decode(bytes);
+  if (text.charCodeAt(0) === 0xfeff) text = text.slice(1);
+  return text;
+}
+
+function charsetOf(contentType: string): string | undefined {
+  const match = /charset\s*=\s*["']?\s*([a-z0-9_-]+)/i.exec(contentType);
+  return match?.[1];
+}
+
+class SizeLimitExceeded extends Error {
+  constructor(readonly actualBytes: number) {
+    super('size_limit_exceeded');
+    this.name = 'SizeLimitExceeded';
+  }
+}
+
+async function readStreamLimited(stream: ReadableStream<Uint8Array>, maxBytes: number): Promise<Uint8Array> {
+  const reader = stream.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    if (value) {
+      total += value.byteLength;
+      if (total > maxBytes) {
+        await reader.cancel();
+        throw new SizeLimitExceeded(total);
+      }
+      chunks.push(value);
+    }
+  }
+  const out = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    out.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return out;
 }
 
 interface ParsedTarget {
@@ -239,14 +403,21 @@ export function createLinkSourceProvider(deps: LinkSourceProviderDeps = {}): Dat
 
   const dispatch = async (
     target: ParsedTarget,
+    callerSignal: AbortSignal | undefined,
   ): Promise<{
     status: number;
     headers: LinkFetchResponse['headers'];
-    body: string;
+    bytes: Uint8Array;
     contentType: string;
   }> => {
     const controller = new AbortController();
     const totalTimer = setTimeout(() => controller.abort(), limits.totalTimeoutMs);
+    const readTimer = setTimeout(() => controller.abort(), limits.readTimeoutMs);
+    const onCallerAbort = (): void => controller.abort();
+    if (callerSignal) {
+      if (callerSignal.aborted) controller.abort();
+      else callerSignal.addEventListener('abort', onCallerAbort, { once: true });
+    }
     const dispatcher = createPinnedDispatcher(
       target.addresses[0] ?? '0.0.0.0',
       limits.connectTimeoutMs,
@@ -258,12 +429,31 @@ export function createLinkSourceProvider(deps: LinkSourceProviderDeps = {}): Dat
         dispatcher,
         headers: { accept: 'text/html,application/xhtml+xml,text/plain' },
       });
-      const contentType =
-        (response.headers.get('content-type') ?? '').split(';')[0]?.trim().toLowerCase() ?? '';
-      const text = await response.text();
-      return { status: response.status, headers: response.headers, body: text, contentType };
+      const contentType = (response.headers.get('content-type') ?? '').trim().toLowerCase();
+      const declared = response.headers.get('content-length');
+      if (declared !== null) {
+        const size = Number(declared);
+        if (Number.isFinite(size) && size > limits.maxBytes) {
+          throw new SizeLimitExceeded(size);
+        }
+      }
+      let bytes: Uint8Array;
+      if (response.body) {
+        bytes = await readStreamLimited(response.body, limits.maxBytes);
+      } else if (response.arrayBuffer) {
+        const buffer = await response.arrayBuffer();
+        bytes = new Uint8Array(buffer);
+      } else {
+        bytes = new TextEncoder().encode(await response.text());
+      }
+      if (bytes.byteLength > limits.maxBytes) {
+        throw new SizeLimitExceeded(bytes.byteLength);
+      }
+      return { status: response.status, headers: response.headers, bytes, contentType };
     } finally {
       clearTimeout(totalTimer);
+      clearTimeout(readTimer);
+      callerSignal?.removeEventListener('abort', onCallerAbort);
       void (dispatcher as { close(): Promise<void> }).close();
     }
   };
@@ -295,12 +485,25 @@ export function createLinkSourceProvider(deps: LinkSourceProviderDeps = {}): Dat
       let response: {
         status: number;
         headers: LinkFetchResponse['headers'];
-        body: string;
+        bytes: Uint8Array;
         contentType: string;
       };
       try {
-        response = await dispatch(target);
+        response = await dispatch(target, deps.signal);
       } catch (error) {
+        if (error instanceof SizeLimitExceeded) {
+          audit({
+            event: 'source.failed',
+            urlHash: hashUrl(currentUrl),
+            host: target.host,
+            outcome: 'size',
+          });
+          throw sourceError(501065, requestId, {
+            limitBytes: limits.maxBytes,
+            actualBytes: error.actualBytes,
+            urlHash: hashUrl(currentUrl),
+          });
+        }
         if (attempt < limits.retryBackoffMs.length && isTimeout(error)) {
           await sleep(limits.retryBackoffMs[attempt] ?? 0);
           attempt += 1;
@@ -365,9 +568,8 @@ export function createLinkSourceProvider(deps: LinkSourceProviderDeps = {}): Dat
         throw sourceError(501039, requestId, { provider: 'link', status: response.status });
       }
 
-      const allowed =
-        HTML_CONTENT_TYPES.has(response.contentType) ||
-        PLAIN_CONTENT_TYPES.has(response.contentType);
+      const baseType = response.contentType.split(';')[0]?.trim().toLowerCase() ?? '';
+      const allowed = HTML_CONTENT_TYPES.has(baseType) || PLAIN_CONTENT_TYPES.has(baseType);
       if (!allowed) {
         audit({
           event: 'source.failed',
@@ -376,30 +578,19 @@ export function createLinkSourceProvider(deps: LinkSourceProviderDeps = {}): Dat
           outcome: 'content_type',
         });
         throw sourceError(501035, requestId, {
-          contentType: response.contentType,
-          urlHash: hashUrl(currentUrl),
-        });
-      }
-      const bytes = Buffer.byteLength(response.body, 'utf8');
-      if (bytes > limits.maxBytes) {
-        audit({
-          event: 'source.failed',
-          urlHash: hashUrl(currentUrl),
-          host: target.host,
-          outcome: 'size',
-        });
-        throw sourceError(501065, requestId, {
-          limitBytes: limits.maxBytes,
-          actualBytes: bytes,
+          contentType: baseType,
           urlHash: hashUrl(currentUrl),
         });
       }
 
-      const isHtml = HTML_CONTENT_TYPES.has(response.contentType);
-      const rawText = isHtml ? htmlToMarkdown(response.body, target.url) : response.body;
-      const plain = isHtml ? stripTags(response.body) : response.body;
+      const isHtml = HTML_CONTENT_TYPES.has(baseType);
+      const body = decodeBody(response.bytes, detectBodyEncoding(response.bytes, charsetOf(response.contentType)));
+      const rawText = isHtml ? htmlToMarkdown(body, target.url) : body;
+      const plain = isHtml ? stripTags(body) : body;
       const ratio =
-        plain.length === 0 ? 0 : Math.min(1, plain.replace(/\s/g, '').length / Math.max(1, bytes));
+        plain.length === 0
+          ? 0
+          : Math.min(1, plain.replace(/\s/g, '').length / Math.max(1, response.bytes.byteLength));
       if (plain.trim().length === 0 || ratio < limits.minTextRatio) {
         audit({
           event: 'source.failed',
@@ -409,12 +600,7 @@ export function createLinkSourceProvider(deps: LinkSourceProviderDeps = {}): Dat
         });
         throw sourceError(501036, requestId, { urlHash: hashUrl(currentUrl), textRatio: ratio });
       }
-      audit({
-        event: 'source.read',
-        urlHash: hashUrl(currentUrl),
-        host: target.host,
-        outcome: 'ok',
-      });
+      audit({ event: 'source.read', urlHash: hashUrl(currentUrl), host: target.host, outcome: 'ok' });
       return { rawText, contentHash: hashSourceText(rawText) };
     }
   };
@@ -486,39 +672,24 @@ export function htmlToMarkdown(input: string, base?: URL): string {
     .replace(/<(script|style|nav|noscript|template)[\s\S]*?<\/\1>/gi, '')
     .replace(/<(script|style|nav|noscript|template)[^>]*\/?>/gi, '');
   html = html
-    .replace(
-      /<a\b[^>]*href\s*=\s*"([^"]+)"[^>]*>([\s\S]*?)<\/a>/gi,
-      (_m, href: string, label: string) => {
-        const target = base ? absolutize(href, base) : href;
-        return '[' + stripTags(label).trim() + '](' + target + ')';
-      },
-    )
-    .replace(
-      /<img\b[^>]*alt\s*=\s*"([^"]*)"[^>]*src\s*=\s*"([^"]+)"[^>]*\/?>/gi,
-      (_m, alt: string, src: string) => {
-        const target = base ? absolutize(src, base) : src;
-        return '![' + alt + '](' + target + ')';
-      },
-    );
+    .replace(/<a\b[^>]*href\s*=\s*"([^"]+)"[^>]*>([\s\S]*?)<\/a>/gi, (_m, href: string, label: string) => {
+      const target = base ? absolutize(href, base) : href;
+      return '[' + stripTags(label).trim() + '](' + target + ')';
+    })
+    .replace(/<img\b[^>]*alt\s*=\s*"([^"]*)"[^>]*src\s*=\s*"([^"]+)"[^>]*\/?>/gi, (_m, alt: string, src: string) => {
+      const target = base ? absolutize(src, base) : src;
+      return '![' + alt + '](' + target + ')';
+    });
   for (let level = 6; level >= 1; level -= 1) {
-    const pattern = new RegExp(
-      '<h' + String(level) + '[^>]*>([\\s\\S]*?)<\\/h' + String(level) + '>',
-      'gi',
-    );
+    const pattern = new RegExp('<h' + String(level) + '[^>]*>([\\s\\S]*?)<\\/h' + String(level) + '>', 'gi');
     html = html.replace(
       pattern,
       (_m, content: string) => '\n' + '#'.repeat(level) + ' ' + stripTags(content).trim() + '\n',
     );
   }
   html = html
-    .replace(
-      /<li[^>]*>([\s\S]*?)<\/li>/gi,
-      (_m, content: string) => '\n- ' + stripTags(content).trim(),
-    )
-    .replace(
-      /<pre[^>]*>([\s\S]*?)<\/pre>/gi,
-      (_m, content: string) => '\n```\n' + decodeEntities(stripTags(content)).trim() + '\n```\n',
-    )
+    .replace(/<li[^>]*>([\s\S]*?)<\/li>/gi, (_m, content: string) => '\n- ' + stripTags(content).trim())
+    .replace(/<pre[^>]*>([\s\S]*?)<\/pre>/gi, (_m, content: string) => '\n```\n' + decodeEntities(stripTags(content)).trim() + '\n```\n')
     .replace(/<tr[^>]*>([\s\S]*?)<\/tr>/gi, (_m, row: string) => {
       const cells = [...row.matchAll(/<(?:td|th)[^>]*>([\s\S]*?)<\/(?:td|th)>/gi)].map((cell) =>
         stripTags(cell[1] ?? '')

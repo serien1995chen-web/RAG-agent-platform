@@ -14,7 +14,7 @@ import { createApiDatasetSourceProvider, type ApiDatasetHttpClient } from './api
 import { createExternalSourceProvider } from './external-provider';
 import { createFileSourceProvider, type FileParserLike } from './file-provider';
 import { createLinkSourceProvider, type LinkLimits, type LinkFetcher } from './link-provider';
-import { sourceError } from './link-provider';
+import { sourceError, type SourceAuditSink } from './link-provider';
 import { createTextSourceProvider } from './text-provider';
 
 export { createTextSourceProvider } from './text-provider';
@@ -34,9 +34,14 @@ export interface SourceProviderRegistryDeps {
   linkFetcher?: LinkFetcher;
   resolveHost?: (hostname: string) => Promise<string[]>;
   linkLimits?: Partial<LinkLimits>;
+  /** 链接安全审计出口；只记 urlHash/host/结果分类。 */
+  audit?: SourceAuditSink;
   apiDataset?: { configured: boolean; client?: ApiDatasetHttpClient; baseUrl?: string };
   pdfProvider?: PdfEnhanceProviderPort;
   pdfProviderConfigured?: boolean;
+  /** U-25：mock 合同开关与运行环境。 */
+  mock?: boolean;
+  environment?: string;
 }
 
 export class SourceProviderRegistry {
@@ -56,6 +61,7 @@ export class SourceProviderRegistry {
         fetcher: deps.linkFetcher,
         resolveHost: deps.resolveHost,
         limits: deps.linkLimits,
+        audit: deps.audit,
       }),
     );
     this.providers.set(
@@ -71,6 +77,8 @@ export class SourceProviderRegistry {
       createExternalSourceProvider({
         configured: deps.pdfProviderConfigured ?? false,
         pdfProvider: deps.pdfProvider,
+        mock: deps.mock,
+        environment: deps.environment,
       }),
     );
   }

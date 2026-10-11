@@ -136,13 +136,16 @@ describe('TEST-FI-PROVIDER-001 source providers', () => {
     const provider = createExternalSourceProvider({
       configured: true,
       pdfProvider,
+      mock: false,
+      environment: 'test',
       sleep: async () => {},
     });
     const result = await provider.read(request('externalFile', 'scan.pdf'), context);
     expect(result.rawText).toBe('PDF 解析正文');
   });
 
-  it('keeps audit fields minimal (TEST-E2E-PROVIDER-001)', async () => {
+  it('wires the audit sink through the registry and records read/blocked/failed with minimal fields (TEST-E2E-PROVIDER-001)', async () => {
+    const events: Array<Record<string, unknown>> = [];
     const registry = createSourceProviderRegistry({
       linkFetcher: async () => ({
         status: 200,
@@ -155,16 +158,69 @@ describe('TEST-FI-PROVIDER-001 source providers', () => {
       }),
       resolveHost: async () => ['93.184.216.34'],
       linkLimits: { retryBackoffMs: [] },
+      audit: (entry) => events.push(entry as unknown as Record<string, unknown>),
     });
-    const provider = registry.resolve('link');
-    expect(provider).not.toBeNull();
-    const result = await (provider as DatasetSourceProvider).read(
-      request('link', 'https://example.com/a?secret=1'),
-      {
-        ...context,
-      },
-    );
+    const provider = registry.resolve('link') as DatasetSourceProvider;
+
+    const result = await provider.read(request('link', 'https://example.com/a?secret=1'), context);
     expect(result.rawText).toContain('正文内容');
+
+    await provider.read(request('link', 'http://10.0.0.9/'), context).catch(() => undefined);
+
+    const readEvent = events.find((entry) => entry.event === 'source.read');
+    expect(readEvent).toBeDefined();
+    expect(readEvent?.host).toBe('example.com');
+    expect(typeof readEvent?.urlHash).toBe('string');
+    expect(events.some((entry) => entry.event === 'source.blocked')).toBe(true);
+    for (const entry of events) {
+      expect(Object.keys(entry)).not.toContain('body');
+      expect(Object.keys(entry)).not.toContain('query');
+      expect(JSON.stringify(entry)).not.toContain('secret=1');
+    }
+  });
+
+  it('records source.failed for a 4xx link response', async () => {
+    const events: Array<Record<string, unknown>> = [];
+    const registry = createSourceProviderRegistry({
+      linkFetcher: async () => ({
+        status: 404,
+        headers: { get: () => null },
+        text: async () => '',
+      }),
+      resolveHost: async () => ['93.184.216.34'],
+      linkLimits: { retryBackoffMs: [] },
+      audit: (entry) => events.push(entry as unknown as Record<string, unknown>),
+    });
+    const provider = registry.resolve('link') as DatasetSourceProvider;
+    await provider.read(request('link', 'https://example.com/missing'), context).catch(() => undefined);
+    expect(events.some((entry) => entry.event === 'source.failed')).toBe(true);
+  });
+
+  it('rejects production + mock with 501063 without calling the provider (TEST-U25-PROVIDER-001)', async () => {
+    let called = 0;
+    const pdfProvider: PdfEnhanceProviderPort = {
+      upload: async () => {
+        called += 1;
+        return { providerTaskId: 't1' };
+      },
+      parse: async () => ({ state: 'done', text: 'x' }),
+      poll: async () => ({ state: 'done', text: 'x' }),
+      cancel: async () => ({ cancelled: true }),
+    };
+    const registry = createSourceProviderRegistry({
+      pdfProvider,
+      pdfProviderConfigured: true,
+      mock: true,
+      environment: 'production',
+    });
+    const provider = registry.resolve('externalFile') as DatasetSourceProvider;
+    try {
+      await provider.read(request('externalFile', 'scan.pdf'), context);
+      expect.unreachable('should throw');
+    } catch (error) {
+      expect(codeOf(error)).toBe(501063);
+    }
+    expect(called).toBe(0);
   });
 
   it('rejects unregistered source types with a stable error', async () => {

@@ -9,11 +9,15 @@ import type {
   SourceReadResult,
 } from '../../../../ports/capabilities';
 import type { RequestContext } from '../../../../ports/types';
+import { assertMockModeAllowed } from '../../../../shared/config';
 import { hashSourceText, sourceError } from './link-provider';
 
 export interface ExternalProviderDeps {
   pdfProvider?: PdfEnhanceProviderPort;
   configured: boolean;
+  /** U-25：mock 合同开关与运行环境；生产 + mock → 501063。 */
+  mock?: boolean;
+  environment?: string;
   pollIntervalMs?: number;
   maxPolls?: number;
   sleep?: (ms: number) => Promise<void>;
@@ -32,6 +36,13 @@ export function createExternalSourceProvider(deps: ExternalProviderDeps): Datase
     if (!deps.configured || !deps.pdfProvider) {
       throw sourceError(501062, context.requestId, { dependency: 'pdf_enhance_provider' });
     }
+    // U-25：调用 Provider 前统一走 mock 门禁（生产 + mock → 501063，且不触发任何请求）。
+    assertMockModeAllowed({
+      dependency: 'pdfProvider',
+      mode: deps.mock ? 'mock' : 'real',
+      environment: deps.environment ?? 'development',
+      requestId: context.requestId,
+    });
     const provider = deps.pdfProvider;
     try {
       const uploaded = await provider.upload(
