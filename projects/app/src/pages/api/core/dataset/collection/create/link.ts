@@ -47,7 +47,9 @@ export default withApiHandler(
     );
     response
       .status(200)
-      .json(successResponse({ collectionId: result.collectionId, state: result.status }, requestId));
+      .json(
+        successResponse({ collectionId: result.collectionId, state: result.status }, requestId),
+      );
   },
   { validationErrorCode: 501065 },
 );

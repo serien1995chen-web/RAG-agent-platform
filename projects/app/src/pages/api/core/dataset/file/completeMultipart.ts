@@ -41,9 +41,9 @@ export default withApiHandler(
       },
       context,
     );
-    response.status(200).json(
-      successResponse({ fileRef: `file:${body.fileId}:${completed.etag ?? ''}` }, requestId),
-    );
+    response
+      .status(200)
+      .json(successResponse({ fileRef: `file:${body.fileId}:${completed.etag ?? ''}` }, requestId));
   },
   { validationErrorCode: 501060 },
 );

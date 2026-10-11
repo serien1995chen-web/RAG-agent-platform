@@ -41,9 +41,14 @@ export default withApiHandler(
     if (body.checksum !== undefined) {
       const existing = findPartByChecksum(session.fileId, body.partNumber, body.checksum);
       if (existing !== null) {
-        response.status(200).json(
-          successResponse({ etag: existing, partNumber: body.partNumber, size: bytes.byteLength }, requestId),
-        );
+        response
+          .status(200)
+          .json(
+            successResponse(
+              { etag: existing, partNumber: body.partNumber, size: bytes.byteLength },
+              requestId,
+            ),
+          );
         return;
       }
     }

@@ -1,6 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { RequestContext } from '../../packages/service/src/ports/types';
+import type * as SharedApiModule from '../../projects/app/src/shared/api';
 
 const context: RequestContext = {
   requestId: 'req-imp-exp',
@@ -156,9 +157,7 @@ function data(body: Record<string, unknown>): Record<string, unknown> {
 describe('P4-10 import/export and API dataset routes', () => {
   it('serves eight routes without 501999 and hides internal keys', async () => {
     vi.doMock('../../projects/app/src/shared/api', async () => {
-      const actual = await vi.importActual<typeof import('../../projects/app/src/shared/api')>(
-        '../../projects/app/src/shared/api',
-      );
+      const actual = await vi.importActual<SharedApiModule>('../../projects/app/src/shared/api');
       return {
         ...actual,
         parseDto: (name: string, value: unknown) => {
@@ -168,23 +167,18 @@ describe('P4-10 import/export and API dataset routes', () => {
       };
     });
     const exportAll = await import('../../projects/app/src/pages/api/core/dataset/exportAll');
-    const collectionExport = await import(
-      '../../projects/app/src/pages/api/core/dataset/collection/export'
-    );
-    const collectionImport = await import(
-      '../../projects/app/src/pages/api/core/dataset/collection/import'
-    );
+    const collectionExport =
+      await import('../../projects/app/src/pages/api/core/dataset/collection/export');
+    const collectionImport =
+      await import('../../projects/app/src/pages/api/core/dataset/collection/import');
     const datasetImport = await import('../../projects/app/src/pages/api/core/dataset/import');
-    const getCatalog = await import(
-      '../../projects/app/src/pages/api/core/dataset/apiDataset/getCatalog'
-    );
-    const getPathNames = await import(
-      '../../projects/app/src/pages/api/core/dataset/apiDataset/getPathNames'
-    );
+    const getCatalog =
+      await import('../../projects/app/src/pages/api/core/dataset/apiDataset/getCatalog');
+    const getPathNames =
+      await import('../../projects/app/src/pages/api/core/dataset/apiDataset/getPathNames');
     const list = await import('../../projects/app/src/pages/api/core/dataset/apiDataset/list');
-    const listExistId = await import(
-      '../../projects/app/src/pages/api/core/dataset/apiDataset/listExistId'
-    );
+    const listExistId =
+      await import('../../projects/app/src/pages/api/core/dataset/apiDataset/listExistId');
 
     const exported = await invoke(exportAll, {
       method: 'GET',
@@ -273,7 +267,16 @@ describe('P4-10 import/export and API dataset routes', () => {
     expect(existResult.status).toBe(200);
     expect(data(existResult.body).fileIds).toEqual(['f1']);
 
-    for (const result of [exported, collectionExported, importResult, datasetImportResult, catalog, pathNames, listResult, existResult]) {
+    for (const result of [
+      exported,
+      collectionExported,
+      importResult,
+      datasetImportResult,
+      catalog,
+      pathNames,
+      listResult,
+      existResult,
+    ]) {
       expect(JSON.stringify(result.body)).not.toContain('501999');
     }
     vi.doUnmock('../../projects/app/src/shared/api');
@@ -282,9 +285,7 @@ describe('P4-10 import/export and API dataset routes', () => {
   it('rejects oversized imports with 501030', async () => {
     vi.resetModules();
     vi.doMock('../../projects/app/src/shared/api', async () => {
-      const actual = await vi.importActual<typeof import('../../projects/app/src/shared/api')>(
-        '../../projects/app/src/shared/api',
-      );
+      const actual = await vi.importActual<SharedApiModule>('../../projects/app/src/shared/api');
       return {
         ...actual,
         parseDto: (name: string, value: unknown) => {

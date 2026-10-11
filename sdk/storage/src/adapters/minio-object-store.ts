@@ -196,13 +196,16 @@ export class MinioObjectStore implements ObjectStorePort {
       'uploadPart',
       async () => {
         const buffer = Buffer.from(input.body);
-        const result = await this.client.uploadPart({
-          bucketName: this.bucket,
-          objectName: input.ref.key,
-          uploadID: uploadId,
-          partNumber: input.partNumber,
-          headers: {},
-        }, buffer);
+        const result = await this.client.uploadPart(
+          {
+            bucketName: this.bucket,
+            objectName: input.ref.key,
+            uploadID: uploadId,
+            partNumber: input.partNumber,
+            headers: {},
+          },
+          buffer,
+        );
         return { etag: result.etag, partNumber: result.part, size: buffer.byteLength };
       },
       input.ref,

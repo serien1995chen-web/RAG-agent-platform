@@ -39,7 +39,12 @@ export default withApiHandler(
     const rows: ExportRow[] = [];
     for (const collection of collections.list) {
       const items = await runtime.knowledgeItemService.listItems(
-        { collectionId: collection.collectionId, page: 1, limit: 1000, options: { timeoutMs: 10_000 } },
+        {
+          collectionId: collection.collectionId,
+          page: 1,
+          limit: 1000,
+          options: { timeoutMs: 10_000 },
+        },
         context,
       );
       for (const item of items.list) {

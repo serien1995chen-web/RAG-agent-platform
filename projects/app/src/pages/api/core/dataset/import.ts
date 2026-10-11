@@ -24,9 +24,11 @@ export default withApiHandler(
     if (body.file === undefined || body.file === null) {
       throw apiError(501058, requestId, { missingHeaders: ['q'], duplicateHeaders: [] });
     }
-    response.status(200).json(
-      successResponse({ report: { success: 0, skipped: 0, failed: 0, errors: [] } }, requestId),
-    );
+    response
+      .status(200)
+      .json(
+        successResponse({ report: { success: 0, skipped: 0, failed: 0, errors: [] } }, requestId),
+      );
   },
   { validationErrorCode: 501030 },
 );

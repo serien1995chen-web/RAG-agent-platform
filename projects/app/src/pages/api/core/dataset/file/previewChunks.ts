@@ -1,4 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
+import type { ExtendedAppRuntime } from '../../../../../runtime';
 import { authenticateRequest } from '../../../../../runtime/auth';
 import { getRuntime } from '../../../../../runtime/health';
 import { parseDto, successResponse, withApiHandler } from '../../../../../shared/api';
@@ -15,7 +16,7 @@ interface PreviewChunksBody {
 /** API-FILE-004 POST /api/core/dataset/file/previewChunks */
 export default withApiHandler(
   async (request: NextApiRequest, response: NextApiResponse, { requestId }: ApiHandlerContext) => {
-    const runtime = (await getRuntime()) as import('../../../../../runtime').ExtendedAppRuntime;
+    const runtime = (await getRuntime()) as ExtendedAppRuntime;
     await authenticateRequest(runtime, request, requestId);
     const body = parseDto<PreviewChunksBody>('PreviewChunksBody', request.body);
     let rawText = body.rawText ?? '';

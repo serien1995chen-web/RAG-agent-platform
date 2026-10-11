@@ -1,4 +1,7 @@
-import { DEFAULT_DATASET_RUNTIME_CONFIG, type DatasetRuntimeConfig } from '../config/dataset-runtime-config.schema';
+import {
+  DEFAULT_DATASET_RUNTIME_CONFIG,
+  type DatasetRuntimeConfig,
+} from '../config/dataset-runtime-config.schema';
 
 export const RAW_BODY_TOO_LARGE = 501030;
 export const PAYLOAD_BYTES_EXCEEDED = 501065;
@@ -87,10 +90,7 @@ export function checkBusinessBytes(
   return { allowed: true };
 }
 
-export function checkItemCount(
-  limits: RequestLimitConfig,
-  items: number,
-): RequestLimitDecision {
+export function checkItemCount(limits: RequestLimitConfig, items: number): RequestLimitDecision {
   if (items > limits.maxItems) {
     return {
       allowed: false,
@@ -103,7 +103,9 @@ export function checkItemCount(
   return { allowed: true };
 }
 
-export function isLimitDecision(decision: RequestLimitDecision): decision is RequestLimitDecision & {
+export function isLimitDecision(
+  decision: RequestLimitDecision,
+): decision is RequestLimitDecision & {
   allowed: false;
   code: number;
   layer: NonNullable<RequestLimitDecision['layer']>;

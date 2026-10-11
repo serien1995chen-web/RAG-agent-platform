@@ -19,10 +19,7 @@ export default withApiHandler(
   async (request: NextApiRequest, response: NextApiResponse, { requestId }: ApiHandlerContext) => {
     const runtime = (await getRuntime()) as ExtendedAppRuntime;
     const { context } = await authenticateRequest(runtime, request, requestId);
-    const body = parseDto<PresignSearchTestImageBody>(
-      'PresignSearchTestImageBody',
-      request.body,
-    );
+    const body = parseDto<PresignSearchTestImageBody>('PresignSearchTestImageBody', request.body);
     if (typeof body.filename !== 'string' || body.filename.length === 0) {
       throw apiError(501065, requestId, { field: 'filename' });
     }

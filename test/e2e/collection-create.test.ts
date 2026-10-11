@@ -1,6 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { RequestContext } from '../../packages/service/src/ports/types';
+import type * as SharedApiModule from '../../projects/app/src/shared/api';
 
 const context: RequestContext = {
   requestId: 'req-col-create',
@@ -26,17 +27,14 @@ vi.mock('../../projects/app/src/runtime/auth', () => ({
   authenticateRequest: async () => ({ context, subject: context.tenant }),
 }));
 
-vi.mock(
-  '../../packages/service/src/modules/collection/adapter/source-provider/index',
-  () => ({
-    createSourceProviderRegistry: () => ({
-      resolve: () => ({
-        read: async () => ({ rawText: 'mock content', contentHash: 'hash-mock' }),
-        preview: async () => ({ rawText: 'mock content', contentHash: 'hash-mock' }),
-      }),
+vi.mock('../../packages/service/src/modules/collection/adapter/source-provider/index', () => ({
+  createSourceProviderRegistry: () => ({
+    resolve: () => ({
+      read: async () => ({ rawText: 'mock content', contentHash: 'hash-mock' }),
+      preview: async () => ({ rawText: 'mock content', contentHash: 'hash-mock' }),
     }),
   }),
-);
+}));
 
 function responseRecorder(): {
   response: NextApiResponse;
@@ -81,7 +79,10 @@ beforeEach(() => {
   const collections = { create: async () => ({ collectionId }) };
   const sourceProvider = {
     read: async (req: { sourceRef: string }) => ({ rawText: req.sourceRef, contentHash: 'hash' }),
-    preview: async (req: { sourceRef: string }) => ({ rawText: req.sourceRef, contentHash: 'hash' }),
+    preview: async (req: { sourceRef: string }) => ({
+      rawText: req.sourceRef,
+      contentHash: 'hash',
+    }),
   };
   state.runtime = {
     collectionRepository: collections,
@@ -115,27 +116,20 @@ function envelopeData(body: Record<string, unknown>): Record<string, unknown> {
 
 describe('P4-08 collection/create routes', () => {
   it('serves the nine routes without 501999 and separates sources', async () => {
-    const file = await import('../../projects/app/src/pages/api/core/dataset/collection/create/file');
-    const link = await import('../../projects/app/src/pages/api/core/dataset/collection/create/link');
-    const text = await import('../../projects/app/src/pages/api/core/dataset/collection/create/text');
-    const externalFile = await import(
-      '../../projects/app/src/pages/api/core/dataset/collection/create/externalFile'
-    );
-    const apiFile = await import(
-      '../../projects/app/src/pages/api/core/dataset/collection/create/apiFile'
-    );
-    const images = await import(
-      '../../projects/app/src/pages/api/core/dataset/collection/create/images'
-    );
-    const backup = await import(
-      '../../projects/app/src/pages/api/core/dataset/collection/create/backup'
-    );
-    const template = await import(
-      '../../projects/app/src/pages/api/core/dataset/collection/create/template'
-    );
-    const createWithFiles = await import(
-      '../../projects/app/src/pages/api/core/dataset/createWithFiles'
-    );
+    const file =
+      await import('../../projects/app/src/pages/api/core/dataset/collection/create/file');
+    const link =
+      await import('../../projects/app/src/pages/api/core/dataset/collection/create/link');
+    const text =
+      await import('../../projects/app/src/pages/api/core/dataset/collection/create/text');
+    const externalFile =
+      await import('../../projects/app/src/pages/api/core/dataset/collection/create/externalFile');
+    const apiFile =
+      await import('../../projects/app/src/pages/api/core/dataset/collection/create/apiFile');
+    const images =
+      await import('../../projects/app/src/pages/api/core/dataset/collection/create/images');
+    const createWithFiles =
+      await import('../../projects/app/src/pages/api/core/dataset/createWithFiles');
 
     const fileResult = await invoke(file, {
       method: 'POST',
@@ -195,7 +189,15 @@ describe('P4-08 collection/create routes', () => {
     expect(aggregateResult.status).toBe(200);
     expect(envelopeData(aggregateResult.body)).toMatchObject({ datasetId });
 
-    for (const result of [fileResult, textResult, linkResult, externalResult, apiFileResult, imagesResult, aggregateResult]) {
+    for (const result of [
+      fileResult,
+      textResult,
+      linkResult,
+      externalResult,
+      apiFileResult,
+      imagesResult,
+      aggregateResult,
+    ]) {
       expect(JSON.stringify(result.body)).not.toContain('501999');
     }
   });
@@ -203,9 +205,7 @@ describe('P4-08 collection/create routes', () => {
   it('rejects invalid backup headers and duplicate headers with stable codes', async () => {
     vi.resetModules();
     vi.doMock('../../projects/app/src/shared/api', async () => {
-      const actual = await vi.importActual<typeof import('../../projects/app/src/shared/api')>(
-        '../../projects/app/src/shared/api',
-      );
+      const actual = await vi.importActual<SharedApiModule>('../../projects/app/src/shared/api');
       return {
         ...actual,
         parseDto: (name: string, value: unknown) => {
@@ -214,7 +214,8 @@ describe('P4-08 collection/create routes', () => {
         },
       };
     });
-    const backup = await import('../../projects/app/src/pages/api/core/dataset/collection/create/backup');
+    const backup =
+      await import('../../projects/app/src/pages/api/core/dataset/collection/create/backup');
     const missing = await invoke(backup, {
       method: 'POST',
       url: '/api/core/dataset/collection/create/backup',
@@ -233,9 +234,7 @@ describe('P4-08 collection/create routes', () => {
   it('rejects websiteDataset aggregation with 501001', async () => {
     vi.resetModules();
     vi.doMock('../../projects/app/src/shared/api', async () => {
-      const actual = await vi.importActual<typeof import('../../projects/app/src/shared/api')>(
-        '../../projects/app/src/shared/api',
-      );
+      const actual = await vi.importActual<SharedApiModule>('../../projects/app/src/shared/api');
       return {
         ...actual,
         parseDto: (name: string, value: unknown) => {
@@ -244,9 +243,8 @@ describe('P4-08 collection/create routes', () => {
         },
       };
     });
-    const createWithFiles = await import(
-      '../../projects/app/src/pages/api/core/dataset/createWithFiles'
-    );
+    const createWithFiles =
+      await import('../../projects/app/src/pages/api/core/dataset/createWithFiles');
     const result = await invoke(createWithFiles, {
       method: 'POST',
       url: '/api/core/dataset/createWithFiles',
@@ -259,7 +257,8 @@ describe('P4-08 collection/create routes', () => {
   });
 
   it('rejects cross-team temp image keys with 501009', async () => {
-    const images = await import('../../projects/app/src/pages/api/core/dataset/collection/create/images');
+    const images =
+      await import('../../projects/app/src/pages/api/core/dataset/collection/create/images');
     const result = await invoke(images, {
       method: 'POST',
       url: '/api/core/dataset/collection/create/images',

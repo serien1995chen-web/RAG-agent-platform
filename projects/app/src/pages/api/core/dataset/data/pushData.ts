@@ -1,4 +1,5 @@
 import { PushDataService } from '@kb/service';
+import type { QueuePort } from '@kb/dal';
 import type { NextApiRequest, NextApiResponse } from 'next';
 import type { ExtendedAppRuntime } from '../../../../../runtime';
 import { authenticateRequest } from '../../../../../runtime/auth';
@@ -28,7 +29,9 @@ export default withApiHandler(
       throw apiError(501065, requestId, { limitBytes: MAX_PUSH_BYTES, actualBytes: bytes });
     }
     if (body.data.length === 0) {
-      response.status(200).json(successResponse({ queued: { accepted: 0, skipped: 0, taskIds: [] } }, requestId));
+      response
+        .status(200)
+        .json(successResponse({ queued: { accepted: 0, skipped: 0, taskIds: [] } }, requestId));
       return;
     }
     const firstCollection = body.data[0]!.collectionId;
@@ -36,7 +39,7 @@ export default withApiHandler(
       { collectionId: firstCollection, options: PORT_OPTIONS },
       context,
     );
-    const queue = (runtime.ports as { queue?: import('@kb/dal').QueuePort }).queue;
+    const queue = (runtime.ports as { queue?: QueuePort }).queue;
     if (!queue) throw apiError(501062, requestId, { dependency: 'queue', mode: 'parse' });
     const service = new PushDataService({
       jobs: runtime.processingRepository,

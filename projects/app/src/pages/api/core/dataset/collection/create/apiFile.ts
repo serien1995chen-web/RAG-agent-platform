@@ -23,10 +23,7 @@ export default withApiHandler(
   async (request: NextApiRequest, response: NextApiResponse, { requestId }: ApiHandlerContext) => {
     const runtime = (await getRuntime()) as ExtendedAppRuntime;
     const { context } = await authenticateRequest(runtime, request, requestId);
-    const body = parseDto<CollectionCreateApiFileBody>(
-      'CollectionCreateApiFileBody',
-      request.body,
-    );
+    const body = parseDto<CollectionCreateApiFileBody>('CollectionCreateApiFileBody', request.body);
     let provider;
     try {
       provider = resolveSourceProvider('apiFile');

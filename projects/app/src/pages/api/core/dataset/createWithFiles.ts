@@ -1,3 +1,4 @@
+import { WEBSITE_DATASET_TYPE } from '@kb/contracts';
 import type { NextApiRequest, NextApiResponse } from 'next';
 import type { ExtendedAppRuntime } from '../../../../runtime';
 import { authenticateRequest } from '../../../../runtime/auth';
@@ -22,7 +23,7 @@ export default withApiHandler(
     const runtime = (await getRuntime()) as ExtendedAppRuntime;
     const { context } = await authenticateRequest(runtime, request, requestId);
     const body = parseDto<CreateDatasetWithFilesBody>('CreateDatasetWithFilesBody', request.body);
-    if (body.datasetParams.type === 'websiteDataset') {
+    if (body.datasetParams.type === WEBSITE_DATASET_TYPE) {
       throw apiError(501001, requestId, { field: 'type' });
     }
     if (body.files.length > 10) {

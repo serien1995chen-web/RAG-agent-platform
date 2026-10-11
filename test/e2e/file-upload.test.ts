@@ -1,6 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { RequestContext } from '../../packages/service/src/ports/types';
+import type * as SharedApiModule from '../../projects/app/src/shared/api';
 
 const context: RequestContext = {
   requestId: 'req-file-upload',
@@ -112,9 +113,7 @@ function data(body: Record<string, unknown>): Record<string, unknown> {
 describe('P4-07 file and multipart routes', () => {
   it('serves the seven routes without internal path leakage', async () => {
     vi.doMock('../../projects/app/src/shared/api', async () => {
-      const actual = await vi.importActual<typeof import('../../projects/app/src/shared/api')>(
-        '../../projects/app/src/shared/api',
-      );
+      const actual = await vi.importActual<SharedApiModule>('../../projects/app/src/shared/api');
       return {
         ...actual,
         parseDto: (name: string, value: unknown) => {
@@ -123,25 +122,20 @@ describe('P4-07 file and multipart routes', () => {
         },
       };
     });
-    const presignUpload = await import(
-      '../../projects/app/src/pages/api/core/dataset/file/presignUpload'
-    );
-    const completeMultipart = await import(
-      '../../projects/app/src/pages/api/core/dataset/file/completeMultipart'
-    );
-    const abortMultipart = await import(
-      '../../projects/app/src/pages/api/core/dataset/file/abortMultipart'
-    );
-    const previewChunks = await import(
-      '../../projects/app/src/pages/api/core/dataset/file/previewChunks'
-    );
-    const presignImage = await import(
-      '../../projects/app/src/pages/api/core/dataset/file/presignSearchTestImage'
-    );
-    const imagePreviews = await import(
-      '../../projects/app/src/pages/api/core/dataset/file/getSearchTestImagePreviewUrls'
-    );
-    const uploadPart = await import('../../projects/app/src/pages/api/core/dataset/file/uploadPart');
+    const presignUpload =
+      await import('../../projects/app/src/pages/api/core/dataset/file/presignUpload');
+    const completeMultipart =
+      await import('../../projects/app/src/pages/api/core/dataset/file/completeMultipart');
+    const abortMultipart =
+      await import('../../projects/app/src/pages/api/core/dataset/file/abortMultipart');
+    const previewChunks =
+      await import('../../projects/app/src/pages/api/core/dataset/file/previewChunks');
+    const presignImage =
+      await import('../../projects/app/src/pages/api/core/dataset/file/presignSearchTestImage');
+    const imagePreviews =
+      await import('../../projects/app/src/pages/api/core/dataset/file/getSearchTestImagePreviewUrls');
+    const uploadPart =
+      await import('../../projects/app/src/pages/api/core/dataset/file/uploadPart');
 
     const presign = await invoke(presignUpload, {
       method: 'POST',
@@ -232,16 +226,24 @@ describe('P4-07 file and multipart routes', () => {
     expect(previews.status).toBe(200);
     expect((data(previews.body).previewUrls as string[])[0]).toContain('https://');
 
-    for (const result of [presign, partOne, duplicate, complete, abort, preview, imagePresign, previews]) {
+    for (const result of [
+      presign,
+      partOne,
+      duplicate,
+      complete,
+      abort,
+      preview,
+      imagePresign,
+      previews,
+    ]) {
       expect(JSON.stringify(result.body)).not.toContain('501999');
     }
     vi.doUnmock('../../projects/app/src/shared/api');
   });
 
   it('rejects cross-team temp image keys with 501061', async () => {
-    const imagePreviews = await import(
-      '../../projects/app/src/pages/api/core/dataset/file/getSearchTestImagePreviewUrls'
-    );
+    const imagePreviews =
+      await import('../../projects/app/src/pages/api/core/dataset/file/getSearchTestImagePreviewUrls');
     const result = await invoke(imagePreviews, {
       method: 'POST',
       url: '/api/core/dataset/file/getSearchTestImagePreviewUrls',
@@ -252,9 +254,8 @@ describe('P4-07 file and multipart routes', () => {
   });
 
   it('rejects an unknown multipart session with 501061', async () => {
-    const abortMultipart = await import(
-      '../../projects/app/src/pages/api/core/dataset/file/abortMultipart'
-    );
+    const abortMultipart =
+      await import('../../projects/app/src/pages/api/core/dataset/file/abortMultipart');
     const result = await invoke(abortMultipart, {
       method: 'POST',
       url: '/api/core/dataset/file/abortMultipart',

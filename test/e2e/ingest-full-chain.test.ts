@@ -25,17 +25,14 @@ vi.mock('../../projects/app/src/runtime/auth', () => ({
   authenticateRequest: async () => ({ context, subject: context.tenant }),
 }));
 
-vi.mock(
-  '../../packages/service/src/modules/collection/adapter/source-provider/index',
-  () => ({
-    createSourceProviderRegistry: () => ({
-      resolve: () => ({
-        read: async () => ({ rawText: 'full chain content', contentHash: 'hash-chain' }),
-        preview: async () => ({ rawText: 'full chain content', contentHash: 'hash-chain' }),
-      }),
+vi.mock('../../packages/service/src/modules/collection/adapter/source-provider/index', () => ({
+  createSourceProviderRegistry: () => ({
+    resolve: () => ({
+      read: async () => ({ rawText: 'full chain content', contentHash: 'hash-chain' }),
+      preview: async () => ({ rawText: 'full chain content', contentHash: 'hash-chain' }),
     }),
   }),
-);
+}));
 
 function responseRecorder() {
   let status = 200;
@@ -73,7 +70,8 @@ beforeEach(() => {
 
 describe('P4-12 ingest full chain', () => {
   it('file source import enqueues exactly one parse task for a non-empty import', async () => {
-    const text = await import('../../projects/app/src/pages/api/core/dataset/collection/create/text');
+    const text =
+      await import('../../projects/app/src/pages/api/core/dataset/collection/create/text');
     const recorder = responseRecorder();
     await text.default(
       {

@@ -1,9 +1,13 @@
 import { ApiErrorException, createApiError } from '@kb/contracts';
 import {
+  type CollectionRepository,
   ImportSourceService,
+  type ProcessingJobRepository,
+  type ServicePorts,
   type CollectionSnapshot,
   type DatasetSourceProvider,
 } from '@kb/service';
+import type { QueuePort } from '@kb/dal';
 import { createSourceProviderRegistry } from '../../../../packages/service/src/modules/collection/adapter/source-provider/index';
 
 export const MAX_RAW_TEXT_BYTES = 10 * 1024 * 1024;
@@ -40,16 +44,16 @@ export function normalizeTrainingType(mode: string | undefined): {
 }
 
 export type ImportRuntime = {
-  collectionRepository: import('@kb/service').CollectionRepository;
-  processingRepository: import('@kb/service').ProcessingJobRepository;
-  ports: import('@kb/service').ServicePorts;
+  collectionRepository: CollectionRepository;
+  processingRepository: ProcessingJobRepository;
+  ports: ServicePorts;
 };
 
 export function createImportSourceService(
   runtime: ImportRuntime,
   sourceProvider: DatasetSourceProvider,
 ): ImportSourceService {
-  const queue = (runtime.ports as { queue?: import('@kb/dal').QueuePort }).queue;
+  const queue = (runtime.ports as { queue?: QueuePort }).queue;
   return new ImportSourceService({
     collections: runtime.collectionRepository,
     sourceProvider,
