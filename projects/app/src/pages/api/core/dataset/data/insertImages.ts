@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { ApiErrorException, createApiError } from '@kb/contracts';
 import type { NextApiRequest, NextApiResponse } from 'next';
 import type { ExtendedAppRuntime } from '../../../../../runtime';
@@ -24,6 +25,10 @@ function normalizeTrainingType(mode: string | undefined): {
   }
   return { mode: 'chunk', autoIndexes: false };
 }
+function stableImageDataId(collectionId: string, file: string): string {
+  const digest = createHash('sha256').update(`${collectionId}\u0000${file}`).digest('hex');
+  return `img-${digest.slice(0, 32)}`;
+}
 
 interface InsertImagesBody {
   collectionId: string;
@@ -48,13 +53,48 @@ export default withApiHandler(
     for (const file of body.files) {
       if (!file.startsWith(prefix)) throw apiError(501009, requestId, {});
     }
+    const collection = await runtime.collectionService.getCollection(
+      { collectionId: body.collectionId, options: { timeoutMs: 10_000 } },
+      context,
+    );
     const normalized = normalizeTrainingType(body.trainingType);
-    const items = body.files.map((file) => ({
-      file,
-      state: 'pending',
-      mode: normalized.mode,
-      autoIndexes: normalized.autoIndexes,
-    }));
+    const mode = normalized.mode === 'imageParse' ? 'imageParse' : 'image';
+    // 真实逐图处理：创建 ImageAsset/Task 并返回真实每图结果；单图失败可见，不隐藏。
+    const items: Array<Record<string, unknown>> = [];
+    for (const file of body.files) {
+      try {
+        const result = await runtime.imageApplicationService.createImage(
+          {
+            imageId: file,
+            datasetId: collection.datasetId,
+            collectionId: collection.collectionId,
+            dataId: stableImageDataId(collection.collectionId, file),
+            bucketName: 'kb-image',
+            objectKey: file,
+            mimeType: 'image/*',
+            size: 0,
+            mode,
+            options: { timeoutMs: 30_000 },
+          },
+          context,
+        );
+        items.push({
+          file,
+          state: result.state,
+          producedItems: result.producedItems,
+          ...(result.errorMsg !== undefined ? { errorMsg: result.errorMsg } : {}),
+          autoIndexes: normalized.autoIndexes,
+        });
+      } catch (error) {
+        items.push({
+          file,
+          state: 'failed',
+          producedItems: 0,
+          errorMsg: error instanceof Error ? error.message : 'image_failed',
+          autoIndexes: normalized.autoIndexes,
+        });
+      }
+    }
     response.status(200).json(successResponse({ items }, requestId));
   },
   { validationErrorCode: 501010 },

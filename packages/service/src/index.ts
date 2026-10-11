@@ -202,11 +202,14 @@ export type {
 export {
   KNOWLEDGE_ITEM_INVARIANTS,
   KnowledgeItemApplicationService,
+  ImageApplicationService,
+  normalizeImageMode,
   KNOWLEDGE_ITEM_JOB_DEFINITIONS,
   InsertDataService,
   createKnowledgeItemAdapter,
   createKnowledgeItemJobHandler,
   createKnowledgeItemRepository,
+  createImageAssetRepository,
   validateKnowledgeItem,
 } from './modules/item';
 export type {

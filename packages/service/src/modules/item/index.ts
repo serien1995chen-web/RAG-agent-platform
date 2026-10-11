@@ -7,7 +7,10 @@ export {
 export type { KnowledgeItem, KnowledgeItemQueryRepository } from './domain';
 export { KnowledgeItemApplicationService } from './application';
 export type { KnowledgeItemServiceDeps } from './application';
+export { ImageApplicationService, normalizeImageMode } from './application';
+export type { ImageApplicationServiceDeps } from './application';
 export { createKnowledgeItemRepository } from './repository';
+export { createImageAssetRepository } from './repository';
 export { createKnowledgeItemAdapter } from './adapter';
 export { KNOWLEDGE_ITEM_JOB_DEFINITIONS, createKnowledgeItemJobHandler } from './jobs';
 export type { KnowledgeItemJobHandler } from './jobs';

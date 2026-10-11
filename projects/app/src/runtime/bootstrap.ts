@@ -1,5 +1,6 @@
 import {
   DatasetApiService,
+  ImageApplicationService,
   KnowledgeItemApplicationService,
   MongoKnowledgeBaseRepository,
   ProcessingApplicationService,
@@ -8,6 +9,7 @@ import {
   createDefaultPorts,
   createSourceProviderRegistry,
   createDeleteJobRepository,
+  createImageAssetRepository,
   createKnowledgeItemIndexAdapter,
   createKnowledgeItemRepository,
   createMigrationRunRepository,
@@ -38,6 +40,7 @@ export interface ExtendedAppRuntime extends AppRuntime {
   processingRepository: ReturnType<typeof createProcessingJobRepository>;
   processingService: ProcessingApplicationService;
   datasetSyncService: DatasetSyncApplicationService;
+  imageApplicationService: ImageApplicationService;
   deleteRepository: ReturnType<typeof createDeleteJobRepository>;
   migrationRepository: ReturnType<typeof createMigrationRunRepository>;
   datasetPermission: ReturnType<typeof createDatasetAclRepository>;
@@ -90,6 +93,15 @@ export async function bootstrapRuntime(
     datasetSync: datasetSyncService,
     datasetSourceProvider: sourceProviders,
   };
+  const imageApplicationService = new ImageApplicationService({
+    assets: createImageAssetRepository(clients.mongo) as NonNullable<
+      ReturnType<typeof createImageAssetRepository>
+    >,
+    items: knowledgeItemRepository,
+    vectors: adapters,
+    fullText: adapters.fullText ?? ports.fullTextStore,
+    processor: ports.imageTrainingProcessor,
+  });
   const drain = options.drain ?? (async () => undefined);
   const closeClients = options.closeClients ?? closeRuntimeClients;
 
@@ -105,6 +117,7 @@ export async function bootstrapRuntime(
     processingRepository,
     processingService,
     datasetSyncService,
+    imageApplicationService,
     deleteRepository,
     migrationRepository,
     datasetPermission,

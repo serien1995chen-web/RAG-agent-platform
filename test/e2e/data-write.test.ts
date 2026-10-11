@@ -93,6 +93,9 @@ beforeEach(() => {
       },
     },
     config: { datasetRuntime: { maxPushItems: 200 } },
+    imageApplicationService: {
+      createImage: async () => ({ state: 'success', producedItems: 1 }),
+    },
     ports: {
       vectorController: { insert: async () => undefined },
       fullTextStore: { write: async () => undefined },
@@ -170,7 +173,8 @@ describe('P4-09 data write routes', () => {
     });
     expect(imagesResult.status).toBe(200);
     expect((data(imagesResult.body).items as Array<Record<string, unknown>>)[0]).toMatchObject({
-      mode: 'chunk',
+      state: 'success',
+      producedItems: 1,
       autoIndexes: true,
     });
 
