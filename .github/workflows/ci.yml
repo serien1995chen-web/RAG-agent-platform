@@ -66,6 +66,34 @@ jobs:
       - name: Integration tests
         run: pnpm test:integration
       - name: Full test suites
+        env:
+          NODE_ENV: test
+          APP_WORKER_MODE: all
+          KB_INSTANCE_ID: ci
+          KB_DEPENDENCY_BASELINE_ID: kb-baseline-6.1
+          KB_VERSION_CHECK_POLICY: strict
+          KB_CONNECT_TIMEOUT_MS: '5000'
+          KB_REQUEST_TIMEOUT_MS: '2000'
+          KB_MONGO_URI: mongodb://127.0.0.1:27017/kb
+          KB_REDIS_URL: redis://127.0.0.1:6379
+          KB_PG_URL: postgres://kb:kb_dev_password@127.0.0.1:5432/kb
+          KB_S3_ENDPOINT: http://127.0.0.1:9000
+          KB_S3_REGION: us-east-1
+          KB_S3_BUCKET: kb-source
+          KB_S3_ACCESS_KEY_REF: env:MINIO_ROOT_USER
+          KB_S3_SECRET_KEY_REF: env:MINIO_ROOT_PASSWORD
+          KB_LOG_LEVEL: info
+          KB_MONGO_POOL_SIZE: '10'
+          KB_REDIS_CONNECTIONS: '2'
+          KB_PG_POOL_SIZE: '10'
+          KB_S3_CONCURRENCY: '4'
+          KB_PROVIDER_CONCURRENCY: '4'
+          KB_BATCH_SIZE: '100'
+          KB_QUEUE_CONCURRENCY: '4'
+          KB_PROVIDER_TIMEOUT_MS: '30000'
+          KB_PROVIDER_MAX_RETRIES: '3'
+          MINIO_ROOT_USER: minioadmin
+          MINIO_ROOT_PASSWORD: minioadmin
         run: pnpm test
       - name: Build
         run: pnpm build

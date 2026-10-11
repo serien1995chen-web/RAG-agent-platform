@@ -60,6 +60,7 @@ export default withApiHandler(
         collectionId: body.collectionId,
         q: body.q,
         ...(body.a !== undefined ? { a: body.a } : {}),
+        indexType: 'question',
         vector,
         options: PORT_OPTIONS,
       },

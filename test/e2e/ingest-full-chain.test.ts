@@ -84,3 +84,80 @@ describe('P4-12 ingest full chain', () => {
     expect(state.enqueued.length).toBeGreaterThanOrEqual(1);
   });
 });
+
+// 真实 bootstrap 全链路：CI 设置 KB_* 时启用；本地未配置则跳过。
+describe.skipIf(!process.env.KB_MONGO_URI)(
+  'P4-12 real bootstrap full chain [TEST-E2E-INGEST-001][ACC-FLOW-001]',
+  () => {
+    it('[TEST-E2E-INGEST-001][ACC-FLOW-001] parser→chunk→vector→fullText→search retrievable', async () => {
+      const { bootstrapRuntime } = await import('../../projects/app/src/runtime/bootstrap');
+      const { InsertDataService } = await import('../../packages/service/src/index');
+      const runtime = await bootstrapRuntime();
+      const teamId = context.tenant.teamId;
+      try {
+        const dataset = await runtime.datasetApi.createDataset(
+          { name: `chain-${Date.now()}`, type: 'dataset', vectorModel: 'bge-m3' },
+          context,
+        );
+        const collection = await runtime.collectionRepository.create(
+          {
+            collection: {
+              teamId,
+              datasetId: dataset.datasetId,
+              parentId: null,
+              type: 'file',
+              name: 'chain',
+              tagIds: [],
+              sourceRef: 'chain',
+            },
+            options: { timeoutMs: 5000 },
+          },
+          context,
+        );
+        const nonce = `${Date.now().toString(16)}${Math.floor(Math.random() * 0xffffffff).toString(16)}`;
+        const dataId = nonce.padEnd(24, '0').slice(0, 24);
+        const question = `hello chain ${nonce}`;
+        const vector = await runtime.modelRuntime.embedText(
+          { text: question, options: { timeoutMs: 5000 } },
+          context,
+        );
+        const insert = new InsertDataService({
+          items: runtime.knowledgeItemRepository,
+          vectors: runtime.vectorController,
+          fullText: runtime.ports.fullTextStore,
+        });
+        await insert.insertDirect(
+          {
+            dataId,
+            datasetId: dataset.datasetId,
+            collectionId: collection.collectionId,
+            q: question,
+            a: 'answer',
+            indexType: 'question',
+            vector,
+            options: { timeoutMs: 10000 },
+          },
+          context,
+        );
+        const result = await runtime.datasetSearch.search(
+          {
+            requestId: context.requestId,
+            teamId,
+            tmbId: context.tmbId,
+            datasetIds: [dataset.datasetId],
+            textQueries: [question],
+            models: { embeddingModel: 'bge-m3' },
+            searchMode: 'mixedRecall',
+            limit: 5,
+            maxTokens: 4000,
+            similarity: 0,
+          },
+          context,
+        );
+        expect(result.citations.some((citation) => citation.dataId === dataId)).toBe(true);
+      } finally {
+        await runtime.shutdown();
+      }
+    }, 60000);
+  },
+);
