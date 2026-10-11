@@ -15,6 +15,8 @@ export {
   checkItemCount,
 } from './shared/http/limits';
 export type { RequestLimitConfig, RequestLimitDecision } from './shared/http/limits';
+export { createLocalDatasetSearchPort } from './shared/runtime/local-search.adapter';
+export type { LocalSearchDeps } from './shared/runtime/local-search.adapter';
 
 export {
   ApiErrorException,

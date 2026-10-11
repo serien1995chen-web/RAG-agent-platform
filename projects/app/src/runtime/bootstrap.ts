@@ -12,6 +12,7 @@ import {
   createDefaultPorts,
   createParseRuntimeAdapter,
   createImageProcessorRuntime,
+  createLocalDatasetSearchPort,
   createSourceProviderRegistry,
   createDeleteJobRepository,
   createImageAssetRepository,
@@ -135,6 +136,14 @@ export async function bootstrapRuntime(
     fullText: adapters.fullText ?? ports.fullTextStore,
     modelRuntime,
   });
+  const datasetSearch = createLocalDatasetSearchPort({
+    vectors: adapters,
+    fullText: adapters.fullText ?? ports.fullTextStore,
+    embed: (text, searchContext) =>
+      modelRuntime.embedText({ text, options: { timeoutMs: 5000 } }, searchContext),
+    items: knowledgeItemRepository as never,
+    collections: collectionService,
+  });
   const drain = options.drain ?? (async () => undefined);
   const closeClients = options.closeClients ?? closeRuntimeClients;
 
@@ -142,6 +151,7 @@ export async function bootstrapRuntime(
   const runtime: ExtendedAppRuntime = {
     ...base,
     datasetApi,
+    datasetSearch,
     knowledgeBaseRepository,
     collectionRepository,
     collectionService,
