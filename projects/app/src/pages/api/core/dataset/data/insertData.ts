@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { ApiErrorException, createApiError } from '@kb/contracts';
 import { InsertDataService } from '@kb/service';
 import type { NextApiRequest, NextApiResponse } from 'next';
@@ -23,8 +24,9 @@ interface InsertDataBody {
   imageId?: string;
 }
 
-function newDataId(): string {
-  return `data-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+function stableDataId(collectionId: string, q: string, a: string): string {
+  const digest = createHash('sha256').update(`${collectionId}\u0000${q}\u0000${a}`).digest('hex');
+  return `qa-${digest.slice(0, 32)}`;
 }
 
 /** API-DATA-005 POST /api/core/dataset/data/insertData */
@@ -48,7 +50,7 @@ export default withApiHandler(
       vectors: runtime.ports.vectorController,
       fullText: runtime.ports.fullTextStore,
     });
-    const dataId = newDataId();
+    const dataId = stableDataId(body.collectionId, body.q, body.a ?? '');
     const result = await service.insertDirect(
       {
         dataId,

@@ -82,6 +82,7 @@ beforeEach(() => {
     collectionRepository: { create: async () => ({ collectionId }) },
     collectionService: { getCollection: async () => collection },
     knowledgeItemRepository: {
+      get: async () => ({ version: 1, q: 'q', a: '', indexes: [] }),
       updateIndexes: async () => ({ version: 2 }),
       bulkUpsert: async () => ({ upserted: 1, duplicates: 0 }),
     },
