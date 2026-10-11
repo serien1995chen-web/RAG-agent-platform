@@ -199,10 +199,19 @@ describe('P4-10 import/export and API dataset routes', () => {
     });
     expect(zipped.status).toBe(200);
     expect(data(zipped.body).contentType).toBe('application/zip');
-    const { gunzipSync } = await import('node:zlib');
-    const unzipped = gunzipSync(Buffer.from(data(zipped.body).body as string, 'base64')).toString(
-      'utf8',
-    );
+    const zipBytes = Buffer.from(data(zipped.body).body as string, 'base64');
+    expect(zipBytes.subarray(0, 4).toString('binary')).toBe('PK\u0003\u0004');
+    // 解析 ZIP：local header -> raw deflate -> 内容
+    const { inflateRawSync } = await import('node:zlib');
+    const nameLen = zipBytes.readUInt16LE(26);
+    const extraLen = zipBytes.readUInt16LE(28);
+    const compressedSize = zipBytes.readUInt32LE(18);
+    const dataStart = 30 + nameLen + extraLen;
+    const entryName = zipBytes.subarray(30, 30 + nameLen).toString('utf8');
+    const unzipped = inflateRawSync(
+      zipBytes.subarray(dataStart, dataStart + compressedSize),
+    ).toString('utf8');
+    expect(entryName).toBe('dataset.jsonl');
     expect(unzipped).toBe(decoded);
 
     const collectionExported = await invoke(collectionExport, {
