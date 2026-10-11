@@ -1,3 +1,5 @@
+import { ApiErrorException, createApiError } from '@kb/contracts';
+import { JOB_MODE_TO_QUEUE, buildParseJobId, type QueuePort } from '@kb/dal';
 import type {
   DatasetSourceProvider,
   SourceReadResult,
@@ -5,17 +7,19 @@ import type {
   TaskResult,
   TrainingProcessorPort,
 } from '../../../ports/capabilities';
-import type { CollectionRepository } from '../../../ports/repositories';
+import type { CollectionRepository, ProcessingJobRepository } from '../../../ports/repositories';
 import type { CollectionSnapshot, PortCallOptions, RequestContext } from '../../../ports/types';
 
 export interface ImportSourceServiceDeps {
   collections: CollectionRepository;
   sourceProvider: DatasetSourceProvider;
   trainingProcessor: TrainingProcessorPort;
+  /** 训练任务事实仓储；与 queue 一起用于路径 A 的真实投递。 */
+  jobs?: ProcessingJobRepository;
+  /** 真实队列投递端；缺失时抛稳定错误，绝不静默返回“已入队”。 */
+  queue?: QueuePort;
   /** 空导入判定：返回非空文本才进入 Parse/Chunk/QA 链路（设计 8.3 / BR-WRITE-007）。 */
   resolveRawText?: (read: SourceReadResult, context: RequestContext) => string;
-  /** 队列投递端；缺省使用 trainingProcessor 作为同进程执行。 */
-  enqueue?: (task: TaskEnvelope, context: RequestContext) => Promise<{ taskId: string }>;
 }
 
 export interface CreateFromSourceInput {
@@ -35,7 +39,7 @@ export interface CreateFromSourceResult {
 
 /**
  * 写入路径 A：来源导入（设计文档 9.3 / 8.3）。
- * 预览零正式副作用；正式创建后按 Parse -> Chunk/QA -> Embedding -> 投影编排。
+ * 预览零正式副作用；正式创建后按「Mongo 事实 → Parse 队列投递」编排。
  * 空文本/纯空白/过滤后无内容：创建 Collection 且 insertLen=0、remainingTraining=0、ready，不创建 Task/Data。
  */
 export class ImportSourceService {
@@ -60,10 +64,7 @@ export class ImportSourceService {
     );
   }
 
-  /**
-   * 预览零副作用：读取来源但不落库；返回可判定的 rawText（可为空）。
-   * 不创建 Collection/Task/Data。
-   */
+  /** 预览零副作用：读取来源但不落库；不创建 Collection/Task/Data。 */
   async previewOnly(
     input: { datasetId: string; sourceType: string; sourceRef: string; options: PortCallOptions },
     context: RequestContext,
@@ -87,7 +88,7 @@ export class ImportSourceService {
 
   /**
    * 路径 A 编排：读来源 -> 创建 Collection -> 空导入早退（ready, insertLen=0）
-   * 或投递 Parse/Chunk/QA 训练任务。预览与正式创建严格分离。
+   * 或「先写 Mongo 训练任务事实 → 再投递 Parse 队列」。预览与正式创建严格分离。
    */
   async createCollectionFromSource(
     input: CreateFromSourceInput,
@@ -116,31 +117,49 @@ export class ImportSourceService {
         status: 'ready',
       };
     }
-    const task: TaskEnvelope = {
-      taskId: collection.collectionId + ':parse',
-      teamId: context.tenant.teamId,
-      datasetId: input.collection.datasetId,
-      collectionId: collection.collectionId,
-      mode: 'parse',
-      payload: { sourceType: input.sourceType, contentHash: read.contentHash },
-    };
-    if (this.deps.enqueue) {
-      const queued = await this.deps.enqueue(task, context);
-      return {
-        collectionId: collection.collectionId,
-        insertLen: 0,
-        remainingTraining: 1,
-        status: 'ready',
-        taskId: queued.taskId,
-      };
+
+    const version = 1;
+    const jobId = buildParseJobId(
+      context.tenant.teamId,
+      input.collection.datasetId,
+      collection.collectionId,
+      version,
+    );
+    const queueName = JOB_MODE_TO_QUEUE.parse;
+    if (!this.deps.jobs || !this.deps.queue || !queueName) {
+      throw new ApiErrorException(
+        createApiError({
+          code: 501062,
+          requestId: context.requestId,
+          params: { dependency: 'queue', mode: 'parse' },
+        }),
+      );
     }
-    // 同进程执行路径：调用方随后可通过 processCollection 驱动解析与投影。
+    // 1) 先写 Mongo 训练任务事实
+    await this.deps.jobs.enqueue(
+      {
+        job: {
+          jobId,
+          teamId: context.tenant.teamId,
+          datasetId: input.collection.datasetId,
+          mode: 'parse',
+          expireAt: null,
+        },
+        options: input.options,
+      },
+      context,
+    );
+    // 2) 事实成功后再投递队列
+    await this.deps.queue.enqueue(queueName, jobId, {
+      sourceType: input.sourceType,
+      contentHash: read.contentHash,
+    });
     return {
       collectionId: collection.collectionId,
       insertLen: 0,
       remainingTraining: 1,
       status: 'ready',
-      taskId: task.taskId,
+      taskId: jobId,
     };
   }
 

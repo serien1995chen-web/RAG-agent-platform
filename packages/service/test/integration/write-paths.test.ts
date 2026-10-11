@@ -1,4 +1,5 @@
 import { ApiErrorException } from '@kb/contracts';
+import { JOB_MODE_TO_QUEUE, QUEUE_NAMES, buildParseJobId, buildQaJobId, type QueuePort } from '@kb/dal';
 import { describe, expect, it } from 'vitest';
 import { ImportSourceService } from '../../src/modules/collection/application/import-source.service';
 import { InsertDataService } from '../../src/modules/item/application/insert-data.service';
@@ -24,6 +25,23 @@ const context: RequestContext = {
   permission: { canRead: true, canWrite: true, canManage: false, isOwner: false },
 };
 const options = { timeoutMs: 5000 };
+
+interface QueueCall {
+  queue: string;
+  jobId: string;
+  payload: unknown;
+}
+
+function queueFake(calls: QueueCall[]): QueuePort {
+  return {
+    enqueue: async (queue, jobId, payload) => {
+      calls.push({ queue, jobId, payload });
+      return { jobId, enqueued: true };
+    },
+    remove: async () => undefined,
+    close: async () => undefined,
+  };
+}
 
 function collectionsFake(created: unknown[]): CollectionRepository {
   return {
@@ -85,10 +103,10 @@ function sourceProvider(rawText: string, calls?: string[]): DatasetSourceProvide
   return { read, preview: read };
 }
 
-function pushJobRepo(enqueued: string[]): ProcessingJobRepository {
+function pushJobRepo(facts: string[]): ProcessingJobRepository {
   return {
     enqueue: async (input) => {
-      enqueued.push(input.job.jobId);
+      facts.push('fact:' + input.job.jobId);
       return { taskId: 'task-' + input.job.jobId, jobId: input.job.jobId };
     },
     claim: async () => ({ taskId: 't', lockTime: 'l' }),
@@ -96,6 +114,15 @@ function pushJobRepo(enqueued: string[]): ProcessingJobRepository {
     finish: async () => undefined,
   } as unknown as ProcessingJobRepository;
 }
+
+const collectionInput = {
+  teamId: 'team-1',
+  datasetId: 'd',
+  name: 'c',
+  type: 'dataset',
+  parentId: null,
+  metadata: {},
+} as never;
 
 describe('TEST-FI-INGEST-001 path A source import', () => {
   it('preview has zero formal side effects', async () => {
@@ -113,71 +140,70 @@ describe('TEST-FI-INGEST-001 path A source import', () => {
     expect(created).toHaveLength(0);
   });
 
-  it('creates a collection and enqueues a parse task for non-empty source', async () => {
+  it('writes the Mongo fact then delivers the exact parse job to the queue', async () => {
     const created: unknown[] = [];
-    const queued: string[] = [];
+    const facts: string[] = [];
+    const queued: QueueCall[] = [];
     const service = new ImportSourceService({
       collections: collectionsFake(created),
       sourceProvider: sourceProvider('正文'),
       trainingProcessor: trainingProcessor(),
-      enqueue: async (task) => {
-        queued.push(task.mode);
-        return { taskId: task.taskId };
-      },
+      jobs: pushJobRepo(facts),
+      queue: queueFake(queued),
     });
+    const expectedJobId = buildParseJobId('team-1', 'd', 'col-1', 1);
     const result = await service.createCollectionFromSource(
-      {
-        collection: {
-          teamId: 'team-1',
-          datasetId: 'd',
-          name: 'c',
-          type: 'dataset',
-          parentId: null,
-          metadata: {},
-        } as never,
-        sourceType: 'text',
-        sourceRef: '正文',
-        options,
-      },
+      { collection: collectionInput, sourceType: 'text', sourceRef: '正文', options },
       context,
     );
-    expect(result.status).toBe('ready');
-    expect(result.remainingTraining).toBe(1);
+    expect(result).toMatchObject({ status: 'ready', remainingTraining: 1, taskId: expectedJobId });
     expect(created).toHaveLength(1);
-    expect(queued).toEqual(['parse']);
+    expect(facts).toEqual(['fact:' + expectedJobId]);
+    expect(queued).toEqual([
+      {
+        queue: JOB_MODE_TO_QUEUE.parse ?? QUEUE_NAMES.parse,
+        jobId: expectedJobId,
+        payload: { sourceType: 'text', contentHash: 'sha256:text' },
+      },
+    ]);
   });
 
   it('returns insertLen=0 ready without Task/Data for an empty import (TEST-INGEST-EMPTY-001)', async () => {
     const created: unknown[] = [];
-    const queued: string[] = [];
+    const facts: string[] = [];
+    const queued: QueueCall[] = [];
     const service = new ImportSourceService({
       collections: collectionsFake(created),
       sourceProvider: sourceProvider('   \n  '),
       trainingProcessor: trainingProcessor(),
-      enqueue: async (task) => {
-        queued.push(task.mode);
-        return { taskId: task.taskId };
-      },
+      jobs: pushJobRepo(facts),
+      queue: queueFake(queued),
     });
     const result = await service.createCollectionFromSource(
-      {
-        collection: {
-          teamId: 'team-1',
-          datasetId: 'd',
-          name: 'c',
-          type: 'dataset',
-          parentId: null,
-          metadata: {},
-        } as never,
-        sourceType: 'text',
-        sourceRef: '   ',
-        options,
-      },
+      { collection: collectionInput, sourceType: 'text', sourceRef: '   ', options },
       context,
     );
     expect(result).toMatchObject({ insertLen: 0, remainingTraining: 0, status: 'ready' });
     expect(created).toHaveLength(1);
+    expect(facts).toHaveLength(0);
     expect(queued).toHaveLength(0);
+  });
+
+  it('fails with 501062 when the queue is not configured', async () => {
+    const created: unknown[] = [];
+    const service = new ImportSourceService({
+      collections: collectionsFake(created),
+      sourceProvider: sourceProvider('正文'),
+      trainingProcessor: trainingProcessor(),
+      jobs: pushJobRepo([]),
+    });
+    const error = await service
+      .createCollectionFromSource(
+        { collection: collectionInput, sourceType: 'text', sourceRef: '正文', options },
+        context,
+      )
+      .catch((thrown: unknown) => thrown);
+    expect((error as ApiErrorException).error.code).toBe(501062);
   });
 });
 
@@ -197,15 +223,7 @@ describe('TEST-FI-INSERT-001 path B direct insert', () => {
       emit: () => calls.push('event'),
     });
     const result = await service.insertDirect(
-      {
-        dataId: 'data-1',
-        datasetId: 'd',
-        collectionId: 'c',
-        q: '  问题 ',
-        a: '答案',
-        vector: [0.1, 0.2],
-        options,
-      },
+      { dataId: 'data-1', datasetId: 'd', collectionId: 'c', q: '  问题 ', a: '答案', vector: [0.1, 0.2], options },
       context,
     );
     expect(result.inserted).toBe(1);
@@ -213,7 +231,7 @@ describe('TEST-FI-INSERT-001 path B direct insert', () => {
     expect(calls).toEqual(['vector', 'tx:begin', 'mongo', 'fulltext', 'tx:commit', 'event']);
   });
 
-  it('does not write a vector when the Mongo transaction fails', async () => {
+  it('keeps a reconcilable orphan vector and emits no event when the Mongo transaction fails', async () => {
     const calls: string[] = [];
     const service = new InsertDataService({
       items: itemsFake(calls),
@@ -244,15 +262,7 @@ describe('TEST-FI-INSERT-001 path B direct insert', () => {
     });
     const error = await service
       .insertDirect(
-        {
-          dataId: 'data-1',
-          datasetId: 'd',
-          collectionId: 'c',
-          q: '',
-          imageId: 'img-1',
-          vector: [0.1],
-          options,
-        },
+        { dataId: 'data-1', datasetId: 'd', collectionId: 'c', q: '', imageId: 'img-1', vector: [0.1], options },
         context,
       )
       .catch((thrown: unknown) => thrown);
@@ -263,21 +273,24 @@ describe('TEST-FI-INSERT-001 path B direct insert', () => {
 });
 
 describe('TEST-REP-PUSH-001 path C batch push', () => {
-  it('writes Mongo facts before queue dispatch and dedupes repeated jobIds', async () => {
-    const enqueued: string[] = [];
+  it('writes the Mongo fact before delivering the exact stable job and dedupes repeats', async () => {
+    const facts: string[] = [];
+    const queued: QueueCall[] = [];
     const service = new PushDataService({
-      jobs: pushJobRepo(enqueued),
+      jobs: pushJobRepo(facts),
       trainingProcessor: trainingProcessor(),
+      queue: queueFake(queued),
     });
+    const expected = buildQaJobId('team-1', 'data-1', 1);
     const result = await service.pushBatch(
       {
         datasetId: 'd',
         collectionId: 'c',
         mode: 'qa',
         items: [
-          { jobId: 'j1', payload: {} },
-          { jobId: 'j1', payload: {} },
-          { jobId: 'j2', payload: {} },
+          { dataId: 'data-1', version: 1, payload: { q: 'a' } },
+          { dataId: 'data-1', version: 1, payload: { q: 'a' } },
+          { dataId: 'data-2', version: 1, payload: { q: 'b' } },
         ],
         options,
       },
@@ -285,14 +298,45 @@ describe('TEST-REP-PUSH-001 path C batch push', () => {
     );
     expect(result.accepted).toBe(2);
     expect(result.skipped).toBe(1);
-    expect(enqueued).toEqual(['j1', 'j2']);
+    expect(facts).toEqual(['fact:' + expected, 'fact:' + buildQaJobId('team-1', 'data-2', 1)]);
+    expect(queued).toEqual([
+      { queue: JOB_MODE_TO_QUEUE.qa ?? QUEUE_NAMES.qa, jobId: expected, payload: { q: 'a' } },
+      {
+        queue: JOB_MODE_TO_QUEUE.qa ?? QUEUE_NAMES.qa,
+        jobId: buildQaJobId('team-1', 'data-2', 1),
+        payload: { q: 'b' },
+      },
+    ]);
+  });
+
+  it('fails with 501062 when the queue is not configured', async () => {
+    const facts: string[] = [];
+    const service = new PushDataService({
+      jobs: pushJobRepo(facts),
+      trainingProcessor: trainingProcessor(),
+    });
+    const error = await service
+      .pushBatch(
+        {
+          datasetId: 'd',
+          collectionId: 'c',
+          mode: 'qa',
+          items: [{ dataId: 'data-1', version: 1, payload: {} }],
+          options,
+        },
+        context,
+      )
+      .catch((thrown: unknown) => thrown);
+    expect((error as ApiErrorException).error.code).toBe(501062);
   });
 
   it('rejects an oversized batch without enqueuing', async () => {
-    const enqueued: string[] = [];
+    const facts: string[] = [];
+    const queued: QueueCall[] = [];
     const service = new PushDataService({
-      jobs: pushJobRepo(enqueued),
+      jobs: pushJobRepo(facts),
       trainingProcessor: trainingProcessor(),
+      queue: queueFake(queued),
       maxItems: 2,
     });
     const error = await service
@@ -302,9 +346,9 @@ describe('TEST-REP-PUSH-001 path C batch push', () => {
           collectionId: 'c',
           mode: 'qa',
           items: [
-            { jobId: 'j1', payload: {} },
-            { jobId: 'j2', payload: {} },
-            { jobId: 'j3', payload: {} },
+            { dataId: 'd1', version: 1, payload: {} },
+            { dataId: 'd2', version: 1, payload: {} },
+            { dataId: 'd3', version: 1, payload: {} },
           ],
           options,
         },
@@ -312,6 +356,7 @@ describe('TEST-REP-PUSH-001 path C batch push', () => {
       )
       .catch((thrown: unknown) => thrown);
     expect((error as ApiErrorException).error.code).toBe(501052);
-    expect(enqueued).toHaveLength(0);
+    expect(facts).toHaveLength(0);
+    expect(queued).toHaveLength(0);
   });
 });
