@@ -33,6 +33,7 @@ export interface ApiRouteOptions {
 
 const IDEMPOTENT_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 const DEFAULT_RAW_BODY_LIMIT = 10 * 1024 * 1024;
+let resolvedRawBodyLimit: number | undefined;
 
 type StatusWriter = (code: number) => NextApiResponse;
 type JsonWriter = (body: unknown) => NextApiResponse;
@@ -51,19 +52,34 @@ function idempotencyUnavailable(requestId: string): ApiErrorException {
   );
 }
 
-/** 代理层原始字节上限：解析/副作用前先按 Content-Length 拒绝。 */
-function enforceProxyLimit(request: NextApiRequest, requestId: string): void {
+/** 代理层原始字节上限来自运行时 `datasetRuntime.maxRequestBodyBytes`，解析/副作用前先判定。 */
+async function resolveRawBodyLimit(): Promise<number> {
+  if (resolvedRawBodyLimit !== undefined) return resolvedRawBodyLimit;
+  try {
+    const { getRuntime } = await import('../../runtime/health');
+    const runtime = await getRuntime();
+    const limit = (runtime.config as { datasetRuntime?: { maxRequestBodyBytes?: number } })
+      .datasetRuntime?.maxRequestBodyBytes;
+    resolvedRawBodyLimit = typeof limit === 'number' && limit > 0 ? limit : DEFAULT_RAW_BODY_LIMIT;
+  } catch {
+    resolvedRawBodyLimit = DEFAULT_RAW_BODY_LIMIT;
+  }
+  return resolvedRawBodyLimit;
+}
+
+async function enforceProxyLimit(request: NextApiRequest, requestId: string): Promise<void> {
   const header = request.headers['content-length'];
   const raw = Array.isArray(header) ? header[0] : header;
   if (raw === undefined) return;
   const contentLength = Number(raw);
-  if (!Number.isFinite(contentLength) || contentLength <= DEFAULT_RAW_BODY_LIMIT) return;
+  const limit = await resolveRawBodyLimit();
+  if (!Number.isFinite(contentLength) || contentLength <= limit) return;
   throw new ApiErrorException(
     createApiError({
       code: 501030,
       requestId,
       params: {
-        limitBytes: DEFAULT_RAW_BODY_LIMIT,
+        limitBytes: limit,
         actualBytes: contentLength,
         layer: 'proxy',
       },
@@ -132,7 +148,7 @@ export function withApiHandler(
     const idempotencyKey = readIdempotencyKey(request);
     if (idempotencyKey === null || !IDEMPOTENT_METHODS.has(method)) {
       try {
-        enforceProxyLimit(request, requestId);
+        await enforceProxyLimit(request, requestId);
         await handler(request, response, { requestId });
       } catch (error) {
         writeErrorResponse(rawStatus, rawJson, requestId, operation, error, options);
@@ -167,7 +183,7 @@ export function withApiHandler(
     }
 
     try {
-      enforceProxyLimit(request, requestId);
+      await enforceProxyLimit(request, requestId);
       const result = await executeWithIdempotency({
         store: idempotencyContext.store,
         scopeKey: buildIdempotencyScopeKey(
