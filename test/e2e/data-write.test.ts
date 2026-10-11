@@ -250,18 +250,15 @@ describe('P4-09 data write routes', () => {
     expect((result.body as { code?: number }).code).toBe(501009);
   });
 
-  it('[TEST-API-INSERT-001] DataUpdateService persists q/a via bulkUpsert with version bump', async () => {
+  it('[TEST-API-INSERT-001] DataUpdateService persists q/a via atomic CAS with version bump', async () => {
     const { DataUpdateService, ModelRuntimeAdapter } =
       await import('../../packages/service/src/index');
     let captured: { q?: string; a?: string; version?: number } | undefined;
     const service = new DataUpdateService({
       items: {
-        updateIndexes: async () => ({ version: 2 }),
-        bulkUpsert: async (input: {
-          items: Array<{ q?: string; a?: string; version?: number }>;
-        }) => {
-          captured = input.items[0];
-          return { upserted: 1, duplicates: 0 };
+        casUpdateItem: async (input: { q?: string; a?: string; version?: number }) => {
+          captured = input;
+          return { version: 2 };
         },
       } as never,
       vectors: { insert: async () => ({ inserted: 1 }) } as never,
@@ -288,21 +285,18 @@ describe('P4-09 data write routes', () => {
     expect(result.version).toBe(2);
     expect(captured?.q).toBe('new-q');
     expect(captured?.a).toBe('new-a');
-    expect(captured?.version).toBe(2);
+    expect(captured?.version).toBe(1);
   });
 
   it('[TEST-API-INSERT-001] DataUpdateService rejects stale version before writing q/a', async () => {
     const { DataUpdateService, ModelRuntimeAdapter } =
       await import('../../packages/service/src/index');
-    let upsertCalled = 0;
+    let casCalled = 0;
     const service = new DataUpdateService({
       items: {
-        updateIndexes: async () => {
+        casUpdateItem: async () => {
+          casCalled += 1;
           throw Object.assign(new Error('version-conflict'), { name: 'ApiErrorException' });
-        },
-        bulkUpsert: async () => {
-          upsertCalled += 1;
-          return { upserted: 1, duplicates: 0 };
         },
       } as never,
       vectors: { insert: async () => ({ inserted: 1 }) } as never,
@@ -328,6 +322,6 @@ describe('P4-09 data write routes', () => {
         context,
       ),
     ).rejects.toBeInstanceOf(Error);
-    expect(upsertCalled).toBe(0);
+    expect(casCalled).toBe(1);
   });
 });

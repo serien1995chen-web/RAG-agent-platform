@@ -163,6 +163,72 @@ describe('MongoKnowledgeItemRepository (P2-10 / PORT-DATA-003)', () => {
     );
   });
 
+  it('allows exactly one concurrent q/a/indexes CAS update per version', async () => {
+    const dataId = new mongoose.Types.ObjectId();
+    const initialUpdateTime = new Date('2026-01-01T00:00:00.000Z');
+    await model.create({
+      _id: dataId,
+      teamId,
+      datasetId: new mongoose.Types.ObjectId(datasetId),
+      collectionId: new mongoose.Types.ObjectId(collectionA),
+      q: 'old',
+      a: 'old',
+      indexes: [],
+      history: [],
+      dedupKey: buildQaDedupKey('old', 'old'),
+      createTime: initialUpdateTime,
+      updateTime: initialUpdateTime,
+    });
+    const snapshot = await repository.get(
+      { dataId: String(dataId), options: { timeoutMs: 5_000 } },
+      context,
+    );
+    const results = await Promise.allSettled([
+      repository.casUpdateItem(
+        {
+          dataId: String(dataId),
+          datasetId,
+          collectionId: collectionA,
+          version: snapshot.version,
+          q: 'A',
+          a: 'answer-a',
+          previousQ: 'old',
+          previousA: 'old',
+          indexes: [{ indexId: 'a', type: 'default', dataId: String(dataId), text: 'A\nanswer-a' }],
+          options: { timeoutMs: 5_000 },
+        },
+        context,
+      ),
+      repository.casUpdateItem(
+        {
+          dataId: String(dataId),
+          datasetId,
+          collectionId: collectionA,
+          version: snapshot.version,
+          q: 'B',
+          a: 'answer-b',
+          previousQ: 'old',
+          previousA: 'old',
+          indexes: [{ indexId: 'b', type: 'default', dataId: String(dataId), text: 'B\nanswer-b' }],
+          options: { timeoutMs: 5_000 },
+        },
+        context,
+      ),
+    ]);
+    expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
+    const rejected = results.find((result) => result.status === 'rejected');
+    expect(rejected?.status).toBe('rejected');
+    if (rejected?.status === 'rejected') {
+      expect(rejected.reason).toBeInstanceOf(ApiErrorException);
+      expect((rejected.reason as ApiErrorException).error.code).toBe(501067);
+    }
+    const stored = await model.findById(dataId).lean();
+    const winner = results[0].status === 'fulfilled' ? 'A' : 'B';
+    expect(stored?.q).toBe(winner);
+    expect(stored?.a).toBe(winner === 'A' ? 'answer-a' : 'answer-b');
+    expect(stored?.history).toHaveLength(1);
+  });
+
   it('deletes by scope without crossing collection boundaries', async () => {
     await model.insertMany([
       {

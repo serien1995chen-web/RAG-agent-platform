@@ -83,6 +83,21 @@ export interface KnowledgeItemRepository {
     input: { items: KnowledgeItemSnapshot[]; options: PortCallOptions },
     context: RequestContext,
   ): Promise<{ upserted: number; duplicates: number }>;
+  casUpdateItem(
+    input: {
+      dataId: string;
+      datasetId: string;
+      collectionId: string;
+      version: number;
+      q: string;
+      a: string;
+      previousQ?: string;
+      previousA?: string;
+      indexes: KnowledgeItemSnapshot['indexes'];
+      options: PortCallOptions;
+    },
+    context: RequestContext,
+  ): Promise<{ version: number }>;
   updateIndexes(
     input: {
       dataId: string;

@@ -208,6 +208,85 @@ export class MongoKnowledgeItemRepository implements KnowledgeItemQueryRepositor
     return { upserted, duplicates };
   }
 
+  async casUpdateItem(
+    input: {
+      dataId: string;
+      datasetId: string;
+      collectionId: string;
+      version: number;
+      q: string;
+      a: string;
+      previousQ?: string;
+      previousA?: string;
+      indexes: KnowledgeItemSnapshot['indexes'];
+      options: { timeoutMs: number };
+    },
+    context: RequestContext,
+  ): Promise<{ version: number }> {
+    const teamId = this.teamId(context);
+    const dataId = toOid(input.dataId, 'dataId', context.requestId);
+    const expectedUpdateTime = new Date(input.version);
+    const nextVersion = Math.max(Date.now(), input.version + 1);
+    const now = new Date();
+    const dedupKey = input.q.length > 0 ? buildQaDedupKey(input.q, input.a) : null;
+    const historyEntry =
+      input.q !== (input.previousQ ?? null) || input.a !== (input.previousA ?? '')
+        ? [
+            {
+              oldQuestion: input.previousQ ?? '',
+              oldAnswer: input.previousA ?? '',
+              updatedAt: now,
+            },
+          ]
+        : [];
+    const update: Record<string, unknown> = {
+      $set: {
+        q: input.q.length > 0 ? input.q : null,
+        a: input.a,
+        indexes: toStoredIndexes(input.indexes),
+        dedupKey,
+        updateTime: new Date(nextVersion),
+      },
+      ...(historyEntry.length > 0
+        ? { $push: { history: { $each: historyEntry, $slice: -10 } } }
+        : {}),
+    };
+    try {
+      const updated = await this.model
+        .findOneAndUpdate({ _id: dataId, teamId, updateTime: expectedUpdateTime }, update, {
+          new: true,
+        })
+        .lean();
+      if (updated) return { version: updated.updateTime.getTime() };
+      const latest = await this.model.findOne({ _id: dataId, teamId }).lean();
+      if (!latest) {
+        throw new ApiErrorException(
+          createApiError({
+            code: 501070,
+            requestId: context.requestId,
+            params: { resourceType: 'data', resourceId: input.dataId },
+          }),
+        );
+      }
+      throw versionConflict(
+        input.dataId,
+        input.version,
+        latest.updateTime.getTime(),
+        context.requestId,
+      );
+    } catch (error) {
+      if (isDuplicateKey(error)) {
+        throw duplicateError(
+          dedupKey ?? '',
+          input.datasetId,
+          input.collectionId,
+          context.requestId,
+        );
+      }
+      throw error;
+    }
+  }
+
   async updateIndexes(
     input: {
       dataId: string;

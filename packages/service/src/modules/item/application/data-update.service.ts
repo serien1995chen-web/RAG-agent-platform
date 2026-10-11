@@ -76,30 +76,18 @@ export class DataUpdateService {
       },
       context,
     );
-    // 2) Mongo CAS 切换：先用 updateIndexes 以版本做条件更新（陈旧版本 501067），
-    //    只有 CAS 成功者才继续写 q/a，避免并发覆盖。
-    const cas = await this.deps.items.updateIndexes(
-      { dataId: input.dataId, version: input.version, indexes, options: input.options },
-      context,
-    );
-    const now = new Date().toISOString();
-    await this.deps.items.bulkUpsert(
+    // 2) Mongo 原子 CAS：q/a/indexes/updateTime 同一次条件更新完成，陈旧版本 501067。
+    const cas = await this.deps.items.casUpdateItem(
       {
-        items: [
-          {
-            dataId: input.dataId,
-            teamId: context.tenant.teamId,
-            datasetId: input.datasetId,
-            collectionId: input.collectionId,
-            q,
-            a,
-            indexes,
-            rebuilding: false,
-            version: cas.version,
-            createTime: now,
-            updateTime: now,
-          },
-        ],
+        dataId: input.dataId,
+        datasetId: input.datasetId,
+        collectionId: input.collectionId,
+        version: input.version,
+        q,
+        a,
+        ...(input.existing.q !== undefined ? { previousQ: input.existing.q } : {}),
+        ...(input.existing.a !== undefined ? { previousA: input.existing.a } : {}),
+        indexes,
         options: input.options,
       },
       context,
