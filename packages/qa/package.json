@@ -16,7 +16,9 @@
     "lint": "eslint src"
   },
   "dependencies": {
-    "@kb/contracts": "workspace:*"
+    "@kb/contracts": "workspace:*",
+    "jsonrepair": "catalog:",
+    "openai": "catalog:"
   },
   "devDependencies": {
     "@types/node": "catalog:",

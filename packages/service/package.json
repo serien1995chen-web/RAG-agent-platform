@@ -20,10 +20,12 @@
     "@kb/contracts": "workspace:*",
     "@kb/dal": "workspace:*",
     "@node-rs/jieba": "catalog:",
+    "axios": "catalog:",
     "bullmq": "catalog:",
     "ioredis": "catalog:",
     "mongoose": "catalog:",
     "pg": "catalog:",
+    "undici": "catalog:",
     "zod": "catalog:"
   },
   "devDependencies": {
