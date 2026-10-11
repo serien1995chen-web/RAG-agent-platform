@@ -210,6 +210,8 @@ describe('TEST-FI-INGEST-001 path A source import', () => {
       )
       .catch((thrown: unknown) => thrown);
     expect((error as ApiErrorException).error.code).toBe(501062);
+    // 预检先于副作用：缺 Queue 时不得创建 Collection。
+    expect(created).toHaveLength(0);
   });
 });
 
@@ -350,6 +352,27 @@ describe('TEST-REP-PUSH-001 path C batch push', () => {
       )
       .catch((thrown: unknown) => thrown);
     expect((error as ApiErrorException).error.code).toBe(501062);
+    // 预检先于副作用：缺 Queue 时不得写入 Mongo 训练任务事实。
+    expect(facts).toHaveLength(0);
+  });
+
+  it('does not let enqueueJob bypass the queue (501062, no Mongo fact)', async () => {
+    const facts: string[] = [];
+    const service = new PushDataService({
+      jobs: pushJobRepo(facts),
+      trainingProcessor: trainingProcessor(),
+    });
+    const error = await service
+      .enqueueJob(
+        {
+          job: { jobId: 'j1', teamId: 'team-1', datasetId: 'd', mode: 'qa', expireAt: null },
+          options,
+        },
+        context,
+      )
+      .catch((thrown: unknown) => thrown);
+    expect((error as ApiErrorException).error.code).toBe(501062);
+    expect(facts).toHaveLength(0);
   });
 
   it('rejects an oversized batch without enqueuing', async () => {

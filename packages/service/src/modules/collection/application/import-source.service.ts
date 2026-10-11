@@ -103,12 +103,25 @@ export class ImportSourceService {
       },
       context,
     );
+    const rawText = this.rawTextOf(read, context);
+    const isEmpty = rawText.trim().length === 0;
+
+    // 预检先于任何正式副作用：非空来源若缺 Queue/任务仓储，创建 Collection 前即 501062。
+    if (!isEmpty && (!this.deps.queue || !this.deps.jobs || !JOB_MODE_TO_QUEUE.parse)) {
+      throw new ApiErrorException(
+        createApiError({
+          code: 501062,
+          requestId: context.requestId,
+          params: { dependency: 'queue', mode: 'parse' },
+        }),
+      );
+    }
+
     const collection = await this.deps.collections.create(
       { collection: input.collection, options: input.options },
       context,
     );
-    const rawText = this.rawTextOf(read, context);
-    if (rawText.trim().length === 0) {
+    if (isEmpty) {
       // 空导入：无 Task/Data，Collection ready（BR-WRITE-007）。
       return {
         collectionId: collection.collectionId,
@@ -125,18 +138,11 @@ export class ImportSourceService {
       collection.collectionId,
       version,
     );
-    const queueName = JOB_MODE_TO_QUEUE.parse;
-    if (!this.deps.jobs || !this.deps.queue || !queueName) {
-      throw new ApiErrorException(
-        createApiError({
-          code: 501062,
-          requestId: context.requestId,
-          params: { dependency: 'queue', mode: 'parse' },
-        }),
-      );
-    }
+    const queueName = JOB_MODE_TO_QUEUE.parse as NonNullable<typeof JOB_MODE_TO_QUEUE.parse>;
+    const jobs = this.deps.jobs as NonNullable<typeof this.deps.jobs>;
+    const queue = this.deps.queue as NonNullable<typeof this.deps.queue>;
     // 1) 先写 Mongo 训练任务事实
-    await this.deps.jobs.enqueue(
+    await jobs.enqueue(
       {
         job: {
           jobId,
@@ -150,7 +156,7 @@ export class ImportSourceService {
       context,
     );
     // 2) 事实成功后再投递队列
-    await this.deps.queue.enqueue(queueName, jobId, {
+    await queue.enqueue(queueName, jobId, {
       sourceType: input.sourceType,
       contentHash: read.contentHash,
     });

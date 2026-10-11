@@ -82,23 +82,25 @@ export class PushDataService {
     this.maxBytes = deps.maxBytes ?? 10 * 1024 * 1024;
   }
 
-  enqueueJob(
+  async enqueueJob(
     input: {
       job: Omit<ProcessingJobSnapshot, 'taskId' | 'retryCount' | 'lockTime'>;
       options: PortCallOptions;
     },
     context: RequestContext,
   ): Promise<{ taskId: string; jobId: string }> {
-    return this.deps.jobs.enqueue(input, context);
+    // 预检先于任何副作用：缺 Queue / 未登记 mode 时不写 Mongo 事实，直接 501062。
+    const queueName = this.requireQueue(input.job.mode, context);
+    const fact = await this.deps.jobs.enqueue(input, context);
+    await (this.deps.queue as QueuePort).enqueue(queueName, input.job.jobId, {
+      jobId: input.job.jobId,
+      mode: input.job.mode,
+    });
+    return fact;
   }
 
-  /** 队列投递：缺失 QueuePort 或无对应 queue 映射时抛稳定错误（501062）。 */
-  private async deliver(
-    mode: string,
-    jobId: string,
-    payload: unknown,
-    context: RequestContext,
-  ): Promise<void> {
+  /** 预检：缺 QueuePort 或无 queue 映射时抛 501062，禁止后续业务副作用。 */
+  private requireQueue(mode: string, context: RequestContext): QueueName {
     const queueName: QueueName | undefined = JOB_MODE_TO_QUEUE[mode];
     if (!this.deps.queue || !queueName) {
       throw new ApiErrorException(
@@ -109,7 +111,18 @@ export class PushDataService {
         }),
       );
     }
-    await this.deps.queue.enqueue(queueName, jobId, payload);
+    return queueName;
+  }
+
+  /** 队列投递：缺失 QueuePort 或无对应 queue 映射时抛稳定错误（501062）。 */
+  private async deliver(
+    mode: string,
+    jobId: string,
+    payload: unknown,
+    context: RequestContext,
+  ): Promise<void> {
+    const queueName = this.requireQueue(mode, context);
+    await (this.deps.queue as QueuePort).enqueue(queueName, jobId, payload);
   }
 
   /**
@@ -135,6 +148,9 @@ export class PushDataService {
         }),
       );
     }
+
+    // 预检先于任何事实写入：缺 Queue 时不产生 Mongo 训练任务事实。
+    this.requireQueue(input.mode, context);
 
     const seen = new Set<string>();
     const taskIds: string[] = [];
