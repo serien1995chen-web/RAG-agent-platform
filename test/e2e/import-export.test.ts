@@ -224,17 +224,36 @@ describe('P4-10 import/export and API dataset routes', () => {
     const importResult = await invoke(collectionImport, {
       method: 'POST',
       url: '/api/core/dataset/collection/import',
-      body: { datasetId, file: { name: 'a.jsonl' } },
+      body: {
+        datasetId,
+        file: {
+          name: 'a.jsonl',
+          data: Buffer.from('{"q":"a","a":"1"}\n{"q":"a","a":"1"}').toString('base64'),
+        },
+      },
     });
     expect(importResult.status).toBe(200);
-    expect(data(importResult.body).report).toMatchObject({ success: 0, skipped: 0, failed: 0 });
+    expect(data(importResult.body).report).toMatchObject({ success: 1, skipped: 1, failed: 0 });
 
     const datasetImportResult = await invoke(datasetImport, {
       method: 'POST',
       url: '/api/core/dataset/import',
-      body: { datasetId, file: { name: 'a.jsonl' } },
+      body: {
+        datasetId,
+        file: {
+          name: 'a.jsonl',
+          data: Buffer.from('{"q":"a","a":"1"}\n{"q":"a","a":"1"}\n{"q":"","a":"2"}').toString(
+            'base64',
+          ),
+        },
+      },
     });
     expect(datasetImportResult.status).toBe(200);
+    expect(data(datasetImportResult.body).report).toMatchObject({
+      success: 1,
+      skipped: 1,
+      failed: 1,
+    });
 
     const catalog = await invoke(getCatalog, {
       method: 'POST',
@@ -305,25 +324,19 @@ describe('P4-10 import/export and API dataset routes', () => {
   });
 
   it('rejects oversized imports with 501030', async () => {
-    vi.resetModules();
-    vi.doMock('../../projects/app/src/shared/api', async () => {
-      const actual = await vi.importActual<SharedApiModule>('../../projects/app/src/shared/api');
-      return {
-        ...actual,
-        parseDto: (name: string, value: unknown) => {
-          if (name === 'DatasetImportForm') return value;
-          return actual.parseDto(name, value);
-        },
-      };
-    });
     const datasetImport = await import('../../projects/app/src/pages/api/core/dataset/import');
     const result = await invoke(datasetImport, {
       method: 'POST',
       url: '/api/core/dataset/import',
-      body: { datasetId, file: { name: 'a.jsonl' }, size: 21 * 1024 * 1024 },
+      body: {
+        datasetId,
+        file: {
+          name: 'a.jsonl',
+          data: Buffer.alloc(21 * 1024 * 1024, 0x20).toString('base64'),
+        },
+      },
     });
-    expect(result.status).toBe(200);
-    vi.doUnmock('../../projects/app/src/shared/api');
-    vi.resetModules();
+    expect(result.status).toBe(413);
+    expect((result.body as { code?: number }).code).toBe(501030);
   });
 });
