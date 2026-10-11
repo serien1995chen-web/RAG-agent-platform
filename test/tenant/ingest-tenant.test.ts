@@ -16,7 +16,7 @@ const context: RequestContext = {
 
 const state = vi.hoisted(() => ({ runtime: undefined as unknown }));
 
-vi.mock('../../projects/app/src/runtime/health', () => ({
+vi.mock('../../projects/app/src/runtime', () => ({
   getRuntime: async () => state.runtime,
 }));
 

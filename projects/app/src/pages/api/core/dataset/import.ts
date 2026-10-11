@@ -1,7 +1,7 @@
 import { ApiErrorException, createApiError } from '@kb/contracts';
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { authenticateRequest } from '../../../../runtime/auth';
-import { getRuntime } from '../../../../runtime/health';
+import { getRuntime } from '../../../../runtime';
 import { parseDto, successResponse, withApiHandler } from '../../../../shared/api';
 import type { ApiHandlerContext } from '../../../../shared/api';
 

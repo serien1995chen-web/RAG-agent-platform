@@ -22,7 +22,7 @@ const state = vi.hoisted(() => ({
   deletes: 0,
 }));
 
-vi.mock('../../projects/app/src/runtime/health', () => ({
+vi.mock('../../projects/app/src/runtime', () => ({
   getRuntime: async () => state.runtime,
 }));
 

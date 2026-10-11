@@ -10,7 +10,7 @@ const routeContext: RequestContext = {
   permission: { canRead: true, canWrite: true, canManage: true, isOwner: true },
 };
 const routeState = vi.hoisted(() => ({ runtime: undefined as unknown }));
-vi.mock('../../projects/app/src/runtime/health', () => ({
+vi.mock('../../projects/app/src/runtime', () => ({
   getRuntime: async () => routeState.runtime,
 }));
 vi.mock('../../projects/app/src/runtime/auth', () => ({

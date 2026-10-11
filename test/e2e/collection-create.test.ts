@@ -19,7 +19,7 @@ const collectionId = '000000000000000000000011';
 
 const state = vi.hoisted(() => ({ runtime: undefined as unknown }));
 
-vi.mock('../../projects/app/src/runtime/health', () => ({
+vi.mock('../../projects/app/src/runtime', () => ({
   getRuntime: async () => state.runtime,
 }));
 

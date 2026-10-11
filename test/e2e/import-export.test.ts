@@ -20,7 +20,7 @@ const dataId = '000000000000000000000012';
 
 const state = vi.hoisted(() => ({ runtime: undefined as unknown, catalogCalls: 0 }));
 
-vi.mock('../../projects/app/src/runtime/health', () => ({
+vi.mock('../../projects/app/src/runtime', () => ({
   getRuntime: async () => state.runtime,
 }));
 
