@@ -40,7 +40,7 @@ function toBytes(file: unknown): Buffer | null {
 
 function stableImportDataId(collectionId: string, q: string, a: string): string {
   const digest = createHash('sha256').update(`${collectionId}\u0000${q}\u0000${a}`).digest('hex');
-  return `imp-${digest.slice(0, 32)}`;
+  return digest.slice(0, 24);
 }
 
 /** API-IMP-001 POST /api/core/dataset/collection/import */

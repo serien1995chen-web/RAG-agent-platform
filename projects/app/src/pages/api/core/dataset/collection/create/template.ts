@@ -57,7 +57,7 @@ function toBytes(file: unknown): Buffer | null {
 
 function stableTemplateDataId(collectionId: string, q: string, a: string): string {
   const digest = createHash('sha256').update(`${collectionId}\u0000${q}\u0000${a}`).digest('hex');
-  return `tpl-${digest.slice(0, 32)}`;
+  return digest.slice(0, 24);
 }
 
 function parseTemplate(bytes: Buffer, name: string): Array<{ q: string; a: string }> {
@@ -105,6 +105,11 @@ export default withApiHandler(
         ? String((body.file as { name?: unknown }).name ?? 'template.csv')
         : 'template.csv';
     const rows = parseTemplate(bytes, name);
+    // 依赖预检先于任何创建：缺 Queue 时不创建 Collection，无半成品。
+    const queue = (runtime.ports as { queue?: QueuePort }).queue;
+    if (rows.length > 0 && !queue) {
+      throw apiError(501062, requestId, { dependency: 'queue', mode: 'qa' });
+    }
     const created = await runtime.collectionRepository.create(
       {
         collection: sourceCollection({
@@ -117,32 +122,35 @@ export default withApiHandler(
       },
       context,
     );
-    const queue = (runtime.ports as { queue?: QueuePort }).queue;
-    if (rows.length > 0 && !queue) {
-      throw apiError(501062, requestId, { dependency: 'queue', mode: 'qa' });
-    }
     let insertLen = 0;
     if (rows.length > 0 && queue) {
-      const service = new PushDataService({
-        jobs: runtime.processingRepository,
-        trainingProcessor: runtime.ports.trainingProcessor,
-        queue,
-      });
-      const result = await service.pushBatch(
-        {
-          datasetId: body.datasetId,
-          collectionId: created.collectionId,
-          mode: 'qa',
-          items: rows.map((row) => ({
-            dataId: stableTemplateDataId(created.collectionId, row.q, row.a),
-            version: 1,
-            payload: row,
-          })),
-          options: PORT_OPTIONS,
-        },
-        context,
-      );
-      insertLen = result.accepted;
+      try {
+        const service = new PushDataService({
+          jobs: runtime.processingRepository,
+          trainingProcessor: runtime.ports.trainingProcessor,
+          queue,
+        });
+        const result = await service.pushBatch(
+          {
+            datasetId: body.datasetId,
+            collectionId: created.collectionId,
+            mode: 'qa',
+            items: rows.map((row) => ({
+              dataId: stableTemplateDataId(created.collectionId, row.q, row.a),
+              version: 1,
+              payload: row,
+            })),
+            options: PORT_OPTIONS,
+          },
+          context,
+        );
+        insertLen = result.accepted;
+      } catch (error) {
+        await runtime.collectionRepository
+          .deleteTree({ collectionId: created.collectionId, options: PORT_OPTIONS }, context)
+          .catch(() => undefined);
+        throw error;
+      }
     }
     response
       .status(200)

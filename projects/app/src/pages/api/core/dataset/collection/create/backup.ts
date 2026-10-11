@@ -57,7 +57,7 @@ function toBytes(file: unknown): Buffer | null {
 
 function stableBackupDataId(collectionId: string, q: string, a: string): string {
   const digest = createHash('sha256').update(`${collectionId}\u0000${q}\u0000${a}`).digest('hex');
-  return `bk-${digest.slice(0, 32)}`;
+  return digest.slice(0, 24);
 }
 
 /** 真实 CSV 解析：表头含 q/a 且无重复，返回真实行。 */
@@ -100,6 +100,11 @@ export default withApiHandler(
         ? String((body.file as { name?: unknown }).name ?? 'backup.csv')
         : 'backup.csv';
     const rows = parseBackup(bytes, name);
+    // 依赖预检先于任何创建：缺 Queue 时不创建 Collection，无半成品。
+    const queue = (runtime.ports as { queue?: QueuePort }).queue;
+    if (rows.length > 0 && !queue) {
+      throw apiError(501062, requestId, { dependency: 'queue', mode: 'qa' });
+    }
     const created = await runtime.collectionRepository.create(
       {
         collection: sourceCollection({
@@ -114,32 +119,36 @@ export default withApiHandler(
       context,
     );
     // 真实持久化：有效行经 PushDataService 生成真实 qa 任务（非仅计数）。
-    const queue = (runtime.ports as { queue?: QueuePort }).queue;
-    if (rows.length > 0 && !queue) {
-      throw apiError(501062, requestId, { dependency: 'queue', mode: 'qa' });
-    }
     let insertLen = 0;
     if (rows.length > 0 && queue) {
-      const service = new PushDataService({
-        jobs: runtime.processingRepository,
-        trainingProcessor: runtime.ports.trainingProcessor,
-        queue,
-      });
-      const result = await service.pushBatch(
-        {
-          datasetId: body.datasetId,
-          collectionId: created.collectionId,
-          mode: 'qa',
-          items: rows.map((row) => ({
-            dataId: stableBackupDataId(created.collectionId, row.q, row.a),
-            version: 1,
-            payload: row,
-          })),
-          options: PORT_OPTIONS,
-        },
-        context,
-      );
-      insertLen = result.accepted;
+      try {
+        const service = new PushDataService({
+          jobs: runtime.processingRepository,
+          trainingProcessor: runtime.ports.trainingProcessor,
+          queue,
+        });
+        const result = await service.pushBatch(
+          {
+            datasetId: body.datasetId,
+            collectionId: created.collectionId,
+            mode: 'qa',
+            items: rows.map((row) => ({
+              dataId: stableBackupDataId(created.collectionId, row.q, row.a),
+              version: 1,
+              payload: row,
+            })),
+            options: PORT_OPTIONS,
+          },
+          context,
+        );
+        insertLen = result.accepted;
+      } catch (error) {
+        // 补偿：push 失败不留半成品 Collection。
+        await runtime.collectionRepository
+          .deleteTree({ collectionId: created.collectionId, options: PORT_OPTIONS }, context)
+          .catch(() => undefined);
+        throw error;
+      }
     }
     response
       .status(200)

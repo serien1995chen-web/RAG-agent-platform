@@ -40,7 +40,7 @@ function toBytes(file: unknown): Buffer | null {
 
 function stableImportDataId(collectionId: string, q: string, a: string): string {
   const digest = createHash('sha256').update(`${collectionId}\u0000${q}\u0000${a}`).digest('hex');
-  return `imp-${digest.slice(0, 32)}`;
+  return digest.slice(0, 24);
 }
 
 /** API-IMP-002 POST /api/core/dataset/import */
@@ -111,7 +111,13 @@ export default withApiHandler(
         failed += 1;
       }
     }
+    // 依赖预检先于任何创建：缺 Queue 时不创建 Collection。
+    const queue = (runtime.ports as { queue?: QueuePort }).queue;
+    if (validRows.length > 0 && !queue) {
+      throw apiError(501062, requestId, { dependency: 'queue', mode: 'qa' });
+    }
     let collectionId = body.targetCollectionId;
+    let createdCollectionId: string | undefined;
     if (!collectionId && validRows.length > 0) {
       const created = await runtime.collectionRepository.create(
         {
@@ -129,33 +135,39 @@ export default withApiHandler(
         context,
       );
       collectionId = created.collectionId;
-    }
-    const queue = (runtime.ports as { queue?: QueuePort }).queue;
-    if (validRows.length > 0 && !queue) {
-      throw apiError(501062, requestId, { dependency: 'queue', mode: 'qa' });
+      createdCollectionId = created.collectionId;
     }
     let success = 0;
     if (validRows.length > 0 && queue && collectionId) {
-      const service = new PushDataService({
-        jobs: runtime.processingRepository,
-        trainingProcessor: runtime.ports.trainingProcessor,
-        queue,
-      });
-      const result = await service.pushBatch(
-        {
-          datasetId: body.datasetId,
-          collectionId,
-          mode: 'qa',
-          items: validRows.map((row) => ({
-            dataId: stableImportDataId(collectionId!, row.q, row.a),
-            version: 1,
-            payload: row,
-          })),
-          options: PORT_OPTIONS,
-        },
-        context,
-      );
-      success = result.accepted;
+      try {
+        const service = new PushDataService({
+          jobs: runtime.processingRepository,
+          trainingProcessor: runtime.ports.trainingProcessor,
+          queue,
+        });
+        const result = await service.pushBatch(
+          {
+            datasetId: body.datasetId,
+            collectionId,
+            mode: 'qa',
+            items: validRows.map((row) => ({
+              dataId: stableImportDataId(collectionId!, row.q, row.a),
+              version: 1,
+              payload: row,
+            })),
+            options: PORT_OPTIONS,
+          },
+          context,
+        );
+        success = result.accepted;
+      } catch (error) {
+        if (createdCollectionId) {
+          await runtime.collectionRepository
+            .deleteTree({ collectionId: createdCollectionId, options: PORT_OPTIONS }, context)
+            .catch(() => undefined);
+        }
+        throw error;
+      }
     }
     response
       .status(200)
