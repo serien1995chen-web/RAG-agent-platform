@@ -51,6 +51,8 @@ export default withApiHandler(
       fullText: runtime.ports.fullTextStore,
     });
     const dataId = stableDataId(body.collectionId, body.q, body.a ?? '');
+    const text = body.a && body.a.length > 0 ? `${body.q}\n${body.a}` : body.q;
+    const vector = await runtime.modelRuntime.embedText({ text, options: PORT_OPTIONS }, context);
     const result = await service.insertDirect(
       {
         dataId,
@@ -58,7 +60,7 @@ export default withApiHandler(
         collectionId: body.collectionId,
         q: body.q,
         ...(body.a !== undefined ? { a: body.a } : {}),
-        vector: [],
+        vector,
         options: PORT_OPTIONS,
       },
       context,

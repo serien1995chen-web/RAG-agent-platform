@@ -29,6 +29,15 @@ interface DataUpdateBody {
   indexes?: IndexPatchValue[];
 }
 
+interface ExistingItem {
+  version: number;
+  q?: string;
+  a?: string;
+  datasetId: string;
+  collectionId: string;
+  indexes: Array<{ indexId: string; type: string; dataId: string; text: string }>;
+}
+
 /** API-DATA-003 POST /api/core/dataset/data/update */
 export default withApiHandler(
   async (request: NextApiRequest, response: NextApiResponse, { requestId }: ApiHandlerContext) => {
@@ -36,12 +45,10 @@ export default withApiHandler(
     const { context } = await authenticateRequest(runtime, request, requestId);
     const body = parseDto<DataUpdateBody>('DataUpdateBody', request.body);
     const repository = runtime.knowledgeItemRepository as typeof runtime.knowledgeItemRepository & {
-      get?: (input: { dataId: string; options: typeof PORT_OPTIONS }) => Promise<{
-        version: number;
-        q?: string;
-        a?: string;
-        indexes: Array<{ indexId: string; type: string; dataId: string; text: string }>;
-      } | null>;
+      get?: (input: {
+        dataId: string;
+        options: typeof PORT_OPTIONS;
+      }) => Promise<ExistingItem | null>;
     };
     const existing = await repository.get?.({ dataId: body.dataId, options: PORT_OPTIONS });
     if (!existing) {
@@ -50,31 +57,24 @@ export default withApiHandler(
     if (existing.version !== body.version) {
       throw apiError(501067, requestId, { expected: existing.version, actual: body.version });
     }
-    // 真实字段更新：q/a/indexes 三者都按请求改写，未提供的保留旧值；不再原样回写旧 indexes。
-    const q = body.q ?? existing.q ?? '';
-    const a = body.a ?? existing.a ?? '';
-    const text = a.length > 0 ? `${q}\n${a}` : q;
-    const indexes =
-      body.indexes && body.indexes.length > 0
-        ? body.indexes.map((patch) => {
-            const previous = existing.indexes.find((index) => index.indexId === patch.indexId);
-            return {
-              indexId: patch.indexId,
-              type: previous?.type ?? 'default',
-              dataId: body.dataId,
-              text: patch.text,
-            };
-          })
-        : existing.indexes.map((index) =>
-            index.type === 'default' || index.type === 'question' ? { ...index, text } : index,
-          );
-    const updated = await runtime.knowledgeItemRepository.updateIndexes(
-      { dataId: body.dataId, version: body.version, indexes, options: PORT_OPTIONS },
+    // 真实更新：新向量 → Mongo CAS 切换 q/a/indexes → FullText（DataUpdateService）。
+    const updated = await runtime.dataUpdateService.updateItem(
+      {
+        dataId: body.dataId,
+        datasetId: existing.datasetId,
+        collectionId: existing.collectionId,
+        version: body.version,
+        ...(body.q !== undefined ? { q: body.q } : {}),
+        ...(body.a !== undefined ? { a: body.a } : {}),
+        ...(body.indexes !== undefined ? { indexes: body.indexes } : {}),
+        existing,
+        options: PORT_OPTIONS,
+      },
       context,
     );
     response
       .status(200)
-      .json(successResponse({ dataId: body.dataId, version: updated.version }, requestId));
+      .json(successResponse({ dataId: updated.dataId, version: updated.version }, requestId));
   },
   { validationErrorCode: 501067 },
 );

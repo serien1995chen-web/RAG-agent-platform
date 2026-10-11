@@ -82,7 +82,7 @@ beforeEach(() => {
     collectionRepository: { create: async () => ({ collectionId }) },
     collectionService: { getCollection: async () => collection },
     knowledgeItemRepository: {
-      get: async () => ({ version: 1, q: 'q', a: '', indexes: [] }),
+      get: async () => ({ version: 1, q: 'q', a: '', datasetId, collectionId, indexes: [] }),
       updateIndexes: async () => ({ version: 2 }),
       bulkUpsert: async () => ({ upserted: 1, duplicates: 0 }),
     },
@@ -96,6 +96,8 @@ beforeEach(() => {
     imageApplicationService: {
       createImage: async () => ({ state: 'success', producedItems: 1 }),
     },
+    modelRuntime: { embedText: async () => [0.1, 0.2, 0.3] },
+    dataUpdateService: { updateItem: async () => ({ dataId, version: 2 }) },
     ports: {
       vectorController: { insert: async () => undefined },
       fullTextStore: { write: async () => undefined },
