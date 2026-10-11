@@ -73,7 +73,10 @@ export default withApiHandler(
       seen.add(line);
       try {
         const parsed = JSON.parse(line) as { q?: string; a?: string };
-        if (!parsed.q || parsed.q.trim().length === 0) throw new Error('empty-q');
+        if (!parsed.q || parsed.q.trim().length === 0) {
+          failed += 1;
+          continue;
+        }
         validRows.push({ q: String(parsed.q), a: String(parsed.a ?? '') });
       } catch {
         failed += 1;

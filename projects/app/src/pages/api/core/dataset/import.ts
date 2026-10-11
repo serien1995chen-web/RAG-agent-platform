@@ -94,11 +94,17 @@ export default withApiHandler(
           const cells = line.split(',');
           const q = (cells[qIndex] ?? '').trim();
           const a = (cells[aIndex] ?? '').trim();
-          if (!q) throw new Error('empty-q');
+          if (!q) {
+            failed += 1;
+            continue;
+          }
           validRows.push({ q, a });
         } else {
           const parsed = JSON.parse(line) as { q?: string; a?: string };
-          if (!parsed.q || parsed.q.trim().length === 0) throw new Error('empty-q');
+          if (!parsed.q || parsed.q.trim().length === 0) {
+            failed += 1;
+            continue;
+          }
           validRows.push({ q: String(parsed.q), a: String(parsed.a ?? '') });
         }
       } catch {
