@@ -8,6 +8,15 @@ import {
 import { buildIdempotencyScopeKey, type IdempotencyStore } from '@kb/dal';
 import type { NextApiHandler, NextApiRequest, NextApiResponse } from 'next';
 import {
+  checkBusinessBytes,
+  checkDecompressedBytes,
+  checkItemCount,
+  checkProxyBytes,
+  requestLimitsFromConfig,
+  type RequestLimitConfig,
+  type RequestLimitDecision,
+} from '../../../../../packages/service/src/shared/http/limits';
+import {
   IdempotencyConflictError,
   bodyHashOf,
   buildConflictResponse,
@@ -32,6 +41,7 @@ export interface ApiRouteOptions {
 }
 
 const IDEMPOTENT_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
+let resolvedLimits: RequestLimitConfig | undefined;
 
 type StatusWriter = (code: number) => NextApiResponse;
 type JsonWriter = (body: unknown) => NextApiResponse;
@@ -48,6 +58,61 @@ function idempotencyUnavailable(requestId: string): ApiErrorException {
       params: { store: 'redis', operation: 'idempotency' },
     }),
   );
+}
+
+/** 三层上限来自运行时 `datasetRuntime`（proxy / decompressed / business / items）。 */
+async function resolveLimits(): Promise<RequestLimitConfig> {
+  if (resolvedLimits !== undefined) return resolvedLimits;
+  try {
+    const { getRuntime } = await import('../../runtime');
+    const runtime = await getRuntime();
+    const config = (runtime.config as unknown as { datasetRuntime?: Record<string, number> })
+      .datasetRuntime;
+    resolvedLimits = config ? requestLimitsFromConfig(config as never) : requestLimitsFromConfig();
+  } catch {
+    resolvedLimits = requestLimitsFromConfig();
+  }
+  return resolvedLimits;
+}
+
+function rejectLimit(decision: RequestLimitDecision, requestId: string): ApiErrorException {
+  return new ApiErrorException(
+    createApiError({
+      code: decision.code ?? 501030,
+      requestId,
+      params: {
+        ...(decision.limitBytes !== undefined ? { limitBytes: decision.limitBytes } : {}),
+        ...(decision.actualBytes !== undefined ? { actualBytes: decision.actualBytes } : {}),
+        ...(decision.limitItems !== undefined ? { limitItems: decision.limitItems } : {}),
+        ...(decision.actualItems !== undefined ? { actualItems: decision.actualItems } : {}),
+        layer: decision.layer ?? 'proxy',
+      },
+    }),
+  );
+}
+
+async function enforceLimits(request: NextApiRequest, requestId: string): Promise<void> {
+  const limits = await resolveLimits();
+  const header = request.headers['content-length'];
+  const raw = Array.isArray(header) ? header[0] : header;
+  const contentLength = raw === undefined ? undefined : Number(raw);
+  const proxy = checkProxyBytes(limits, contentLength);
+  if (!proxy.allowed) throw rejectLimit(proxy, requestId);
+  const bodyBytes =
+    request.body === undefined ? 0 : Buffer.byteLength(JSON.stringify(request.body), 'utf8');
+  const decompressed = checkDecompressedBytes(limits, bodyBytes);
+  if (!decompressed.allowed) throw rejectLimit(decompressed, requestId);
+  // 业务字段字节上限（501065）：对已解析业务体单独校验。
+  const business = checkBusinessBytes(
+    limits,
+    request.body === undefined ? 0 : Buffer.byteLength(JSON.stringify(request.body), 'utf8'),
+  );
+  if (!business.allowed) throw rejectLimit(business, requestId);
+  const body = request.body as { data?: unknown[] } | undefined;
+  if (Array.isArray(body?.data)) {
+    const items = checkItemCount(limits, body.data.length);
+    if (!items.allowed) throw rejectLimit(items, requestId);
+  }
 }
 
 /** 统一 error → HTTP 响应映射；只允许通过本函数写错误响应。 */
@@ -111,6 +176,7 @@ export function withApiHandler(
     const idempotencyKey = readIdempotencyKey(request);
     if (idempotencyKey === null || !IDEMPOTENT_METHODS.has(method)) {
       try {
+        await enforceLimits(request, requestId);
         await handler(request, response, { requestId });
       } catch (error) {
         writeErrorResponse(rawStatus, rawJson, requestId, operation, error, options);
@@ -145,6 +211,7 @@ export function withApiHandler(
     }
 
     try {
+      await enforceLimits(request, requestId);
       const result = await executeWithIdempotency({
         store: idempotencyContext.store,
         scopeKey: buildIdempotencyScopeKey(
