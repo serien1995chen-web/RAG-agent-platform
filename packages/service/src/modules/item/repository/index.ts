@@ -7,3 +7,6 @@ export function createKnowledgeItemRepository(connection?: Connection): Knowledg
   if (connection) return new MongoKnowledgeItemRepository(connection);
   return createUnimplementedPort<KnowledgeItemRepository>('KnowledgeItemRepository');
 }
+
+export { MongoImageAssetRepository, createImageAssetRepository, DEFAULT_IMAGE_TTL_MS } from "./mongo-image-asset.repository";
+export type { ImageAssetRecord, ImageAssetState, CreateTemporaryInput } from "./mongo-image-asset.repository";
