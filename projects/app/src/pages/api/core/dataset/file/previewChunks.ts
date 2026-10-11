@@ -37,6 +37,10 @@ export default withApiHandler(
     // fileRef 形如 dataset/{datasetId}/{fileId}[.ext]；据此解析 dataset scope。
     const parts = body.fileRef.split('/');
     const datasetId = parts[0] === 'dataset' ? (parts[1] ?? '') : '';
+    if (datasetId) {
+      // 先校验 Dataset 属于认证团队，再取对象。
+      await runtime.datasetApi.getDatasetDetail(datasetId, context);
+    }
     const stored = await runtime.clients.objectStore.get(
       { ref: { bucket: 'kb-source', key: body.fileRef } },
       { teamId: context.tenant.teamId, ...(datasetId ? { datasetId } : {}) },

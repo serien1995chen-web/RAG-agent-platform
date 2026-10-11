@@ -28,8 +28,10 @@ interface ApiDatasetClient {
 export default withApiHandler(
   async (request: NextApiRequest, response: NextApiResponse, { requestId }: ApiHandlerContext) => {
     const runtime = (await getRuntime()) as ExtendedAppRuntime;
-    await authenticateRequest(runtime, request, requestId);
+    const { context } = await authenticateRequest(runtime, request, requestId);
     const body = parseDto<ApiDatasetPathNamesBody>('ApiDatasetPathNamesBody', request.body);
+    // 先校验 Dataset 归属，再调用 Provider。
+    await runtime.datasetApi.getDatasetDetail(body.datasetId, context);
     const client = (runtime.ports as { apiDatasetClient?: ApiDatasetClient }).apiDatasetClient;
     if (!client) throw apiError(501017, requestId, { provider: 'apiDataset' });
     try {

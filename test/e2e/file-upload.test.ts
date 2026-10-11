@@ -71,6 +71,9 @@ beforeEach(async () => {
   state.deletes = 0;
   state.runtime = {
     fileUploadService: new FileUploadService(),
+    datasetApi: {
+      getDatasetDetail: async () => ({ dataset: { datasetId, teamId: context.tenant.teamId } }),
+    },
     clients: {
       objectStore: {
         get: async () => ({ body: Buffer.from('a'.repeat(200)) }),

@@ -33,6 +33,8 @@ export default withApiHandler(
     if (body.size > MAX_RAW_TEXT_BYTES) {
       throw apiError(501065, requestId, { limitBytes: MAX_RAW_TEXT_BYTES, actualBytes: body.size });
     }
+    // 先校验 Dataset 属于认证团队，再构造对象 scope。
+    await runtime.datasetApi.getDatasetDetail(body.datasetId, context);
     const store = runtime.clients.objectStore;
     const fileId = randomUUID();
     const key = `dataset/${body.datasetId}/${fileId}`;

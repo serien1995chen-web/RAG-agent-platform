@@ -6,6 +6,7 @@ import {
   toApiResponse,
 } from '@kb/contracts';
 import {
+  checkBusinessBytes,
   checkDecompressedBytes,
   checkItemCount,
   checkProxyBytes,
@@ -101,6 +102,12 @@ async function enforceLimits(request: NextApiRequest, requestId: string): Promis
     request.body === undefined ? 0 : Buffer.byteLength(JSON.stringify(request.body), 'utf8');
   const decompressed = checkDecompressedBytes(limits, bodyBytes);
   if (!decompressed.allowed) throw rejectLimit(decompressed, requestId);
+  // 业务字段字节上限（501065）：对已解析业务体单独校验。
+  const business = checkBusinessBytes(
+    limits,
+    request.body === undefined ? 0 : Buffer.byteLength(JSON.stringify(request.body), 'utf8'),
+  );
+  if (!business.allowed) throw rejectLimit(business, requestId);
   const body = request.body as { data?: unknown[] } | undefined;
   if (Array.isArray(body?.data)) {
     const items = checkItemCount(limits, body.data.length);
