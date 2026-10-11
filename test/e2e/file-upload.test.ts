@@ -68,8 +68,15 @@ function request(input: {
 beforeEach(async () => {
   state.objects.clear();
   state.deletes = 0;
-  const { resetSessions } = await import('../../projects/app/src/shared/file-session');
-  resetSessions();
+  (
+    globalThis as unknown as {
+      __p4FileSessions?: {
+        sessions: Map<string, unknown>;
+        parts: Map<string, unknown>;
+        checksums: Map<string, unknown>;
+      };
+    }
+  ).__p4FileSessions = { sessions: new Map(), parts: new Map(), checksums: new Map() };
   state.runtime = {
     clients: {
       objectStore: {
@@ -148,8 +155,11 @@ describe('P4-07 file and multipart routes', () => {
     expect(JSON.stringify(data(presign.body))).not.toContain('bucket');
     expect(JSON.stringify(data(presign.body))).not.toContain('kb-source');
 
-    const { createSession } = await import('../../projects/app/src/shared/file-session');
-    createSession({
+    (
+      globalThis as unknown as {
+        __p4FileSessions: { sessions: Map<string, unknown> };
+      }
+    ).__p4FileSessions.sessions.set(fileId, {
       fileId,
       teamId: context.tenant.teamId,
       datasetId,

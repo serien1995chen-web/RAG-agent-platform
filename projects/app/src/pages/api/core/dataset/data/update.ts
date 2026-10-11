@@ -1,10 +1,19 @@
+import { ApiErrorException, createApiError } from '@kb/contracts';
 import type { NextApiRequest, NextApiResponse } from 'next';
 import type { ExtendedAppRuntime } from '../../../../../runtime';
 import { authenticateRequest } from '../../../../../runtime/auth';
 import { getRuntime } from '../../../../../runtime/health';
 import { parseDto, successResponse, withApiHandler } from '../../../../../shared/api';
 import type { ApiHandlerContext } from '../../../../../shared/api';
-import { PORT_OPTIONS, apiError } from '../../../../../shared/import-source';
+
+const PORT_OPTIONS = { timeoutMs: 10_000 } as const;
+function apiError(
+  code: number,
+  requestId: string,
+  params: Record<string, unknown>,
+): ApiErrorException {
+  return new ApiErrorException(createApiError({ code, requestId, params }));
+}
 
 interface DataUpdateBody {
   dataId: string;

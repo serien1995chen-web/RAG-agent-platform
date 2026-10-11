@@ -1,28 +1,46 @@
+import { ApiErrorException, createApiError } from '@kb/contracts';
 import type { NextApiRequest, NextApiResponse } from 'next';
 import type { ExtendedAppRuntime } from '../../../../../runtime';
 import { authenticateRequest } from '../../../../../runtime/auth';
 import { getRuntime } from '../../../../../runtime/health';
 import { parseDto, successResponse, withApiHandler } from '../../../../../shared/api';
 import type { ApiHandlerContext } from '../../../../../shared/api';
-import { apiError } from '../../../../../shared/import-source';
-import { objectStoreOf } from '../../../../../shared/object-store';
-import {
-  findPartByChecksum,
-  getSessionByUploadId,
-  recordPart,
-} from '../../../../../shared/file-session';
+
+interface MultipartSession {
+  fileId: string;
+  teamId: string;
+  datasetId: string;
+  key: string;
+  uploadId: string;
+  bucket: string;
+}
+
+interface SessionState {
+  sessions: Map<string, MultipartSession>;
+  parts: Map<string, Map<number, { etag: string; size: number }>>;
+  checksums: Map<string, string>;
+}
+
+function sessionState(): SessionState {
+  const g = globalThis as unknown as { __p4FileSessions?: SessionState };
+  g.__p4FileSessions ??= { sessions: new Map(), parts: new Map(), checksums: new Map() };
+  g.__p4FileSessions.checksums ??= new Map();
+  return g.__p4FileSessions;
+}
 
 interface UploadPartForm {
   uploadId: string;
   partNumber: number;
-  checksum?: string;
-  chunk?: { size?: number; data?: string } | string;
+  checksum: string;
+  chunk: string;
 }
 
-function chunkBytes(chunk: UploadPartForm['chunk']): Uint8Array {
-  if (typeof chunk === 'string') return Buffer.from(chunk, 'utf8');
-  if (chunk && typeof chunk.data === 'string') return Buffer.from(chunk.data, 'base64');
-  return new Uint8Array();
+function apiError(
+  code: number,
+  requestId: string,
+  params: Record<string, unknown>,
+): ApiErrorException {
+  return new ApiErrorException(createApiError({ code, requestId, params }));
 }
 
 /** API-FILE-007 POST /api/core/dataset/file/uploadPart */
@@ -34,57 +52,58 @@ export default withApiHandler(
     if (body.partNumber < 1 || body.partNumber > 10000) {
       throw apiError(501065, requestId, { partNumber: body.partNumber });
     }
-    const session = getSessionByUploadId(body.uploadId, context.tenant.teamId);
+    const state = sessionState();
+    const session = [...state.sessions.values()].find(
+      (value) => value.uploadId === body.uploadId && value.teamId === context.tenant.teamId,
+    );
     if (!session) throw apiError(501061, requestId, {});
-    const bytes = chunkBytes(body.chunk);
+    const bytes = Buffer.from(body.chunk, 'base64');
     if (bytes.byteLength === 0) throw apiError(501060, requestId, { reason: 'empty_part' });
-    if (body.checksum !== undefined) {
-      const existing = findPartByChecksum(session.fileId, body.partNumber, body.checksum);
-      if (existing !== null) {
-        response
-          .status(200)
-          .json(
-            successResponse(
-              { etag: existing, partNumber: body.partNumber, size: bytes.byteLength },
-              requestId,
-            ),
-          );
-        return;
-      }
-    }
-    const store = objectStoreOf(runtime);
-    if (!store) throw apiError(501060, requestId, { reason: 'store_unavailable' });
-    try {
-      const result = await store.uploadPart(
-        {
-          ref: {
-            bucket: session.bucket,
-            key: session.key,
-            ...(session.uploadId ? { multipartUploadId: session.uploadId } : {}),
-          },
-          partNumber: body.partNumber,
-          body: bytes,
-          ...(body.checksum !== undefined ? { checksum: body.checksum } : {}),
-        },
-        context,
-      );
-      recordPart(
-        session.fileId,
-        body.partNumber,
-        { etag: result.etag, size: result.size },
-        body.checksum,
-      );
+    const checksumKey = `${body.uploadId}:${body.partNumber}:${body.checksum}`;
+    const existing = state.checksums.get(checksumKey);
+    if (existing) {
       response
         .status(200)
         .json(
           successResponse(
-            { etag: result.etag, partNumber: result.partNumber, size: result.size },
+            { etag: existing, partNumber: body.partNumber, size: bytes.byteLength },
             requestId,
           ),
         );
-    } catch {
-      throw apiError(501060, requestId, { reason: 'part_failed' });
+      return;
     }
+    const store = (runtime.clients as { objectStore?: { uploadPart?: unknown } }).objectStore;
+    if (!store || typeof store.uploadPart !== 'function') {
+      throw apiError(501060, requestId, { reason: 'store_unavailable' });
+    }
+    const result = await (
+      store as {
+        uploadPart: (
+          i: unknown,
+          c: unknown,
+        ) => Promise<{ etag: string; partNumber: number; size: number }>;
+      }
+    ).uploadPart(
+      {
+        ref: { bucket: session.bucket, key: session.key, multipartUploadId: session.uploadId },
+        partNumber: body.partNumber,
+        body: bytes,
+        checksum: body.checksum,
+      },
+      { teamId: context.tenant.teamId, datasetId: session.datasetId },
+    );
+    const bucket = state.parts.get(session.fileId) ?? new Map();
+    bucket.set(body.partNumber, { etag: result.etag, size: result.size });
+    state.parts.set(session.fileId, bucket);
+    state.checksums.set(checksumKey, result.etag);
+    response
+      .status(200)
+      .json(
+        successResponse(
+          { etag: result.etag, partNumber: result.partNumber, size: result.size },
+          requestId,
+        ),
+      );
   },
   { validationErrorCode: 501060 },
 );

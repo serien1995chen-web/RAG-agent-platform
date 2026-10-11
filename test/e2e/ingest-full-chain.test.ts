@@ -25,15 +25,6 @@ vi.mock('../../projects/app/src/runtime/auth', () => ({
   authenticateRequest: async () => ({ context, subject: context.tenant }),
 }));
 
-vi.mock('../../packages/service/src/modules/collection/adapter/source-provider/index', () => ({
-  createSourceProviderRegistry: () => ({
-    resolve: () => ({
-      read: async () => ({ rawText: 'full chain content', contentHash: 'hash-chain' }),
-      preview: async () => ({ rawText: 'full chain content', contentHash: 'hash-chain' }),
-    }),
-  }),
-}));
-
 function responseRecorder() {
   let status = 200;
   let body: unknown = null;
@@ -62,6 +53,10 @@ beforeEach(() => {
       },
     },
     ports: {
+      datasetSourceProvider: {
+        read: async () => ({ rawText: 'full chain content', contentHash: 'hash-chain' }),
+        preview: async () => ({ rawText: 'full chain content', contentHash: 'hash-chain' }),
+      },
       trainingProcessor: { process: async () => ({ state: 'success' }) },
       queue: { enqueue: async (_name: string, jobId: string) => state.enqueued.push(jobId) },
     },

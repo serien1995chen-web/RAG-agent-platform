@@ -1,10 +1,39 @@
+import type { CollectionSnapshot } from '@kb/service';
+import { ApiErrorException, createApiError } from '@kb/contracts';
 import type { NextApiRequest, NextApiResponse } from 'next';
 import type { ExtendedAppRuntime } from '../../../../../../runtime';
 import { authenticateRequest } from '../../../../../../runtime/auth';
 import { getRuntime } from '../../../../../../runtime/health';
 import { parseDto, successResponse, withApiHandler } from '../../../../../../shared/api';
 import type { ApiHandlerContext } from '../../../../../../shared/api';
-import { PORT_OPTIONS, apiError, sourceCollection } from '../../../../../../shared/import-source';
+
+function sourceCollection(input: {
+  teamId: string;
+  datasetId: string;
+  name: string;
+  sourceRef: string;
+  type?: string;
+  parentId?: string | null;
+}): Omit<CollectionSnapshot, 'collectionId' | 'version' | 'createTime' | 'updateTime'> {
+  return {
+    teamId: input.teamId,
+    datasetId: input.datasetId,
+    parentId: input.parentId ?? null,
+    type: input.type ?? 'file',
+    name: input.name,
+    tagIds: [],
+    sourceRef: input.sourceRef,
+  };
+}
+
+const PORT_OPTIONS = { timeoutMs: 10_000 } as const;
+function apiError(
+  code: number,
+  requestId: string,
+  params: Record<string, unknown>,
+): ApiErrorException {
+  return new ApiErrorException(createApiError({ code, requestId, params }));
+}
 
 interface CollectionCreateBackupForm {
   file?: unknown;

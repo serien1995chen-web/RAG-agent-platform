@@ -1,14 +1,29 @@
+import { ApiErrorException, createApiError } from '@kb/contracts';
 import type { NextApiRequest, NextApiResponse } from 'next';
 import type { ExtendedAppRuntime } from '../../../../../runtime';
 import { authenticateRequest } from '../../../../../runtime/auth';
 import { getRuntime } from '../../../../../runtime/health';
 import { parseDto, successResponse, withApiHandler } from '../../../../../shared/api';
 import type { ApiHandlerContext } from '../../../../../shared/api';
-import {
-  MAX_IMAGES_PER_REQUEST,
-  apiError,
-  normalizeTrainingType,
-} from '../../../../../shared/import-source';
+
+const MAX_IMAGES_PER_REQUEST = 10;
+function apiError(
+  code: number,
+  requestId: string,
+  params: Record<string, unknown>,
+): ApiErrorException {
+  return new ApiErrorException(createApiError({ code, requestId, params }));
+}
+function normalizeTrainingType(mode: string | undefined): {
+  mode: 'chunk' | 'qa' | 'image' | 'imageParse';
+  autoIndexes: boolean;
+} {
+  if (mode === undefined || mode === 'auto') return { mode: 'chunk', autoIndexes: true };
+  if (mode === 'image' || mode === 'imageParse' || mode === 'qa' || mode === 'chunk') {
+    return { mode, autoIndexes: false };
+  }
+  return { mode: 'chunk', autoIndexes: false };
+}
 
 interface InsertImagesBody {
   collectionId: string;

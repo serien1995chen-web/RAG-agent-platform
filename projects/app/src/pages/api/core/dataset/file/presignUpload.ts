@@ -1,18 +1,33 @@
 import { randomUUID } from 'node:crypto';
+import { ApiErrorException, createApiError } from '@kb/contracts';
 import type { NextApiRequest, NextApiResponse } from 'next';
 import type { ExtendedAppRuntime } from '../../../../../runtime';
 import { authenticateRequest } from '../../../../../runtime/auth';
 import { getRuntime } from '../../../../../runtime/health';
 import { parseDto, successResponse, withApiHandler } from '../../../../../shared/api';
 import type { ApiHandlerContext } from '../../../../../shared/api';
-import { MAX_RAW_TEXT_BYTES, apiError } from '../../../../../shared/import-source';
-import { objectStoreOf } from '../../../../../shared/object-store';
+
+const MAX_RAW_TEXT_BYTES = 10 * 1024 * 1024;
 
 interface PresignUploadBody {
   datasetId: string;
   filename: string;
   size: number;
   mime: string;
+}
+
+function apiError(
+  code: number,
+  requestId: string,
+  params: Record<string, unknown>,
+): ApiErrorException {
+  return new ApiErrorException(createApiError({ code, requestId, params }));
+}
+
+function objectStoreOf(runtime: unknown) {
+  const store = (runtime as { clients?: { objectStore?: { presignPut?: unknown } } }).clients
+    ?.objectStore;
+  return store && typeof store.presignPut === 'function' ? store : null;
 }
 
 /** API-FILE-001 POST /api/core/dataset/file/presignUpload */
@@ -28,20 +43,20 @@ export default withApiHandler(
     if (!store) throw apiError(501017, requestId, { provider: 's3' });
     const fileId = randomUUID();
     const key = `dataset/${body.datasetId}/${fileId}`;
-    const uploadUrl = await store.presignPut(
+    const uploadUrl = await (
+      store as { presignPut: (i: unknown, c: unknown) => Promise<string> }
+    ).presignPut(
       { ref: { bucket: 'kb-source', key }, expiresSeconds: 900 },
-      context,
+      { teamId: context.tenant.teamId, datasetId: body.datasetId },
     );
-    response.status(200).json(
-      successResponse(
-        {
-          uploadUrl,
-          fileId,
-          expiresAt: new Date(Date.now() + 900_000).toISOString(),
-        },
-        requestId,
-      ),
-    );
+    response
+      .status(200)
+      .json(
+        successResponse(
+          { uploadUrl, fileId, expiresAt: new Date(Date.now() + 900_000).toISOString() },
+          requestId,
+        ),
+      );
   },
   { validationErrorCode: 501065 },
 );

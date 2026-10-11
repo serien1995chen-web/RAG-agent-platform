@@ -1,14 +1,21 @@
+import { ApiErrorException, createApiError } from '@kb/contracts';
 import type { NextApiRequest, NextApiResponse } from 'next';
 import type { ExtendedAppRuntime } from '../../../../../runtime';
 import { authenticateRequest } from '../../../../../runtime/auth';
 import { getRuntime } from '../../../../../runtime/health';
 import { parseDto, successResponse, withApiHandler } from '../../../../../shared/api';
 import type { ApiHandlerContext } from '../../../../../shared/api';
-import { apiError } from '../../../../../shared/import-source';
-import { objectStoreOf } from '../../../../../shared/object-store';
 
 interface PreviewUrlsBody {
   keys: string[];
+}
+
+function apiError(
+  code: number,
+  requestId: string,
+  params: Record<string, unknown>,
+): ApiErrorException {
+  return new ApiErrorException(createApiError({ code, requestId, params }));
 }
 
 /** API-FILE-006 POST /api/core/dataset/file/getSearchTestImagePreviewUrls */
@@ -24,12 +31,17 @@ export default withApiHandler(
     for (const key of body.keys) {
       if (!key.startsWith(prefix)) throw apiError(501061, requestId, {});
     }
-    const store = objectStoreOf(runtime);
-    if (!store) throw apiError(501011, requestId, { reason: 'store_unavailable' });
+    const store = (runtime.clients as { objectStore?: { presignGet?: unknown } }).objectStore;
+    if (!store || typeof store.presignGet !== 'function') {
+      throw apiError(501011, requestId, { reason: 'store_unavailable' });
+    }
     const previewUrls: string[] = [];
     for (const key of body.keys) {
       previewUrls.push(
-        await store.presignGet({ ref: { bucket: 'kb-image', key }, expiresSeconds: 3600 }, context),
+        await (store as { presignGet: (i: unknown, c: unknown) => Promise<string> }).presignGet(
+          { ref: { bucket: 'kb-image', key }, expiresSeconds: 3600 },
+          { teamId: context.tenant.teamId },
+        ),
       );
     }
     response.status(200).json(successResponse({ previewUrls }, requestId));

@@ -1,22 +1,18 @@
+import { ApiErrorException, createApiError } from '@kb/contracts';
 import type { NextApiRequest, NextApiResponse } from 'next';
 import type { ExtendedAppRuntime } from '../../../../../runtime';
 import { authenticateRequest } from '../../../../../runtime/auth';
 import { getRuntime } from '../../../../../runtime/health';
 import { parseDto, successResponse, withApiHandler } from '../../../../../shared/api';
 import type { ApiHandlerContext } from '../../../../../shared/api';
-import { MAX_RAW_TEXT_BYTES, apiError } from '../../../../../shared/import-source';
-import { objectStoreOf } from '../../../../../shared/object-store';
+
+const MAX_RAW_TEXT_BYTES = 10 * 1024 * 1024;
 
 interface ChunkPolicyValue {
-  mode?: 'auto' | 'paragraph' | 'custom';
   chunkSize?: number;
   minSize?: number;
   maxSize?: number;
   overlapRatio?: number;
-  paragraphDeep?: number;
-  customRegs?: string[];
-  lengthUnit?: 'char' | 'token';
-  forceSplit?: boolean;
   maxChunks?: number;
 }
 
@@ -25,10 +21,20 @@ interface PreviewChunksBody {
   chunkPolicy: ChunkPolicyValue;
 }
 
-function splitByPolicy(
-  text: string,
-  policy: ChunkPolicyValue,
-): Array<{ index: number; text: string; length: number }> {
+function apiError(
+  code: number,
+  requestId: string,
+  params: Record<string, unknown>,
+): ApiErrorException {
+  return new ApiErrorException(createApiError({ code, requestId, params }));
+}
+
+function objectStoreOf(runtime: unknown) {
+  const store = (runtime as { clients?: { objectStore?: { get?: unknown } } }).clients?.objectStore;
+  return store && typeof store.get === 'function' ? store : null;
+}
+
+function splitByPolicy(text: string, policy: ChunkPolicyValue) {
   const chunkSize = policy.chunkSize ?? 1000;
   const minSize = policy.minSize ?? 100;
   const maxSize = policy.maxSize ?? 8000;
@@ -52,12 +58,12 @@ export default withApiHandler(
     const runtime = (await getRuntime()) as ExtendedAppRuntime;
     const { context } = await authenticateRequest(runtime, request, requestId);
     const body = parseDto<PreviewChunksBody>('PreviewChunksBody', request.body);
-    let rawText = '';
     const store = objectStoreOf(runtime);
-    if (store) {
-      const fetched = await store.get({ ref: { bucket: 'kb-source', key: body.fileRef } }, context);
-      rawText = Buffer.from(fetched.body).toString('utf8');
-    }
+    if (!store) throw apiError(501056, requestId, { format: 'store_unavailable' });
+    const fetched = await (
+      store as { get: (i: unknown, c: unknown) => Promise<{ body: Uint8Array }> }
+    ).get({ ref: { bucket: 'kb-source', key: body.fileRef } }, { teamId: context.tenant.teamId });
+    const rawText = Buffer.from(fetched.body).toString('utf8');
     const actualBytes = Buffer.byteLength(rawText, 'utf8');
     if (actualBytes > MAX_RAW_TEXT_BYTES) {
       throw apiError(501065, requestId, { limitBytes: MAX_RAW_TEXT_BYTES, actualBytes });
@@ -65,8 +71,9 @@ export default withApiHandler(
     if (rawText.length === 0) {
       throw apiError(501056, requestId, { format: body.fileRef.split('.').pop() ?? 'unknown' });
     }
-    const chunks = splitByPolicy(rawText, body.chunkPolicy);
-    response.status(200).json(successResponse({ chunks }, requestId));
+    response
+      .status(200)
+      .json(successResponse({ chunks: splitByPolicy(rawText, body.chunkPolicy) }, requestId));
   },
   { validationErrorCode: 501056 },
 );
