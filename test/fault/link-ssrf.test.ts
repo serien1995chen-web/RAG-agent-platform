@@ -220,12 +220,15 @@ describe('TEST-LINK-CANCEL-001 and retry classification', () => {
   });
 });
 
-
 // ---------------------------------------------------------------------------
 // RK-03 字节级 IPv6 拦截 / RK-04 大小、字符集、取消
 // ---------------------------------------------------------------------------
 
-function bytesResponse(bytes: Uint8Array, contentType: string, contentLength?: string): LinkFetchResponse {
+function bytesResponse(
+  bytes: Uint8Array,
+  contentType: string,
+  contentLength?: string,
+): LinkFetchResponse {
   return {
     status: 200,
     headers: {
@@ -319,7 +322,9 @@ describe('TEST-LINK-LIMIT-001 (RK-04) size enforcement', () => {
     });
     const response: LinkFetchResponse = {
       status: 200,
-      headers: { get: (name: string) => (name.toLowerCase() === 'content-type' ? 'text/plain' : null) },
+      headers: {
+        get: (name: string) => (name.toLowerCase() === 'content-type' ? 'text/plain' : null),
+      },
       text: async () => '',
       body: stream,
     };

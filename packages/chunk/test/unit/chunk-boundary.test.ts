@@ -1,10 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  DEFAULT_CHUNK_POLICY,
-  chunkText,
-  createCounter,
-  type ChunkPolicy,
-} from '../../src/index';
+import { DEFAULT_CHUNK_POLICY, chunkText, createCounter, type ChunkPolicy } from '../../src/index';
 
 function policy(overrides: Partial<ChunkPolicy> = {}): ChunkPolicy {
   return { ...DEFAULT_CHUNK_POLICY, lengthUnit: 'char', ...overrides };
@@ -80,7 +75,6 @@ describe('TEST-CHUNK-BOUNDARY-001 deterministic boundaries', () => {
     expect(second).toEqual(first);
   });
 });
-
 
 describe('TEST-CHUNK-BOUNDARY-001 (RK-06) token slicing and next-first coalesce', () => {
   it('keeps every chunk within chunkSize in token mode', () => {

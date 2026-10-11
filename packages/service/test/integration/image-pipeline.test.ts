@@ -267,7 +267,6 @@ describe('TEST-IMAGE-AUTO-001 image pipeline and handler', () => {
   });
 });
 
-
 describe('TEST-IMAGE-AUTO-001 (RK-08a) embedding, index type, imageDescMap, stable operationId, idempotency', () => {
   interface RecordedAsset {
     imageId: string;
@@ -285,7 +284,11 @@ describe('TEST-IMAGE-AUTO-001 (RK-08a) embedding, index type, imageDescMap, stab
   function makeHarness() {
     const ops: string[] = [];
     const vectorCalls: Array<{ records: Array<{ indexId: string; vector: number[] }> }> = [];
-    const itemCalls: Array<{ dataId: string; metadata?: unknown; indexes: Array<{ type: string }> }> = [];
+    const itemCalls: Array<{
+      dataId: string;
+      metadata?: unknown;
+      indexes: Array<{ type: string }>;
+    }> = [];
     const base = (imageId: string): RecordedAsset => ({
       imageId,
       teamId: teamA,
@@ -313,7 +316,9 @@ describe('TEST-IMAGE-AUTO-001 (RK-08a) embedding, index type, imageDescMap, stab
       markFailed: async () => undefined,
     };
     const items = {
-      bulkUpsert: async (input: { items: Array<{ dataId: string; metadata?: unknown; indexes: Array<{ type: string }> }> }) => {
+      bulkUpsert: async (input: {
+        items: Array<{ dataId: string; metadata?: unknown; indexes: Array<{ type: string }> }>;
+      }) => {
         itemCalls.push(input.items[0]!);
         return { upserted: 1, duplicates: 0 };
       },
@@ -328,14 +333,15 @@ describe('TEST-IMAGE-AUTO-001 (RK-08a) embedding, index type, imageDescMap, stab
     return { ops, vectorCalls, itemCalls, assets, items, vectors, fullText };
   }
 
-  const baseProcessor = (embedding?: number[]): ImageTrainingProcessorPort => ({
-    processImage: async (task) => ({
-      imageId: task.payload.imageRef.key,
-      state: 'success',
-      description: '图像描述',
-      ...(embedding ? { embedding } : {}),
-    }),
-  } as unknown as ImageTrainingProcessorPort);
+  const baseProcessor = (embedding?: number[]): ImageTrainingProcessorPort =>
+    ({
+      processImage: async (task) => ({
+        imageId: task.payload.imageRef.key,
+        state: 'success',
+        description: '图像描述',
+        ...(embedding ? { embedding } : {}),
+      }),
+    }) as unknown as ImageTrainingProcessorPort;
 
   it('persists the processor embedding as an imageEmbedding vector with imageDescMap', async () => {
     const h = makeHarness();
@@ -365,7 +371,9 @@ describe('TEST-IMAGE-AUTO-001 (RK-08a) embedding, index type, imageDescMap, stab
     expect(h.vectorCalls[0]?.records[0]?.indexId).toBe('data-e:imageEmbedding');
     const item = h.itemCalls[0];
     expect(item?.indexes.map((index) => index.type)).toEqual(['image', 'imageEmbedding']);
-    expect((item?.metadata as { imageDescMap?: { image?: string } })?.imageDescMap?.image).toBe('图像描述');
+    expect((item?.metadata as { imageDescMap?: { image?: string } })?.imageDescMap?.image).toBe(
+      '图像描述',
+    );
   });
 
   it('uses a stable operationId derived from buildImageJobId (no process-local counter)', async () => {

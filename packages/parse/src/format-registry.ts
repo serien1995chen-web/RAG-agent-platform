@@ -31,8 +31,18 @@ export const PARSE_FORMAT_MATRIX: readonly ParseFormatSpec[] = [
     parser: 'native-markdown',
     fallback: 'rawText',
   },
-  { format: 'html', extensions: ['html', 'htm'], parser: 'html-to-markdown', fallback: 'plain-text' },
-  { format: 'pdf', extensions: ['pdf'], parser: 'pdf-text-layer', fallback: 'pdf-enhance-provider' },
+  {
+    format: 'html',
+    extensions: ['html', 'htm'],
+    parser: 'html-to-markdown',
+    fallback: 'plain-text',
+  },
+  {
+    format: 'pdf',
+    extensions: ['pdf'],
+    parser: 'pdf-text-layer',
+    fallback: 'pdf-enhance-provider',
+  },
   { format: 'docx', extensions: ['docx'], parser: 'docx-parser', fallback: 'none' },
   { format: 'pptx', extensions: ['pptx'], parser: 'pptx-parser', fallback: 'none' },
   { format: 'xlsx', extensions: ['xlsx'], parser: 'xlsx-precheck', fallback: 'none' },
@@ -65,8 +75,9 @@ export interface DocumentParserPort {
 export function resolveParseFormat(extension: string): ParseFormatSpec | null {
   const normalized = extension.replace(/^\./, '').toLowerCase();
   return (
-    PARSE_FORMAT_MATRIX.find((spec) => (spec.extensions as readonly string[]).includes(normalized)) ??
-    null
+    PARSE_FORMAT_MATRIX.find((spec) =>
+      (spec.extensions as readonly string[]).includes(normalized),
+    ) ?? null
   );
 }
 
@@ -392,7 +403,11 @@ export async function openZipEntries(
         stream.on('error', reject);
         stream.on('end', () => {
           const data = Buffer.concat(chunks);
-          entries.push({ name, size: entry.uncompressedSize, readUtf8: () => data.toString('utf8') });
+          entries.push({
+            name,
+            size: entry.uncompressedSize,
+            readUtf8: () => data.toString('utf8'),
+          });
           zip.readEntry();
         });
       });

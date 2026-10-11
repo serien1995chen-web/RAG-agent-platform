@@ -192,7 +192,9 @@ describe('TEST-FI-PROVIDER-001 source providers', () => {
       audit: (entry) => events.push(entry as unknown as Record<string, unknown>),
     });
     const provider = registry.resolve('link') as DatasetSourceProvider;
-    await provider.read(request('link', 'https://example.com/missing'), context).catch(() => undefined);
+    await provider
+      .read(request('link', 'https://example.com/missing'), context)
+      .catch(() => undefined);
     expect(events.some((entry) => entry.event === 'source.failed')).toBe(true);
   });
 

@@ -1,5 +1,11 @@
 import { ApiErrorException } from '@kb/contracts';
-import { JOB_MODE_TO_QUEUE, QUEUE_NAMES, buildParseJobId, buildQaJobId, type QueuePort } from '@kb/dal';
+import {
+  JOB_MODE_TO_QUEUE,
+  QUEUE_NAMES,
+  buildParseJobId,
+  buildQaJobId,
+  type QueuePort,
+} from '@kb/dal';
 import { describe, expect, it } from 'vitest';
 import { ImportSourceService } from '../../src/modules/collection/application/import-source.service';
 import { InsertDataService } from '../../src/modules/item/application/insert-data.service';
@@ -223,7 +229,15 @@ describe('TEST-FI-INSERT-001 path B direct insert', () => {
       emit: () => calls.push('event'),
     });
     const result = await service.insertDirect(
-      { dataId: 'data-1', datasetId: 'd', collectionId: 'c', q: '  问题 ', a: '答案', vector: [0.1, 0.2], options },
+      {
+        dataId: 'data-1',
+        datasetId: 'd',
+        collectionId: 'c',
+        q: '  问题 ',
+        a: '答案',
+        vector: [0.1, 0.2],
+        options,
+      },
       context,
     );
     expect(result.inserted).toBe(1);
@@ -262,7 +276,15 @@ describe('TEST-FI-INSERT-001 path B direct insert', () => {
     });
     const error = await service
       .insertDirect(
-        { dataId: 'data-1', datasetId: 'd', collectionId: 'c', q: '', imageId: 'img-1', vector: [0.1], options },
+        {
+          dataId: 'data-1',
+          datasetId: 'd',
+          collectionId: 'c',
+          q: '',
+          imageId: 'img-1',
+          vector: [0.1],
+          options,
+        },
         context,
       )
       .catch((thrown: unknown) => thrown);

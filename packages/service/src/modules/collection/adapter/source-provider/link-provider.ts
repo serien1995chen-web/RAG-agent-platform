@@ -194,14 +194,15 @@ function embeddedIpv4Candidates(groups: number[]): number[] {
   if (g(0) === 0x2002) out.push(v4(g(1), g(2))); // 6to4 2002::/16
   if (g(0) === 0x2001 && g(1) === 0x0000) {
     out.push(v4(g(2), g(3))); // Teredo 服务器 IPv4
-    out.push((~v4(g(6), g(7))) >>> 0); // Teredo 混淆后的客户端 IPv4
+    out.push(~v4(g(6), g(7)) >>> 0); // Teredo 混淆后的客户端 IPv4
   }
   return out;
 }
 
 /** 判断地址是否命中拦截集合（loopback/private/linkLocal/uniqueLocal/reserved/multicast/broadcast/unspecified/CGNAT 及内嵌 IPv4）。 */
 export function isBlockedAddress(address: string): boolean {
-  const normalized = address.startsWith('[') && address.endsWith(']') ? address.slice(1, -1) : address;
+  const normalized =
+    address.startsWith('[') && address.endsWith(']') ? address.slice(1, -1) : address;
   if (BLOCKED_LITERAL_HOSTS.has(normalized)) return true;
   if (isIP(normalized) === 4) {
     const value = ipv4ToInt(normalized);
@@ -289,7 +290,10 @@ class SizeLimitExceeded extends Error {
   }
 }
 
-async function readStreamLimited(stream: ReadableStream<Uint8Array>, maxBytes: number): Promise<Uint8Array> {
+async function readStreamLimited(
+  stream: ReadableStream<Uint8Array>,
+  maxBytes: number,
+): Promise<Uint8Array> {
   const reader = stream.getReader();
   const chunks: Uint8Array[] = [];
   let total = 0;
@@ -584,7 +588,10 @@ export function createLinkSourceProvider(deps: LinkSourceProviderDeps = {}): Dat
       }
 
       const isHtml = HTML_CONTENT_TYPES.has(baseType);
-      const body = decodeBody(response.bytes, detectBodyEncoding(response.bytes, charsetOf(response.contentType)));
+      const body = decodeBody(
+        response.bytes,
+        detectBodyEncoding(response.bytes, charsetOf(response.contentType)),
+      );
       const rawText = isHtml ? htmlToMarkdown(body, target.url) : body;
       const plain = isHtml ? stripTags(body) : body;
       const ratio =
@@ -600,7 +607,12 @@ export function createLinkSourceProvider(deps: LinkSourceProviderDeps = {}): Dat
         });
         throw sourceError(501036, requestId, { urlHash: hashUrl(currentUrl), textRatio: ratio });
       }
-      audit({ event: 'source.read', urlHash: hashUrl(currentUrl), host: target.host, outcome: 'ok' });
+      audit({
+        event: 'source.read',
+        urlHash: hashUrl(currentUrl),
+        host: target.host,
+        outcome: 'ok',
+      });
       return { rawText, contentHash: hashSourceText(rawText) };
     }
   };
@@ -672,24 +684,39 @@ export function htmlToMarkdown(input: string, base?: URL): string {
     .replace(/<(script|style|nav|noscript|template)[\s\S]*?<\/\1>/gi, '')
     .replace(/<(script|style|nav|noscript|template)[^>]*\/?>/gi, '');
   html = html
-    .replace(/<a\b[^>]*href\s*=\s*"([^"]+)"[^>]*>([\s\S]*?)<\/a>/gi, (_m, href: string, label: string) => {
-      const target = base ? absolutize(href, base) : href;
-      return '[' + stripTags(label).trim() + '](' + target + ')';
-    })
-    .replace(/<img\b[^>]*alt\s*=\s*"([^"]*)"[^>]*src\s*=\s*"([^"]+)"[^>]*\/?>/gi, (_m, alt: string, src: string) => {
-      const target = base ? absolutize(src, base) : src;
-      return '![' + alt + '](' + target + ')';
-    });
+    .replace(
+      /<a\b[^>]*href\s*=\s*"([^"]+)"[^>]*>([\s\S]*?)<\/a>/gi,
+      (_m, href: string, label: string) => {
+        const target = base ? absolutize(href, base) : href;
+        return '[' + stripTags(label).trim() + '](' + target + ')';
+      },
+    )
+    .replace(
+      /<img\b[^>]*alt\s*=\s*"([^"]*)"[^>]*src\s*=\s*"([^"]+)"[^>]*\/?>/gi,
+      (_m, alt: string, src: string) => {
+        const target = base ? absolutize(src, base) : src;
+        return '![' + alt + '](' + target + ')';
+      },
+    );
   for (let level = 6; level >= 1; level -= 1) {
-    const pattern = new RegExp('<h' + String(level) + '[^>]*>([\\s\\S]*?)<\\/h' + String(level) + '>', 'gi');
+    const pattern = new RegExp(
+      '<h' + String(level) + '[^>]*>([\\s\\S]*?)<\\/h' + String(level) + '>',
+      'gi',
+    );
     html = html.replace(
       pattern,
       (_m, content: string) => '\n' + '#'.repeat(level) + ' ' + stripTags(content).trim() + '\n',
     );
   }
   html = html
-    .replace(/<li[^>]*>([\s\S]*?)<\/li>/gi, (_m, content: string) => '\n- ' + stripTags(content).trim())
-    .replace(/<pre[^>]*>([\s\S]*?)<\/pre>/gi, (_m, content: string) => '\n```\n' + decodeEntities(stripTags(content)).trim() + '\n```\n')
+    .replace(
+      /<li[^>]*>([\s\S]*?)<\/li>/gi,
+      (_m, content: string) => '\n- ' + stripTags(content).trim(),
+    )
+    .replace(
+      /<pre[^>]*>([\s\S]*?)<\/pre>/gi,
+      (_m, content: string) => '\n```\n' + decodeEntities(stripTags(content)).trim() + '\n```\n',
+    )
     .replace(/<tr[^>]*>([\s\S]*?)<\/tr>/gi, (_m, row: string) => {
       const cells = [...row.matchAll(/<(?:td|th)[^>]*>([\s\S]*?)<\/(?:td|th)>/gi)].map((cell) =>
         stripTags(cell[1] ?? '')
