@@ -5,10 +5,7 @@ export type { SourceCollectionServiceDeps } from './application';
 export { createSourceCollectionRepository } from './repository';
 export type { SourceCollectionRepository } from './repository';
 export { createSourceCollectionAdapter } from './adapter';
-export {
-  createSourceProviderRegistry,
-  createDefaultFileParser,
-} from './adapter/source-provider/index';
+export { createSourceProviderRegistry } from './adapter/source-provider/index';
 export type { SourceProviderRegistryDeps } from './adapter/source-provider/index';
 export { SOURCE_COLLECTION_JOB_DEFINITIONS, createSourceCollectionJobHandler } from './jobs';
 export type { SourceCollectionJobHandler } from './jobs';

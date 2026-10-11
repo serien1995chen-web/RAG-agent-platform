@@ -6,7 +6,6 @@ import {
   SourceCollectionApplicationService,
   createDatasetAclRepository,
   createDefaultPorts,
-  createDefaultFileParser,
   createSourceProviderRegistry,
   createDeleteJobRepository,
   createKnowledgeItemIndexAdapter,
@@ -79,7 +78,6 @@ export async function bootstrapRuntime(
   const syncQueue = new BullMqQueueAdapter({ connection: clients.redis });
   const sourceProviders = createSourceProviderRegistry({
     objectStore: clients.objectStore as unknown as ServicePorts['objectStore'],
-    fileParser: createDefaultFileParser(),
   });
   const datasetSyncService = new DatasetSyncApplicationService({
     collections: collectionRepository,
