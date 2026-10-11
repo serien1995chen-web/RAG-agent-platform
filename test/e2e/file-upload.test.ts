@@ -73,7 +73,7 @@ beforeEach(async () => {
     fileUploadService: new FileUploadService(),
     clients: {
       objectStore: {
-        get: async () => ({ body: Buffer.from('abcdef') }),
+        get: async () => ({ body: Buffer.from('a'.repeat(200)) }),
         presignPut: async (input: { ref: { key: string } }) =>
           `https://s3.example/put/${input.ref.key}`,
         presignGet: async (input: { ref: { key: string } }) =>
@@ -205,20 +205,20 @@ describe('P4-07 file and multipart routes', () => {
         fileRef: `dataset/${datasetId}/${fileId}`,
         chunkPolicy: {
           mode: 'custom',
-          chunkSize: 2,
-          minSize: 1,
+          chunkSize: 64,
+          minSize: 64,
           maxSize: 8000,
           overlapRatio: 0,
           paragraphDeep: 1,
           customRegs: [],
           lengthUnit: 'char',
           forceSplit: true,
-          maxChunks: 100,
+          maxChunks: 1000,
         },
       },
     });
     expect(preview.status).toBe(200);
-    expect((data(preview.body).chunks as unknown[]).length).toBe(3);
+    expect((data(preview.body).chunks as unknown[]).length).toBe(4);
 
     const imagePresign = await invoke(presignImage, {
       method: 'POST',

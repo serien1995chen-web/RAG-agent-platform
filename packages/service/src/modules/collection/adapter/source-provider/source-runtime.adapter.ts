@@ -1,4 +1,5 @@
-import { createDefaultDocumentParser } from '@kb/parse';
+import { createDefaultDocumentParser, type DocumentParseContext } from '@kb/parse';
+import { DEFAULT_CHUNK_POLICY, chunkText, type ChunkItem, type ChunkPolicy } from '@kb/chunk';
 import type { ApiDatasetHttpClient } from './api-dataset-provider';
 import type { FileParserLike } from './file-provider';
 
@@ -30,4 +31,29 @@ export function createApiDatasetClient(): ApiDatasetHttpClient {
       }
     },
   };
+}
+
+/** 真实 previewChunks：@kb/parse 解析字节 + @kb/chunk 按 ChunkPolicy 确定性切分。 */
+export async function parseAndChunkPreview(input: {
+  bytes: Uint8Array;
+  extension: string;
+  teamId: string;
+  datasetId: string;
+  fileRef: string;
+  timeoutMs: number;
+  policy?: Partial<ChunkPolicy>;
+}): Promise<{ rawText: string; chunks: ChunkItem[] }> {
+  const parser = createDefaultDocumentParser();
+  const parseRequest: DocumentParseContext = {
+    teamId: input.teamId,
+    datasetId: input.datasetId,
+    fileRef: input.fileRef,
+    extension: input.extension,
+    timeoutMs: input.timeoutMs,
+    bytes: input.bytes,
+  };
+  const parsed = await parser.parse(parseRequest);
+  const policy: ChunkPolicy = { ...DEFAULT_CHUNK_POLICY, ...(input.policy ?? {}) };
+  const output = chunkText({ text: parsed.rawText, policy });
+  return { rawText: parsed.rawText, chunks: output.chunks };
 }

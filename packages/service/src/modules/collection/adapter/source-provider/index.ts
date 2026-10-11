@@ -18,7 +18,11 @@ import { sourceError, type SourceAuditSink } from './link-provider';
 import { createTextSourceProvider } from './text-provider';
 
 export { createTextSourceProvider } from './text-provider';
-export { createParseRuntimeAdapter, createApiDatasetClient } from './source-runtime.adapter';
+export {
+  createParseRuntimeAdapter,
+  createApiDatasetClient,
+  parseAndChunkPreview,
+} from './source-runtime.adapter';
 export { createFileSourceProvider } from './file-provider';
 export type { FileParserLike, FileSourceProviderDeps } from './file-provider';
 export { createLinkSourceProvider, DEFAULT_LINK_LIMITS, isBlockedAddress } from './link-provider';
