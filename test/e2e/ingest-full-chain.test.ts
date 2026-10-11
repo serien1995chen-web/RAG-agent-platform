@@ -146,8 +146,11 @@ describe.skipIf(!process.env.KB_MONGO_URI)(
           previewRec.response,
         );
         expect(previewRec.result().status).toBe(200);
-        const chunks = (previewRec.result().body.data as { chunks: unknown[] }).chunks;
+        const chunks = (previewRec.result().body.data as { chunks: Array<{ text: string }> })
+          .chunks;
         expect(chunks.length).toBeGreaterThan(0);
+        const chunkText = chunks[0]?.text ?? '';
+        expect(chunkText.length).toBeGreaterThan(0);
 
         // 2) 真实插入经 insertData API 路由（真实向量 + 全文）。
         const collection = await runtime.collectionRepository.create(
@@ -165,8 +168,6 @@ describe.skipIf(!process.env.KB_MONGO_URI)(
           },
           context,
         );
-        const nonce = `${Date.now().toString(16)}${Math.floor(Math.random() * 0xffffffff).toString(16)}`;
-        const question = `hello chain ${nonce}`;
         const insertData =
           await import('../../projects/app/src/pages/api/core/dataset/data/insertData');
         const insertRec = responseRecorder();
@@ -174,29 +175,50 @@ describe.skipIf(!process.env.KB_MONGO_URI)(
           request({
             method: 'POST',
             url: '/api/core/dataset/data/insertData',
-            body: { collectionId: collection.collectionId, q: question, a: 'answer' },
+            body: { collectionId: collection.collectionId, q: chunkText, a: 'answer' },
           }),
           insertRec.response,
         );
         expect(insertRec.result().status).toBe(200);
+        const insertedData = insertRec.result().body.data as { dataId: string };
 
-        // 3) 既有 Search 入口（扩展 runtime 的真实 DatasetSearchPort）命中已导入 Data。
-        const searchResult = await runtime.datasetSearch.search(
-          {
-            requestId: context.requestId,
-            teamId,
-            tmbId: context.tenant.tmbId,
-            datasetIds: [dataset.datasetId],
-            textQueries: [question],
-            models: { embeddingModel: 'bge-m3' },
-            searchMode: 'mixedRecall',
-            limit: 5,
-            maxTokens: 4000,
-            similarity: 0,
-          },
-          context,
-        );
-        expect(searchResult.citations.length).toBeGreaterThan(0);
+        // 3) 既有 Search API 路由检索同一 chunk，只有同一 dataId 命中才算全链路成立。
+        const healthModule = '../../projects/app/src/runtime/health';
+        const actualHealth = await vi.importActual(healthModule);
+        vi.doMock(healthModule, () => ({
+          ...(actualHealth as Record<string, unknown>),
+          getRuntime: async () => runtime,
+        }));
+        try {
+          const searchTest =
+            await import('../../projects/app/src/pages/api/core/dataset/searchTest');
+          const searchRec = responseRecorder();
+          await searchTest.default(
+            request({
+              method: 'POST',
+              url: '/api/core/dataset/searchTest',
+              body: {
+                datasetId: dataset.datasetId,
+                text: chunkText,
+                searchMode: 'mixedRecall',
+                limit: 5,
+              },
+            }),
+            searchRec.response,
+          );
+          expect(searchRec.result().status).toBe(200);
+          const searchRes = (
+            searchRec.result().body.data as {
+              searchRes?: { citations?: Array<{ dataId: string }> };
+            }
+          ).searchRes;
+          expect(
+            searchRes?.citations?.some((citation) => citation.dataId === insertedData.dataId),
+          ).toBe(true);
+        } finally {
+          vi.doUnmock(healthModule);
+          vi.resetModules();
+        }
       } finally {
         await runtime.shutdown();
       }
