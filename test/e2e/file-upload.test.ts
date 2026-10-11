@@ -251,6 +251,53 @@ describe('P4-07 file and multipart routes', () => {
     vi.doUnmock('../../projects/app/src/shared/api');
   });
 
+  it('[TEST-FILE-UPLOADPART-001] rejects completeMultipart when parts are incomplete', async () => {
+    const presignUpload =
+      await import('../../projects/app/src/pages/api/core/dataset/file/presignUpload');
+    const uploadPart =
+      await import('../../projects/app/src/pages/api/core/dataset/file/uploadPart');
+    const completeMultipart =
+      await import('../../projects/app/src/pages/api/core/dataset/file/completeMultipart');
+    const presign = await invoke(presignUpload, {
+      method: 'POST',
+      url: '/api/core/dataset/file/presignUpload',
+      body: { datasetId, filename: 'c.txt', size: 10, mime: 'text/plain' },
+    });
+    const fileId = data(presign.body).fileId as string;
+    const part1 = await invoke(uploadPart, {
+      method: 'POST',
+      url: '/api/core/dataset/file/uploadPart',
+      body: {
+        uploadId: fileId,
+        partNumber: 1,
+        checksum: 's1',
+        chunk: Buffer.from('aaa').toString('base64'),
+      },
+    });
+    const part2 = await invoke(uploadPart, {
+      method: 'POST',
+      url: '/api/core/dataset/file/uploadPart',
+      body: {
+        uploadId: fileId,
+        partNumber: 2,
+        checksum: 's2',
+        chunk: Buffer.from('bbb').toString('base64'),
+      },
+    });
+    const complete = await invoke(completeMultipart, {
+      method: 'POST',
+      url: '/api/core/dataset/file/completeMultipart',
+      body: {
+        fileId,
+        parts: [{ partNumber: 1, etag: data(part1.body).etag as string }],
+        hash: 'h',
+      },
+    });
+    expect(complete.status).toBe(409);
+    expect((complete.body as { code?: number }).code).toBe(501060);
+    expect(data(part2.body).etag).toBeTruthy();
+  });
+
   it('rejects cross-team temp image keys with 501061', async () => {
     const imagePreviews =
       await import('../../projects/app/src/pages/api/core/dataset/file/getSearchTestImagePreviewUrls');

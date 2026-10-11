@@ -29,6 +29,9 @@ export default withApiHandler(
     if (body.parts.length > 10000) {
       throw apiError(501060, requestId, { reason: 'too_many_parts' });
     }
+    if (typeof body.hash !== 'string' || body.hash.length === 0) {
+      throw apiError(501060, requestId, { reason: 'missing_hash' });
+    }
     const sessions = runtime.fileUploadService;
     // 先校验归属、分片集合/顺序/ETag/累计大小，任一不符 501060。
     const session = sessions.validateComplete(

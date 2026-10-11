@@ -90,7 +90,32 @@ export class FileUploadService {
         createApiError({ code: 501060, requestId, params: { reason: 'no_parts' } }),
       );
     }
+    // 请求必须覆盖全部已记录分片（不接受少报），数量一致。
+    if (parts.length !== recorded.length) {
+      throw new ApiErrorException(
+        createApiError({
+          code: 501060,
+          requestId,
+          params: { reason: 'incomplete_parts', expected: recorded.length, actual: parts.length },
+        }),
+      );
+    }
     const expected = new Map(recorded.map((part) => [part.partNumber, part.etag]));
+    // 顺序必须升序且与记录一致（无缺号、无重复、无乱序）。
+    const actualNumbers = parts.map((part) => part.partNumber);
+    const recordedNumbers = recorded.map((part) => part.partNumber);
+    for (let i = 0; i < actualNumbers.length; i += 1) {
+      if (actualNumbers[i] !== recordedNumbers[i]) {
+        throw new ApiErrorException(
+          createApiError({
+            code: 501060,
+            requestId,
+            params: { reason: 'part_order_mismatch', at: i },
+          }),
+        );
+      }
+    }
+    // 每片 ETag 必须匹配。
     for (const part of parts) {
       if (expected.get(part.partNumber) !== part.etag) {
         throw new ApiErrorException(
@@ -101,6 +126,12 @@ export class FileUploadService {
           }),
         );
       }
+    }
+    // 每片必须记录 checksum（complete 前校验）。
+    if (recorded.some((part) => !part.checksum)) {
+      throw new ApiErrorException(
+        createApiError({ code: 501060, requestId, params: { reason: 'missing_checksum' } }),
+      );
     }
     return session;
   }

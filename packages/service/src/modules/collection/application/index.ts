@@ -64,5 +64,3 @@ export class SourceCollectionApplicationService {
 
 export { DatasetSyncApplicationService } from './sync.service';
 export type { DatasetSyncServiceDeps } from './sync.service';
-export { FileUploadService } from './file-upload.service';
-export type { MultipartSessionValue, MultipartPartValue } from './file-upload.service';
