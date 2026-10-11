@@ -37,6 +37,7 @@ export default withApiHandler(
     const runtime = (await getRuntime()) as ExtendedAppRuntime;
     const { context } = await authenticateRequest(runtime, request, requestId);
     const body = parseDto<ApiDatasetCatalogBody>('ApiDatasetCatalogBody', request.body);
+    await runtime.datasetApi.getDatasetDetail(body.datasetId, context);
     const client = (runtime.ports as { apiDatasetClient?: ApiDatasetClient }).apiDatasetClient;
     if (!client) throw apiError(501017, requestId, { provider: 'apiDataset' });
     const key = JSON.stringify([context.tenant.teamId, body.datasetId, body.parentId ?? null]);

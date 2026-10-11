@@ -29,6 +29,7 @@ export default withApiHandler(
     const runtime = (await getRuntime()) as ExtendedAppRuntime;
     const { context } = await authenticateRequest(runtime, request, requestId);
     const query = parseDto<ApiDatasetExistIdQuery>('ApiDatasetExistIdQuery', request.query);
+    await runtime.datasetApi.getDatasetDetail(query.datasetId, context);
     const client = (runtime.ports as { apiDatasetClient?: ApiDatasetClient }).apiDatasetClient;
     if (!client) throw apiError(501017, requestId, { provider: 'apiDataset' });
     const fileIds = await client.listExistId({
