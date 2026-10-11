@@ -1,5 +1,6 @@
 import { createDefaultDocumentParser, type DocumentParseContext } from '@kb/parse';
 import { DEFAULT_CHUNK_POLICY, chunkText, type ChunkItem, type ChunkPolicy } from '@kb/chunk';
+import { ApiErrorException, createApiError } from '@kb/contracts';
 import type { ApiDatasetHttpClient } from './api-dataset-provider';
 import type { FileParserLike } from './file-provider';
 
@@ -29,6 +30,86 @@ export function createApiDatasetClient(): ApiDatasetHttpClient {
       } finally {
         clearTimeout(timer);
       }
+    },
+  };
+}
+
+export interface ApiDatasetRuntimeClient {
+  getCatalog(input: {
+    datasetId: string;
+    apiConfig: unknown;
+    parentId?: string;
+  }): Promise<unknown[]>;
+  getPathNames(input: { datasetId: string; apiConfig: unknown; nodeId: string }): Promise<string>;
+  list(input: {
+    datasetId: string;
+    apiConfig: unknown;
+    parentId?: string;
+    keyword?: string;
+  }): Promise<{ list: unknown[]; isImported: boolean }>;
+  listExistId(input: { datasetId: string; apiConfigId: string }): Promise<unknown[]>;
+}
+
+/**
+ * API Dataset 运行时客户端（Rev2 §4.3.2）：基于 source-runtime HTTP client 访问配置的
+ * API Dataset 端点。未配置时由调用方 501017 处理；Provider 失败映射 501039。
+ */
+export function createApiDatasetRuntimeClient(deps: {
+  configured: boolean;
+  baseUrl?: string;
+  client: ApiDatasetHttpClient;
+}): ApiDatasetRuntimeClient {
+  const endpoint = (deps.baseUrl ?? '').replace(/\/$/, '');
+  const fetchJson = async (path: string, query: Record<string, unknown>): Promise<unknown> => {
+    const params = new URLSearchParams();
+    for (const [key, value] of Object.entries(query)) {
+      if (value !== undefined) params.set(key, String(value));
+    }
+    const suffix = params.size > 0 ? `?${params.toString()}` : '';
+    const response = await deps.client.get(`${endpoint}${path}${suffix}`, {
+      timeout: 10_000,
+      responseType: 'text',
+    });
+    if (response.status >= 400) {
+      throw new ApiErrorException(
+        createApiError({
+          code: 501039,
+          requestId: 'api-dataset',
+          params: { status: response.status },
+        }),
+      );
+    }
+    return JSON.parse(response.data);
+  };
+  return {
+    async getCatalog(input) {
+      const data = (await fetchJson('/catalog', {
+        datasetId: input.datasetId,
+        parentId: input.parentId,
+      })) as { nodes?: unknown[] };
+      return data.nodes ?? (Array.isArray(data) ? data : []);
+    },
+    async getPathNames(input) {
+      const data = (await fetchJson('/path-names', {
+        datasetId: input.datasetId,
+        nodeId: input.nodeId,
+      })) as { path?: string } | string;
+      return typeof data === 'string' ? data : (data.path ?? '');
+    },
+    async list(input) {
+      const data = (await fetchJson('/list', {
+        datasetId: input.datasetId,
+        parentId: input.parentId,
+        keyword: input.keyword,
+      })) as { list?: unknown[]; isImported?: boolean };
+      return { list: data.list ?? [], isImported: data.isImported ?? false };
+    },
+    async listExistId(input) {
+      const data = (await fetchJson('/list-exist-id', {
+        datasetId: input.datasetId,
+        apiConfigId: input.apiConfigId,
+      })) as unknown[] | { fileIds?: unknown[] };
+      return Array.isArray(data) ? data : (data.fileIds ?? []);
     },
   };
 }

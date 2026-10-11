@@ -204,6 +204,7 @@ export {
   createSourceProviderRegistry,
   createParseRuntimeAdapter,
   createApiDatasetClient,
+  createApiDatasetRuntimeClient,
   parseAndChunkPreview,
   validateSourceCollection,
 } from './modules/collection';

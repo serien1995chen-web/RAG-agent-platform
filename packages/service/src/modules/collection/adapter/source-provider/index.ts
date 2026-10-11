@@ -21,8 +21,10 @@ export { createTextSourceProvider } from './text-provider';
 export {
   createParseRuntimeAdapter,
   createApiDatasetClient,
+  createApiDatasetRuntimeClient,
   parseAndChunkPreview,
 } from './source-runtime.adapter';
+export type { ApiDatasetRuntimeClient } from './source-runtime.adapter';
 export { createFileSourceProvider } from './file-provider';
 export type { FileParserLike, FileSourceProviderDeps } from './file-provider';
 export { createLinkSourceProvider, DEFAULT_LINK_LIMITS, isBlockedAddress } from './link-provider';

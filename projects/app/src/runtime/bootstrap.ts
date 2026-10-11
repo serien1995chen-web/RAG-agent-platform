@@ -11,6 +11,7 @@ import {
   createDatasetAclRepository,
   createDefaultPorts,
   createApiDatasetClient,
+  createApiDatasetRuntimeClient,
   createParseRuntimeAdapter,
   createSourceProviderRegistry,
   createDeleteJobRepository,
@@ -106,6 +107,10 @@ export async function bootstrapRuntime(
     objectStore: clients.objectStore as unknown as ServicePorts['objectStore'],
     ...(adapters.fullText ? { fullTextStore: adapters.fullText } : {}),
     queue: syncQueue,
+    apiDatasetClient: createApiDatasetRuntimeClient({
+      configured: true,
+      client: createApiDatasetClient(),
+    }),
   } as ServicePorts;
   const imageApplicationService = new ImageApplicationService({
     assets: createImageAssetRepository(clients.mongo) as NonNullable<

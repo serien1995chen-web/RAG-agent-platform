@@ -11,8 +11,10 @@ export {
   createSourceProviderRegistry,
   createParseRuntimeAdapter,
   createApiDatasetClient,
+  createApiDatasetRuntimeClient,
   parseAndChunkPreview,
 } from './adapter/source-provider/index';
+export type { ApiDatasetRuntimeClient } from './adapter/source-provider/index';
 export type { SourceProviderRegistryDeps } from './adapter/source-provider/index';
 export { SOURCE_COLLECTION_JOB_DEFINITIONS, createSourceCollectionJobHandler } from './jobs';
 export type { SourceCollectionJobHandler } from './jobs';
