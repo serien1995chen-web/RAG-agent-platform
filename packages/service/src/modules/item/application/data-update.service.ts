@@ -76,8 +76,12 @@ export class DataUpdateService {
       },
       context,
     );
-    // 2) Mongo 切换引用：KnowledgeItemRepository 无 q/a CAS 原语，
-    //    以版本前置校验 + bulkUpsert 持久化 q/a/indexes（真正写入 q/a，非仅 indexes）。
+    // 2) Mongo CAS 切换：先用 updateIndexes 以版本做条件更新（陈旧版本 501067），
+    //    只有 CAS 成功者才继续写 q/a，避免并发覆盖。
+    const cas = await this.deps.items.updateIndexes(
+      { dataId: input.dataId, version: input.version, indexes, options: input.options },
+      context,
+    );
     const now = new Date().toISOString();
     await this.deps.items.bulkUpsert(
       {
@@ -91,7 +95,7 @@ export class DataUpdateService {
             a,
             indexes,
             rebuilding: false,
-            version: nextVersion,
+            version: cas.version,
             createTime: now,
             updateTime: now,
           },
@@ -111,6 +115,6 @@ export class DataUpdateService {
       },
       context,
     );
-    return { dataId: input.dataId, version: nextVersion };
+    return { dataId: input.dataId, version: cas.version };
   }
 }

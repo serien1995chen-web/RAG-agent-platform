@@ -26,7 +26,8 @@ interface InsertDataBody {
 
 function stableDataId(collectionId: string, q: string, a: string): string {
   const digest = createHash('sha256').update(`${collectionId}\u0000${q}\u0000${a}`).digest('hex');
-  return `qa-${digest.slice(0, 32)}`;
+  // Mongoose dataId 为 ObjectId：必须是 24 位十六进制。
+  return digest.slice(0, 24);
 }
 
 /** API-DATA-005 POST /api/core/dataset/data/insertData */

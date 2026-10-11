@@ -27,7 +27,7 @@ function normalizeTrainingType(mode: string | undefined): {
 }
 function stableImageDataId(collectionId: string, file: string): string {
   const digest = createHash('sha256').update(`${collectionId}\u0000${file}`).digest('hex');
-  return `img-${digest.slice(0, 32)}`;
+  return digest.slice(0, 24);
 }
 
 interface InsertImagesBody {

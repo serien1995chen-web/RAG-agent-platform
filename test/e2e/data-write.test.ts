@@ -256,6 +256,7 @@ describe('P4-09 data write routes', () => {
     let captured: { q?: string; a?: string; version?: number } | undefined;
     const service = new DataUpdateService({
       items: {
+        updateIndexes: async () => ({ version: 2 }),
         bulkUpsert: async (input: {
           items: Array<{ q?: string; a?: string; version?: number }>;
         }) => {
@@ -288,5 +289,45 @@ describe('P4-09 data write routes', () => {
     expect(captured?.q).toBe('new-q');
     expect(captured?.a).toBe('new-a');
     expect(captured?.version).toBe(2);
+  });
+
+  it('[TEST-API-INSERT-001] DataUpdateService rejects stale version before writing q/a', async () => {
+    const { DataUpdateService, ModelRuntimeAdapter } =
+      await import('../../packages/service/src/index');
+    let upsertCalled = 0;
+    const service = new DataUpdateService({
+      items: {
+        updateIndexes: async () => {
+          throw Object.assign(new Error('version-conflict'), { name: 'ApiErrorException' });
+        },
+        bulkUpsert: async () => {
+          upsertCalled += 1;
+          return { upserted: 1, duplicates: 0 };
+        },
+      } as never,
+      vectors: { insert: async () => ({ inserted: 1 }) } as never,
+      fullText: { write: async () => undefined } as never,
+      modelRuntime: new ModelRuntimeAdapter({ mode: 'mock' }),
+    });
+    await expect(
+      service.updateItem(
+        {
+          dataId,
+          datasetId,
+          collectionId,
+          version: 1,
+          q: 'new-q',
+          a: 'new-a',
+          existing: {
+            q: 'old-q',
+            a: 'old-a',
+            indexes: [{ indexId: `${dataId}:default`, type: 'default', dataId, text: 'old' }],
+          },
+          options: { timeoutMs: 1000 },
+        },
+        context,
+      ),
+    ).rejects.toBeInstanceOf(Error);
+    expect(upsertCalled).toBe(0);
   });
 });

@@ -27,7 +27,7 @@ const MAX_PUSH_BYTES = 10 * 1024 * 1024;
 /** 稳定幂等键：同一 collection + 同一 q/a 内容恒定，重复 push 不重复 Data/Training/账单。 */
 function stableDataId(collectionId: string, q: string, a: string): string {
   const digest = createHash('sha256').update(`${collectionId}\u0000${q}\u0000${a}`).digest('hex');
-  return `qa-${digest.slice(0, 32)}`;
+  return digest.slice(0, 24);
 }
 
 /** API-DATA-007 POST /api/core/dataset/data/pushData */
