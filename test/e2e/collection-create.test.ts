@@ -219,13 +219,19 @@ describe('P4-08 collection/create routes', () => {
     const missing = await invoke(backup, {
       method: 'POST',
       url: '/api/core/dataset/collection/create/backup',
-      body: { datasetId, file: { name: 'a.csv' }, header: ['q'] },
+      body: {
+        datasetId,
+        file: { name: 'a.csv', data: Buffer.from('q\n1').toString('base64') },
+      },
     });
     expect((missing.body as { code?: number }).code).toBe(501058);
     const duplicate = await invoke(backup, {
       method: 'POST',
       url: '/api/core/dataset/collection/create/backup',
-      body: { datasetId, file: { name: 'a.csv' }, header: ['q', 'a', 'a'] },
+      body: {
+        datasetId,
+        file: { name: 'a.csv', data: Buffer.from('q,a,a\n1,2,3').toString('base64') },
+      },
     });
     expect((duplicate.body as { code?: number }).code).toBe(501059);
     vi.doUnmock('../../projects/app/src/shared/api');

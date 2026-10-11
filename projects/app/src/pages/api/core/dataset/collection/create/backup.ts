@@ -39,16 +39,40 @@ interface CollectionCreateBackupForm {
   file?: unknown;
   datasetId: string;
   parentId?: string;
-  header?: unknown;
 }
 
-function validateQaHeaders(header: unknown): { ok: boolean; duplicate: boolean } {
-  if (!Array.isArray(header)) return { ok: false, duplicate: false };
-  const normalized = header.map((value) => String(value).trim().toLowerCase());
-  return {
-    ok: normalized.includes('q') && normalized.includes('a'),
-    duplicate: new Set(normalized).size !== normalized.length,
-  };
+function toBytes(file: unknown): Buffer | null {
+  if (typeof file === 'string') return Buffer.from(file, 'base64');
+  if (file instanceof Uint8Array) return Buffer.from(file);
+  if (file && typeof file === 'object' && 'data' in file) {
+    const data = (file as { data?: unknown }).data;
+    if (typeof data === 'string') return Buffer.from(data, 'base64');
+    if (data instanceof Uint8Array) return Buffer.from(data);
+  }
+  return null;
+}
+
+/** 真实 CSV/XLSX 表头校验 + 行数统计：表头需含 q/a 且无重复，返回真实 insertLen。 */
+function parseBackup(bytes: Buffer, name: string): { insertLen: number } {
+  const lower = name.toLowerCase();
+  if (lower.endsWith('.xlsx')) {
+    // XLSX 为二进制容器；此处不臆造解析，交由上游 parser 能力，缺失时稳定拒绝。
+    throw apiError(501056, 'backup', { format: 'xlsx' });
+  }
+  const rows = bytes
+    .toString('utf8')
+    .split(/\r?\n/)
+    .filter((line) => line.trim().length > 0);
+  if (rows.length === 0) return { insertLen: 0 };
+  const header = (rows.shift() ?? '').split(',').map((value) => value.trim().toLowerCase());
+  const hasQ = header.includes('q');
+  const hasA = header.includes('a');
+  const duplicate = new Set(header).size !== header.length;
+  if (!hasQ || !hasA) {
+    throw apiError(501058, 'backup', { missingHeaders: ['q', 'a'], duplicateHeaders: [] });
+  }
+  if (duplicate) throw apiError(501059, 'backup', { sheet: 'sheet1' });
+  return { insertLen: rows.length };
 }
 
 /** API-COL-009 POST /api/core/dataset/collection/create/backup */
@@ -57,16 +81,15 @@ export default withApiHandler(
     const runtime = (await getRuntime()) as ExtendedAppRuntime;
     const { context } = await authenticateRequest(runtime, request, requestId);
     const body = parseDto<CollectionCreateBackupForm>('CollectionCreateBackupForm', request.body);
-    if (body.file === undefined || body.file === null) {
+    const bytes = toBytes(body.file);
+    if (bytes === null) {
       throw apiError(501058, requestId, { missingHeaders: ['q', 'a'], duplicateHeaders: [] });
     }
-    const check = validateQaHeaders(body.header);
-    if (!check.ok) {
-      throw apiError(501058, requestId, { missingHeaders: ['q', 'a'], duplicateHeaders: [] });
-    }
-    if (check.duplicate) {
-      throw apiError(501059, requestId, { sheet: 'sheet1' });
-    }
+    const name =
+      body.file && typeof body.file === 'object' && 'name' in body.file
+        ? String((body.file as { name?: unknown }).name ?? 'backup.csv')
+        : 'backup.csv';
+    const { insertLen } = parseBackup(bytes, name);
     const created = await runtime.collectionRepository.create(
       {
         collection: sourceCollection({
@@ -74,7 +97,7 @@ export default withApiHandler(
           datasetId: body.datasetId,
           parentId: body.parentId ?? null,
           name: 'backup',
-          sourceRef: 'backup',
+          sourceRef: name,
         }),
         options: PORT_OPTIONS,
       },
@@ -82,7 +105,7 @@ export default withApiHandler(
     );
     response
       .status(200)
-      .json(successResponse({ collectionId: created.collectionId, insertLen: 0 }, requestId));
+      .json(successResponse({ collectionId: created.collectionId, insertLen }, requestId));
   },
   { validationErrorCode: 501059 },
 );
