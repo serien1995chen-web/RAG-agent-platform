@@ -1,4 +1,7 @@
+import { createHash } from 'node:crypto';
 import type { CollectionSnapshot } from '@kb/service';
+import { PushDataService } from '@kb/service';
+import type { QueuePort } from '@kb/dal';
 import { ApiErrorException, createApiError } from '@kb/contracts';
 import type { NextApiRequest, NextApiResponse } from 'next';
 import type { ExtendedAppRuntime } from '../../../../../../runtime';
@@ -52,27 +55,34 @@ function toBytes(file: unknown): Buffer | null {
   return null;
 }
 
-/** 真实 CSV/XLSX 表头校验 + 行数统计：表头需含 q/a 且无重复，返回真实 insertLen。 */
-function parseBackup(bytes: Buffer, name: string): { insertLen: number } {
-  const lower = name.toLowerCase();
-  if (lower.endsWith('.xlsx')) {
-    // XLSX 为二进制容器；此处不臆造解析，交由上游 parser 能力，缺失时稳定拒绝。
+function stableBackupDataId(collectionId: string, q: string, a: string): string {
+  const digest = createHash('sha256').update(`${collectionId}\u0000${q}\u0000${a}`).digest('hex');
+  return `bk-${digest.slice(0, 32)}`;
+}
+
+/** 真实 CSV 解析：表头含 q/a 且无重复，返回真实行。 */
+function parseBackup(bytes: Buffer, name: string): Array<{ q: string; a: string }> {
+  if (name.toLowerCase().endsWith('.xlsx')) {
     throw apiError(501056, 'backup', { format: 'xlsx' });
   }
   const rows = bytes
     .toString('utf8')
     .split(/\r?\n/)
     .filter((line) => line.trim().length > 0);
-  if (rows.length === 0) return { insertLen: 0 };
+  if (rows.length === 0) return [];
   const header = (rows.shift() ?? '').split(',').map((value) => value.trim().toLowerCase());
-  const hasQ = header.includes('q');
-  const hasA = header.includes('a');
-  const duplicate = new Set(header).size !== header.length;
-  if (!hasQ || !hasA) {
+  const qIndex = header.indexOf('q');
+  const aIndex = header.indexOf('a');
+  if (qIndex === -1 || aIndex === -1) {
     throw apiError(501058, 'backup', { missingHeaders: ['q', 'a'], duplicateHeaders: [] });
   }
-  if (duplicate) throw apiError(501059, 'backup', { sheet: 'sheet1' });
-  return { insertLen: rows.length };
+  if (new Set(header).size !== header.length) {
+    throw apiError(501059, 'backup', { sheet: 'sheet1' });
+  }
+  return rows.map((line) => {
+    const cells = line.split(',');
+    return { q: (cells[qIndex] ?? '').trim(), a: (cells[aIndex] ?? '').trim() };
+  });
 }
 
 /** API-COL-009 POST /api/core/dataset/collection/create/backup */
@@ -89,7 +99,7 @@ export default withApiHandler(
       body.file && typeof body.file === 'object' && 'name' in body.file
         ? String((body.file as { name?: unknown }).name ?? 'backup.csv')
         : 'backup.csv';
-    const { insertLen } = parseBackup(bytes, name);
+    const rows = parseBackup(bytes, name);
     const created = await runtime.collectionRepository.create(
       {
         collection: sourceCollection({
@@ -103,6 +113,34 @@ export default withApiHandler(
       },
       context,
     );
+    // 真实持久化：有效行经 PushDataService 生成真实 qa 任务（非仅计数）。
+    const queue = (runtime.ports as { queue?: QueuePort }).queue;
+    if (rows.length > 0 && !queue) {
+      throw apiError(501062, requestId, { dependency: 'queue', mode: 'qa' });
+    }
+    let insertLen = 0;
+    if (rows.length > 0 && queue) {
+      const service = new PushDataService({
+        jobs: runtime.processingRepository,
+        trainingProcessor: runtime.ports.trainingProcessor,
+        queue,
+      });
+      const result = await service.pushBatch(
+        {
+          datasetId: body.datasetId,
+          collectionId: created.collectionId,
+          mode: 'qa',
+          items: rows.map((row) => ({
+            dataId: stableBackupDataId(created.collectionId, row.q, row.a),
+            version: 1,
+            payload: row,
+          })),
+          options: PORT_OPTIONS,
+        },
+        context,
+      );
+      insertLen = result.accepted;
+    }
     response
       .status(200)
       .json(successResponse({ collectionId: created.collectionId, insertLen }, requestId));

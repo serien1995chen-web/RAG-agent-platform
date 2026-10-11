@@ -70,6 +70,7 @@ beforeEach(() => {
       getDatasetDetail: async () => ({ dataset: { datasetId, teamId: context.tenant.teamId } }),
     },
     collectionRepository: {
+      create: async () => ({ collectionId }),
       list: async () => ({
         total: 1,
         list: [
@@ -103,6 +104,9 @@ beforeEach(() => {
         updateTime: '',
       }),
     },
+    processingRepository: {
+      enqueue: async () => ({ taskId: 't1', jobId: 'j1' }),
+    },
     knowledgeItemService: {
       listItems: async () => ({
         total: 1,
@@ -125,6 +129,8 @@ beforeEach(() => {
       }),
     },
     ports: {
+      queue: { enqueue: async () => undefined },
+      trainingProcessor: { process: async () => ({ state: 'success' }) },
       apiDatasetClient: {
         getCatalog: async () => {
           state.catalogCalls += 1;
@@ -226,6 +232,7 @@ describe('P4-10 import/export and API dataset routes', () => {
       url: '/api/core/dataset/collection/import',
       body: {
         datasetId,
+        targetCollectionId: collectionId,
         file: {
           name: 'a.jsonl',
           data: Buffer.from('{"q":"a","a":"1"}\n{"q":"a","a":"1"}').toString('base64'),

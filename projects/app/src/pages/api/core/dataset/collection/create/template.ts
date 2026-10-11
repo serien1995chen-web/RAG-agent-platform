@@ -1,4 +1,7 @@
+import { createHash } from 'node:crypto';
 import type { CollectionSnapshot } from '@kb/service';
+import { PushDataService } from '@kb/service';
+import type { QueuePort } from '@kb/dal';
 import { ApiErrorException, createApiError } from '@kb/contracts';
 import type { NextApiRequest, NextApiResponse } from 'next';
 import type { ExtendedAppRuntime } from '../../../../../../runtime';
@@ -52,8 +55,12 @@ function toBytes(file: unknown): Buffer | null {
   return null;
 }
 
-/** 真实模板文件解析：CSV 表头需含 q/a 且无重复，返回真实 insertLen。 */
-function parseTemplate(bytes: Buffer, name: string): { insertLen: number } {
+function stableTemplateDataId(collectionId: string, q: string, a: string): string {
+  const digest = createHash('sha256').update(`${collectionId}\u0000${q}\u0000${a}`).digest('hex');
+  return `tpl-${digest.slice(0, 32)}`;
+}
+
+function parseTemplate(bytes: Buffer, name: string): Array<{ q: string; a: string }> {
   if (name.toLowerCase().endsWith('.xlsx')) {
     throw apiError(501056, 'template', { format: 'xlsx' });
   }
@@ -61,15 +68,20 @@ function parseTemplate(bytes: Buffer, name: string): { insertLen: number } {
     .toString('utf8')
     .split(/\r?\n/)
     .filter((line) => line.trim().length > 0);
-  if (rows.length === 0) return { insertLen: 0 };
+  if (rows.length === 0) return [];
   const header = (rows.shift() ?? '').split(',').map((value) => value.trim().toLowerCase());
-  const ok = header.includes('q') && header.includes('a');
-  const duplicate = new Set(header).size !== header.length;
-  if (!ok) {
+  const qIndex = header.indexOf('q');
+  const aIndex = header.indexOf('a');
+  if (qIndex === -1 || aIndex === -1) {
     throw apiError(501058, 'template', { missingHeaders: ['q', 'a'], duplicateHeaders: [] });
   }
-  if (duplicate) throw apiError(501059, 'template', { sheet: 'sheet1' });
-  return { insertLen: rows.length };
+  if (new Set(header).size !== header.length) {
+    throw apiError(501059, 'template', { sheet: 'sheet1' });
+  }
+  return rows.map((line) => {
+    const cells = line.split(',');
+    return { q: (cells[qIndex] ?? '').trim(), a: (cells[aIndex] ?? '').trim() };
+  });
 }
 
 /** API-COL-010 POST /api/core/dataset/collection/create/template */
@@ -92,7 +104,7 @@ export default withApiHandler(
       body.file && typeof body.file === 'object' && 'name' in body.file
         ? String((body.file as { name?: unknown }).name ?? 'template.csv')
         : 'template.csv';
-    const { insertLen } = parseTemplate(bytes, name);
+    const rows = parseTemplate(bytes, name);
     const created = await runtime.collectionRepository.create(
       {
         collection: sourceCollection({
@@ -105,6 +117,33 @@ export default withApiHandler(
       },
       context,
     );
+    const queue = (runtime.ports as { queue?: QueuePort }).queue;
+    if (rows.length > 0 && !queue) {
+      throw apiError(501062, requestId, { dependency: 'queue', mode: 'qa' });
+    }
+    let insertLen = 0;
+    if (rows.length > 0 && queue) {
+      const service = new PushDataService({
+        jobs: runtime.processingRepository,
+        trainingProcessor: runtime.ports.trainingProcessor,
+        queue,
+      });
+      const result = await service.pushBatch(
+        {
+          datasetId: body.datasetId,
+          collectionId: created.collectionId,
+          mode: 'qa',
+          items: rows.map((row) => ({
+            dataId: stableTemplateDataId(created.collectionId, row.q, row.a),
+            version: 1,
+            payload: row,
+          })),
+          options: PORT_OPTIONS,
+        },
+        context,
+      );
+      insertLen = result.accepted;
+    }
     response
       .status(200)
       .json(successResponse({ collectionId: created.collectionId, insertLen }, requestId));
