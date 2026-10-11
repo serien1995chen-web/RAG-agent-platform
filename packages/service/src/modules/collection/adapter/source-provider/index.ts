@@ -115,4 +115,3 @@ export function createSourceProviderRegistry(
 ): SourceProviderRegistry {
   return new SourceProviderRegistry(deps);
 }
-
