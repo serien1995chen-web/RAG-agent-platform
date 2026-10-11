@@ -11,6 +11,7 @@ import {
   createDatasetAclRepository,
   createDefaultPorts,
   createParseRuntimeAdapter,
+  createImageProcessorRuntime,
   createSourceProviderRegistry,
   createDeleteJobRepository,
   createImageAssetRepository,
@@ -107,6 +108,17 @@ export async function bootstrapRuntime(
     ...(adapters.fullText ? { fullTextStore: adapters.fullText } : {}),
     queue: syncQueue,
   } as ServicePorts;
+  const modelMode = (
+    base.config as unknown as {
+      system?: { dependencyBaseline?: { model?: 'mock' | 'real' } };
+    }
+  )?.system?.dependencyBaseline?.model;
+  const modelRuntime = new ModelRuntimeAdapter({
+    mode: modelMode === 'real' ? 'real' : 'mock',
+    modelRegistry: ports.modelRegistry,
+  });
+  // 用真实/受控图片处理器替换默认 501999 桩（Blocker 2）。
+  ports.imageTrainingProcessor = createImageProcessorRuntime(modelRuntime);
   const imageApplicationService = new ImageApplicationService({
     assets: createImageAssetRepository(clients.mongo) as NonNullable<
       ReturnType<typeof createImageAssetRepository>
@@ -117,15 +129,6 @@ export async function bootstrapRuntime(
     processor: ports.imageTrainingProcessor,
   });
   const fileUploadService = new FileUploadService();
-  const modelMode = (
-    base.config as unknown as {
-      system?: { dependencyBaseline?: { model?: 'mock' | 'real' } };
-    }
-  )?.system?.dependencyBaseline?.model;
-  const modelRuntime = new ModelRuntimeAdapter({
-    mode: modelMode === 'real' ? 'real' : 'mock',
-    modelRegistry: ports.modelRegistry,
-  });
   const dataUpdateService = new DataUpdateService({
     items: knowledgeItemRepository,
     vectors: adapters,

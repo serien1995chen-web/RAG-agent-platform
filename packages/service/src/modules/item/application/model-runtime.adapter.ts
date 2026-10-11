@@ -1,5 +1,9 @@
 import { ApiErrorException, createApiError } from '@kb/contracts';
-import type { ModelRegistryPort } from '../../../ports/capabilities';
+import type {
+  ImageTaskResult,
+  ImageTrainingProcessorPort,
+  ModelRegistryPort,
+} from '../../../ports/capabilities';
 import type { PortCallOptions, RequestContext } from '../../../ports/types';
 
 export type ModelRuntimeMode = 'mock' | 'real';
@@ -100,4 +104,37 @@ export class ModelRuntimeAdapter {
       }),
     );
   }
+}
+
+/**
+ * Rev2：以 ModelRuntimeAdapter 实现 ImageTrainingProcessorPort，替换默认 501999 桩。
+ * mock 模式返回确定性 description+embedding；real 模式缺配置由其内部返回 501062/501063。
+ */
+export function createImageProcessorRuntime(
+  modelRuntime: ModelRuntimeAdapter,
+): ImageTrainingProcessorPort {
+  return {
+    async processImage(task, imageRef, context): Promise<ImageTaskResult> {
+      const options: PortCallOptions = { timeoutMs: 30_000 };
+      try {
+        const description = await modelRuntime.describeImage(
+          { objectKey: imageRef.key, options },
+          context,
+        );
+        const embedding = await modelRuntime.embedText({ text: description, options }, context);
+        return {
+          imageId: task.dataId ?? imageRef.key,
+          state: 'success',
+          description,
+          ...{ embedding },
+        } as ImageTaskResult & { embedding: number[] };
+      } catch (error) {
+        return {
+          imageId: task.dataId ?? imageRef.key,
+          state: 'failed',
+          errorMsg: error instanceof Error ? error.message : 'image_processor_failed',
+        };
+      }
+    },
+  };
 }

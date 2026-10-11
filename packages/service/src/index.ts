@@ -222,6 +222,7 @@ export {
   normalizeImageMode,
   DataUpdateService,
   ModelRuntimeAdapter,
+  createImageProcessorRuntime,
   KNOWLEDGE_ITEM_JOB_DEFINITIONS,
   InsertDataService,
   createKnowledgeItemAdapter,

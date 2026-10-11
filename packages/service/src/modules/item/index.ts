@@ -11,7 +11,10 @@ export { ImageApplicationService, normalizeImageMode } from './application';
 export type { ImageApplicationServiceDeps } from './application';
 export { DataUpdateService } from './application/data-update.service';
 export type { DataUpdateServiceDeps, DataUpdateInput } from './application/data-update.service';
-export { ModelRuntimeAdapter } from './application/model-runtime.adapter';
+export {
+  ModelRuntimeAdapter,
+  createImageProcessorRuntime,
+} from './application/model-runtime.adapter';
 export type { ModelRuntimeDeps, ModelRuntimeMode } from './application/model-runtime.adapter';
 export { createKnowledgeItemRepository } from './repository';
 export { createImageAssetRepository } from './repository';
