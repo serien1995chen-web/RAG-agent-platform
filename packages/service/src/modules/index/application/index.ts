@@ -3,6 +3,13 @@ import type { VectorController } from '../../../ports/capabilities';
 import type { PortCallOptions } from '../../../ports/types';
 import type { VectorSearchHit } from '../../../ports/capabilities';
 
+export {
+  EMBEDDING_DIMENSION,
+  EmbeddingService,
+  createUnimplementedEmbeddingGateway,
+} from './embedding.service';
+export type { EmbeddingGateway, EmbeddingRequest, EmbeddingServiceDeps } from './embedding.service';
+
 export interface IndexServiceDeps {
   repository: VectorController;
 }

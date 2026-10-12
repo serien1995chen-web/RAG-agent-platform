@@ -42,7 +42,10 @@ export function createFileSourceProvider(deps: FileSourceProviderDeps): DatasetS
       bucket: deps.resolveBucket ? deps.resolveBucket(request) : 'kb-source',
       key: request.sourceRef,
     };
-    const stored = await deps.objectStore.get({ ref, options: request.options }, context);
+    const stored = await deps.objectStore.get(
+      { ref, options: request.options, datasetId: request.datasetId },
+      context,
+    );
     const extension = extensionOf(request.sourceRef);
     if (extension.length === 0) {
       throw sourceError(UNSUPPORTED_CONTENT, context.requestId, {

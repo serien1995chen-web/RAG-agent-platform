@@ -29,6 +29,11 @@ export type {
 
 export type {
   AdminDatasetPort,
+  ApiDatasetCapability,
+  ApiDatasetCatalogRequest,
+  ApiDatasetConfig,
+  ApiDatasetListRequest,
+  ApiDatasetPathNamesRequest,
   ArchiveStatusPort,
   AuditPort,
   AuditRecord,
@@ -61,6 +66,8 @@ export type {
   ModelCapability,
   ModelRegistryPort,
   MongoIndexManagerPort,
+  MultipartPartReceipt,
+  MultipartPartUpload,
   Notification,
   NotificationEvent,
   NotifyPort,

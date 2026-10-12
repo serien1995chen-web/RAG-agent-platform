@@ -16,4 +16,8 @@ export {
   createApiDatasetSourceProvider,
   createExternalSourceProvider,
 } from './source-provider/index';
-export type { SourceProviderType, SourceProviderRegistryDeps } from './source-provider/index';
+export type {
+  FileParserLike,
+  SourceProviderType,
+  SourceProviderRegistryDeps,
+} from './source-provider/index';

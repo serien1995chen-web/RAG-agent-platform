@@ -1,13 +1,20 @@
 import { ApiErrorException } from '@kb/contracts';
 import { describe, expect, it } from 'vitest';
 import {
+  SourceProviderRegistry,
   createApiDatasetSourceProvider,
   createExternalSourceProvider,
   createFileSourceProvider,
   createSourceProviderRegistry,
   createTextSourceProvider,
 } from '../../src/modules/collection/adapter/source-provider/index';
+import {
+  SourceProviderRegistry as PublicSourceProviderRegistry,
+  createSourceProviderRegistry as createPublicSourceProviderRegistry,
+} from '../../src/index';
 import type {
+  ApiDatasetCatalogRequest,
+  ApiDatasetConfig,
   DatasetSourceProvider,
   ObjectStorePort,
   PdfEnhanceProviderPort,
@@ -31,8 +38,18 @@ const context: RequestContext = {
   permission: { canRead: true, canWrite: true, canManage: false, isOwner: false },
 };
 
-function request(sourceType: string, sourceRef: string): SourceReadRequest {
-  return { datasetId: 'ds-1', sourceType, sourceRef, options: { timeoutMs: 5000 } };
+function request(
+  sourceType: string,
+  sourceRef: string,
+  config?: ApiDatasetConfig,
+): SourceReadRequest {
+  return {
+    datasetId: 'ds-1',
+    sourceType,
+    sourceRef,
+    ...(config ? { apiConfig: config } : {}),
+    options: { timeoutMs: 5000 },
+  };
 }
 
 async function captureCode(
@@ -53,6 +70,41 @@ function codeOf(error: unknown): number {
   throw error;
 }
 
+async function codeOfAsync(work: () => Promise<unknown>): Promise<number> {
+  try {
+    await work();
+    return 0;
+  } catch (error) {
+    return codeOf(error);
+  }
+}
+
+function apiConfig(overrides: Partial<ApiDatasetConfig> = {}): ApiDatasetConfig {
+  return {
+    provider: 'custom',
+    credentialRef: 'ref://demo',
+    capabilities: [
+      { name: 'getCatalog', supported: true },
+      { name: 'getPathNames', supported: true },
+      { name: 'list', supported: true },
+    ],
+    ...overrides,
+  };
+}
+
+function readConfig(overrides: Partial<ApiDatasetConfig> = {}): ApiDatasetConfig {
+  return {
+    provider: 'custom',
+    credentialRef: 'ref://demo',
+    capabilities: [{ name: 'read', supported: true }],
+    ...overrides,
+  };
+}
+
+function catalogRequest(config: ApiDatasetConfig, parentId = 'root'): ApiDatasetCatalogRequest {
+  return { datasetId: 'ds-1', apiConfig: config, parentId, options: { timeoutMs: 5000 } };
+}
+
 describe('TEST-FI-PROVIDER-001 source providers', () => {
   it('reads text with a stable content hash and allows empty text', async () => {
     const provider = createTextSourceProvider();
@@ -63,22 +115,31 @@ describe('TEST-FI-PROVIDER-001 source providers', () => {
     expect(empty.rawText).toBe('');
   });
 
-  it('reads files through ObjectStore and @kb/parse', async () => {
+  it('reads files through ObjectStore and @kb/parse with the authorized datasetId', async () => {
+    let seenDatasetId: string | undefined;
     const objectStore: ObjectStorePort = {
-      get: async () => ({
-        ref: { bucket: 'kb-source', key: 'a.txt' },
-        body: Buffer.from('file body'),
-      }),
+      get: async (input) => {
+        seenDatasetId = input.datasetId;
+        return { ref: { bucket: 'kb-source', key: 'a.txt' }, body: Buffer.from('file body') };
+      },
       put: async () => ({ bucket: 'kb-source', key: 'x' }),
       delete: async () => ({ deleted: true }),
       promote: async (input) => input.ref,
       prepareMultipart: async (input) => input.ref,
+      uploadPart: async (input) => ({
+        partNumber: input.partNumber,
+        etag: 'stub',
+        size: input.body.byteLength,
+      }),
+      completeMultipart: async (input) => ({ ...input.ref, etag: input.hash }),
       abort: async () => ({ aborted: true }),
     };
     const provider = createFileSourceProvider({ objectStore, parser: stubParser });
     const result = await provider.read(request('file', 'a.txt'), context);
     expect(result.rawText).toBe('file body');
     expect(result.fileRef).toBe('a.txt');
+    // file Provider 必须把已授权的 request.datasetId 传给 ObjectStore，而不是从 key 反推。
+    expect(seenDatasetId).toBe('ds-1');
   });
 
   it('rejects files without extension as 501035', async () => {
@@ -88,13 +149,19 @@ describe('TEST-FI-PROVIDER-001 source providers', () => {
       delete: async () => ({ deleted: true }),
       promote: async (input) => input.ref,
       prepareMultipart: async (input) => input.ref,
+      uploadPart: async (input) => ({
+        partNumber: input.partNumber,
+        etag: 'stub',
+        size: input.body.byteLength,
+      }),
+      completeMultipart: async (input) => ({ ...input.ref, etag: input.hash }),
       abort: async () => ({ aborted: true }),
     };
     const provider = createFileSourceProvider({ objectStore, parser: stubParser });
     expect(await captureCode(provider, request('file', 'noext'))).toBe(501035);
   });
 
-  it('does not issue any request when apiFile is unconfigured (501062)', async () => {
+  it('does not issue any request when apiFile is unconfigured (501017)', async () => {
     let called = 0;
     const provider = createApiDatasetSourceProvider({
       configured: false,
@@ -105,7 +172,38 @@ describe('TEST-FI-PROVIDER-001 source providers', () => {
         },
       },
     });
-    expect(await captureCode(provider, request('apiFile', 'x'))).toBe(501062);
+    expect(await captureCode(provider, request('apiFile', 'x', readConfig()))).toBe(501017);
+    expect(called).toBe(0);
+  });
+
+  it('returns 501017 for apiFile read when the request carries no apiConfig', async () => {
+    let called = 0;
+    const provider = createApiDatasetSourceProvider({
+      configured: true,
+      client: {
+        get: async () => {
+          called += 1;
+          return { status: 200, data: 'x' };
+        },
+      },
+    });
+    expect(await captureCode(provider, request('apiFile', 'x'))).toBe(501017);
+    expect(called).toBe(0);
+  });
+
+  it('returns 501019 when apiFile read capability is not declared', async () => {
+    let called = 0;
+    const provider = createApiDatasetSourceProvider({
+      configured: true,
+      client: {
+        get: async () => {
+          called += 1;
+          return { status: 200, data: 'x' };
+        },
+      },
+    });
+    const config = readConfig({ capabilities: [{ name: 'getCatalog', supported: true }] });
+    expect(await captureCode(provider, request('apiFile', 'x', config))).toBe(501019);
     expect(called).toBe(0);
   });
 
@@ -114,7 +212,9 @@ describe('TEST-FI-PROVIDER-001 source providers', () => {
       configured: true,
       client: { get: async () => ({ status: 200, data: '第三方内容' }) },
     });
-    expect((await ok.read(request('apiFile', 'x'), context)).rawText).toBe('第三方内容');
+    expect((await ok.read(request('apiFile', 'x', readConfig()), context)).rawText).toBe(
+      '第三方内容',
+    );
     const failed = createApiDatasetSourceProvider({
       configured: true,
       client: {
@@ -123,7 +223,27 @@ describe('TEST-FI-PROVIDER-001 source providers', () => {
         },
       },
     });
-    expect(await captureCode(failed, request('apiFile', 'x'))).toBe(501039);
+    expect(await captureCode(failed, request('apiFile', 'x', readConfig()))).toBe(501039);
+  });
+
+  it('reads with the timeout and client resolved from the request apiConfig', async () => {
+    const seen: Array<{ timeout?: number; credentialRef?: string }> = [];
+    const provider = createApiDatasetSourceProvider({
+      configured: true,
+      client: {
+        get: async () => ({ status: 200, data: 'default' }),
+      },
+      resolveClient: () => ({
+        get: async (_url, options) => {
+          seen.push({ timeout: options.timeout, credentialRef: options.credentialRef });
+          return { status: 200, data: 'per-config' };
+        },
+      }),
+    });
+    const config = readConfig({ credentialRef: 'ref://request', timeoutMs: 1234 });
+    const result = await provider.read(request('apiFile', 'x', config), context);
+    expect(result.rawText).toBe('per-config');
+    expect(seen).toEqual([{ timeout: 1234, credentialRef: 'ref://request' }]);
   });
 
   it('maps the PDF provider mock (TEST-PDF-MOCK-001)', async () => {
@@ -233,5 +353,191 @@ describe('TEST-FI-PROVIDER-001 source providers', () => {
     } catch (error) {
       expect(codeOf(error)).toBe(501035);
     }
+  });
+
+  it('rejects API Dataset calls when unconfigured (501017) without issuing a request', async () => {
+    let called = 0;
+    const provider = createApiDatasetSourceProvider({
+      configured: false,
+      client: {
+        get: async () => ({ status: 200, data: 'x' }),
+        getCatalog: async () => {
+          called += 1;
+          return [];
+        },
+      },
+    });
+    expect(
+      await codeOfAsync(() => provider.getCatalog!(catalogRequest(apiConfig()), context)),
+    ).toBe(501017);
+    expect(called).toBe(0);
+  });
+
+  it('rejects API Dataset calls when the capability is not declared (501019)', async () => {
+    let called = 0;
+    const provider = createApiDatasetSourceProvider({
+      configured: true,
+      client: {
+        get: async () => ({ status: 200, data: 'x' }),
+        getCatalog: async () => {
+          called += 1;
+          return [];
+        },
+      },
+    });
+    const config = apiConfig({ capabilities: [{ name: 'list', supported: true }] });
+    expect(await codeOfAsync(() => provider.getCatalog!(catalogRequest(config), context))).toBe(
+      501019,
+    );
+    expect(called).toBe(0);
+  });
+
+  it('does not fake success when the injected client lacks the API Dataset method', async () => {
+    const provider = createApiDatasetSourceProvider({
+      configured: true,
+      client: { get: async () => ({ status: 200, data: 'x' }) },
+    });
+    expect(
+      await codeOfAsync(() => provider.getCatalog!(catalogRequest(apiConfig()), context)),
+    ).toBe(501019);
+    expect(
+      await codeOfAsync(() =>
+        provider.list!(
+          { datasetId: 'ds-1', apiConfig: apiConfig(), options: { timeoutMs: 5000 } },
+          context,
+        ),
+      ),
+    ).toBe(501019);
+  });
+
+  it('passes API Dataset catalog/path/list through to the injected client', async () => {
+    const provider = createApiDatasetSourceProvider({
+      configured: true,
+      baseUrl: 'https://api.example.test',
+      client: {
+        get: async () => ({ status: 200, data: 'x' }),
+        getCatalog: async (req, options) => {
+          expect(req.parentId).toBe('root');
+          expect(options.baseUrl).toBe('https://api.example.test');
+          expect(options.provider).toBe('custom');
+          expect(options.credentialRef).toBe('ref://demo');
+          expect(options.timeoutMs).toBe(5000);
+          return [{ id: 'n1' }];
+        },
+        getPathNames: async () => '/root/n1',
+        list: async () => [{ id: 'f1' }],
+      },
+    });
+    expect(await provider.getCatalog!(catalogRequest(apiConfig()), context)).toEqual([
+      { id: 'n1' },
+    ]);
+    expect(
+      await provider.getPathNames!(
+        { datasetId: 'ds-1', apiConfig: apiConfig(), nodeId: 'n1', options: { timeoutMs: 5000 } },
+        context,
+      ),
+    ).toBe('/root/n1');
+    expect(
+      await provider.list!(
+        { datasetId: 'ds-1', apiConfig: apiConfig(), options: { timeoutMs: 5000 } },
+        context,
+      ),
+    ).toEqual([{ id: 'f1' }]);
+  });
+
+  it('resolves timeout/endpoint/credential from the request apiConfig', async () => {
+    const provider = createApiDatasetSourceProvider({
+      configured: true,
+      client: {
+        get: async () => ({ status: 200, data: 'x' }),
+        getCatalog: async (_req, options) => {
+          expect(options.timeoutMs).toBe(1234);
+          expect(options.endpointRef).toBe('endpoint://third-party');
+          expect(options.credentialRef).toBe('ref://per-request');
+          return [{ id: 'n1' }];
+        },
+      },
+    });
+    const config = apiConfig({
+      timeoutMs: 1234,
+      endpointRef: 'endpoint://third-party',
+      credentialRef: 'ref://per-request',
+    });
+    await provider.getCatalog!(catalogRequest(config), context);
+  });
+
+  it('selects the http client from the request apiConfig', async () => {
+    const seen: string[] = [];
+    const provider = createApiDatasetSourceProvider({
+      configured: true,
+      client: {
+        get: async () => ({ status: 200, data: 'x' }),
+        getCatalog: async () => {
+          seen.push('default');
+          return [];
+        },
+      },
+      resolveClient: () => ({
+        get: async () => ({ status: 200, data: 'x' }),
+        getCatalog: async (req) => {
+          seen.push(req.apiConfig.credentialRef);
+          return [{ id: req.apiConfig.credentialRef }];
+        },
+      }),
+    });
+    const result = await provider.getCatalog!(
+      catalogRequest(apiConfig({ credentialRef: 'ref://per-config' })),
+      context,
+    );
+    expect(result).toEqual([{ id: 'ref://per-config' }]);
+    expect(seen).toEqual(['ref://per-config']);
+  });
+
+  it('exposes the provider registry on the @kb/service public surface', () => {
+    expect(PublicSourceProviderRegistry).toBe(SourceProviderRegistry);
+    expect(typeof createPublicSourceProviderRegistry).toBe('function');
+  });
+
+  it('maps API Dataset provider failures to 501039', async () => {
+    const provider = createApiDatasetSourceProvider({
+      configured: true,
+      client: {
+        get: async () => ({ status: 200, data: 'x' }),
+        getCatalog: async () => {
+          throw { response: { status: 503 } };
+        },
+      },
+    });
+    expect(
+      await codeOfAsync(() => provider.getCatalog!(catalogRequest(apiConfig()), context)),
+    ).toBe(501039);
+  });
+
+  it('caches getCatalog per teamId+datasetId+config+parentId for 5 minutes', async () => {
+    let calls = 0;
+    const registry = createSourceProviderRegistry({
+      apiDataset: {
+        configured: true,
+        client: {
+          get: async () => ({ status: 200, data: 'x' }),
+          getCatalog: async () => {
+            calls += 1;
+            return [{ id: `n${calls}` }];
+          },
+        },
+      },
+    });
+    const first = await registry.getCatalog(catalogRequest(apiConfig()), context);
+    const second = await registry.getCatalog(catalogRequest(apiConfig()), context);
+    expect(first).toEqual([{ id: 'n1' }]);
+    expect(second).toEqual(first);
+    expect(calls).toBe(1);
+
+    // 同 provider 但配置身份不同（不同 credentialRef）不得复用缓存。
+    await registry.getCatalog(catalogRequest(apiConfig({ credentialRef: 'ref://other' })), context);
+    expect(calls).toBe(2);
+
+    await registry.getCatalog(catalogRequest(apiConfig(), 'other-parent'), context);
+    expect(calls).toBe(3);
   });
 });

@@ -1,7 +1,27 @@
+import { createHash } from 'node:crypto';
 import { ApiErrorException, createApiError } from '@kb/contracts';
 import { Client } from 'minio';
-import type { ObjectRef, ObjectStorePort, TenantObjectContext } from '../interface';
+import type {
+  MultipartPartReceipt,
+  MultipartPartUpload,
+  ObjectRef,
+  ObjectStorePort,
+  TenantObjectContext,
+} from '../interface';
 import { assertObjectKeyScope, objectKeyHash } from '../tenant-scope';
+
+/** 单次 multipart 上传允许的最大分片数（设计文档 7.6 / 12.6）。 */
+const MAX_MULTIPART_PARTS = 10000;
+
+/** 分片完整性/校验类 S3 错误码：统一映射为 501060，不落入 501016。 */
+const MULTIPART_INTEGRITY_ERROR_CODES = new Set([
+  'NoSuchUpload',
+  'InvalidPart',
+  'InvalidPartOrder',
+  'EntityTooSmall',
+  'BadDigest',
+  'InvalidDigest',
+]);
 
 export interface MinioObjectStoreConfig {
   endPoint: string;
@@ -11,6 +31,8 @@ export interface MinioObjectStoreConfig {
   secretKey: string;
   region: string;
   bucket: string;
+  /** 测试/自定义注入：覆盖内部 Client（默认按其余字段创建）。 */
+  client?: Client;
 }
 
 function isNotFound(error: unknown): boolean {
@@ -29,6 +51,54 @@ function isNoSuchUpload(error: unknown): boolean {
   return (error as { code?: unknown }).code === 'NoSuchUpload';
 }
 
+function isMultipartIntegrityError(error: unknown): boolean {
+  if (typeof error !== 'object' || error === null) return false;
+  const code = (error as { code?: unknown }).code;
+  return typeof code === 'string' && MULTIPART_INTEGRITY_ERROR_CODES.has(code);
+}
+
+function normalizeEtag(value: string | null | undefined): string {
+  return (value ?? '').replace(/^"|"$/g, '').toLowerCase();
+}
+
+/**
+ * 校验分片 checksum，支持 `sha256:<hex>`、`md5:<hex>` 与裸 hex
+ * （32 位按 md5、64 位按 sha256）；不匹配或格式非法返回 false。
+ */
+function checksumMatches(body: Uint8Array, checksum: string): boolean {
+  const declared = checksum.trim().toLowerCase();
+  if (declared.length === 0) return false;
+  let algorithm = declared.length === 64 ? 'sha256' : 'md5';
+  let hex = declared;
+  const separator = declared.indexOf(':');
+  if (separator >= 0) {
+    algorithm = declared.slice(0, separator);
+    hex = declared.slice(separator + 1);
+  }
+  if (algorithm === 'sha256') {
+    return hex.length === 64 && createHash('sha256').update(body).digest('hex') === hex;
+  }
+  if (algorithm === 'md5') {
+    return hex.length === 32 && createHash('md5').update(body).digest('hex') === hex;
+  }
+  return false;
+}
+
+/**
+ * 由分片 ETag 计算期望的 S3 multipart ETag：md5(拼接各分片 md5 原始摘要)-分片数。
+ * 任一 ETag 非 32 位 hex（例如启用了非 MD5 校验）时返回 null，表示无法预先计算。
+ */
+function expectedMultipartEtag(parts: readonly { etag: string }[]): string | null {
+  if (parts.length === 0) return null;
+  const digests: Buffer[] = [];
+  for (const part of parts) {
+    const etag = normalizeEtag(part.etag);
+    if (!/^[0-9a-f]{32}$/.test(etag)) return null;
+    digests.push(Buffer.from(etag, 'hex'));
+  }
+  return `${createHash('md5').update(Buffer.concat(digests)).digest('hex')}-${digests.length}`;
+}
+
 /**
  * S3 兼容（MinIO）实现（设计文档 7.6 / 10.9.1）：
  * 真实读写 + 触网前租户前缀校验 + 统一错误映射（不泄露内部路径）。
@@ -42,14 +112,16 @@ export class MinioObjectStore implements ObjectStorePort {
   constructor(config: MinioObjectStoreConfig) {
     this.bucket = config.bucket;
     this.region = config.region;
-    this.client = new Client({
-      endPoint: config.endPoint,
-      port: config.port,
-      useSSL: config.useSSL,
-      accessKey: config.accessKey,
-      secretKey: config.secretKey,
-      region: config.region,
-    });
+    this.client =
+      config.client ??
+      new Client({
+        endPoint: config.endPoint,
+        port: config.port,
+        useSSL: config.useSSL,
+        accessKey: config.accessKey,
+        secretKey: config.secretKey,
+        region: config.region,
+      });
   }
 
   private async mapErrors<T>(
@@ -78,6 +150,47 @@ export class MinioObjectStore implements ObjectStorePort {
         }),
       );
     }
+  }
+
+  /** 完整性错误 501060：参数只含 fileId(=objectKeyHash) / uploadId / 缺失分片号，不泄露完整 key。 */
+  private integrityError(
+    uploadId: string,
+    ref: ObjectRef,
+    missingParts: readonly number[],
+  ): ApiErrorException {
+    return new ApiErrorException(
+      createApiError({
+        code: 501060,
+        requestId: 'object-store',
+        params: {
+          fileId: objectKeyHash(ref.key),
+          uploadId,
+          missingParts: [...missingParts],
+        },
+      }),
+    );
+  }
+
+  /**
+   * hash 最终一致性校验失败时清理：删除已提交对象并尽力中止会话，
+   * 返回对象是否已确认删除；删除失败必须由调用方升级为可观测错误（501016）。
+   */
+  private async discardCompletedObject(ref: ObjectRef, uploadId: string): Promise<boolean> {
+    let objectRemoved = false;
+    try {
+      await this.client.removeObject(this.bucket, ref.key);
+      objectRemoved = true;
+    } catch {
+      objectRemoved = false;
+    }
+    if (uploadId) {
+      try {
+        await this.client.abortMultipartUpload(this.bucket, ref.key, uploadId);
+      } catch {
+        // 会话通常已随 complete 结束（NoSuchUpload），不影响对象清理结果判定。
+      }
+    }
+    return objectRemoved;
   }
 
   async ensureBucket(): Promise<void> {
@@ -171,6 +284,134 @@ export class MinioObjectStore implements ObjectStorePort {
           {},
         );
         return { ...input.ref, multipartUploadId: uploadId };
+      },
+      input.ref,
+    );
+  }
+
+  async uploadPart(
+    input: MultipartPartUpload,
+    context: TenantObjectContext,
+  ): Promise<MultipartPartReceipt> {
+    assertObjectKeyScope(input.ref, context);
+    return this.mapErrors(
+      'uploadPart',
+      async () => {
+        await this.ensureBucket();
+        if (
+          !input.uploadId ||
+          !Number.isInteger(input.partNumber) ||
+          input.partNumber < 1 ||
+          input.partNumber > MAX_MULTIPART_PARTS
+        ) {
+          throw this.integrityError(input.uploadId, input.ref, [input.partNumber]);
+        }
+        const body = Buffer.from(input.body);
+        if (!checksumMatches(body, input.checksum)) {
+          throw this.integrityError(input.uploadId, input.ref, [input.partNumber]);
+        }
+        let etag: string;
+        try {
+          const result = await this.client.uploadPart(
+            {
+              bucketName: this.bucket,
+              objectName: input.ref.key,
+              uploadID: input.uploadId,
+              partNumber: input.partNumber,
+              headers: {},
+            },
+            body,
+          );
+          etag = normalizeEtag(result.etag);
+        } catch (error) {
+          if (isMultipartIntegrityError(error)) {
+            throw this.integrityError(input.uploadId, input.ref, [input.partNumber]);
+          }
+          throw error;
+        }
+        return { partNumber: input.partNumber, etag, size: body.byteLength };
+      },
+      input.ref,
+    );
+  }
+
+  async completeMultipart(
+    input: {
+      ref: ObjectRef;
+      uploadId: string;
+      parts: readonly MultipartPartReceipt[];
+      hash: string;
+    },
+    context: TenantObjectContext,
+  ): Promise<ObjectRef> {
+    assertObjectKeyScope(input.ref, context);
+    return this.mapErrors(
+      'completeMultipart',
+      async () => {
+        if (!input.uploadId) {
+          throw this.integrityError('', input.ref, []);
+        }
+        if (input.parts.length < 1 || input.parts.length > MAX_MULTIPART_PARTS) {
+          throw this.integrityError(
+            input.uploadId,
+            input.ref,
+            input.parts.map((part) => part.partNumber),
+          );
+        }
+        const seen = new Set<number>();
+        const invalid: number[] = [];
+        for (const part of input.parts) {
+          if (
+            !Number.isInteger(part.partNumber) ||
+            part.partNumber < 1 ||
+            part.partNumber > MAX_MULTIPART_PARTS ||
+            !part.etag ||
+            seen.has(part.partNumber)
+          ) {
+            invalid.push(part.partNumber);
+            continue;
+          }
+          seen.add(part.partNumber);
+        }
+        if (invalid.length > 0) {
+          throw this.integrityError(input.uploadId, input.ref, invalid);
+        }
+        const ordered = [...input.parts].sort((a, b) => a.partNumber - b.partNumber);
+        const expected = expectedMultipartEtag(ordered);
+        if (expected !== null && normalizeEtag(input.hash) !== expected) {
+          // 提交前拦截：hash 不一致时不得产生已完成对象，直接返回 501060。
+          throw this.integrityError(input.uploadId, input.ref, []);
+        }
+        let etag: string;
+        try {
+          const result = await this.client.completeMultipartUpload(
+            this.bucket,
+            input.ref.key,
+            input.uploadId,
+            ordered.map((part) => ({ part: part.partNumber, etag: part.etag })),
+          );
+          etag = normalizeEtag(result.etag);
+        } catch (error) {
+          if (isMultipartIntegrityError(error)) {
+            throw this.integrityError(input.uploadId, input.ref, []);
+          }
+          throw error;
+        }
+        if (normalizeEtag(input.hash) !== etag) {
+          const cleaned = await this.discardCompletedObject(input.ref, input.uploadId);
+          if (!cleaned) {
+            throw new ApiErrorException(
+              createApiError({
+                code: 501016,
+                requestId: 'object-store',
+                params: { store: 's3', operation: 'completeMultipartCleanup' },
+              }),
+            );
+          }
+          throw this.integrityError(input.uploadId, input.ref, []);
+        }
+        const size = ordered.reduce((total, part) => total + part.size, 0);
+        return { ...input.ref, size, etag, multipartUploadId: undefined };
       },
       input.ref,
     );

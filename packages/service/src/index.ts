@@ -79,6 +79,11 @@ export type {
 export { DEFAULT_PORT_IDS, createDefaultPorts, createUnimplementedPort } from './ports/index';
 export type {
   AdminDatasetPort,
+  ApiDatasetCapability,
+  ApiDatasetCatalogRequest,
+  ApiDatasetConfig,
+  ApiDatasetListRequest,
+  ApiDatasetPathNamesRequest,
   ArchiveStatusPort,
   AuditPort,
   AuditRecord,
@@ -124,6 +129,8 @@ export type {
   ModelCapability,
   ModelRegistryPort,
   MongoIndexManagerPort,
+  MultipartPartReceipt,
+  MultipartPartUpload,
   Notification,
   NotificationEvent,
   NotifyPort,
@@ -184,18 +191,22 @@ export type {
 export {
   SOURCE_COLLECTION_INVARIANTS,
   SourceCollectionApplicationService,
+  SourceProviderRegistry,
   SOURCE_COLLECTION_JOB_DEFINITIONS,
   ImportSourceService,
   createSourceCollectionAdapter,
   createSourceCollectionJobHandler,
   createSourceCollectionRepository,
+  createSourceProviderRegistry,
   validateSourceCollection,
 } from './modules/collection';
 export type {
+  FileParserLike,
   ImportSourceServiceDeps,
   SourceCollection,
   SourceCollectionJobHandler,
   SourceCollectionServiceDeps,
+  SourceProviderRegistryDeps,
 } from './modules/collection';
 
 export {
@@ -216,15 +227,21 @@ export type {
 } from './modules/item';
 
 export {
+  EMBEDDING_DIMENSION,
+  EmbeddingService,
   KNOWLEDGE_ITEM_INDEX_INVARIANTS,
   IndexApplicationService,
   KNOWLEDGE_ITEM_INDEX_JOB_DEFINITIONS,
   createKnowledgeItemIndexAdapter,
   createKnowledgeItemIndexJobHandler,
   createKnowledgeItemIndexRepository,
+  createUnimplementedEmbeddingGateway,
   validateKnowledgeItemIndex,
 } from './modules/index';
 export type {
+  EmbeddingGateway,
+  EmbeddingRequest,
+  EmbeddingServiceDeps,
   IndexServiceDeps,
   KnowledgeItemIndex,
   KnowledgeItemIndexJobHandler,

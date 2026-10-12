@@ -1,5 +1,6 @@
 import {
   DatasetApiService,
+  EmbeddingService,
   KnowledgeItemApplicationService,
   MongoKnowledgeBaseRepository,
   ProcessingApplicationService,
@@ -12,13 +13,19 @@ import {
   createMigrationRunRepository,
   createProcessingJobRepository,
   createSourceCollectionRepository,
+  createSourceProviderRegistry,
+  type DatasetSourceProvider,
+  type EmbeddingGateway,
+  type FileParserLike,
   type FullTextStore,
   type ServicePorts,
   type VectorController,
 } from '@kb/service';
 import { BullMqQueueAdapter } from '@kb/dal';
+import { createDefaultDocumentParser } from '@kb/parse';
 import { DatasetSyncApplicationService } from '../../../../packages/service/src/modules/collection/application/sync.service';
 import { closeRuntimeClients, type RuntimeClients } from './clients';
+import { createRuntimeObjectStorePort } from './object-store-adapter';
 import { getRuntime as getBaseRuntime, type AppRuntime } from './health';
 
 export interface RuntimeBootstrapOptions {
@@ -26,6 +33,18 @@ export interface RuntimeBootstrapOptions {
   drain?: () => Promise<void>;
   closeClients?: (clients: RuntimeClients) => Promise<void>;
   ports?: ServicePorts;
+  /** BASE-B3：可选 embedding 网关注入；未注入时 embeddingService 返回 501062。 */
+  embeddingGateway?: EmbeddingGateway;
+  /**
+   * BASE-B2/P1：来源 Provider 运行时注入口（例如 createSourceProviderRegistry(...)）。
+   * 未注入时由 bootstrap 默认装配 SourceProviderRegistry（apiFile 未配置返回 501017，
+   * 未知来源返回 501035），不再回落到骨架错误 501999。
+   * 优先级：本字段 > 默认 Registry；不从 options.ports.datasetSourceProvider 取值，
+   * 以免 createDefaultPorts() 的未实现 Port 覆盖默认 Registry。
+   */
+  datasetSourceProvider?: DatasetSourceProvider;
+  /** 文件来源 Provider 所需解析器；未注入时使用 @kb/parse 默认解析器。 */
+  fileParser?: FileParserLike;
 }
 
 export interface ExtendedAppRuntime extends AppRuntime {
@@ -40,6 +59,8 @@ export interface ExtendedAppRuntime extends AppRuntime {
   deleteRepository: ReturnType<typeof createDeleteJobRepository>;
   migrationRepository: ReturnType<typeof createMigrationRunRepository>;
   datasetPermission: ReturnType<typeof createDatasetAclRepository>;
+  embeddingService: EmbeddingService;
+  datasetSourceProvider: DatasetSourceProvider;
   vectorController: VectorController;
   fullTextStore?: FullTextStore;
   ports: ServicePorts;
@@ -59,6 +80,19 @@ export async function bootstrapRuntime(
   const deleteRepository = createDeleteJobRepository(clients.mongo);
   const migrationRepository = createMigrationRunRepository(clients.mongo);
   const datasetPermission = createDatasetAclRepository(clients.mongo);
+  const embeddingService = new EmbeddingService({ gateway: options.embeddingGateway });
+  const objectStorePort = createRuntimeObjectStorePort(clients.objectStore);
+  const fileParser = options.fileParser ?? createDefaultDocumentParser();
+  const basePorts = options.ports ?? createDefaultPorts();
+  // 优先级固定：显式 datasetSourceProvider > 默认真实 Registry。
+  // 不从 options.ports.datasetSourceProvider 取值，避免 createDefaultPorts() 的未实现 Port
+  // 覆盖默认 Registry 导致 501999 回归。
+  const datasetSourceProvider =
+    options.datasetSourceProvider ??
+    createSourceProviderRegistry({
+      objectStore: objectStorePort,
+      fileParser,
+    });
   const adapters = createKnowledgeItemIndexAdapter({
     pool: clients.pg,
     connection: clients.mongo,
@@ -82,8 +116,9 @@ export async function bootstrapRuntime(
     queue: syncQueue,
   });
   const ports: ServicePorts = {
-    ...(options.ports ?? createDefaultPorts()),
+    ...basePorts,
     datasetSync: datasetSyncService,
+    datasetSourceProvider,
   };
   const drain = options.drain ?? (async () => undefined);
   const closeClients = options.closeClients ?? closeRuntimeClients;
@@ -103,6 +138,8 @@ export async function bootstrapRuntime(
     deleteRepository,
     migrationRepository,
     datasetPermission,
+    embeddingService,
+    datasetSourceProvider,
     vectorController: adapters,
     ...(adapters.fullText ? { fullTextStore: adapters.fullText } : {}),
     ports,

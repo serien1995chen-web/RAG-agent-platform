@@ -1,4 +1,10 @@
-import type { ImageQuery, ModelSelection, SearchRequest, SearchResult } from '@kb/contracts';
+import type {
+  ImageQuery,
+  JsonValue,
+  ModelSelection,
+  SearchRequest,
+  SearchResult,
+} from '@kb/contracts';
 import type {
   ObjectRef,
   PageResult,
@@ -116,29 +122,63 @@ export interface VectorController {
   ): Promise<number>;
 }
 
+/**
+ * 分片上传输入（设计文档 7.6 PORT-STORE-003）：沿用 PortCallOptions 与 RequestContext 租户校验。
+ * datasetId 为调用方**已授权**的 Dataset 作用域；dataset/ 前缀 key 必须与之一致，
+ * 禁止从 key 反推 datasetId（否则可绕过 Dataset ACL）。
+ */
+export interface MultipartPartUpload {
+  ref: ObjectRef;
+  uploadId: string;
+  partNumber: number;
+  body: Uint8Array;
+  checksum: string;
+  options: PortCallOptions;
+  datasetId?: string;
+}
+
+/** 分片上传回执：partNumber + etag 供 completeMultipart 合并，size 供总大小校验。 */
+export interface MultipartPartReceipt {
+  partNumber: number;
+  etag: string;
+  size: number;
+}
+
 export interface ObjectStorePort {
   put(
-    input: { ref: ObjectRef; body: Uint8Array; options: PortCallOptions },
+    input: { ref: ObjectRef; body: Uint8Array; options: PortCallOptions; datasetId?: string },
     context: RequestContext,
   ): Promise<ObjectRef>;
   get(
-    input: { ref: ObjectRef; options: PortCallOptions },
+    input: { ref: ObjectRef; options: PortCallOptions; datasetId?: string },
     context: RequestContext,
   ): Promise<{ ref: ObjectRef; body: Uint8Array }>;
   delete(
-    input: { ref: ObjectRef; options: PortCallOptions },
+    input: { ref: ObjectRef; options: PortCallOptions; datasetId?: string },
     context: RequestContext,
   ): Promise<{ deleted: boolean }>;
   promote(
-    input: { ref: ObjectRef; options: PortCallOptions },
+    input: { ref: ObjectRef; options: PortCallOptions; datasetId?: string },
     context: RequestContext,
   ): Promise<ObjectRef>;
   prepareMultipart(
-    input: { ref: ObjectRef; parts: number; options: PortCallOptions },
+    input: { ref: ObjectRef; parts: number; options: PortCallOptions; datasetId?: string },
+    context: RequestContext,
+  ): Promise<ObjectRef>;
+  uploadPart(input: MultipartPartUpload, context: RequestContext): Promise<MultipartPartReceipt>;
+  completeMultipart(
+    input: {
+      ref: ObjectRef;
+      uploadId: string;
+      parts: readonly MultipartPartReceipt[];
+      hash: string;
+      options: PortCallOptions;
+      datasetId?: string;
+    },
     context: RequestContext,
   ): Promise<ObjectRef>;
   abort(
-    input: { ref: ObjectRef; options: PortCallOptions },
+    input: { ref: ObjectRef; options: PortCallOptions; datasetId?: string },
     context: RequestContext,
   ): Promise<{ aborted: boolean }>;
 }
@@ -214,6 +254,11 @@ export interface SourceReadRequest {
   datasetId: string;
   sourceType: string;
   sourceRef: string;
+  /**
+   * API Dataset（sourceType=apiFile）请求级配置：携带 provider/credentialRef/endpointRef/timeoutMs。
+   * 其他 sourceType 可省略；apiFile 缺失该字段按未配置处理（501017）。
+   */
+  apiConfig?: ApiDatasetConfig;
   options: PortCallOptions;
 }
 
@@ -224,9 +269,56 @@ export interface SourceReadResult {
   etag?: string;
 }
 
+/** API Dataset 能力声明（设计文档 12.8.2 `ApiDatasetCapabilities`）。 */
+export interface ApiDatasetCapability {
+  name: string;
+  supported: boolean;
+  constraints?: Record<string, JsonValue>;
+}
+
+/**
+ * API Dataset 配置（设计文档 12.8.2 `ApiDatasetConfig`）。
+ * provider 选择第三方实现；capabilities 未声明即拒绝调用（501019）。
+ */
+export interface ApiDatasetConfig {
+  provider: 'doc2x' | 'somark' | 'textin' | 'custom';
+  credentialRef: string;
+  endpointRef?: string;
+  timeoutMs?: number;
+  capabilities: ApiDatasetCapability[];
+}
+
+export interface ApiDatasetCatalogRequest {
+  datasetId: string;
+  apiConfig: ApiDatasetConfig;
+  parentId?: string;
+  options: PortCallOptions;
+}
+
+export interface ApiDatasetPathNamesRequest {
+  datasetId: string;
+  apiConfig: ApiDatasetConfig;
+  nodeId: string;
+  options: PortCallOptions;
+}
+
+export interface ApiDatasetListRequest {
+  datasetId: string;
+  apiConfig: ApiDatasetConfig;
+  parentId?: string;
+  keyword?: string;
+  options: PortCallOptions;
+}
+
 export interface DatasetSourceProvider {
   read(request: SourceReadRequest, context: RequestContext): Promise<SourceReadResult>;
   preview(request: SourceReadRequest, context: RequestContext): Promise<SourceReadResult>;
+  /** 按 parentId 返回目录节点；结果按 teamId+datasetId+provider+parentId 缓存 5 分钟。 */
+  getCatalog?(request: ApiDatasetCatalogRequest, context: RequestContext): Promise<JsonValue[]>;
+  /** 按 nodeId 递归返回节点路径字符串。 */
+  getPathNames?(request: ApiDatasetPathNamesRequest, context: RequestContext): Promise<string>;
+  /** 按 parentId/keyword 返回第三方文件列表（对应 ApiAPIDS003.list）。 */
+  list?(request: ApiDatasetListRequest, context: RequestContext): Promise<JsonValue[]>;
 }
 
 export interface TaskEnvelope<TPayload = unknown> {

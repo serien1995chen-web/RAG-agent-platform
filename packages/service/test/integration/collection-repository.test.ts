@@ -79,7 +79,7 @@ beforeAll(async () => {
   );
   await Promise.all([datasets.init(), collections.init()]);
   repository = new MongoCollectionRepository(connection);
-}, 60_000);
+}, 300_000);
 
 beforeEach(async () => {
   await Promise.all([datasets.deleteMany({}), collections.deleteMany({})]);

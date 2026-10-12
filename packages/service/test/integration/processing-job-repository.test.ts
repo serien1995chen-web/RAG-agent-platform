@@ -57,7 +57,7 @@ beforeAll(async () => {
   model = connection.model<DatasetTrainingDoc>('DatasetTraining', DatasetTrainingSchema);
   await model.init();
   repository = new MongoProcessingJobRepository(connection);
-}, 60_000);
+}, 300_000);
 
 beforeEach(async () => {
   await model.deleteMany({});

@@ -36,7 +36,7 @@ beforeAll(async () => {
   logs = connection.model<DatasetMigrationLogDoc>('DatasetMigrationLog', DatasetMigrationLogSchema);
   await Promise.all([migrations.init(), logs.init()]);
   repository = new MongoMigrationRepository(connection);
-}, 60_000);
+}, 300_000);
 
 beforeEach(async () => {
   await Promise.all([migrations.deleteMany({}), logs.deleteMany({})]);

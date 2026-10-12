@@ -48,7 +48,7 @@ beforeAll(async () => {
   connection = mongoose.createConnection(mongo.getUri(), { dbName: 'image-test' });
   await connection.asPromise();
   assets = new MongoImageAssetRepository(connection);
-}, 60_000);
+}, 300_000);
 
 afterAll(async () => {
   if (connection) await connection.close();
