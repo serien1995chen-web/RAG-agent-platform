@@ -14,7 +14,9 @@ import {
   type RequestContext,
 } from '@kb/service';
 import { createSearchEngine } from '../../../../packages/search/src/index';
+import { CitationService } from '../../../../packages/service/src/modules/index/application/citation.service';
 import { createDatasetSearchPort } from '../../../../packages/service/src/modules/index/adapter/dataset-search.adapter';
+import { createPreviewSigner } from '../../../../sdk/storage/src/presign';
 import { createDefaultExtensionRegistry, type ExtensionRegistry } from '../extensions';
 import type { RuntimeClients } from './clients';
 
@@ -137,10 +139,39 @@ async function bootstrap(): Promise<AppRuntime> {
     embedding: new EmbeddingService({}),
   });
   const collections: CollectionRepository = createSourceCollectionRepository(clients.mongo);
+  const previewSigner = createPreviewSigner({
+    endPoint: new URL(config.system.s3.endpoint).hostname,
+    port: Number(
+      new URL(config.system.s3.endpoint).port ||
+        (new URL(config.system.s3.endpoint).protocol === 'https:' ? 443 : 80),
+    ),
+    useSSL: new URL(config.system.s3.endpoint).protocol === 'https:',
+    accessKey: resolveSecretRef(config.system.s3.accessKeyRef),
+    secretKey: resolveSecretRef(config.system.s3.secretKeyRef),
+    region: config.system.s3.region,
+  });
   const datasetSearch = createDatasetSearchPort({
     engine,
     connection: clients.mongo,
     collections,
+    citationBuilder: new CitationService({
+      resolveImageRef: async (imageId, ctx) => {
+        const imageModel = clients.mongo.models.ImageAsset;
+        if (!imageModel) return null;
+        const doc = (await imageModel
+          .findOne({
+            teamId: ctx.tenant.teamId,
+            imageId,
+          })
+          .lean()) as unknown as { objectKey: string; datasetId: unknown } | null;
+        if (!doc) return null;
+        return {
+          ref: { bucket: config.system.s3.bucket, key: doc.objectKey },
+          datasetId: String(doc.datasetId),
+        };
+      },
+      presignPreview: previewSigner,
+    }),
     datasetIndexVersion: async (datasetId, ctx) => {
       const summary = await new MongoKnowledgeBaseRepository(clients.mongo).findByDatasetId(
         { datasetId },

@@ -16,6 +16,8 @@ export type {
   IndexSyncResult,
   IndexingServiceDeps,
 } from './indexing.service';
+export { CitationService } from './citation.service';
+export type { CitationServiceDeps, ResolvedCitationInput } from './citation.service';
 
 export interface IndexServiceDeps {
   repository: VectorController;
