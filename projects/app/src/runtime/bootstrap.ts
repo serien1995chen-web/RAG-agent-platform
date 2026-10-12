@@ -38,6 +38,8 @@ export interface RuntimeBootstrapOptions {
    * BASE-B2/P1：来源 Provider 运行时注入口（例如 createSourceProviderRegistry(...)）。
    * 未注入时由 bootstrap 默认装配 SourceProviderRegistry（apiFile 未配置返回 501017，
    * 未知来源返回 501035），不再回落到骨架错误 501999。
+   * 优先级：本字段 > 默认 Registry；不从 options.ports.datasetSourceProvider 取值，
+   * 以免 createDefaultPorts() 的未实现 Port 覆盖默认 Registry。
    */
   datasetSourceProvider?: DatasetSourceProvider;
   /** 文件来源 Provider 所需解析器（@kb/parse 实现）；未注入时 file sourceType 不可用。 */
@@ -80,9 +82,11 @@ export async function bootstrapRuntime(
   const embeddingService = new EmbeddingService({ gateway: options.embeddingGateway });
   const objectStorePort = createRuntimeObjectStorePort(clients.objectStore);
   const basePorts = options.ports ?? createDefaultPorts();
+  // 优先级固定：显式 datasetSourceProvider > 默认真实 Registry。
+  // 不从 options.ports.datasetSourceProvider 取值，避免 createDefaultPorts() 的未实现 Port
+  // 覆盖默认 Registry 导致 501999 回归。
   const datasetSourceProvider =
     options.datasetSourceProvider ??
-    (options.ports ? options.ports.datasetSourceProvider : undefined) ??
     createSourceProviderRegistry({
       objectStore: objectStorePort,
       ...(options.fileParser ? { fileParser: options.fileParser } : {}),

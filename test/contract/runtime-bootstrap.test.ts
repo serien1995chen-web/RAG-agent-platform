@@ -1,6 +1,10 @@
 import type mongoose from 'mongoose';
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_PORT_IDS, SourceProviderRegistry } from '../../packages/service/src/index';
+import {
+  DEFAULT_PORT_IDS,
+  SourceProviderRegistry,
+  createDefaultPorts,
+} from '../../packages/service/src/index';
 import type { RequestContext } from '../../packages/service/src/index';
 import { bootstrapRuntime } from '../../projects/app/src/runtime/bootstrap';
 import type { AppRuntime } from '../../projects/app/src/runtime/health';
@@ -156,5 +160,29 @@ describe('runtime bootstrap (P2-17)', () => {
     });
     expect(runtime.datasetSourceProvider).toBe(injected);
     expect(runtime.ports.datasetSourceProvider).toBe(injected);
+  });
+
+  it('keeps the default registry even when explicit ports are supplied', async () => {
+    const clients = fakeClients();
+    const runtime = await bootstrapRuntime({
+      getBaseRuntime: async () => fakeBaseRuntime(clients),
+      drain: async () => undefined,
+      closeClients: async () => undefined,
+      ports: createDefaultPorts(),
+    });
+    // createDefaultPorts() 的 datasetSourceProvider 是未实现 Port；不得覆盖默认真实 Registry。
+    expect(runtime.datasetSourceProvider).toBeInstanceOf(SourceProviderRegistry);
+    expect(runtime.ports.datasetSourceProvider).toBe(runtime.datasetSourceProvider);
+    await expect(
+      runtime.ports.datasetSourceProvider.read(
+        {
+          datasetId: 'ds-1',
+          sourceType: 'unknownType',
+          sourceRef: 'x',
+          options: { timeoutMs: 1000 },
+        },
+        embeddingContext,
+      ),
+    ).rejects.toMatchObject({ error: { code: 501035 } });
   });
 });
