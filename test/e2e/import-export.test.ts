@@ -15,6 +15,7 @@ const context: RequestContext = {
 const state = vi.hoisted(() => ({
   forceDuplicates: false,
   providerCalls: 0,
+  createdCollections: [] as Record<string, unknown>[],
   runtime: undefined as unknown,
 }));
 
@@ -38,6 +39,7 @@ function responseRecorder(): {
   let status = 200;
   let body: { data?: unknown; code?: number } = {};
   let sent: unknown;
+  const chunks: Buffer[] = [];
   const headers: Record<string, string> = {};
   const response = {
     setHeader(name: string, value: string) {
@@ -54,6 +56,16 @@ function responseRecorder(): {
     },
     send(value: unknown) {
       sent = value;
+      return response;
+    },
+    write(value: unknown) {
+      chunks.push(Buffer.isBuffer(value) ? value : Buffer.from(String(value)));
+      return true;
+    },
+    end(value?: unknown) {
+      if (value !== undefined)
+        chunks.push(Buffer.isBuffer(value) ? value : Buffer.from(String(value)));
+      sent = Buffer.concat(chunks);
       return response;
     },
   } as unknown as NextApiResponse;
@@ -76,28 +88,37 @@ function request(input: {
 }
 
 function buildRuntime() {
+  const seeded = {
+    collectionId: COLLECTION_ID,
+    teamId: TEAM_ID,
+    datasetId: DATASET_ID,
+    parentId: null,
+    type: 'apiFile',
+    name: 'api',
+    tagIds: [],
+    sourceRef: `apiFile:cfg-1:/docs/a.md`,
+    version: 1,
+    createTime: 'now',
+    updateTime: 'now',
+  };
   return {
     collectionRepository: {
       list: async () => ({
-        total: 1,
-        list: [
-          {
-            collectionId: COLLECTION_ID,
-            teamId: TEAM_ID,
-            datasetId: DATASET_ID,
-            parentId: null,
-            type: 'apiFile',
-            name: 'api',
-            tagIds: [],
-            sourceRef: `apiFile:cfg-1:/docs/a.md`,
-            version: 1,
-            createTime: 'now',
-            updateTime: 'now',
-          },
-        ],
+        total: 1 + state.createdCollections.length,
+        list: [seeded, ...state.createdCollections],
         cursor: null,
       }),
-      create: async () => ({ collectionId: COLLECTION_ID }),
+      create: async (input: { collection: Record<string, unknown> }) => {
+        const collectionId = `col-created-${state.createdCollections.length + 1}`;
+        state.createdCollections.push({
+          ...input.collection,
+          collectionId,
+          version: 1,
+          createTime: 'now',
+          updateTime: 'now',
+        });
+        return { collectionId };
+      },
     },
     knowledgeItemService: {
       listItems: async () => ({
@@ -144,7 +165,18 @@ function buildRuntime() {
       },
     },
     ports: { fullTextStore: { write: async () => undefined } },
-    clients: { redis: undefined, mongo: undefined },
+    processingRepository: {
+      enqueue: async () => ({ taskId: 'task-1', jobId: 'job-1' }),
+    },
+    clients: {
+      redis: undefined,
+      mongo: undefined,
+      queue: {
+        enqueue: async () => ({ jobId: 'job-1', enqueued: true }),
+        remove: async () => undefined,
+        close: async () => undefined,
+      },
+    },
     config: {
       system: { s3: { bucket: 'kb' } },
       datasetRuntime: { maxPushItems: 200, maxRequestBodyBytes: 10 * 1024 * 1024 },
@@ -155,6 +187,7 @@ function buildRuntime() {
 beforeEach(() => {
   state.forceDuplicates = false;
   state.providerCalls = 0;
+  state.createdCollections = [];
   state.runtime = buildRuntime();
 });
 
@@ -295,6 +328,137 @@ describe('TEST-API-IMPORT-001 P4-10 import routes', () => {
     );
     expect(bad.result().body.code).toBe(501061);
   });
+
+  it('rejects invalid and duplicate headers with 501058 before side effects', async () => {
+    const importCollection = (
+      await import('../../projects/app/src/pages/api/core/dataset/collection/import')
+    ).default;
+    const before = state.createdCollections.length;
+    const missingA = responseRecorder();
+    await importCollection(
+      request({
+        method: 'POST',
+        url: '/api/core/dataset/collection/import',
+        body: {
+          datasetId: DATASET_ID,
+          targetCollectionId: COLLECTION_ID,
+          file: { filename: 'x.csv', content: Buffer.from('q,b\nhello,world\n') },
+        },
+      }),
+      missingA.response,
+    );
+    expect(missingA.result().body.code).toBe(501058);
+
+    const duplicate = responseRecorder();
+    await importCollection(
+      request({
+        method: 'POST',
+        url: '/api/core/dataset/collection/import',
+        body: {
+          datasetId: DATASET_ID,
+          targetCollectionId: COLLECTION_ID,
+          file: { filename: 'x.csv', content: Buffer.from('q,q,a\n1,2,3\n') },
+        },
+      }),
+      duplicate.response,
+    );
+    expect(duplicate.result().body.code).toBe(501058);
+    expect(state.createdCollections.length).toBe(before);
+  });
+
+  it('rejects more than 10000 data rows with 501030 before side effects', async () => {
+    const importCollection = (
+      await import('../../projects/app/src/pages/api/core/dataset/collection/import')
+    ).default;
+    const before = state.createdCollections.length;
+    const rows = Array.from({ length: 10001 }, (_, i) => `q${i},a${i}`).join('\n');
+    const res = responseRecorder();
+    await importCollection(
+      request({
+        method: 'POST',
+        url: '/api/core/dataset/collection/import',
+        body: {
+          datasetId: DATASET_ID,
+          targetCollectionId: COLLECTION_ID,
+          file: { filename: 'big.csv', content: Buffer.from(`q,a\n${rows}\n`) },
+        },
+      }),
+      res.response,
+    );
+    expect(res.result().body.code).toBe(501030);
+    expect(state.createdCollections.length).toBe(before);
+  });
+
+  it('applies a valid mapping and rejects a mapping with a missing required column', async () => {
+    const importCollection = (
+      await import('../../projects/app/src/pages/api/core/dataset/collection/import')
+    ).default;
+    const csv = Buffer.from('q,a\nhello,world\n');
+    const ok = responseRecorder();
+    await importCollection(
+      request({
+        method: 'POST',
+        url: '/api/core/dataset/collection/import',
+        body: {
+          datasetId: DATASET_ID,
+          targetCollectionId: COLLECTION_ID,
+          file: { filename: 'm.csv', content: csv },
+          mapping: JSON.stringify({
+            sourceFormat: 'csv',
+            columns: [
+              { sourceColumn: 'q', targetField: 'q', targetType: 'string' },
+              { sourceColumn: 'a', targetField: 'a', targetType: 'string' },
+            ],
+          }),
+        },
+      }),
+      ok.response,
+    );
+    expect(ok.result().status).toBe(200);
+    expect((ok.result().body.data as { report: { success: number } }).report.success).toBe(1);
+
+    const bad = responseRecorder();
+    await importCollection(
+      request({
+        method: 'POST',
+        url: '/api/core/dataset/collection/import',
+        body: {
+          datasetId: DATASET_ID,
+          targetCollectionId: COLLECTION_ID,
+          file: { filename: 'm.csv', content: csv },
+          mapping: JSON.stringify({
+            sourceFormat: 'csv',
+            columns: [
+              { sourceColumn: 'missing', targetField: 'q', targetType: 'string', required: true },
+              { sourceColumn: 'a', targetField: 'a', targetType: 'string' },
+            ],
+          }),
+        },
+      }),
+      bad.response,
+    );
+    expect(bad.result().body.code).toBe(501058);
+  });
+
+  it('rejects a collection-level import into a collection outside the dataset', async () => {
+    const importCollection = (
+      await import('../../projects/app/src/pages/api/core/dataset/collection/import')
+    ).default;
+    const res = responseRecorder();
+    await importCollection(
+      request({
+        method: 'POST',
+        url: '/api/core/dataset/collection/import',
+        body: {
+          datasetId: DATASET_ID,
+          targetCollectionId: '0000000000000000000000cc',
+          file: { filename: 'x.jsonl', content: Buffer.from('{"q":"a?"}\n') },
+        },
+      }),
+      res.response,
+    );
+    expect(res.result().body.code).toBe(501061);
+  });
 });
 
 describe('TEST-API-APIDATASET-001 P4-10 API Dataset routes', () => {
@@ -356,6 +520,40 @@ describe('TEST-API-APIDATASET-001 P4-10 API Dataset routes', () => {
       exist.response,
     );
     expect((exist.result().body.data as { fileIds: string[] }).fileIds).toEqual(['/docs/a.md']);
+    expect(state.providerCalls).toBe(callsBefore);
+  });
+
+  it('dedupes a real create/apiFile collection through listExistId without provider calls', async () => {
+    const apiFile = (
+      await import('../../projects/app/src/pages/api/core/dataset/collection/create/apiFile')
+    ).default;
+    const { apiConfigIdentity } =
+      await import('../../projects/app/src/pages/api/core/dataset/collection/create/apiFile');
+    const listExistId = (
+      await import('../../projects/app/src/pages/api/core/dataset/apiDataset/listExistId')
+    ).default;
+    const apiConfig = { provider: 'custom', credentialRef: 'ref', capabilities: [] };
+    const created = responseRecorder();
+    await apiFile(
+      request({
+        method: 'POST',
+        url: '/api/core/dataset/collection/create/apiFile',
+        body: { datasetId: DATASET_ID, apiConfig, path: '/docs/b.md' },
+      }),
+      created.response,
+    );
+    expect(created.result().status).toBe(200);
+    const callsBefore = state.providerCalls;
+    const exist = responseRecorder();
+    await listExistId(
+      request({
+        method: 'GET',
+        url: '/api/core/dataset/apiDataset/listExistId',
+        query: { datasetId: DATASET_ID, apiConfigId: apiConfigIdentity(apiConfig) },
+      }),
+      exist.response,
+    );
+    expect((exist.result().body.data as { fileIds: string[] }).fileIds).toContain('/docs/b.md');
     expect(state.providerCalls).toBe(callsBefore);
   });
 });

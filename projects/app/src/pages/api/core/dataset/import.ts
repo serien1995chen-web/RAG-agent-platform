@@ -9,10 +9,34 @@ import { parseDto, successResponse, withApiHandler } from '../../../../shared/ap
 import type { ApiHandlerContext } from '../../../../shared/api';
 import { readMultipartForm } from './file/presignUpload';
 
+// multipart/form-data 需自行读取原始流；导入允许至多 20MB。
+export const config = { api: { bodyParser: false } };
+
+const MAX_IMPORT_BYTES = 20 * 1024 * 1024;
+const MAX_IMPORT_ROWS = 10000;
+
 interface ImportFormFields {
   file: Uint8Array;
   datasetId: string;
   targetCollectionId?: string;
+  mapping?: ImportMappingValue;
+}
+
+interface MappingColumn {
+  sourceColumn: string;
+  targetField: string;
+  required?: boolean;
+}
+
+interface ImportMappingValue {
+  sourceFormat?: string;
+  columns?: MappingColumn[];
+}
+
+interface ExtractedRow {
+  q: string;
+  a: string;
+  error?: string;
 }
 
 function extensionOf(filename: string): string {
@@ -20,49 +44,153 @@ function extensionOf(filename: string): string {
   return (match?.[1] ?? '').toLowerCase();
 }
 
-function markdownTableRows(text: string): { q: string; a: string }[] {
-  const rows: { q: string; a: string }[] = [];
-  for (const raw of text.split('\n')) {
-    const line = raw.trim();
-    if (!line.startsWith('|') || !line.endsWith('|')) continue;
-    if (/^\|[\s\-:|]+\|$/.test(line)) continue;
-    const cells = line
-      .slice(1, -1)
-      .split('|')
-      .map((cell) => cell.trim());
-    if ((cells[0] ?? '').toLowerCase() === 'q') continue;
-    rows.push({ q: cells[0] ?? '', a: cells[1] ?? '' });
-  }
-  return rows;
+function errorOf(
+  code: number,
+  requestId: string,
+  params: Record<string, unknown>,
+): ApiErrorException {
+  return new ApiErrorException(createApiError({ code, requestId, params }));
 }
 
-async function rowsOf(
-  bytes: Uint8Array,
-  filename: string,
-  datasetId: string,
-  teamId: string,
-): Promise<{ q: string; a: string }[]> {
-  if (extensionOf(filename) === 'jsonl') {
-    return Buffer.from(bytes)
+function unionError(requestId: string, params: Record<string, unknown>): ApiErrorException {
+  return errorOf(501058, requestId, params);
+}
+
+function sheetInvalid(requestId: string, reason: string): ApiErrorException {
+  return errorOf(501059, requestId, { sheetName: '', reason, limit: MAX_IMPORT_ROWS });
+}
+
+function parseMapping(raw: string | undefined, requestId: string): ImportMappingValue | undefined {
+  if (raw === undefined) return undefined;
+  try {
+    return JSON.parse(raw) as ImportMappingValue;
+  } catch {
+    throw unionError(requestId, { missingHeaders: [], duplicateHeaders: [] });
+  }
+}
+
+function cellsOf(line: string): string[] {
+  return line
+    .slice(1, -1)
+    .split('|')
+    .map((cell) => cell.trim());
+}
+
+function parseMarkdownTable(text: string): { header: string[]; rows: string[][] } {
+  const lines = text
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line.startsWith('|') && line.endsWith('|'));
+  if (lines.length === 0) return { header: [], rows: [] };
+  const header = cellsOf(lines[0] ?? '');
+  const rows: string[][] = [];
+  for (const line of lines.slice(1)) {
+    if (/^\|[\s\-:|]+\|$/.test(line)) continue;
+    rows.push(cellsOf(line));
+  }
+  return { header, rows };
+}
+
+function resolveColumns(
+  header: string[],
+  mapping: ImportMappingValue | undefined,
+  requestId: string,
+): { qIndex: number; aIndex: number } {
+  const normalized = header.map((name) => name.toLowerCase());
+  const seen = new Set<string>();
+  const duplicateHeaders: string[] = [];
+  for (const name of normalized) {
+    if (name.length === 0) continue;
+    if (seen.has(name)) {
+      if (!duplicateHeaders.includes(name)) duplicateHeaders.push(name);
+    } else {
+      seen.add(name);
+    }
+  }
+  if (duplicateHeaders.length > 0) {
+    throw unionError(requestId, { missingHeaders: [], duplicateHeaders });
+  }
+  if (mapping?.columns && mapping.columns.length > 0) {
+    const missingHeaders = mapping.columns
+      .filter((column) => column.required)
+      .map((column) => column.sourceColumn)
+      .filter((name) => !normalized.includes(name.toLowerCase()));
+    if (missingHeaders.length > 0) {
+      throw unionError(requestId, { missingHeaders, duplicateHeaders: [] });
+    }
+    const qColumn = mapping.columns.find((column) => column.targetField === 'q');
+    const aColumn = mapping.columns.find((column) => column.targetField === 'a');
+    const qIndex = qColumn ? normalized.indexOf(qColumn.sourceColumn.toLowerCase()) : -1;
+    const aIndex = aColumn ? normalized.indexOf(aColumn.sourceColumn.toLowerCase()) : -1;
+    if (qIndex < 0) throw unionError(requestId, { missingHeaders: ['q'], duplicateHeaders: [] });
+    return { qIndex, aIndex };
+  }
+  const qIndex = normalized.indexOf('q');
+  const aIndex = normalized.indexOf('a');
+  const missingHeaders: string[] = [];
+  if (qIndex < 0) missingHeaders.push('q');
+  if (aIndex < 0) missingHeaders.push('a');
+  if (missingHeaders.length > 0)
+    throw unionError(requestId, { missingHeaders, duplicateHeaders: [] });
+  return { qIndex, aIndex };
+}
+
+function normalizeRows(
+  rows: string[][],
+  qIndex: number,
+  aIndex: number,
+  requiredQ: boolean,
+): ExtractedRow[] {
+  void requiredQ;
+  return rows.map((cells) => ({
+    q: cells[qIndex] ?? '',
+    a: aIndex >= 0 ? (cells[aIndex] ?? '') : '',
+  }));
+}
+
+async function extractRows(input: {
+  bytes: Uint8Array;
+  filename: string;
+  datasetId: string;
+  teamId: string;
+  mapping?: ImportMappingValue;
+  requestId: string;
+}): Promise<ExtractedRow[]> {
+  const extension = extensionOf(input.filename);
+  if (extension === 'jsonl') {
+    return Buffer.from(input.bytes)
       .toString('utf8')
       .split('\n')
       .map((line) => line.trim())
       .filter((line) => line.length > 0)
       .map((line) => {
-        const parsed = JSON.parse(line) as { q?: string; a?: string };
-        return { q: parsed.q ?? '', a: parsed.a ?? '' };
+        try {
+          const parsed = JSON.parse(line) as { q?: string; a?: string };
+          return { q: parsed.q ?? '', a: parsed.a ?? '' };
+        } catch {
+          return { q: '', a: '', error: 'json_parse_failed' };
+        }
       });
   }
+  if (extension !== 'csv' && extension !== 'xlsx') {
+    throw sheetInvalid(input.requestId, 'unsupported_format');
+  }
   const parseRequest: DocumentParseContext = {
-    teamId,
-    datasetId,
-    fileRef: filename,
-    extension: extensionOf(filename),
+    teamId: input.teamId,
+    datasetId: input.datasetId,
+    fileRef: input.filename,
+    extension,
     timeoutMs: 60_000,
-    bytes,
+    bytes: input.bytes,
   };
   const parsed = await createDefaultDocumentParser().parse(parseRequest);
-  return markdownTableRows(parsed.rawText);
+  if (extension === 'xlsx' && (parsed.rawText.match(/^## /gm) ?? []).length > 1) {
+    throw sheetInvalid(input.requestId, 'multiple_sheets');
+  }
+  const { header, rows } = parseMarkdownTable(parsed.rawText);
+  if (header.length === 0) throw sheetInvalid(input.requestId, 'empty_sheet');
+  const { qIndex, aIndex } = resolveColumns(header, input.mapping, input.requestId);
+  return normalizeRows(rows, qIndex, aIndex, true);
 }
 
 /** API-IMP-002 POST /api/core/dataset/import */
@@ -70,24 +198,38 @@ export default withApiHandler(
   async (request: NextApiRequest, response: NextApiResponse, { requestId }: ApiHandlerContext) => {
     const runtime = await getRuntime();
     const { context } = await authenticateRequest(runtime, request, requestId);
-    const form = readMultipartForm(request);
+    const form = await readMultipartForm(request);
     const filePart = form.files.file;
     if (!filePart || filePart.content.byteLength === 0) {
-      throw new ApiErrorException(
-        createApiError({
-          code: 501059,
-          requestId,
-          params: { sheetName: '', reason: 'missing_file', limit: 1 },
-        }),
-      );
+      throw sheetInvalid(requestId, 'missing_file');
     }
+    if (filePart.content.byteLength > MAX_IMPORT_BYTES) {
+      throw errorOf(501030, requestId, {
+        limit: MAX_IMPORT_BYTES,
+        actual: filePart.content.byteLength,
+      });
+    }
+    const mapping = parseMapping(form.fields.mapping, requestId);
     const fields = parseDto<ImportFormFields>('DatasetImportForm', {
       file: filePart.content,
       datasetId: form.fields.datasetId,
       ...(form.fields.targetCollectionId !== undefined
         ? { targetCollectionId: form.fields.targetCollectionId }
         : {}),
+      ...(mapping !== undefined ? { mapping } : {}),
     });
+    // 预检（表头/单表/行数）先于任何副作用。
+    const rows = await extractRows({
+      bytes: filePart.content,
+      filename: filePart.filename,
+      datasetId: fields.datasetId,
+      teamId: context.tenant.teamId,
+      ...(mapping !== undefined ? { mapping } : {}),
+      requestId,
+    });
+    if (rows.length > MAX_IMPORT_ROWS) {
+      throw errorOf(501030, requestId, { limit: MAX_IMPORT_ROWS, actual: rows.length });
+    }
     const options = { timeoutMs: 60_000 };
     let collectionId = fields.targetCollectionId ?? '';
     if (collectionId) {
@@ -96,13 +238,7 @@ export default withApiHandler(
         context,
       );
       if (!page.list.some((collection) => collection.collectionId === collectionId)) {
-        throw new ApiErrorException(
-          createApiError({
-            code: 501061,
-            requestId,
-            params: { fileId: '', datasetId: fields.datasetId },
-          }),
-        );
+        throw errorOf(501061, requestId, { fileId: '', datasetId: fields.datasetId });
       }
     } else {
       const created = await runtime.collectionRepository.create(
@@ -128,15 +264,19 @@ export default withApiHandler(
       fullText: runtime.fullTextStore ?? runtime.ports.fullTextStore,
     });
     const report = { success: 0, skipped: 0, failed: 0, errors: [] as unknown[] };
-    const rows = await rowsOf(
-      filePart.content,
-      filePart.filename,
-      fields.datasetId,
-      context.tenant.teamId,
-    );
     for (let index = 0; index < rows.length; index += 1) {
       const row = rows[index];
       if (!row) continue;
+      if (row.error || row.q.trim().length === 0) {
+        report.failed += 1;
+        report.errors.push({
+          row: index,
+          code: row.error ?? 'empty_q',
+          messageKey: 'dataset.import.row_failed',
+          params: {},
+        });
+        continue;
+      }
       try {
         const vectors = await runtime.embeddingService.embed(
           { models: { embeddingModel: 'bge-m3' }, texts: [row.q], options },
@@ -168,5 +308,5 @@ export default withApiHandler(
     }
     response.status(200).json(successResponse({ report }, requestId));
   },
-  { validationErrorCode: 501058 },
+  { validationErrorCode: 501058, maxRequestBodyBytes: MAX_IMPORT_BYTES },
 );
