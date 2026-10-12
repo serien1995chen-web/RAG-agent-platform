@@ -73,6 +73,12 @@ describe('TEST-FI-PROVIDER-001 source providers', () => {
       delete: async () => ({ deleted: true }),
       promote: async (input) => input.ref,
       prepareMultipart: async (input) => input.ref,
+      uploadPart: async (input) => ({
+        partNumber: input.partNumber,
+        etag: 'stub',
+        size: input.body.byteLength,
+      }),
+      completeMultipart: async (input) => ({ ...input.ref, etag: input.hash }),
       abort: async () => ({ aborted: true }),
     };
     const provider = createFileSourceProvider({ objectStore, parser: stubParser });
@@ -88,6 +94,12 @@ describe('TEST-FI-PROVIDER-001 source providers', () => {
       delete: async () => ({ deleted: true }),
       promote: async (input) => input.ref,
       prepareMultipart: async (input) => input.ref,
+      uploadPart: async (input) => ({
+        partNumber: input.partNumber,
+        etag: 'stub',
+        size: input.body.byteLength,
+      }),
+      completeMultipart: async (input) => ({ ...input.ref, etag: input.hash }),
       abort: async () => ({ aborted: true }),
     };
     const provider = createFileSourceProvider({ objectStore, parser: stubParser });

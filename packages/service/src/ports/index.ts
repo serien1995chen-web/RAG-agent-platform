@@ -61,6 +61,8 @@ export type {
   ModelCapability,
   ModelRegistryPort,
   MongoIndexManagerPort,
+  MultipartPartReceipt,
+  MultipartPartUpload,
   Notification,
   NotificationEvent,
   NotifyPort,

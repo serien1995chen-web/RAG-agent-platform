@@ -8,6 +8,12 @@ export { MinioObjectStore } from './adapters/minio-object-store';
 export type { MinioObjectStoreConfig } from './adapters/minio-object-store';
 export { createObjectStore } from './factory';
 export type { ObjectStoreConfig } from './factory';
-export type { ObjectRef, ObjectStorePort, TenantObjectContext } from './interface';
+export type {
+  MultipartPartReceipt,
+  MultipartPartUpload,
+  ObjectRef,
+  ObjectStorePort,
+  TenantObjectContext,
+} from './interface';
 export { presignObjectUrl } from './presign';
 export { OBJECT_KEY_PREFIXES, assertObjectKeyScope, objectKeyHash } from './tenant-scope';

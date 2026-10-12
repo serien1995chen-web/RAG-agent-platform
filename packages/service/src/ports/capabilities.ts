@@ -116,6 +116,23 @@ export interface VectorController {
   ): Promise<number>;
 }
 
+/** 分片上传输入（设计文档 7.6 PORT-STORE-003）：沿用 PortCallOptions 与 RequestContext 租户校验。 */
+export interface MultipartPartUpload {
+  ref: ObjectRef;
+  uploadId: string;
+  partNumber: number;
+  body: Uint8Array;
+  checksum: string;
+  options: PortCallOptions;
+}
+
+/** 分片上传回执：partNumber + etag 供 completeMultipart 合并，size 供总大小校验。 */
+export interface MultipartPartReceipt {
+  partNumber: number;
+  etag: string;
+  size: number;
+}
+
 export interface ObjectStorePort {
   put(
     input: { ref: ObjectRef; body: Uint8Array; options: PortCallOptions },
@@ -135,6 +152,17 @@ export interface ObjectStorePort {
   ): Promise<ObjectRef>;
   prepareMultipart(
     input: { ref: ObjectRef; parts: number; options: PortCallOptions },
+    context: RequestContext,
+  ): Promise<ObjectRef>;
+  uploadPart(input: MultipartPartUpload, context: RequestContext): Promise<MultipartPartReceipt>;
+  completeMultipart(
+    input: {
+      ref: ObjectRef;
+      uploadId: string;
+      parts: readonly MultipartPartReceipt[];
+      hash: string;
+      options: PortCallOptions;
+    },
     context: RequestContext,
   ): Promise<ObjectRef>;
   abort(

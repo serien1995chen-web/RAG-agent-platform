@@ -19,6 +19,25 @@ export interface TenantObjectContext {
   datasetId?: string;
 }
 
+/**
+ * 分片上传输入：uploadId 由 prepareMultipart 返回；
+ * checksum 由调用方计算，用于分片字节级完整性校验（不匹配返回 501060）。
+ */
+export interface MultipartPartUpload {
+  ref: ObjectRef;
+  uploadId: string;
+  partNumber: number;
+  body: Uint8Array;
+  checksum: string;
+}
+
+/** 分片上传回执：partNumber + etag 用于 completeMultipart；size 用于总大小校验。 */
+export interface MultipartPartReceipt {
+  partNumber: number;
+  etag: string;
+  size: number;
+}
+
 export interface ObjectStorePort {
   ensureBucket(): Promise<void>;
   put(
@@ -33,6 +52,19 @@ export interface ObjectStorePort {
   promote(input: { ref: ObjectRef }, context: TenantObjectContext): Promise<ObjectRef>;
   prepareMultipart(
     input: { ref: ObjectRef; parts: number },
+    context: TenantObjectContext,
+  ): Promise<ObjectRef>;
+  uploadPart(
+    input: MultipartPartUpload,
+    context: TenantObjectContext,
+  ): Promise<MultipartPartReceipt>;
+  completeMultipart(
+    input: {
+      ref: ObjectRef;
+      uploadId: string;
+      parts: readonly MultipartPartReceipt[];
+      hash: string;
+    },
     context: TenantObjectContext,
   ): Promise<ObjectRef>;
   abort(input: { ref: ObjectRef }, context: TenantObjectContext): Promise<{ aborted: boolean }>;
