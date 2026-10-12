@@ -115,12 +115,13 @@ describe('TEST-FI-PROVIDER-001 source providers', () => {
     expect(empty.rawText).toBe('');
   });
 
-  it('reads files through ObjectStore and @kb/parse', async () => {
+  it('reads files through ObjectStore and @kb/parse with the authorized datasetId', async () => {
+    let seenDatasetId: string | undefined;
     const objectStore: ObjectStorePort = {
-      get: async () => ({
-        ref: { bucket: 'kb-source', key: 'a.txt' },
-        body: Buffer.from('file body'),
-      }),
+      get: async (input) => {
+        seenDatasetId = input.datasetId;
+        return { ref: { bucket: 'kb-source', key: 'a.txt' }, body: Buffer.from('file body') };
+      },
       put: async () => ({ bucket: 'kb-source', key: 'x' }),
       delete: async () => ({ deleted: true }),
       promote: async (input) => input.ref,
@@ -137,6 +138,8 @@ describe('TEST-FI-PROVIDER-001 source providers', () => {
     const result = await provider.read(request('file', 'a.txt'), context);
     expect(result.rawText).toBe('file body');
     expect(result.fileRef).toBe('a.txt');
+    // file Provider 必须把已授权的 request.datasetId 传给 ObjectStore，而不是从 key 反推。
+    expect(seenDatasetId).toBe('ds-1');
   });
 
   it('rejects files without extension as 501035', async () => {

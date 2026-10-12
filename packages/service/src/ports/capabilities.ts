@@ -122,7 +122,11 @@ export interface VectorController {
   ): Promise<number>;
 }
 
-/** 分片上传输入（设计文档 7.6 PORT-STORE-003）：沿用 PortCallOptions 与 RequestContext 租户校验。 */
+/**
+ * 分片上传输入（设计文档 7.6 PORT-STORE-003）：沿用 PortCallOptions 与 RequestContext 租户校验。
+ * datasetId 为调用方**已授权**的 Dataset 作用域；dataset/ 前缀 key 必须与之一致，
+ * 禁止从 key 反推 datasetId（否则可绕过 Dataset ACL）。
+ */
 export interface MultipartPartUpload {
   ref: ObjectRef;
   uploadId: string;
@@ -130,6 +134,7 @@ export interface MultipartPartUpload {
   body: Uint8Array;
   checksum: string;
   options: PortCallOptions;
+  datasetId?: string;
 }
 
 /** 分片上传回执：partNumber + etag 供 completeMultipart 合并，size 供总大小校验。 */
@@ -141,23 +146,23 @@ export interface MultipartPartReceipt {
 
 export interface ObjectStorePort {
   put(
-    input: { ref: ObjectRef; body: Uint8Array; options: PortCallOptions },
+    input: { ref: ObjectRef; body: Uint8Array; options: PortCallOptions; datasetId?: string },
     context: RequestContext,
   ): Promise<ObjectRef>;
   get(
-    input: { ref: ObjectRef; options: PortCallOptions },
+    input: { ref: ObjectRef; options: PortCallOptions; datasetId?: string },
     context: RequestContext,
   ): Promise<{ ref: ObjectRef; body: Uint8Array }>;
   delete(
-    input: { ref: ObjectRef; options: PortCallOptions },
+    input: { ref: ObjectRef; options: PortCallOptions; datasetId?: string },
     context: RequestContext,
   ): Promise<{ deleted: boolean }>;
   promote(
-    input: { ref: ObjectRef; options: PortCallOptions },
+    input: { ref: ObjectRef; options: PortCallOptions; datasetId?: string },
     context: RequestContext,
   ): Promise<ObjectRef>;
   prepareMultipart(
-    input: { ref: ObjectRef; parts: number; options: PortCallOptions },
+    input: { ref: ObjectRef; parts: number; options: PortCallOptions; datasetId?: string },
     context: RequestContext,
   ): Promise<ObjectRef>;
   uploadPart(input: MultipartPartUpload, context: RequestContext): Promise<MultipartPartReceipt>;
@@ -168,11 +173,12 @@ export interface ObjectStorePort {
       parts: readonly MultipartPartReceipt[];
       hash: string;
       options: PortCallOptions;
+      datasetId?: string;
     },
     context: RequestContext,
   ): Promise<ObjectRef>;
   abort(
-    input: { ref: ObjectRef; options: PortCallOptions },
+    input: { ref: ObjectRef; options: PortCallOptions; datasetId?: string },
     context: RequestContext,
   ): Promise<{ aborted: boolean }>;
 }

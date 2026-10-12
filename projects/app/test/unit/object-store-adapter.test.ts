@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   createRuntimeObjectStorePort,
   tenantContextOf,
@@ -11,7 +11,18 @@ const context: RequestContext = {
   permission: { canRead: true, canWrite: true, canManage: false, isOwner: false },
 };
 
-describe('runtime ObjectStore adapter (P1-2)', () => {
+function codeOf(work: () => unknown): number {
+  try {
+    work();
+    throw new Error('expected throw');
+  } catch (error) {
+    const apiError = (error as { error?: { code?: number } }).error;
+    if (!apiError) throw error;
+    return apiError.code ?? 0;
+  }
+}
+
+describe('runtime ObjectStore adapter (P1-1 授权作用域)', () => {
   it('maps temp/image keys to a team-only tenant context', () => {
     expect(tenantContextOf(context, { bucket: 'b', key: 'temp/team-a/a.txt' })).toEqual({
       teamId: 'team-a',
@@ -21,11 +32,39 @@ describe('runtime ObjectStore adapter (P1-2)', () => {
     });
   });
 
-  it('derives datasetId from dataset-scoped keys', () => {
-    expect(tenantContextOf(context, { bucket: 'b', key: 'dataset/ds-1/a.txt' })).toEqual({
+  it('accepts a dataset key matching the authorized datasetId', () => {
+    expect(tenantContextOf(context, { bucket: 'b', key: 'dataset/ds-1/a.txt' }, 'ds-1')).toEqual({
       teamId: 'team-a',
       datasetId: 'ds-1',
     });
+  });
+
+  it('rejects a dataset key that does not match the authorized datasetId', () => {
+    expect(
+      codeOf(() => tenantContextOf(context, { bucket: 'b', key: 'dataset/ds-2/secret' }, 'ds-1')),
+    ).toBe(501061);
+  });
+
+  it('rejects a dataset key when no datasetId is authorized', () => {
+    expect(codeOf(() => tenantContextOf(context, { bucket: 'b', key: 'dataset/ds-1/a.txt' }))).toBe(
+      501061,
+    );
+  });
+
+  it('blocks the call before touching storage when the scope mismatches', async () => {
+    const get = vi.fn(async () => ({ ref: {}, body: new Uint8Array() }));
+    const port = createRuntimeObjectStorePort({ get } as never);
+    await expect(
+      port.get(
+        {
+          ref: { bucket: 'b', key: 'dataset/ds-2/secret' },
+          options: { timeoutMs: 1000 },
+          datasetId: 'ds-1',
+        },
+        context,
+      ),
+    ).rejects.toMatchObject({ error: { code: 501061 } });
+    expect(get).not.toHaveBeenCalled();
   });
 
   it('delegates with a TenantObjectContext, never the RequestContext', async () => {
@@ -42,6 +81,7 @@ describe('runtime ObjectStore adapter (P1-2)', () => {
         ref: { bucket: 'b', key: 'dataset/ds-1/a.txt' },
         body: new Uint8Array([1]),
         options: { timeoutMs: 1000 },
+        datasetId: 'ds-1',
       },
       context,
     );
