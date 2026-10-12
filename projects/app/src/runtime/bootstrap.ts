@@ -1,5 +1,6 @@
 import {
   DatasetApiService,
+  EmbeddingService,
   KnowledgeItemApplicationService,
   MongoKnowledgeBaseRepository,
   ProcessingApplicationService,
@@ -12,6 +13,7 @@ import {
   createMigrationRunRepository,
   createProcessingJobRepository,
   createSourceCollectionRepository,
+  type EmbeddingGateway,
   type FullTextStore,
   type ServicePorts,
   type VectorController,
@@ -26,6 +28,8 @@ export interface RuntimeBootstrapOptions {
   drain?: () => Promise<void>;
   closeClients?: (clients: RuntimeClients) => Promise<void>;
   ports?: ServicePorts;
+  /** BASE-B3：可选 embedding 网关注入；未注入时 embeddingService 返回 501062。 */
+  embeddingGateway?: EmbeddingGateway;
 }
 
 export interface ExtendedAppRuntime extends AppRuntime {
@@ -40,6 +44,7 @@ export interface ExtendedAppRuntime extends AppRuntime {
   deleteRepository: ReturnType<typeof createDeleteJobRepository>;
   migrationRepository: ReturnType<typeof createMigrationRunRepository>;
   datasetPermission: ReturnType<typeof createDatasetAclRepository>;
+  embeddingService: EmbeddingService;
   vectorController: VectorController;
   fullTextStore?: FullTextStore;
   ports: ServicePorts;
@@ -59,6 +64,7 @@ export async function bootstrapRuntime(
   const deleteRepository = createDeleteJobRepository(clients.mongo);
   const migrationRepository = createMigrationRunRepository(clients.mongo);
   const datasetPermission = createDatasetAclRepository(clients.mongo);
+  const embeddingService = new EmbeddingService({ gateway: options.embeddingGateway });
   const adapters = createKnowledgeItemIndexAdapter({
     pool: clients.pg,
     connection: clients.mongo,
@@ -103,6 +109,7 @@ export async function bootstrapRuntime(
     deleteRepository,
     migrationRepository,
     datasetPermission,
+    embeddingService,
     vectorController: adapters,
     ...(adapters.fullText ? { fullTextStore: adapters.fullText } : {}),
     ports,

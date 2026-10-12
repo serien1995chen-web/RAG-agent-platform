@@ -2,6 +2,12 @@ export { KNOWLEDGE_ITEM_INDEX_INVARIANTS, validateKnowledgeItemIndex } from './d
 export type { KnowledgeItemIndex } from './domain';
 export { IndexApplicationService } from './application';
 export type { IndexServiceDeps } from './application';
+export {
+  EMBEDDING_DIMENSION,
+  EmbeddingService,
+  createUnimplementedEmbeddingGateway,
+} from './application';
+export type { EmbeddingGateway, EmbeddingRequest, EmbeddingServiceDeps } from './application';
 export { createKnowledgeItemIndexRepository } from './repository';
 export { createKnowledgeItemIndexAdapter } from './adapter';
 export { KNOWLEDGE_ITEM_INDEX_JOB_DEFINITIONS, createKnowledgeItemIndexJobHandler } from './jobs';

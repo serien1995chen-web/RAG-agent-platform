@@ -1,5 +1,6 @@
 import type mongoose from 'mongoose';
 import { describe, expect, it } from 'vitest';
+import { DEFAULT_PORT_IDS } from '../../packages/service/src/index';
 import { bootstrapRuntime } from '../../projects/app/src/runtime/bootstrap';
 import type { AppRuntime } from '../../projects/app/src/runtime/health';
 import type { RuntimeClients } from '../../projects/app/src/runtime/clients';
@@ -68,9 +69,29 @@ describe('runtime bootstrap (P2-17)', () => {
     expect(typeof runtime.datasetPermission.getPermission).toBe('function');
     expect(runtime.vectorController).toBeDefined();
     expect(runtime.fullTextStore).toBeDefined();
+    expect(runtime.embeddingService).toBeDefined();
+    expect(DEFAULT_PORT_IDS).toHaveLength(38);
+    expect(DEFAULT_PORT_IDS).not.toContain('EmbeddingGateway');
 
     await runtime.shutdown();
     await runtime.shutdown();
     expect(events).toEqual(['drain', 'close']);
+  });
+
+  it('wires the optional embedding gateway into the embedding service', async () => {
+    const clients = fakeClients();
+    const runtime = await bootstrapRuntime({
+      getBaseRuntime: async () => fakeBaseRuntime(clients),
+      drain: async () => undefined,
+      closeClients: async () => undefined,
+      embeddingGateway: { embed: async () => [new Array<number>(1536).fill(0.5)] },
+    });
+    const vectors = await runtime.embeddingService.embed({
+      models: { embeddingModel: 'bge-m3' },
+      texts: ['hello'],
+      options: { timeoutMs: 1000 },
+    });
+    expect(vectors).toHaveLength(1);
+    expect(vectors[0]).toHaveLength(1536);
   });
 });

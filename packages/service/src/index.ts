@@ -223,15 +223,21 @@ export type {
 } from './modules/item';
 
 export {
+  EMBEDDING_DIMENSION,
+  EmbeddingService,
   KNOWLEDGE_ITEM_INDEX_INVARIANTS,
   IndexApplicationService,
   KNOWLEDGE_ITEM_INDEX_JOB_DEFINITIONS,
   createKnowledgeItemIndexAdapter,
   createKnowledgeItemIndexJobHandler,
   createKnowledgeItemIndexRepository,
+  createUnimplementedEmbeddingGateway,
   validateKnowledgeItemIndex,
 } from './modules/index';
 export type {
+  EmbeddingGateway,
+  EmbeddingRequest,
+  EmbeddingServiceDeps,
   IndexServiceDeps,
   KnowledgeItemIndex,
   KnowledgeItemIndexJobHandler,
