@@ -1,0 +1,409 @@
+import type { NextApiRequest, NextApiResponse } from 'next';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { RequestContext } from '../../packages/service/src/ports/types';
+
+const TEAM_ID = '000000000000000000000001';
+const DATASET_ID = '0000000000000000000000d1';
+
+const context: RequestContext = {
+  requestId: 'req-collection-create',
+  tenant: { teamId: TEAM_ID, tmbId: '000000000000000000000002', authType: 'token', isRoot: false },
+  permission: { canRead: true, canWrite: true, canManage: true, isOwner: true },
+};
+
+interface State {
+  collections: { teamId: string; datasetId: string; type: string; trainingPolicy?: unknown }[];
+  enqueued: string[];
+  deleted: string[];
+  apiConfigs: unknown[];
+  createFailAt: number;
+  runtime: unknown;
+}
+
+const state = vi.hoisted<State>(() => ({
+  collections: [],
+  enqueued: [],
+  deleted: [],
+  apiConfigs: [],
+  createFailAt: -1,
+  runtime: undefined,
+}));
+
+vi.mock('../../projects/app/src/runtime', () => ({
+  getRuntime: async () => state.runtime,
+}));
+
+vi.mock('../../projects/app/src/runtime/auth', () => ({
+  authenticateRequest: async () => ({ context, subject: context.tenant }),
+}));
+
+function responseRecorder(): {
+  response: NextApiResponse;
+  result: () => { status: number; body: { data?: unknown; code?: number } };
+} {
+  let status = 200;
+  let body: { data?: unknown; code?: number } = {};
+  const response = {
+    setHeader: () => response,
+    status(code: number) {
+      status = code;
+      return response;
+    },
+    json(value: unknown) {
+      body = value as { data?: unknown; code?: number };
+      return response;
+    },
+  } as unknown as NextApiResponse;
+  return { response, result: () => ({ status, body }) };
+}
+
+function request(input: {
+  method: string;
+  url: string;
+  query?: Record<string, string>;
+  body?: unknown;
+}): NextApiRequest {
+  return {
+    method: input.method,
+    url: input.url,
+    query: input.query ?? {},
+    body: input.body,
+    headers: {},
+  } as unknown as NextApiRequest;
+}
+
+let collectionSeq = 0;
+
+function buildRuntime() {
+  collectionSeq = 0;
+  return {
+    collectionRepository: {
+      create: async (input: {
+        collection: { teamId: string; datasetId: string; type: string; trainingPolicy?: unknown };
+      }) => {
+        collectionSeq += 1;
+        if (state.createFailAt === collectionSeq) throw new Error('create_failed');
+        state.collections.push(input.collection);
+        return { collectionId: `col-${collectionSeq}` };
+      },
+      deleteTree: async (input: { collectionId: string }) => {
+        state.deleted.push(input.collectionId);
+        return { deleteJobId: 'del-' + input.collectionId };
+      },
+    },
+    datasetSourceProvider: {
+      read: async (sourceRequest: {
+        sourceType: string;
+        sourceRef: string;
+        apiConfig?: unknown;
+      }) => {
+        state.apiConfigs.push(sourceRequest.apiConfig);
+        const rawText = sourceRequest.sourceType === 'text' ? sourceRequest.sourceRef : 'content';
+        return { rawText, contentHash: 'hash' };
+      },
+      preview: async (sourceRequest: { sourceType: string; sourceRef: string }) => ({
+        rawText: sourceRequest.sourceType === 'text' ? sourceRequest.sourceRef : 'content',
+        contentHash: 'hash',
+      }),
+    },
+    processingRepository: {
+      enqueue: async () => {
+        state.enqueued.push('task');
+        return { taskId: 'task-1', jobId: 'job-1' };
+      },
+    },
+    knowledgeItemRepository: { bulkUpsert: async () => ({ upserted: 1, duplicates: 0 }) },
+    vectorController: { insert: async () => ({ inserted: 1 }) },
+    fullTextStore: { write: async () => undefined },
+    datasetApi: {
+      createDataset: async () => ({ datasetId: DATASET_ID, state: 'ready' }),
+    },
+    ports: { trainingProcessor: { process: async () => ({ state: 'success' }) } },
+    clients: {
+      queue: {
+        enqueue: async () => ({ jobId: 'job-1', enqueued: true }),
+        remove: async () => undefined,
+        close: async () => undefined,
+      },
+      redis: undefined,
+      mongo: undefined,
+    },
+    config: { system: { s3: { bucket: 'kb-objects' } } },
+  };
+}
+
+beforeEach(() => {
+  state.collections = [];
+  state.enqueued = [];
+  state.deleted = [];
+  state.apiConfigs = [];
+  state.createFailAt = -1;
+  state.runtime = buildRuntime();
+});
+
+async function signFileToken(key: string): Promise<string> {
+  const { signUploadToken } =
+    await import('../../projects/app/src/pages/api/core/dataset/file/presignUpload');
+  return signUploadToken({
+    kind: 'file',
+    teamId: TEAM_ID,
+    datasetId: DATASET_ID,
+    bucket: 'kb-objects',
+    key,
+    uploadId: '',
+    expiresAt: Date.now() + 60_000,
+  });
+}
+
+describe('TEST-E2E-INGEST-001 P4-08 collection create routes', () => {
+  it('creates collections from text/file/link/externalFile without 501999', async () => {
+    const text = (
+      await import('../../projects/app/src/pages/api/core/dataset/collection/create/text')
+    ).default;
+    const file = (
+      await import('../../projects/app/src/pages/api/core/dataset/collection/create/file')
+    ).default;
+    const link = (
+      await import('../../projects/app/src/pages/api/core/dataset/collection/create/link')
+    ).default;
+    const externalFile = (
+      await import('../../projects/app/src/pages/api/core/dataset/collection/create/externalFile')
+    ).default;
+
+    const textRes = responseRecorder();
+    await text(
+      request({
+        method: 'POST',
+        url: '/api/core/dataset/collection/create/text',
+        body: { datasetId: DATASET_ID, text: 'hello world' },
+      }),
+      textRes.response,
+    );
+    expect(textRes.result().status).toBe(200);
+    expect(state.collections.at(-1)?.type).toBe('text');
+
+    const fileRes = responseRecorder();
+    await file(
+      request({
+        method: 'POST',
+        url: '/api/core/dataset/collection/create/file',
+        body: {
+          datasetId: DATASET_ID,
+          fileId: await signFileToken(`dataset/${DATASET_ID}/uploads/a.md`),
+        },
+      }),
+      fileRes.response,
+    );
+    expect(fileRes.result().status).toBe(200);
+
+    const linkRes = responseRecorder();
+    await link(
+      request({
+        method: 'POST',
+        url: '/api/core/dataset/collection/create/link',
+        body: { datasetId: DATASET_ID, link: 'https://example.com/page' },
+      }),
+      linkRes.response,
+    );
+    expect(linkRes.result().status).toBe(200);
+    expect((linkRes.result().body.data as { state: string }).state).toBe('ready');
+
+    const extRes = responseRecorder();
+    await externalFile(
+      request({
+        method: 'POST',
+        url: '/api/core/dataset/collection/create/externalFile',
+        body: { datasetId: DATASET_ID, provider: 'custom', fileKey: 'dataset/d1/a.pdf' },
+      }),
+      extRes.response,
+    );
+    expect(extRes.result().status).toBe(200);
+  });
+
+  it('empty text import succeeds with insertLen=0 and no task', async () => {
+    const text = (
+      await import('../../projects/app/src/pages/api/core/dataset/collection/create/text')
+    ).default;
+    const res = responseRecorder();
+    await text(
+      request({
+        method: 'POST',
+        url: '/api/core/dataset/collection/create/text',
+        body: { datasetId: DATASET_ID, text: '   ' },
+      }),
+      res.response,
+    );
+    expect(res.result().status).toBe(200);
+    expect((res.result().body.data as { insertLen: number }).insertLen).toBe(0);
+    expect(state.enqueued).toHaveLength(0);
+  });
+
+  it('rewrites images trainingType=auto to chunk + autoIndexes', async () => {
+    const images = (
+      await import('../../projects/app/src/pages/api/core/dataset/collection/create/images')
+    ).default;
+    const res = responseRecorder();
+    await images(
+      request({
+        method: 'POST',
+        url: '/api/core/dataset/collection/create/images',
+        body: { datasetId: DATASET_ID, images: ['image-1'], trainingType: 'auto' },
+      }),
+      res.response,
+    );
+    expect(res.result().status).toBe(200);
+    expect(state.collections.at(-1)?.trainingPolicy).toEqual({ mode: 'chunk', autoIndexes: true });
+  });
+});
+
+describe('TEST-API-IMPORT-001 P4-08 backup/template validation', () => {
+  it('serves backup and template with parsed csv', async () => {
+    const backup = (
+      await import('../../projects/app/src/pages/api/core/dataset/collection/create/backup')
+    ).default;
+    const template = (
+      await import('../../projects/app/src/pages/api/core/dataset/collection/create/template')
+    ).default;
+    const csv = Buffer.from('q,a\nhello,world\n');
+
+    const backupRes = responseRecorder();
+    await backup(
+      request({
+        method: 'POST',
+        url: '/api/core/dataset/collection/create/backup',
+        body: {
+          datasetId: DATASET_ID,
+          file: { filename: 'backup.csv', content: csv },
+        },
+      }),
+      backupRes.response,
+    );
+    expect(backupRes.result().status).toBe(200);
+
+    const templateRes = responseRecorder();
+    await template(
+      request({
+        method: 'POST',
+        url: '/api/core/dataset/collection/create/template',
+        body: {
+          datasetId: DATASET_ID,
+          templateId: 'tpl-1',
+          file: { filename: 't.csv', content: csv },
+        },
+      }),
+      templateRes.response,
+    );
+    expect(templateRes.result().status).toBe(200);
+  });
+
+  it('rejects an invalid backup header mapping with 501058', async () => {
+    const backup = (
+      await import('../../projects/app/src/pages/api/core/dataset/collection/create/backup')
+    ).default;
+    const res = responseRecorder();
+    await backup(
+      request({
+        method: 'POST',
+        url: '/api/core/dataset/collection/create/backup',
+        body: {
+          datasetId: DATASET_ID,
+          file: { filename: 'backup.csv', content: Buffer.from('q,a\nhello,world\n') },
+          mapping: JSON.stringify({
+            sourceFormat: 'csv',
+            columns: [{ sourceColumn: 'missing', targetField: 'q', targetType: 'string' }],
+          }),
+        },
+      }),
+      res.response,
+    );
+    expect(res.result().body.code).toBe(501058);
+  });
+});
+
+describe('TEST-API-IMPORT-DATASET-001 P4-08 createWithFiles and apiFile', () => {
+  it('creates a dataset with files in one request', async () => {
+    const createWithFiles = (
+      await import('../../projects/app/src/pages/api/core/dataset/createWithFiles')
+    ).default;
+    const res = responseRecorder();
+    await createWithFiles(
+      request({
+        method: 'POST',
+        url: '/api/core/dataset/createWithFiles',
+        body: {
+          datasetParams: {
+            name: 'agg',
+            type: 'dataset',
+            models: { embeddingModel: 'bge-m3' },
+          },
+          files: [await signFileToken(`dataset/${DATASET_ID}/uploads/a.md`)],
+        },
+      }),
+      res.response,
+    );
+    expect(res.result().status).toBe(200);
+    expect((res.result().body.data as { datasetId: string }).datasetId).toBe(DATASET_ID);
+  });
+
+  it('rejects more than 10 files with 501030 and cleans up on failure', async () => {
+    const createWithFiles = (
+      await import('../../projects/app/src/pages/api/core/dataset/createWithFiles')
+    ).default;
+    const tooMany = responseRecorder();
+    await createWithFiles(
+      request({
+        method: 'POST',
+        url: '/api/core/dataset/createWithFiles',
+        body: {
+          datasetParams: { name: 'agg', type: 'dataset', models: { embeddingModel: 'bge-m3' } },
+          files: Array.from({ length: 11 }, () => 'x'),
+        },
+      }),
+      tooMany.response,
+    );
+    expect(tooMany.result().body.code).toBe(501030);
+
+    state.createFailAt = 2;
+    const failed = responseRecorder();
+    await createWithFiles(
+      request({
+        method: 'POST',
+        url: '/api/core/dataset/createWithFiles',
+        body: {
+          datasetParams: { name: 'agg', type: 'dataset', models: { embeddingModel: 'bge-m3' } },
+          files: [
+            await signFileToken(`dataset/${DATASET_ID}/uploads/a.md`),
+            await signFileToken(`dataset/${DATASET_ID}/uploads/b.md`),
+          ],
+        },
+      }),
+      failed.response,
+    );
+    expect(failed.result().body.code).toBe(501998);
+    expect(state.deleted).toEqual(['col-1']);
+  });
+
+  it('forwards apiConfig to the provider for apiFile sources', async () => {
+    const apiFile = (
+      await import('../../projects/app/src/pages/api/core/dataset/collection/create/apiFile')
+    ).default;
+    const apiConfig = {
+      provider: 'custom',
+      credentialRef: 'ref',
+      capabilities: [{ name: 'read', supported: true }],
+    };
+    const res = responseRecorder();
+    await apiFile(
+      request({
+        method: 'POST',
+        url: '/api/core/dataset/collection/create/apiFile',
+        body: { datasetId: DATASET_ID, apiConfig, path: '/docs/a.md' },
+      }),
+      res.response,
+    );
+    expect(res.result().status).toBe(200);
+    expect(state.apiConfigs).toContainEqual(
+      expect.objectContaining({ provider: 'custom', credentialRef: 'ref' }),
+    );
+  });
+});
