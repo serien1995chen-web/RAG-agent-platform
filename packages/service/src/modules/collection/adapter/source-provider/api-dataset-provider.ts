@@ -1,8 +1,7 @@
 /**
  * P4-04 apiFile 来源 Provider（设计 8.1.1 / 11.6）。
- * 第三方目录/文件接口（axios）；未配置返回 501062 且不发请求；失败 501039。
- * BASE-B2：扩展 getCatalog/getPathNames/list，未配置 501017、能力缺失 501019、失败 501039；
- * 现有 read 行为保持不变。
+ * 第三方目录/文件接口；read/getCatalog/getPathNames/list 全部按请求 apiConfig 解析
+ * 客户端、端点、凭证与超时：未配置 501017、能力缺失 501019、Provider 失败 501039。
  */
 import { createHash } from 'node:crypto';
 import { ApiErrorException } from '@kb/contracts';
@@ -31,7 +30,14 @@ export interface ApiDatasetClientCallOptions {
 export interface ApiDatasetHttpClient {
   get(
     url: string,
-    options: { timeout: number; responseType: 'text' },
+    options: {
+      timeout: number;
+      responseType: 'text';
+      provider?: ApiDatasetConfig['provider'];
+      credentialRef?: string;
+      endpointRef?: string;
+      baseUrl?: string;
+    },
   ): Promise<{ status: number; data: string }>;
   getCatalog?(
     request: ApiDatasetCatalogRequest,
@@ -52,7 +58,7 @@ export interface ApiDatasetProviderDeps {
   baseUrl?: string;
 }
 
-type ApiDatasetOperation = 'getCatalog' | 'getPathNames' | 'list';
+type ApiDatasetOperation = 'read' | 'getCatalog' | 'getPathNames' | 'list';
 
 function statusOf(error: unknown): number | string {
   const status =
@@ -103,6 +109,13 @@ function resolveTimeoutMs(config: ApiDatasetConfig, options: PortCallOptions): n
   return config.timeoutMs && config.timeoutMs > 0 ? config.timeoutMs : options.timeoutMs;
 }
 
+/** 端点优先取请求 apiConfig.endpointRef（当其为绝对 URL），否则回退注入的 baseUrl。 */
+function resolveBaseUrl(config: ApiDatasetConfig, fallback?: string): string | undefined {
+  const ref = config.endpointRef;
+  if (ref && /^https?:\/\//i.test(ref)) return ref.replace(/\/+$/, '');
+  return fallback;
+}
+
 export function createApiDatasetSourceProvider(
   deps: ApiDatasetProviderDeps,
 ): DatasetSourceProvider {
@@ -110,22 +123,26 @@ export function createApiDatasetSourceProvider(
     request: SourceReadRequest,
     context: RequestContext,
   ): Promise<SourceReadResult> => {
-    if (!deps.configured || !deps.client) {
-      throw sourceError(501062, context.requestId, { dependency: 'api_dataset_provider' });
+    const config = request.apiConfig;
+    if (!config) {
+      throw sourceError(501017, context.requestId, { provider: 'api_dataset' });
     }
-    const url = deps.baseUrl ? deps.baseUrl + request.sourceRef : request.sourceRef;
-    try {
-      const response = await deps.client.get(url, {
-        timeout: request.options.timeoutMs,
+    const client = requireClient(context, config);
+    requireCapability(context, config, 'read');
+    const options = clientOptions(config, request.options);
+    const baseUrl = resolveBaseUrl(config, deps.baseUrl);
+    const url = baseUrl ? baseUrl + request.sourceRef : request.sourceRef;
+    return callClient(context, config, async () => {
+      const response = await client.get(url, {
+        timeout: options.timeoutMs,
         responseType: 'text',
+        provider: options.provider,
+        credentialRef: options.credentialRef,
+        endpointRef: options.endpointRef,
+        baseUrl: options.baseUrl,
       });
       return { rawText: response.data, contentHash: hashSourceText(response.data) };
-    } catch (error) {
-      throw sourceError(501039, context.requestId, {
-        provider: 'api_dataset',
-        status: statusOf(error),
-      });
-    }
+    });
   };
 
   const requireClient = (

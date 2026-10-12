@@ -38,8 +38,18 @@ const context: RequestContext = {
   permission: { canRead: true, canWrite: true, canManage: false, isOwner: false },
 };
 
-function request(sourceType: string, sourceRef: string): SourceReadRequest {
-  return { datasetId: 'ds-1', sourceType, sourceRef, options: { timeoutMs: 5000 } };
+function request(
+  sourceType: string,
+  sourceRef: string,
+  config?: ApiDatasetConfig,
+): SourceReadRequest {
+  return {
+    datasetId: 'ds-1',
+    sourceType,
+    sourceRef,
+    ...(config ? { apiConfig: config } : {}),
+    options: { timeoutMs: 5000 },
+  };
 }
 
 async function captureCode(
@@ -78,6 +88,15 @@ function apiConfig(overrides: Partial<ApiDatasetConfig> = {}): ApiDatasetConfig 
       { name: 'getPathNames', supported: true },
       { name: 'list', supported: true },
     ],
+    ...overrides,
+  };
+}
+
+function readConfig(overrides: Partial<ApiDatasetConfig> = {}): ApiDatasetConfig {
+  return {
+    provider: 'custom',
+    credentialRef: 'ref://demo',
+    capabilities: [{ name: 'read', supported: true }],
     ...overrides,
   };
 }
@@ -139,7 +158,7 @@ describe('TEST-FI-PROVIDER-001 source providers', () => {
     expect(await captureCode(provider, request('file', 'noext'))).toBe(501035);
   });
 
-  it('does not issue any request when apiFile is unconfigured (501062)', async () => {
+  it('does not issue any request when apiFile is unconfigured (501017)', async () => {
     let called = 0;
     const provider = createApiDatasetSourceProvider({
       configured: false,
@@ -150,7 +169,38 @@ describe('TEST-FI-PROVIDER-001 source providers', () => {
         },
       },
     });
-    expect(await captureCode(provider, request('apiFile', 'x'))).toBe(501062);
+    expect(await captureCode(provider, request('apiFile', 'x', readConfig()))).toBe(501017);
+    expect(called).toBe(0);
+  });
+
+  it('returns 501017 for apiFile read when the request carries no apiConfig', async () => {
+    let called = 0;
+    const provider = createApiDatasetSourceProvider({
+      configured: true,
+      client: {
+        get: async () => {
+          called += 1;
+          return { status: 200, data: 'x' };
+        },
+      },
+    });
+    expect(await captureCode(provider, request('apiFile', 'x'))).toBe(501017);
+    expect(called).toBe(0);
+  });
+
+  it('returns 501019 when apiFile read capability is not declared', async () => {
+    let called = 0;
+    const provider = createApiDatasetSourceProvider({
+      configured: true,
+      client: {
+        get: async () => {
+          called += 1;
+          return { status: 200, data: 'x' };
+        },
+      },
+    });
+    const config = readConfig({ capabilities: [{ name: 'getCatalog', supported: true }] });
+    expect(await captureCode(provider, request('apiFile', 'x', config))).toBe(501019);
     expect(called).toBe(0);
   });
 
@@ -159,7 +209,9 @@ describe('TEST-FI-PROVIDER-001 source providers', () => {
       configured: true,
       client: { get: async () => ({ status: 200, data: '第三方内容' }) },
     });
-    expect((await ok.read(request('apiFile', 'x'), context)).rawText).toBe('第三方内容');
+    expect((await ok.read(request('apiFile', 'x', readConfig()), context)).rawText).toBe(
+      '第三方内容',
+    );
     const failed = createApiDatasetSourceProvider({
       configured: true,
       client: {
@@ -168,7 +220,27 @@ describe('TEST-FI-PROVIDER-001 source providers', () => {
         },
       },
     });
-    expect(await captureCode(failed, request('apiFile', 'x'))).toBe(501039);
+    expect(await captureCode(failed, request('apiFile', 'x', readConfig()))).toBe(501039);
+  });
+
+  it('reads with the timeout and client resolved from the request apiConfig', async () => {
+    const seen: Array<{ timeout?: number; credentialRef?: string }> = [];
+    const provider = createApiDatasetSourceProvider({
+      configured: true,
+      client: {
+        get: async () => ({ status: 200, data: 'default' }),
+      },
+      resolveClient: () => ({
+        get: async (_url, options) => {
+          seen.push({ timeout: options.timeout, credentialRef: options.credentialRef });
+          return { status: 200, data: 'per-config' };
+        },
+      }),
+    });
+    const config = readConfig({ credentialRef: 'ref://request', timeoutMs: 1234 });
+    const result = await provider.read(request('apiFile', 'x', config), context);
+    expect(result.rawText).toBe('per-config');
+    expect(seen).toEqual([{ timeout: 1234, credentialRef: 'ref://request' }]);
   });
 
   it('maps the PDF provider mock (TEST-PDF-MOCK-001)', async () => {

@@ -106,7 +106,7 @@ export class SourceProviderRegistry {
     return this.providers.get(sourceType) ?? null;
   }
 
-  read(request: SourceReadRequest, context: RequestContext): Promise<SourceReadResult> {
+  async read(request: SourceReadRequest, context: RequestContext): Promise<SourceReadResult> {
     const provider = this.resolve(request.sourceType);
     if (!provider) {
       throw sourceError(501035, context.requestId, {
@@ -117,7 +117,7 @@ export class SourceProviderRegistry {
     return provider.read(request, context);
   }
 
-  preview(request: SourceReadRequest, context: RequestContext): Promise<SourceReadResult> {
+  async preview(request: SourceReadRequest, context: RequestContext): Promise<SourceReadResult> {
     const provider = this.resolve(request.sourceType);
     if (!provider) {
       throw sourceError(501035, context.requestId, {

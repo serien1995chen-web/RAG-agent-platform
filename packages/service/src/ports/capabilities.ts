@@ -248,6 +248,11 @@ export interface SourceReadRequest {
   datasetId: string;
   sourceType: string;
   sourceRef: string;
+  /**
+   * API Dataset（sourceType=apiFile）请求级配置：携带 provider/credentialRef/endpointRef/timeoutMs。
+   * 其他 sourceType 可省略；apiFile 缺失该字段按未配置处理（501017）。
+   */
+  apiConfig?: ApiDatasetConfig;
   options: PortCallOptions;
 }
 
