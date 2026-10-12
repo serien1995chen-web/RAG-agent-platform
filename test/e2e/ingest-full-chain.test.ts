@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest';
+import type { NextApiRequest, NextApiResponse } from 'next';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { DEFAULT_CHUNK_POLICY, chunkText } from '../../packages/chunk/src/index';
 import {
   createDefaultDocumentParser,
@@ -26,6 +27,38 @@ const context: RequestContext = {
   },
   permission: { canRead: true, canWrite: true, canManage: true, isOwner: false },
 };
+
+const routeState = vi.hoisted(() => ({
+  runtime: undefined as unknown,
+  items: [] as { dataId: string }[],
+  vectors: [] as { dataId: string }[],
+  fullText: [] as { dataId: string }[],
+}));
+
+vi.mock('../../projects/app/src/runtime', () => ({
+  getRuntime: async () => routeState.runtime,
+}));
+
+vi.mock('../../projects/app/src/runtime/auth', () => ({
+  authenticateRequest: async () => ({
+    subject: {
+      teamId: '000000000000000000000001',
+      tmbId: '000000000000000000000002',
+      authType: 'token',
+      isRoot: false,
+    },
+    context: {
+      requestId: 'req-route-chain',
+      tenant: {
+        teamId: '000000000000000000000001',
+        tmbId: '000000000000000000000002',
+        authType: 'token',
+        isRoot: false,
+      },
+      permission: { canRead: true, canWrite: true, canManage: true, isOwner: false },
+    },
+  }),
+}));
 
 /** TEST-E2E-INGEST-001 全链路：文件 -> Parse -> Chunk -> Vector/Mongo/FullText -> 可检索。 */
 describe('TEST-E2E-INGEST-001 ingest full chain', () => {
@@ -126,5 +159,103 @@ describe('TEST-E2E-INGEST-001 ingest full chain', () => {
     expect(recall[0]?.dataId).toBe(dataId);
 
     expect(items.get(dataId)?.q).toBe(chunked.chunks[0]?.text);
+  });
+});
+
+function routeRecorder(): {
+  response: NextApiResponse;
+  result: () => { status: number; body: { data?: unknown; code?: number } };
+} {
+  let status = 200;
+  let body: { data?: unknown; code?: number } = {};
+  const response = {
+    setHeader: () => response,
+    status(code: number) {
+      status = code;
+      return response;
+    },
+    json(value: unknown) {
+      body = value as { data?: unknown; code?: number };
+      return response;
+    },
+  } as unknown as NextApiResponse;
+  return { response, result: () => ({ status, body }) };
+}
+
+function routeRequest(body: unknown): NextApiRequest {
+  return {
+    method: 'POST',
+    url: '/api/core/dataset/data/insertData',
+    query: {},
+    headers: {},
+    body,
+  } as unknown as NextApiRequest;
+}
+
+beforeEach(() => {
+  routeState.items = [];
+  routeState.vectors = [];
+  routeState.fullText = [];
+  routeState.runtime = {
+    collectionService: {
+      getCollection: async (input: { collectionId: string }) => ({
+        collectionId: input.collectionId,
+        teamId: '000000000000000000000001',
+        datasetId: '0000000000000000000000d1',
+        parentId: null,
+        type: 'virtual',
+        name: 'n',
+        tagIds: [],
+        sourceRef: 's',
+        version: 1,
+        createTime: 'now',
+        updateTime: 'now',
+      }),
+    },
+    embeddingService: { embed: async () => [new Array<number>(1536).fill(0.1)] },
+    vectorController: {
+      insert: async (input: { records: { dataId: string }[] }) => {
+        routeState.vectors.push(...input.records.map((record) => ({ dataId: record.dataId })));
+        return { inserted: input.records.length };
+      },
+      embRecall: async () =>
+        routeState.vectors.map((v) => ({ dataId: v.dataId, indexId: 'i', score: 1 })),
+    },
+    knowledgeItemRepository: {
+      bulkUpsert: async (input: { items: { dataId: string }[] }) => {
+        routeState.items.push(...input.items.map((item) => ({ dataId: item.dataId })));
+        return { upserted: input.items.length, duplicates: 0 };
+      },
+    },
+    fullTextStore: {
+      write: async (input: { dataId: string }) => {
+        routeState.fullText.push({ dataId: input.dataId });
+      },
+    },
+    ports: { fullTextStore: { write: async () => undefined } },
+  };
+});
+
+describe('TEST-E2E-INGEST-001 route-level chain', () => {
+  it('runs insertData route through embedding -> vector -> mongo -> fulltext -> recall', async () => {
+    const insertData = (
+      await import('../../projects/app/src/pages/api/core/dataset/data/insertData')
+    ).default;
+    const res = routeRecorder();
+    await insertData(
+      routeRequest({ collectionId: '0000000000000000000000c1', q: 'route chain question' }),
+      res.response,
+    );
+    expect(res.result().status).toBe(200);
+    const dataId = (res.result().body.data as { dataId: string }).dataId;
+    expect(routeState.vectors[0]?.dataId).toBe(dataId);
+    expect(routeState.items[0]?.dataId).toBe(dataId);
+    expect(routeState.fullText[0]?.dataId).toBe(dataId);
+
+    const runtime = routeState.runtime as {
+      vectorController: { embRecall: () => Promise<{ dataId: string }[]> };
+    };
+    const recall = await runtime.vectorController.embRecall();
+    expect(recall[0]?.dataId).toBe(dataId);
   });
 });

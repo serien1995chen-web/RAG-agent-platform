@@ -1,15 +1,18 @@
 import { describe, expect, it } from 'vitest';
-import { ApiErrorException } from '../../packages/contracts/src/index';
+import { ApiErrorException, createApiError } from '../../packages/contracts/src/index';
 import {
   createDefaultDocumentParser,
   type DocumentParseContext,
 } from '../../packages/parse/src/index';
 import {
-  createSkeletonError,
+  EmbeddingService,
+  type FullTextStore,
   ImportSourceService,
-  type DatasetSourceProvider,
+  InsertDataService,
+  type KnowledgeItemRepository,
   type RequestContext,
-  type SourceReadResult,
+  type VectorController,
+  type VectorRecord,
 } from '../../packages/service/src/index';
 
 const context: RequestContext = {
@@ -22,6 +25,20 @@ const context: RequestContext = {
   },
   permission: { canRead: true, canWrite: true, canManage: true, isOwner: false },
 };
+
+function providerError(code: number, params: Record<string, unknown>): ApiErrorException {
+  return new ApiErrorException(createApiError({ code, requestId: 'object-store', params }));
+}
+
+function noopFullText(): FullTextStore {
+  return {
+    search: async () => [],
+    write: async () => undefined,
+    deleteByDataId: async () => ({ deleted: 0 }),
+    deleteByDatasetIds: async () => ({ deleted: 0 }),
+    deleteByCollectionIds: async () => ({ deleted: 0 }),
+  };
+}
 
 /** TEST-FI-INGEST-001 故障分类与无残留。 */
 describe('TEST-FI-INGEST-001 ingest fault classification', () => {
@@ -39,20 +56,18 @@ describe('TEST-FI-INGEST-001 ingest fault classification', () => {
     });
   });
 
-  it('does not create a collection when the source provider fails (no orphan)', async () => {
+  it('classifies a model (embedding gateway) fault as 501062 without a fake vector', async () => {
+    const embedding = new EmbeddingService();
+    await expect(
+      embedding.embed(
+        { models: { embeddingModel: 'bge-m3' }, texts: ['hello'], options: { timeoutMs: 1_000 } },
+        context,
+      ),
+    ).rejects.toMatchObject({ error: { code: 501062 } });
+  });
+
+  it('classifies S3 storage faults and creates no collection (no orphan)', async () => {
     let created = 0;
-    const provider: DatasetSourceProvider = {
-      read: async (): Promise<SourceReadResult> => {
-        throw new ApiErrorException(
-          createSkeletonError({ operation: 'source.read' }, context.requestId),
-        );
-      },
-      preview: async (): Promise<SourceReadResult> => {
-        throw new ApiErrorException(
-          createSkeletonError({ operation: 'source.preview' }, context.requestId),
-        );
-      },
-    };
     const service = new ImportSourceService({
       collections: {
         create: async () => {
@@ -63,7 +78,14 @@ describe('TEST-FI-INGEST-001 ingest fault classification', () => {
         update: async () => ({ version: 1 }),
         deleteTree: async () => ({ deleteJobId: 'd1' }),
       },
-      sourceProvider: provider,
+      sourceProvider: {
+        read: async () => {
+          throw providerError(501016, { store: 's3', operation: 'get' });
+        },
+        preview: async () => {
+          throw providerError(501016, { store: 's3', operation: 'get' });
+        },
+      },
       trainingProcessor: { process: async () => ({ state: 'success' }) },
     });
     await expect(
@@ -83,7 +105,43 @@ describe('TEST-FI-INGEST-001 ingest fault classification', () => {
         },
         context,
       ),
-    ).rejects.toBeInstanceOf(ApiErrorException);
+    ).rejects.toMatchObject({ error: { code: 501016 } });
     expect(created).toBe(0);
+  });
+
+  it('classifies PG vector faults before any Mongo write (no orphan data)', async () => {
+    let upserts = 0;
+    const items: KnowledgeItemRepository = {
+      bulkUpsert: async ({ items: batch }) => {
+        upserts += 1;
+        return { upserted: batch.length, duplicates: 0 };
+      },
+      updateIndexes: async () => ({ version: 1 }),
+      deleteByScope: async () => ({ deleted: 0 }),
+    };
+    const vectors: VectorController = {
+      insert: async (_input: { records: VectorRecord[]; options: { timeoutMs: number } }) => {
+        throw providerError(501016, { store: 'pgvector', operation: 'insert' });
+      },
+      delete: async () => ({ deleted: 0 }),
+      embRecall: async () => [],
+      getVectorDataByTime: async () => [],
+      getVectorCount: async () => 0,
+    };
+    const service = new InsertDataService({ items, vectors, fullText: noopFullText() });
+    await expect(
+      service.insertDirect(
+        {
+          dataId: '0000000000000000000000aa',
+          datasetId: '0000000000000000000000d1',
+          collectionId: '0000000000000000000000c1',
+          q: 'hello',
+          vector: new Array<number>(3).fill(0),
+          options: { timeoutMs: 1_000 },
+        },
+        context,
+      ),
+    ).rejects.toMatchObject({ error: { code: 501016 } });
+    expect(upserts).toBe(0);
   });
 });
