@@ -1,4 +1,10 @@
-import type { ImageQuery, ModelSelection, SearchRequest, SearchResult } from '@kb/contracts';
+import type {
+  ImageQuery,
+  JsonValue,
+  ModelSelection,
+  SearchRequest,
+  SearchResult,
+} from '@kb/contracts';
 import type {
   ObjectRef,
   PageResult,
@@ -252,9 +258,56 @@ export interface SourceReadResult {
   etag?: string;
 }
 
+/** API Dataset 能力声明（设计文档 12.8.2 `ApiDatasetCapabilities`）。 */
+export interface ApiDatasetCapability {
+  name: string;
+  supported: boolean;
+  constraints?: Record<string, JsonValue>;
+}
+
+/**
+ * API Dataset 配置（设计文档 12.8.2 `ApiDatasetConfig`）。
+ * provider 选择第三方实现；capabilities 未声明即拒绝调用（501019）。
+ */
+export interface ApiDatasetConfig {
+  provider: 'doc2x' | 'somark' | 'textin' | 'custom';
+  credentialRef: string;
+  endpointRef?: string;
+  timeoutMs?: number;
+  capabilities: ApiDatasetCapability[];
+}
+
+export interface ApiDatasetCatalogRequest {
+  datasetId: string;
+  apiConfig: ApiDatasetConfig;
+  parentId?: string;
+  options: PortCallOptions;
+}
+
+export interface ApiDatasetPathNamesRequest {
+  datasetId: string;
+  apiConfig: ApiDatasetConfig;
+  nodeId: string;
+  options: PortCallOptions;
+}
+
+export interface ApiDatasetListRequest {
+  datasetId: string;
+  apiConfig: ApiDatasetConfig;
+  parentId?: string;
+  keyword?: string;
+  options: PortCallOptions;
+}
+
 export interface DatasetSourceProvider {
   read(request: SourceReadRequest, context: RequestContext): Promise<SourceReadResult>;
   preview(request: SourceReadRequest, context: RequestContext): Promise<SourceReadResult>;
+  /** 按 parentId 返回目录节点；结果按 teamId+datasetId+provider+parentId 缓存 5 分钟。 */
+  getCatalog?(request: ApiDatasetCatalogRequest, context: RequestContext): Promise<JsonValue[]>;
+  /** 按 nodeId 递归返回节点路径字符串。 */
+  getPathNames?(request: ApiDatasetPathNamesRequest, context: RequestContext): Promise<string>;
+  /** 按 parentId/keyword 返回第三方文件列表（对应 ApiAPIDS003.list）。 */
+  list?(request: ApiDatasetListRequest, context: RequestContext): Promise<JsonValue[]>;
 }
 
 export interface TaskEnvelope<TPayload = unknown> {

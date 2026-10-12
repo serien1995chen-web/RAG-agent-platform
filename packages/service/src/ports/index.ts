@@ -29,6 +29,11 @@ export type {
 
 export type {
   AdminDatasetPort,
+  ApiDatasetCapability,
+  ApiDatasetCatalogRequest,
+  ApiDatasetConfig,
+  ApiDatasetListRequest,
+  ApiDatasetPathNamesRequest,
   ArchiveStatusPort,
   AuditPort,
   AuditRecord,

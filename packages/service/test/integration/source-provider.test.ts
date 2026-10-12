@@ -8,6 +8,8 @@ import {
   createTextSourceProvider,
 } from '../../src/modules/collection/adapter/source-provider/index';
 import type {
+  ApiDatasetCatalogRequest,
+  ApiDatasetConfig,
   DatasetSourceProvider,
   ObjectStorePort,
   PdfEnhanceProviderPort,
@@ -51,6 +53,32 @@ async function captureCode(
 function codeOf(error: unknown): number {
   if (error instanceof ApiErrorException) return error.error.code;
   throw error;
+}
+
+async function codeOfAsync(work: () => Promise<unknown>): Promise<number> {
+  try {
+    await work();
+    return 0;
+  } catch (error) {
+    return codeOf(error);
+  }
+}
+
+function apiConfig(overrides: Partial<ApiDatasetConfig> = {}): ApiDatasetConfig {
+  return {
+    provider: 'custom',
+    credentialRef: 'ref://demo',
+    capabilities: [
+      { name: 'getCatalog', supported: true },
+      { name: 'getPathNames', supported: true },
+      { name: 'list', supported: true },
+    ],
+    ...overrides,
+  };
+}
+
+function catalogRequest(config: ApiDatasetConfig, parentId = 'root'): ApiDatasetCatalogRequest {
+  return { datasetId: 'ds-1', apiConfig: config, parentId, options: { timeoutMs: 5000 } };
 }
 
 describe('TEST-FI-PROVIDER-001 source providers', () => {
@@ -245,5 +273,132 @@ describe('TEST-FI-PROVIDER-001 source providers', () => {
     } catch (error) {
       expect(codeOf(error)).toBe(501035);
     }
+  });
+
+  it('rejects API Dataset calls when unconfigured (501017) without issuing a request', async () => {
+    let called = 0;
+    const provider = createApiDatasetSourceProvider({
+      configured: false,
+      client: {
+        get: async () => ({ status: 200, data: 'x' }),
+        getCatalog: async () => {
+          called += 1;
+          return [];
+        },
+      },
+    });
+    expect(
+      await codeOfAsync(() => provider.getCatalog!(catalogRequest(apiConfig()), context)),
+    ).toBe(501017);
+    expect(called).toBe(0);
+  });
+
+  it('rejects API Dataset calls when the capability is not declared (501019)', async () => {
+    let called = 0;
+    const provider = createApiDatasetSourceProvider({
+      configured: true,
+      client: {
+        get: async () => ({ status: 200, data: 'x' }),
+        getCatalog: async () => {
+          called += 1;
+          return [];
+        },
+      },
+    });
+    const config = apiConfig({ capabilities: [{ name: 'list', supported: true }] });
+    expect(await codeOfAsync(() => provider.getCatalog!(catalogRequest(config), context))).toBe(
+      501019,
+    );
+    expect(called).toBe(0);
+  });
+
+  it('does not fake success when the injected client lacks the API Dataset method', async () => {
+    const provider = createApiDatasetSourceProvider({
+      configured: true,
+      client: { get: async () => ({ status: 200, data: 'x' }) },
+    });
+    expect(
+      await codeOfAsync(() => provider.getCatalog!(catalogRequest(apiConfig()), context)),
+    ).toBe(501019);
+    expect(
+      await codeOfAsync(() =>
+        provider.list!(
+          { datasetId: 'ds-1', apiConfig: apiConfig(), options: { timeoutMs: 5000 } },
+          context,
+        ),
+      ),
+    ).toBe(501019);
+  });
+
+  it('passes API Dataset catalog/path/list through to the injected client', async () => {
+    const provider = createApiDatasetSourceProvider({
+      configured: true,
+      baseUrl: 'https://api.example.test',
+      client: {
+        get: async () => ({ status: 200, data: 'x' }),
+        getCatalog: async (req, options) => {
+          expect(req.parentId).toBe('root');
+          expect(options.baseUrl).toBe('https://api.example.test');
+          expect(options.timeoutMs).toBe(5000);
+          return [{ id: 'n1' }];
+        },
+        getPathNames: async () => '/root/n1',
+        list: async () => [{ id: 'f1' }],
+      },
+    });
+    expect(await provider.getCatalog!(catalogRequest(apiConfig()), context)).toEqual([
+      { id: 'n1' },
+    ]);
+    expect(
+      await provider.getPathNames!(
+        { datasetId: 'ds-1', apiConfig: apiConfig(), nodeId: 'n1', options: { timeoutMs: 5000 } },
+        context,
+      ),
+    ).toBe('/root/n1');
+    expect(
+      await provider.list!(
+        { datasetId: 'ds-1', apiConfig: apiConfig(), options: { timeoutMs: 5000 } },
+        context,
+      ),
+    ).toEqual([{ id: 'f1' }]);
+  });
+
+  it('maps API Dataset provider failures to 501039', async () => {
+    const provider = createApiDatasetSourceProvider({
+      configured: true,
+      client: {
+        get: async () => ({ status: 200, data: 'x' }),
+        getCatalog: async () => {
+          throw { response: { status: 503 } };
+        },
+      },
+    });
+    expect(
+      await codeOfAsync(() => provider.getCatalog!(catalogRequest(apiConfig()), context)),
+    ).toBe(501039);
+  });
+
+  it('caches getCatalog per teamId+datasetId+provider+parentId for 5 minutes', async () => {
+    let calls = 0;
+    const registry = createSourceProviderRegistry({
+      apiDataset: {
+        configured: true,
+        client: {
+          get: async () => ({ status: 200, data: 'x' }),
+          getCatalog: async () => {
+            calls += 1;
+            return [{ id: `n${calls}` }];
+          },
+        },
+      },
+    });
+    const first = await registry.getCatalog(catalogRequest(apiConfig()), context);
+    const second = await registry.getCatalog(catalogRequest(apiConfig()), context);
+    expect(first).toEqual([{ id: 'n1' }]);
+    expect(second).toEqual(first);
+    expect(calls).toBe(1);
+
+    await registry.getCatalog(catalogRequest(apiConfig(), 'other-parent'), context);
+    expect(calls).toBe(2);
   });
 });

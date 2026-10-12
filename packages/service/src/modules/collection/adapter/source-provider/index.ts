@@ -2,7 +2,11 @@
  * P4-04 来源 Provider 选择器（设计 8.1.1 / 9.4）。
  * sourceType → Provider；未登记类型抛稳定错误；未配置 Provider 不得发起任何外部请求。
  */
+import type { JsonValue } from '@kb/contracts';
 import type {
+  ApiDatasetCatalogRequest,
+  ApiDatasetListRequest,
+  ApiDatasetPathNamesRequest,
   DatasetSourceProvider,
   ObjectStorePort,
   PdfEnhanceProviderPort,
@@ -46,6 +50,8 @@ export interface SourceProviderRegistryDeps {
 
 export class SourceProviderRegistry {
   private readonly providers = new Map<string, DatasetSourceProvider>();
+  private readonly catalogCache = new Map<string, { expiresAt: number; value: JsonValue[] }>();
+  private static readonly CATALOG_TTL_MS = 5 * 60 * 1000;
 
   constructor(deps: SourceProviderRegistryDeps = {}) {
     this.providers.set('text', createTextSourceProvider());
@@ -107,6 +113,59 @@ export class SourceProviderRegistry {
       });
     }
     return provider.preview(request, context);
+  }
+
+  async getCatalog(
+    request: ApiDatasetCatalogRequest,
+    context: RequestContext,
+  ): Promise<JsonValue[]> {
+    const provider = this.resolve('apiFile');
+    const method = provider?.getCatalog;
+    if (!provider || !method) {
+      throw sourceError(501019, context.requestId, {
+        provider: request.apiConfig.provider,
+        status: 'not_implemented',
+      });
+    }
+    const cacheKey = [
+      context.tenant.teamId,
+      request.datasetId,
+      request.apiConfig.provider,
+      request.parentId ?? '',
+    ].join('|');
+    const now = Date.now();
+    const cached = this.catalogCache.get(cacheKey);
+    if (cached && cached.expiresAt > now) return cached.value;
+    const value = await method.call(provider, request, context);
+    this.catalogCache.set(cacheKey, {
+      expiresAt: now + SourceProviderRegistry.CATALOG_TTL_MS,
+      value,
+    });
+    return value;
+  }
+
+  getPathNames(request: ApiDatasetPathNamesRequest, context: RequestContext): Promise<string> {
+    const provider = this.resolve('apiFile');
+    const method = provider?.getPathNames;
+    if (!provider || !method) {
+      throw sourceError(501019, context.requestId, {
+        provider: request.apiConfig.provider,
+        status: 'not_implemented',
+      });
+    }
+    return method.call(provider, request, context);
+  }
+
+  list(request: ApiDatasetListRequest, context: RequestContext): Promise<JsonValue[]> {
+    const provider = this.resolve('apiFile');
+    const method = provider?.list;
+    if (!provider || !method) {
+      throw sourceError(501019, context.requestId, {
+        provider: request.apiConfig.provider,
+        status: 'not_implemented',
+      });
+    }
+    return method.call(provider, request, context);
   }
 }
 

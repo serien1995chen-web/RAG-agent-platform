@@ -79,6 +79,11 @@ export type {
 export { DEFAULT_PORT_IDS, createDefaultPorts, createUnimplementedPort } from './ports/index';
 export type {
   AdminDatasetPort,
+  ApiDatasetCapability,
+  ApiDatasetCatalogRequest,
+  ApiDatasetConfig,
+  ApiDatasetListRequest,
+  ApiDatasetPathNamesRequest,
   ArchiveStatusPort,
   AuditPort,
   AuditRecord,
