@@ -201,6 +201,7 @@ export {
   validateSourceCollection,
 } from './modules/collection';
 export type {
+  FileParserLike,
   ImportSourceServiceDeps,
   SourceCollection,
   SourceCollectionJobHandler,

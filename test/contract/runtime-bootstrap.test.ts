@@ -1,6 +1,6 @@
 import type mongoose from 'mongoose';
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_PORT_IDS } from '../../packages/service/src/index';
+import { DEFAULT_PORT_IDS, SourceProviderRegistry } from '../../packages/service/src/index';
 import type { RequestContext } from '../../packages/service/src/index';
 import { bootstrapRuntime } from '../../projects/app/src/runtime/bootstrap';
 import type { AppRuntime } from '../../projects/app/src/runtime/health';
@@ -103,5 +103,58 @@ describe('runtime bootstrap (P2-17)', () => {
     );
     expect(vectors).toHaveLength(1);
     expect(vectors[0]).toHaveLength(1536);
+  });
+
+  it('assembles a default SourceProviderRegistry when none is injected', async () => {
+    const clients = fakeClients();
+    const runtime = await bootstrapRuntime({
+      getBaseRuntime: async () => fakeBaseRuntime(clients),
+      drain: async () => undefined,
+      closeClients: async () => undefined,
+    });
+    expect(runtime.datasetSourceProvider).toBeInstanceOf(SourceProviderRegistry);
+    expect(runtime.ports.datasetSourceProvider).toBe(runtime.datasetSourceProvider);
+  });
+
+  it('returns stable provider errors instead of skeleton 501999 by default', async () => {
+    const clients = fakeClients();
+    const runtime = await bootstrapRuntime({
+      getBaseRuntime: async () => fakeBaseRuntime(clients),
+      drain: async () => undefined,
+      closeClients: async () => undefined,
+    });
+    await expect(
+      runtime.ports.datasetSourceProvider.read(
+        { datasetId: 'ds-1', sourceType: 'apiFile', sourceRef: 'x', options: { timeoutMs: 1000 } },
+        embeddingContext,
+      ),
+    ).rejects.toMatchObject({ error: { code: 501017 } });
+    await expect(
+      runtime.ports.datasetSourceProvider.read(
+        {
+          datasetId: 'ds-1',
+          sourceType: 'unknownType',
+          sourceRef: 'x',
+          options: { timeoutMs: 1000 },
+        },
+        embeddingContext,
+      ),
+    ).rejects.toMatchObject({ error: { code: 501035 } });
+  });
+
+  it('uses an explicitly injected dataset source provider', async () => {
+    const clients = fakeClients();
+    const injected = {
+      read: async () => ({ contentHash: 'sha256:injected' }),
+      preview: async () => ({ contentHash: 'sha256:injected' }),
+    };
+    const runtime = await bootstrapRuntime({
+      getBaseRuntime: async () => fakeBaseRuntime(clients),
+      drain: async () => undefined,
+      closeClients: async () => undefined,
+      datasetSourceProvider: injected,
+    });
+    expect(runtime.datasetSourceProvider).toBe(injected);
+    expect(runtime.ports.datasetSourceProvider).toBe(injected);
   });
 });

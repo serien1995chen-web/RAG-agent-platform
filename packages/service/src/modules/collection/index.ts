@@ -6,7 +6,7 @@ export { createSourceCollectionRepository } from './repository';
 export type { SourceCollectionRepository } from './repository';
 export { createSourceCollectionAdapter } from './adapter';
 export { SourceProviderRegistry, createSourceProviderRegistry } from './adapter';
-export type { SourceProviderRegistryDeps } from './adapter';
+export type { FileParserLike, SourceProviderRegistryDeps } from './adapter';
 export { SOURCE_COLLECTION_JOB_DEFINITIONS, createSourceCollectionJobHandler } from './jobs';
 export type { SourceCollectionJobHandler } from './jobs';
 export { ImportSourceService } from './application/import-source.service';

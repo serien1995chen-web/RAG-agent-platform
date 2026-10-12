@@ -13,8 +13,10 @@ import {
   createMigrationRunRepository,
   createProcessingJobRepository,
   createSourceCollectionRepository,
+  createSourceProviderRegistry,
   type DatasetSourceProvider,
   type EmbeddingGateway,
+  type FileParserLike,
   type FullTextStore,
   type ServicePorts,
   type VectorController,
@@ -22,6 +24,7 @@ import {
 import { BullMqQueueAdapter } from '@kb/dal';
 import { DatasetSyncApplicationService } from '../../../../packages/service/src/modules/collection/application/sync.service';
 import { closeRuntimeClients, type RuntimeClients } from './clients';
+import { createRuntimeObjectStorePort } from './object-store-adapter';
 import { getRuntime as getBaseRuntime, type AppRuntime } from './health';
 
 export interface RuntimeBootstrapOptions {
@@ -33,9 +36,12 @@ export interface RuntimeBootstrapOptions {
   embeddingGateway?: EmbeddingGateway;
   /**
    * BASE-B2/P1：来源 Provider 运行时注入口（例如 createSourceProviderRegistry(...)）。
-   * 未注入时 ports.datasetSourceProvider 保持默认未实现，personB 路由不得静默降级。
+   * 未注入时由 bootstrap 默认装配 SourceProviderRegistry（apiFile 未配置返回 501017，
+   * 未知来源返回 501035），不再回落到骨架错误 501999。
    */
   datasetSourceProvider?: DatasetSourceProvider;
+  /** 文件来源 Provider 所需解析器（@kb/parse 实现）；未注入时 file sourceType 不可用。 */
+  fileParser?: FileParserLike;
 }
 
 export interface ExtendedAppRuntime extends AppRuntime {
@@ -51,6 +57,7 @@ export interface ExtendedAppRuntime extends AppRuntime {
   migrationRepository: ReturnType<typeof createMigrationRunRepository>;
   datasetPermission: ReturnType<typeof createDatasetAclRepository>;
   embeddingService: EmbeddingService;
+  datasetSourceProvider: DatasetSourceProvider;
   vectorController: VectorController;
   fullTextStore?: FullTextStore;
   ports: ServicePorts;
@@ -71,6 +78,15 @@ export async function bootstrapRuntime(
   const migrationRepository = createMigrationRunRepository(clients.mongo);
   const datasetPermission = createDatasetAclRepository(clients.mongo);
   const embeddingService = new EmbeddingService({ gateway: options.embeddingGateway });
+  const objectStorePort = createRuntimeObjectStorePort(clients.objectStore);
+  const basePorts = options.ports ?? createDefaultPorts();
+  const datasetSourceProvider =
+    options.datasetSourceProvider ??
+    (options.ports ? options.ports.datasetSourceProvider : undefined) ??
+    createSourceProviderRegistry({
+      objectStore: objectStorePort,
+      ...(options.fileParser ? { fileParser: options.fileParser } : {}),
+    });
   const adapters = createKnowledgeItemIndexAdapter({
     pool: clients.pg,
     connection: clients.mongo,
@@ -94,11 +110,9 @@ export async function bootstrapRuntime(
     queue: syncQueue,
   });
   const ports: ServicePorts = {
-    ...(options.ports ?? createDefaultPorts()),
+    ...basePorts,
     datasetSync: datasetSyncService,
-    ...(options.datasetSourceProvider
-      ? { datasetSourceProvider: options.datasetSourceProvider }
-      : {}),
+    datasetSourceProvider,
   };
   const drain = options.drain ?? (async () => undefined);
   const closeClients = options.closeClients ?? closeRuntimeClients;
@@ -119,6 +133,7 @@ export async function bootstrapRuntime(
     migrationRepository,
     datasetPermission,
     embeddingService,
+    datasetSourceProvider,
     vectorController: adapters,
     ...(adapters.fullText ? { fullTextStore: adapters.fullText } : {}),
     ports,
