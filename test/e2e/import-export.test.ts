@@ -254,6 +254,29 @@ describe('TEST-API-IMPORT-001 P4-10 import routes', () => {
     expect(dupReport.skipped).toBe(2);
   });
 
+  it('imports csv rows mapped through the parser markdown table', async () => {
+    const importCollection = (
+      await import('../../projects/app/src/pages/api/core/dataset/collection/import')
+    ).default;
+    const csv = Buffer.from('q,a\nhello,world\nfoo,bar\n');
+    const res = responseRecorder();
+    await importCollection(
+      request({
+        method: 'POST',
+        url: '/api/core/dataset/collection/import',
+        body: {
+          datasetId: DATASET_ID,
+          targetCollectionId: COLLECTION_ID,
+          file: { filename: 'in.csv', content: csv },
+        },
+      }),
+      res.response,
+    );
+    expect(res.result().status).toBe(200);
+    const report = (res.result().body.data as { report: { success: number } }).report;
+    expect(report.success).toBe(2);
+  });
+
   it('validates targetCollectionId for dataset-level import', async () => {
     const importDataset = (await import('../../projects/app/src/pages/api/core/dataset/import'))
       .default;

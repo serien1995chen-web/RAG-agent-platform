@@ -1,5 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import { ApiErrorException, createApiError } from '@kb/contracts';
+import { createDefaultDocumentParser, type DocumentParseContext } from '@kb/parse';
 import { InsertDataService } from '@kb/service';
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { authenticateRequest } from '../../../../runtime/auth';
@@ -19,17 +20,49 @@ function extensionOf(filename: string): string {
   return (match?.[1] ?? '').toLowerCase();
 }
 
-function rowsOf(bytes: Uint8Array, filename: string): { q: string; a: string }[] {
-  if (extensionOf(filename) !== 'jsonl') return [];
-  return Buffer.from(bytes)
-    .toString('utf8')
-    .split('\n')
-    .map((line) => line.trim())
-    .filter((line) => line.length > 0)
-    .map((line) => {
-      const parsed = JSON.parse(line) as { q?: string; a?: string };
-      return { q: parsed.q ?? '', a: parsed.a ?? '' };
-    });
+function markdownTableRows(text: string): { q: string; a: string }[] {
+  const rows: { q: string; a: string }[] = [];
+  for (const raw of text.split('\n')) {
+    const line = raw.trim();
+    if (!line.startsWith('|') || !line.endsWith('|')) continue;
+    if (/^\|[\s\-:|]+\|$/.test(line)) continue;
+    const cells = line
+      .slice(1, -1)
+      .split('|')
+      .map((cell) => cell.trim());
+    if ((cells[0] ?? '').toLowerCase() === 'q') continue;
+    rows.push({ q: cells[0] ?? '', a: cells[1] ?? '' });
+  }
+  return rows;
+}
+
+async function rowsOf(
+  bytes: Uint8Array,
+  filename: string,
+  datasetId: string,
+  teamId: string,
+): Promise<{ q: string; a: string }[]> {
+  if (extensionOf(filename) === 'jsonl') {
+    return Buffer.from(bytes)
+      .toString('utf8')
+      .split('\n')
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0)
+      .map((line) => {
+        const parsed = JSON.parse(line) as { q?: string; a?: string };
+        return { q: parsed.q ?? '', a: parsed.a ?? '' };
+      });
+  }
+  const parseRequest: DocumentParseContext = {
+    teamId,
+    datasetId,
+    fileRef: filename,
+    extension: extensionOf(filename),
+    timeoutMs: 60_000,
+    bytes,
+  };
+  const parsed = await createDefaultDocumentParser().parse(parseRequest);
+  return markdownTableRows(parsed.rawText);
 }
 
 /** API-IMP-002 POST /api/core/dataset/import */
@@ -95,7 +128,12 @@ export default withApiHandler(
       fullText: runtime.fullTextStore ?? runtime.ports.fullTextStore,
     });
     const report = { success: 0, skipped: 0, failed: 0, errors: [] as unknown[] };
-    const rows = rowsOf(filePart.content, filePart.filename);
+    const rows = await rowsOf(
+      filePart.content,
+      filePart.filename,
+      fields.datasetId,
+      context.tenant.teamId,
+    );
     for (let index = 0; index < rows.length; index += 1) {
       const row = rows[index];
       if (!row) continue;

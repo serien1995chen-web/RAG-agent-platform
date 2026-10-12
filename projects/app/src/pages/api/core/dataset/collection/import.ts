@@ -1,5 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import { ApiErrorException, createApiError } from '@kb/contracts';
+import { createDefaultDocumentParser, type DocumentParseContext } from '@kb/parse';
 import { InsertDataService } from '@kb/service';
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { authenticateRequest } from '../../../../../runtime/auth';
@@ -19,7 +20,28 @@ function extensionOf(filename: string): string {
   return (match?.[1] ?? '').toLowerCase();
 }
 
-function rowsOf(bytes: Uint8Array, filename: string): { q: string; a: string }[] {
+function markdownTableRows(text: string): { q: string; a: string }[] {
+  const rows: { q: string; a: string }[] = [];
+  for (const raw of text.split('\n')) {
+    const line = raw.trim();
+    if (!line.startsWith('|') || !line.endsWith('|')) continue;
+    if (/^\|[\s\-:|]+\|$/.test(line)) continue;
+    const cells = line
+      .slice(1, -1)
+      .split('|')
+      .map((cell) => cell.trim());
+    if ((cells[0] ?? '').toLowerCase() === 'q') continue;
+    rows.push({ q: cells[0] ?? '', a: cells[1] ?? '' });
+  }
+  return rows;
+}
+
+async function rowsOf(
+  bytes: Uint8Array,
+  filename: string,
+  datasetId: string,
+  context: { tenant: { teamId: string } },
+): Promise<{ q: string; a: string }[]> {
   const extension = extensionOf(filename);
   if (extension === 'jsonl') {
     return Buffer.from(bytes)
@@ -32,7 +54,16 @@ function rowsOf(bytes: Uint8Array, filename: string): { q: string; a: string }[]
         return { q: parsed.q ?? '', a: parsed.a ?? '' };
       });
   }
-  return [];
+  const parseRequest: DocumentParseContext = {
+    teamId: context.tenant.teamId,
+    datasetId,
+    fileRef: filename,
+    extension,
+    timeoutMs: 60_000,
+    bytes,
+  };
+  const parsed = await createDefaultDocumentParser().parse(parseRequest);
+  return markdownTableRows(parsed.rawText);
 }
 
 /** API-IMP-001 POST /api/core/dataset/collection/import */
@@ -84,7 +115,7 @@ export default withApiHandler(
       fullText: runtime.fullTextStore ?? runtime.ports.fullTextStore,
     });
     const report = { success: 0, skipped: 0, failed: 0, errors: [] as unknown[] };
-    const rows = rowsOf(filePart.content, filePart.filename);
+    const rows = await rowsOf(filePart.content, filePart.filename, fields.datasetId, context);
     for (let index = 0; index < rows.length; index += 1) {
       const row = rows[index];
       if (!row) continue;
