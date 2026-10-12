@@ -9,6 +9,13 @@ export {
   createUnimplementedEmbeddingGateway,
 } from './embedding.service';
 export type { EmbeddingGateway, EmbeddingRequest, EmbeddingServiceDeps } from './embedding.service';
+export { IndexingService } from './indexing.service';
+export type {
+  IndexSyncIndexEntry,
+  IndexSyncInput,
+  IndexSyncResult,
+  IndexingServiceDeps,
+} from './indexing.service';
 
 export interface IndexServiceDeps {
   repository: VectorController;

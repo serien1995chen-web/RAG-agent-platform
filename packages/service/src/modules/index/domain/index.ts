@@ -16,3 +16,11 @@ export function validateKnowledgeItemIndex(candidate: Partial<KnowledgeItemIndex
   if (!candidate.text) issues.push('索引文本不得为空');
   return issues;
 }
+
+export {
+  INDEX_SCHEMA_VERSION,
+  INDEX_VERSION_DIMENSION,
+  buildVectorId,
+  generateIndexVersion,
+  resolveQueryIndexVersion,
+} from './index-version';
