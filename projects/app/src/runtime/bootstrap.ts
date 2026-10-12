@@ -1,4 +1,5 @@
 import {
+  ApiErrorException,
   DatasetApiService,
   EmbeddingService,
   KnowledgeItemApplicationService,
@@ -14,6 +15,7 @@ import {
   createProcessingJobRepository,
   createSourceCollectionRepository,
   createSourceProviderRegistry,
+  createApiError,
   type DatasetSourceProvider,
   type EmbeddingGateway,
   type FileParserLike,
@@ -24,6 +26,8 @@ import {
 import { BullMqQueueAdapter } from '@kb/dal';
 import { createDefaultDocumentParser } from '@kb/parse';
 import { DatasetSyncApplicationService } from '../../../../packages/service/src/modules/collection/application/sync.service';
+import { createDatasetSearchPort } from '../../../../packages/service/src/modules/index/adapter/dataset-search.adapter';
+import { createSearchEngine } from '../../../../packages/search/src/index';
 import { closeRuntimeClients, type RuntimeClients } from './clients';
 import { createRuntimeObjectStorePort } from './object-store-adapter';
 import { getRuntime as getBaseRuntime, type AppRuntime } from './health';
@@ -120,6 +124,28 @@ export async function bootstrapRuntime(
     datasetSync: datasetSyncService,
     datasetSourceProvider,
   };
+  const datasetSearch = createDatasetSearchPort({
+    engine: createSearchEngine({
+      vectors: adapters,
+      fullText: adapters.fullText,
+      embedding: embeddingService,
+    }),
+    connection: clients.mongo,
+    collections: collectionRepository,
+    datasetIndexVersion: async (datasetId, ctx) => {
+      const summary = await knowledgeBaseRepository.findByDatasetId({ datasetId }, ctx);
+      if (!summary) {
+        throw new ApiErrorException(
+          createApiError({
+            code: 501070,
+            requestId: ctx.requestId,
+            params: { resourceType: 'dataset', resourceId: datasetId },
+          }),
+        );
+      }
+      return summary.indexVersion;
+    },
+  });
   const drain = options.drain ?? (async () => undefined);
   const closeClients = options.closeClients ?? closeRuntimeClients;
 
@@ -127,6 +153,7 @@ export async function bootstrapRuntime(
   const runtime: ExtendedAppRuntime = {
     ...base,
     datasetApi,
+    datasetSearch,
     knowledgeBaseRepository,
     collectionRepository,
     collectionService,

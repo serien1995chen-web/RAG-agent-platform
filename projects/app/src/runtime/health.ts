@@ -1,13 +1,20 @@
 import {
+  ApiErrorException,
   DatasetApiService,
+  EmbeddingService,
   HealthProbeService,
   MongoKnowledgeBaseRepository,
-  createDegradedDatasetSearchPort,
+  createApiError,
+  createKnowledgeItemIndexAdapter,
+  createSourceCollectionRepository,
   resolveSecretRef,
   type AppConfig,
+  type CollectionRepository,
   type DatasetSearchPort,
   type RequestContext,
 } from '@kb/service';
+import { createSearchEngine } from '../../../../packages/search/src/index';
+import { createDatasetSearchPort } from '../../../../packages/service/src/modules/index/adapter/dataset-search.adapter';
 import { createDefaultExtensionRegistry, type ExtensionRegistry } from '../extensions';
 import type { RuntimeClients } from './clients';
 
@@ -120,13 +127,44 @@ async function bootstrap(): Promise<AppRuntime> {
   const datasetApi = new DatasetApiService({
     repository: new MongoKnowledgeBaseRepository(clients.mongo),
   });
+  const adapters = createKnowledgeItemIndexAdapter({
+    pool: clients.pg,
+    connection: clients.mongo,
+  });
+  const engine = createSearchEngine({
+    vectors: adapters,
+    fullText: adapters.fullText,
+    embedding: new EmbeddingService({}),
+  });
+  const collections: CollectionRepository = createSourceCollectionRepository(clients.mongo);
+  const datasetSearch = createDatasetSearchPort({
+    engine,
+    connection: clients.mongo,
+    collections,
+    datasetIndexVersion: async (datasetId, ctx) => {
+      const summary = await new MongoKnowledgeBaseRepository(clients.mongo).findByDatasetId(
+        { datasetId },
+        ctx,
+      );
+      if (!summary) {
+        throw new ApiErrorException(
+          createApiError({
+            code: 501070,
+            requestId: ctx.requestId,
+            params: { resourceType: 'dataset', resourceId: datasetId },
+          }),
+        );
+      }
+      return summary.indexVersion;
+    },
+  });
   const runtime: AppRuntime = {
     config,
     clients,
     health,
     extensions,
     datasetApi,
-    datasetSearch: createDegradedDatasetSearchPort(),
+    datasetSearch,
     startedAt: Date.now(),
     startup: { state: 'starting', issues: [] },
   };
