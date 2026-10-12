@@ -6,6 +6,7 @@ import {
   toApiResponse,
 } from '@kb/contracts';
 import { buildIdempotencyScopeKey, type IdempotencyStore } from '@kb/dal';
+import { DEFAULT_DATASET_RUNTIME_CONFIG, type DatasetRuntimeConfig } from '@kb/service';
 import type { NextApiHandler, NextApiRequest, NextApiResponse } from 'next';
 import {
   assertContentLength,
@@ -34,17 +35,18 @@ export type ApiRouteHandler = (
 export interface ApiRouteOptions {
   /** Zod 入参错误映射到该路由在 12.4 矩阵中声明的 400 业务码。 */
   validationErrorCode?: number;
+  /** 路由级原始/解码 body 上限覆盖（如 import 允许 20MB）；缺省用配置 maxRequestBodyBytes。 */
+  maxRequestBodyBytes?: number;
 }
 
 const IDEMPOTENT_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
-/** 第一/二层请求上限由配置注入；配置不可用时跳过（路由级校验仍在）。 */
-function resolveRequestLimits(): { maxRequestBodyBytes: number } | undefined {
+/** 第一/二层请求上限由配置注入；配置不可用时回落到冻结默认值（失败关闭，绝不静默放行）。 */
+function resolveRequestLimits(): DatasetRuntimeConfig {
   try {
-    const config = getAppConfig();
-    return { maxRequestBodyBytes: config.datasetRuntime.maxRequestBodyBytes };
+    return getAppConfig().datasetRuntime;
   } catch {
-    return undefined;
+    return DEFAULT_DATASET_RUNTIME_CONFIG;
   }
 }
 
@@ -123,22 +125,21 @@ export function withApiHandler(
     const operation = request.url ?? 'unknown';
 
     const limits = resolveRequestLimits();
-    if (limits) {
-      try {
-        assertContentLength({
-          headers: request.headers,
-          limitBytes: limits.maxRequestBodyBytes,
-          requestId,
-        });
-        assertDecodedBody({
-          body: request.body,
-          limitBytes: limits.maxRequestBodyBytes,
-          requestId,
-        });
-      } catch (error) {
-        writeErrorResponse(rawStatus, rawJson, requestId, operation, error, options);
-        return;
-      }
+    const bodyLimit = options.maxRequestBodyBytes ?? limits.maxRequestBodyBytes;
+    try {
+      assertContentLength({
+        headers: request.headers,
+        limitBytes: bodyLimit,
+        requestId,
+      });
+      assertDecodedBody({
+        body: request.body,
+        limitBytes: bodyLimit,
+        requestId,
+      });
+    } catch (error) {
+      writeErrorResponse(rawStatus, rawJson, requestId, operation, error, options);
+      return;
     }
 
     const method = (request.method ?? 'GET').toUpperCase();

@@ -95,6 +95,21 @@ describe('TEST-API-LIMIT-001 request limit layers', () => {
     expect(handler).toHaveBeenCalledTimes(1);
     expect(response.statusCode).toBe(200);
   });
+
+  it('reaches the limit layer for bodies above the Next default 1MB', async () => {
+    limitsState.maxRequestBodyBytes = 10 * 1024 * 1024;
+    const handler = vi.fn(async (_request: NextApiRequest, res: NextApiResponse): Promise<void> => {
+      res.status(200).json({ code: 200, data: { ok: true } });
+    });
+    const wrapped = withApiHandler(handler, { maxRequestBodyBytes: 20 * 1024 * 1024 });
+    const { request, response } = mockPair({
+      method: 'POST',
+      body: { payload: 'x'.repeat(2 * 1024 * 1024) },
+    });
+    await wrapped(request, response);
+    expect(handler).toHaveBeenCalledTimes(1);
+    expect(response.statusCode).toBe(200);
+  });
 });
 
 describe('TEST-API-RAW-001 and TEST-INGEST-EMPTY-001 business layers', () => {

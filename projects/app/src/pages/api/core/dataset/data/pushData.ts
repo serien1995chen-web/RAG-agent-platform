@@ -12,6 +12,9 @@ interface PushDataBody {
   data: { collectionId: string; q: string; a?: string }[];
 }
 
+// pushData 允许至多 10MB JSON，避免 Next 默认 1MB 提前 413。
+export const config = { api: { bodyParser: { sizeLimit: '10mb' } } };
+
 const DEFAULT_MAX_ITEMS = 200;
 const DEFAULT_MAX_BYTES = 10 * 1024 * 1024;
 
