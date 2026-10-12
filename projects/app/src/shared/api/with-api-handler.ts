@@ -8,6 +8,11 @@ import {
 import { buildIdempotencyScopeKey, type IdempotencyStore } from '@kb/dal';
 import type { NextApiHandler, NextApiRequest, NextApiResponse } from 'next';
 import {
+  assertContentLength,
+  assertDecodedBody,
+} from '../../../../../packages/service/src/shared/http/limits';
+import { getAppConfig } from '../../runtime/config';
+import {
   IdempotencyConflictError,
   bodyHashOf,
   buildConflictResponse,
@@ -32,6 +37,16 @@ export interface ApiRouteOptions {
 }
 
 const IDEMPOTENT_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
+
+/** 第一/二层请求上限由配置注入；配置不可用时跳过（路由级校验仍在）。 */
+function resolveRequestLimits(): { maxRequestBodyBytes: number } | undefined {
+  try {
+    const config = getAppConfig();
+    return { maxRequestBodyBytes: config.datasetRuntime.maxRequestBodyBytes };
+  } catch {
+    return undefined;
+  }
+}
 
 type StatusWriter = (code: number) => NextApiResponse;
 type JsonWriter = (body: unknown) => NextApiResponse;
@@ -106,6 +121,25 @@ export function withApiHandler(
     const rawStatus = response.status.bind(response) as StatusWriter;
     const rawJson = response.json.bind(response) as JsonWriter;
     const operation = request.url ?? 'unknown';
+
+    const limits = resolveRequestLimits();
+    if (limits) {
+      try {
+        assertContentLength({
+          headers: request.headers,
+          limitBytes: limits.maxRequestBodyBytes,
+          requestId,
+        });
+        assertDecodedBody({
+          body: request.body,
+          limitBytes: limits.maxRequestBodyBytes,
+          requestId,
+        });
+      } catch (error) {
+        writeErrorResponse(rawStatus, rawJson, requestId, operation, error, options);
+        return;
+      }
+    }
 
     const method = (request.method ?? 'GET').toUpperCase();
     const idempotencyKey = readIdempotencyKey(request);
