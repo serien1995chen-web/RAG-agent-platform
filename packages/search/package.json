@@ -16,6 +16,7 @@
     "lint": "eslint src"
   },
   "dependencies": {
+    "@kb/chunk": "workspace:*",
     "@kb/contracts": "workspace:*"
   },
   "devDependencies": {

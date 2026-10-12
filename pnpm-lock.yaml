@@ -335,6 +335,9 @@ importers:
 
   packages/search:
     dependencies:
+      '@kb/chunk':
+        specifier: workspace:*
+        version: link:../chunk
       '@kb/contracts':
         specifier: workspace:*
         version: link:../contracts
