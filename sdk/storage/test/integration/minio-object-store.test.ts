@@ -181,6 +181,55 @@ describe('MinioObjectStore integration', () => {
         context,
       ),
     ).rejects.toMatchObject({ error: { code: 501060 } });
+    // P1：hash 校验失败必须回收已提交对象，不能留下正式对象或孤儿数据。
+    await expect(store.get({ ref }, context)).rejects.toMatchObject({ error: { code: 501015 } });
+  });
+
+  it('maps integrity S3 failures (EntityTooSmall) to 501060', async () => {
+    const context = { teamId: 'team-a' };
+    const key = `temp/team-a/${Date.now()}-too-small.bin`;
+    const ref = { bucket: 'kb-integration-test', key };
+    const prepared = await store.prepareMultipart({ ref, parts: 2 }, context);
+    const uploadId = prepared.multipartUploadId as string;
+    // 非末分片小于 S3 最小 5MiB，complete 时 MinIO 返回 EntityTooSmall。
+    const part1 = Buffer.from('tiny');
+    const part2 = Buffer.from('tail');
+    const first = await store.uploadPart(
+      { ref, uploadId, partNumber: 1, body: part1, checksum: md5Hex(part1) },
+      context,
+    );
+    const second = await store.uploadPart(
+      { ref, uploadId, partNumber: 2, body: part2, checksum: md5Hex(part2) },
+      context,
+    );
+    await expect(
+      store.completeMultipart(
+        { ref, uploadId, parts: [first, second], hash: multipartEtag([part1, part2]) },
+        context,
+      ),
+    ).rejects.toMatchObject({ error: { code: 501060 } });
+    await store.abort({ ref }, context);
+    await expect(store.get({ ref }, context)).rejects.toMatchObject({ error: { code: 501015 } });
+  });
+
+  it('maps integrity S3 failures (InvalidPart) to 501060', async () => {
+    const context = { teamId: 'team-a' };
+    const key = `temp/team-a/${Date.now()}-invalid-part.bin`;
+    const ref = { bucket: 'kb-integration-test', key };
+    const prepared = await store.prepareMultipart({ ref, parts: 1 }, context);
+    const uploadId = prepared.multipartUploadId as string;
+    const body = Buffer.from('invalid-part-body');
+    const receipt = await store.uploadPart(
+      { ref, uploadId, partNumber: 1, body, checksum: md5Hex(body) },
+      context,
+    );
+    const tampered = { ...receipt, etag: '00000000000000000000000000000000' };
+    await expect(
+      store.completeMultipart(
+        { ref, uploadId, parts: [tampered], hash: multipartEtag([body]) },
+        context,
+      ),
+    ).rejects.toMatchObject({ error: { code: 501060 } });
     await store.abort({ ref }, context);
   });
 

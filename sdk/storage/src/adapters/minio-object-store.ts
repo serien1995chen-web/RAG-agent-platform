@@ -13,6 +13,16 @@ import { assertObjectKeyScope, objectKeyHash } from '../tenant-scope';
 /** 单次 multipart 上传允许的最大分片数（设计文档 7.6 / 12.6）。 */
 const MAX_MULTIPART_PARTS = 10000;
 
+/** 分片完整性/校验类 S3 错误码：统一映射为 501060，不落入 501016。 */
+const MULTIPART_INTEGRITY_ERROR_CODES = new Set([
+  'NoSuchUpload',
+  'InvalidPart',
+  'InvalidPartOrder',
+  'EntityTooSmall',
+  'BadDigest',
+  'InvalidDigest',
+]);
+
 export interface MinioObjectStoreConfig {
   endPoint: string;
   port: number;
@@ -37,6 +47,12 @@ function isNotFound(error: unknown): boolean {
 function isNoSuchUpload(error: unknown): boolean {
   if (typeof error !== 'object' || error === null) return false;
   return (error as { code?: unknown }).code === 'NoSuchUpload';
+}
+
+function isMultipartIntegrityError(error: unknown): boolean {
+  if (typeof error !== 'object' || error === null) return false;
+  const code = (error as { code?: unknown }).code;
+  return typeof code === 'string' && MULTIPART_INTEGRITY_ERROR_CODES.has(code);
 }
 
 function normalizeEtag(value: string | null | undefined): string {
@@ -134,6 +150,24 @@ export class MinioObjectStore implements ObjectStorePort {
         },
       }),
     );
+  }
+
+  /**
+   * hash 最终一致性校验失败时清理：删除已提交对象并尽力中止会话，
+   * 保证不残留正式对象；清理失败不改变对外错误语义（仍返回 501060）。
+   */
+  private async discardCompletedObject(ref: ObjectRef, uploadId: string): Promise<void> {
+    try {
+      await this.client.removeObject(this.bucket, ref.key);
+    } catch {
+      // 清理尽力而为：保留 501060 语义，避免把完整性错误改写成 501016。
+    }
+    if (!uploadId) return;
+    try {
+      await this.client.abortMultipartUpload(this.bucket, ref.key, uploadId);
+    } catch {
+      // 会话通常已随 complete 结束（NoSuchUpload），忽略清理错误。
+    }
   }
 
   async ensureBucket(): Promise<void> {
@@ -267,7 +301,7 @@ export class MinioObjectStore implements ObjectStorePort {
           );
           etag = normalizeEtag(result.etag);
         } catch (error) {
-          if (isNoSuchUpload(error)) {
+          if (isMultipartIntegrityError(error)) {
             throw this.integrityError(input.uploadId, input.ref, [input.partNumber]);
           }
           throw error;
@@ -330,12 +364,13 @@ export class MinioObjectStore implements ObjectStorePort {
           );
           etag = normalizeEtag(result.etag);
         } catch (error) {
-          if (isNoSuchUpload(error)) {
+          if (isMultipartIntegrityError(error)) {
             throw this.integrityError(input.uploadId, input.ref, []);
           }
           throw error;
         }
         if (normalizeEtag(input.hash) !== etag) {
+          await this.discardCompletedObject(input.ref, input.uploadId);
           throw this.integrityError(input.uploadId, input.ref, []);
         }
         const size = ordered.reduce((total, part) => total + part.size, 0);
