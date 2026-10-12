@@ -5,6 +5,7 @@
 import type { JsonValue } from '@kb/contracts';
 import type {
   ApiDatasetCatalogRequest,
+  ApiDatasetConfig,
   ApiDatasetListRequest,
   ApiDatasetPathNamesRequest,
   DatasetSourceProvider,
@@ -14,7 +15,11 @@ import type {
   SourceReadResult,
 } from '../../../../ports/capabilities';
 import type { RequestContext } from '../../../../ports/types';
-import { createApiDatasetSourceProvider, type ApiDatasetHttpClient } from './api-dataset-provider';
+import {
+  apiDatasetConfigIdentity,
+  createApiDatasetSourceProvider,
+  type ApiDatasetHttpClient,
+} from './api-dataset-provider';
 import { createExternalSourceProvider } from './external-provider';
 import { createFileSourceProvider, type FileParserLike } from './file-provider';
 import { createLinkSourceProvider, type LinkLimits, type LinkFetcher } from './link-provider';
@@ -26,6 +31,8 @@ export { createFileSourceProvider } from './file-provider';
 export type { FileParserLike, FileSourceProviderDeps } from './file-provider';
 export { createLinkSourceProvider, DEFAULT_LINK_LIMITS, isBlockedAddress } from './link-provider';
 export { createApiDatasetSourceProvider } from './api-dataset-provider';
+export { apiDatasetConfigIdentity } from './api-dataset-provider';
+export type { ApiDatasetClientCallOptions } from './api-dataset-provider';
 export { createExternalSourceProvider } from './external-provider';
 export { hashSourceText, hashUrl } from './link-provider';
 
@@ -40,7 +47,12 @@ export interface SourceProviderRegistryDeps {
   linkLimits?: Partial<LinkLimits>;
   /** 链接安全审计出口；只记 urlHash/host/结果分类。 */
   audit?: SourceAuditSink;
-  apiDataset?: { configured: boolean; client?: ApiDatasetHttpClient; baseUrl?: string };
+  apiDataset?: {
+    configured: boolean;
+    client?: ApiDatasetHttpClient;
+    resolveClient?: (config: ApiDatasetConfig) => ApiDatasetHttpClient | undefined;
+    baseUrl?: string;
+  };
   pdfProvider?: PdfEnhanceProviderPort;
   pdfProviderConfigured?: boolean;
   /** U-25：mock 合同开关与运行环境。 */
@@ -75,6 +87,7 @@ export class SourceProviderRegistry {
       createApiDatasetSourceProvider({
         configured: deps.apiDataset?.configured ?? false,
         client: deps.apiDataset?.client,
+        resolveClient: deps.apiDataset?.resolveClient,
         baseUrl: deps.apiDataset?.baseUrl,
       }),
     );
@@ -130,7 +143,7 @@ export class SourceProviderRegistry {
     const cacheKey = [
       context.tenant.teamId,
       request.datasetId,
-      request.apiConfig.provider,
+      apiDatasetConfigIdentity(request.apiConfig),
       request.parentId ?? '',
     ].join('|');
     const now = Date.now();

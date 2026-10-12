@@ -13,6 +13,7 @@ import {
   createMigrationRunRepository,
   createProcessingJobRepository,
   createSourceCollectionRepository,
+  type DatasetSourceProvider,
   type EmbeddingGateway,
   type FullTextStore,
   type ServicePorts,
@@ -30,6 +31,11 @@ export interface RuntimeBootstrapOptions {
   ports?: ServicePorts;
   /** BASE-B3：可选 embedding 网关注入；未注入时 embeddingService 返回 501062。 */
   embeddingGateway?: EmbeddingGateway;
+  /**
+   * BASE-B2/P1：来源 Provider 运行时注入口（例如 createSourceProviderRegistry(...)）。
+   * 未注入时 ports.datasetSourceProvider 保持默认未实现，personB 路由不得静默降级。
+   */
+  datasetSourceProvider?: DatasetSourceProvider;
 }
 
 export interface ExtendedAppRuntime extends AppRuntime {
@@ -90,6 +96,9 @@ export async function bootstrapRuntime(
   const ports: ServicePorts = {
     ...(options.ports ?? createDefaultPorts()),
     datasetSync: datasetSyncService,
+    ...(options.datasetSourceProvider
+      ? { datasetSourceProvider: options.datasetSourceProvider }
+      : {}),
   };
   const drain = options.drain ?? (async () => undefined);
   const closeClients = options.closeClients ?? closeRuntimeClients;

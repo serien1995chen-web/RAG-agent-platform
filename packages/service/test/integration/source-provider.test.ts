@@ -1,12 +1,17 @@
 import { ApiErrorException } from '@kb/contracts';
 import { describe, expect, it } from 'vitest';
 import {
+  SourceProviderRegistry,
   createApiDatasetSourceProvider,
   createExternalSourceProvider,
   createFileSourceProvider,
   createSourceProviderRegistry,
   createTextSourceProvider,
 } from '../../src/modules/collection/adapter/source-provider/index';
+import {
+  SourceProviderRegistry as PublicSourceProviderRegistry,
+  createSourceProviderRegistry as createPublicSourceProviderRegistry,
+} from '../../src/index';
 import type {
   ApiDatasetCatalogRequest,
   ApiDatasetConfig,
@@ -339,6 +344,8 @@ describe('TEST-FI-PROVIDER-001 source providers', () => {
         getCatalog: async (req, options) => {
           expect(req.parentId).toBe('root');
           expect(options.baseUrl).toBe('https://api.example.test');
+          expect(options.provider).toBe('custom');
+          expect(options.credentialRef).toBe('ref://demo');
           expect(options.timeoutMs).toBe(5000);
           return [{ id: 'n1' }];
         },
@@ -363,6 +370,59 @@ describe('TEST-FI-PROVIDER-001 source providers', () => {
     ).toEqual([{ id: 'f1' }]);
   });
 
+  it('resolves timeout/endpoint/credential from the request apiConfig', async () => {
+    const provider = createApiDatasetSourceProvider({
+      configured: true,
+      client: {
+        get: async () => ({ status: 200, data: 'x' }),
+        getCatalog: async (_req, options) => {
+          expect(options.timeoutMs).toBe(1234);
+          expect(options.endpointRef).toBe('endpoint://third-party');
+          expect(options.credentialRef).toBe('ref://per-request');
+          return [{ id: 'n1' }];
+        },
+      },
+    });
+    const config = apiConfig({
+      timeoutMs: 1234,
+      endpointRef: 'endpoint://third-party',
+      credentialRef: 'ref://per-request',
+    });
+    await provider.getCatalog!(catalogRequest(config), context);
+  });
+
+  it('selects the http client from the request apiConfig', async () => {
+    const seen: string[] = [];
+    const provider = createApiDatasetSourceProvider({
+      configured: true,
+      client: {
+        get: async () => ({ status: 200, data: 'x' }),
+        getCatalog: async () => {
+          seen.push('default');
+          return [];
+        },
+      },
+      resolveClient: () => ({
+        get: async () => ({ status: 200, data: 'x' }),
+        getCatalog: async (req) => {
+          seen.push(req.apiConfig.credentialRef);
+          return [{ id: req.apiConfig.credentialRef }];
+        },
+      }),
+    });
+    const result = await provider.getCatalog!(
+      catalogRequest(apiConfig({ credentialRef: 'ref://per-config' })),
+      context,
+    );
+    expect(result).toEqual([{ id: 'ref://per-config' }]);
+    expect(seen).toEqual(['ref://per-config']);
+  });
+
+  it('exposes the provider registry on the @kb/service public surface', () => {
+    expect(PublicSourceProviderRegistry).toBe(SourceProviderRegistry);
+    expect(typeof createPublicSourceProviderRegistry).toBe('function');
+  });
+
   it('maps API Dataset provider failures to 501039', async () => {
     const provider = createApiDatasetSourceProvider({
       configured: true,
@@ -378,7 +438,7 @@ describe('TEST-FI-PROVIDER-001 source providers', () => {
     ).toBe(501039);
   });
 
-  it('caches getCatalog per teamId+datasetId+provider+parentId for 5 minutes', async () => {
+  it('caches getCatalog per teamId+datasetId+config+parentId for 5 minutes', async () => {
     let calls = 0;
     const registry = createSourceProviderRegistry({
       apiDataset: {
@@ -398,7 +458,11 @@ describe('TEST-FI-PROVIDER-001 source providers', () => {
     expect(second).toEqual(first);
     expect(calls).toBe(1);
 
-    await registry.getCatalog(catalogRequest(apiConfig(), 'other-parent'), context);
+    // 同 provider 但配置身份不同（不同 credentialRef）不得复用缓存。
+    await registry.getCatalog(catalogRequest(apiConfig({ credentialRef: 'ref://other' })), context);
     expect(calls).toBe(2);
+
+    await registry.getCatalog(catalogRequest(apiConfig(), 'other-parent'), context);
+    expect(calls).toBe(3);
   });
 });

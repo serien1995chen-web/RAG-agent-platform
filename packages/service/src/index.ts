@@ -191,11 +191,13 @@ export type {
 export {
   SOURCE_COLLECTION_INVARIANTS,
   SourceCollectionApplicationService,
+  SourceProviderRegistry,
   SOURCE_COLLECTION_JOB_DEFINITIONS,
   ImportSourceService,
   createSourceCollectionAdapter,
   createSourceCollectionJobHandler,
   createSourceCollectionRepository,
+  createSourceProviderRegistry,
   validateSourceCollection,
 } from './modules/collection';
 export type {
@@ -203,6 +205,7 @@ export type {
   SourceCollection,
   SourceCollectionJobHandler,
   SourceCollectionServiceDeps,
+  SourceProviderRegistryDeps,
 } from './modules/collection';
 
 export {

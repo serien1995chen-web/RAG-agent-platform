@@ -4,6 +4,7 @@
  * BASE-B2：扩展 getCatalog/getPathNames/list，未配置 501017、能力缺失 501019、失败 501039；
  * 现有 read 行为保持不变。
  */
+import { createHash } from 'node:crypto';
 import { ApiErrorException } from '@kb/contracts';
 import type { JsonValue } from '@kb/contracts';
 import type {
@@ -15,8 +16,17 @@ import type {
   SourceReadRequest,
   SourceReadResult,
 } from '../../../../ports/capabilities';
-import type { RequestContext } from '../../../../ports/types';
+import type { PortCallOptions, RequestContext } from '../../../../ports/types';
 import { hashSourceText, sourceError } from './link-provider';
+
+/** 每次调用按请求 apiConfig 解析出的端点/凭证/超时，供注入客户端使用。 */
+export interface ApiDatasetClientCallOptions {
+  provider: ApiDatasetConfig['provider'];
+  credentialRef: string;
+  endpointRef?: string;
+  baseUrl?: string;
+  timeoutMs: number;
+}
 
 export interface ApiDatasetHttpClient {
   get(
@@ -25,20 +35,19 @@ export interface ApiDatasetHttpClient {
   ): Promise<{ status: number; data: string }>;
   getCatalog?(
     request: ApiDatasetCatalogRequest,
-    options: { baseUrl?: string; timeoutMs: number },
+    options: ApiDatasetClientCallOptions,
   ): Promise<JsonValue[]>;
   getPathNames?(
     request: ApiDatasetPathNamesRequest,
-    options: { baseUrl?: string; timeoutMs: number },
+    options: ApiDatasetClientCallOptions,
   ): Promise<string>;
-  list?(
-    request: ApiDatasetListRequest,
-    options: { baseUrl?: string; timeoutMs: number },
-  ): Promise<JsonValue[]>;
+  list?(request: ApiDatasetListRequest, options: ApiDatasetClientCallOptions): Promise<JsonValue[]>;
 }
 
 export interface ApiDatasetProviderDeps {
   client?: ApiDatasetHttpClient;
+  /** 可选：按请求 apiConfig 选择客户端；返回 undefined 时回退到 client。 */
+  resolveClient?: (config: ApiDatasetConfig) => ApiDatasetHttpClient | undefined;
   configured: boolean;
   baseUrl?: string;
 }
@@ -57,6 +66,41 @@ function capabilityDeclared(config: ApiDatasetConfig, operation: ApiDatasetOpera
   return config.capabilities.some(
     (capability) => capability.supported && capability.name === operation,
   );
+}
+
+/** 稳定序列化（键排序），用于配置身份哈希，避免不同 JSON 键序导致缓存击穿。 */
+function canonicalize(value: unknown): string {
+  if (value === null || typeof value !== 'object') return JSON.stringify(value) ?? 'null';
+  if (Array.isArray(value)) return `[${value.map((item) => canonicalize(item)).join(',')}]`;
+  const entries = Object.entries(value as Record<string, unknown>).sort(([a], [b]) =>
+    a.localeCompare(b),
+  );
+  return `{${entries
+    .map(([key, item]) => `${JSON.stringify(key)}:${canonicalize(item)}`)
+    .join(',')}}`;
+}
+
+/**
+ * API Dataset 配置身份哈希：同一 team/dataset 下只有配置完全一致才允许复用目录缓存，
+ * 防止不同 endpoint/credential/capabilities 之间串用缓存。
+ */
+export function apiDatasetConfigIdentity(config: ApiDatasetConfig): string {
+  const identity = canonicalize({
+    provider: config.provider,
+    endpointRef: config.endpointRef ?? '',
+    credentialRef: config.credentialRef,
+    capabilities: config.capabilities.map((capability) => ({
+      name: capability.name,
+      supported: capability.supported,
+      constraints: capability.constraints ?? null,
+    })),
+  });
+  return `sha256:${createHash('sha256').update(identity).digest('hex')}`;
+}
+
+/** 超时按请求 apiConfig.timeoutMs 优先，缺省回退调用方 options.timeoutMs。 */
+function resolveTimeoutMs(config: ApiDatasetConfig, options: PortCallOptions): number {
+  return config.timeoutMs && config.timeoutMs > 0 ? config.timeoutMs : options.timeoutMs;
 }
 
 export function createApiDatasetSourceProvider(
@@ -88,11 +132,23 @@ export function createApiDatasetSourceProvider(
     context: RequestContext,
     config: ApiDatasetConfig,
   ): ApiDatasetHttpClient => {
-    if (!deps.configured || !deps.client) {
+    const client = deps.resolveClient?.(config) ?? deps.client;
+    if (!deps.configured || !client || !config.credentialRef) {
       throw sourceError(501017, context.requestId, { provider: config.provider });
     }
-    return deps.client;
+    return client;
   };
+
+  const clientOptions = (
+    config: ApiDatasetConfig,
+    options: PortCallOptions,
+  ): ApiDatasetClientCallOptions => ({
+    provider: config.provider,
+    credentialRef: config.credentialRef,
+    endpointRef: config.endpointRef,
+    baseUrl: deps.baseUrl,
+    timeoutMs: resolveTimeoutMs(config, options),
+  });
 
   const requireCapability = (
     context: RequestContext,
@@ -137,7 +193,7 @@ export function createApiDatasetSourceProvider(
       });
     }
     return callClient(context, request.apiConfig, () =>
-      method.call(client, request, { baseUrl: deps.baseUrl, timeoutMs: request.options.timeoutMs }),
+      method.call(client, request, clientOptions(request.apiConfig, request.options)),
     );
   };
 
@@ -155,7 +211,7 @@ export function createApiDatasetSourceProvider(
       });
     }
     return callClient(context, request.apiConfig, () =>
-      method.call(client, request, { baseUrl: deps.baseUrl, timeoutMs: request.options.timeoutMs }),
+      method.call(client, request, clientOptions(request.apiConfig, request.options)),
     );
   };
 
@@ -173,7 +229,7 @@ export function createApiDatasetSourceProvider(
       });
     }
     return callClient(context, request.apiConfig, () =>
-      method.call(client, request, { baseUrl: deps.baseUrl, timeoutMs: request.options.timeoutMs }),
+      method.call(client, request, clientOptions(request.apiConfig, request.options)),
     );
   };
 
