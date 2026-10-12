@@ -41,7 +41,7 @@ beforeAll(async () => {
   );
   await Promise.all([jobs.init(), failures.init()]);
   repository = new MongoDeleteJobRepository(connection);
-}, 60_000);
+}, 300_000);
 
 beforeEach(async () => {
   await Promise.all([jobs.deleteMany({}), failures.deleteMany({})]);

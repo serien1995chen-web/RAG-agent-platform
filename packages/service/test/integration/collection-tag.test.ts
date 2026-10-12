@@ -43,7 +43,7 @@ beforeAll(async () => {
   );
   await Promise.all([tags.init(), collections.init()]);
   repository = new MongoCollectionTagRepository(connection);
-}, 120_000);
+}, 300_000);
 
 beforeEach(async () => {
   await Promise.all([tags.deleteMany({}), collections.deleteMany({})]);

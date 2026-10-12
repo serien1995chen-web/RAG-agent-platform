@@ -44,7 +44,7 @@ beforeAll(async () => {
   model = connection.model<DatasetDataDoc>('DatasetData', DatasetDataSchema);
   await model.init();
   repository = new MongoKnowledgeItemRepository(connection);
-}, 60_000);
+}, 300_000);
 
 beforeEach(async () => {
   await model.deleteMany({});

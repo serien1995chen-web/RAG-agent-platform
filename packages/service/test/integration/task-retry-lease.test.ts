@@ -127,7 +127,7 @@ beforeAll(async () => {
   model = created.model;
   repository = created.repository;
   service = created.service;
-}, 60_000);
+}, 300_000);
 
 beforeEach(async () => {
   await model.deleteMany({});

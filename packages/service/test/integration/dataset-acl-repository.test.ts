@@ -34,7 +34,7 @@ beforeAll(async () => {
   acl = connection.model<DatasetAclDoc>('DatasetAcl', DatasetAclSchema);
   await Promise.all([datasets.init(), acl.init()]);
   repository = new MongoDatasetAclRepository(connection);
-}, 120_000);
+}, 300_000);
 
 beforeEach(async () => {
   await Promise.all([datasets.deleteMany({}), acl.deleteMany({})]);

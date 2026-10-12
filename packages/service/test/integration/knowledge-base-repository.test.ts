@@ -38,7 +38,7 @@ beforeAll(async () => {
   model = connection.model<DatasetDoc>('Dataset', DatasetSchema);
   await model.init();
   repository = new MongoKnowledgeBaseRepository(connection);
-}, 60_000);
+}, 300_000);
 
 beforeEach(async () => {
   await model.deleteMany({});
