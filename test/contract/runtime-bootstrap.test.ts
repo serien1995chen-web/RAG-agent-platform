@@ -120,6 +120,29 @@ describe('runtime bootstrap (P2-17)', () => {
     expect(runtime.ports.datasetSourceProvider).toBe(runtime.datasetSourceProvider);
   });
 
+  it('registers the default file provider and parses a text file', async () => {
+    const clients = fakeClients();
+    clients.objectStore.get = async (input: { ref: unknown }) => ({
+      ref: input.ref,
+      body: Buffer.from('default file parser'),
+    });
+    const runtime = await bootstrapRuntime({
+      getBaseRuntime: async () => fakeBaseRuntime(clients),
+      drain: async () => undefined,
+      closeClients: async () => undefined,
+    });
+    const result = await runtime.ports.datasetSourceProvider.read(
+      {
+        datasetId: 'ds-1',
+        sourceType: 'file',
+        sourceRef: 'temp/team-a/input.txt',
+        options: { timeoutMs: 1000 },
+      },
+      embeddingContext,
+    );
+    expect(result.rawText).toBe('default file parser');
+  });
+
   it('returns stable provider errors instead of skeleton 501999 by default', async () => {
     const clients = fakeClients();
     const runtime = await bootstrapRuntime({

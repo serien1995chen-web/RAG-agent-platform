@@ -22,6 +22,7 @@ import {
   type VectorController,
 } from '@kb/service';
 import { BullMqQueueAdapter } from '@kb/dal';
+import { createDefaultDocumentParser } from '@kb/parse';
 import { DatasetSyncApplicationService } from '../../../../packages/service/src/modules/collection/application/sync.service';
 import { closeRuntimeClients, type RuntimeClients } from './clients';
 import { createRuntimeObjectStorePort } from './object-store-adapter';
@@ -42,7 +43,7 @@ export interface RuntimeBootstrapOptions {
    * 以免 createDefaultPorts() 的未实现 Port 覆盖默认 Registry。
    */
   datasetSourceProvider?: DatasetSourceProvider;
-  /** 文件来源 Provider 所需解析器（@kb/parse 实现）；未注入时 file sourceType 不可用。 */
+  /** 文件来源 Provider 所需解析器；未注入时使用 @kb/parse 默认解析器。 */
   fileParser?: FileParserLike;
 }
 
@@ -81,6 +82,7 @@ export async function bootstrapRuntime(
   const datasetPermission = createDatasetAclRepository(clients.mongo);
   const embeddingService = new EmbeddingService({ gateway: options.embeddingGateway });
   const objectStorePort = createRuntimeObjectStorePort(clients.objectStore);
+  const fileParser = options.fileParser ?? createDefaultDocumentParser();
   const basePorts = options.ports ?? createDefaultPorts();
   // 优先级固定：显式 datasetSourceProvider > 默认真实 Registry。
   // 不从 options.ports.datasetSourceProvider 取值，避免 createDefaultPorts() 的未实现 Port
@@ -89,7 +91,7 @@ export async function bootstrapRuntime(
     options.datasetSourceProvider ??
     createSourceProviderRegistry({
       objectStore: objectStorePort,
-      ...(options.fileParser ? { fileParser: options.fileParser } : {}),
+      fileParser,
     });
   const adapters = createKnowledgeItemIndexAdapter({
     pool: clients.pg,
