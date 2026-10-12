@@ -1,6 +1,7 @@
 import type mongoose from 'mongoose';
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_PORT_IDS } from '../../packages/service/src/index';
+import type { RequestContext } from '../../packages/service/src/index';
 import { bootstrapRuntime } from '../../projects/app/src/runtime/bootstrap';
 import type { AppRuntime } from '../../projects/app/src/runtime/health';
 import type { RuntimeClients } from '../../projects/app/src/runtime/clients';
@@ -48,6 +49,12 @@ function fakeBaseRuntime(clients: RuntimeClients): AppRuntime {
   } as unknown as AppRuntime;
 }
 
+const embeddingContext: RequestContext = {
+  requestId: 'req-runtime-bootstrap',
+  tenant: { teamId: 'team-a', tmbId: 'tmb-a', authType: 'internal', isRoot: false },
+  permission: { canRead: true, canWrite: false, canManage: false, isOwner: false },
+};
+
 describe('runtime bootstrap (P2-17)', () => {
   it('assembles real ports and shuts down drain before releasing clients', async () => {
     const events: string[] = [];
@@ -86,11 +93,14 @@ describe('runtime bootstrap (P2-17)', () => {
       closeClients: async () => undefined,
       embeddingGateway: { embed: async () => [new Array<number>(1536).fill(0.5)] },
     });
-    const vectors = await runtime.embeddingService.embed({
-      models: { embeddingModel: 'bge-m3' },
-      texts: ['hello'],
-      options: { timeoutMs: 1000 },
-    });
+    const vectors = await runtime.embeddingService.embed(
+      {
+        models: { embeddingModel: 'bge-m3' },
+        texts: ['hello'],
+        options: { timeoutMs: 1000 },
+      },
+      embeddingContext,
+    );
     expect(vectors).toHaveLength(1);
     expect(vectors[0]).toHaveLength(1536);
   });
