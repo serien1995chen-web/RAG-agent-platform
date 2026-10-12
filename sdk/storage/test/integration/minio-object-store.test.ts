@@ -16,10 +16,16 @@ function multipartEtag(bodies: readonly Uint8Array[]): string {
   return `${createHash('md5').update(Buffer.concat(digests)).digest('hex')}-${bodies.length}`;
 }
 
+/** 由分片 ETag 反推同一期望值，用于让「提交前校验」通过。 */
+function multipartEtagFromPartEtags(etags: readonly string[]): string {
+  const digests = etags.map((etag) => Buffer.from(etag, 'hex'));
+  return `${createHash('md5').update(Buffer.concat(digests)).digest('hex')}-${etags.length}`;
+}
+
 const endpoint = process.env.KB_TEST_S3_ENDPOINT ?? 'http://127.0.0.1:9000';
 const url = new URL(endpoint);
 
-const store = createObjectStore({
+const baseConfig = {
   endPoint: url.hostname,
   port: Number(url.port || (url.protocol === 'https:' ? 443 : 80)),
   useSSL: url.protocol === 'https:',
@@ -27,7 +33,9 @@ const store = createObjectStore({
   secretKey: process.env.KB_TEST_S3_SECRET_KEY ?? 'minioadmin',
   region: process.env.KB_TEST_S3_REGION ?? 'us-east-1',
   bucket: 'kb-integration-test',
-});
+};
+
+const store = createObjectStore(baseConfig);
 
 describe('MinioObjectStore integration', () => {
   it('puts, gets, promotes and deletes a tenant-scoped object', async () => {
@@ -224,9 +232,10 @@ describe('MinioObjectStore integration', () => {
       context,
     );
     const tampered = { ...receipt, etag: '00000000000000000000000000000000' };
+    // 让提交前 ETag 预校验通过，从而真正触发 MinIO 的 InvalidPart 分支。
     await expect(
       store.completeMultipart(
-        { ref, uploadId, parts: [tampered], hash: multipartEtag([body]) },
+        { ref, uploadId, parts: [tampered], hash: multipartEtagFromPartEtags([tampered.etag]) },
         context,
       ),
     ).rejects.toMatchObject({ error: { code: 501060 } });
@@ -275,5 +284,59 @@ describe('MinioObjectStore integration', () => {
         { teamId: 'team-a' },
       ),
     ).rejects.toMatchObject({ error: { code: 501061 } });
+  });
+
+  it('rejects a mismatched hash before submitting the multipart upload', async () => {
+    const partEtag = md5Hex(Buffer.from('precheck'));
+    let completeCalls = 0;
+    const fakeClient = {
+      bucketExists: async () => true,
+      completeMultipartUpload: async () => {
+        completeCalls += 1;
+        return { etag: multipartEtagFromPartEtags([partEtag]), versionId: null };
+      },
+    } as never;
+    const fakeStore = createObjectStore({ ...baseConfig, client: fakeClient });
+    await expect(
+      fakeStore.completeMultipart(
+        {
+          ref: { bucket: 'kb-integration-test', key: 'temp/team-a/precheck.bin' },
+          uploadId: 'upload-1',
+          parts: [{ partNumber: 1, etag: partEtag, size: 8 }],
+          hash: 'sha256:not-the-multipart-etag',
+        },
+        { teamId: 'team-a' },
+      ),
+    ).rejects.toMatchObject({ error: { code: 501060 } });
+    // 提交前拦截：不得调用 completeMultipartUpload，因而不会产生已完成对象。
+    expect(completeCalls).toBe(0);
+  });
+
+  it('surfaces a cleanup failure instead of masking it as 501060', async () => {
+    const partEtag = md5Hex(Buffer.from('cleanup'));
+    const fakeClient = {
+      bucketExists: async () => true,
+      // 预校验通过（hash 与分片 ETag 一致），但响应 ETag 不一致 → 触发事后清理。
+      completeMultipartUpload: async () => ({
+        etag: 'deadbeefdeadbeefdeadbeefdeadbeef-1',
+        versionId: null,
+      }),
+      removeObject: async () => {
+        throw { code: 'AccessDenied', message: 'denied' };
+      },
+      abortMultipartUpload: async () => undefined,
+    } as never;
+    const fakeStore = createObjectStore({ ...baseConfig, client: fakeClient });
+    await expect(
+      fakeStore.completeMultipart(
+        {
+          ref: { bucket: 'kb-integration-test', key: 'temp/team-a/cleanup.bin' },
+          uploadId: 'upload-2',
+          parts: [{ partNumber: 1, etag: partEtag, size: 7 }],
+          hash: multipartEtagFromPartEtags([partEtag]),
+        },
+        { teamId: 'team-a' },
+      ),
+    ).rejects.toMatchObject({ error: { code: 501016 } });
   });
 });

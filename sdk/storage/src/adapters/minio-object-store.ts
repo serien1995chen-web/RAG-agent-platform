@@ -31,6 +31,8 @@ export interface MinioObjectStoreConfig {
   secretKey: string;
   region: string;
   bucket: string;
+  /** 测试/自定义注入：覆盖内部 Client（默认按其余字段创建）。 */
+  client?: Client;
 }
 
 function isNotFound(error: unknown): boolean {
@@ -83,6 +85,21 @@ function checksumMatches(body: Uint8Array, checksum: string): boolean {
 }
 
 /**
+ * 由分片 ETag 计算期望的 S3 multipart ETag：md5(拼接各分片 md5 原始摘要)-分片数。
+ * 任一 ETag 非 32 位 hex（例如启用了非 MD5 校验）时返回 null，表示无法预先计算。
+ */
+function expectedMultipartEtag(parts: readonly { etag: string }[]): string | null {
+  if (parts.length === 0) return null;
+  const digests: Buffer[] = [];
+  for (const part of parts) {
+    const etag = normalizeEtag(part.etag);
+    if (!/^[0-9a-f]{32}$/.test(etag)) return null;
+    digests.push(Buffer.from(etag, 'hex'));
+  }
+  return `${createHash('md5').update(Buffer.concat(digests)).digest('hex')}-${digests.length}`;
+}
+
+/**
  * S3 兼容（MinIO）实现（设计文档 7.6 / 10.9.1）：
  * 真实读写 + 触网前租户前缀校验 + 统一错误映射（不泄露内部路径）。
  */
@@ -95,14 +112,16 @@ export class MinioObjectStore implements ObjectStorePort {
   constructor(config: MinioObjectStoreConfig) {
     this.bucket = config.bucket;
     this.region = config.region;
-    this.client = new Client({
-      endPoint: config.endPoint,
-      port: config.port,
-      useSSL: config.useSSL,
-      accessKey: config.accessKey,
-      secretKey: config.secretKey,
-      region: config.region,
-    });
+    this.client =
+      config.client ??
+      new Client({
+        endPoint: config.endPoint,
+        port: config.port,
+        useSSL: config.useSSL,
+        accessKey: config.accessKey,
+        secretKey: config.secretKey,
+        region: config.region,
+      });
   }
 
   private async mapErrors<T>(
@@ -154,20 +173,24 @@ export class MinioObjectStore implements ObjectStorePort {
 
   /**
    * hash 最终一致性校验失败时清理：删除已提交对象并尽力中止会话，
-   * 保证不残留正式对象；清理失败不改变对外错误语义（仍返回 501060）。
+   * 返回对象是否已确认删除；删除失败必须由调用方升级为可观测错误（501016）。
    */
-  private async discardCompletedObject(ref: ObjectRef, uploadId: string): Promise<void> {
+  private async discardCompletedObject(ref: ObjectRef, uploadId: string): Promise<boolean> {
+    let objectRemoved = false;
     try {
       await this.client.removeObject(this.bucket, ref.key);
+      objectRemoved = true;
     } catch {
-      // 清理尽力而为：保留 501060 语义，避免把完整性错误改写成 501016。
+      objectRemoved = false;
     }
-    if (!uploadId) return;
-    try {
-      await this.client.abortMultipartUpload(this.bucket, ref.key, uploadId);
-    } catch {
-      // 会话通常已随 complete 结束（NoSuchUpload），忽略清理错误。
+    if (uploadId) {
+      try {
+        await this.client.abortMultipartUpload(this.bucket, ref.key, uploadId);
+      } catch {
+        // 会话通常已随 complete 结束（NoSuchUpload），不影响对象清理结果判定。
+      }
     }
+    return objectRemoved;
   }
 
   async ensureBucket(): Promise<void> {
@@ -354,6 +377,11 @@ export class MinioObjectStore implements ObjectStorePort {
           throw this.integrityError(input.uploadId, input.ref, invalid);
         }
         const ordered = [...input.parts].sort((a, b) => a.partNumber - b.partNumber);
+        const expected = expectedMultipartEtag(ordered);
+        if (expected !== null && normalizeEtag(input.hash) !== expected) {
+          // 提交前拦截：hash 不一致时不得产生已完成对象，直接返回 501060。
+          throw this.integrityError(input.uploadId, input.ref, []);
+        }
         let etag: string;
         try {
           const result = await this.client.completeMultipartUpload(
@@ -370,7 +398,16 @@ export class MinioObjectStore implements ObjectStorePort {
           throw error;
         }
         if (normalizeEtag(input.hash) !== etag) {
-          await this.discardCompletedObject(input.ref, input.uploadId);
+          const cleaned = await this.discardCompletedObject(input.ref, input.uploadId);
+          if (!cleaned) {
+            throw new ApiErrorException(
+              createApiError({
+                code: 501016,
+                requestId: 'object-store',
+                params: { store: 's3', operation: 'completeMultipartCleanup' },
+              }),
+            );
+          }
           throw this.integrityError(input.uploadId, input.ref, []);
         }
         const size = ordered.reduce((total, part) => total + part.size, 0);
