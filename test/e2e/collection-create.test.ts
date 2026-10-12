@@ -407,3 +407,110 @@ describe('TEST-API-IMPORT-DATASET-001 P4-08 createWithFiles and apiFile', () => 
     );
   });
 });
+
+describe('P-7 backup/template validation', () => {
+  it('rejects non CSV/XLSX backups with 501059 and missing headers with 501058', async () => {
+    const backup = (
+      await import('../../projects/app/src/pages/api/core/dataset/collection/create/backup')
+    ).default;
+    const before = state.collections.length;
+
+    const wrongExt = responseRecorder();
+    await backup(
+      request({
+        method: 'POST',
+        url: '/api/core/dataset/collection/create/backup',
+        body: { datasetId: DATASET_ID, file: { filename: 'notes.txt', content: Buffer.from('x') } },
+      }),
+      wrongExt.response,
+    );
+    expect(wrongExt.result().body.code).toBe(501059);
+
+    const missingQ = responseRecorder();
+    await backup(
+      request({
+        method: 'POST',
+        url: '/api/core/dataset/collection/create/backup',
+        body: {
+          datasetId: DATASET_ID,
+          file: { filename: 'b.csv', content: Buffer.from('q,b\nhello,world\n') },
+        },
+      }),
+      missingQ.response,
+    );
+    expect(missingQ.result().body.code).toBe(501058);
+
+    const duplicate = responseRecorder();
+    await backup(
+      request({
+        method: 'POST',
+        url: '/api/core/dataset/collection/create/backup',
+        body: {
+          datasetId: DATASET_ID,
+          file: { filename: 'b.csv', content: Buffer.from('q,q,a\n1,2,3\n') },
+        },
+      }),
+      duplicate.response,
+    );
+    expect(duplicate.result().body.code).toBe(501058);
+    expect(state.collections.length).toBe(before);
+  });
+
+  it('rejects a backup whose mapping references a missing required column', async () => {
+    const backup = (
+      await import('../../projects/app/src/pages/api/core/dataset/collection/create/backup')
+    ).default;
+    const res = responseRecorder();
+    await backup(
+      request({
+        method: 'POST',
+        url: '/api/core/dataset/collection/create/backup',
+        body: {
+          datasetId: DATASET_ID,
+          file: { filename: 'b.csv', content: Buffer.from('q,a\nhi,yo\n') },
+          mapping: JSON.stringify({
+            sourceFormat: 'csv',
+            columns: [
+              { sourceColumn: 'missing', targetField: 'q', targetType: 'string', required: true },
+              { sourceColumn: 'a', targetField: 'a', targetType: 'string' },
+            ],
+          }),
+        },
+      }),
+      res.response,
+    );
+    expect(res.result().body.code).toBe(501058);
+  });
+
+  it('returns 501037 for a missing template and 501056 for a non CSV/XLSX template', async () => {
+    const template = (
+      await import('../../projects/app/src/pages/api/core/dataset/collection/create/template')
+    ).default;
+
+    const missingFile = responseRecorder();
+    await template(
+      request({
+        method: 'POST',
+        url: '/api/core/dataset/collection/create/template',
+        body: { datasetId: DATASET_ID, templateId: 'tpl-x' },
+      }),
+      missingFile.response,
+    );
+    expect(missingFile.result().body.code).toBe(501037);
+
+    const wrongExt = responseRecorder();
+    await template(
+      request({
+        method: 'POST',
+        url: '/api/core/dataset/collection/create/template',
+        body: {
+          datasetId: DATASET_ID,
+          templateId: 'tpl-x',
+          file: { filename: 't.txt', content: Buffer.from('q,a\n1,2\n') },
+        },
+      }),
+      wrongExt.response,
+    );
+    expect(wrongExt.result().body.code).toBe(501056);
+  });
+});
