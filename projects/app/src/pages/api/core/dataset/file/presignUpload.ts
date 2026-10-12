@@ -101,12 +101,6 @@ export function objectRefOf(payload: UploadTokenPayload): ObjectRef {
   return { bucket: payload.bucket, key: payload.key };
 }
 
-function asBytes(value: unknown): Uint8Array {
-  if (value instanceof Uint8Array) return value;
-  if (typeof value === 'string') return Buffer.from(value, 'base64');
-  return new Uint8Array(0);
-}
-
 function headerOf(request: NextApiRequest, name: string): string | undefined {
   const raw = request.headers[name];
   return Array.isArray(raw) ? raw[0] : raw;
@@ -114,6 +108,36 @@ function headerOf(request: NextApiRequest, name: string): string | undefined {
 
 function recordOf(value: unknown): Record<string, unknown> | null {
   return typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : null;
+}
+
+/** 原始字节归一：不按 base64 解码；字符串按 latin1 还原原始 multipart 字节。 */
+export function toRawBytes(value: unknown): Uint8Array {
+  if (value instanceof Uint8Array) return value;
+  if (typeof value === 'string') return Buffer.from(value, 'latin1');
+  return new Uint8Array(0);
+}
+
+/**
+ * 读取原始请求体：兼容真实 Readable 流（bodyParser:false）、Buffer/Uint8Array、
+ * 原始字符串与测试注入的已解析对象。
+ */
+export async function readRequestBody(request: NextApiRequest): Promise<Buffer> {
+  const body = request.body as unknown;
+  if (Buffer.isBuffer(body)) return body;
+  if (body instanceof Uint8Array) return Buffer.from(body);
+  if (typeof body === 'string') return Buffer.from(body, 'latin1');
+  if (body !== undefined && body !== null) return Buffer.from(JSON.stringify(body), 'utf8');
+  const stream = request as unknown as {
+    on?: (event: string, listener: (...args: unknown[]) => void) => unknown;
+  };
+  if (typeof stream.on !== 'function') return Buffer.alloc(0);
+  const chunks: Buffer[] = [];
+  await new Promise<void>((resolve, reject) => {
+    stream.on?.('data', (chunk: unknown) => chunks.push(Buffer.from(toRawBytes(chunk))));
+    stream.on?.('end', () => resolve());
+    stream.on?.('error', (error: unknown) => reject(error));
+  });
+  return Buffer.concat(chunks);
 }
 
 /** 已是解析后的对象（测试或上层中间件）时按字段/文件归类。 */
@@ -124,7 +148,7 @@ function normalizeParsedBody(body: Record<string, unknown>): ParsedMultipartForm
       form.files[key] = {
         filename: '',
         contentType: 'application/octet-stream',
-        content: asBytes(value),
+        content: toRawBytes(value),
       };
       continue;
     }
@@ -134,7 +158,7 @@ function normalizeParsedBody(body: Record<string, unknown>): ParsedMultipartForm
         filename: typeof nested.filename === 'string' ? nested.filename : '',
         contentType:
           typeof nested.contentType === 'string' ? nested.contentType : 'application/octet-stream',
-        content: asBytes(nested.content),
+        content: toRawBytes(nested.content),
       };
       continue;
     }
@@ -154,8 +178,8 @@ function parseMultipart(bytes: Uint8Array, boundary: string): ParsedMultipartFor
     if (next === -1) break;
     let part = buffer.subarray(start, next);
     // 去掉分隔符后的 CRLF 与结尾 CRLF
-    if (part.subarray(0, 2).toString('utf8') === '\r\n') part = part.subarray(2);
-    if (part.subarray(-2).toString('utf8') === '\r\n') part = part.subarray(0, -2);
+    if (part.subarray(0, 2).toString('latin1') === '\r\n') part = part.subarray(2);
+    if (part.subarray(-2).toString('latin1') === '\r\n') part = part.subarray(0, -2);
     const headerEnd = part.indexOf('\r\n\r\n');
     if (headerEnd !== -1) {
       const headerText = part.subarray(0, headerEnd).toString('utf8');
@@ -182,17 +206,42 @@ function parseMultipart(bytes: Uint8Array, boundary: string): ParsedMultipartFor
 }
 
 /** 读取 multipart 表单：支持已解析对象与真实 multipart/form-data 字节流。 */
-export function readMultipartForm(request: NextApiRequest): ParsedMultipartForm {
+export async function readMultipartForm(request: NextApiRequest): Promise<ParsedMultipartForm> {
   const body = request.body as unknown;
   const parsed = recordOf(body);
   if (parsed && !(body instanceof Uint8Array) && !Buffer.isBuffer(body)) {
     return normalizeParsedBody(parsed);
   }
   const contentType = headerOf(request, 'content-type') ?? '';
-  if (!contentType.startsWith('multipart/form-data')) return { fields: {}, files: {} };
+  if (!contentType.toLowerCase().startsWith('multipart/form-data')) {
+    return { fields: {}, files: {} };
+  }
   const boundaryMatch = /boundary="?([^";]+)"?/i.exec(contentType);
   if (!boundaryMatch) return { fields: {}, files: {} };
-  return parseMultipart(asBytes(body), boundaryMatch[1] ?? '');
+  const bytes = await readRequestBody(request);
+  return parseMultipart(bytes, boundaryMatch[1] ?? '');
+}
+
+/**
+ * 统一 body 解析：JSON 对象直接返回；multipart 原始字节走 readMultipartForm；
+ * 其他原始流尝试按 JSON 解析。供 complete/abort 等路由共享同一可靠路径。
+ */
+export async function resolveBodyObject(request: NextApiRequest): Promise<Record<string, unknown>> {
+  const body = request.body as unknown;
+  const parsed = recordOf(body);
+  if (parsed && !(body instanceof Uint8Array) && !Buffer.isBuffer(body)) return parsed;
+  const contentType = (headerOf(request, 'content-type') ?? '').toLowerCase();
+  if (contentType.startsWith('multipart/form-data')) {
+    const form = await readMultipartForm(request);
+    return { ...form.fields };
+  }
+  const raw = await readRequestBody(request);
+  if (raw.length === 0) return {};
+  try {
+    return JSON.parse(raw.toString('utf8')) as Record<string, unknown>;
+  } catch {
+    return {};
+  }
 }
 
 function sanitizeFilename(filename: string): string {

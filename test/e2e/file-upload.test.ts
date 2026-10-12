@@ -2,6 +2,7 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiErrorException, createApiError } from '../../packages/contracts/src/index';
 import type { RequestContext } from '../../packages/service/src/ports/types';
+import { signUploadToken } from '../../projects/app/src/pages/api/core/dataset/file/presignUpload';
 
 const TEAM_ID = '000000000000000000000001';
 const OTHER_TEAM_ID = '0000000000000000000000ff';
@@ -15,6 +16,7 @@ const context: RequestContext = {
 
 const state = vi.hoisted(() => ({
   uploaded: [] as string[],
+  capturedChunk: undefined as Uint8Array | undefined,
   aborted: new Set<string>(),
   storage: undefined as unknown,
 }));
@@ -22,7 +24,10 @@ const state = vi.hoisted(() => ({
 vi.mock('../../projects/app/src/runtime', () => ({
   getRuntime: async () => ({
     clients: { objectStore: state.storage },
-    config: { system: { s3: { bucket: 'kb-objects' } } },
+    config: {
+      system: { s3: { bucket: 'kb-objects' } },
+      datasetRuntime: { maxRequestBodyBytes: 10 * 1024 * 1024 },
+    },
   }),
 }));
 
@@ -93,6 +98,7 @@ const storage = {
     uploadId: string;
   }) => {
     state.uploaded.push(`${ref.key}#${uploadId}#${partNumber}#${checksum}`);
+    state.capturedChunk = body;
     return { partNumber, etag: `etag-${partNumber}-${checksum}`, size: body.byteLength };
   },
   completeMultipart: async ({ ref }: { ref: { bucket: string; key: string } }) => ({
@@ -151,6 +157,7 @@ async function importRoutes() {
 
 beforeEach(() => {
   state.uploaded = [];
+  state.capturedChunk = undefined;
   state.aborted = new Set<string>();
   state.storage = storage;
 });
@@ -357,5 +364,115 @@ describe('TEST-TEMPKEY-001 search-test image temp keys', () => {
       expired.response,
     );
     expect(expired.result().body.code).toBe(501011);
+  });
+});
+
+describe('P-1 real multipart parsing', () => {
+  it('parses raw multipart and preserves binary chunk bytes without base64 decoding', async () => {
+    const uploadPart = (
+      await import('../../projects/app/src/pages/api/core/dataset/file/uploadPart')
+    ).default;
+    const token = signUploadToken({
+      kind: 'upload',
+      teamId: TEAM_ID,
+      datasetId: DATASET_ID,
+      bucket: 'kb-objects',
+      key: `dataset/${DATASET_ID}/uploads/raw.bin`,
+      uploadId: 'upload-session-raw',
+      expiresAt: Date.now() + 60_000,
+    });
+    const boundary = '----kbraw';
+    const chunk = Buffer.from([0, 1, 2, 3, 250, 251, 252, 253, 254, 255, 65, 66, 67]);
+    const head = Buffer.from(
+      `--${boundary}\r\nContent-Disposition: form-data; name="partNumber"\r\n\r\n1\r\n` +
+        `--${boundary}\r\nContent-Disposition: form-data; name="checksum"\r\n\r\nsha256:raw\r\n` +
+        `--${boundary}\r\nContent-Disposition: form-data; name="chunk"; filename="c.bin"\r\n` +
+        `Content-Type: application/octet-stream\r\n\r\n`,
+      'utf8',
+    );
+    const tail = Buffer.from(`\r\n--${boundary}--\r\n`, 'utf8');
+    const raw = Buffer.concat([head, chunk, tail]);
+    const res = responseRecorder();
+    await uploadPart(
+      request({
+        method: 'POST',
+        url: '/api/core/dataset/file/uploadPart',
+        query: { fileId: token },
+        body: raw,
+        headers: { 'content-type': `multipart/form-data; boundary=${boundary}` },
+      }),
+      res.response,
+    );
+    expect(res.result().status).toBe(200);
+    expect(Array.from(state.capturedChunk ?? [])).toEqual(Array.from(chunk));
+  });
+});
+
+describe('P-6 search-test upload closed loop', () => {
+  it('completes presign -> uploadPart -> preview with 2h TTL', async () => {
+    const routes = await importRoutes();
+    const presigned = responseRecorder();
+    await routes.presignSearchTestImage(
+      request({
+        method: 'POST',
+        url: '/api/core/dataset/file/presignSearchTestImage',
+        body: { filename: 'shot.png', size: 12, mime: 'image/png' },
+      }),
+      presigned.response,
+    );
+    const data = presigned.result().body.data as { url: string; key: string; expiresAt: string };
+    const parsed = new URL(data.url, 'http://localhost');
+    const fileId = parsed.searchParams.get('fileId') ?? '';
+    expect(fileId.length).toBeGreaterThan(0);
+    const ttl = Date.parse(data.expiresAt) - Date.now();
+    expect(ttl).toBeGreaterThan(1.9 * 60 * 60 * 1000);
+
+    const uploaded = responseRecorder();
+    await routes.uploadPart(
+      request({
+        method: 'POST',
+        url: '/api/core/dataset/file/uploadPart',
+        query: { fileId },
+        body: { partNumber: 1, checksum: 'sha256:x', chunk: new Uint8Array([9, 8, 7]) },
+      }),
+      uploaded.response,
+    );
+    expect(uploaded.result().status).toBe(200);
+
+    const preview = responseRecorder();
+    await routes.getSearchTestImagePreviewUrls(
+      request({
+        method: 'POST',
+        url: '/api/core/dataset/file/getSearchTestImagePreviewUrls',
+        body: { keys: [data.key] },
+      }),
+      preview.response,
+    );
+    expect(preview.result().status).toBe(200);
+  });
+
+  it('rejects oversized size and non-image mime', async () => {
+    const routes = await importRoutes();
+    const tooBig = responseRecorder();
+    await routes.presignSearchTestImage(
+      request({
+        method: 'POST',
+        url: '/api/core/dataset/file/presignSearchTestImage',
+        body: { filename: 'big.png', size: 20 * 1024 * 1024, mime: 'image/png' },
+      }),
+      tooBig.response,
+    );
+    expect(tooBig.result().body.code).toBe(501065);
+
+    const badMime = responseRecorder();
+    await routes.presignSearchTestImage(
+      request({
+        method: 'POST',
+        url: '/api/core/dataset/file/presignSearchTestImage',
+        body: { filename: 'note.txt', size: 10, mime: 'text/plain' },
+      }),
+      badMime.response,
+    );
+    expect(badMime.result().body.code).toBe(501010);
   });
 });

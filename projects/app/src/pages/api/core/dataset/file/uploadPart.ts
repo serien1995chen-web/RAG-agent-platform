@@ -13,6 +13,9 @@ interface UploadPartForm {
   checksum: string;
 }
 
+// multipart/form-data 必须关闭 Next 默认 body parser，自行读取原始字节。
+export const config = { api: { bodyParser: false } };
+
 /** API-FILE-007 POST /api/core/dataset/file/uploadPart */
 export default withApiHandler(
   async (request: NextApiRequest, response: NextApiResponse, { requestId }: ApiHandlerContext) => {
@@ -21,7 +24,7 @@ export default withApiHandler(
     const rawFileId = request.query.fileId;
     const fileId = Array.isArray(rawFileId) ? rawFileId[0] : rawFileId;
     const payload = verifyUploadToken(fileId, context);
-    const form = readMultipartForm(request);
+    const form = await readMultipartForm(request);
     const chunk = form.files.chunk?.content ?? new Uint8Array(0);
     const fields = parseDto<UploadPartForm>('UploadPartForm', {
       uploadId: form.fields.uploadId ?? payload.uploadId,

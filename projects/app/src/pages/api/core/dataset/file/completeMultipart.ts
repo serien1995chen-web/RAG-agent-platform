@@ -5,7 +5,13 @@ import { getRuntime } from '../../../../../runtime';
 import { createRuntimeObjectStorePort } from '../../../../../runtime/object-store-adapter';
 import { parseDto, successResponse, withApiHandler } from '../../../../../shared/api';
 import type { ApiHandlerContext } from '../../../../../shared/api';
-import { FILE_REF_TTL_MS, objectRefOf, signUploadToken, verifyUploadToken } from './presignUpload';
+import {
+  FILE_REF_TTL_MS,
+  objectRefOf,
+  resolveBodyObject,
+  signUploadToken,
+  verifyUploadToken,
+} from './presignUpload';
 
 interface CompleteMultipartBody {
   fileId: string;
@@ -18,7 +24,10 @@ export default withApiHandler(
   async (request: NextApiRequest, response: NextApiResponse, { requestId }: ApiHandlerContext) => {
     const runtime = await getRuntime();
     const { context } = await authenticateRequest(runtime, request, requestId);
-    const body = parseDto<CompleteMultipartBody>('CompleteMultipartBody', request.body);
+    const body = parseDto<CompleteMultipartBody>(
+      'CompleteMultipartBody',
+      await resolveBodyObject(request),
+    );
     const payload = verifyUploadToken(body.fileId, context);
     const parts: MultipartPartReceipt[] = body.parts.map((part) => ({
       partNumber: part.partNumber,

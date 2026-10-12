@@ -5,7 +5,7 @@ import { getRuntime } from '../../../../../runtime';
 import { createRuntimeObjectStorePort } from '../../../../../runtime/object-store-adapter';
 import { parseDto, successResponse, withApiHandler } from '../../../../../shared/api';
 import type { ApiHandlerContext } from '../../../../../shared/api';
-import { objectRefOf, verifyUploadToken } from './presignUpload';
+import { objectRefOf, resolveBodyObject, verifyUploadToken } from './presignUpload';
 
 interface AbortMultipartBody {
   fileId: string;
@@ -17,7 +17,10 @@ export default withApiHandler(
   async (request: NextApiRequest, response: NextApiResponse, { requestId }: ApiHandlerContext) => {
     const runtime = await getRuntime();
     const { context } = await authenticateRequest(runtime, request, requestId);
-    const body = parseDto<AbortMultipartBody>('AbortMultipartBody', request.body);
+    const body = parseDto<AbortMultipartBody>(
+      'AbortMultipartBody',
+      await resolveBodyObject(request),
+    );
     const payload = verifyUploadToken(body.fileId, context);
     const objectStore = createRuntimeObjectStorePort(runtime.clients.objectStore);
     try {
