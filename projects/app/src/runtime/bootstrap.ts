@@ -27,10 +27,14 @@ import { BullMqQueueAdapter, QUEUE_NAMES } from '@kb/dal';
 import { Queue } from 'bullmq';
 import { createDefaultDocumentParser } from '@kb/parse';
 import { DeleteApplicationService } from '../../../../packages/service/src/modules/delete/application/index';
+import { ReconcileApplicationService } from '../../../../packages/service/src/modules/delete/application/reconcile.service';
 import {
   MongoCrossStoreOperationRepository,
   MongoDeleteFactsRepository,
+  MongoReconcileReportRepository,
 } from '../../../../packages/service/src/modules/delete/repository/index';
+import { ReconcileResultAdapter } from '../../../../packages/service/src/modules/delete/adapter/reconcile-result.adapter';
+import type { S3OrphanScanner } from '../../../../packages/service/src/modules/delete/domain/findings';
 import { MongoDeleteJobRepository } from '../../../../packages/service/src/modules/delete/repository/mongo-delete-job.repository';
 import { reconcileDatasetSyncSchedulers } from '../../../../packages/service/src/shared/runtime/dataset-sync-scheduler';
 import { createLeaderLock } from '../../../../packages/service/src/shared/runtime/leader-lock';
@@ -63,6 +67,8 @@ export interface RuntimeBootstrapOptions {
   datasetSourceProvider?: DatasetSourceProvider;
   /** 文件来源 Provider 所需解析器；未注入时使用 @kb/parse 默认解析器。 */
   fileParser?: FileParserLike;
+  /** P6-03 可缺省的 S3 孤儿扫描器；P6-04 起由 MinioObjectStore 判型默认注入。 */
+  s3OrphanScanner?: S3OrphanScanner;
 }
 
 export interface ExtendedAppRuntime extends AppRuntime {
@@ -77,6 +83,7 @@ export interface ExtendedAppRuntime extends AppRuntime {
   deleteRepository: MongoDeleteJobRepository;
   deleteJobStore: MongoDeleteJobRepository;
   deleteService: DeleteApplicationService;
+  reconcileService: ReconcileApplicationService;
   migrationRepository: ReturnType<typeof createMigrationRunRepository>;
   datasetPermission: ReturnType<typeof createDatasetAclRepository>;
   embeddingService: EmbeddingService;
@@ -187,10 +194,20 @@ export async function bootstrapRuntime(
       }
     },
   });
+  const reconcileReportRepository = new MongoReconcileReportRepository(clients.mongo);
+  const reconcileResultAdapter = new ReconcileResultAdapter(reconcileReportRepository);
+  const reconcileService = new ReconcileApplicationService({
+    facts: deleteFactsRepository,
+    reports: reconcileReportRepository,
+    vectorController: adapters,
+    ...(adapters.fullText ? { fullTextStore: adapters.fullText } : {}),
+    ...(options.s3OrphanScanner !== undefined ? { s3OrphanScanner: options.s3OrphanScanner } : {}),
+  });
   const ports: ServicePorts = {
     ...basePorts,
     deleteJobRepository: deleteRepository,
     objectStore: objectStorePort,
+    reconcileResult: reconcileResultAdapter,
     datasetSync: datasetSyncService,
     datasetSourceProvider,
     modelRegistry: createModelRegistryAdapter({
@@ -249,6 +266,7 @@ export async function bootstrapRuntime(
     deleteRepository,
     deleteJobStore,
     deleteService,
+    reconcileService,
     migrationRepository,
     datasetPermission,
     embeddingService,

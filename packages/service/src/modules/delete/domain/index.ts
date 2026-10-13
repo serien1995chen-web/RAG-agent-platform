@@ -6,6 +6,15 @@ export {
   canRetryDeleteJob,
   isTerminalState,
 } from './state-machine';
+export { RECONCILE_FINDING_ACTIONS, RECONCILE_FINDING_KINDS } from './findings';
+export type {
+  ReconcileFinding,
+  ReconcileFindingKind,
+  ReconcileMode,
+  S3ObjectDescriptor,
+  S3OrphanScanner,
+  SchedulerReconcileSummary,
+} from './findings';
 /**
  * DeleteJob 领域骨架（设计文档 7.2 / 7.4）。
  * 该层只允许实体、值对象、不变量与 Port 引用；禁止导入基础设施客户端。

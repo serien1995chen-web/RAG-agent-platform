@@ -14,6 +14,7 @@ import {
   DatasetSchema,
   DatasetTrainingSchema,
   ImageAssetSchema,
+  S3TtlRecordSchema,
   type CrossStoreOperationDoc,
   type DatasetAclDoc,
   type DatasetCollectionDoc,
@@ -23,6 +24,7 @@ import {
   type DatasetDoc,
   type DatasetTrainingDoc,
   type ImageAssetDoc,
+  type S3TtlRecordDoc,
 } from '../../../shared/persistence/schemas';
 
 /** 删除范围（dataset/collection/data 三类入口）。 */
@@ -30,6 +32,8 @@ export type DeleteScopeKind = 'dataset' | 'collection' | 'data';
 
 export interface DeleteScope {
   kind: DeleteScopeKind;
+  /** 对账扫描的显式租户范围；缺省表示 Root/global 扫描。 */
+  teamId?: string;
   datasetId?: string;
   collectionId?: string;
   dataId?: string;
@@ -51,6 +55,20 @@ export interface DeleteTransactionResult {
   objectRefs: ObjectRef[];
   vectorDataIds: string[];
 }
+
+export interface ReconcileVectorCandidates {
+  datasets: Array<{ datasetId: string; teamId: string }>;
+  liveDataIds: string[];
+  liveDatasetIds: string[];
+  liveCollectionIds: string[];
+}
+
+export interface ReconcileWindow {
+  start: Date;
+  end: Date;
+}
+
+const MAX_RECONCILE_SCAN = 5000;
 
 function toOid(value: string, field: string, requestId: string): Types.ObjectId {
   if (!Types.ObjectId.isValid(value)) {
@@ -117,6 +135,7 @@ export class MongoDeleteFactsRepository {
   private readonly imageAssets: Model<ImageAssetDoc>;
   private readonly jobs: Model<DatasetDeleteJobDoc>;
   private readonly operations: Model<CrossStoreOperationDoc>;
+  private readonly ttlRecords: Model<S3TtlRecordDoc>;
 
   constructor(connection: Connection) {
     this.connection = connection;
@@ -147,6 +166,9 @@ export class MongoDeleteFactsRepository {
     this.operations =
       (connection.models.CrossStoreOperation as Model<CrossStoreOperationDoc>) ??
       connection.model<CrossStoreOperationDoc>('CrossStoreOperation', CrossStoreOperationSchema);
+    this.ttlRecords =
+      (connection.models.S3TtlRecord as Model<S3TtlRecordDoc>) ??
+      connection.model<S3TtlRecordDoc>('S3TtlRecord', S3TtlRecordSchema);
   }
 
   private teamIdOf(context: RequestContext): Types.ObjectId {
@@ -320,6 +342,313 @@ export class MongoDeleteFactsRepository {
       return Boolean(alive);
     }
     return true;
+  }
+
+  // -------------------------------------------------------------------------
+  // P6-03 对账扫描与清理（E2）：只返回 id/hash 级字段，不读取正文。
+  // -------------------------------------------------------------------------
+
+  /** 向量候选判定所需的存活参照（dataset/collection/data 仅 id）。 */
+  async scanVectorCandidates(
+    scope: DeleteScope,
+    window: ReconcileWindow,
+  ): Promise<ReconcileVectorCandidates> {
+    void window;
+    const teamFilter = this.scanTeamFilter(scope);
+    const datasetFilter: Record<string, unknown> = { ...teamFilter, deleteTime: null };
+    if (scope.datasetId !== undefined && scope.datasetId !== '') {
+      datasetFilter._id = toOid(scope.datasetId, 'datasetId', 'reconcile');
+    }
+    const datasetRows = (await this.datasets
+      .find(datasetFilter)
+      .select('_id teamId')
+      .limit(MAX_RECONCILE_SCAN)
+      .lean()) as unknown as Array<{ _id: Types.ObjectId; teamId: Types.ObjectId }>;
+
+    const collectionFilter: Record<string, unknown> = { ...teamFilter };
+    if (scope.datasetId !== undefined && scope.datasetId !== '') {
+      collectionFilter.datasetId = toOid(scope.datasetId, 'datasetId', 'reconcile');
+    }
+    if (scope.collectionId !== undefined && scope.collectionId !== '') {
+      collectionFilter._id = toOid(scope.collectionId, 'collectionId', 'reconcile');
+    }
+    const collectionRows = (await this.collections
+      .find(collectionFilter)
+      .select('_id')
+      .limit(MAX_RECONCILE_SCAN)
+      .lean()) as unknown as Array<{ _id: Types.ObjectId }>;
+
+    const dataFilter: Record<string, unknown> = { ...teamFilter };
+    if (scope.datasetId !== undefined && scope.datasetId !== '') {
+      dataFilter.datasetId = toOid(scope.datasetId, 'datasetId', 'reconcile');
+    }
+    if (scope.collectionId !== undefined && scope.collectionId !== '') {
+      dataFilter.collectionId = toOid(scope.collectionId, 'collectionId', 'reconcile');
+    }
+    if (scope.dataId !== undefined && scope.dataId !== '') {
+      dataFilter._id = toOid(scope.dataId, 'dataId', 'reconcile');
+    }
+    const dataRows = (await this.datas
+      .find(dataFilter)
+      .select('_id')
+      .limit(MAX_RECONCILE_SCAN)
+      .lean()) as unknown as Array<{ _id: Types.ObjectId }>;
+
+    return {
+      datasets: datasetRows.map((row) => ({
+        datasetId: String(row._id),
+        teamId: String(row.teamId),
+      })),
+      liveDataIds: dataRows.map((row) => String(row._id)),
+      liveDatasetIds: datasetRows.map((row) => String(row._id)),
+      liveCollectionIds: collectionRows.map((row) => String(row._id)),
+    };
+  }
+
+  /** 全文孤儿候选（dataset_data_texts 行，仅 id 字段；窗口按 createTime 上界）。 */
+  async scanFulltextCandidates(
+    scope: DeleteScope,
+    window: ReconcileWindow,
+  ): Promise<Array<{ dataId: string; datasetId: string; collectionId: string }>> {
+    const filter: Record<string, unknown> = {
+      ...this.scanTeamFilter(scope),
+      createTime: { $lte: window.end },
+    };
+    if (scope.datasetId !== undefined && scope.datasetId !== '') {
+      filter.datasetId = toOid(scope.datasetId, 'datasetId', 'reconcile');
+    }
+    if (scope.collectionId !== undefined && scope.collectionId !== '') {
+      filter.collectionId = toOid(scope.collectionId, 'collectionId', 'reconcile');
+    }
+    if (scope.dataId !== undefined && scope.dataId !== '') {
+      filter.dataId = toOid(scope.dataId, 'dataId', 'reconcile');
+    }
+    const rows = (await this.texts
+      .find(filter)
+      .select('dataId datasetId collectionId')
+      .limit(MAX_RECONCILE_SCAN)
+      .lean()) as unknown as Array<{
+      dataId: Types.ObjectId;
+      datasetId: Types.ObjectId;
+      collectionId: Types.ObjectId;
+    }>;
+    return rows.map((row) => ({
+      dataId: String(row.dataId),
+      datasetId: String(row.datasetId),
+      collectionId: String(row.collectionId),
+    }));
+  }
+
+  /** ACL 孤儿：指向已删除 Dataset 的 ACL 行（仅 id）。 */
+  async scanAclOrphans(
+    scope: DeleteScope,
+  ): Promise<Array<{ id: string; teamId: string; resourceId: string }>> {
+    const deletedFilter: Record<string, unknown> = {
+      ...this.scanTeamFilter(scope),
+      deleteTime: { $ne: null },
+    };
+    if (scope.datasetId !== undefined && scope.datasetId !== '') {
+      deletedFilter._id = toOid(scope.datasetId, 'datasetId', 'reconcile');
+    }
+    const deleted = (await this.datasets
+      .find(deletedFilter)
+      .select('_id teamId')
+      .limit(MAX_RECONCILE_SCAN)
+      .lean()) as unknown as Array<{ _id: Types.ObjectId; teamId: Types.ObjectId }>;
+    const orphans: Array<{ id: string; teamId: string; resourceId: string }> = [];
+    for (const dataset of deleted) {
+      const rows = (await this.acls
+        .find({
+          teamId: dataset.teamId,
+          resourceType: 'dataset',
+          resourceId: dataset._id,
+        })
+        .select('_id')
+        .limit(MAX_RECONCILE_SCAN)
+        .lean()) as unknown as Array<{ _id: Types.ObjectId }>;
+      for (const row of rows) {
+        orphans.push({
+          id: String(row._id),
+          teamId: String(dataset.teamId),
+          resourceId: String(dataset._id),
+        });
+      }
+    }
+    return orphans;
+  }
+
+  /** Training 孤儿：指向已删除/不存在 Dataset 或 Collection 的 Training 行（仅 id）。 */
+  async scanTrainingOrphans(
+    scope: DeleteScope,
+  ): Promise<Array<{ id: string; teamId: string; datasetId: string; collectionId: string }>> {
+    const teamFilter = this.scanTeamFilter(scope);
+    const datasetRows = (await this.datasets
+      .find(teamFilter)
+      .select('_id teamId deleteTime')
+      .limit(MAX_RECONCILE_SCAN)
+      .lean()) as unknown as Array<{
+      _id: Types.ObjectId;
+      teamId: Types.ObjectId;
+      deleteTime: Date | null;
+    }>;
+    const liveDatasetIds = new Set(
+      datasetRows.filter((row) => row.deleteTime === null).map((row) => String(row._id)),
+    );
+    const collectionRows = (await this.collections
+      .find(teamFilter)
+      .select('_id')
+      .limit(MAX_RECONCILE_SCAN)
+      .lean()) as unknown as Array<{ _id: Types.ObjectId }>;
+    const liveCollectionIds = new Set(collectionRows.map((row) => String(row._id)));
+
+    const trainingFilter: Record<string, unknown> = { ...teamFilter };
+    if (scope.datasetId !== undefined && scope.datasetId !== '') {
+      trainingFilter.datasetId = toOid(scope.datasetId, 'datasetId', 'reconcile');
+    }
+    if (scope.collectionId !== undefined && scope.collectionId !== '') {
+      trainingFilter.collectionId = toOid(scope.collectionId, 'collectionId', 'reconcile');
+    }
+    const rows = (await this.trainings
+      .find(trainingFilter)
+      .select('_id teamId datasetId collectionId')
+      .limit(MAX_RECONCILE_SCAN)
+      .lean()) as unknown as Array<{
+      _id: Types.ObjectId;
+      teamId: Types.ObjectId;
+      datasetId: Types.ObjectId;
+      collectionId: Types.ObjectId;
+    }>;
+    return rows
+      .filter(
+        (row) =>
+          !liveDatasetIds.has(String(row.datasetId)) ||
+          !liveCollectionIds.has(String(row.collectionId)),
+      )
+      .map((row) => ({
+        id: String(row._id),
+        teamId: String(row.teamId),
+        datasetId: String(row.datasetId),
+        collectionId: String(row.collectionId),
+      }));
+  }
+
+  /** 卡住删除任务：state=deleting 且租约过期超过一个窗口。 */
+  async scanStuckDeleteJobs(
+    now: Date,
+    windowMs: number,
+    teamId?: string,
+  ): Promise<Array<{ jobId: string; teamId: string; attempt: number }>> {
+    const filter: Record<string, unknown> = {
+      state: 'deleting',
+      leaseExpireAt: { $lte: new Date(now.getTime() - windowMs) },
+      ...(teamId !== undefined && teamId !== ''
+        ? { teamId: toOid(teamId, 'teamId', 'reconcile') }
+        : {}),
+    };
+    const rows = (await this.jobs
+      .find(filter)
+      .select('jobId teamId attempt')
+      .limit(MAX_RECONCILE_SCAN)
+      .lean()) as unknown as Array<{
+      jobId: string;
+      teamId: Types.ObjectId;
+      attempt: number;
+    }>;
+    return rows.map((row) => ({
+      jobId: row.jobId,
+      teamId: String(row.teamId),
+      attempt: row.attempt,
+    }));
+  }
+
+  /** 跨存储失败超限（stage=failed 且 attempt≥10）——schema 无 job/dataset 外键，按团队范围收敛。 */
+  async scanFailedCrossStoreOps(
+    scope: DeleteScope,
+  ): Promise<Array<{ operationId: string; operation: string; attempt: number }>> {
+    const rows = (await this.operations
+      .find({
+        ...this.scanTeamFilter(scope),
+        operation: { $in: ['delete_vector', 'delete_s3', 'switch_ref'] },
+        stage: 'failed',
+        attempt: { $gte: 10 },
+      })
+      .select('operationId operation attempt')
+      .limit(MAX_RECONCILE_SCAN)
+      .lean()) as unknown as Array<{
+      operationId: string;
+      operation: string;
+      attempt: number;
+    }>;
+    return rows.map((row) => ({
+      operationId: row.operationId,
+      operation: row.operation,
+      attempt: row.attempt,
+    }));
+  }
+
+  /** TTL 记录存在性（teamId 缺省时按显式 Root 范围查询）。 */
+  async hasTtlRecord(input: { teamId?: string; objectKey: string }): Promise<boolean> {
+    const exists = await this.ttlRecords.exists({
+      ...(input.teamId !== undefined && input.teamId !== ''
+        ? { teamId: toOid(input.teamId, 'teamId', 'reconcile') }
+        : {}),
+      objectKey: input.objectKey,
+    });
+    return Boolean(exists);
+  }
+
+  /** 按显式 id 集合 + teamId 清理 ACL 行（仅可证明孤儿调用）。 */
+  async deleteAclRows(ids: string[], teamId: string): Promise<number> {
+    const objectIds = ids
+      .filter((id) => Types.ObjectId.isValid(id))
+      .map((id) => new Types.ObjectId(id));
+    if (objectIds.length === 0) return 0;
+    const result = await this.acls.deleteMany({
+      _id: { $in: objectIds },
+      teamId: toOid(teamId, 'teamId', 'reconcile'),
+    });
+    return result.deletedCount ?? 0;
+  }
+
+  /** 按显式 id 集合 + teamId 清理 Training 行（仅可证明孤儿调用）。 */
+  async deleteTrainingRows(ids: string[], teamId: string): Promise<number> {
+    const objectIds = ids
+      .filter((id) => Types.ObjectId.isValid(id))
+      .map((id) => new Types.ObjectId(id));
+    if (objectIds.length === 0) return 0;
+    const result = await this.trainings.deleteMany({
+      _id: { $in: objectIds },
+      teamId: toOid(teamId, 'teamId', 'reconcile'),
+    });
+    return result.deletedCount ?? 0;
+  }
+
+  /** 卡住任务重排：attempt<10 时 deleting/failed→queued 且 attempt+1；超限返回 manual_review。 */
+  async requeueStuckJob(jobId: string, teamId: string): Promise<string> {
+    const updated = await this.jobs.findOneAndUpdate(
+      {
+        teamId: toOid(teamId, 'teamId', 'reconcile'),
+        jobId,
+        state: { $in: ['deleting', 'failed'] },
+        attempt: { $lt: 10 },
+      },
+      {
+        $set: {
+          state: 'queued',
+          leaseOwner: null,
+          leaseExpireAt: null,
+          updateTime: new Date(),
+        },
+        $inc: { attempt: 1 },
+      },
+      { new: true },
+    );
+    return updated ? jobId : 'manual_review';
+  }
+
+  private scanTeamFilter(scope: DeleteScope): Record<string, unknown> {
+    if (scope.teamId === undefined || scope.teamId === '') return {};
+    return { teamId: toOid(scope.teamId, 'teamId', 'reconcile') };
   }
 
   private async resolveDatasetId(

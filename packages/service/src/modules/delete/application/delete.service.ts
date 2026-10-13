@@ -26,6 +26,8 @@ export type DeleteScopeKind = 'dataset' | 'collection' | 'data';
 
 export interface DeleteScope {
   kind: DeleteScopeKind;
+  /** 对账/扫描的显式租户范围；删除入口忽略该字段（teamId 只来自认证上下文）。 */
+  teamId?: string;
   datasetId?: string;
   collectionId?: string;
   dataId?: string;

@@ -10,3 +10,4 @@ export function createDeleteJobRepository(connection?: Connection): DeleteJobRep
 
 export { MongoDeleteFactsRepository } from './mongo-delete-facts.repository';
 export { MongoCrossStoreOperationRepository } from './mongo-cross-store-operation.repository';
+export { MongoReconcileReportRepository } from './mongo-reconcile-report.repository';

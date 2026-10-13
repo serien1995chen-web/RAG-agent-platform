@@ -2,9 +2,12 @@ import { pathToFileURL } from 'node:url';
 import {
   resolveRuntimeRole,
   type AppConfig,
+  type RequestContext,
   type RuntimeRole,
   type ServicePorts,
 } from '@kb/service';
+// Plan D4 冻结 @kb/service barrel；leader-lock 按相对路径引用包内实现（P3 深导入先例）。
+import { createLeaderLock } from '../../../../packages/service/src/shared/runtime/leader-lock';
 import {
   bootstrapRuntime,
   type ExtendedAppRuntime,
@@ -36,6 +39,96 @@ export interface WorkerRuntimeHandle {
 
 const emptyExpectedDatasetIds = async (): Promise<readonly string[]> => [];
 
+const RECONCILE_INTERVAL_MS = 60 * 60 * 1000;
+const RECONCILE_LOCK_TTL_MS = 600_000;
+const RECONCILE_LOCK_KEY = 'runtime:delete-reconcile';
+
+function reconcileContext(): RequestContext {
+  return {
+    requestId: `delete-reconcile-${Date.now()}`,
+    tenant: { teamId: 'system', tmbId: 'system', authType: 'internal', isRoot: false },
+    permission: { canRead: true, canWrite: true, canManage: false, isOwner: false },
+  };
+}
+
+/**
+ * 对账单元（P6-03）：启动即跑 + 每 60 分钟一轮；锁丢失时不执行下一轮并记日志；
+ * close 等待在途并释放 leader lock（drain 顺序 claims→leases→leader-lock 不变）。
+ */
+function createReconcileSweeperUnit(runtime: ExtendedAppRuntime): RuntimeUnit {
+  const lock = createLeaderLock({
+    redis: runtime.clients.redis,
+    key: RECONCILE_LOCK_KEY,
+    ttlMs: RECONCILE_LOCK_TTL_MS,
+  });
+  const logger = runtime.clients.logger;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let inFlight: Promise<void> | undefined;
+  let closed = false;
+
+  const renewTimer = setInterval(
+    () => {
+      if (closed || !lock.isHeld()) return;
+      void lock
+        .renew()
+        .then((renewed) => {
+          if (!renewed) logger.log('delete-reconcile.lock_lost', {});
+        })
+        .catch((error: unknown) => {
+          logger.log('delete-reconcile.renew_failed', {
+            error: error instanceof Error ? error.name : typeof error,
+          });
+        });
+    },
+    Math.max(1, Math.floor(RECONCILE_LOCK_TTL_MS / 3)),
+  );
+
+  const round = async (): Promise<void> => {
+    if (closed) return;
+    try {
+      const held = lock.isHeld() || (await lock.acquire());
+      if (!held) {
+        logger.log('delete-reconcile.round_skipped', { reason: 'lock_not_held' });
+      } else {
+        const summaries = await runtime.reconcileService.run(
+          { mode: 'apply', scope: { kind: 'global' } },
+          reconcileContext(),
+        );
+        logger.log('delete-reconcile.round', { reports: summaries.length });
+      }
+    } catch (error) {
+      logger.log('delete-reconcile.round_failed', {
+        error: error instanceof Error ? error.name : typeof error,
+      });
+    }
+    if (!closed) {
+      timer = setTimeout(runRound, RECONCILE_INTERVAL_MS);
+    }
+  };
+
+  const runRound = (): void => {
+    inFlight = round().finally(() => {
+      inFlight = undefined;
+    });
+    void inFlight;
+  };
+
+  runRound();
+
+  return {
+    name: 'delete-reconcile',
+    phase: 'leader-lock',
+    async close(): Promise<void> {
+      closed = true;
+      if (timer !== undefined) clearTimeout(timer);
+      clearInterval(renewTimer);
+      const pending = inFlight;
+      if (pending) await pending.catch(() => undefined);
+      await lock.release();
+    },
+  };
+}
+
 function defaultUnits(
   runtime: ExtendedAppRuntime,
   role: RuntimeRole,
@@ -51,6 +144,7 @@ function defaultUnits(
       createDatasetSyncScheduler(runtime, {
         listExpectedDatasetIds: options.listExpectedDatasetIds ?? emptyExpectedDatasetIds,
       }),
+      createReconcileSweeperUnit(runtime),
     );
   }
   return units;
