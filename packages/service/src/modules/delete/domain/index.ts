@@ -15,6 +15,13 @@ export type {
   S3OrphanScanner,
   SchedulerReconcileSummary,
 } from './findings';
+export {
+  FAILURE_CURSOR_ORDER,
+  FAILURE_EXHAUSTED_KIND,
+  classifyFailureError,
+  isFailureExhausted,
+} from './failure';
+export type { FailureClassification, FailureRecord } from './failure';
 /**
  * DeleteJob 领域骨架（设计文档 7.2 / 7.4）。
  * 该层只允许实体、值对象、不变量与 Port 引用；禁止导入基础设施客户端。

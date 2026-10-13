@@ -126,6 +126,7 @@ export class MongoCrossStoreOperationRepository {
       stage: string;
       error?: Record<string, unknown> | null;
       attemptDelta?: number;
+      nextAttemptAt?: Date;
       now?: Date;
     },
     context: RequestContext,
@@ -140,6 +141,14 @@ export class MongoCrossStoreOperationRepository {
           stage: input.stage,
           error: input.error ?? null,
           updateTime: input.now ?? new Date(),
+          ...(input.nextAttemptAt !== undefined
+            ? {
+                nextAttemptAt: input.nextAttemptAt,
+                // 退避写回即归还租约：下一轮仅由 nextAttemptAt 控制可领取性。
+                leaseOwner: null,
+                leaseExpireAt: null,
+              }
+            : {}),
         },
         ...(input.attemptDelta !== undefined ? { $inc: { attempt: input.attemptDelta } } : {}),
       },

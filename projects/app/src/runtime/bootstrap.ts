@@ -28,6 +28,7 @@ import { Queue } from 'bullmq';
 import { createDefaultDocumentParser } from '@kb/parse';
 import { MinioObjectStore } from '@kb/storage';
 import { DeleteApplicationService } from '../../../../packages/service/src/modules/delete/application/index';
+import { CompensationApplicationService } from '../../../../packages/service/src/modules/delete/application/compensation.service';
 import { ReconcileApplicationService } from '../../../../packages/service/src/modules/delete/application/reconcile.service';
 import { S3TtlService } from '../../../../packages/service/src/modules/delete/application/s3-ttl.service';
 import {
@@ -37,6 +38,7 @@ import {
   MongoS3TtlRepository,
 } from '../../../../packages/service/src/modules/delete/repository/index';
 import { ReconcileResultAdapter } from '../../../../packages/service/src/modules/delete/adapter/reconcile-result.adapter';
+import { FailureQueryAdapter } from '../../../../packages/service/src/modules/delete/adapter/failure-query.adapter';
 import type { S3OrphanScanner } from '../../../../packages/service/src/modules/delete/domain/findings';
 import { MongoDeleteJobRepository } from '../../../../packages/service/src/modules/delete/repository/mongo-delete-job.repository';
 import { reconcileDatasetSyncSchedulers } from '../../../../packages/service/src/shared/runtime/dataset-sync-scheduler';
@@ -88,6 +90,7 @@ export interface ExtendedAppRuntime extends AppRuntime {
   deleteService: DeleteApplicationService;
   reconcileService: ReconcileApplicationService;
   s3TtlService: S3TtlService;
+  compensationService: CompensationApplicationService;
   migrationRepository: ReturnType<typeof createMigrationRunRepository>;
   datasetPermission: ReturnType<typeof createDatasetAclRepository>;
   embeddingService: EmbeddingService;
@@ -227,11 +230,20 @@ export async function bootstrapRuntime(
     ...(s3OrphanScanner !== undefined ? { s3OrphanScanner } : {}),
     s3TtlBackfill: s3TtlRepository,
   });
+  const failureQueryAdapter = new FailureQueryAdapter(clients.mongo);
+  const compensationService = new CompensationApplicationService({
+    crossStore: crossStoreRepository,
+    vectorController: adapters,
+    objectStore: objectStorePort,
+    hasFormalReference: (input) => s3TtlRepository.hasFormalReference(input),
+    hasLiveReference: (input, context) => deleteFactsRepository.hasLiveReference(input, context),
+  });
   const ports: ServicePorts = {
     ...basePorts,
     deleteJobRepository: deleteRepository,
     objectStore: objectStorePort,
     reconcileResult: reconcileResultAdapter,
+    failureQuery: failureQueryAdapter,
     datasetSync: datasetSyncService,
     datasetSourceProvider,
     modelRegistry: createModelRegistryAdapter({
@@ -292,6 +304,7 @@ export async function bootstrapRuntime(
     deleteService,
     reconcileService,
     s3TtlService,
+    compensationService,
     migrationRepository,
     datasetPermission,
     embeddingService,
