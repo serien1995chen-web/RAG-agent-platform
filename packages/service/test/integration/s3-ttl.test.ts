@@ -1,4 +1,3 @@
-import { ApiErrorException, createApiError } from '@kb/contracts';
 import { MongoMemoryServer } from 'mongodb-memory-server';
 import mongoose from 'mongoose';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
