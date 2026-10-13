@@ -16,6 +16,7 @@ function candidate(docId: string, score: number): Candidate {
     collectionId: 'collection-a',
     score,
     scores: [{ type: 'embedding', value: score, index: 0 }],
+    text: `question ${docId}answer`,
   };
 }
 
@@ -80,6 +81,17 @@ describe('search fusion', () => {
     expect(applyTokenBudget(items, 0, () => 100)).toEqual([items[0]]);
     expect(applyTokenBudget(items, 100, () => 100)).toHaveLength(1);
     expect(applyTokenBudget(items, 200, () => 100)).toHaveLength(2);
+  });
+
+  it('bills token budget from candidate text instead of serialized JSON', () => {
+    const seen: string[] = [];
+    const items = [{ ...candidate('a', 1), text: 'question-answer' }];
+    applyTokenBudget(items, 100, (text) => {
+      seen.push(text);
+      return 1;
+    });
+    expect(seen).toEqual(['question-answer']);
+    expect(seen[0]).not.toContain('docId');
   });
 
   it('truncates within the 1-50 limit', () => {

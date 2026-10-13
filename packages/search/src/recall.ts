@@ -193,6 +193,7 @@ function vectorCandidate(
     collectionId,
     score: hit.score,
     scores: [score],
+    text: '',
   };
 }
 
@@ -208,6 +209,7 @@ function fullTextCandidate(
     collectionId: hit.collectionId,
     score: hit.score,
     scores: [score],
+    text: '',
   };
 }
 

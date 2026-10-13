@@ -13,6 +13,7 @@ export interface Candidate {
   collectionId: string;
   score: number;
   scores: CitationScore[];
+  text: string;
 }
 
 export interface RecallOutcome {
@@ -58,6 +59,10 @@ export interface SearchEngineDeps {
       context: { requestId: string; tenant: { teamId: string; tmbId: string } },
     ): Promise<number[][]>;
   };
+  resolveTexts?: (
+    candidates: readonly Candidate[],
+    context: { requestId: string; tenant: { teamId: string; tmbId: string } },
+  ) => Promise<Map<string, string>>;
   rerank?: {
     rerank(
       input: {

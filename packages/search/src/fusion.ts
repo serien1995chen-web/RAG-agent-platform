@@ -107,7 +107,7 @@ export function applyTokenBudget(
   const output: Candidate[] = [];
   let used = 0;
   for (const item of items) {
-    const tokens = countTokens(JSON.stringify(item));
+    const tokens = countTokens(item.text ?? '');
     if (output.length > 0 && used + tokens > maxTokens) break;
     output.push(item);
     used += tokens;

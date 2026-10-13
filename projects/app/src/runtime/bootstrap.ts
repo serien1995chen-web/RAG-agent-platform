@@ -26,11 +26,14 @@ import {
 import { BullMqQueueAdapter } from '@kb/dal';
 import { createDefaultDocumentParser } from '@kb/parse';
 import { DatasetSyncApplicationService } from '../../../../packages/service/src/modules/collection/application/sync.service';
-import { createDatasetSearchPort } from '../../../../packages/service/src/modules/index/adapter/dataset-search.adapter';
+import {
+  createDatasetSearchPort,
+  createTextResolver,
+} from '../../../../packages/service/src/modules/index/adapter/dataset-search.adapter';
 import { createSearchEngine } from '../../../../packages/search/src/index';
 import { closeRuntimeClients, type RuntimeClients } from './clients';
 import { createRuntimeObjectStorePort } from './object-store-adapter';
-import { getRuntime as getBaseRuntime, type AppRuntime } from './health';
+import { createCitationBuilder, getRuntime as getBaseRuntime, type AppRuntime } from './health';
 
 export interface RuntimeBootstrapOptions {
   getBaseRuntime?: () => Promise<AppRuntime>;
@@ -129,9 +132,11 @@ export async function bootstrapRuntime(
       vectors: adapters,
       fullText: adapters.fullText,
       embedding: embeddingService,
+      resolveTexts: createTextResolver(clients.mongo),
     }),
     connection: clients.mongo,
     collections: collectionRepository,
+    citationBuilder: createCitationBuilder(base.config, clients),
     datasetIndexVersion: async (datasetId, ctx) => {
       const summary = await knowledgeBaseRepository.findByDatasetId({ datasetId }, ctx);
       if (!summary) {

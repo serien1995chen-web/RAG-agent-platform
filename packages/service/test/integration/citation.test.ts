@@ -1,4 +1,5 @@
 import { CitationSchema } from '@kb/contracts';
+import type { SearchRequest, SearchResult } from '@kb/contracts';
 import { MongoMemoryServer } from 'mongodb-memory-server';
 import mongoose from 'mongoose';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -6,12 +7,14 @@ import {
   CitationService,
   type ResolvedCitationInput,
 } from '../../src/modules/index/application/citation.service';
+import { createDatasetSearchPort } from '../../src/modules/index/adapter/dataset-search.adapter';
 import {
   DEFAULT_PREVIEW_TTL_SECONDS,
   PREVIEW_URL_MAX_TTL_SECONDS,
 } from '../../src/modules/index/domain/citation';
 import type { ObjectRef, RequestContext } from '../../src/ports/types';
 import { registerMongoModels } from '../../src/shared/persistence/schemas';
+import type { CollectionRepository } from '../../src/ports/repositories';
 import { createPreviewSigner, type PreviewSigner } from '../../../../sdk/storage/src/presign';
 
 const teamId = new mongoose.Types.ObjectId().toHexString();
@@ -36,12 +39,13 @@ const baseItem: ResolvedCitationInput = {
 
 let mongo: MongoMemoryServer;
 let connection: mongoose.Connection;
+let models: ReturnType<typeof registerMongoModels>;
 
 beforeAll(async () => {
   mongo = await MongoMemoryServer.create();
   connection = mongoose.createConnection(mongo.getUri('kb_citation_it'));
   await connection.asPromise();
-  const models = registerMongoModels(connection);
+  models = registerMongoModels(connection);
   await models.DatasetData.init();
   await models.DatasetCollection.init();
   await models.ImageAsset.init();
@@ -166,5 +170,112 @@ describe('P5-05 citation service', () => {
     const normalize = (citations: typeof first) =>
       citations.map((citation) => ({ ...citation, imagePreviewUrls: ['<signed>'] }));
     expect(normalize(second)).toEqual(normalize(first));
+  });
+
+  it('keeps citationBuilder wired through createDatasetSearchPort', async () => {
+    const datasetId = new mongoose.Types.ObjectId().toHexString();
+    const collectionId = new mongoose.Types.ObjectId().toHexString();
+    const dataId = new mongoose.Types.ObjectId().toHexString();
+    const vectorId = `${dataId}:qa:bge-m3:1536:v1`;
+    await models.DatasetData.create({
+      _id: new mongoose.Types.ObjectId(dataId),
+      teamId: new mongoose.Types.ObjectId(teamId),
+      datasetId: new mongoose.Types.ObjectId(datasetId),
+      collectionId: new mongoose.Types.ObjectId(collectionId),
+      q: 'q',
+      a: 'a',
+      imageId: 'img-1',
+      chunkIndex: 0,
+      metadata: {},
+      history: [],
+      indexes: [{ type: 'default', dataId: vectorId, text: 'q a' }],
+      dedupKey: null,
+      rebuilding: false,
+      createTime: new Date(),
+      updateTime: new Date(),
+    });
+
+    let presignCalls = 0;
+    const searchResult: SearchResult = {
+      citations: [
+        {
+          dataId: vectorId,
+          chunkIndex: 0,
+          datasetId,
+          collectionId,
+          collectionName: 'pending',
+          sourceName: 'pending',
+          sourceType: 'virtual',
+          quoteText: '',
+          updateTime: new Date(0).toISOString(),
+          scores: [],
+        },
+      ],
+      stats: {
+        searchMode: 'embedding',
+        usingReRank: false,
+        usingSimilarityFilter: false,
+        embeddingTokens: 0,
+        rerankInputTokens: 0,
+        degraded: [],
+        durationMs: 0,
+      },
+    };
+    const engine = {
+      search: async () => searchResult,
+      searchBatch: async () => [searchResult],
+    };
+    const collections = {
+      list: async () => ({
+        total: 1,
+        list: [
+          {
+            collectionId,
+            teamId,
+            datasetId,
+            parentId: null,
+            type: 'file',
+            name: 'source.txt',
+            tagIds: [],
+            version: 1,
+            createTime: new Date().toISOString(),
+            updateTime: new Date().toISOString(),
+          },
+        ],
+        cursor: null,
+      }),
+    } as unknown as CollectionRepository;
+    const adapter = createDatasetSearchPort({
+      engine,
+      connection,
+      collections,
+      datasetIndexVersion: async () => 'bge-m3:1536:v1',
+      citationBuilder: new CitationService({
+        resolveImageRef: async () => ({
+          ref: { bucket: 'kb-test', key: `image/${teamId}/img-1` },
+          datasetId,
+        }),
+        presignPreview: async () => {
+          presignCalls += 1;
+          return `https://preview.test/${presignCalls}`;
+        },
+      }),
+    });
+    const request: SearchRequest = {
+      requestId: 'req-port-citation',
+      teamId,
+      datasetIds: [datasetId],
+      textQueries: ['q'],
+      imageQueries: [],
+      models: { embeddingModel: 'bge-m3' },
+      searchMode: 'embedding',
+      limit: 10,
+      maxTokens: 4_000,
+      similarity: 0,
+    };
+
+    const result = await adapter.search(request, context);
+    expect(presignCalls).toBe(1);
+    expect(result.citations[0]?.imagePreviewUrls).toEqual(['https://preview.test/1']);
   });
 });

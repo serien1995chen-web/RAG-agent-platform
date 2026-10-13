@@ -6,7 +6,7 @@ import type {
   SearchRequest,
   SearchResult,
 } from '@kb/contracts';
-import type { SearchPipelinePort } from '@kb/search';
+import type { Candidate, SearchPipelinePort } from '@kb/search';
 import { Types, type Connection } from 'mongoose';
 import type { DatasetSearchPort } from '../../../ports/capabilities';
 import type { CollectionRepository } from '../../../ports/repositories';
@@ -70,6 +70,10 @@ interface NormalizedSearch {
 interface CitationResolution {
   citations: Citation[];
   degraded: DegradedInfo[];
+}
+
+function normalizeQaText(text: string): string {
+  return text.normalize('NFKC').trim().replace(/\s+/g, ' ');
 }
 
 function sourceTypeOf(value: string): CitationSourceType {
@@ -331,4 +335,55 @@ export class DatasetSearchAdapter implements DatasetSearchPort {
 
 export function createDatasetSearchPort(deps: DatasetSearchAdapterDeps): DatasetSearchPort {
   return new DatasetSearchAdapter(deps);
+}
+
+export function createTextResolver(
+  connection: Connection,
+): (
+  candidates: readonly Candidate[],
+  context: { requestId: string; tenant: { teamId: string; tmbId: string } },
+) => Promise<Map<string, string>> {
+  const models = registerMongoModels(connection);
+
+  return async (candidates, context) => {
+    const teamId = new Types.ObjectId(context.tenant.teamId);
+    const parsed = candidates.flatMap((candidate) => {
+      const separator = candidate.docId.indexOf(':');
+      if (separator <= 0) return [];
+      const datasetId = candidate.docId.slice(0, separator);
+      const rawDataId = candidate.docId.slice(separator + 1);
+      const dataId = rawDataId.split(':')[0] ?? rawDataId;
+      if (!Types.ObjectId.isValid(datasetId) || !Types.ObjectId.isValid(dataId)) return [];
+      return [{ candidate, datasetId, dataId }];
+    });
+
+    const datasetIds = [...new Set(parsed.map((item) => item.datasetId))].map(
+      (id) => new Types.ObjectId(id),
+    );
+    const dataIds = [...new Set(parsed.map((item) => item.dataId))].map(
+      (id) => new Types.ObjectId(id),
+    );
+    const docs =
+      parsed.length === 0
+        ? []
+        : ((await models.DatasetData.find({
+            teamId,
+            datasetId: { $in: datasetIds },
+            _id: { $in: dataIds },
+          })
+            .select('q a')
+            .lean()
+            .exec()) as unknown as { _id: Types.ObjectId; q: string | null; a: string }[]);
+    const textByDataId = new Map(
+      docs.map((doc) => [
+        String(doc._id),
+        `${normalizeQaText(doc.q ?? '')}${normalizeQaText(doc.a ?? '')}`,
+      ]),
+    );
+    const resolved = new Map<string, string>();
+    for (const item of parsed) {
+      resolved.set(item.candidate.docId, textByDataId.get(item.dataId) ?? '');
+    }
+    return resolved;
+  };
 }

@@ -3,8 +3,11 @@ import { MongoMemoryServer } from 'mongodb-memory-server';
 import mongoose, { Types } from 'mongoose';
 import { Pool } from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { createSearchEngine, rrfFuseWeighted } from '../../../search/src/index';
-import { createDatasetSearchPort } from '../../src/modules/index/adapter/dataset-search.adapter';
+import { createSearchEngine, dedupeCandidates, rrfFuseWeighted } from '../../../search/src/index';
+import {
+  createDatasetSearchPort,
+  createTextResolver,
+} from '../../src/modules/index/adapter/dataset-search.adapter';
 import { createFullTextStoreAdapter } from '../../src/modules/index/adapter/full-text-store.adapter';
 import { createVectorControllerAdapter } from '../../src/modules/index/adapter/vector-controller.adapter';
 import { MongoKnowledgeItemRepository } from '../../src/modules/item/repository/mongo-knowledge-item.repository';
@@ -161,6 +164,7 @@ function createAdapter(
     vectors?: VectorController;
     fullText?: FullTextStore;
     collections?: CollectionRepository;
+    includeFullText?: boolean;
   } = {},
 ) {
   const vectors =
@@ -206,11 +210,12 @@ function createAdapter(
 
   const engine = createSearchEngine({
     vectors,
-    fullText,
+    ...(overrides.includeFullText === false ? {} : { fullText }),
     embedding: {
       embed: async ({ texts }) =>
         texts.map((text) => (text.includes('beta') ? unitVector(1) : unitVector(0))),
     },
+    resolveTexts: createTextResolver(connection),
   });
   return createDatasetSearchPort({
     engine,
@@ -247,6 +252,26 @@ describe('P5-02 dataset search adapter', () => {
       seeded.context,
     );
     expect(mixed.citations.map((citation) => citation.dataId)).toContain(seeded.dataId);
+
+    const duplicateCandidates = [
+      {
+        docId: 'doc-a',
+        itemId: 'item-a',
+        collectionId: 'collection-a',
+        score: 1,
+        scores: [],
+        text: 'same-answer',
+      },
+      {
+        docId: 'doc-b',
+        itemId: 'item-b',
+        collectionId: 'collection-a',
+        score: 1,
+        scores: [],
+        text: 'same-answer',
+      },
+    ];
+    expect(dedupeCandidates(duplicateCandidates, (candidate) => candidate.text)).toHaveLength(1);
   });
 
   it('uses the frozen candidate counts for all modes', async () => {
@@ -330,6 +355,46 @@ describe('P5-02 dataset search adapter', () => {
       otherContext,
     );
     expect(result.citations).toEqual([]);
+  });
+
+  it('rejects invalid collectionFilterMatch operators and handles null $and', async () => {
+    const seeded = await seedDocument();
+    const adapter = createAdapter();
+
+    await expect(
+      adapter.search(
+        requestFor(seeded.teamId, seeded.datasetId, seeded.collectionId, {
+          collectionFilterMatch: "{tags:{$not:['t1']}}",
+        }),
+        seeded.context,
+      ),
+    ).rejects.toMatchObject({ error: { code: 501050 } });
+
+    const empty = await adapter.search(
+      requestFor(seeded.teamId, seeded.datasetId, seeded.collectionId, {
+        collectionFilterMatch: "{tags:{$and:['t1',null]}}",
+      }),
+      seeded.context,
+    );
+    expect(empty.citations).toEqual([]);
+    expect(empty.stats.degraded).toEqual([]);
+  });
+
+  it('degrades with full_text_store_unavailable when the full-text store is absent', async () => {
+    const seeded = await seedDocument();
+    const adapter = createAdapter({ includeFullText: false });
+
+    const result = await adapter.search(
+      requestFor(seeded.teamId, seeded.datasetId, seeded.collectionId, {
+        searchMode: 'mixedRecall',
+      }),
+      seeded.context,
+    );
+    expect(result.citations.map((citation) => citation.dataId)).toContain(seeded.dataId);
+    expect(result.stats.degraded).toContainEqual({
+      stage: 'fullText',
+      reason: 'full_text_store_unavailable',
+    });
   });
 
   it('rejects searchBatch over ten requests with 501050', async () => {

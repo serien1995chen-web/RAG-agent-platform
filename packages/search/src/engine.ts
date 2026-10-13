@@ -193,7 +193,17 @@ export function createSearchEngine(deps: SearchEngineDeps): SearchPipelinePort {
       }
     }
 
-    candidates = dedupeCandidates(candidates, (candidate) => candidate.docId);
+    if (deps.resolveTexts) {
+      const texts = await deps.resolveTexts(candidates, context);
+      candidates = candidates.map((candidate) => ({
+        ...candidate,
+        text: texts.get(candidate.docId) ?? candidate.text,
+      }));
+    }
+
+    candidates = dedupeCandidates(candidates, (candidate) =>
+      candidate.text.length > 0 ? candidate.text : candidate.docId,
+    );
     if (request.similarity > 0) {
       candidates = filterBySimilarity(candidates, request.similarity);
     }
