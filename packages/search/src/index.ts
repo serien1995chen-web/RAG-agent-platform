@@ -72,3 +72,23 @@ export function createDegradedSearchEngine(reason = 'adapter_not_configured'): S
 
 export { SEARCH_BATCH_LIMIT, buildIndexVersion };
 export type { SearchRequest, SearchResult };
+export { createSearchEngine } from './engine';
+export {
+  applyTokenBudget,
+  dedupeCandidates,
+  filterBySimilarity,
+  fuseCandidates,
+  mergeReranked,
+  minMaxNormalize,
+  truncateByLimit,
+} from './fusion';
+export { parseCollectionFilterMatch, recallCandidates } from './recall';
+export { DEFAULT_RRF_K, rrfFuseWeighted } from './rrf';
+export type {
+  Candidate,
+  RankedEntry,
+  RecallOutcome,
+  SearchEngineDeps,
+  SearchEngineOptions,
+  SearchPipelinePort,
+} from './types';
