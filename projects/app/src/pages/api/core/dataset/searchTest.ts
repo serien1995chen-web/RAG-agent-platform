@@ -49,6 +49,9 @@ export default withApiHandler(
       limit: body.limit ?? 10,
       maxTokens: 4000,
       similarity: body.similarity ?? 0,
+      ...(body.collectionFilterMatch !== undefined
+        ? { collectionFilterMatch: body.collectionFilterMatch }
+        : {}),
       ...(body.embeddingWeight !== undefined || body.rerankWeight !== undefined
         ? {
             weights: {

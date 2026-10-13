@@ -2,6 +2,7 @@ import {
   ApiErrorException,
   DatasetApiService,
   EmbeddingService,
+  IndexApplicationService,
   KnowledgeItemApplicationService,
   MongoKnowledgeBaseRepository,
   ProcessingApplicationService,
@@ -69,6 +70,7 @@ export interface ExtendedAppRuntime extends AppRuntime {
   migrationRepository: ReturnType<typeof createMigrationRunRepository>;
   datasetPermission: ReturnType<typeof createDatasetAclRepository>;
   embeddingService: EmbeddingService;
+  indexService: IndexApplicationService;
   datasetSourceProvider: DatasetSourceProvider;
   vectorController: VectorController;
   fullTextStore?: FullTextStore;
@@ -124,6 +126,10 @@ export async function bootstrapRuntime(
   });
   const knowledgeItemService = new KnowledgeItemApplicationService({
     repository: knowledgeItemRepository,
+  });
+  const indexService = new IndexApplicationService({
+    repository: adapters,
+    items: knowledgeItemRepository,
   });
   const processingService = new ProcessingApplicationService({
     repository: processingRepository,
@@ -196,6 +202,7 @@ export async function bootstrapRuntime(
     migrationRepository,
     datasetPermission,
     embeddingService,
+    indexService,
     datasetSourceProvider,
     vectorController: adapters,
     ...(adapters.fullText ? { fullTextStore: adapters.fullText } : {}),
