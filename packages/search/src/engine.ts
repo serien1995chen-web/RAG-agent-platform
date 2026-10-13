@@ -17,7 +17,13 @@ import {
 } from './fusion';
 import { rrfFuseWeighted } from './rrf';
 import { recallCandidates } from './recall';
-import type { Candidate, RankedEntry, SearchEngineDeps, SearchPipelinePort } from './types';
+import type {
+  Candidate,
+  RankedEntry,
+  SearchEngineDeps,
+  SearchEngineOptions,
+  SearchPipelinePort,
+} from './types';
 
 function error(
   request: SearchRequest,
@@ -127,7 +133,10 @@ function toCitation(candidate: Candidate, index: number, usingReRank: boolean): 
   };
 }
 
-export function createSearchEngine(deps: SearchEngineDeps): SearchPipelinePort {
+export function createSearchEngine(
+  deps: SearchEngineDeps,
+  options: SearchEngineOptions = {},
+): SearchPipelinePort {
   const search = async (
     request: SearchRequest,
     context: { requestId: string; tenant: { teamId: string; tmbId: string } },
@@ -185,10 +194,15 @@ export function createSearchEngine(deps: SearchEngineDeps): SearchPipelinePort {
           candidates = mergeReranked(candidates, reranked, request.weights?.rerank ?? 0.5).items;
           usingReRank = true;
         } catch (caught) {
-          degraded.push({
-            stage: 'rerank',
-            reason: caught instanceof Error ? caught.message : String(caught),
-          });
+          const reason = caught instanceof Error ? caught.message : String(caught);
+          if ((options.rerankFailureMode ?? 'fallback') === 'strict') {
+            throw error(request, 501064, {
+              model: request.models.rerankModel,
+              reason,
+              requestId: request.requestId,
+            });
+          }
+          degraded.push({ stage: 'rerank', reason });
         }
       }
     }

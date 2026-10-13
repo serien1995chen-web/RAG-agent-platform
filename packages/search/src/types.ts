@@ -86,4 +86,8 @@ export interface SearchPipelinePort {
   ): Promise<SearchResult[]>;
 }
 
-export type SearchEngineOptions = Record<string, never>;
+export type RerankFailureMode = 'fallback' | 'strict';
+
+export interface SearchEngineOptions {
+  rerankFailureMode?: RerankFailureMode;
+}

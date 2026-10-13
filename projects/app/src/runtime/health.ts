@@ -23,6 +23,7 @@ import {
   createTextResolver,
   type DatasetSearchAdapterDeps,
 } from '../../../../packages/service/src/modules/index/adapter/dataset-search.adapter';
+import { createRerankAdapter } from '../../../../packages/service/src/modules/index/adapter/rerank.adapter';
 
 export interface AppRuntime {
   config: AppConfig;
@@ -174,12 +175,19 @@ async function bootstrap(): Promise<AppRuntime> {
     pool: clients.pg,
     connection: clients.mongo,
   });
-  const engine = createSearchEngine({
-    vectors: adapters,
-    fullText: adapters.fullText,
-    embedding: new EmbeddingService({}),
-    resolveTexts: createTextResolver(clients.mongo),
-  });
+  const engine = createSearchEngine(
+    {
+      vectors: adapters,
+      fullText: adapters.fullText,
+      embedding: new EmbeddingService({}),
+      resolveTexts: createTextResolver(clients.mongo),
+      rerank: createRerankAdapter({
+        environment: config.system.environment,
+        mockMode: config.externalMockMode.model,
+      }),
+    },
+    { rerankFailureMode: config.datasetRuntime.search.rerankFailureMode },
+  );
   const collections: CollectionRepository = createSourceCollectionRepository(clients.mongo);
   const datasetSearch = createDatasetSearchPort({
     engine,
