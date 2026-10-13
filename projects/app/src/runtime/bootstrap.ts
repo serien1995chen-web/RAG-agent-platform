@@ -26,12 +26,15 @@ import {
 import { BullMqQueueAdapter, QUEUE_NAMES } from '@kb/dal';
 import { Queue } from 'bullmq';
 import { createDefaultDocumentParser } from '@kb/parse';
+import { MinioObjectStore } from '@kb/storage';
 import { DeleteApplicationService } from '../../../../packages/service/src/modules/delete/application/index';
 import { ReconcileApplicationService } from '../../../../packages/service/src/modules/delete/application/reconcile.service';
+import { S3TtlService } from '../../../../packages/service/src/modules/delete/application/s3-ttl.service';
 import {
   MongoCrossStoreOperationRepository,
   MongoDeleteFactsRepository,
   MongoReconcileReportRepository,
+  MongoS3TtlRepository,
 } from '../../../../packages/service/src/modules/delete/repository/index';
 import { ReconcileResultAdapter } from '../../../../packages/service/src/modules/delete/adapter/reconcile-result.adapter';
 import type { S3OrphanScanner } from '../../../../packages/service/src/modules/delete/domain/findings';
@@ -84,6 +87,7 @@ export interface ExtendedAppRuntime extends AppRuntime {
   deleteJobStore: MongoDeleteJobRepository;
   deleteService: DeleteApplicationService;
   reconcileService: ReconcileApplicationService;
+  s3TtlService: S3TtlService;
   migrationRepository: ReturnType<typeof createMigrationRunRepository>;
   datasetPermission: ReturnType<typeof createDatasetAclRepository>;
   embeddingService: EmbeddingService;
@@ -196,12 +200,32 @@ export async function bootstrapRuntime(
   });
   const reconcileReportRepository = new MongoReconcileReportRepository(clients.mongo);
   const reconcileResultAdapter = new ReconcileResultAdapter(reconcileReportRepository);
+  const s3TtlRepository = new MongoS3TtlRepository(clients.mongo);
+  // 附加授权②：仅当底层为 MinioObjectStore 时提供枚举能力；判型失败时孤儿扫描转 pending_review。
+  const minioObjectStore =
+    clients.objectStore instanceof MinioObjectStore ? clients.objectStore : undefined;
+  const orphanObjectLister =
+    minioObjectStore !== undefined
+      ? {
+          listByPrefix: (input: { prefix: string; limit: number }) =>
+            minioObjectStore.listObjectsByPrefix(input),
+        }
+      : undefined;
+  const s3TtlService = new S3TtlService({
+    repository: s3TtlRepository,
+    objectStore: objectStorePort,
+    logger: clients.logger,
+    ...(orphanObjectLister !== undefined ? { orphanObjectLister } : {}),
+  });
+  const s3OrphanScanner =
+    options.s3OrphanScanner ?? (orphanObjectLister !== undefined ? s3TtlService : undefined);
   const reconcileService = new ReconcileApplicationService({
     facts: deleteFactsRepository,
     reports: reconcileReportRepository,
     vectorController: adapters,
     ...(adapters.fullText ? { fullTextStore: adapters.fullText } : {}),
-    ...(options.s3OrphanScanner !== undefined ? { s3OrphanScanner: options.s3OrphanScanner } : {}),
+    ...(s3OrphanScanner !== undefined ? { s3OrphanScanner } : {}),
+    s3TtlBackfill: s3TtlRepository,
   });
   const ports: ServicePorts = {
     ...basePorts,
@@ -267,6 +291,7 @@ export async function bootstrapRuntime(
     deleteJobStore,
     deleteService,
     reconcileService,
+    s3TtlService,
     migrationRepository,
     datasetPermission,
     embeddingService,

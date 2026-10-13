@@ -8,6 +8,7 @@ import {
 } from '@kb/service';
 // Plan D4 冻结 @kb/service barrel；leader-lock 按相对路径引用包内实现（P3 深导入先例）。
 import { createLeaderLock } from '../../../../packages/service/src/shared/runtime/leader-lock';
+import { createS3TtlSweeperUnit } from '../../../../packages/service/src/shared/runtime/ttl-sweeper';
 import {
   bootstrapRuntime,
   type ExtendedAppRuntime,
@@ -145,6 +146,11 @@ function defaultUnits(
         listExpectedDatasetIds: options.listExpectedDatasetIds ?? emptyExpectedDatasetIds,
       }),
       createReconcileSweeperUnit(runtime),
+      createS3TtlSweeperUnit({
+        service: runtime.s3TtlService,
+        redis: runtime.clients.redis,
+        logger: runtime.clients.logger,
+      }),
     );
   }
   return units;
