@@ -9,7 +9,6 @@ import {
   SourceCollectionApplicationService,
   createDatasetAclRepository,
   createDefaultPorts,
-  createDeleteJobRepository,
   createKnowledgeItemIndexAdapter,
   createKnowledgeItemRepository,
   createMigrationRunRepository,
@@ -24,8 +23,17 @@ import {
   type ServicePorts,
   type VectorController,
 } from '@kb/service';
-import { BullMqQueueAdapter } from '@kb/dal';
+import { BullMqQueueAdapter, QUEUE_NAMES } from '@kb/dal';
+import { Queue } from 'bullmq';
 import { createDefaultDocumentParser } from '@kb/parse';
+import { DeleteApplicationService } from '../../../../packages/service/src/modules/delete/application/index';
+import {
+  MongoCrossStoreOperationRepository,
+  MongoDeleteFactsRepository,
+} from '../../../../packages/service/src/modules/delete/repository/index';
+import { MongoDeleteJobRepository } from '../../../../packages/service/src/modules/delete/repository/mongo-delete-job.repository';
+import { reconcileDatasetSyncSchedulers } from '../../../../packages/service/src/shared/runtime/dataset-sync-scheduler';
+import { createLeaderLock } from '../../../../packages/service/src/shared/runtime/leader-lock';
 import { DatasetSyncApplicationService } from '../../../../packages/service/src/modules/collection/application/sync.service';
 import {
   createDatasetSearchPort,
@@ -66,7 +74,9 @@ export interface ExtendedAppRuntime extends AppRuntime {
   processingRepository: ReturnType<typeof createProcessingJobRepository>;
   processingService: ProcessingApplicationService;
   datasetSyncService: DatasetSyncApplicationService;
-  deleteRepository: ReturnType<typeof createDeleteJobRepository>;
+  deleteRepository: MongoDeleteJobRepository;
+  deleteJobStore: MongoDeleteJobRepository;
+  deleteService: DeleteApplicationService;
   migrationRepository: ReturnType<typeof createMigrationRunRepository>;
   datasetPermission: ReturnType<typeof createDatasetAclRepository>;
   embeddingService: EmbeddingService;
@@ -88,7 +98,10 @@ export async function bootstrapRuntime(
   const collectionRepository = createSourceCollectionRepository(clients.mongo);
   const knowledgeItemRepository = createKnowledgeItemRepository(clients.mongo);
   const processingRepository = createProcessingJobRepository(clients.mongo);
-  const deleteRepository = createDeleteJobRepository(clients.mongo);
+  const deleteJobStore = new MongoDeleteJobRepository(clients.mongo);
+  const deleteRepository = deleteJobStore;
+  const deleteFactsRepository = new MongoDeleteFactsRepository(clients.mongo);
+  const crossStoreRepository = new MongoCrossStoreOperationRepository(clients.mongo);
   const migrationRepository = createMigrationRunRepository(clients.mongo);
   const datasetPermission = createDatasetAclRepository(clients.mongo);
   const embeddingService = new EmbeddingService({ gateway: options.embeddingGateway });
@@ -141,8 +154,43 @@ export async function bootstrapRuntime(
     processingJobs: processingRepository,
     queue: syncQueue,
   });
+  const deleteQueue = new BullMqQueueAdapter({ connection: clients.redis });
+  const deleteSchedulerQueue = new Queue(QUEUE_NAMES.sync, { connection: clients.redis });
+  const deleteSchedulerLock = createLeaderLock({
+    redis: clients.redis,
+    key: 'runtime:delete-scheduler-cleanup',
+    ttlMs: 30_000,
+  });
+  const deleteService = new DeleteApplicationService({
+    jobs: deleteJobStore,
+    crossStore: crossStoreRepository,
+    facts: deleteFactsRepository,
+    queue: deleteQueue,
+    vectorController: adapters,
+    objectStore: objectStorePort,
+    syncSchedulerCleanup: async (datasetId, context) => {
+      try {
+        const result = await reconcileDatasetSyncSchedulers({
+          queue: deleteSchedulerQueue,
+          lock: deleteSchedulerLock,
+          listExpectedDatasetIds: async () => [],
+          listRemovedDatasetIds: async () => [datasetId],
+          logger: clients.logger,
+        });
+        clients.logger.log('delete.scheduler_cleanup', { datasetId, ...result });
+      } catch (error) {
+        clients.logger.log('delete.scheduler_cleanup_failed', {
+          datasetId,
+          requestId: context.requestId,
+          error: error instanceof Error ? error.name : typeof error,
+        });
+      }
+    },
+  });
   const ports: ServicePorts = {
     ...basePorts,
+    deleteJobRepository: deleteRepository,
+    objectStore: objectStorePort,
     datasetSync: datasetSyncService,
     datasetSourceProvider,
     modelRegistry: createModelRegistryAdapter({
@@ -199,6 +247,8 @@ export async function bootstrapRuntime(
     processingService,
     datasetSyncService,
     deleteRepository,
+    deleteJobStore,
+    deleteService,
     migrationRepository,
     datasetPermission,
     embeddingService,
@@ -213,6 +263,8 @@ export async function bootstrapRuntime(
       closed = true;
       await drain();
       await syncQueue.close();
+      await deleteQueue.close();
+      await deleteSchedulerQueue.close();
       await closeClients(clients);
     },
   };

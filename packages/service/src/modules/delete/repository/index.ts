@@ -7,3 +7,6 @@ export function createDeleteJobRepository(connection?: Connection): DeleteJobRep
   if (connection) return new MongoDeleteJobRepository(connection);
   return createUnimplementedPort<DeleteJobRepository>('DeleteJobRepository');
 }
+
+export { MongoDeleteFactsRepository } from './mongo-delete-facts.repository';
+export { MongoCrossStoreOperationRepository } from './mongo-cross-store-operation.repository';

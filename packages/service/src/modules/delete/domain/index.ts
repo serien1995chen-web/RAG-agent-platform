@@ -1,5 +1,11 @@
 import type { DeleteJobSnapshot } from '../../../ports/types';
 export { assertTransition, canTransition } from './state';
+export {
+  DELETE_STAGES,
+  assertStageOrder,
+  canRetryDeleteJob,
+  isTerminalState,
+} from './state-machine';
 /**
  * DeleteJob 领域骨架（设计文档 7.2 / 7.4）。
  * 该层只允许实体、值对象、不变量与 Port 引用；禁止导入基础设施客户端。
