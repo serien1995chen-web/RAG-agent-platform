@@ -33,6 +33,7 @@ export const DatasetRuntimeConfigSchema = z.object({
       embedding: z.number().min(0).max(1),
       rerank: z.number().min(0).max(1),
     }),
+    rerankFailureMode: z.enum(['fallback', 'strict']).default('fallback'),
   }),
   chunkDefaults: ChunkPolicyDefaultsSchema,
 });
@@ -54,6 +55,7 @@ export const DEFAULT_DATASET_RUNTIME_CONFIG: DatasetRuntimeConfig = {
     maxTokens: 4000,
     defaultSimilarity: 0,
     defaultWeights: { embedding: 0.5, rerank: 0.5 },
+    rerankFailureMode: 'fallback',
   },
   chunkDefaults: DEFAULT_CHUNK_POLICY,
 };

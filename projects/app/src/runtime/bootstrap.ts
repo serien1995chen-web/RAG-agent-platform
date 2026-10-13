@@ -2,6 +2,7 @@ import {
   ApiErrorException,
   DatasetApiService,
   EmbeddingService,
+  IndexApplicationService,
   KnowledgeItemApplicationService,
   MongoKnowledgeBaseRepository,
   ProcessingApplicationService,
@@ -30,6 +31,8 @@ import {
   createDatasetSearchPort,
   createTextResolver,
 } from '../../../../packages/service/src/modules/index/adapter/dataset-search.adapter';
+import { createRerankAdapter } from '../../../../packages/service/src/modules/index/adapter/rerank.adapter';
+import { createModelRegistryAdapter } from '../../../../packages/service/src/modules/index/adapter/model-registry.adapter';
 import { createSearchEngine } from '../../../../packages/search/src/index';
 import { closeRuntimeClients, type RuntimeClients } from './clients';
 import { createRuntimeObjectStorePort } from './object-store-adapter';
@@ -67,6 +70,7 @@ export interface ExtendedAppRuntime extends AppRuntime {
   migrationRepository: ReturnType<typeof createMigrationRunRepository>;
   datasetPermission: ReturnType<typeof createDatasetAclRepository>;
   embeddingService: EmbeddingService;
+  indexService: IndexApplicationService;
   datasetSourceProvider: DatasetSourceProvider;
   vectorController: VectorController;
   fullTextStore?: FullTextStore;
@@ -104,6 +108,17 @@ export async function bootstrapRuntime(
     pool: clients.pg,
     connection: clients.mongo,
   });
+  // P5-03-S09：从（可能被契约测试精简 mock 的）base.config 读取装配所需字段，缺省回落冻结默认值。
+  const runtimeConfig = base.config as
+    | {
+        system?: { environment?: string };
+        externalMockMode?: { model?: 'mock' | 'real' };
+        datasetRuntime?: { search?: { rerankFailureMode?: 'fallback' | 'strict' } };
+      }
+    | undefined;
+  const modelEnvironment = runtimeConfig?.system?.environment ?? 'production';
+  const modelMockMode = runtimeConfig?.externalMockMode?.model ?? 'mock';
+  const rerankFailureMode = runtimeConfig?.datasetRuntime?.search?.rerankFailureMode ?? 'fallback';
 
   const datasetApi = new DatasetApiService({ repository: knowledgeBaseRepository });
   const collectionService = new SourceCollectionApplicationService({
@@ -111,6 +126,10 @@ export async function bootstrapRuntime(
   });
   const knowledgeItemService = new KnowledgeItemApplicationService({
     repository: knowledgeItemRepository,
+  });
+  const indexService = new IndexApplicationService({
+    repository: adapters,
+    items: knowledgeItemRepository,
   });
   const processingService = new ProcessingApplicationService({
     repository: processingRepository,
@@ -126,14 +145,26 @@ export async function bootstrapRuntime(
     ...basePorts,
     datasetSync: datasetSyncService,
     datasetSourceProvider,
+    modelRegistry: createModelRegistryAdapter({
+      environment: modelEnvironment,
+      mockMode: modelMockMode,
+      models: [],
+    }),
   };
   const datasetSearch = createDatasetSearchPort({
-    engine: createSearchEngine({
-      vectors: adapters,
-      fullText: adapters.fullText,
-      embedding: embeddingService,
-      resolveTexts: createTextResolver(clients.mongo),
-    }),
+    engine: createSearchEngine(
+      {
+        vectors: adapters,
+        fullText: adapters.fullText,
+        embedding: embeddingService,
+        resolveTexts: createTextResolver(clients.mongo),
+        rerank: createRerankAdapter({
+          environment: modelEnvironment,
+          mockMode: modelMockMode,
+        }),
+      },
+      { rerankFailureMode },
+    ),
     connection: clients.mongo,
     collections: collectionRepository,
     citationBuilder: createCitationBuilder(base.config, clients),
@@ -171,6 +202,7 @@ export async function bootstrapRuntime(
     migrationRepository,
     datasetPermission,
     embeddingService,
+    indexService,
     datasetSourceProvider,
     vectorController: adapters,
     ...(adapters.fullText ? { fullTextStore: adapters.fullText } : {}),

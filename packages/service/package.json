@@ -24,6 +24,7 @@
     "bullmq": "catalog:",
     "ioredis": "catalog:",
     "mongoose": "catalog:",
+    "openai": "catalog:",
     "pg": "catalog:",
     "undici": "catalog:",
     "zod": "catalog:"
