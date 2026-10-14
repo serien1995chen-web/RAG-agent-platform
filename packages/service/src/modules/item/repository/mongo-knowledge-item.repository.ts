@@ -208,6 +208,19 @@ export class MongoKnowledgeItemRepository implements KnowledgeItemQueryRepositor
     return { upserted, duplicates };
   }
 
+  async setRebuilding(
+    input: { dataIds: string[]; rebuilding: boolean; options: { timeoutMs: number } },
+    context: RequestContext,
+  ): Promise<void> {
+    if (input.dataIds.length === 0) return;
+    const teamId = this.teamId(context);
+    const dataIds = input.dataIds.map((dataId) => toOid(dataId, 'dataId', context.requestId));
+    await this.model.updateMany(
+      { teamId, _id: { $in: dataIds } },
+      { $set: { rebuilding: input.rebuilding, updateTime: new Date() } },
+    );
+  }
+
   async updateIndexes(
     input: {
       dataId: string;

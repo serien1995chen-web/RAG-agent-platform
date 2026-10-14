@@ -1,10 +1,12 @@
 import { ApiErrorException, createApiError } from '@kb/contracts';
+import { buildDeleteJobId } from '@kb/dal';
 import { Types, type Connection, type Model } from 'mongoose';
 import type { DeleteJobRepository } from '../../../ports/repositories';
 import type {
   DeleteJobSnapshot,
   DeleteJobState,
   PageResult,
+  PortCallOptions,
   RequestContext,
 } from '../../../ports/types';
 import {
@@ -60,6 +62,11 @@ export interface DeleteJobFailureInput {
   lastError: string;
 }
 
+export interface DeleteJobScopeSnapshot extends DeleteJobSnapshot {
+  actorTmbId: string | null;
+  ownerTmbId: string | null;
+}
+
 export class MongoDeleteJobRepository implements DeleteJobRepository {
   private readonly model: Model<DatasetDeleteJobDoc>;
   private readonly failures: Model<DatasetDeleteFailureDoc>;
@@ -77,7 +84,7 @@ export class MongoDeleteJobRepository implements DeleteJobRepository {
     return toOid(context.tenant.teamId, 'teamId', context.requestId);
   }
 
-  private async toSnapshot(doc: DatasetDeleteJobDoc): Promise<DeleteJobSnapshot> {
+  private async toSnapshot(doc: DatasetDeleteJobDoc): Promise<DeleteJobScopeSnapshot> {
     const failureCount = await this.failures.countDocuments({
       teamId: doc.teamId,
       jobId: doc.jobId,
@@ -91,6 +98,8 @@ export class MongoDeleteJobRepository implements DeleteJobRepository {
       progress:
         doc.progress.total === 0 ? 0 : Math.round((doc.progress.done / doc.progress.total) * 100),
       failureCount,
+      actorTmbId: doc.actorTmbId ? String(doc.actorTmbId) : null,
+      ownerTmbId: doc.ownerTmbId ? String(doc.ownerTmbId) : null,
       createTime: doc.createTime.toISOString(),
       updateTime: doc.updateTime.toISOString(),
     };
@@ -115,6 +124,8 @@ export class MongoDeleteJobRepository implements DeleteJobRepository {
             jobId,
             teamId,
             datasetId,
+            actorTmbId: toOid(context.tenant.tmbId, 'tmbId', context.requestId),
+            ownerTmbId: null,
             state: 'marked',
             stage: 'mongo',
             progress: { total: 0, done: 0, failed: 0, skipped: 0 },
@@ -149,6 +160,37 @@ export class MongoDeleteJobRepository implements DeleteJobRepository {
       );
     }
     return this.toSnapshot(doc as DatasetDeleteJobDoc);
+  }
+
+  async findByScope(
+    input: {
+      datasetId?: string;
+      collectionId?: string;
+      dataId?: string;
+      options: PortCallOptions;
+    },
+    context: RequestContext,
+  ): Promise<DeleteJobScopeSnapshot | null> {
+    const teamId = this.teamId(context);
+    let jobId: string | RegExp;
+    if (input.collectionId) {
+      const datasetSegment = input.datasetId ? escapeRegExp(input.datasetId) : '[0-9a-fA-F]{24}';
+      jobId = new RegExp(
+        `^${escapeRegExp(String(teamId))}:${datasetSegment}:collection:${escapeRegExp(input.collectionId)}:delete$`,
+      );
+    } else if (input.dataId) {
+      const datasetSegment = input.datasetId ? escapeRegExp(input.datasetId) : '[0-9a-fA-F]{24}';
+      jobId = new RegExp(
+        `^${escapeRegExp(String(teamId))}:${datasetSegment}:data:${escapeRegExp(input.dataId)}:delete$`,
+      );
+    } else if (input.datasetId) {
+      jobId = buildDeleteJobId(String(teamId), input.datasetId);
+    } else {
+      return null;
+    }
+
+    const doc = await this.model.findOne({ teamId, jobId }).sort({ updateTime: -1 }).lean();
+    return doc ? this.toSnapshot(doc as DatasetDeleteJobDoc) : null;
   }
 
   async transition(
@@ -374,4 +416,8 @@ export class MongoDeleteJobRepository implements DeleteJobRepository {
     );
     return Boolean(updated);
   }
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }

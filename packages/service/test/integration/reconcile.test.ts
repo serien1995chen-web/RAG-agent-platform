@@ -321,6 +321,7 @@ async function seedOrphans(): Promise<void> {
     datasetId: liveDataset,
     collectionId: new mongoose.Types.ObjectId(),
     dataId: new mongoose.Types.ObjectId(),
+    createTime: new Date(fixedNow.getTime() - 3 * 3_600_000),
     fullTextToken: 'SECRET-TOKEN',
   });
   await jobs.create({
@@ -545,6 +546,7 @@ describe('对账服务与报告（P6-03 / 设计 14.7 / 16.3）', () => {
       datasetId: liveDataset,
       collectionId: collection,
       dataId: new mongoose.Types.ObjectId(),
+      createTime: new Date(fixedNow.getTime() - 3 * 3_600_000),
       fullTextToken: 'orphan-token',
     });
     const orphanTextId = String(orphanText._id);

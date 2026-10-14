@@ -18,6 +18,8 @@ export type {
   IndexSyncResult,
   IndexingServiceDeps,
 } from './indexing.service';
+export { IndexVersionSwitchService } from './index-version-switch';
+export type { DatasetIndexVersionStore } from './index-version-switch';
 export { CitationService } from './citation.service';
 export type { CitationServiceDeps, ResolvedCitationInput } from './citation.service';
 

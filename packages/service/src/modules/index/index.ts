@@ -2,6 +2,8 @@ export { KNOWLEDGE_ITEM_INDEX_INVARIANTS, validateKnowledgeItemIndex } from './d
 export type { KnowledgeItemIndex } from './domain';
 export { IndexApplicationService } from './application';
 export type { IndexServiceDeps } from './application';
+export { IndexVersionSwitchService } from './application';
+export type { DatasetIndexVersionStore } from './application';
 export {
   EMBEDDING_DIMENSION,
   EmbeddingService,

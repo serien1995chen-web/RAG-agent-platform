@@ -44,6 +44,7 @@ export interface ExecuteDeleteTransactionInput {
   expectedVersion?: number;
   /** 服务层已按冻结格式算出的稳定 jobId；collection/data 范围缺省时由本仓储补齐格式。 */
   jobId?: string;
+  ownerTmbId?: string;
   resourceIds?: { collectionIds?: string[]; dataIds?: string[] };
 }
 
@@ -252,6 +253,8 @@ export class MongoDeleteFactsRepository {
             jobId,
             teamId,
             datasetId,
+            actorTmbId: toOid(context.tenant.tmbId, 'tmbId', requestId),
+            ownerTmbId: input.ownerTmbId ? toOid(input.ownerTmbId, 'ownerTmbId', requestId) : null,
             state: 'marked',
             stage: 'mongo',
             progress: { total: 0, done: 0, failed: 0, skipped: 0 },
