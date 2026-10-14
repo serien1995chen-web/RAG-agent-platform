@@ -310,3 +310,6 @@ export type {
   OwnerTransferServiceDeps,
   OwnerTransferStore,
 } from './modules/permission';
+
+export { createArchiveStatusAdapter } from './shared/runtime/archive-status.adapter';
+export { createFailureQueryAdapter } from './shared/runtime/failure-query.adapter';
