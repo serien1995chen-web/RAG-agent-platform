@@ -4,18 +4,24 @@ import {
   EmbeddingService,
   IndexApplicationService,
   KnowledgeItemApplicationService,
+  MigrationApplicationService,
   MongoKnowledgeBaseRepository,
   ProcessingApplicationService,
   SourceCollectionApplicationService,
+  createArchiveStatusAdapter,
+  createAuditAdapter,
   createDatasetAclRepository,
   createDefaultPorts,
+  createFailureQueryAdapter,
   createKnowledgeItemIndexAdapter,
   createKnowledgeItemRepository,
+  createMigrationRunAdapter,
   createMigrationRunRepository,
   createProcessingJobRepository,
   createSourceCollectionRepository,
   createSourceProviderRegistry,
   createApiError,
+  type AuthSubjectProvider,
   type DatasetSourceProvider,
   type EmbeddingGateway,
   type FileParserLike,
@@ -38,9 +44,12 @@ import {
   MongoS3TtlRepository,
 } from '../../../../packages/service/src/modules/delete/repository/index';
 import { ReconcileResultAdapter } from '../../../../packages/service/src/modules/delete/adapter/reconcile-result.adapter';
-import { FailureQueryAdapter } from '../../../../packages/service/src/modules/delete/adapter/failure-query.adapter';
 import type { S3OrphanScanner } from '../../../../packages/service/src/modules/delete/domain/findings';
 import { MongoDeleteJobRepository } from '../../../../packages/service/src/modules/delete/repository/mongo-delete-job.repository';
+import { createBackupToolAdapter } from '../../../../packages/service/src/modules/migration/adapter/backup-tool.adapter';
+import { MigrationExecutor } from '../../../../packages/service/src/modules/migration/application/executor';
+import { createDatasetNotificationAdapter } from '../../../../packages/service/src/modules/processing/adapter/dataset-notification.adapter';
+import { MongoIndexManager } from '../../../../packages/service/src/shared/persistence/mongo-index-manager';
 import { reconcileDatasetSyncSchedulers } from '../../../../packages/service/src/shared/runtime/dataset-sync-scheduler';
 import { createLeaderLock } from '../../../../packages/service/src/shared/runtime/leader-lock';
 import { DatasetSyncApplicationService } from '../../../../packages/service/src/modules/collection/application/sync.service';
@@ -74,6 +83,8 @@ export interface RuntimeBootstrapOptions {
   fileParser?: FileParserLike;
   /** P6-03 可缺省的 S3 孤儿扫描器；P6-04 起由 MinioObjectStore 判型默认注入。 */
   s3OrphanScanner?: S3OrphanScanner;
+  /** P7-05 独立 Root/Admin 身份 provider；不得用 identity extension 替代。 */
+  adminAuthProvider?: AuthSubjectProvider;
 }
 
 export interface ExtendedAppRuntime extends AppRuntime {
@@ -92,6 +103,8 @@ export interface ExtendedAppRuntime extends AppRuntime {
   s3TtlService: S3TtlService;
   compensationService: CompensationApplicationService;
   migrationRepository: ReturnType<typeof createMigrationRunRepository>;
+  migrationService: MigrationApplicationService;
+  adminAuthProvider?: AuthSubjectProvider;
   datasetPermission: ReturnType<typeof createDatasetAclRepository>;
   embeddingService: EmbeddingService;
   indexService: IndexApplicationService;
@@ -231,7 +244,20 @@ export async function bootstrapRuntime(
     s3TtlBackfill: s3TtlRepository,
     deleteQueue,
   });
-  const failureQueryAdapter = new FailureQueryAdapter(clients.mongo);
+  const audit = createAuditAdapter({ connection: clients.mongo });
+  const datasetNotification = createDatasetNotificationAdapter({ notify: basePorts.notify });
+  const archiveStatus = createArchiveStatusAdapter();
+  const failureQuery = createFailureQueryAdapter({ connection: clients.mongo });
+  const mongoIndexManager = new MongoIndexManager(clients.mongo);
+  const migrationRegistry = createMigrationRunAdapter({ connection: clients.mongo });
+  const backupTool = createBackupToolAdapter();
+  const migrationExecutor = new MigrationExecutor({
+    registry: migrationRegistry,
+    backupTool,
+    mongoIndexManager,
+    audit,
+  });
+  const migrationService = new MigrationApplicationService({ executor: migrationExecutor });
   const compensationService = new CompensationApplicationService({
     crossStore: crossStoreRepository,
     vectorController: adapters,
@@ -244,7 +270,13 @@ export async function bootstrapRuntime(
     deleteJobRepository: deleteRepository,
     objectStore: objectStorePort,
     reconcileResult: reconcileResultAdapter,
-    failureQuery: failureQueryAdapter,
+    audit,
+    datasetNotification,
+    archiveStatus,
+    failureQuery,
+    mongoIndexManager,
+    migrationRegistry,
+    backupTool,
     datasetSync: datasetSyncService,
     datasetSourceProvider,
     modelRegistry: createModelRegistryAdapter({
@@ -307,6 +339,8 @@ export async function bootstrapRuntime(
     s3TtlService,
     compensationService,
     migrationRepository,
+    migrationService,
+    adminAuthProvider: options.adminAuthProvider,
     datasetPermission,
     embeddingService,
     indexService,
