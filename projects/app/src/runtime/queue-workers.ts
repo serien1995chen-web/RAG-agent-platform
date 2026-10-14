@@ -7,7 +7,6 @@ import {
   MIGRATION_RUN_JOB_DEFINITIONS,
   PROCESSING_JOB_JOB_DEFINITIONS,
   classifyRetryableError,
-  createDeleteJobJobHandler,
   createKnowledgeBaseJobHandler,
   createKnowledgeItemJobHandler,
   createMigrationRunJobHandler,
@@ -21,6 +20,7 @@ import {
 import { DelayedError, Worker, type Job } from 'bullmq';
 // Plan D4 冻结 @kb/service barrel（不在 25 条文件清单内）；心跳常量按相对路径引用包内实现。
 import { PROCESSING_HEARTBEAT_MS } from '../../../../packages/service/src/modules/processing/domain/lease';
+import { createDeleteCleanupJobHandler } from '../../../../packages/service/src/modules/delete/jobs/cleanup.handler';
 import type { ExtendedAppRuntime } from './bootstrap';
 import type { RuntimeUnit } from './drain';
 
@@ -329,8 +329,8 @@ export function createRuntimeWorkerUnits(runtime: ExtendedAppRuntime): RuntimeUn
       vector: itemHandler,
     },
   });
-  const deleteHandler: RuntimeJobHandler = createDeleteJobJobHandler({
-    deleteRepository: runtime.ports.deleteJobRepository,
+  const deleteHandler: RuntimeJobHandler = createDeleteCleanupJobHandler({
+    deleteService: runtime.deleteService,
   });
   const syncHandler: RuntimeJobHandler = createKnowledgeBaseJobHandler({
     datasetSync: runtime.ports.datasetSync,

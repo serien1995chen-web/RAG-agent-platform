@@ -9,7 +9,6 @@ import {
   SourceCollectionApplicationService,
   createDatasetAclRepository,
   createDefaultPorts,
-  createDeleteJobRepository,
   createKnowledgeItemIndexAdapter,
   createKnowledgeItemRepository,
   createMigrationRunRepository,
@@ -24,8 +23,26 @@ import {
   type ServicePorts,
   type VectorController,
 } from '@kb/service';
-import { BullMqQueueAdapter } from '@kb/dal';
+import { BullMqQueueAdapter, QUEUE_NAMES } from '@kb/dal';
+import { Queue } from 'bullmq';
 import { createDefaultDocumentParser } from '@kb/parse';
+import { MinioObjectStore } from '@kb/storage';
+import { DeleteApplicationService } from '../../../../packages/service/src/modules/delete/application/index';
+import { CompensationApplicationService } from '../../../../packages/service/src/modules/delete/application/compensation.service';
+import { ReconcileApplicationService } from '../../../../packages/service/src/modules/delete/application/reconcile.service';
+import { S3TtlService } from '../../../../packages/service/src/modules/delete/application/s3-ttl.service';
+import {
+  MongoCrossStoreOperationRepository,
+  MongoDeleteFactsRepository,
+  MongoReconcileReportRepository,
+  MongoS3TtlRepository,
+} from '../../../../packages/service/src/modules/delete/repository/index';
+import { ReconcileResultAdapter } from '../../../../packages/service/src/modules/delete/adapter/reconcile-result.adapter';
+import { FailureQueryAdapter } from '../../../../packages/service/src/modules/delete/adapter/failure-query.adapter';
+import type { S3OrphanScanner } from '../../../../packages/service/src/modules/delete/domain/findings';
+import { MongoDeleteJobRepository } from '../../../../packages/service/src/modules/delete/repository/mongo-delete-job.repository';
+import { reconcileDatasetSyncSchedulers } from '../../../../packages/service/src/shared/runtime/dataset-sync-scheduler';
+import { createLeaderLock } from '../../../../packages/service/src/shared/runtime/leader-lock';
 import { DatasetSyncApplicationService } from '../../../../packages/service/src/modules/collection/application/sync.service';
 import {
   createDatasetSearchPort,
@@ -55,6 +72,8 @@ export interface RuntimeBootstrapOptions {
   datasetSourceProvider?: DatasetSourceProvider;
   /** 文件来源 Provider 所需解析器；未注入时使用 @kb/parse 默认解析器。 */
   fileParser?: FileParserLike;
+  /** P6-03 可缺省的 S3 孤儿扫描器；P6-04 起由 MinioObjectStore 判型默认注入。 */
+  s3OrphanScanner?: S3OrphanScanner;
 }
 
 export interface ExtendedAppRuntime extends AppRuntime {
@@ -66,7 +85,12 @@ export interface ExtendedAppRuntime extends AppRuntime {
   processingRepository: ReturnType<typeof createProcessingJobRepository>;
   processingService: ProcessingApplicationService;
   datasetSyncService: DatasetSyncApplicationService;
-  deleteRepository: ReturnType<typeof createDeleteJobRepository>;
+  deleteRepository: MongoDeleteJobRepository;
+  deleteJobStore: MongoDeleteJobRepository;
+  deleteService: DeleteApplicationService;
+  reconcileService: ReconcileApplicationService;
+  s3TtlService: S3TtlService;
+  compensationService: CompensationApplicationService;
   migrationRepository: ReturnType<typeof createMigrationRunRepository>;
   datasetPermission: ReturnType<typeof createDatasetAclRepository>;
   embeddingService: EmbeddingService;
@@ -88,7 +112,10 @@ export async function bootstrapRuntime(
   const collectionRepository = createSourceCollectionRepository(clients.mongo);
   const knowledgeItemRepository = createKnowledgeItemRepository(clients.mongo);
   const processingRepository = createProcessingJobRepository(clients.mongo);
-  const deleteRepository = createDeleteJobRepository(clients.mongo);
+  const deleteJobStore = new MongoDeleteJobRepository(clients.mongo);
+  const deleteRepository = deleteJobStore;
+  const deleteFactsRepository = new MongoDeleteFactsRepository(clients.mongo);
+  const crossStoreRepository = new MongoCrossStoreOperationRepository(clients.mongo);
   const migrationRepository = createMigrationRunRepository(clients.mongo);
   const datasetPermission = createDatasetAclRepository(clients.mongo);
   const embeddingService = new EmbeddingService({ gateway: options.embeddingGateway });
@@ -141,8 +168,83 @@ export async function bootstrapRuntime(
     processingJobs: processingRepository,
     queue: syncQueue,
   });
+  const deleteQueue = new BullMqQueueAdapter({ connection: clients.redis });
+  const deleteSchedulerQueue = new Queue(QUEUE_NAMES.sync, { connection: clients.redis });
+  const deleteSchedulerLock = createLeaderLock({
+    redis: clients.redis,
+    key: 'runtime:delete-scheduler-cleanup',
+    ttlMs: 30_000,
+  });
+  const deleteService = new DeleteApplicationService({
+    jobs: deleteJobStore,
+    crossStore: crossStoreRepository,
+    facts: deleteFactsRepository,
+    queue: deleteQueue,
+    vectorController: adapters,
+    objectStore: objectStorePort,
+    syncSchedulerCleanup: async (datasetId, context) => {
+      try {
+        const result = await reconcileDatasetSyncSchedulers({
+          queue: deleteSchedulerQueue,
+          lock: deleteSchedulerLock,
+          listExpectedDatasetIds: async () => [],
+          listRemovedDatasetIds: async () => [datasetId],
+          logger: clients.logger,
+        });
+        clients.logger.log('delete.scheduler_cleanup', { datasetId, ...result });
+      } catch (error) {
+        clients.logger.log('delete.scheduler_cleanup_failed', {
+          datasetId,
+          requestId: context.requestId,
+          error: error instanceof Error ? error.name : typeof error,
+        });
+      }
+    },
+  });
+  const reconcileReportRepository = new MongoReconcileReportRepository(clients.mongo);
+  const reconcileResultAdapter = new ReconcileResultAdapter(reconcileReportRepository);
+  const s3TtlRepository = new MongoS3TtlRepository(clients.mongo);
+  // 附加授权②：仅当底层为 MinioObjectStore 时提供枚举能力；判型失败时孤儿扫描转 pending_review。
+  const minioObjectStore =
+    clients.objectStore instanceof MinioObjectStore ? clients.objectStore : undefined;
+  const orphanObjectLister =
+    minioObjectStore !== undefined
+      ? {
+          listByPrefix: (input: { prefix: string; limit: number }) =>
+            minioObjectStore.listObjectsByPrefix(input),
+        }
+      : undefined;
+  const s3TtlService = new S3TtlService({
+    repository: s3TtlRepository,
+    objectStore: objectStorePort,
+    logger: clients.logger,
+    ...(orphanObjectLister !== undefined ? { orphanObjectLister } : {}),
+  });
+  const s3OrphanScanner =
+    options.s3OrphanScanner ?? (orphanObjectLister !== undefined ? s3TtlService : undefined);
+  const reconcileService = new ReconcileApplicationService({
+    facts: deleteFactsRepository,
+    reports: reconcileReportRepository,
+    vectorController: adapters,
+    ...(adapters.fullText ? { fullTextStore: adapters.fullText } : {}),
+    ...(s3OrphanScanner !== undefined ? { s3OrphanScanner } : {}),
+    s3TtlBackfill: s3TtlRepository,
+    deleteQueue,
+  });
+  const failureQueryAdapter = new FailureQueryAdapter(clients.mongo);
+  const compensationService = new CompensationApplicationService({
+    crossStore: crossStoreRepository,
+    vectorController: adapters,
+    objectStore: objectStorePort,
+    hasFormalReference: (input) => s3TtlRepository.hasFormalReference(input),
+    hasLiveReference: (input, context) => deleteFactsRepository.hasLiveReference(input, context),
+  });
   const ports: ServicePorts = {
     ...basePorts,
+    deleteJobRepository: deleteRepository,
+    objectStore: objectStorePort,
+    reconcileResult: reconcileResultAdapter,
+    failureQuery: failureQueryAdapter,
     datasetSync: datasetSyncService,
     datasetSourceProvider,
     modelRegistry: createModelRegistryAdapter({
@@ -199,6 +301,11 @@ export async function bootstrapRuntime(
     processingService,
     datasetSyncService,
     deleteRepository,
+    deleteJobStore,
+    deleteService,
+    reconcileService,
+    s3TtlService,
+    compensationService,
     migrationRepository,
     datasetPermission,
     embeddingService,
@@ -213,6 +320,8 @@ export async function bootstrapRuntime(
       closed = true;
       await drain();
       await syncQueue.close();
+      await deleteQueue.close();
+      await deleteSchedulerQueue.close();
       await closeClients(clients);
     },
   };

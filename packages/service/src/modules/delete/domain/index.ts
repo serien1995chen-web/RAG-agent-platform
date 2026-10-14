@@ -1,5 +1,27 @@
 import type { DeleteJobSnapshot } from '../../../ports/types';
 export { assertTransition, canTransition } from './state';
+export {
+  DELETE_STAGES,
+  assertStageOrder,
+  canRetryDeleteJob,
+  isTerminalState,
+} from './state-machine';
+export { RECONCILE_FINDING_ACTIONS, RECONCILE_FINDING_KINDS } from './findings';
+export type {
+  ReconcileFinding,
+  ReconcileFindingKind,
+  ReconcileMode,
+  S3ObjectDescriptor,
+  S3OrphanScanner,
+  SchedulerReconcileSummary,
+} from './findings';
+export {
+  FAILURE_CURSOR_ORDER,
+  FAILURE_EXHAUSTED_KIND,
+  classifyFailureError,
+  isFailureExhausted,
+} from './failure';
+export type { FailureClassification, FailureRecord } from './failure';
 /**
  * DeleteJob 领域骨架（设计文档 7.2 / 7.4）。
  * 该层只允许实体、值对象、不变量与 Port 引用；禁止导入基础设施客户端。

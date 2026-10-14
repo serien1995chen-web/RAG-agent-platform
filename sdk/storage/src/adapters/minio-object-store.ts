@@ -8,7 +8,7 @@ import type {
   ObjectStorePort,
   TenantObjectContext,
 } from '../interface';
-import { assertObjectKeyScope, objectKeyHash } from '../tenant-scope';
+import { OBJECT_KEY_PREFIXES, assertObjectKeyScope, objectKeyHash } from '../tenant-scope';
 
 /** 单次 multipart 上传允许的最大分片数（设计文档 7.6 / 12.6）。 */
 const MAX_MULTIPART_PARTS = 10000;
@@ -200,6 +200,39 @@ export class MinioObjectStore implements ObjectStorePort {
       if (!exists) await this.client.makeBucket(this.bucket, this.region);
       this.bucketReady = true;
     });
+  }
+
+  /**
+   * P6-04 附加授权②：具体类内部枚举 helper（不进入 ObjectStorePort 接口）。
+   * 仅允许 temp/、image/、dataset/ 前缀；达到 limit（默认 5000）即停止；
+   * 不做 teamId 校验（跨租户归属由服务层按 key 前缀解析与审计）。
+   */
+  async listObjectsByPrefix(input: {
+    prefix: string;
+    limit?: number;
+  }): Promise<Array<{ key: string; size: number; lastModified: Date | null }>> {
+    const head = input.prefix.split('/')[0] ?? '';
+    if (!OBJECT_KEY_PREFIXES.includes(head as (typeof OBJECT_KEY_PREFIXES)[number])) {
+      throw new ApiErrorException(
+        createApiError({
+          code: 501061,
+          requestId: 'object-store',
+          params: { fileId: objectKeyHash(input.prefix), datasetId: '' },
+        }),
+      );
+    }
+    const limit = input.limit ?? 5000;
+    const stream = this.client.listObjectsV2(this.bucket, input.prefix, true);
+    const objects: Array<{ key: string; size: number; lastModified: Date | null }> = [];
+    for await (const item of stream) {
+      objects.push({
+        key: item.name,
+        size: item.size,
+        lastModified: item.lastModified ?? null,
+      });
+      if (objects.length >= limit) break;
+    }
+    return objects;
   }
 
   async put(

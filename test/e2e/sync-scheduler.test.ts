@@ -417,7 +417,10 @@ describe('autoSync chain and scheduler (P3-06)', () => {
     expect(sync).toHaveBeenCalled();
 
     await runtime.shutdown();
-    expect(events).toEqual(['drain', 'queue', 'clients']);
+    expect(events[0]).toBe('drain');
+    expect(events[events.length - 1]).toBe('clients');
+    expect(events.slice(1, -1).every((event) => event === 'queue')).toBe(true);
+    expect(events.some((event) => event === 'queue')).toBe(true);
   });
 
   it('serves API-COL-015 as a real route', async () => {

@@ -39,6 +39,27 @@ function invalidTransition(
   );
 }
 
+/** 租约领取结果（最小字段集，供清理运行器判定阶段与重试预算）。 */
+export interface DeleteJobLeaseClaim {
+  jobId: string;
+  datasetId: string;
+  state: DeleteJobState;
+  stage: string;
+  attempt: number;
+  leaseOwner: string;
+}
+
+export interface DeleteJobFailureInput {
+  jobId: string;
+  resourceType: string;
+  resourceId: string;
+  stage: string;
+  attempt: number;
+  errorClass: string;
+  retryable: boolean;
+  lastError: string;
+}
+
 export class MongoDeleteJobRepository implements DeleteJobRepository {
   private readonly model: Model<DatasetDeleteJobDoc>;
   private readonly failures: Model<DatasetDeleteFailureDoc>;
@@ -208,5 +229,149 @@ export class MongoDeleteJobRepository implements DeleteJobRepository {
       { $set: { state: 'queued', updateTime: new Date() }, $inc: { attempt: 1 } },
     );
     return { accepted: Boolean(updated) };
+  }
+
+  /**
+   * E1 租约领取：queued→deleting；deleting 且租约过期时原子接管。
+   * 两条路径都以 teamId+jobId 过滤，任一路径失败返回 null（不可领取）。
+   */
+  async claimWithLease(
+    input: { jobId: string; leaseOwner: string; leaseMs: number; now: Date },
+    context: RequestContext,
+  ): Promise<DeleteJobLeaseClaim | null> {
+    const teamId = this.teamId(context);
+    const leaseExpireAt = new Date(input.now.getTime() + input.leaseMs);
+    const leaseSet = {
+      leaseOwner: input.leaseOwner,
+      leaseExpireAt,
+      updateTime: input.now,
+    };
+    let doc = await this.model
+      .findOneAndUpdate(
+        { teamId, jobId: input.jobId, state: 'queued' },
+        { $set: { ...leaseSet, state: 'deleting' } },
+        { new: true },
+      )
+      .lean();
+    if (!doc) {
+      doc = await this.model
+        .findOneAndUpdate(
+          {
+            teamId,
+            jobId: input.jobId,
+            state: 'deleting',
+            leaseExpireAt: { $lte: input.now },
+          },
+          { $set: leaseSet },
+          { new: true },
+        )
+        .lean();
+    }
+    if (!doc) return null;
+    return {
+      jobId: doc.jobId,
+      datasetId: String(doc.datasetId),
+      state: doc.state as DeleteJobState,
+      stage: doc.stage,
+      attempt: doc.attempt,
+      leaseOwner: input.leaseOwner,
+    };
+  }
+
+  /** 续租：仅 leaseOwner 匹配且 state=deleting 时成功。 */
+  async renewLease(
+    input: { jobId: string; leaseOwner: string; leaseMs: number; now: Date },
+    context: RequestContext,
+  ): Promise<boolean> {
+    const updated = await this.model.findOneAndUpdate(
+      {
+        teamId: this.teamId(context),
+        jobId: input.jobId,
+        state: 'deleting',
+        leaseOwner: input.leaseOwner,
+      },
+      {
+        $set: {
+          leaseExpireAt: new Date(input.now.getTime() + input.leaseMs),
+          updateTime: input.now,
+        },
+      },
+    );
+    return Boolean(updated);
+  }
+
+  /**
+   * 释放租约：置 leaseOwner=null、leaseExpireAt=纪元时间，
+   * 使「deleting 且租约过期」的接管条件可立即命中。
+   */
+  async releaseLease(
+    input: { jobId: string; leaseOwner: string; now: Date },
+    context: RequestContext,
+  ): Promise<void> {
+    await this.model.findOneAndUpdate(
+      {
+        teamId: this.teamId(context),
+        jobId: input.jobId,
+        state: 'deleting',
+        leaseOwner: input.leaseOwner,
+      },
+      { $set: { leaseOwner: null, leaseExpireAt: new Date(0), updateTime: input.now } },
+    );
+  }
+
+  /** 进度/阶段写入：仅 leaseOwner 匹配可写（原子条件更新）。 */
+  async updateProgressGuarded(
+    input: {
+      jobId: string;
+      leaseOwner: string;
+      stage?: string;
+      progress?: { total: number; done: number; failed: number; skipped: number };
+      now?: Date;
+    },
+    context: RequestContext,
+  ): Promise<boolean> {
+    const updated = await this.model.findOneAndUpdate(
+      {
+        teamId: this.teamId(context),
+        jobId: input.jobId,
+        state: 'deleting',
+        leaseOwner: input.leaseOwner,
+      },
+      {
+        $set: {
+          ...(input.stage !== undefined ? { stage: input.stage } : {}),
+          ...(input.progress !== undefined ? { progress: input.progress } : {}),
+          updateTime: input.now ?? new Date(),
+        },
+      },
+    );
+    return Boolean(updated);
+  }
+
+  /** 失败事实源：每次失败一条（teamId 强制）。 */
+  async recordFailure(input: DeleteJobFailureInput, context: RequestContext): Promise<void> {
+    const now = new Date();
+    await this.failures.create({
+      teamId: this.teamId(context),
+      jobId: input.jobId,
+      resourceType: input.resourceType,
+      resourceId: input.resourceId,
+      stage: input.stage,
+      attempt: input.attempt,
+      errorClass: input.errorClass,
+      retryable: input.retryable,
+      lastError: input.lastError,
+      createTime: now,
+      updateTime: now,
+    });
+  }
+
+  /** 重试复位：failed→queued 且 attempt+1（仅稳定 jobId 命中时成功）。 */
+  async resetRetry(input: { jobId: string }, context: RequestContext): Promise<boolean> {
+    const updated = await this.model.findOneAndUpdate(
+      { teamId: this.teamId(context), jobId: input.jobId, state: 'failed' },
+      { $set: { state: 'queued', updateTime: new Date() }, $inc: { attempt: 1 } },
+    );
+    return Boolean(updated);
   }
 }
