@@ -32,6 +32,14 @@ export default withApiHandler(
       ...(headerIdempotencyKey !== null ? { 'Idempotency-Key': headerIdempotencyKey } : {}),
     });
     const options = { timeoutMs: 30_000 };
+    const existing = await runtime.deleteService.getDeleteJobByScope(
+      { scope: { kind: 'dataset', datasetId: body.datasetId }, options },
+      context,
+    );
+    if (existing) {
+      response.status(200).json(successResponse(existing, requestId));
+      return;
+    }
     const permission = await runtime.datasetPermission.getPermission(
       { datasetId: body.datasetId, options },
       context,

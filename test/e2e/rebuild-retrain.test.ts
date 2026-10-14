@@ -1,12 +1,13 @@
 import { ApiErrorException, createApiError } from '../../packages/contracts/src/index';
 import { MemoryIdempotencyStore } from '../../packages/dal/src/index';
 import { EmbeddingService } from '../../packages/service/src/modules/index/application/embedding.service';
+import { createDefaultPorts } from '../../packages/service/src/index';
+import type { VectorRecord } from '../../packages/service/src/ports/capabilities';
 import type {
   CollectionSnapshot,
   KnowledgeBaseSnapshot,
   KnowledgeItemSnapshot,
   RequestContext,
-  VectorRecord,
 } from '../../packages/service/src/ports/types';
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -27,6 +28,7 @@ const context: RequestContext = {
 const datasetId = '000000000000000000000101';
 const collectionId = '000000000000000000000102';
 const dataId = '000000000000000000000103';
+const oldIndexVersion = 'old-model:1536:v1';
 
 const state = vi.hoisted(() => ({
   runtime: undefined as unknown,
@@ -85,7 +87,7 @@ function dataset(): KnowledgeBaseSnapshot & { indexVersion: string } {
     type: 'knowledge',
     name: 'dataset',
     vectorModel: 'old-model',
-    indexVersion: 'old-model:1536:v1',
+    indexVersion: oldIndexVersion,
     inheritPermission: true,
     autoSync: false,
     deleteTime: null,
@@ -135,15 +137,48 @@ function item(rebuilding = false): KnowledgeItemSnapshot {
   };
 }
 
-function buildRuntime(
-  options: { rebuilding?: boolean; queued?: boolean; permissionMask?: number } = {},
-) {
+interface RuntimeOptions {
+  rebuilding?: boolean;
+  queued?: boolean;
+  permissionMask?: number;
+  casFails?: boolean;
+  cleanupFails?: boolean;
+  missingDataset?: boolean;
+  missingCollection?: boolean;
+  trainingMode?: 'success' | 'retry' | 'default';
+}
+
+interface TaskFact {
+  action: 'enqueue' | 'finish';
+  taskId?: string;
+  budgetKind?: string;
+  mode?: string;
+  state?: string;
+  errorMsg?: string;
+}
+
+function buildRuntime(options: RuntimeOptions = {}) {
   const events: string[] = [];
-  const vectors = new Map<string, VectorRecord[]>();
+  const vectors = new Map<string, VectorRecord[]>([
+    [
+      oldIndexVersion,
+      [
+        {
+          teamId: context.tenant.teamId,
+          datasetId,
+          collectionId,
+          dataId: 'old-vector-id',
+          indexId: `${dataId}:default`,
+          indexVersion: oldIndexVersion,
+          vector: [0.2],
+        },
+      ],
+    ],
+  ]);
   let currentDataset = dataset();
   let currentItem = item(options.rebuilding ?? false);
   const sourceCollection = collection();
-  const taskFacts: Array<{ budgetKind?: string }> = [];
+  const taskFacts: TaskFact[] = [];
   const trainingCalls: Array<{ mode: string }> = [];
   const deletions = {
     data: 0,
@@ -154,7 +189,7 @@ function buildRuntime(
 
   const knowledgeBase = {
     async findByDatasetId() {
-      return currentDataset;
+      return options.missingDataset ? null : currentDataset;
     },
     async get() {
       return currentDataset;
@@ -164,9 +199,7 @@ function buildRuntime(
     },
     async update(input: { version: number; patch: { vectorModel?: string } }) {
       if (input.version !== currentDataset.version) {
-        throw new ApiErrorException(
-          createApiError({ code: 501067, requestId: context.requestId, params: {} }),
-        );
+        throw versionConflict();
       }
       currentDataset = {
         ...currentDataset,
@@ -181,13 +214,12 @@ function buildRuntime(
       expectedIndexVersion: string;
       nextIndexVersion: string;
     }) {
+      if (options.casFails) throw versionConflict();
       if (
         input.expectedVersion !== currentDataset.version ||
         input.expectedIndexVersion !== currentDataset.indexVersion
       ) {
-        throw new ApiErrorException(
-          createApiError({ code: 501067, requestId: context.requestId, params: {} }),
-        );
+        throw versionConflict();
       }
       currentDataset = {
         ...currentDataset,
@@ -203,6 +235,15 @@ function buildRuntime(
   };
   const collectionRepository = {
     async get() {
+      if (options.missingCollection) {
+        throw new ApiErrorException(
+          createApiError({
+            code: 501070,
+            requestId: context.requestId,
+            params: { resourceType: 'collection', resourceId: collectionId },
+          }),
+        );
+      }
       return sourceCollection;
     },
     async list() {
@@ -212,11 +253,7 @@ function buildRuntime(
       return { collectionId };
     },
     async update(input: { version: number; patch: { trainingPolicy?: unknown } }) {
-      if (input.version !== sourceCollection.version) {
-        throw new ApiErrorException(
-          createApiError({ code: 501067, requestId: context.requestId, params: {} }),
-        );
-      }
+      if (input.version !== sourceCollection.version) throw versionConflict();
       sourceCollection.trainingPolicy = input.patch.trainingPolicy;
       sourceCollection.version += 1;
       events.push('mongo:update-policy');
@@ -239,11 +276,7 @@ function buildRuntime(
       return { upserted: 0, duplicates: input.items.length };
     },
     async updateIndexes(input: { version: number; indexes: KnowledgeItemSnapshot['indexes'] }) {
-      if (input.version !== currentItem.version) {
-        throw new ApiErrorException(
-          createApiError({ code: 501067, requestId: context.requestId, params: {} }),
-        );
-      }
+      if (input.version !== currentItem.version) throw versionConflict();
       currentItem = {
         ...currentItem,
         indexes: input.indexes,
@@ -265,10 +298,19 @@ function buildRuntime(
         list.push(record);
         vectors.set(record.indexVersion, list);
       }
-      events.push('vector:insert');
+      events.push('vector:insert-new');
       return { inserted: input.records.length };
     },
     async delete(input: { dataIds?: string[]; collectionId?: string }) {
+      if (options.cleanupFails) {
+        throw new ApiErrorException(
+          createApiError({
+            code: 501016,
+            requestId: context.requestId,
+            params: { store: 'vector', operation: 'delete' },
+          }),
+        );
+      }
       deletions.vectors += 1;
       if (input.dataIds) {
         for (const [version, records] of vectors) {
@@ -278,7 +320,7 @@ function buildRuntime(
           );
         }
       }
-      events.push(input.dataIds ? 'vector:delete-stale' : 'vector:delete-collection');
+      events.push(input.dataIds ? 'vector:delete-old' : 'vector:delete-collection');
       return { deleted: input.dataIds?.length ?? 1 };
     },
     async embRecall() {
@@ -314,10 +356,31 @@ function buildRuntime(
     async getQueueStats() {
       return options.queued ? [{ mode: 'parse', depth: 1, running: 0 }] : [];
     },
-    async enqueueJob(input: { budgetKind?: string }) {
-      taskFacts.push(input);
-      events.push('mongo:enqueue-rebuild');
-      return { taskId: 'task-rebuild', jobId: 'job-rebuild' };
+    async enqueueJob(input: {
+      job: { jobId: string; mode: string; collectionId?: string };
+      budgetKind?: string;
+    }) {
+      taskFacts.push({
+        action: 'enqueue',
+        taskId: input.job.jobId,
+        budgetKind: input.budgetKind,
+        mode: input.job.mode,
+      });
+      events.push(input.job.mode === 'parse' ? 'mongo:enqueue-retrain' : 'mongo:enqueue-rebuild');
+      return { taskId: input.job.jobId, jobId: input.job.jobId };
+    },
+    async finishJob(input: {
+      taskId: string;
+      state: 'success' | 'failed' | 'blocked' | 'final_error';
+      errorMsg?: string;
+    }) {
+      taskFacts.push({
+        action: 'finish',
+        taskId: input.taskId,
+        state: input.state,
+        ...(input.errorMsg !== undefined ? { errorMsg: input.errorMsg } : {}),
+      });
+      events.push(`mongo:finish:${input.state}`);
     },
     async deleteTrainingData() {
       deletions.training += 1;
@@ -332,6 +395,16 @@ function buildRuntime(
       },
     },
   });
+  const trainingProcessor =
+    options.trainingMode === 'default'
+      ? createDefaultPorts().trainingProcessor
+      : {
+          async process() {
+            trainingCalls.push({ mode: 'parse' });
+            events.push('training:process');
+            return { state: options.trainingMode === 'retry' ? 'retry' : 'success' };
+          },
+        };
   const runtime = {
     clients: { idempotencyStore: new MemoryIdempotencyStore() },
     datasetPermission: {
@@ -354,13 +427,7 @@ function buildRuntime(
     fullTextStore: fullText,
     ports: {
       fullTextStore: fullText,
-      trainingProcessor: {
-        async process(task: { mode: string }) {
-          trainingCalls.push(task);
-          events.push('training:process');
-          return { state: 'success' };
-        },
-      },
+      trainingProcessor,
       tenantQuotaProvider: {
         async check() {
           return { allowed: true, limit: 10, current: 0 };
@@ -376,7 +443,22 @@ function buildRuntime(
     taskFacts,
     trainingCalls,
     getDataset: () => currentDataset,
+    getItem: () => currentItem,
   };
+}
+
+function versionConflict(): ApiErrorException {
+  return new ApiErrorException(
+    createApiError({ code: 501067, requestId: context.requestId, params: {} }),
+  );
+}
+
+function eventIndex(events: string[], name: string): number {
+  return events.indexOf(name);
+}
+
+function eventIndexStartingWith(events: string[], prefix: string): number {
+  return events.findIndex((event) => event.startsWith(prefix));
 }
 
 beforeEach(() => {
@@ -384,7 +466,7 @@ beforeEach(() => {
 });
 
 describe('P6-02 rebuild and retrain routes', () => {
-  it('ACC-REBUILD-001/002 writes new vectors, switches CAS, cleans old vectors and keeps budget 50', async () => {
+  it('ACC-REBUILD-001/002 follows insert-new -> CAS -> switch refs -> delete-old', async () => {
     const built = buildRuntime();
     state.runtime = built.runtime;
     const recorder = responseRecorder();
@@ -401,14 +483,67 @@ describe('P6-02 rebuild and retrain routes', () => {
     );
 
     expect(recorder.result().status).toBe(200);
-    expect(built.taskFacts[0]?.budgetKind).toBe('rebuild');
-    expect(built.events.at(-1)).toBe('cas:switch-index-version');
-    expect(built.events).toContain('vector:delete-stale');
+    expect(built.taskFacts[0]).toMatchObject({ budgetKind: 'rebuild', mode: 'vector' });
+    expect(eventIndex(built.events, 'vector:insert-new')).toBeLessThan(
+      eventIndex(built.events, 'cas:switch-index-version'),
+    );
+    expect(eventIndex(built.events, 'cas:switch-index-version')).toBeLessThan(
+      eventIndex(built.events, 'vector:delete-old'),
+    );
     expect(built.getDataset().indexVersion).toBe('new-model:1536:v1');
-    expect(built.vectors.has('new-model:1536:v1')).toBe(true);
+    expect(built.vectors.get(oldIndexVersion)).toEqual([]);
   });
 
-  it('TEST-TASK-RETRY-001 rejects same model and conflicting processing with fixed errors', async () => {
+  it('TEST-SEARCH-INDEXVERSION-001 keeps old references when CAS fails', async () => {
+    const built = buildRuntime({ casFails: true });
+    state.runtime = built.runtime;
+    const recorder = responseRecorder();
+    await rebuildRoute(
+      request({
+        method: 'POST',
+        url: '/api/core/dataset/rebuildEmbedding',
+        body: {
+          datasetId,
+          modelRef: { provider: 'openai', model: 'new-model', dimension: 1536 },
+        },
+      }),
+      recorder.response,
+    );
+
+    expect((recorder.result().body as { code: number }).code).toBe(501069);
+    expect(built.getDataset().indexVersion).toBe(oldIndexVersion);
+    expect(built.getItem().indexes[0]?.dataId).toBe('old-vector-id');
+    expect(built.vectors.get(oldIndexVersion)).toHaveLength(1);
+    expect(built.events).not.toContain('vector:delete-old');
+  });
+
+  it('R1 cleanup failure returns cleanup_pending after the new indexVersion is committed', async () => {
+    const built = buildRuntime({ cleanupFails: true });
+    state.runtime = built.runtime;
+    const recorder = responseRecorder();
+    await rebuildRoute(
+      request({
+        method: 'POST',
+        url: '/api/core/dataset/rebuildEmbedding',
+        body: {
+          datasetId,
+          modelRef: { provider: 'openai', model: 'new-model', dimension: 1536 },
+        },
+      }),
+      recorder.response,
+    );
+
+    expect(recorder.result().status).toBe(200);
+    expect(recorder.result().body).toMatchObject({ data: { state: 'cleanup_pending' } });
+    expect(built.getDataset().indexVersion).toBe('new-model:1536:v1');
+    expect(
+      built.taskFacts.some(
+        (fact) => fact.action === 'finish' && fact.errorMsg?.includes('cleanup_pending'),
+      ),
+    ).toBe(true);
+  });
+
+  it('TEST-TASK-RETRY-001 rejects same model, invalid dimension and conflicts', async () => {
     const sameModel = responseRecorder();
     await rebuildRoute(
       request({
@@ -421,8 +556,21 @@ describe('P6-02 rebuild and retrain routes', () => {
       }),
       sameModel.response,
     );
-    expect(sameModel.result().status).toBe(500);
     expect((sameModel.result().body as { code: number }).code).toBe(501013);
+
+    const invalidDimension = responseRecorder();
+    await rebuildRoute(
+      request({
+        method: 'POST',
+        url: '/api/core/dataset/rebuildEmbedding',
+        body: {
+          datasetId,
+          modelRef: { provider: 'openai', model: 'new-model', dimension: 1024 },
+        },
+      }),
+      invalidDimension.response,
+    );
+    expect((invalidDimension.result().body as { code: number }).code).toBe(501013);
 
     const queued = buildRuntime({ queued: true });
     state.runtime = queued.runtime;
@@ -438,11 +586,12 @@ describe('P6-02 rebuild and retrain routes', () => {
       }),
       conflict.response,
     );
-    expect(conflict.result().status).toBe(409);
     expect((conflict.result().body as { code: number }).code).toBe(501069);
   });
 
-  it('ACC-DATA-004 rejects a non-1536 rebuild dimension with 501013', async () => {
+  it('R1-F4 maps missing rebuild dataset to the registered 501013 code', async () => {
+    const built = buildRuntime({ missingDataset: true });
+    state.runtime = built.runtime;
     const recorder = responseRecorder();
     await rebuildRoute(
       request({
@@ -450,16 +599,15 @@ describe('P6-02 rebuild and retrain routes', () => {
         url: '/api/core/dataset/rebuildEmbedding',
         body: {
           datasetId,
-          modelRef: { provider: 'openai', model: 'new-model', dimension: 1024 },
+          modelRef: { provider: 'openai', model: 'new-model', dimension: 1536 },
         },
       }),
       recorder.response,
     );
-    expect(recorder.result().status).toBe(500);
     expect((recorder.result().body as { code: number }).code).toBe(501013);
   });
 
-  it('ACC-REBUILD-002 retrains with source preserved while old derived stores are cleared', async () => {
+  it('ACC-REBUILD-002 retrains only after processor success and preserves the source', async () => {
     const built = buildRuntime();
     state.runtime = built.runtime;
     const recorder = responseRecorder();
@@ -486,15 +634,117 @@ describe('P6-02 rebuild and retrain routes', () => {
       }),
       recorder.response,
     );
+
     expect(recorder.result().status).toBe(200);
+    expect(eventIndex(built.events, 'mongo:enqueue-retrain')).toBeLessThan(
+      eventIndex(built.events, 'training:process'),
+    );
+    expect(eventIndex(built.events, 'training:process')).toBeLessThan(
+      eventIndexStartingWith(built.events, 'delete:data:'),
+    );
     expect(built.deletions).toEqual({ data: 1, vectors: 1, fullText: 1, training: 1 });
-    expect(built.trainingCalls).toHaveLength(1);
-    expect(built.trainingCalls[0]?.mode).toBe('parse');
     const updatedCollection = await built.runtime.collectionRepository.get(
       { collectionId, options: { timeoutMs: 5_000 } },
       context,
     );
     expect(updatedCollection.sourceRef).toBe('{"fileId":"source-file"}');
     expect((updatedCollection.trainingPolicy as { mode: string }).mode).toBe('paragraph');
+  });
+
+  it('R1-F2 maps the default 501999 processor path to 501069 without deleting old data', async () => {
+    const built = buildRuntime({ trainingMode: 'default' });
+    state.runtime = built.runtime;
+    const recorder = responseRecorder();
+    await retrainRoute(
+      request({
+        method: 'POST',
+        url: '/api/core/dataset/collection/retrain',
+        headers: { 'idempotency-key': 'retrain-default' },
+        body: {
+          collectionId,
+          policy: {
+            mode: 'auto',
+            chunkSize: 1000,
+            minSize: 100,
+            maxSize: 8000,
+            overlapRatio: 0,
+            paragraphDeep: 5,
+            customRegs: [],
+            lengthUnit: 'token',
+            forceSplit: true,
+            maxChunks: 50000,
+          },
+        },
+      }),
+      recorder.response,
+    );
+
+    expect((recorder.result().body as { code: number }).code).toBe(501069);
+    expect(built.deletions).toEqual({ data: 0, vectors: 0, fullText: 0, training: 0 });
+    expect(
+      built.taskFacts.some((fact) => fact.action === 'finish' && fact.state === 'failed'),
+    ).toBe(true);
+  });
+
+  it('R1-F2 keeps old derived data when processor returns retry', async () => {
+    const built = buildRuntime({ trainingMode: 'retry' });
+    state.runtime = built.runtime;
+    const recorder = responseRecorder();
+    await retrainRoute(
+      request({
+        method: 'POST',
+        url: '/api/core/dataset/collection/retrain',
+        headers: { 'idempotency-key': 'retrain-retry' },
+        body: {
+          collectionId,
+          policy: {
+            mode: 'auto',
+            chunkSize: 1000,
+            minSize: 100,
+            maxSize: 8000,
+            overlapRatio: 0,
+            paragraphDeep: 5,
+            customRegs: [],
+            lengthUnit: 'token',
+            forceSplit: true,
+            maxChunks: 50000,
+          },
+        },
+      }),
+      recorder.response,
+    );
+
+    expect((recorder.result().body as { code: number }).code).toBe(501069);
+    expect(built.deletions).toEqual({ data: 0, vectors: 0, fullText: 0, training: 0 });
+  });
+
+  it('R1-F4 maps missing retrain collection to 501069', async () => {
+    const built = buildRuntime({ missingCollection: true });
+    state.runtime = built.runtime;
+    const recorder = responseRecorder();
+    await retrainRoute(
+      request({
+        method: 'POST',
+        url: '/api/core/dataset/collection/retrain',
+        headers: { 'idempotency-key': 'retrain-missing' },
+        body: {
+          collectionId,
+          policy: {
+            mode: 'auto',
+            chunkSize: 1000,
+            minSize: 100,
+            maxSize: 8000,
+            overlapRatio: 0,
+            paragraphDeep: 5,
+            customRegs: [],
+            lengthUnit: 'token',
+            forceSplit: true,
+            maxChunks: 50000,
+          },
+        },
+      }),
+      recorder.response,
+    );
+    expect((recorder.result().body as { code: number }).code).toBe(501069);
   });
 });

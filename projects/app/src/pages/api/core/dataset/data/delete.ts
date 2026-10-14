@@ -41,6 +41,14 @@ export default withApiHandler(
       ...(headerIdempotencyKey !== null ? { 'Idempotency-Key': headerIdempotencyKey } : {}),
     });
     const options = { timeoutMs: 30_000 };
+    const existing = await runtime.deleteService.getDeleteJobByScope(
+      { scope: { kind: 'data', dataId: body.dataId }, options },
+      context,
+    );
+    if (existing) {
+      response.status(200).json(successResponse(existing, requestId));
+      return;
+    }
     const item = await (
       runtime.knowledgeItemRepository as typeof runtime.knowledgeItemRepository &
         KnowledgeItemLookupRepository

@@ -36,14 +36,29 @@ export default withApiHandler(
       ...(headerIdempotencyKey !== null ? { 'Idempotency-Key': headerIdempotencyKey } : {}),
     });
     const options = { timeoutMs: 30_000 };
-    const collection = await runtime.collectionRepository.get(
-      { collectionId: body.collectionId, options },
-      context,
-    );
-    const permission = await runtime.datasetPermission.getPermission(
-      { datasetId: collection.datasetId, options },
-      context,
-    );
+    let collection;
+    let permission;
+    try {
+      collection = await runtime.collectionRepository.get(
+        { collectionId: body.collectionId, options },
+        context,
+      );
+      permission = await runtime.datasetPermission.getPermission(
+        { datasetId: collection.datasetId, options },
+        context,
+      );
+    } catch (error) {
+      if (error instanceof ApiErrorException && error.error.code === 501070) {
+        throw new ApiErrorException(
+          createApiError({
+            code: 501069,
+            requestId,
+            params: { collectionId: body.collectionId, reason: 'not_found' },
+          }),
+        );
+      }
+      throw error;
+    }
     const allowed =
       context.tenant.isRoot ||
       (permission.permissionMask & OWNER_PERMISSION) !== 0 ||

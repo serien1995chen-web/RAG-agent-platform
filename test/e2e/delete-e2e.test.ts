@@ -261,7 +261,7 @@ describe('P6-07 lifecycle E2E batch', () => {
           );
         },
       },
-      deleteService: { requestDatasetDelete },
+      deleteService: { getDeleteJobByScope: async () => null, requestDatasetDelete },
     };
     const recorder = responseRecorder();
     await datasetDeleteRoute(

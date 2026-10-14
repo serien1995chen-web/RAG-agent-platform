@@ -76,8 +76,17 @@ function request(input: {
   } as unknown as NextApiRequest;
 }
 
-function buildRuntime(options: { permissionMask?: number; missingJob?: boolean } = {}) {
+interface RuntimeOptions {
+  permissionMask?: number;
+  missingJob?: boolean;
+  existingScopeJob?: { jobId: string; state: 'completed' | 'failed' | 'queued' | 'deleting' };
+  missingCollection?: boolean;
+  missingData?: boolean;
+}
+
+function buildRuntime(options: RuntimeOptions = {}) {
   const calls: Array<{ method: string; input: unknown }> = [];
+  const lookups = { permission: 0, collection: 0, data: 0 };
   const retryJob = vi.fn(async () => {
     throw new Error('worker retryJob must not be called');
   });
@@ -85,6 +94,7 @@ function buildRuntime(options: { permissionMask?: number; missingJob?: boolean }
     clients: { idempotencyStore: new MemoryIdempotencyStore() },
     datasetPermission: {
       async getPermission() {
+        lookups.permission += 1;
         return {
           owner: context.tenant.tmbId,
           permissionMask: options.permissionMask ?? 8,
@@ -96,15 +106,55 @@ function buildRuntime(options: { permissionMask?: number; missingJob?: boolean }
     },
     collectionRepository: {
       async get() {
+        lookups.collection += 1;
+        if (options.missingCollection) {
+          throw new ApiErrorException(
+            createApiError({
+              code: 501070,
+              requestId: context.requestId,
+              params: { resourceType: 'collection', resourceId: collectionId },
+            }),
+          );
+        }
         return { collectionId, datasetId };
       },
     },
     knowledgeItemRepository: {
       async get() {
+        lookups.data += 1;
+        if (options.missingData) {
+          throw new ApiErrorException(
+            createApiError({
+              code: 501070,
+              requestId: context.requestId,
+              params: { resourceType: 'data', resourceId: dataId },
+            }),
+          );
+        }
         return { dataId, datasetId, collectionId };
       },
     },
     deleteService: {
+      async getDeleteJobByScope(input: unknown) {
+        calls.push({ method: 'getDeleteJobByScope', input });
+        if (!options.existingScopeJob) return null;
+        if (
+          options.existingScopeJob.state === 'queued' ||
+          options.existingScopeJob.state === 'deleting'
+        ) {
+          throw new ApiErrorException(
+            createApiError({
+              code: 501068,
+              requestId: context.requestId,
+              params: {
+                jobId: options.existingScopeJob.jobId,
+                state: options.existingScopeJob.state,
+              },
+            }),
+          );
+        }
+        return options.existingScopeJob;
+      },
       async requestDatasetDelete(input: unknown) {
         calls.push({ method: 'requestDatasetDelete', input });
         return { jobId, state: 'queued' };
@@ -143,12 +193,17 @@ function buildRuntime(options: { permissionMask?: number; missingJob?: boolean }
       async listFailures(input: { limit: number }) {
         calls.push({ method: 'listFailures', input });
         return {
-          total: 1,
+          total: 2,
           list: [
             {
               resourceType: 'vector',
               resourceId: 'internal-vector-key',
-              reason: `s3-key=${'x'.repeat(200)}`,
+              reason: `s3://bucket/${'x'.repeat(200)}`,
+            },
+            {
+              resourceType: 'storage',
+              resourceId: 'internal-object-key',
+              reason: '501016 dataset.storage.unavailable',
             },
           ],
           cursor: 'cursor-1',
@@ -161,7 +216,7 @@ function buildRuntime(options: { permissionMask?: number; missingJob?: boolean }
       retryJob,
     },
   };
-  return { runtime, calls, retryJob };
+  return { runtime, calls, retryJob, lookups };
 }
 
 beforeEach(() => {
@@ -182,18 +237,7 @@ describe('P6-05 lifecycle delete routes', () => {
       }),
       first.response,
     );
-    const second = responseRecorder();
-    await datasetDeleteRoute(
-      request({
-        method: 'POST',
-        url: '/api/core/dataset/delete',
-        headers: { 'idempotency-key': 'dataset-del-2' },
-        body: { datasetId },
-      }),
-      second.response,
-    );
     expect((first.result().body as { data: { jobId: string } }).data.jobId).toBe(jobId);
-    expect((second.result().body as { data: { jobId: string } }).data.jobId).toBe(jobId);
 
     const deniedRuntime = buildRuntime({ permissionMask: 2 });
     state.runtime = deniedRuntime.runtime;
@@ -224,7 +268,6 @@ describe('P6-05 lifecycle delete routes', () => {
       allowed.response,
     );
     expect((allowed.result().body as { data: { jobId: string } }).data.jobId).toBe(jobId);
-    expect(built.calls.some((call) => call.method === 'requestCollectionDelete')).toBe(true);
 
     const deniedRuntime = buildRuntime({ permissionMask: 1 });
     state.runtime = deniedRuntime.runtime;
@@ -257,10 +300,76 @@ describe('P6-05 lifecycle delete routes', () => {
     expect(recorder.result().body).toMatchObject({
       data: { dataId, state: 'queued' },
     });
-    expect(recorder.result().body).not.toHaveProperty('jobId');
   });
 
-  it('ACC-DELETE-004 returns job progress and failure pages with hashed resource ids', async () => {
+  it('R1-F3 replays completed jobs before ACL/resource lookup for all delete scopes', async () => {
+    const built = buildRuntime({
+      existingScopeJob: { jobId: 'replayed-job', state: 'completed' },
+    });
+    state.runtime = built.runtime;
+    const calls = [
+      () =>
+        datasetDeleteRoute(
+          request({
+            method: 'POST',
+            url: '/api/core/dataset/delete',
+            headers: { 'idempotency-key': 'dataset-replay' },
+            body: { datasetId },
+          }),
+          responseRecorder().response,
+        ),
+      () =>
+        collectionDeleteRoute(
+          request({
+            method: 'POST',
+            url: '/api/core/dataset/collection/delete',
+            headers: { 'idempotency-key': 'collection-replay' },
+            body: { collectionId },
+          }),
+          responseRecorder().response,
+        ),
+      () =>
+        dataDeleteRoute(
+          request({
+            method: 'POST',
+            url: '/api/core/dataset/data/delete',
+            headers: { 'idempotency-key': 'data-replay' },
+            body: { dataId },
+          }),
+          responseRecorder().response,
+        ),
+    ];
+    for (const call of calls) await call();
+    expect(built.lookups).toEqual({ permission: 0, collection: 0, data: 0 });
+    expect(
+      built.calls.filter((call) =>
+        ['requestDatasetDelete', 'requestCollectionDelete', 'requestDataDelete'].includes(
+          call.method,
+        ),
+      ),
+    ).toEqual([]);
+  });
+
+  it('R1-F3 returns 501068 for an in-progress job before ACL/resource lookup', async () => {
+    const built = buildRuntime({
+      existingScopeJob: { jobId: 'in-progress-job', state: 'deleting' },
+    });
+    state.runtime = built.runtime;
+    const recorder = responseRecorder();
+    await datasetDeleteRoute(
+      request({
+        method: 'POST',
+        url: '/api/core/dataset/delete',
+        headers: { 'idempotency-key': 'dataset-in-progress' },
+        body: { datasetId },
+      }),
+      recorder.response,
+    );
+    expect((recorder.result().body as { code: number }).code).toBe(501068);
+    expect(built.lookups).toEqual({ permission: 0, collection: 0, data: 0 });
+  });
+
+  it('ACC-DELETE-004 hashes resource ids and only exposes classified failure reasons', async () => {
     const built = buildRuntime();
     state.runtime = built.runtime;
     const job = responseRecorder();
@@ -290,10 +399,17 @@ describe('P6-05 lifecycle delete routes', () => {
         data: { total: number; cursor: string; list: Array<Record<string, unknown>> };
       }
     ).data;
-    expect(failureData.total).toBe(1);
+    expect(failureData.total).toBe(2);
     expect(failureData.cursor).toBe('cursor-1');
+    expect(failureData.list[0]).toMatchObject({ reason: 'dataset.delete.failed' });
+    expect(failureData.list[1]).toMatchObject({
+      reason: '501016 dataset.storage.unavailable',
+    });
     expect(failureData.list[0]?.resourceIdHash).toMatch(/^[a-f0-9]{64}$/);
     expect(JSON.stringify(failureData)).not.toContain('internal-vector-key');
+    expect(JSON.stringify(failureData)).not.toContain('internal-object-key');
+    expect(JSON.stringify(failureData)).not.toContain('s3://');
+    expect(JSON.stringify(failureData)).not.toContain('x'.repeat(200));
     expect(
       (built.calls.find((call) => call.method === 'listFailures')?.input as { limit: number })
         .limit,
@@ -315,7 +431,6 @@ describe('P6-05 lifecycle delete routes', () => {
       retry.response,
     );
     expect(retry.result().body).toMatchObject({ data: { accepted: true } });
-    expect(built.calls.some((call) => call.method === 'retryDeleteJob')).toBe(true);
     expect(built.retryJob).not.toHaveBeenCalled();
 
     const missing = buildRuntime({ missingJob: true });

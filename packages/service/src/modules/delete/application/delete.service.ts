@@ -81,6 +81,15 @@ export interface DeleteJobStore {
     input: { jobId: string; options: PortCallOptions },
     context: RequestContext,
   ): Promise<DeleteJobSnapshot>;
+  findByScope(
+    input: {
+      datasetId?: string;
+      collectionId?: string;
+      dataId?: string;
+      options: PortCallOptions;
+    },
+    context: RequestContext,
+  ): Promise<DeleteJobSnapshot | null>;
   listFailures(
     input: { jobId: string; cursor?: string; limit: number; options: PortCallOptions },
     context: RequestContext,
@@ -219,6 +228,28 @@ export class DeleteApplicationService {
     context: RequestContext,
   ): Promise<DeleteJobSnapshot> {
     return this.deps.jobs.get(input, context);
+  }
+
+  async getDeleteJobByScope(
+    input: { scope: DeleteScope; options: PortCallOptions },
+    context: RequestContext,
+  ): Promise<DeleteRequestResult | null> {
+    const job = await this.deps.jobs.findByScope(
+      {
+        ...(input.scope.datasetId !== undefined ? { datasetId: input.scope.datasetId } : {}),
+        ...(input.scope.collectionId !== undefined
+          ? { collectionId: input.scope.collectionId }
+          : {}),
+        ...(input.scope.dataId !== undefined ? { dataId: input.scope.dataId } : {}),
+        options: input.options,
+      },
+      context,
+    );
+    if (!job) return null;
+    if (job.state === 'completed' || job.state === 'failed') {
+      return { jobId: job.jobId, state: job.state };
+    }
+    throw deleteInProgress(job.jobId, job.state, context.requestId);
   }
 
   listFailures(

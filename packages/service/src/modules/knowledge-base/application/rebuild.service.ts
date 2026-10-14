@@ -5,12 +5,18 @@ import {
   type ModelReference,
 } from '@kb/contracts';
 import { buildVectorJobId } from '@kb/dal';
+import type { FullTextStore, VectorController, VectorRecord } from '../../../ports/capabilities';
 import type {
   CollectionRepository,
   KnowledgeBaseRepository,
   KnowledgeItemRepository,
 } from '../../../ports/repositories';
-import type { KnowledgeItemSnapshot, PortCallOptions, RequestContext } from '../../../ports/types';
+import type {
+  KnowledgeItemIndexValue,
+  KnowledgeItemSnapshot,
+  PortCallOptions,
+  RequestContext,
+} from '../../../ports/types';
 import type { KnowledgeBaseQueryRepository } from '../domain/dataset-query';
 
 const PAGE_SIZE = 100;
@@ -28,19 +34,6 @@ interface RebuildEmbeddingRuntime {
     },
     context: RequestContext,
   ): Promise<number[][]>;
-}
-
-interface RebuildIndexingRuntime {
-  syncItemIndex(
-    input: {
-      item: KnowledgeItemSnapshot;
-      indexVersion: string;
-      entries: Array<{ type: string; text: string; vector: number[] }>;
-      fullText: string;
-      options: PortCallOptions;
-    },
-    context: RequestContext,
-  ): Promise<{ version: number }>;
 }
 
 interface RebuildIndexVersionSwitchRuntime {
@@ -75,6 +68,15 @@ interface RebuildProcessingRuntime {
     },
     context: RequestContext,
   ): Promise<{ taskId: string; jobId: string }>;
+  finishJob(
+    input: {
+      taskId: string;
+      state: 'success' | 'failed' | 'blocked' | 'final_error';
+      errorMsg?: string;
+      options: PortCallOptions;
+    },
+    context: RequestContext,
+  ): Promise<void>;
 }
 
 interface RebuildItemRepository extends KnowledgeItemRepository {
@@ -99,7 +101,8 @@ interface RebuildEmbeddingServiceDeps {
   items: RebuildItemRepository;
   processing: RebuildProcessingRuntime;
   embedding: RebuildEmbeddingRuntime;
-  indexing: RebuildIndexingRuntime;
+  vectors: VectorController;
+  fullText: FullTextStore;
   indexVersionSwitch: RebuildIndexVersionSwitchRuntime;
 }
 
@@ -111,7 +114,15 @@ export interface RebuildEmbeddingInput {
 
 export interface RebuildEmbeddingResult {
   taskId: string;
-  state: 'completed';
+  state: 'completed' | 'cleanup_pending';
+}
+
+interface PreparedRebuildItem {
+  item: KnowledgeItemSnapshot;
+  indexes: KnowledgeItemIndexValue[];
+  oldVectorIds: string[];
+  vectorRecords: VectorRecord[];
+  fullText: string;
 }
 
 export class RebuildEmbeddingService {
@@ -127,13 +138,7 @@ export class RebuildEmbeddingService {
       context,
     );
     if (!dataset) {
-      throw new ApiErrorException(
-        createApiError({
-          code: 501070,
-          requestId: context.requestId,
-          params: { resourceType: 'dataset', resourceId: input.datasetId },
-        }),
-      );
+      throw rebuildNotFound(input.datasetId, context.requestId);
     }
     if (dataset.vectorModel === input.modelRef.model) {
       throw invalidModel(input.modelRef.model, context.requestId, 'different');
@@ -189,14 +194,16 @@ export class RebuildEmbeddingService {
       context,
     );
 
+    const prepared: PreparedRebuildItem[] = [];
     for (const item of items) {
       const current = await this.deps.items.get(
         { dataId: item.dataId, options: input.options },
         context,
       );
       const sourceEntries = this.sourceEntries(current);
+      let vectors: number[][] = [];
       if (sourceEntries.length > 0) {
-        const vectors = await this.deps.embedding.embed(
+        vectors = await this.deps.embedding.embed(
           {
             models: { embeddingModel: input.modelRef.model },
             texts: sourceEntries.map((entry) => entry.text),
@@ -204,42 +211,139 @@ export class RebuildEmbeddingService {
           },
           context,
         );
-        await this.deps.indexing.syncItemIndex(
-          {
-            item: current,
-            indexVersion: nextIndexVersion,
-            entries: sourceEntries.map((entry, index) => ({
-              type: entry.type,
-              text: entry.text,
-              vector: vectors[index] ?? [],
-            })),
-            fullText: sourceEntries.map((entry) => entry.text).join('\n'),
-            options: input.options,
-          },
-          context,
-        );
       }
-      const refreshed = await this.deps.items.get(
-        { dataId: item.dataId, options: input.options },
-        context,
-      );
-      await this.deps.items.bulkUpsert(
-        { items: [{ ...refreshed, rebuilding: false }], options: input.options },
+      const vectorRecords: VectorRecord[] = [];
+      const indexes: KnowledgeItemIndexValue[] = sourceEntries.map((entry, index) => {
+        const vectorId = `${current.dataId}:${entry.type}:${nextIndexVersion}`;
+        vectorRecords.push({
+          teamId: context.tenant.teamId,
+          datasetId: current.datasetId,
+          collectionId: current.collectionId,
+          dataId: vectorId,
+          indexId: `${current.dataId}:${entry.type}`,
+          indexVersion: nextIndexVersion,
+          vector: vectors[index] ?? [],
+        });
+        return {
+          indexId: `${current.dataId}:${entry.type}`,
+          type: entry.type,
+          dataId: vectorId,
+          text: entry.text,
+        };
+      });
+      prepared.push({
+        item: current,
+        indexes,
+        oldVectorIds: current.indexes
+          .map((index) => index.dataId)
+          .filter((dataId): dataId is string => Boolean(dataId)),
+        vectorRecords,
+        fullText: sourceEntries.map((entry) => entry.text).join('\n'),
+      });
+    }
+
+    const allVectorRecords = prepared.flatMap((entry) => entry.vectorRecords);
+    if (allVectorRecords.length > 0) {
+      await this.deps.vectors.insert(
+        { records: allVectorRecords, options: input.options },
         context,
       );
     }
 
-    await this.deps.indexVersionSwitch.switchIndexVersion(
-      {
-        datasetId: input.datasetId,
-        expectedVersion: updated.version,
-        expectedIndexVersion: dataset.indexVersion,
-        nextIndexVersion,
-        options: input.options,
-      },
-      context,
-    );
+    try {
+      await this.deps.indexVersionSwitch.switchIndexVersion(
+        {
+          datasetId: input.datasetId,
+          expectedVersion: updated.version,
+          expectedIndexVersion: dataset.indexVersion,
+          nextIndexVersion,
+          options: input.options,
+        },
+        context,
+      );
+    } catch {
+      await this.finishRebuildTask(taskId, 'failed', 'cas_failed', input, context);
+      throw rebuildConflict(input.datasetId, context.requestId);
+    }
+
+    let cleanupPending = false;
+    for (const entry of prepared) {
+      try {
+        await this.deps.items.updateIndexes(
+          {
+            dataId: entry.item.dataId,
+            version: entry.item.version,
+            indexes: entry.indexes,
+            options: input.options,
+          },
+          context,
+        );
+        await this.deps.fullText.write(
+          {
+            datasetId: entry.item.datasetId,
+            collectionId: entry.item.collectionId,
+            dataId: entry.item.dataId,
+            text: entry.fullText,
+            options: input.options,
+          },
+          context,
+        );
+        if (entry.oldVectorIds.length > 0) {
+          await this.deps.vectors.delete(
+            {
+              dataIds: entry.oldVectorIds,
+              datasetId: entry.item.datasetId,
+              collectionId: entry.item.collectionId,
+              options: input.options,
+            },
+            context,
+          );
+        }
+        const refreshed = await this.deps.items.get(
+          { dataId: entry.item.dataId, options: input.options },
+          context,
+        );
+        await this.deps.items.bulkUpsert(
+          { items: [{ ...refreshed, rebuilding: false }], options: input.options },
+          context,
+        );
+      } catch (error) {
+        cleanupPending = true;
+        await this.finishRebuildTask(
+          taskId,
+          'failed',
+          `cleanup_pending:${errorLabel(error)}`,
+          input,
+          context,
+        );
+        break;
+      }
+    }
+    if (cleanupPending) return { taskId, state: 'cleanup_pending' };
+    await this.finishRebuildTask(taskId, 'success', undefined, input, context);
     return { taskId, state: 'completed' };
+  }
+
+  private async finishRebuildTask(
+    taskId: string,
+    state: 'success' | 'failed',
+    errorMsg: string | undefined,
+    input: RebuildEmbeddingInput,
+    context: RequestContext,
+  ): Promise<void> {
+    try {
+      await this.deps.processing.finishJob(
+        {
+          taskId,
+          state,
+          ...(errorMsg !== undefined ? { errorMsg } : {}),
+          options: input.options,
+        },
+        context,
+      );
+    } catch {
+      // Finish facts are best-effort; cleanup state must not hide the switched indexVersion.
+    }
   }
 
   private validateModel(modelRef: ModelReference, context: RequestContext): void {
@@ -321,4 +425,19 @@ function rebuildConflict(datasetId: string, requestId: string): ApiErrorExceptio
       params: { datasetId },
     }),
   );
+}
+
+function rebuildNotFound(datasetId: string, requestId: string): ApiErrorException {
+  return new ApiErrorException(
+    createApiError({
+      code: 501013,
+      requestId,
+      params: { datasetId, reason: 'not_found' },
+    }),
+  );
+}
+
+function errorLabel(error: unknown): string {
+  if (error instanceof ApiErrorException) return error.error.messageKey;
+  return error instanceof Error ? error.name : typeof error;
 }

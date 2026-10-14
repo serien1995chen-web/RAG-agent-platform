@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { ApiErrorException, createApiError } from '@kb/contracts';
+import { ApiErrorException, createApiError, getErrorMeta } from '@kb/contracts';
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { getRuntime } from '../../../../../../runtime';
 import { authenticateRequest } from '../../../../../../runtime/auth';
@@ -16,6 +16,15 @@ const OWNER_PERMISSION = 8;
 
 function resourceIdHash(resourceId: string): string {
   return createHash('sha256').update(resourceId).digest('hex');
+}
+
+function safeFailureReason(reason: string): string {
+  const match = /^(\d{6})\s+([a-z0-9_.:-]+)$/i.exec(reason.trim());
+  if (!match?.[1] || !match[2]) return 'dataset.delete.failed';
+  const code = Number(match[1]);
+  const meta = getErrorMeta(code);
+  if (!meta || meta.messageKey !== match[2]) return 'dataset.delete.failed';
+  return `${match[1]} ${match[2]}`;
 }
 
 /** API-DEL-002 GET /api/core/dataset/delete-jobs/{jobId}/failures */
@@ -55,7 +64,7 @@ export default withApiHandler(
           list: failures.list.map((failure) => ({
             resourceType: failure.resourceType,
             resourceIdHash: resourceIdHash(failure.resourceId),
-            reason: failure.reason.slice(0, 160),
+            reason: safeFailureReason(failure.reason),
           })),
           cursor: failures.cursor,
         },

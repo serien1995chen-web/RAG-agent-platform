@@ -1,10 +1,12 @@
 import { ApiErrorException, createApiError } from '@kb/contracts';
+import { buildDeleteJobId } from '@kb/dal';
 import { Types, type Connection, type Model } from 'mongoose';
 import type { DeleteJobRepository } from '../../../ports/repositories';
 import type {
   DeleteJobSnapshot,
   DeleteJobState,
   PageResult,
+  PortCallOptions,
   RequestContext,
 } from '../../../ports/types';
 import {
@@ -149,6 +151,37 @@ export class MongoDeleteJobRepository implements DeleteJobRepository {
       );
     }
     return this.toSnapshot(doc as DatasetDeleteJobDoc);
+  }
+
+  async findByScope(
+    input: {
+      datasetId?: string;
+      collectionId?: string;
+      dataId?: string;
+      options: PortCallOptions;
+    },
+    context: RequestContext,
+  ): Promise<DeleteJobSnapshot | null> {
+    const teamId = this.teamId(context);
+    let jobId: string | RegExp;
+    if (input.collectionId) {
+      const datasetSegment = input.datasetId ? escapeRegExp(input.datasetId) : '[0-9a-fA-F]{24}';
+      jobId = new RegExp(
+        `^${escapeRegExp(String(teamId))}:${datasetSegment}:collection:${escapeRegExp(input.collectionId)}:delete$`,
+      );
+    } else if (input.dataId) {
+      const datasetSegment = input.datasetId ? escapeRegExp(input.datasetId) : '[0-9a-fA-F]{24}';
+      jobId = new RegExp(
+        `^${escapeRegExp(String(teamId))}:${datasetSegment}:data:${escapeRegExp(input.dataId)}:delete$`,
+      );
+    } else if (input.datasetId) {
+      jobId = buildDeleteJobId(String(teamId), input.datasetId);
+    } else {
+      return null;
+    }
+
+    const doc = await this.model.findOne({ teamId, jobId }).sort({ updateTime: -1 }).lean();
+    return doc ? this.toSnapshot(doc as DatasetDeleteJobDoc) : null;
   }
 
   async transition(
@@ -374,4 +407,8 @@ export class MongoDeleteJobRepository implements DeleteJobRepository {
     );
     return Boolean(updated);
   }
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }

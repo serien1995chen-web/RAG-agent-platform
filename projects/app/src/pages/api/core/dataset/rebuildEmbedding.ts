@@ -5,10 +5,7 @@ import { getRuntime } from '../../../../runtime';
 import { authenticateRequest } from '../../../../runtime/auth';
 import { parseDto, successResponse, withApiHandler } from '../../../../shared/api';
 import type { ApiHandlerContext } from '../../../../shared/api';
-import {
-  IndexVersionSwitchService,
-  IndexingService,
-} from '../../../../../../../packages/service/src/modules/index/application';
+import { IndexVersionSwitchService } from '../../../../../../../packages/service/src/modules/index/application';
 import type { KnowledgeItemQueryRepository } from '../../../../../../../packages/service/src/modules/item/domain';
 import { RebuildEmbeddingService } from '../../../../../../../packages/service/src/modules/knowledge-base/application/rebuild.service';
 
@@ -26,10 +23,24 @@ export default withApiHandler(
     const { context } = await authenticateRequest(runtime, request, requestId);
     const body = parseDto<RebuildEmbeddingBody>('RebuildEmbeddingBody', request.body);
     const options = { timeoutMs: 30_000 };
-    const permission = await runtime.datasetPermission.getPermission(
-      { datasetId: body.datasetId, options },
-      context,
-    );
+    let permission;
+    try {
+      permission = await runtime.datasetPermission.getPermission(
+        { datasetId: body.datasetId, options },
+        context,
+      );
+    } catch (error) {
+      if (error instanceof ApiErrorException && error.error.code === 501070) {
+        throw new ApiErrorException(
+          createApiError({
+            code: 501013,
+            requestId,
+            params: { datasetId: body.datasetId, reason: 'not_found' },
+          }),
+        );
+      }
+      throw error;
+    }
     if (!context.tenant.isRoot && (permission.permissionMask & OWNER_PERMISSION) === 0) {
       throw new ApiErrorException(
         createApiError({
@@ -48,11 +59,8 @@ export default withApiHandler(
       items,
       processing: runtime.processingService,
       embedding: runtime.embeddingService,
-      indexing: new IndexingService({
-        items,
-        vectors: runtime.vectorController,
-        fullText,
-      }),
+      vectors: runtime.vectorController,
+      fullText,
       indexVersionSwitch: new IndexVersionSwitchService({
         store: runtime.knowledgeBaseRepository,
       }),
