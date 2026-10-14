@@ -15,3 +15,9 @@ export { REQUEST_ID_HEADER, resolveRequestId } from './request-id';
 export { matchRoute, normalizePath } from './route-matcher';
 export { withApiHandler } from './with-api-handler';
 export type { ApiHandlerContext, ApiRouteHandler, ApiRouteOptions } from './with-api-handler';
+export { withAdminHandler } from './with-admin-handler';
+export type {
+  AdminHandlerContext,
+  AdminRouteHandler,
+  AdminRouteOptions,
+} from './with-admin-handler';
