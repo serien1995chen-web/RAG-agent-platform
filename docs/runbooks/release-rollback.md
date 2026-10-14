@@ -34,18 +34,18 @@
 
 ## Drill Record
 
-| Field | Value |
-| --- | --- |
-| changeId | |
-| rollbackPoint | |
-| rollbackInfo | |
-| operator | |
-| approvalRole | |
-| beforeChecks | |
-| commands | |
-| afterChecks | |
-| comparisonResult | |
-| repeatedRollbackSafe | |
-| incidentNotes | |
+| Field                | Value |
+| -------------------- | ----- |
+| changeId             |       |
+| rollbackPoint        |       |
+| rollbackInfo         |       |
+| operator             |       |
+| approvalRole         |       |
+| beforeChecks         |       |
+| commands             |       |
+| afterChecks          |       |
+| comparisonResult     |       |
+| repeatedRollbackSafe |       |
+| incidentNotes        |       |
 
 Failed rollback keeps the environment isolated for manual handling. The backup is not deleted before verification completes.

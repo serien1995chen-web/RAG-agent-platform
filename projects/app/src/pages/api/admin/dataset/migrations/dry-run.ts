@@ -1,10 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { getRuntime } from '../../../../../runtime';
-import {
-  parseDto,
-  successResponse,
-  withAdminHandler,
-} from '../../../../../shared/api';
+import { parseDto, successResponse, withAdminHandler } from '../../../../../shared/api';
 import type { AdminHandlerContext } from '../../../../../shared/api';
 
 interface MigrationDryRunBody {

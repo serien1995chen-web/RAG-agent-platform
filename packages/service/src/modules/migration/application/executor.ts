@@ -334,7 +334,12 @@ export class MigrationExecutor {
         operation: 'migration.apply.done',
         resourceType: 'migration',
         resourceId: started.runId,
-        payload: { version: definition.version, dryRun: false, result: 'done', requestId: context.requestId },
+        payload: {
+          version: definition.version,
+          dryRun: false,
+          result: 'done',
+          requestId: context.requestId,
+        },
       },
       context,
     );
@@ -365,12 +370,18 @@ export class MigrationExecutor {
         continue;
       }
       try {
-        const result = await batch.execute({ runId: input.runId, cursor, options: input.options }, context);
+        const result = await batch.execute(
+          { runId: input.runId, cursor, options: input.options },
+          context,
+        );
         counts.expected += result.counts.expected;
         counts.actual += result.counts.actual;
         references.checked += result.references.checked;
         references.missing.push(...result.references.missing);
-        if (result.references.missing.length > 0 || result.counts.expected !== result.counts.actual) {
+        if (
+          result.references.missing.length > 0 ||
+          result.counts.expected !== result.counts.actual
+        ) {
           await this.deps.registry.fail(
             {
               runId: input.runId,
@@ -446,11 +457,7 @@ export class MigrationExecutor {
     if (resumed.state === 'done') {
       return { runId: resumed.runId, cursor: resumed.cursor, state: resumed.state };
     }
-    const definition = assertKnownDefinition(
-      this.definitions,
-      resumed.version,
-      context.requestId,
-    );
+    const definition = assertKnownDefinition(this.definitions, resumed.version, context.requestId);
     const batches = await this.runBatches(
       { definition, runId: resumed.runId, cursor: resumed.cursor, options: input.options },
       context,

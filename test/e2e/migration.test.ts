@@ -37,11 +37,7 @@ function responseRecorder(): {
   };
 }
 
-function request(input: {
-  url: string;
-  body?: unknown;
-  idempotencyKey?: string;
-}): NextApiRequest {
+function request(input: { url: string; body?: unknown; idempotencyKey?: string }): NextApiRequest {
   return {
     method: 'POST',
     url: input.url,
@@ -111,7 +107,10 @@ describe('Root migration routes (P7-04 / API-ROOT-001..003)', () => {
     const { dryRun } = await loadRoutes();
     const rec = responseRecorder();
     await dryRun(
-      request({ url: '/api/admin/dataset/migrations/dry-run', body: { version: 'v1', scope: { teamIds: [teamId] } } }),
+      request({
+        url: '/api/admin/dataset/migrations/dry-run',
+        body: { version: 'v1', scope: { teamIds: [teamId] } },
+      }),
       rec.response,
     );
     const { status, body } = rec.result();

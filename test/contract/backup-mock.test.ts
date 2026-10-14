@@ -36,10 +36,7 @@ describe('BackupToolPort mock contract (TEST-BACKUP-MOCK-001, TEST-OPS-RESTORE-0
       artifactRef: 'mongo:snapshot:1',
       changeId: 'change-1',
     };
-    const validated = await adapter.validate(
-      { command, options: { timeoutMs: 1_000 } },
-      context,
-    );
+    const validated = await adapter.validate({ command, options: { timeoutMs: 1_000 } }, context);
     expect(validated).toEqual({ valid: true });
 
     const result = await adapter.run({ command, options: { timeoutMs: 1_000 } }, context);

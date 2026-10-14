@@ -30,15 +30,15 @@
 
 ## Evidence Template
 
-| Field | Value |
-| --- | --- |
-| changeId | |
-| version | |
-| writeMode | |
-| estimatedWindow | |
-| rollbackWindow | |
-| dryRunReport | |
-| applyRunId | |
-| verificationResult | |
-| rollbackInfo | |
-| approver | |
+| Field              | Value |
+| ------------------ | ----- |
+| changeId           |       |
+| version            |       |
+| writeMode          |       |
+| estimatedWindow    |       |
+| rollbackWindow     |       |
+| dryRunReport       |       |
+| applyRunId         |       |
+| verificationResult |       |
+| rollbackInfo       |       |
+| approver           |       |

@@ -45,25 +45,25 @@ Commands must be supplied by the private delivery tool. Failed rollback keeps th
 
 ## Data Comparison
 
-| Area | Before | After | Compared fields |
-| --- | --- | --- | --- |
-| Mongo | Snapshot manifest | Live counts | collection, count, checksum |
-| PG/pgvector | Snapshot manifest | Live counts | table, count, dimension |
-| S3 | Bucket manifest | Live objects | bucket, key, etag, policy |
-| Migration | Registry export | Live registry | version, state, cursor |
+| Area        | Before            | After         | Compared fields             |
+| ----------- | ----------------- | ------------- | --------------------------- |
+| Mongo       | Snapshot manifest | Live counts   | collection, count, checksum |
+| PG/pgvector | Snapshot manifest | Live counts   | table, count, dimension     |
+| S3          | Bucket manifest   | Live objects  | bucket, key, etag, policy   |
+| Migration   | Registry export   | Live registry | version, state, cursor      |
 
 ## Drill Record
 
-| Field | Value |
-| --- | --- |
-| changeId | |
-| operator | |
-| approvalRole | |
-| startedAt | |
-| completedAt | |
-| backupEvidence | |
-| beforeChecks | |
-| afterChecks | |
-| rollbackInfo | |
-| comparisonResult | |
-| incidentNotes | |
+| Field            | Value |
+| ---------------- | ----- |
+| changeId         |       |
+| operator         |       |
+| approvalRole     |       |
+| startedAt        |       |
+| completedAt      |       |
+| backupEvidence   |       |
+| beforeChecks     |       |
+| afterChecks      |       |
+| rollbackInfo     |       |
+| comparisonResult |       |
+| incidentNotes    |       |

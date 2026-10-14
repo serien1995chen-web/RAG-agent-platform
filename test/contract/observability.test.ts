@@ -27,9 +27,9 @@ describe('P7-07 observability contracts (ACC-OBS-001..008 / TEST-OBS-TRACE-001 /
   });
 
   it('keeps teamId out of global metric labels and drops non-whitelisted attributes', () => {
-    expect(
-      METRIC_DEFINITIONS.every((entry) => !entry.allowedAttributes.includes('teamId')),
-    ).toBe(true);
+    expect(METRIC_DEFINITIONS.every((entry) => !entry.allowedAttributes.includes('teamId'))).toBe(
+      true,
+    );
     const calls: Array<{ name: string; attributes: Record<string, string> }> = [];
     const port = {
       record: (name: string, _value: number, attributes: Record<string, string>) => {

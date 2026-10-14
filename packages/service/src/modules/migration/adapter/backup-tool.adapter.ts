@@ -13,7 +13,10 @@ function notConfigured(requestId: string): ApiErrorException {
   );
 }
 
-function commandOf(command: unknown, requestId: string): {
+function commandOf(
+  command: unknown,
+  requestId: string,
+): {
   toolRef: string;
   artifactRef: string;
   changeId: string;

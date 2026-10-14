@@ -84,13 +84,15 @@ beforeEach(() => {
     },
     extensions: { get: () => null },
     health: {
-      checkRequired: vi.fn(async () => [
-        { name: 'mongo', status: 'ok', durationMs: 1 },
-      ]),
+      checkRequired: vi.fn(async () => [{ name: 'mongo', status: 'ok', durationMs: 1 }]),
       checkOptional: vi.fn(async () => []),
       summarize: vi.fn(() => ({
         httpStatus: 200,
-        response: { status: 'ok', checks: [{ name: 'mongo', status: 'ok', durationMs: 1 }], durationMs: 1 },
+        response: {
+          status: 'ok',
+          checks: [{ name: 'mongo', status: 'ok', durationMs: 1 }],
+          durationMs: 1,
+        },
       })),
     },
     config: {
