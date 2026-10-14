@@ -7,8 +7,18 @@ export {
   validateMigrationRun,
 } from './domain';
 export type { MigrationRun, MigrationState } from './domain';
-export { MigrationApplicationService } from './application';
-export type { MigrationServiceDeps } from './application';
+export {
+  MigrationApplicationService,
+  MigrationExecutor,
+  MIGRATION_DEFINITIONS,
+  registerMigrationDefinitions,
+} from './application';
+export type {
+  MigrationBatch,
+  MigrationDefinition,
+  MigrationExecutionResult,
+  MigrationServiceDeps,
+} from './application';
 export { createMigrationRunRepository } from './repository';
 export { createMigrationRunAdapter } from './adapter';
 export { MIGRATION_RUN_JOB_DEFINITIONS, createMigrationRunJobHandler } from './jobs';
