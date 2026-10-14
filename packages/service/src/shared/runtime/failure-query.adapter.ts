@@ -84,6 +84,27 @@ function asCursor(cursor: FailureCursor): Candidate {
   };
 }
 
+/**
+ * 游标下推：全局全序 (time desc, sourceRank asc, _id desc) 下「排在游标之后」的 Mongo 过滤。
+ * 设游标 C=(t_c, r_c, id_c)、来源固定排行 r_s：
+ *   time < t_c  OR  ( time == t_c AND ( r_s > r_c OR ( r_s == r_c AND _id < id_c ) ) )
+ */
+function cursorFilter(
+  timeField: 'createTime' | 'timestamp',
+  sourceRank: number,
+  cursor: FailureCursor,
+): Record<string, unknown> {
+  const at = new Date(cursor.timeMs);
+  if (sourceRank > cursor.sourceRank) return { [timeField]: { $lte: at } };
+  if (sourceRank < cursor.sourceRank) return { [timeField]: { $lt: at } };
+  return {
+    $or: [
+      { [timeField]: { $lt: at } },
+      { [timeField]: at, _id: { $lt: new Types.ObjectId(cursor.idHex) } },
+    ],
+  };
+}
+
 function resolveModel<T>(connection: Connection, name: string, schema: Schema<T>): Model<T> {
   const existing = connection.models[name] as Model<T> | undefined;
   return existing ?? connection.model<T>(name, schema);
@@ -134,24 +155,28 @@ export class FailureQueryAdapter implements FailureQueryPort {
     }
 
     const take = input.limit + 1;
+    const deleteFilter = cursor === null ? {} : cursorFilter('createTime', 0, cursor);
+    const trainingFilter = cursor === null ? {} : cursorFilter('createTime', 1, cursor);
+    const migrationFilter = cursor === null ? {} : cursorFilter('createTime', 2, cursor);
+    const operationFilter = cursor === null ? {} : cursorFilter('timestamp', 3, cursor);
     const [deleteDocs, trainingDocs, migrationDocs, operationDocs, totals] = await Promise.all([
       this.deleteFailures
-        .find({ teamId })
+        .find({ teamId, ...deleteFilter })
         .sort({ createTime: -1, _id: -1 })
         .limit(take)
         .lean<LeanDoc<DatasetDeleteFailureDoc>[]>(),
       this.trainings
-        .find({ teamId })
+        .find({ teamId, ...trainingFilter })
         .sort({ createTime: -1, _id: -1 })
         .limit(take)
         .lean<LeanDoc<DatasetTrainingDoc>[]>(),
       this.migrationLogs
-        .find({ teamId })
+        .find({ teamId, ...migrationFilter })
         .sort({ createTime: -1, _id: -1 })
         .limit(take)
         .lean<LeanDoc<DatasetMigrationLogDoc>[]>(),
       this.operationLogs
-        .find({ teamId })
+        .find({ teamId, ...operationFilter })
         .sort({ timestamp: -1, _id: -1 })
         .limit(take)
         .lean<LeanDoc<OperationLogDoc>[]>(),

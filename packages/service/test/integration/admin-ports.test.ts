@@ -237,6 +237,51 @@ describe('archive status and failure query ports (P7-08 / TEST-PORT-CONTRACT-001
     const firstIds = first.list.map((record) => record.resourceId);
     const secondIds = second.list.map((record) => record.resourceId);
     expect(secondIds.some((id) => firstIds.includes(id))).toBe(false);
+    expect(second.cursor).toBeNull();
+  });
+
+  it('pages past the limit+1 window within a single source', async () => {
+    await deleteFailures.insertMany(
+      [0, 1, 2, 3, 4, 5].map((index) => ({
+        teamId,
+        jobId: `overflow-${index}`,
+        resourceType: 'data',
+        resourceId: `r${index}`,
+        stage: 'delete',
+        attempt: 1,
+        errorClass: 'storage',
+        retryable: true,
+        lastError: `err-${index}`,
+        createTime: new Date(Date.UTC(2026, 0, 1 + index)),
+        updateTime: new Date(Date.UTC(2026, 0, 1 + index)),
+      })),
+    );
+
+    const single = await failures.query(
+      { scope: {}, limit: 100, options: { timeoutMs: 5_000 } },
+      context,
+    );
+    const expected = single.list.map((record) => record.resourceId);
+    expect(expected).toHaveLength(6);
+
+    const collected: string[] = [];
+    let cursor: string | undefined;
+    let lastCursor: string | null = 'unset';
+    for (let page = 0; page < 10; page += 1) {
+      const result = await failures.query(
+        { scope: {}, cursor, limit: 2, options: { timeoutMs: 5_000 } },
+        context,
+      );
+      collected.push(...result.list.map((record) => record.resourceId));
+      lastCursor = result.cursor;
+      if (result.cursor === null) break;
+      cursor = result.cursor;
+    }
+
+    expect(lastCursor).toBeNull();
+    expect(collected).toEqual(expected);
+    expect(new Set(collected).size).toBe(6);
+    expect(collected).toEqual(['r5', 'r4', 'r3', 'r2', 'r1', 'r0']);
   });
 
   it('enforces strict tenant scope', async () => {

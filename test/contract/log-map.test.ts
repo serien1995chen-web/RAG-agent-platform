@@ -14,6 +14,13 @@ import {
   UsageItemSchema,
   UsageSchema,
 } from '../../packages/service/src/shared/persistence/schemas';
+import {
+  INSTRUMENT_CLASSES,
+  METRIC_DEFINITIONS,
+  METRIC_NAMES,
+  metricDropCount,
+  recordMetric,
+} from '../../packages/service/src/shared/observability/instruments';
 
 describe('ADR-017 Audit/Usage/Track 映射契约 (TEST-LOG-MAP-001)', () => {
   it('anchors the four canonical collections', () => {
@@ -73,5 +80,49 @@ describe('ADR-017 Audit/Usage/Track 映射契约 (TEST-LOG-MAP-001)', () => {
     expect(typeof UsageAdapter.prototype.listUsageItems).toBe('function');
     expect(typeof UsageAdapter.prototype.compareUsageCounts).toBe('function');
     expect(typeof TrackAdapter.prototype.record).toBe('function');
+  });
+});
+
+describe('指标字典与统一记录入口 (P7-03 / 15.1-15.2)', () => {
+  it('freezes the 43-metric dictionary and the 13-instrument class list', () => {
+    expect(METRIC_DEFINITIONS).toHaveLength(43);
+    expect(METRIC_NAMES).toEqual(METRIC_DEFINITIONS.map((entry) => entry.name));
+    expect(new Set(METRIC_NAMES).size).toBe(43);
+    expect(INSTRUMENT_CLASSES).toHaveLength(13);
+    expect(new Set(INSTRUMENT_CLASSES).size).toBe(13);
+    expect(METRIC_DEFINITIONS.every((entry) => !entry.allowedAttributes.includes('teamId'))).toBe(
+      true,
+    );
+  });
+
+  it('records whitelisted metrics through the entry without throwing', () => {
+    const calls: Array<{ name: string; attributes: Record<string, string> }> = [];
+    const port = {
+      record: (name: string, _value: number, attributes: Record<string, string>) => {
+        calls.push({ name, attributes });
+      },
+    };
+    expect(
+      recordMetric(port, 'dataset_http_requests_total', 1, { method: 'GET', route: '/x' }),
+    ).toEqual({ recorded: true });
+    expect(
+      recordMetric(port, 'dataset_http_requests_total', 1, { route: '/x', leaked: 'y' }),
+    ).toEqual({ recorded: true, dropped: 'attribute_not_allowed' });
+    expect(calls[1]?.attributes).toEqual({ route: '/x' });
+    expect(recordMetric(port, 'nope_metric', 1, {})).toEqual({
+      recorded: false,
+      dropped: 'unknown_metric',
+    });
+
+    const before = metricDropCount();
+    const boom = {
+      record: () => {
+        throw new Error('metrics down');
+      },
+    };
+    expect(recordMetric(boom, 'dataset_queue_depth', 1, { queue: 'q' })).toEqual({
+      recorded: false,
+    });
+    expect(metricDropCount()).toBe(before + 1);
   });
 });

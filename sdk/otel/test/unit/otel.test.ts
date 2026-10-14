@@ -22,13 +22,6 @@ import {
   setSpanStatusFromHttp,
   startInstrumentSpan,
 } from '../../src/index';
-import {
-  INSTRUMENT_CLASSES,
-  METRIC_DEFINITIONS,
-  METRIC_NAMES,
-  metricDropCount,
-  recordMetric,
-} from '../../../../packages/service/src/shared/observability/instruments';
 
 describe('otel three-entry safety (15.x)', () => {
   it('degrades to disabled when no exporter is configured', () => {
@@ -71,14 +64,8 @@ describe('P7-03 OTel metrics / span / log / alert contracts (15.1-15.5)', () => 
     provider.register();
   });
 
-  it('keeps the frozen 43-metric and 13-instrument dictionaries', () => {
-    expect(METRIC_DEFINITIONS).toHaveLength(43);
-    expect(METRIC_NAMES).toEqual(METRIC_DEFINITIONS.map((entry) => entry.name));
-    expect(new Set(METRIC_NAMES).size).toBe(43);
+  it('keeps the frozen 13-instrument dictionary', () => {
     expect(Object.keys(SPAN_INSTRUMENTS)).toHaveLength(13);
-    expect(INSTRUMENT_CLASSES).toHaveLength(13);
-    expect(new Set(INSTRUMENT_CLASSES).size).toBe(13);
-
     expect(SPAN_INSTRUMENTS.http.allowedAttributes).toEqual([
       'route',
       'method',
@@ -87,9 +74,6 @@ describe('P7-03 OTel metrics / span / log / alert contracts (15.1-15.5)', () => 
     ]);
     expect(SPAN_INSTRUMENTS.search.allowedAttributes).toContain('searchMode');
     expect(SPAN_INSTRUMENTS.postgresql.forbiddenAttributes).toContain('向量原文');
-    expect(METRIC_DEFINITIONS.every((entry) => !entry.allowedAttributes.includes('teamId'))).toBe(
-      true,
-    );
   });
 
   it('filters attributes to the instrument whitelist and ends the span', async () => {
@@ -161,37 +145,6 @@ describe('P7-03 OTel metrics / span / log / alert contracts (15.1-15.5)', () => 
       }),
     ).toBe(false);
     expect(await emitAlert(signal, { emit: async () => undefined })).toBe(true);
-  });
-
-  it('records whitelisted metrics through the entry without throwing', () => {
-    const calls: Array<{ name: string; attributes: Record<string, string> }> = [];
-    const port = {
-      record: (name: string, _value: number, attributes: Record<string, string>) => {
-        calls.push({ name, attributes });
-      },
-    };
-    expect(
-      recordMetric(port, 'dataset_http_requests_total', 1, { method: 'GET', route: '/x' }),
-    ).toEqual({ recorded: true });
-    expect(
-      recordMetric(port, 'dataset_http_requests_total', 1, { route: '/x', leaked: 'y' }),
-    ).toEqual({ recorded: true, dropped: 'attribute_not_allowed' });
-    expect(calls[1]?.attributes).toEqual({ route: '/x' });
-    expect(recordMetric(port, 'nope_metric', 1, {})).toEqual({
-      recorded: false,
-      dropped: 'unknown_metric',
-    });
-
-    const before = metricDropCount();
-    const boom = {
-      record: () => {
-        throw new Error('metrics down');
-      },
-    };
-    expect(recordMetric(boom, 'dataset_queue_depth', 1, { queue: 'q' })).toEqual({
-      recorded: false,
-    });
-    expect(metricDropCount()).toBe(before + 1);
   });
 
   it('constructs OTLP exporter/reader factories without network I/O', async () => {
