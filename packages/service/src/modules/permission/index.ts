@@ -17,3 +17,10 @@ export {
   MongoDatasetAclRepository,
   isFullPermission,
 } from './repository/mongo-dataset-acl.repository';
+
+export { CollaboratorService, OwnerTransferService } from './application';
+export type {
+  CollaboratorServiceDeps,
+  OwnerTransferServiceDeps,
+  OwnerTransferStore,
+} from './application';

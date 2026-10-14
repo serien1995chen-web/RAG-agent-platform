@@ -303,3 +303,10 @@ export type {
 
 export { createAuditAdapter, createUsageAdapter, createTrackAdapter } from './shared/observability';
 export type { AuditAdapterDeps, UsageAdapterDeps, TrackAdapterDeps } from './shared/observability';
+
+export { CollaboratorService, OwnerTransferService } from './modules/permission';
+export type {
+  CollaboratorServiceDeps,
+  OwnerTransferServiceDeps,
+  OwnerTransferStore,
+} from './modules/permission';
