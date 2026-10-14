@@ -314,6 +314,22 @@ describe('archive status and failure query ports (P7-08 / TEST-PORT-CONTRACT-001
     );
   });
 
+  it('rejects an out-of-range cursor timestamp with a stable 501070', async () => {
+    await seed();
+    await expectApiError(
+      failures.query(
+        {
+          scope: {},
+          cursor: `99999999999999999:0:${String(new mongoose.Types.ObjectId())}`,
+          limit: 10,
+          options: { timeoutMs: 5_000 },
+        },
+        context,
+      ),
+      501070,
+    );
+  });
+
   it('stays read-only across the four sources', async () => {
     await seed();
     const before = await Promise.all([

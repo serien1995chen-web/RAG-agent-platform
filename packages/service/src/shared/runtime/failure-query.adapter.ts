@@ -59,7 +59,11 @@ function parseCursor(cursor: string | undefined): FailureCursor | null {
   if (!match) return null;
   const [, timeText, rankText, idHex] = match;
   if (timeText === undefined || rankText === undefined || idHex === undefined) return null;
-  return { timeMs: Number(timeText), sourceRank: Number(rankText), idHex };
+  // 越界时间戳会让 `new Date(ms)` 得到 Invalid Date，随聚合条件下发 Mongo 时会抛 CastError；
+  // 按 Plan §8.4-S02.5「解析失败 → 501070」在此拒绝（日期可表示范围 ±8.64e15 ms）。
+  const timeMs = Number(timeText);
+  if (!Number.isSafeInteger(timeMs) || Math.abs(timeMs) > 8.64e15) return null;
+  return { timeMs, sourceRank: Number(rankText), idHex };
 }
 
 function cursorKey(candidate: Candidate): string {
