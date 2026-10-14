@@ -1,9 +1,8 @@
 import { ApiErrorException, createApiError } from '@kb/contracts';
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { getRuntime } from '../../../../../runtime';
-import { authenticateRequest } from '../../../../../runtime/auth';
-import { parseDto, successResponse, withApiHandler } from '../../../../../shared/api';
-import type { ApiHandlerContext } from '../../../../../shared/api';
+import { parseDto, successResponse, withAdminHandler } from '../../../../../shared/api';
+import type { AdminHandlerContext } from '../../../../../shared/api';
 
 interface ReconcileReportsQueryDto {
   window: string;
@@ -31,8 +30,12 @@ function invalidQuery(requestId: string, field: string, value: unknown): ApiErro
 }
 
 /** API-ROOT-004 GET /api/admin/dataset/reconcile/reports */
-export default withApiHandler(
-  async (request: NextApiRequest, response: NextApiResponse, { requestId }: ApiHandlerContext) => {
+export default withAdminHandler(
+  async (
+    request: NextApiRequest,
+    response: NextApiResponse,
+    { requestId, context }: AdminHandlerContext,
+  ) => {
     const windowValue = firstQueryValue(request.query.window) ?? '';
     const rawScope = firstQueryValue(request.query.scope);
     let scopeValue: unknown = null;
@@ -64,7 +67,6 @@ export default withApiHandler(
       page,
     });
     const runtime = await getRuntime();
-    const { context } = await authenticateRequest(runtime, request, requestId);
     const result = await runtime.reconcileService.listReports(
       {
         windowHours,
