@@ -300,3 +300,6 @@ export type {
   MigrationRunJobHandler,
   MigrationServiceDeps,
 } from './modules/migration';
+
+export { createAuditAdapter, createUsageAdapter, createTrackAdapter } from './shared/observability';
+export type { AuditAdapterDeps, UsageAdapterDeps, TrackAdapterDeps } from './shared/observability';
