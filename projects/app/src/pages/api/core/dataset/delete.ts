@@ -37,7 +37,24 @@ export default withApiHandler(
       context,
     );
     if (existing) {
-      response.status(200).json(successResponse(existing, requestId));
+      const authorized =
+        context.tenant.isRoot ||
+        existing.actorTmbId === context.tenant.tmbId ||
+        existing.ownerTmbId === context.tenant.tmbId;
+      if (!authorized) {
+        throw new ApiErrorException(
+          createApiError({
+            code: 501061,
+            requestId,
+            params: { datasetId: body.datasetId, permission: 'owner' },
+          }),
+        );
+      }
+      const replayed = await runtime.deleteService.requestDatasetDelete(
+        { datasetId: body.datasetId, options },
+        context,
+      );
+      response.status(200).json(successResponse(replayed, requestId));
       return;
     }
     const permission = await runtime.datasetPermission.getPermission(
@@ -54,7 +71,7 @@ export default withApiHandler(
       );
     }
     const result = await runtime.deleteService.requestDatasetDelete(
-      { datasetId: body.datasetId, options },
+      { datasetId: body.datasetId, ownerTmbId: permission.owner, options },
       context,
     );
     response.status(200).json(successResponse(result, requestId));

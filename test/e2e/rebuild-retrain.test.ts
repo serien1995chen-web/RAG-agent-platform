@@ -142,10 +142,12 @@ interface RuntimeOptions {
   queued?: boolean;
   permissionMask?: number;
   casFails?: boolean;
+  casFailures?: number;
   cleanupFails?: boolean;
   missingDataset?: boolean;
   missingCollection?: boolean;
   trainingMode?: 'success' | 'retry' | 'default';
+  produceData?: boolean;
 }
 
 interface TaskFact {
@@ -177,6 +179,8 @@ function buildRuntime(options: RuntimeOptions = {}) {
   ]);
   let currentDataset = dataset();
   let currentItem = item(options.rebuilding ?? false);
+  let producedItem: KnowledgeItemSnapshot | null = null;
+  let casFailuresRemaining = options.casFailures ?? (options.casFails ? 1 : 0);
   const sourceCollection = collection();
   const taskFacts: TaskFact[] = [];
   const trainingCalls: Array<{ mode: string }> = [];
@@ -186,6 +190,8 @@ function buildRuntime(options: RuntimeOptions = {}) {
     fullText: 0,
     training: 0,
   };
+  const deleteScopes: Array<{ collectionId?: string; dataIds?: string[] }> = [];
+  const trainingDeleteCalls: Array<{ collectionId?: string; dataId?: string }> = [];
 
   const knowledgeBase = {
     async findByDatasetId() {
@@ -214,7 +220,10 @@ function buildRuntime(options: RuntimeOptions = {}) {
       expectedIndexVersion: string;
       nextIndexVersion: string;
     }) {
-      if (options.casFails) throw versionConflict();
+      if (casFailuresRemaining > 0) {
+        casFailuresRemaining -= 1;
+        throw versionConflict();
+      }
       if (
         input.expectedVersion !== currentDataset.version ||
         input.expectedIndexVersion !== currentDataset.indexVersion
@@ -265,10 +274,19 @@ function buildRuntime(options: RuntimeOptions = {}) {
   };
   const itemRepository = {
     async list() {
-      return { total: 1, list: [currentItem], cursor: null };
+      return {
+        total: producedItem ? 2 : 1,
+        list: [currentItem, ...(producedItem ? [producedItem] : [])],
+        cursor: null,
+      };
     },
     async get() {
       return currentItem;
+    },
+    async setRebuilding(input: { dataIds: string[]; rebuilding: boolean }) {
+      if (!input.dataIds.includes(currentItem.dataId)) return;
+      currentItem = { ...currentItem, rebuilding: input.rebuilding };
+      events.push(`mongo:rebuilding:${String(currentItem.rebuilding)}`);
     },
     async bulkUpsert(input: { items: KnowledgeItemSnapshot[] }) {
       currentItem = { ...currentItem, ...input.items[0] };
@@ -285,7 +303,8 @@ function buildRuntime(options: RuntimeOptions = {}) {
       events.push('mongo:update-indexes');
       return { version: currentItem.version };
     },
-    async deleteByScope(input: { collectionId?: string }) {
+    async deleteByScope(input: { collectionId?: string; dataIds?: string[] }) {
+      deleteScopes.push(input);
       deletions.data += 1;
       events.push(`delete:data:${input.collectionId ?? ''}`);
       return { deleted: 1 };
@@ -341,6 +360,8 @@ function buildRuntime(options: RuntimeOptions = {}) {
       events.push('fulltext:write');
     },
     async deleteByDataId() {
+      deletions.fullText += 1;
+      events.push('delete:fulltext');
       return { deleted: 1 };
     },
     async deleteByDatasetIds() {
@@ -382,7 +403,8 @@ function buildRuntime(options: RuntimeOptions = {}) {
       });
       events.push(`mongo:finish:${input.state}`);
     },
-    async deleteTrainingData() {
+    async deleteTrainingData(input: { collectionId?: string; dataId?: string }) {
+      trainingDeleteCalls.push(input);
       deletions.training += 1;
       events.push('delete:training');
       return { deletedCount: 1 };
@@ -402,6 +424,18 @@ function buildRuntime(options: RuntimeOptions = {}) {
           async process() {
             trainingCalls.push({ mode: 'parse' });
             events.push('training:process');
+            if (options.produceData) {
+              producedItem = {
+                ...item(),
+                dataId: 'new-data-id',
+                indexes: [
+                  {
+                    ...item().indexes[0]!,
+                    dataId: 'new-vector-id',
+                  },
+                ],
+              };
+            }
             return { state: options.trainingMode === 'retry' ? 'retry' : 'success' };
           },
         };
@@ -442,6 +476,8 @@ function buildRuntime(options: RuntimeOptions = {}) {
     deletions,
     taskFacts,
     trainingCalls,
+    deleteScopes,
+    trainingDeleteCalls,
     getDataset: () => currentDataset,
     getItem: () => currentItem,
   };
@@ -515,6 +551,42 @@ describe('P6-02 rebuild and retrain routes', () => {
     expect(built.getItem().indexes[0]?.dataId).toBe('old-vector-id');
     expect(built.vectors.get(oldIndexVersion)).toHaveLength(1);
     expect(built.events).not.toContain('vector:delete-old');
+  });
+
+  it('R1-F1 clears rebuilding state after CAS failure and allows retry', async () => {
+    const built = buildRuntime({ casFailures: 1 });
+    state.runtime = built.runtime;
+    const first = responseRecorder();
+    await rebuildRoute(
+      request({
+        method: 'POST',
+        url: '/api/core/dataset/rebuildEmbedding',
+        body: {
+          datasetId,
+          modelRef: { provider: 'openai', model: 'new-model', dimension: 1536 },
+        },
+      }),
+      first.response,
+    );
+    expect((first.result().body as { code: number }).code).toBe(501069);
+    expect(built.getDataset().vectorModel).toBe('old-model');
+    expect(built.getItem().rebuilding).toBe(false);
+
+    const second = responseRecorder();
+    await rebuildRoute(
+      request({
+        method: 'POST',
+        url: '/api/core/dataset/rebuildEmbedding',
+        body: {
+          datasetId,
+          modelRef: { provider: 'openai', model: 'new-model', dimension: 1536 },
+        },
+      }),
+      second.response,
+    );
+    expect(second.result().status).toBe(200);
+    expect(built.getDataset().indexVersion).toBe('new-model:1536:v1');
+    expect(built.getItem().rebuilding).toBe(false);
   });
 
   it('R1 cleanup failure returns cleanup_pending after the new indexVersion is committed', async () => {
@@ -608,7 +680,7 @@ describe('P6-02 rebuild and retrain routes', () => {
   });
 
   it('ACC-REBUILD-002 retrains only after processor success and preserves the source', async () => {
-    const built = buildRuntime();
+    const built = buildRuntime({ produceData: true });
     state.runtime = built.runtime;
     const recorder = responseRecorder();
     await retrainRoute(
@@ -643,6 +715,9 @@ describe('P6-02 rebuild and retrain routes', () => {
       eventIndexStartingWith(built.events, 'delete:data:'),
     );
     expect(built.deletions).toEqual({ data: 1, vectors: 1, fullText: 1, training: 1 });
+    expect(built.deleteScopes[0]?.dataIds).toEqual([dataId]);
+    expect(built.deleteScopes[0]?.dataIds).not.toContain('new-data-id');
+    expect(built.trainingDeleteCalls).toEqual([expect.objectContaining({ dataId })]);
     const updatedCollection = await built.runtime.collectionRepository.get(
       { collectionId, options: { timeoutMs: 5_000 } },
       context,

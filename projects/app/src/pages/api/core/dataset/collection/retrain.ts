@@ -9,7 +9,10 @@ import {
   withApiHandler,
 } from '../../../../../shared/api';
 import type { ApiHandlerContext } from '../../../../../shared/api';
-import { CollectionRetrainService } from '../../../../../../../../packages/service/src/modules/collection/application/retrain.service';
+import {
+  CollectionRetrainService,
+  type RetrainItemRepository,
+} from '../../../../../../../../packages/service/src/modules/collection/application/retrain.service';
 import type { ChunkPolicyValue } from '../../../../../../../../packages/service/src/shared/persistence';
 
 interface CollectionRetrainBody {
@@ -73,9 +76,10 @@ export default withApiHandler(
       );
     }
 
+    const items = runtime.knowledgeItemRepository as RetrainItemRepository;
     const service = new CollectionRetrainService({
       collections: runtime.collectionRepository,
-      items: runtime.knowledgeItemRepository,
+      items,
       fullText: runtime.fullTextStore ?? runtime.ports.fullTextStore,
       vectors: runtime.vectorController,
       processing: runtime.processingService,

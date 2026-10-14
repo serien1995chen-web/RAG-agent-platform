@@ -193,4 +193,69 @@ describe('MongoDeleteJobRepository (P2-12)', () => {
       repository.get({ jobId: foreign.jobId, options: { timeoutMs: 5_000 } }, context),
     ).rejects.toMatchObject({ error: { code: 501070 } });
   });
+
+  it('finds dataset, collection and data jobs by team scope', async () => {
+    const datasetId = String(new mongoose.Types.ObjectId());
+    const collectionId = String(new mongoose.Types.ObjectId());
+    const dataId = String(new mongoose.Types.ObjectId());
+    const actorTmbId = new mongoose.Types.ObjectId();
+    const ownerTmbId = new mongoose.Types.ObjectId();
+    const now = new Date();
+    const base = {
+      teamId,
+      datasetId: new mongoose.Types.ObjectId(datasetId),
+      actorTmbId,
+      ownerTmbId,
+      state: 'completed',
+      stage: 'verify',
+      progress: { total: 1, done: 1, failed: 0, skipped: 0 },
+      attempt: 1,
+      error: null,
+      leaseOwner: null,
+      leaseExpireAt: null,
+      createTime: now,
+      updateTime: now,
+    } as const;
+    await jobs.create([
+      { ...base, jobId: `${teamId}:${datasetId}:delete`, state: 'completed' },
+      {
+        ...base,
+        jobId: `${teamId}:${datasetId}:collection:${collectionId}:delete`,
+        state: 'failed',
+      },
+      { ...base, jobId: `${teamId}:${datasetId}:data:${dataId}:delete`, state: 'queued' },
+    ]);
+
+    const datasetJob = await repository.findByScope(
+      { datasetId, options: { timeoutMs: 5_000 } },
+      context,
+    );
+    const collectionJob = await repository.findByScope(
+      { collectionId, options: { timeoutMs: 5_000 } },
+      context,
+    );
+    const dataJob = await repository.findByScope(
+      { dataId, options: { timeoutMs: 5_000 } },
+      context,
+    );
+    expect(datasetJob).toMatchObject({
+      jobId: `${teamId}:${datasetId}:delete`,
+      datasetId,
+      actorTmbId: String(actorTmbId),
+      ownerTmbId: String(ownerTmbId),
+    });
+    expect(collectionJob?.jobId).toContain(`:collection:${collectionId}:delete`);
+    expect(collectionJob?.state).toBe('failed');
+    expect(dataJob?.jobId).toContain(`:data:${dataId}:delete`);
+    expect(dataJob?.state).toBe('queued');
+    expect(
+      await repository.findByScope(
+        { datasetId, options: { timeoutMs: 5_000 } },
+        {
+          ...context,
+          tenant: { ...context.tenant, teamId: String(otherTeamId) },
+        },
+      ),
+    ).toBeNull();
+  });
 });

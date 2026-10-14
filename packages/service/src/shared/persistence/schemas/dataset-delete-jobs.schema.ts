@@ -13,6 +13,8 @@ export interface DatasetDeleteJobDoc {
   jobId: string;
   teamId: Types.ObjectId;
   datasetId: Types.ObjectId;
+  actorTmbId?: Types.ObjectId | null;
+  ownerTmbId?: Types.ObjectId | null;
   state: string;
   stage: string;
   progress: DatasetDeleteJobProgressValue;
@@ -39,6 +41,8 @@ export const DatasetDeleteJobSchema = new Schema<DatasetDeleteJobDoc>(
     jobId: { type: String, required: true },
     teamId: { type: Schema.Types.ObjectId, required: true },
     datasetId: { type: Schema.Types.ObjectId, required: true },
+    actorTmbId: { type: Schema.Types.ObjectId, default: null },
+    ownerTmbId: { type: Schema.Types.ObjectId, default: null },
     state: {
       type: String,
       enum: ['marked', 'queued', 'deleting', 'completed', 'failed'],

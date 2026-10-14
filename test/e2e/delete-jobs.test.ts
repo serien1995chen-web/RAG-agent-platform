@@ -79,7 +79,13 @@ function request(input: {
 interface RuntimeOptions {
   permissionMask?: number;
   missingJob?: boolean;
-  existingScopeJob?: { jobId: string; state: 'completed' | 'failed' | 'queued' | 'deleting' };
+  existingScopeJob?: {
+    jobId: string;
+    state: 'completed' | 'failed' | 'queued' | 'deleting';
+    datasetId?: string;
+    actorTmbId?: string | null;
+    ownerTmbId?: string | null;
+  };
   missingCollection?: boolean;
   missingData?: boolean;
 }
@@ -138,10 +144,23 @@ function buildRuntime(options: RuntimeOptions = {}) {
       async getDeleteJobByScope(input: unknown) {
         calls.push({ method: 'getDeleteJobByScope', input });
         if (!options.existingScopeJob) return null;
-        if (
-          options.existingScopeJob.state === 'queued' ||
-          options.existingScopeJob.state === 'deleting'
-        ) {
+        return {
+          jobId: options.existingScopeJob.jobId,
+          state: options.existingScopeJob.state,
+          datasetId: options.existingScopeJob.datasetId ?? datasetId,
+          actorTmbId: options.existingScopeJob.actorTmbId ?? context.tenant.tmbId,
+          ownerTmbId: options.existingScopeJob.ownerTmbId ?? context.tenant.tmbId,
+        };
+      },
+      async requestDatasetDelete(input: unknown) {
+        calls.push({ method: 'requestDatasetDelete', input });
+        if (options.existingScopeJob) {
+          if (
+            options.existingScopeJob.state === 'completed' ||
+            options.existingScopeJob.state === 'failed'
+          ) {
+            return { jobId: options.existingScopeJob.jobId, state: options.existingScopeJob.state };
+          }
           throw new ApiErrorException(
             createApiError({
               code: 501068,
@@ -153,18 +172,20 @@ function buildRuntime(options: RuntimeOptions = {}) {
             }),
           );
         }
-        return options.existingScopeJob;
-      },
-      async requestDatasetDelete(input: unknown) {
-        calls.push({ method: 'requestDatasetDelete', input });
         return { jobId, state: 'queued' };
       },
       async requestCollectionDelete(input: unknown) {
         calls.push({ method: 'requestCollectionDelete', input });
+        if (options.existingScopeJob) {
+          return { jobId: options.existingScopeJob.jobId, state: options.existingScopeJob.state };
+        }
         return { jobId, state: 'queued' };
       },
       async requestDataDelete(input: unknown) {
         calls.push({ method: 'requestDataDelete', input });
+        if (options.existingScopeJob) {
+          return { jobId: options.existingScopeJob.jobId, state: options.existingScopeJob.state };
+        }
         return { jobId, state: 'queued' };
       },
       async getDeleteJob(input: unknown) {
@@ -340,14 +361,73 @@ describe('P6-05 lifecycle delete routes', () => {
         ),
     ];
     for (const call of calls) await call();
-    expect(built.lookups).toEqual({ permission: 0, collection: 0, data: 0 });
+    expect(built.lookups).toEqual({ permission: 2, collection: 0, data: 0 });
     expect(
       built.calls.filter((call) =>
         ['requestDatasetDelete', 'requestCollectionDelete', 'requestDataDelete'].includes(
           call.method,
         ),
       ),
-    ).toEqual([]);
+    ).toHaveLength(3);
+  });
+
+  it('R1-F3 denies replay when the caller is not the delete actor/owner or dataset writer', async () => {
+    const dataset = buildRuntime({
+      existingScopeJob: {
+        jobId: 'foreign-dataset-job',
+        state: 'completed',
+        actorTmbId: '000000000000000000000099',
+        ownerTmbId: '000000000000000000000099',
+      },
+    });
+    state.runtime = dataset.runtime;
+    const datasetDenied = responseRecorder();
+    await datasetDeleteRoute(
+      request({
+        method: 'POST',
+        url: '/api/core/dataset/delete',
+        headers: { 'idempotency-key': 'dataset-replay-denied' },
+        body: { datasetId },
+      }),
+      datasetDenied.response,
+    );
+    expect((datasetDenied.result().body as { code: number }).code).toBe(501061);
+
+    const collection = buildRuntime({
+      permissionMask: 1,
+      existingScopeJob: { jobId: 'collection-job', state: 'completed' },
+    });
+    state.runtime = collection.runtime;
+    const collectionDenied = responseRecorder();
+    await collectionDeleteRoute(
+      request({
+        method: 'POST',
+        url: '/api/core/dataset/collection/delete',
+        headers: { 'idempotency-key': 'collection-replay-denied' },
+        body: { collectionId },
+      }),
+      collectionDenied.response,
+    );
+    expect((collectionDenied.result().body as { code: number }).code).toBe(501070);
+    expect(collection.lookups).toEqual({ permission: 1, collection: 0, data: 0 });
+
+    const data = buildRuntime({
+      permissionMask: 1,
+      existingScopeJob: { jobId: 'data-job', state: 'completed' },
+    });
+    state.runtime = data.runtime;
+    const dataDenied = responseRecorder();
+    await dataDeleteRoute(
+      request({
+        method: 'POST',
+        url: '/api/core/dataset/data/delete',
+        headers: { 'idempotency-key': 'data-replay-denied' },
+        body: { dataId },
+      }),
+      dataDenied.response,
+    );
+    expect((dataDenied.result().body as { code: number }).code).toBe(501027);
+    expect(data.lookups).toEqual({ permission: 1, collection: 0, data: 0 });
   });
 
   it('R1-F3 returns 501068 for an in-progress job before ACL/resource lookup', async () => {

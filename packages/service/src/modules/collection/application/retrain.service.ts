@@ -8,7 +8,13 @@ import type {
   VectorController,
 } from '../../../ports/capabilities';
 import type { CollectionRepository, KnowledgeItemRepository } from '../../../ports/repositories';
-import type { CollectionSnapshot, PortCallOptions, RequestContext } from '../../../ports/types';
+import type {
+  CollectionSnapshot,
+  KnowledgeItemSnapshot,
+  PageResult,
+  PortCallOptions,
+  RequestContext,
+} from '../../../ports/types';
 import type { ChunkPolicyValue } from '../../../shared/persistence';
 
 type RetrainCollectionRepository = CollectionRepository & {
@@ -18,9 +24,21 @@ type RetrainCollectionRepository = CollectionRepository & {
   ): Promise<CollectionSnapshot>;
 };
 
+export interface RetrainItemRepository extends KnowledgeItemRepository {
+  list(
+    input: {
+      collectionId: string;
+      page: number;
+      limit: number;
+      options: PortCallOptions;
+    },
+    context: RequestContext,
+  ): Promise<PageResult<KnowledgeItemSnapshot>>;
+}
+
 interface CollectionRetrainServiceDeps {
   collections: RetrainCollectionRepository;
-  items: KnowledgeItemRepository;
+  items: RetrainItemRepository;
   fullText: FullTextStore;
   vectors: VectorController;
   processing: RetrainProcessingRuntime;
@@ -34,7 +52,7 @@ interface RetrainProcessingRuntime {
     context: RequestContext,
   ): Promise<Array<{ mode: string; depth: number; running: number }>>;
   deleteTrainingData(
-    input: { collectionId: string; options: PortCallOptions },
+    input: { collectionId?: string; dataId?: string; options: PortCallOptions },
     context: RequestContext,
   ): Promise<{ deletedCount: number }>;
   enqueueJob(
@@ -135,6 +153,8 @@ export class CollectionRetrainService {
       );
     }
 
+    const oldItems = await this.listCollectionItems(collection, input, context);
+
     const jobId = buildParseJobId(
       context.tenant.teamId,
       collection.datasetId,
@@ -208,22 +228,74 @@ export class CollectionRetrainService {
         },
         context,
       );
-      await this.deps.items.deleteByScope({ ...oldDerived, options: input.options }, context);
-      await this.deps.vectors.delete({ ...oldDerived, options: input.options }, context);
-      await this.deps.fullText.deleteByCollectionIds(
-        { collectionIds: [collection.collectionId], options: input.options },
-        context,
+      const currentItems = await this.listCollectionItems(collection, input, context);
+      const currentByDataId = new Map(currentItems.map((item) => [item.dataId, item]));
+      const staleItems = oldItems.filter((oldItem) => {
+        const current = currentByDataId.get(oldItem.dataId);
+        return (
+          current === undefined ||
+          (current.version === oldItem.version && current.updateTime === oldItem.updateTime)
+        );
+      });
+      const oldDataIds = staleItems.map((item) => item.dataId);
+      const oldVectorIds = staleItems.flatMap((item) =>
+        item.indexes
+          .map((index) => index.dataId)
+          .filter((dataId): dataId is string => Boolean(dataId)),
       );
-      await this.deps.processing.deleteTrainingData(
-        { collectionId: collection.collectionId, options: input.options },
-        context,
-      );
+      if (oldDataIds.length > 0) {
+        await this.deps.items.deleteByScope(
+          { ...oldDerived, dataIds: oldDataIds, options: input.options },
+          context,
+        );
+      }
+      if (oldVectorIds.length > 0) {
+        await this.deps.vectors.delete(
+          { ...oldDerived, dataIds: oldVectorIds, options: input.options },
+          context,
+        );
+      }
+      for (const oldDataId of oldDataIds) {
+        await this.deps.fullText.deleteByDataId(
+          { dataId: oldDataId, options: input.options },
+          context,
+        );
+        await this.deps.processing.deleteTrainingData(
+          { dataId: oldDataId, options: input.options },
+          context,
+        );
+      }
     } catch (error) {
       await this.finishRetrainTask(taskId, 'failed', errorLabel(error), input, context);
       throw retrainUnavailable(input.collectionId, 'retrain_cleanup_failed', context.requestId);
     }
     await this.finishRetrainTask(taskId, 'success', undefined, input, context);
     return { taskId };
+  }
+
+  private async listCollectionItems(
+    collection: CollectionSnapshot,
+    input: CollectionRetrainInput,
+    context: RequestContext,
+  ): Promise<KnowledgeItemSnapshot[]> {
+    const items: KnowledgeItemSnapshot[] = [];
+    const limit = 100;
+    let page = 1;
+    while (true) {
+      const result = await this.deps.items.list(
+        {
+          collectionId: collection.collectionId,
+          page,
+          limit,
+          options: input.options,
+        },
+        context,
+      );
+      items.push(...result.list);
+      if (result.list.length === 0 || page * limit >= result.total) break;
+      page += 1;
+    }
+    return items;
   }
 
   private async finishRetrainTask(

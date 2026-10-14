@@ -62,6 +62,11 @@ export interface DeleteJobFailureInput {
   lastError: string;
 }
 
+export interface DeleteJobScopeSnapshot extends DeleteJobSnapshot {
+  actorTmbId: string | null;
+  ownerTmbId: string | null;
+}
+
 export class MongoDeleteJobRepository implements DeleteJobRepository {
   private readonly model: Model<DatasetDeleteJobDoc>;
   private readonly failures: Model<DatasetDeleteFailureDoc>;
@@ -79,7 +84,7 @@ export class MongoDeleteJobRepository implements DeleteJobRepository {
     return toOid(context.tenant.teamId, 'teamId', context.requestId);
   }
 
-  private async toSnapshot(doc: DatasetDeleteJobDoc): Promise<DeleteJobSnapshot> {
+  private async toSnapshot(doc: DatasetDeleteJobDoc): Promise<DeleteJobScopeSnapshot> {
     const failureCount = await this.failures.countDocuments({
       teamId: doc.teamId,
       jobId: doc.jobId,
@@ -93,6 +98,8 @@ export class MongoDeleteJobRepository implements DeleteJobRepository {
       progress:
         doc.progress.total === 0 ? 0 : Math.round((doc.progress.done / doc.progress.total) * 100),
       failureCount,
+      actorTmbId: doc.actorTmbId ? String(doc.actorTmbId) : null,
+      ownerTmbId: doc.ownerTmbId ? String(doc.ownerTmbId) : null,
       createTime: doc.createTime.toISOString(),
       updateTime: doc.updateTime.toISOString(),
     };
@@ -117,6 +124,8 @@ export class MongoDeleteJobRepository implements DeleteJobRepository {
             jobId,
             teamId,
             datasetId,
+            actorTmbId: toOid(context.tenant.tmbId, 'tmbId', context.requestId),
+            ownerTmbId: null,
             state: 'marked',
             stage: 'mongo',
             progress: { total: 0, done: 0, failed: 0, skipped: 0 },
@@ -161,7 +170,7 @@ export class MongoDeleteJobRepository implements DeleteJobRepository {
       options: PortCallOptions;
     },
     context: RequestContext,
-  ): Promise<DeleteJobSnapshot | null> {
+  ): Promise<DeleteJobScopeSnapshot | null> {
     const teamId = this.teamId(context);
     let jobId: string | RegExp;
     if (input.collectionId) {

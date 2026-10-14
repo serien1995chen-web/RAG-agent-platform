@@ -79,7 +79,7 @@ interface RebuildProcessingRuntime {
   ): Promise<void>;
 }
 
-interface RebuildItemRepository extends KnowledgeItemRepository {
+export interface RebuildItemRepository extends KnowledgeItemRepository {
   list(
     input: {
       collectionId: string;
@@ -93,6 +93,10 @@ interface RebuildItemRepository extends KnowledgeItemRepository {
     input: { dataId: string; options: PortCallOptions },
     context: RequestContext,
   ): Promise<KnowledgeItemSnapshot>;
+  setRebuilding(
+    input: { dataIds: string[]; rebuilding: boolean; options: PortCallOptions },
+    context: RequestContext,
+  ): Promise<void>;
 }
 
 interface RebuildEmbeddingServiceDeps {
@@ -166,12 +170,10 @@ export class RebuildEmbeddingService {
       },
       context,
     );
-    for (const item of items) {
-      await this.deps.items.bulkUpsert(
-        { items: [{ ...item, rebuilding: true }], options: input.options },
-        context,
-      );
-    }
+    await this.deps.items.setRebuilding(
+      { dataIds: items.map((item) => item.dataId), rebuilding: true, options: input.options },
+      context,
+    );
 
     const nextIndexVersion = buildIndexVersion(
       input.modelRef.model,
@@ -179,75 +181,89 @@ export class RebuildEmbeddingService {
       INDEX_SCHEMA_VERSION,
     );
     const taskId = buildVectorJobId(context.tenant.teamId, input.datasetId, nextIndexVersion);
-    await this.deps.processing.enqueueJob(
-      {
-        job: {
-          jobId: taskId,
-          teamId: context.tenant.teamId,
-          datasetId: input.datasetId,
-          mode: 'vector',
-          expireAt: null,
-        },
-        budgetKind: 'rebuild',
-        options: input.options,
-      },
-      context,
-    );
-
     const prepared: PreparedRebuildItem[] = [];
-    for (const item of items) {
-      const current = await this.deps.items.get(
-        { dataId: item.dataId, options: input.options },
+    try {
+      await this.deps.processing.enqueueJob(
+        {
+          job: {
+            jobId: taskId,
+            teamId: context.tenant.teamId,
+            datasetId: input.datasetId,
+            mode: 'vector',
+            expireAt: null,
+          },
+          budgetKind: 'rebuild',
+          options: input.options,
+        },
         context,
       );
-      const sourceEntries = this.sourceEntries(current);
-      let vectors: number[][] = [];
-      if (sourceEntries.length > 0) {
-        vectors = await this.deps.embedding.embed(
-          {
-            models: { embeddingModel: input.modelRef.model },
-            texts: sourceEntries.map((entry) => entry.text),
-            options: input.options,
-          },
+
+      for (const item of items) {
+        const current = await this.deps.items.get(
+          { dataId: item.dataId, options: input.options },
+          context,
+        );
+        const sourceEntries = this.sourceEntries(current);
+        let vectors: number[][] = [];
+        if (sourceEntries.length > 0) {
+          vectors = await this.deps.embedding.embed(
+            {
+              models: { embeddingModel: input.modelRef.model },
+              texts: sourceEntries.map((entry) => entry.text),
+              options: input.options,
+            },
+            context,
+          );
+        }
+        const vectorRecords: VectorRecord[] = [];
+        const indexes: KnowledgeItemIndexValue[] = sourceEntries.map((entry, index) => {
+          const vectorId = `${current.dataId}:${entry.type}:${nextIndexVersion}`;
+          vectorRecords.push({
+            teamId: context.tenant.teamId,
+            datasetId: current.datasetId,
+            collectionId: current.collectionId,
+            dataId: vectorId,
+            indexId: `${current.dataId}:${entry.type}`,
+            indexVersion: nextIndexVersion,
+            vector: vectors[index] ?? [],
+          });
+          return {
+            indexId: `${current.dataId}:${entry.type}`,
+            type: entry.type,
+            dataId: vectorId,
+            text: entry.text,
+          };
+        });
+        prepared.push({
+          item: current,
+          indexes,
+          oldVectorIds: current.indexes
+            .map((index) => index.dataId)
+            .filter((dataId): dataId is string => Boolean(dataId)),
+          vectorRecords,
+          fullText: sourceEntries.map((entry) => entry.text).join('\n'),
+        });
+      }
+
+      const allVectorRecords = prepared.flatMap((entry) => entry.vectorRecords);
+      if (allVectorRecords.length > 0) {
+        await this.deps.vectors.insert(
+          { records: allVectorRecords, options: input.options },
           context,
         );
       }
-      const vectorRecords: VectorRecord[] = [];
-      const indexes: KnowledgeItemIndexValue[] = sourceEntries.map((entry, index) => {
-        const vectorId = `${current.dataId}:${entry.type}:${nextIndexVersion}`;
-        vectorRecords.push({
-          teamId: context.tenant.teamId,
-          datasetId: current.datasetId,
-          collectionId: current.collectionId,
-          dataId: vectorId,
-          indexId: `${current.dataId}:${entry.type}`,
-          indexVersion: nextIndexVersion,
-          vector: vectors[index] ?? [],
-        });
-        return {
-          indexId: `${current.dataId}:${entry.type}`,
-          type: entry.type,
-          dataId: vectorId,
-          text: entry.text,
-        };
-      });
-      prepared.push({
-        item: current,
-        indexes,
-        oldVectorIds: current.indexes
-          .map((index) => index.dataId)
-          .filter((dataId): dataId is string => Boolean(dataId)),
-        vectorRecords,
-        fullText: sourceEntries.map((entry) => entry.text).join('\n'),
-      });
-    }
-
-    const allVectorRecords = prepared.flatMap((entry) => entry.vectorRecords);
-    if (allVectorRecords.length > 0) {
-      await this.deps.vectors.insert(
-        { records: allVectorRecords, options: input.options },
+    } catch (error) {
+      const failure = this.failureForPreCas(error, input.datasetId, context.requestId);
+      await this.recoverFailedRebuild(
+        taskId,
+        items,
+        dataset.vectorModel,
+        updated.version,
+        errorLabel(error),
+        input,
         context,
       );
+      throw failure;
     }
 
     try {
@@ -261,12 +277,21 @@ export class RebuildEmbeddingService {
         },
         context,
       );
-    } catch {
-      await this.finishRebuildTask(taskId, 'failed', 'cas_failed', input, context);
+    } catch (error) {
+      await this.recoverFailedRebuild(
+        taskId,
+        items,
+        dataset.vectorModel,
+        updated.version,
+        `cas_failed:${errorLabel(error)}`,
+        input,
+        context,
+      );
       throw rebuildConflict(input.datasetId, context.requestId);
     }
 
     let cleanupPending = false;
+    let cleanupReason: string | undefined;
     for (const entry of prepared) {
       try {
         await this.deps.items.updateIndexes(
@@ -288,6 +313,12 @@ export class RebuildEmbeddingService {
           },
           context,
         );
+      } catch (error) {
+        cleanupPending = true;
+        cleanupReason = `cleanup_pending:${errorLabel(error)}`;
+        continue;
+      }
+      try {
         if (entry.oldVectorIds.length > 0) {
           await this.deps.vectors.delete(
             {
@@ -299,29 +330,81 @@ export class RebuildEmbeddingService {
             context,
           );
         }
-        const refreshed = await this.deps.items.get(
-          { dataId: entry.item.dataId, options: input.options },
-          context,
-        );
-        await this.deps.items.bulkUpsert(
-          { items: [{ ...refreshed, rebuilding: false }], options: input.options },
-          context,
-        );
       } catch (error) {
         cleanupPending = true;
-        await this.finishRebuildTask(
-          taskId,
-          'failed',
-          `cleanup_pending:${errorLabel(error)}`,
-          input,
-          context,
-        );
-        break;
+        cleanupReason = `cleanup_pending:${errorLabel(error)}`;
       }
     }
-    if (cleanupPending) return { taskId, state: 'cleanup_pending' };
+    try {
+      await this.deps.items.setRebuilding(
+        {
+          dataIds: prepared.map((entry) => entry.item.dataId),
+          rebuilding: false,
+          options: input.options,
+        },
+        context,
+      );
+    } catch {
+      // Keep the committed indexVersion authoritative even if flag cleanup fails.
+    }
+    if (cleanupPending) {
+      await this.finishRebuildTask(
+        taskId,
+        'failed',
+        cleanupReason ?? 'cleanup_pending',
+        input,
+        context,
+      );
+      return { taskId, state: 'cleanup_pending' };
+    }
     await this.finishRebuildTask(taskId, 'success', undefined, input, context);
     return { taskId, state: 'completed' };
+  }
+
+  private failureForPreCas(
+    error: unknown,
+    datasetId: string,
+    requestId: string,
+  ): ApiErrorException {
+    if (error instanceof ApiErrorException && error.error.code === 501013) return error;
+    return rebuildConflict(datasetId, requestId);
+  }
+
+  private async recoverFailedRebuild(
+    taskId: string,
+    items: KnowledgeItemSnapshot[],
+    previousVectorModel: string,
+    version: number,
+    reason: string,
+    input: RebuildEmbeddingInput,
+    context: RequestContext,
+  ): Promise<void> {
+    try {
+      await this.deps.items.setRebuilding(
+        {
+          dataIds: items.map((item) => item.dataId),
+          rebuilding: false,
+          options: input.options,
+        },
+        context,
+      );
+    } catch {
+      // Preserve the original rebuild failure.
+    }
+    try {
+      await this.deps.knowledgeBase.update(
+        {
+          datasetId: input.datasetId,
+          version,
+          patch: { vectorModel: previousVectorModel },
+          options: input.options,
+        },
+        context,
+      );
+    } catch {
+      // Preserve the original rebuild failure.
+    }
+    await this.finishRebuildTask(taskId, 'failed', reason, input, context);
   }
 
   private async finishRebuildTask(

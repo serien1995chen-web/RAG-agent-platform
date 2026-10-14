@@ -38,7 +38,28 @@ export default withApiHandler(
       context,
     );
     if (existing) {
-      response.status(200).json(successResponse(existing, requestId));
+      const permission = await runtime.datasetPermission.getPermission(
+        { datasetId: existing.datasetId, options },
+        context,
+      );
+      const allowed =
+        context.tenant.isRoot ||
+        (permission.permissionMask & OWNER_PERMISSION) !== 0 ||
+        (permission.permissionMask & WRITE_PERMISSION) !== 0;
+      if (!allowed) {
+        throw new ApiErrorException(
+          createApiError({
+            code: 501070,
+            requestId,
+            params: { collectionId: body.collectionId, permission: 'write' },
+          }),
+        );
+      }
+      const replayed = await runtime.deleteService.requestCollectionDelete(
+        { collectionId: body.collectionId, options },
+        context,
+      );
+      response.status(200).json(successResponse(replayed, requestId));
       return;
     }
     const collection = await runtime.collectionRepository.get(
@@ -63,7 +84,7 @@ export default withApiHandler(
       );
     }
     const result = await runtime.deleteService.requestCollectionDelete(
-      { collectionId: body.collectionId, options },
+      { collectionId: body.collectionId, ownerTmbId: permission.owner, options },
       context,
     );
     response.status(200).json(successResponse(result, requestId));

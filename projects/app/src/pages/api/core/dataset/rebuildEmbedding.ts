@@ -6,8 +6,10 @@ import { authenticateRequest } from '../../../../runtime/auth';
 import { parseDto, successResponse, withApiHandler } from '../../../../shared/api';
 import type { ApiHandlerContext } from '../../../../shared/api';
 import { IndexVersionSwitchService } from '../../../../../../../packages/service/src/modules/index/application';
-import type { KnowledgeItemQueryRepository } from '../../../../../../../packages/service/src/modules/item/domain';
-import { RebuildEmbeddingService } from '../../../../../../../packages/service/src/modules/knowledge-base/application/rebuild.service';
+import {
+  RebuildEmbeddingService,
+  type RebuildItemRepository,
+} from '../../../../../../../packages/service/src/modules/knowledge-base/application/rebuild.service';
 
 interface RebuildEmbeddingBody {
   datasetId: string;
@@ -51,7 +53,7 @@ export default withApiHandler(
       );
     }
 
-    const items = runtime.knowledgeItemRepository as KnowledgeItemQueryRepository;
+    const items = runtime.knowledgeItemRepository as RebuildItemRepository;
     const fullText = runtime.fullTextStore ?? runtime.ports.fullTextStore;
     const service = new RebuildEmbeddingService({
       knowledgeBase: runtime.knowledgeBaseRepository,

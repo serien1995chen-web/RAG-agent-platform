@@ -38,6 +38,14 @@ export interface DeleteRequestResult {
   state: DeleteJobState;
 }
 
+export interface DeleteJobScopeView {
+  jobId: string;
+  state: DeleteJobState;
+  datasetId: string;
+  actorTmbId: string | null;
+  ownerTmbId: string | null;
+}
+
 export interface DeleteCleanupStats {
   scanned: number;
   deleted: number;
@@ -89,7 +97,7 @@ export interface DeleteJobStore {
       options: PortCallOptions;
     },
     context: RequestContext,
-  ): Promise<DeleteJobSnapshot | null>;
+  ): Promise<DeleteJobScopeView | null>;
   listFailures(
     input: { jobId: string; cursor?: string; limit: number; options: PortCallOptions },
     context: RequestContext,
@@ -171,6 +179,7 @@ export interface DeleteFactsStore {
       scope: DeleteScope;
       expectedVersion?: number;
       jobId?: string;
+      ownerTmbId?: string;
       resourceIds?: { collectionIds?: string[]; dataIds?: string[] };
     },
     context: RequestContext,
@@ -233,7 +242,7 @@ export class DeleteApplicationService {
   async getDeleteJobByScope(
     input: { scope: DeleteScope; options: PortCallOptions },
     context: RequestContext,
-  ): Promise<DeleteRequestResult | null> {
+  ): Promise<DeleteJobScopeView | null> {
     const job = await this.deps.jobs.findByScope(
       {
         ...(input.scope.datasetId !== undefined ? { datasetId: input.scope.datasetId } : {}),
@@ -245,11 +254,7 @@ export class DeleteApplicationService {
       },
       context,
     );
-    if (!job) return null;
-    if (job.state === 'completed' || job.state === 'failed') {
-      return { jobId: job.jobId, state: job.state };
-    }
-    throw deleteInProgress(job.jobId, job.state, context.requestId);
+    return job;
   }
 
   listFailures(
@@ -267,32 +272,39 @@ export class DeleteApplicationService {
   }
 
   requestDatasetDelete(
-    input: { datasetId: string; options: PortCallOptions },
+    input: { datasetId: string; ownerTmbId?: string; options: PortCallOptions },
     context: RequestContext,
   ): Promise<DeleteRequestResult> {
     return this.requestDelete(
       { kind: 'dataset', datasetId: input.datasetId },
       input.options,
       context,
+      input.ownerTmbId,
     );
   }
 
   requestCollectionDelete(
-    input: { collectionId: string; options: PortCallOptions },
+    input: { collectionId: string; ownerTmbId?: string; options: PortCallOptions },
     context: RequestContext,
   ): Promise<DeleteRequestResult> {
     return this.requestDelete(
       { kind: 'collection', collectionId: input.collectionId },
       input.options,
       context,
+      input.ownerTmbId,
     );
   }
 
   requestDataDelete(
-    input: { dataId: string; options: PortCallOptions },
+    input: { dataId: string; ownerTmbId?: string; options: PortCallOptions },
     context: RequestContext,
   ): Promise<DeleteRequestResult> {
-    return this.requestDelete({ kind: 'data', dataId: input.dataId }, input.options, context);
+    return this.requestDelete(
+      { kind: 'data', dataId: input.dataId },
+      input.options,
+      context,
+      input.ownerTmbId,
+    );
   }
 
   /** Worker 清理运行器：租约领取 → vector → s3 → verify → completed。 */
@@ -513,6 +525,7 @@ export class DeleteApplicationService {
     scope: DeleteScope,
     options: PortCallOptions,
     context: RequestContext,
+    ownerTmbId?: string,
   ): Promise<DeleteRequestResult> {
     const knownJobId =
       scope.kind === 'dataset' && scope.datasetId !== undefined
@@ -527,6 +540,7 @@ export class DeleteApplicationService {
       {
         scope,
         ...(knownJobId !== undefined ? { jobId: knownJobId } : {}),
+        ...(ownerTmbId !== undefined ? { ownerTmbId } : {}),
       },
       context,
     );
