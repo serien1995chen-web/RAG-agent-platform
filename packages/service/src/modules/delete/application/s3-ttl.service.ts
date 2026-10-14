@@ -1,5 +1,4 @@
 import { createHash } from 'node:crypto';
-import { ApiErrorException } from '@kb/contracts';
 import type { ObjectStorePort } from '../../../ports/capabilities';
 import type { ObjectRef, PortCallOptions, RequestContext } from '../../../ports/types';
 import type { ReconcileFinding, S3ObjectDescriptor, S3OrphanScanner } from '../domain/findings';
@@ -203,22 +202,7 @@ export class S3TtlService implements S3OrphanScanner {
         await this.deps.objectStore.delete(deleteInput, recordContext);
         await this.deps.repository.deleteRecord({ id: record.id, teamId: record.teamId });
         stats.deleted += 1;
-      } catch (error) {
-        if (error instanceof ApiErrorException && error.error.code === 501016) {
-          // bucket/存储不可用：保留记录等待下一轮，不计入退避。
-          await this.deps.repository.markFailed({
-            id: record.id,
-            teamId: record.teamId,
-            attempt: record.attempt,
-            nextAttemptAt: now,
-            now,
-          });
-          this.deps.logger?.log('s3-ttl.bucket_unavailable', {
-            objectKeyHash: objectKeyHash16(record.objectKey),
-          });
-          stats.failed += 1;
-          continue;
-        }
+      } catch {
         const nextAttempt = record.attempt + 1;
         const backoffMs = Math.min(60_000 * 2 ** Math.max(0, nextAttempt - 1), 3_600_000);
         await this.deps.repository.markFailed({

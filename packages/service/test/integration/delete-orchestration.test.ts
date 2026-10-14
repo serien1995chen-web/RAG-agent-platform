@@ -2,7 +2,7 @@ import { ApiErrorException, createApiError } from '@kb/contracts';
 import type { QueuePort } from '@kb/dal';
 import { MongoMemoryReplSet } from 'mongodb-memory-server';
 import mongoose from 'mongoose';
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ObjectStorePort, VectorController } from '../../src/ports/capabilities';
 import type { PortCallOptions, RequestContext } from '../../src/ports/types';
 import { DeleteApplicationService } from '../../src/modules/delete/application/delete.service';
@@ -108,15 +108,34 @@ class FakeVectorController {
   }
 }
 
-function fakeObjectStore(): { port: ObjectStorePort; deletedKeys: string[] } {
+function fakeObjectStore(): {
+  port: ObjectStorePort;
+  deletedKeys: string[];
+  deletedDatasetIds: Array<string | undefined>;
+} {
   const deletedKeys: string[] = [];
+  const deletedDatasetIds: Array<string | undefined> = [];
   const port = {
-    async delete(input: { ref: { key: string } }): Promise<{ deleted: boolean }> {
+    async delete(input: {
+      ref: { key: string };
+      datasetId?: string;
+    }): Promise<{ deleted: boolean }> {
+      const [prefix, datasetId] = input.ref.key.split('/');
+      if (prefix === 'dataset' && datasetId !== input.datasetId) {
+        throw new ApiErrorException(
+          createApiError({
+            code: 501061,
+            requestId: 'object-store-scope',
+            params: { fileId: input.ref.key, datasetId: input.datasetId ?? '' },
+          }),
+        );
+      }
       deletedKeys.push(input.ref.key);
+      deletedDatasetIds.push(input.datasetId);
       return { deleted: true };
     },
   } as unknown as ObjectStorePort;
-  return { port, deletedKeys };
+  return { port, deletedKeys, deletedDatasetIds };
 }
 
 interface Harness {
@@ -124,6 +143,7 @@ interface Harness {
   queue: FakeQueue;
   vector: FakeVectorController;
   objectStoreDeleted: string[];
+  objectStoreDatasetIds: Array<string | undefined>;
   cleanupCalls: string[];
   jobStore: MongoDeleteJobRepository;
 }
@@ -145,7 +165,15 @@ function harness(): Harness {
       cleanupCalls.push(datasetId);
     },
   });
-  return { service, queue, vector, objectStoreDeleted: store.deletedKeys, cleanupCalls, jobStore };
+  return {
+    service,
+    queue,
+    vector,
+    objectStoreDeleted: store.deletedKeys,
+    objectStoreDatasetIds: store.deletedDatasetIds,
+    cleanupCalls,
+    jobStore,
+  };
 }
 
 async function seedDataset(): Promise<{
@@ -486,6 +514,80 @@ describe('删除编排与状态机（P6-01 / 设计 7.9 / 14.6）', () => {
     expect(queue.calls.map((call) => call.jobId)).toEqual([created.jobId]);
     const rescheduled = await operations.find({ teamId }).lean();
     expect(rescheduled.every((op) => op.nextAttemptAt.getTime() < future.getTime())).toBe(true);
+  });
+
+  it('Collection 删除仅收集本集合对象，并向真实 ObjectStore 传递 datasetId', async () => {
+    const { datasetId, collectionId, dataId } = await seedDataset();
+    const otherCollection = await collections.create({
+      teamId,
+      datasetId,
+      type: 'file',
+      name: 'collection-b',
+      trainingPolicy: DEFAULT_CHUNK_POLICY,
+    });
+    await datas.updateOne({ teamId, _id: dataId }, { $set: { imageId: 'img-1' } });
+    await imageAssets.create({
+      imageId: 'img-2',
+      teamId,
+      datasetId,
+      collectionId: otherCollection._id,
+      objectKey: `dataset/${String(datasetId)}/img-2.png`,
+      mimeType: 'image/png',
+      size: 12,
+    });
+    const { service, objectStoreDeleted, objectStoreDatasetIds } = harness();
+
+    const created = await service.requestCollectionDelete(
+      { collectionId: String(collectionId), options },
+      context,
+    );
+    const deleteS3Operations = await operations.find({ teamId, operation: 'delete_s3' }).lean();
+    expect(deleteS3Operations.map((operation) => operation.resourceRef.resourceId)).toEqual([
+      `dataset/${String(datasetId)}/img-1.png`,
+    ]);
+
+    await service.runCleanup(
+      {
+        jobId: created.jobId,
+        scope: {
+          kind: 'collection',
+          datasetId: String(datasetId),
+          collectionId: String(collectionId),
+        },
+        options,
+      },
+      context,
+    );
+    expect(objectStoreDeleted).toEqual([`dataset/${String(datasetId)}/img-1.png`]);
+    expect(objectStoreDatasetIds).toEqual([String(datasetId)]);
+  });
+
+  it('从 s3 阶段恢复不会回退到 vector', async () => {
+    const { datasetId } = await seedDataset();
+    const { service, vector, objectStoreDeleted, jobStore } = harness();
+    const renewLease = vi.spyOn(jobStore, 'renewLease');
+    const created = await service.requestDatasetDelete(
+      { datasetId: String(datasetId), options },
+      context,
+    );
+    await jobs.updateOne(
+      { teamId, jobId: created.jobId },
+      { $set: { state: 'queued', stage: 's3' } },
+    );
+
+    const stats = await service.runCleanup(
+      {
+        jobId: created.jobId,
+        scope: { kind: 'dataset', datasetId: String(datasetId) },
+        options,
+      },
+      context,
+    );
+    expect(stats.failed).toBe(0);
+    expect(vector.deleted).toHaveLength(0);
+    expect(renewLease).toHaveBeenCalled();
+    expect(objectStoreDeleted).toEqual([`dataset/${String(datasetId)}/img-1.png`]);
+    expect((await jobs.findOne({ teamId, jobId: created.jobId }).lean())?.state).toBe('completed');
   });
 
   it('跨租户查询 501070（TEST-RECON-ACL-001 / TEST-E2E-DELETE-001 语义）', async () => {

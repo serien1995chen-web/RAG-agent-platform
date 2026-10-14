@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { QUEUE_NAMES, type QueuePort } from '@kb/dal';
 import type { FullTextStore, VectorController } from '../../../ports/capabilities';
 import type { PortCallOptions, RequestContext } from '../../../ports/types';
 import type {
@@ -66,7 +67,7 @@ export interface ReconcileFactsStore {
   scanFulltextCandidates(
     scope: DeleteScope,
     window: { start: Date; end: Date },
-  ): Promise<Array<{ dataId: string; datasetId: string; collectionId: string }>>;
+  ): Promise<Array<{ teamId: string; dataId: string; datasetId: string; collectionId: string }>>;
   scanAclOrphans(
     scope: DeleteScope,
   ): Promise<Array<{ id: string; teamId: string; resourceId: string }>>;
@@ -138,6 +139,8 @@ export interface ReconcileServiceDeps {
   s3OrphanScanner?: S3OrphanScanner;
   s3TtlBackfill?: S3TtlBackfillStore;
   schedulerReconcileSummary?: () => Promise<SchedulerReconcileSummary>;
+  /** apply 模式重排卡住删除任务时必须真实投递；缺省时只标记 pending_review。 */
+  deleteQueue?: QueuePort;
   clock?: () => Date;
   batchLimit?: number;
   pageSize?: number;
@@ -319,6 +322,10 @@ export class ReconcileApplicationService {
     const liveCollectionIds = new Set(candidates.liveCollectionIds);
     const options = this.optionsOf(context);
     for (const dataset of candidates.datasets) {
+      const datasetContext: RequestContext = {
+        ...context,
+        tenant: { ...context.tenant, teamId: dataset.teamId },
+      };
       const rows = await this.deps.vectorController.getVectorDataByTime(
         {
           teamId: dataset.teamId,
@@ -327,7 +334,7 @@ export class ReconcileApplicationService {
           to: window.end.toISOString(),
           options,
         },
-        context,
+        datasetContext,
       );
       for (const row of rows) {
         outcome.counts.scanned += 1;
@@ -344,7 +351,10 @@ export class ReconcileApplicationService {
             this.finding('vector-orphan', row.dataId, mode === 'apply' ? 'cleanup' : 'report'),
           );
           if (mode === 'apply') {
-            await this.deps.vectorController.delete({ dataIds: [row.dataId], options }, context);
+            await this.deps.vectorController.delete(
+              { datasetId: row.datasetId, dataIds: [row.dataId], options },
+              datasetContext,
+            );
           }
           outcome.counts.success += 1;
         } catch {
@@ -387,7 +397,11 @@ export class ReconcileApplicationService {
             outcome.counts.skipped += 1;
             continue;
           }
-          await this.deps.fullTextStore.deleteByDataId({ dataId: row.dataId, options }, context);
+          const rowContext: RequestContext = {
+            ...context,
+            tenant: { ...context.tenant, teamId: row.teamId },
+          };
+          await this.deps.fullTextStore.deleteByDataId({ dataId: row.dataId, options }, rowContext);
         }
         outcome.counts.success += 1;
       } catch {
@@ -505,6 +519,12 @@ export class ReconcileApplicationService {
           outcome.counts.success += 1;
           continue;
         }
+        if (!this.deps.deleteQueue) {
+          outcome.pendingReview = true;
+          outcome.findings.push(this.finding('stuck-delete-job', row.jobId, 'pending_review'));
+          outcome.counts.skipped += 1;
+          continue;
+        }
         const result = await this.deps.facts.requeueStuckJob(row.jobId, row.teamId);
         if (result === 'manual_review') {
           outcome.pendingReview = true;
@@ -512,6 +532,11 @@ export class ReconcileApplicationService {
           outcome.counts.skipped += 1;
           continue;
         }
+        await this.deps.deleteQueue.enqueue(QUEUE_NAMES.delete, row.jobId, {
+          jobId: row.jobId,
+          scope: deleteScopeFromJobId(row.jobId),
+          stage: 'vector',
+        });
         outcome.findings.push(this.finding('stuck-delete-job', row.jobId, 'requeue'));
         outcome.counts.success += 1;
       } catch {
@@ -629,4 +654,16 @@ export class ReconcileApplicationService {
   private now(): Date {
     return this.deps.clock ? this.deps.clock() : new Date();
   }
+}
+
+function deleteScopeFromJobId(jobId: string): DeleteScope {
+  const segments = jobId.split(':');
+  const datasetId = segments[1] ?? '';
+  if (segments[2] === 'collection') {
+    return { kind: 'collection', datasetId, collectionId: segments[3] ?? '' };
+  }
+  if (segments[2] === 'data') {
+    return { kind: 'data', datasetId, dataId: segments[3] ?? '' };
+  }
+  return { kind: 'dataset', datasetId };
 }

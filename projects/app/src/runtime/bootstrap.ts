@@ -229,6 +229,7 @@ export async function bootstrapRuntime(
     ...(adapters.fullText ? { fullTextStore: adapters.fullText } : {}),
     ...(s3OrphanScanner !== undefined ? { s3OrphanScanner } : {}),
     s3TtlBackfill: s3TtlRepository,
+    deleteQueue,
   });
   const failureQueryAdapter = new FailureQueryAdapter(clients.mongo);
   const compensationService = new CompensationApplicationService({

@@ -156,7 +156,7 @@ function serviceOf(options: {
 }
 
 describe('FI: S3 TTL 故障批次（设计 10.9.1 / AB §4.3）', () => {
-  it('bucket 不可用（501016）保留记录且等待下一轮', async () => {
+  it('bucket 不可用（501016）保留记录并计入指数退避', async () => {
     const store = new FakeTtlStore();
     store.add({ id: 'ttl-1', objectKey: 'temp/team-a/1.txt' });
     const calls: ObjectStoreCalls = { aborts: [], deletes: [] };
@@ -165,9 +165,12 @@ describe('FI: S3 TTL 故障批次（设计 10.9.1 / AB §4.3）', () => {
     expect(stats.failed).toBe(1);
     const record = store.records.get('ttl-1');
     expect(record?.state).toBe('failed');
-    expect(record?.attempt).toBe(0);
-    expect(record?.nextAttemptAt.getTime()).toBe(fixedNow.getTime());
-    expect(await store.claimBatch({ now: fixedNow, limit: 10 })).toHaveLength(1);
+    expect(record?.attempt).toBe(1);
+    expect(record?.nextAttemptAt.getTime()).toBe(fixedNow.getTime() + 60_000);
+    expect(await store.claimBatch({ now: fixedNow, limit: 10 })).toHaveLength(0);
+    expect(
+      await store.claimBatch({ now: new Date(fixedNow.getTime() + 60_000), limit: 10 }),
+    ).toHaveLength(1);
   });
 
   it('abort 失败不进删除步骤且保留记录', async () => {

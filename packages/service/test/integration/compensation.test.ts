@@ -49,8 +49,14 @@ class FakeVectors {
   readonly deleteCalls: Array<Record<string, unknown>> = [];
   deleteThrows = false;
 
-  async delete(input: Record<string, unknown>): Promise<{ deleted: number }> {
+  async delete(
+    input: { datasetId?: string; dataIds?: string[] },
+    context: RequestContext,
+  ): Promise<{ deleted: number }> {
     if (this.deleteThrows) throw new Error('vector-delete-failed');
+    if (input.datasetId === undefined || context.tenant.teamId === '') {
+      throw new Error('vector-delete-missing-dataset-context');
+    }
     this.deleteCalls.push(input);
     return { deleted: 1 };
   }
@@ -63,8 +69,15 @@ interface StoreState {
 
 function fakeObjectStore(state: StoreState): ObjectStorePort {
   return {
-    async delete(input: { ref: { key: string } }): Promise<{ deleted: boolean }> {
+    async delete(input: {
+      ref: { key: string };
+      datasetId?: string;
+    }): Promise<{ deleted: boolean }> {
       if (state.deleteThrows) throw new Error('s3-delete-failed');
+      const [prefix, datasetId] = input.ref.key.split('/');
+      if (prefix === 'dataset' && datasetId !== input.datasetId) {
+        throw new Error('s3-delete-missing-dataset-context');
+      }
       state.deleteCalls.push(input.ref.key);
       return { deleted: true };
     },
@@ -206,14 +219,16 @@ describe('失败记录与跨存储补偿（P6-06 / 设计 14.5 / 14.9）', () =>
 
   it('operationId 幂等：重复 sweep 不重复执行已 cleaned 操作（TEST-CROSSSTORE-001）', async () => {
     const dataId = String(new mongoose.Types.ObjectId());
+    const datasetId = String(new mongoose.Types.ObjectId());
     await seedOperation({
-      operationId: `delete-vector:${String(teamId)}:${dataId}:1`,
+      operationId: `delete-vector:${String(teamId)}:${datasetId}:${dataId}:1`,
       resourceRef: { resourceType: 'data', resourceId: dataId, version: 1 },
     });
     const { service, vectors } = harness();
     const first = await service.sweepOnce(context);
     expect(first.cleaned).toBe(1);
     expect(vectors.deleteCalls).toHaveLength(1);
+    expect(vectors.deleteCalls[0]).toMatchObject({ datasetId, dataIds: [dataId] });
     const second = await service.sweepOnce(context);
     expect(second.scanned).toBe(0);
     expect(vectors.deleteCalls).toHaveLength(1);
@@ -221,8 +236,9 @@ describe('失败记录与跨存储补偿（P6-06 / 设计 14.5 / 14.9）', () =>
 
   it('lease 过期可被接管、未过期不可抢占（ACC-REL-005）', async () => {
     const dataId = String(new mongoose.Types.ObjectId());
+    const datasetId = String(new mongoose.Types.ObjectId());
     await seedOperation({
-      operationId: `delete-vector:${String(teamId)}:${dataId}:1`,
+      operationId: `delete-vector:${String(teamId)}:${datasetId}:${dataId}:1`,
       resourceRef: { resourceType: 'data', resourceId: dataId, version: 1 },
       leaseOwner: 'worker-x',
       leaseExpireAt: new Date(fixedNow.getTime() + 600_000),
@@ -242,7 +258,8 @@ describe('失败记录与跨存储补偿（P6-06 / 设计 14.5 / 14.9）', () =>
 
   it('attempt≥10 置 failed 并进入对账 finding 来源（ACC-DELETE-005）', async () => {
     const dataId = String(new mongoose.Types.ObjectId());
-    const operationId = `delete-vector:${String(teamId)}:${dataId}:1`;
+    const datasetId = String(new mongoose.Types.ObjectId());
+    const operationId = `delete-vector:${String(teamId)}:${datasetId}:${dataId}:1`;
     await seedOperation({
       operationId,
       resourceRef: { resourceType: 'data', resourceId: dataId, version: 1 },
@@ -266,8 +283,9 @@ describe('失败记录与跨存储补偿（P6-06 / 设计 14.5 / 14.9）', () =>
 
   it('跨租户 op 不重放：operationId 内 teamId 与事实 teamId 不一致即拒绝', async () => {
     const dataId = String(new mongoose.Types.ObjectId());
+    const datasetId = String(new mongoose.Types.ObjectId());
     await seedOperation({
-      operationId: `delete-vector:${String(otherTeamId)}:${dataId}:1`,
+      operationId: `delete-vector:${String(otherTeamId)}:${datasetId}:${dataId}:1`,
       resourceRef: { resourceType: 'data', resourceId: dataId, version: 1 },
     });
     const { service, vectors } = harness();

@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { ApiErrorException, createApiError } from '@kb/contracts';
 import type { ObjectStorePort, VectorController } from '../../../ports/capabilities';
 import type { PortCallOptions, RequestContext } from '../../../ports/types';
 import { classifyFailureError, isFailureExhausted } from '../domain/failure';
@@ -142,8 +143,10 @@ export class CompensationApplicationService {
               continue;
             }
           }
+          const datasetId = datasetIdFromDeleteVectorOperationId(operation.operationId);
+          if (datasetId === undefined) throw invalidOperation(operation.operationId, context);
           await this.deps.vectorController.delete(
-            { dataIds: [operation.resourceRef.resourceId], options },
+            { datasetId, dataIds: [operation.resourceRef.resourceId], options },
             derived,
           );
           await this.deps.crossStore.markStage(
@@ -168,8 +171,13 @@ export class CompensationApplicationService {
             stats.cleaned += 1;
             continue;
           }
+          const datasetId = datasetIdFromObjectKey(objectKey);
           await this.deps.objectStore.delete(
-            { ref: { bucket: '', key: objectKey }, options },
+            {
+              ref: { bucket: '', key: objectKey },
+              options,
+              ...(datasetId !== undefined ? { datasetId } : {}),
+            },
             derived,
           );
           await this.deps.crossStore.markStage(
@@ -265,4 +273,27 @@ export class CompensationApplicationService {
   private now(): Date {
     return this.deps.clock ? this.deps.clock() : new Date();
   }
+}
+
+function datasetIdFromDeleteVectorOperationId(operationId: string): string | undefined {
+  const segments = operationId.split(':');
+  const candidate = segments[2];
+  return candidate !== undefined && OBJECT_ID_PATTERN.test(candidate) ? candidate : undefined;
+}
+
+function datasetIdFromObjectKey(objectKey: string): string | undefined {
+  const [prefix, datasetId] = objectKey.split('/');
+  return prefix === 'dataset' && datasetId !== undefined && OBJECT_ID_PATTERN.test(datasetId)
+    ? datasetId
+    : undefined;
+}
+
+function invalidOperation(operationId: string, context: RequestContext): ApiErrorException {
+  return new ApiErrorException(
+    createApiError({
+      code: 501005,
+      requestId: context.requestId,
+      params: { taskId: operationId, from: 'operationId', to: 'invalid' },
+    }),
+  );
 }

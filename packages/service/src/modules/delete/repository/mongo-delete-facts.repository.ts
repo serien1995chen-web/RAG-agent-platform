@@ -228,7 +228,12 @@ export class MongoDeleteFactsRepository {
       }
 
       const vectorDataIds = await this.collectDataIds(scopeFilter, session);
-      const objectRefs = await this.collectObjectRefs({ teamId, datasetId }, session);
+      const objectRefs = await this.collectObjectRefs(
+        input.scope,
+        { teamId, datasetId },
+        session,
+        requestId,
+      );
 
       await this.cleanupDerivedTables(input.scope, { teamId, datasetId }, session, requestId);
       if (input.scope.kind === 'dataset') {
@@ -355,15 +360,19 @@ export class MongoDeleteFactsRepository {
   ): Promise<ReconcileVectorCandidates> {
     void window;
     const teamFilter = this.scanTeamFilter(scope);
-    const datasetFilter: Record<string, unknown> = { ...teamFilter, deleteTime: null };
+    const datasetFilter: Record<string, unknown> = { ...teamFilter };
     if (scope.datasetId !== undefined && scope.datasetId !== '') {
       datasetFilter._id = toOid(scope.datasetId, 'datasetId', 'reconcile');
     }
     const datasetRows = (await this.datasets
       .find(datasetFilter)
-      .select('_id teamId')
+      .select('_id teamId deleteTime')
       .limit(MAX_RECONCILE_SCAN)
-      .lean()) as unknown as Array<{ _id: Types.ObjectId; teamId: Types.ObjectId }>;
+      .lean()) as unknown as Array<{
+      _id: Types.ObjectId;
+      teamId: Types.ObjectId;
+      deleteTime: Date | null;
+    }>;
 
     const collectionFilter: Record<string, unknown> = { ...teamFilter };
     if (scope.datasetId !== undefined && scope.datasetId !== '') {
@@ -400,7 +409,9 @@ export class MongoDeleteFactsRepository {
         teamId: String(row.teamId),
       })),
       liveDataIds: dataRows.map((row) => String(row._id)),
-      liveDatasetIds: datasetRows.map((row) => String(row._id)),
+      liveDatasetIds: datasetRows
+        .filter((row) => row.deleteTime === null)
+        .map((row) => String(row._id)),
       liveCollectionIds: collectionRows.map((row) => String(row._id)),
     };
   }
@@ -409,7 +420,7 @@ export class MongoDeleteFactsRepository {
   async scanFulltextCandidates(
     scope: DeleteScope,
     window: ReconcileWindow,
-  ): Promise<Array<{ dataId: string; datasetId: string; collectionId: string }>> {
+  ): Promise<Array<{ teamId: string; dataId: string; datasetId: string; collectionId: string }>> {
     const filter: Record<string, unknown> = {
       ...this.scanTeamFilter(scope),
       createTime: { $lte: window.end },
@@ -425,14 +436,16 @@ export class MongoDeleteFactsRepository {
     }
     const rows = (await this.texts
       .find(filter)
-      .select('dataId datasetId collectionId')
+      .select('teamId dataId datasetId collectionId')
       .limit(MAX_RECONCILE_SCAN)
       .lean()) as unknown as Array<{
+      teamId: Types.ObjectId;
       dataId: Types.ObjectId;
       datasetId: Types.ObjectId;
       collectionId: Types.ObjectId;
     }>;
     return rows.map((row) => ({
+      teamId: String(row.teamId),
       dataId: String(row.dataId),
       datasetId: String(row.datasetId),
       collectionId: String(row.collectionId),
@@ -538,9 +551,13 @@ export class MongoDeleteFactsRepository {
     windowMs: number,
     teamId?: string,
   ): Promise<Array<{ jobId: string; teamId: string; attempt: number }>> {
+    const staleAt = new Date(now.getTime() - windowMs);
     const filter: Record<string, unknown> = {
-      state: 'deleting',
-      leaseExpireAt: { $lte: new Date(now.getTime() - windowMs) },
+      $or: [
+        { state: 'deleting', leaseExpireAt: { $lte: staleAt } },
+        { state: 'queued', updateTime: { $lte: staleAt } },
+      ],
+      attempt: { $lt: 10 },
       ...(teamId !== undefined && teamId !== ''
         ? { teamId: toOid(teamId, 'teamId', 'reconcile') }
         : {}),
@@ -629,7 +646,7 @@ export class MongoDeleteFactsRepository {
       {
         teamId: toOid(teamId, 'teamId', 'reconcile'),
         jobId,
-        state: { $in: ['deleting', 'failed'] },
+        state: { $in: ['deleting', 'failed', 'queued'] },
         attempt: { $lt: 10 },
       },
       {
@@ -729,11 +746,48 @@ export class MongoDeleteFactsRepository {
   }
 
   private async collectObjectRefs(
+    scope: DeleteScope,
     filter: { teamId: Types.ObjectId; datasetId: Types.ObjectId },
     session: ClientSession,
+    requestId: string,
   ): Promise<ObjectRef[]> {
+    const assetFilter: Record<string, unknown> = {
+      teamId: filter.teamId,
+      datasetId: filter.datasetId,
+    };
+    if (scope.kind === 'collection') {
+      const collectionId = toOid(scope.collectionId ?? '', 'collectionId', requestId);
+      const dataRows = (await this.datas
+        .find({ teamId: filter.teamId, datasetId: filter.datasetId, collectionId })
+        .select('imageId')
+        .session(session)
+        .lean()) as unknown as Array<{ imageId: string | null }>;
+      const imageIds = dataRows
+        .map((row) => row.imageId)
+        .filter((imageId): imageId is string => imageId !== null && imageId !== '');
+      assetFilter.$or = [
+        { collectionId },
+        ...(imageIds.length > 0 ? [{ imageId: { $in: imageIds } }] : []),
+      ];
+    }
+    if (scope.kind === 'data') {
+      const dataRows = (await this.datas
+        .find({
+          teamId: filter.teamId,
+          datasetId: filter.datasetId,
+          _id: toOid(scope.dataId ?? '', 'dataId', requestId),
+        })
+        .select('imageId')
+        .session(session)
+        .lean()) as unknown as Array<{ imageId: string | null }>;
+      const imageIds = dataRows
+        .map((row) => row.imageId)
+        .filter((imageId): imageId is string => imageId !== null && imageId !== '');
+      if (imageIds.length === 0) return [];
+      assetFilter.imageId = { $in: imageIds };
+    }
     const docs = (await this.imageAssets
-      .find(filter)
+      .find(assetFilter)
       .session(session)
       .lean()) as unknown as ImageAssetDoc[];
     return docs.map((doc) => ({ bucket: '', key: doc.objectKey }));

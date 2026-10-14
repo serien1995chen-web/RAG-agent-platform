@@ -1,6 +1,7 @@
 import { ApiErrorException, createApiError } from '@kb/contracts';
 import { MongoMemoryServer } from 'mongodb-memory-server';
 import mongoose from 'mongoose';
+import type { QueuePort } from '@kb/dal';
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { FullTextStore, VectorController } from '../../src/ports/capabilities';
@@ -118,7 +119,23 @@ class FakeVectors {
 
   constructor(private readonly options: HarnessOptions) {}
 
-  async getVectorDataByTime(): Promise<VectorRow[]> {
+  async getVectorDataByTime(
+    input: { teamId: string; datasetId: string },
+    context: RequestContext,
+  ): Promise<VectorRow[]> {
+    if (
+      context.tenant.teamId !== input.teamId ||
+      input.datasetId === undefined ||
+      input.datasetId === ''
+    ) {
+      throw new ApiErrorException(
+        createApiError({
+          code: 501012,
+          requestId: 'vector-context',
+          params: { missing: ['teamId'] },
+        }),
+      );
+    }
     if (this.options.vectorThrows === true) {
       throw new ApiErrorException(
         createApiError({
@@ -128,10 +145,22 @@ class FakeVectors {
         }),
       );
     }
-    return this.options.vectorRows ?? [];
+    return (this.options.vectorRows ?? []).filter((row) => row.datasetId === input.datasetId);
   }
 
-  async delete(input: Record<string, unknown>): Promise<{ deleted: number }> {
+  async delete(
+    input: { datasetId?: string; dataIds?: string[] },
+    context: RequestContext,
+  ): Promise<{ deleted: number }> {
+    if (input.datasetId === undefined || context.tenant.teamId === '') {
+      throw new ApiErrorException(
+        createApiError({
+          code: 501012,
+          requestId: 'vector-context',
+          params: { missing: ['datasetId'] },
+        }),
+      );
+    }
     this.deleteCalls.push(input);
     return { deleted: 1 };
   }
@@ -142,13 +171,29 @@ function harness(options: HarnessOptions = {}): {
   vectors: FakeVectors;
   backfills: Array<Record<string, unknown>>;
   fullTextDeletes: string[];
+  queueCalls: Array<{ queue: string; jobId: string; payload: unknown }>;
 } {
   const vectors = new FakeVectors(options);
   const backfills: Array<Record<string, unknown>> = [];
   const fullTextDeletes: string[] = [];
+  const queueCalls: Array<{ queue: string; jobId: string; payload: unknown }> = [];
   const fullTextStore = {
-    async deleteByDataId(input: { dataId: string }): Promise<{ deleted: number }> {
-      const result = await texts.deleteMany({ dataId: new mongoose.Types.ObjectId(input.dataId) });
+    async deleteByDataId(
+      input: { dataId: string },
+      context: RequestContext,
+    ): Promise<{ deleted: number }> {
+      const dataId = new mongoose.Types.ObjectId(input.dataId);
+      const row = await texts.findOne({ dataId }).lean();
+      if (row && String(row.teamId) !== context.tenant.teamId) {
+        throw new ApiErrorException(
+          createApiError({
+            code: 501012,
+            requestId: 'fulltext-context',
+            params: { missing: ['teamId'] },
+          }),
+        );
+      }
+      const result = await texts.deleteMany({ dataId });
       fullTextDeletes.push(input.dataId);
       return { deleted: result.deletedCount ?? 0 };
     },
@@ -196,9 +241,17 @@ function harness(options: HarnessOptions = {}): {
               error: 0,
             },
         }),
+    deleteQueue: {
+      async enqueue(queue: string, jobId: string, payload: unknown) {
+        queueCalls.push({ queue, jobId, payload });
+        return { jobId, enqueued: true };
+      },
+      async remove() {},
+      async close() {},
+    } as unknown as QueuePort,
     clock: () => fixedNow,
   });
-  return { service, vectors, backfills, fullTextDeletes };
+  return { service, vectors, backfills, fullTextDeletes, queueCalls };
 }
 
 async function seedDataset(deleted = false): Promise<mongoose.Types.ObjectId> {
@@ -343,7 +396,7 @@ describe('对账服务与报告（P6-03 / 设计 14.7 / 16.3）', () => {
     await seedOrphans();
     const liveDataset = await datasets.findOne({ name: 'dataset-live' }).lean();
     const liveCollection = await collections.findOne({ datasetId: liveDataset?._id }).lean();
-    const { service, vectors, backfills } = harness({
+    const { service, vectors, backfills, queueCalls } = harness({
       vectorRows: [
         {
           teamId: String(teamId),
@@ -400,6 +453,7 @@ describe('对账服务与报告（P6-03 / 设计 14.7 / 16.3）', () => {
     }
     const job = await jobs.findOne({ teamId }).lean();
     expect(job?.state).toBe('queued');
+    expect(queueCalls.map((call) => call.jobId)).toContain(job?.jobId);
     expect(await acls.countDocuments({ teamId })).toBe(0);
     expect(await trainings.countDocuments({ teamId })).toBe(0);
     expect(backfills).toHaveLength(1);
@@ -528,6 +582,37 @@ describe('对账服务与报告（P6-03 / 设计 14.7 / 16.3）', () => {
     expect(await texts.countDocuments({ _id: orphanTextId })).toBe(0);
     expect(await acls.countDocuments({ resourceId: liveDataset })).toBe(1);
     expect(await trainings.countDocuments({ datasetId: liveDataset })).toBe(1);
+  });
+
+  it('已删除 Dataset 的向量孤儿仍被扫描并清理', async () => {
+    const deletedDataset = await seedDataset(true);
+    const collection = await seedCollection(deletedDataset);
+    const dataId = String(new mongoose.Types.ObjectId());
+    const { service, vectors } = harness({
+      vectorRows: [
+        {
+          teamId: String(teamId),
+          datasetId: String(deletedDataset),
+          collectionId: String(collection),
+          dataId,
+        },
+      ],
+      schedulerSummary: null,
+      scannerAbsent: true,
+    });
+
+    const summaries = await service.run(
+      { scope: { kind: 'team', teamId: String(teamId) }, mode: 'apply' },
+      context,
+    );
+    expect(summaries.find((summary) => summary.kind === 'vector-orphan')?.counts.success).toBe(1);
+    expect(vectors.deleteCalls).toEqual([
+      {
+        datasetId: String(deletedDataset),
+        dataIds: [dataId],
+        options: { timeoutMs: 30_000 },
+      },
+    ]);
   });
 
   it('listReports：非 Root 强制 teamId，Root 使用显式 scope（ACC-OPS-007）', async () => {

@@ -141,7 +141,14 @@ export interface CrossStoreStore {
   listByJob(
     input: { teamId: string; jobId: string },
     context: RequestContext,
-  ): Promise<Array<{ operationId: string; operation: string; stage: string }>>;
+  ): Promise<
+    Array<{
+      operationId: string;
+      operation: string;
+      stage: string;
+      resourceRef: { resourceType: string; resourceId: string; version: number };
+    }>
+  >;
   resetNextAttempt(
     input: { operationIds: string[]; now: Date },
     context: RequestContext,
@@ -265,11 +272,12 @@ export class DeleteApplicationService {
     const scope = this.assertScope(input.scope, input.jobId);
     const now = this.now();
     const leaseOwner = this.deps.leaseOwner ?? `delete-${randomUUID()}`;
+    const leaseMs = this.deps.leaseMs ?? DEFAULT_LEASE_MS;
     const claimed = await this.deps.jobs.claimWithLease(
       {
         jobId: input.jobId,
         leaseOwner,
-        leaseMs: this.deps.leaseMs ?? DEFAULT_LEASE_MS,
+        leaseMs,
         now,
       },
       context,
@@ -299,31 +307,67 @@ export class DeleteApplicationService {
       const from = stageIndex(currentStage);
       const to = stageIndex(next);
       if (to > from) assertStageOrder(currentStage, next, input.jobId);
-      await this.deps.jobs.updateProgressGuarded(
+      const updated = await this.deps.jobs.updateProgressGuarded(
         { jobId: input.jobId, leaseOwner, stage: next, now: this.now() },
         context,
       );
+      if (!updated) throw leaseLost(input.jobId, context.requestId);
       currentStage = next;
+    };
+    const runFrom = async (stage: string, work: () => Promise<void>): Promise<void> => {
+      const from = stageIndex(currentStage);
+      const target = stageIndex(stage);
+      if (from > target) return;
+      if (from < target) await advance(stage);
+      await work();
+    };
+    const renewLease = async (): Promise<void> => {
+      const renewed = await this.deps.jobs.renewLease(
+        { jobId: input.jobId, leaseOwner, leaseMs, now: this.now() },
+        context,
+      );
+      if (!renewed) throw leaseLost(input.jobId, context.requestId);
     };
 
     try {
-      await advance('vector');
-      await this.deps.vectorController.delete(this.vectorInput(scope), context);
+      await runFrom('vector', async () => {
+        await renewLease();
+        await this.deps.vectorController.delete(this.vectorInput(scope), context);
+      });
 
-      await advance('s3');
-      const objectRefs = await this.deps.facts.listObjectRefsForScope(scope, context);
-      scanned = objectRefs.length;
-      for (const ref of objectRefs) {
-        const live = await this.deps.facts.hasLiveReference({ objectKey: ref.key }, context);
-        if (live) {
-          skipped += 1;
-          continue;
+      await runFrom('s3', async () => {
+        await renewLease();
+        const operations = await this.deps.crossStore.listByJob(
+          { teamId: context.tenant.teamId, jobId: input.jobId },
+          context,
+        );
+        const objectRefs = operations
+          .filter((operation) => operation.operation === 'delete_s3')
+          .map((operation) => ({ bucket: '', key: operation.resourceRef.resourceId }));
+        scanned = objectRefs.length;
+        for (const [index, ref] of objectRefs.entries()) {
+          if (index > 0 && index % 50 === 0) await renewLease();
+          const live = await this.deps.facts.hasLiveReference({ objectKey: ref.key }, context);
+          if (live) {
+            skipped += 1;
+            continue;
+          }
+          const datasetId = datasetIdFromObjectKey(ref.key);
+          const result = await this.deps.objectStore.delete(
+            {
+              ref,
+              options: input.options,
+              ...(datasetId !== undefined ? { datasetId } : {}),
+            },
+            context,
+          );
+          if (result.deleted) deleted += 1;
         }
-        const result = await this.deps.objectStore.delete({ ref, options: input.options }, context);
-        if (result.deleted) deleted += 1;
-      }
+      });
 
-      await advance('verify');
+      await runFrom('verify', async () => {
+        await renewLease();
+      });
       await this.deps.jobs.transition(
         {
           jobId: input.jobId,
@@ -572,4 +616,21 @@ function deleteInProgress(jobId: string, state: string, requestId: string): ApiE
 
 function noFailureToRetry(jobId: string, requestId: string): ApiErrorException {
   return new ApiErrorException(createApiError({ code: 501040, requestId, params: { jobId } }));
+}
+
+function datasetIdFromObjectKey(objectKey: string): string | undefined {
+  const [prefix, datasetId] = objectKey.split('/');
+  return prefix === 'dataset' && datasetId !== undefined && datasetId !== ''
+    ? datasetId
+    : undefined;
+}
+
+function leaseLost(jobId: string, requestId: string): ApiErrorException {
+  return new ApiErrorException(
+    createApiError({
+      code: 501005,
+      requestId,
+      params: { taskId: jobId, from: 'lease', to: 'lost' },
+    }),
+  );
 }
