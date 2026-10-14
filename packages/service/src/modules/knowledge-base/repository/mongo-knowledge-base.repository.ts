@@ -222,6 +222,54 @@ export class MongoKnowledgeBaseRepository
     );
   }
 
+  async switchIndexVersion(
+    input: {
+      datasetId: string;
+      expectedVersion: number;
+      expectedIndexVersion: string;
+      nextIndexVersion: string;
+      options: { timeoutMs: number };
+    },
+    context: RequestContext,
+  ): Promise<{ version: number }> {
+    const teamId = this.teamId(context);
+    const datasetId = toOid(input.datasetId, 'datasetId', context.requestId);
+    const updated = await this.model
+      .findOneAndUpdate(
+        {
+          _id: datasetId,
+          teamId,
+          deleteTime: null,
+          version: input.expectedVersion,
+          indexVersion: input.expectedIndexVersion,
+        },
+        {
+          $set: { indexVersion: input.nextIndexVersion, updateTime: new Date() },
+          $inc: { version: 1 },
+        },
+        { new: true },
+      )
+      .lean();
+    if (updated) return { version: updated.version };
+
+    const current = await this.model.findOne({ _id: datasetId, teamId, deleteTime: null }).lean();
+    if (!current) {
+      throw new ApiErrorException(
+        createApiError({
+          code: 501070,
+          requestId: context.requestId,
+          params: { resourceType: 'dataset', resourceId: input.datasetId },
+        }),
+      );
+    }
+    throw versionConflict(
+      input.datasetId,
+      input.expectedVersion,
+      current.version,
+      context.requestId,
+    );
+  }
+
   async updateDataset(
     input: DatasetUpdateInput,
     context: RequestContext,

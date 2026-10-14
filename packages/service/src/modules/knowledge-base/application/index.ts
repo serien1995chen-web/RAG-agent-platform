@@ -18,3 +18,6 @@ export class KnowledgeBaseApplicationService {
     return this.deps.repository.get(input, context);
   }
 }
+
+export { RebuildEmbeddingService } from './rebuild.service';
+export type { RebuildEmbeddingInput, RebuildEmbeddingResult } from './rebuild.service';
