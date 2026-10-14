@@ -7,7 +7,6 @@ import {
   withApiHandler,
   type ApiHandlerContext,
   type ApiRouteOptions,
-  type ApiRouteHandler,
 } from './with-api-handler';
 
 export interface AdminRouteOptions extends ApiRouteOptions {
@@ -29,7 +28,7 @@ export type AdminRouteHandler = (
 function stripIdempotencyHeader(request: NextApiRequest): NextApiRequest {
   const headers = { ...request.headers };
   delete headers['idempotency-key'];
-  return { ...request, headers };
+  return { ...request, headers } as NextApiRequest;
 }
 
 function bodyRecord(request: NextApiRequest): Record<string, unknown> {
@@ -60,7 +59,7 @@ async function auditAdminRequest(input: {
         operation: dryRun ? 'admin.migration.dry-run' : 'admin.request',
         requestId: input.requestId,
         payload: {
-          operator: input.authenticated.subject.uid ?? input.authenticated.subject.tmbId,
+          operator: input.authenticated.subject.tmbId,
           scope: body.scope ?? null,
           version: body.version ?? null,
           dryRun,
@@ -123,7 +122,7 @@ export function withAdminHandler(
           ? { maxRequestBodyBytes: options.maxRequestBodyBytes }
           : {}),
       } satisfies ApiRouteOptions,
-    ) as ApiRouteHandler;
+    );
     return wrapped(adminRequest, response);
   };
 }
