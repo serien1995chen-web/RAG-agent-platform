@@ -37,3 +37,8 @@ export class PermissionApplicationService {
     return this.deps.repository.updateCollaborators(input, context);
   }
 }
+
+export { CollaboratorService } from './collaborator.service';
+export type { CollaboratorServiceDeps } from './collaborator.service';
+export { OwnerTransferService } from './owner-transfer.service';
+export type { OwnerTransferServiceDeps, OwnerTransferStore } from './owner-transfer.service';

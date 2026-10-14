@@ -3,7 +3,9 @@ import {
   MeterProvider,
   PeriodicExportingMetricReader,
   type MetricReader,
+  type PushMetricExporter,
 } from '@opentelemetry/sdk-metrics';
+import { OTLPMetricExporter } from '@opentelemetry/exporter-metrics-otlp-http';
 import type { OtelConfig, OtelInitStatus } from './types';
 
 /**
@@ -30,4 +32,20 @@ export function initMetrics(
       reason: `init_failed:${error instanceof Error ? error.name : 'unknown'}`,
     };
   }
+}
+
+/** 设计 15.7 / 6.1.6：OTLP metrics exporter 工厂（仅构造对象，不发起网络请求）。 */
+export function createOtlpMetricExporter(endpointUrl: string): PushMetricExporter {
+  return new OTLPMetricExporter({ url: endpointUrl });
+}
+
+/** 设计 15.7：OTLP 周期导出 reader 工厂（导出间隔由调用方保证 > 0）。 */
+export function createOtlpMetricReader(
+  endpointUrl: string,
+  exportIntervalMillis: number,
+): MetricReader {
+  return new PeriodicExportingMetricReader({
+    exporter: createOtlpMetricExporter(endpointUrl),
+    exportIntervalMillis,
+  });
 }

@@ -9,3 +9,15 @@ export { createSafeLogger, isSensitiveLogFields } from './logger';
 export type { SafeLogger } from './logger';
 export { getTracer, initTracing } from './tracing';
 export type { LogLevel, OtelConfig, OtelInitStatus } from './types';
+
+export {
+  SPAN_INSTRUMENTS,
+  startInstrumentSpan,
+  setSpanStatusFromHttp,
+  createOtlpTraceExporter,
+} from './tracing';
+export type { SpanInstrumentName, SpanInstrumentDefinition } from './tracing';
+export { createOtlpMetricExporter, createOtlpMetricReader } from './metrics';
+export { LOG_FIELD_DICTIONARY, createOtlpLogExporter } from './logger';
+export { ALERT_KINDS, createAlertSignal, emitAlert } from './alert';
+export type { AlertSignal, AlertSignalKind } from './alert';

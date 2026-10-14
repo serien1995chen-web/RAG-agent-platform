@@ -300,3 +300,16 @@ export type {
   MigrationRunJobHandler,
   MigrationServiceDeps,
 } from './modules/migration';
+
+export { createAuditAdapter, createUsageAdapter, createTrackAdapter } from './shared/observability';
+export type { AuditAdapterDeps, UsageAdapterDeps, TrackAdapterDeps } from './shared/observability';
+
+export { CollaboratorService, OwnerTransferService } from './modules/permission';
+export type {
+  CollaboratorServiceDeps,
+  OwnerTransferServiceDeps,
+  OwnerTransferStore,
+} from './modules/permission';
+
+export { createArchiveStatusAdapter } from './shared/runtime/archive-status.adapter';
+export { createFailureQueryAdapter } from './shared/runtime/failure-query.adapter';
