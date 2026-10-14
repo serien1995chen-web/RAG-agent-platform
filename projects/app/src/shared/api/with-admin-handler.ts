@@ -3,11 +3,7 @@ import type { NextApiHandler, NextApiRequest, NextApiResponse } from 'next';
 import type { AdminAuthResolver } from '../../runtime/admin-auth';
 import { resolveAdminRequest } from '../../runtime/admin-auth';
 import { readIdempotencyKey } from './idempotency';
-import {
-  withApiHandler,
-  type ApiHandlerContext,
-  type ApiRouteOptions,
-} from './with-api-handler';
+import { withApiHandler, type ApiHandlerContext, type ApiRouteOptions } from './with-api-handler';
 
 export interface AdminRouteOptions extends ApiRouteOptions {
   resolver?: AdminAuthResolver;
