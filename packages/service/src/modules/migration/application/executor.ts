@@ -164,11 +164,7 @@ function crossTenantScope(requestId: string, teamId: string): ApiErrorException 
   );
 }
 
-function normalizedIdArray(
-  value: unknown,
-  field: string,
-  requestId: string,
-): string[] {
+function normalizedIdArray(value: unknown, field: string, requestId: string): string[] {
   if (value === undefined) return [];
   if (!Array.isArray(value)) throw invalidScope(requestId, field);
   const ids = value.map((item) => {

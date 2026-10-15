@@ -8,10 +8,7 @@ import {
   type DatasetMigrationDoc,
   type DatasetMigrationLogDoc,
 } from '../../../shared/persistence/schemas';
-import type {
-  MigrationDefinition,
-  NormalizedMigrationScope,
-} from '../application/executor';
+import type { MigrationDefinition, NormalizedMigrationScope } from '../application/executor';
 
 const STALE_RUN_FLOOR_MS = 60_000;
 
@@ -85,7 +82,9 @@ function sameScope(left: unknown, right: NormalizedMigrationScope): boolean {
   if (typeof left !== 'object' || left === null) return false;
   const value = left as Record<string, unknown>;
   const fields = ['teamIds', 'datasetIds', 'collectionIds', 'operationTypes'] as const;
-  return fields.every((field) => JSON.stringify(value[field] ?? []) === JSON.stringify(right[field]));
+  return fields.every(
+    (field) => JSON.stringify(value[field] ?? []) === JSON.stringify(right[field]),
+  );
 }
 
 /** Mongo execution ledger for P7 migration runs. It never writes business collections. */
@@ -108,9 +107,7 @@ export class MigrationExecutionRegistry implements MigrationRegistryPort {
   ): { _id: Types.ObjectId; 'scope.teamIds'?: string } {
     return {
       _id: objectId,
-      ...(!context.tenant.isRoot
-        ? { 'scope.teamIds': context.tenant.teamId.toLowerCase() }
-        : {}),
+      ...(!context.tenant.isRoot ? { 'scope.teamIds': context.tenant.teamId.toLowerCase() } : {}),
     };
   }
 
@@ -135,10 +132,7 @@ export class MigrationExecutionRegistry implements MigrationRegistryPort {
       .findOne({ version: input.definition.version })
       .lean<DatasetMigrationDoc>();
     if (existing) {
-      if (
-        idempotencyKeyOf(existing) === input.idempotencyKey &&
-        sameScope(existing.scope, scope)
-      ) {
+      if (idempotencyKeyOf(existing) === input.idempotencyKey && sameScope(existing.scope, scope)) {
         return {
           runId: idOf(existing),
           cursor: cursorOf(existing),
