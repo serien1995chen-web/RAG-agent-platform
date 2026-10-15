@@ -45,27 +45,6 @@ vi.mock('../../../../projects/app/src/runtime', () => ({
   getRuntime: async () => routeFixture.runtime,
 }));
 
-vi.mock('../../../../projects/app/src/runtime/auth', () => ({
-  authenticateRequest: async () => ({
-    subject: {
-      teamId: routeFixture.teamId,
-      tmbId: 'tmb-route',
-      authType: 'token',
-      isRoot: false,
-    },
-    context: {
-      requestId: 'req-route',
-      tenant: {
-        teamId: routeFixture.teamId,
-        tmbId: 'tmb-route',
-        authType: 'token',
-        isRoot: false,
-      },
-      permission: { canRead: true, canWrite: true, canManage: true, isOwner: true },
-    },
-  }),
-}));
-
 import reconcileReportsRoute from '../../../../projects/app/src/pages/api/admin/dataset/reconcile/reports';
 
 const teamId = new mongoose.Types.ObjectId(routeFixture.teamId);
@@ -651,6 +630,15 @@ describe('对账服务与报告（P6-03 / 设计 14.7 / 16.3）', () => {
   it('ROOT-004 路由返回 200 且非 501999，teamId 透传（ACC-OPS-007）', async () => {
     const calls: Array<{ windowHours: number; teamId: string }> = [];
     routeFixture.runtime = {
+      adminAuthProvider: {
+        resolve: async () => ({
+          teamId: routeFixture.teamId,
+          tmbId: 'tmb-route',
+          authType: 'root',
+          isRoot: true,
+          sourceName: 'reconcile-route-test',
+        }),
+      },
       reconcileService: {
         listReports: async (
           input: { windowHours: number },

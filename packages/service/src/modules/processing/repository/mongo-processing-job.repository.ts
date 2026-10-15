@@ -406,6 +406,8 @@ export class MongoProcessingJobRepository implements ProcessingJobRepository {
     ) {
       throw invalidState(input.taskId, input.lockTime, now.toISOString(), context.requestId);
     }
+    // Mongo stores millisecond timestamps; a successful renew must invalidate the old token.
+    const renewedLockTime = new Date(Math.max(now.getTime(), oldLockTime.getTime() + 1));
     const renewed = await this.model
       .findOneAndUpdate(
         {
@@ -414,7 +416,7 @@ export class MongoProcessingJobRepository implements ProcessingJobRepository {
           lockTime: oldLockTime,
           retryCount: { $gt: 0 },
         },
-        { $set: { lockTime: now, updateTime: now } },
+        { $set: { lockTime: renewedLockTime, updateTime: now } },
         { new: true },
       )
       .lean();

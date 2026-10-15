@@ -98,6 +98,20 @@ describe('DTO registry (12.8.2)', () => {
     expect(dtoRegistry['Pagination']!.parse({})).toEqual({ page: 1, limit: 20, sortOrder: 'desc' });
     expect(dtoRegistry['Pagination']!.safeParse({ page: 1, limit: 101 }).success).toBe(false);
   });
+
+  it('compiles enum arrays and rejects scalar enum values', () => {
+    const valid = dtoRegistry['ScopeSelector']!.safeParse({
+      teamIds: ['000000000000000000000001'],
+      operationTypes: ['migrate'],
+    });
+    expect(valid.success).toBe(true);
+
+    const invalid = dtoRegistry['ScopeSelector']!.safeParse({
+      teamIds: ['000000000000000000000001'],
+      operationTypes: 'migrate',
+    });
+    expect(invalid.success).toBe(false);
+  });
 });
 
 describe('route registry (12.9)', () => {
