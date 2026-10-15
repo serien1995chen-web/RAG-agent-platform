@@ -100,6 +100,7 @@ function parseField(rawField: string): FieldSpec | null {
 
   let enumValues: string[] | null = null;
   const enumMatch = rest.match(/enum\(([^)]*)\)/);
+  const enumArray = rest.match(/enum\([^)]*\)(\[\])?/)?.[1] === '[]';
   if (enumMatch?.[1] !== undefined) {
     enumValues = enumMatch[1]
       .split(',')
@@ -118,7 +119,9 @@ function parseField(rawField: string): FieldSpec | null {
   const type = typeMatch
     ? `${typeMatch[1] ?? ''}${typeMatch[2] ?? ''}`
     : enumMatch
-      ? 'enum'
+      ? enumArray
+        ? 'enum[]'
+        : 'enum'
       : rest.trim();
   if (/optional/.test(constraints)) optional = true;
   const nullable = /\|null\b/.test(rest) || /\bnull\b/.test(constraints);
@@ -150,7 +153,9 @@ function compileField(
   const bounds = numericBounds(field.constraints);
   let schema: z.ZodTypeAny;
 
-  if (field.enumValues !== null && field.enumValues.length > 0) {
+  if (field.enumValues !== null && field.enumValues.length > 0 && field.type === 'enum[]') {
+    schema = z.array(z.enum(field.enumValues as [string, ...string[]]));
+  } else if (field.enumValues !== null && field.enumValues.length > 0) {
     schema = z.enum(field.enumValues as [string, ...string[]]);
   } else if (field.type === 'enum') {
     // 设计文档中少量字段只写 enum 而未展开取值，骨架期按字符串占位。
