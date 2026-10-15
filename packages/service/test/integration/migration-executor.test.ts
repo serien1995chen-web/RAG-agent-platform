@@ -445,4 +445,85 @@ describe('MigrationExecutor (P7-04)', () => {
     expect(failed?.state).toBe('failed');
     expect(auditRecords).toHaveLength(0);
   });
+
+  it('requires a verified backup before resume can complete (C6, TEST-MIG-RESUME-001)', async () => {
+    let verified = false;
+    const backup = {
+      validate: vi.fn(async () => ({ valid: true })),
+      run: vi.fn(async () => ({
+        evidence: { mode: 'mock', checksum: 'sha256:c6-backup' },
+      })),
+      verify: vi.fn(async () => ({ verified })),
+    } satisfies BackupToolPort;
+    const executor = new MigrationExecutor({
+      registry: createMigrationRunAdapter({ connection }),
+      backupTool: backup,
+      mongoIndexManager: indexManager(),
+      definitions: [
+        definition({
+          version: 'test-backup-resume-v1',
+          backupRequired: true,
+        }),
+      ],
+    });
+
+    const applyInput = {
+      version: 'test-backup-resume-v1',
+      scope,
+      idempotencyKey: 'idem-c6',
+      options: { timeoutMs: 5_000 },
+    };
+    await expectApiError(executor.apply(applyInput, context), 501025);
+    const replay = await executor.apply(applyInput, context);
+    expect(replay.state).toBe('failed');
+    expect(backup.run).toHaveBeenCalledTimes(1);
+
+    const failed = await migrations.findOne({ version: 'test-backup-resume-v1' }).lean();
+    expect(failed?.state).toBe('failed');
+    expect(failed?.resumeToken).toMatchObject({
+      backupRequired: true,
+      backupVerified: false,
+    });
+    const runId = String(failed?._id);
+
+    await expectApiError(
+      executor.resume(
+        {
+          runId,
+          cursor: 'cursor-1',
+          idempotencyKey: 'idem-c6-resume-failed',
+          options: { timeoutMs: 5_000 },
+        },
+        context,
+      ),
+      501025,
+    );
+    const failedResume = await migrations.findById(runId).lean();
+    expect(failedResume?.state).toBe('failed');
+    expect(failedResume?.resumeToken).toMatchObject({
+      backupRequired: true,
+      backupVerified: false,
+    });
+
+    verified = true;
+    const resumed = await executor.resume(
+      {
+        runId,
+        cursor: 'cursor-2',
+        idempotencyKey: 'idem-c6-resume-ok',
+        options: { timeoutMs: 5_000 },
+      },
+      context,
+    );
+    expect(resumed.state).toBe('done');
+    expect(backup.run).toHaveBeenCalledTimes(3);
+
+    const completed = await migrations.findById(runId).lean();
+    expect(completed?.state).toBe('done');
+    expect(completed?.resumeToken).toMatchObject({
+      backupRequired: true,
+      backupVerified: true,
+      backupEvidence: { mode: 'mock', checksum: 'sha256:c6-backup' },
+    });
+  });
 });

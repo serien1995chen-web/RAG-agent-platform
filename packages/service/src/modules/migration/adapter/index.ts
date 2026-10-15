@@ -51,6 +51,17 @@ function cursorOf(doc: Pick<DatasetMigrationDoc, 'resumeToken'>): string | null 
   return typeof value === 'string' && value.length > 0 ? value : null;
 }
 
+function backupRequiredOf(
+  doc: Pick<DatasetMigrationDoc, 'backupRequired' | 'resumeToken'>,
+): boolean {
+  const value = doc.resumeToken?.backupRequired;
+  return typeof value === 'boolean' ? value : doc.backupRequired;
+}
+
+function backupVerifiedOf(doc: Pick<DatasetMigrationDoc, 'resumeToken'>): boolean {
+  return doc.resumeToken?.backupVerified === true;
+}
+
 function idOf(doc: DatasetMigrationDoc): string {
   return String((doc as { _id?: unknown })._id ?? '');
 }
@@ -126,7 +137,15 @@ export class MigrationExecutionRegistry implements MigrationRegistryPort {
       options: PortCallOptions;
     },
     context: RequestContext,
-  ): Promise<{ runId: string; cursor: string | null; state: string; replayed: boolean }> {
+  ): Promise<{
+    runId: string;
+    cursor: string | null;
+    state: string;
+    scope: NormalizedMigrationScope;
+    backupRequired: boolean;
+    backupVerified: boolean;
+    replayed: boolean;
+  }> {
     const scope = normalizedScopeOf(input.scope);
     const existing = await this.model
       .findOne({ version: input.definition.version })
@@ -137,6 +156,9 @@ export class MigrationExecutionRegistry implements MigrationRegistryPort {
           runId: idOf(existing),
           cursor: cursorOf(existing),
           state: existing.state,
+          scope: normalizedScopeOf(existing.scope),
+          backupRequired: backupRequiredOf(existing),
+          backupVerified: backupVerifiedOf(existing),
           replayed: true,
         };
       }
@@ -151,7 +173,13 @@ export class MigrationExecutionRegistry implements MigrationRegistryPort {
         state: 'running',
         attempts: 1,
         dryRun: false,
-        resumeToken: { cursor: null, idempotencyKey: input.idempotencyKey },
+        resumeToken: {
+          cursor: null,
+          idempotencyKey: input.idempotencyKey,
+          backupRequired: input.definition.backupRequired,
+          backupVerified: !input.definition.backupRequired,
+          backupEvidence: null,
+        },
         rollbackInfo: null,
         error: null,
         scope: scope as unknown as Record<string, unknown>,
@@ -163,7 +191,15 @@ export class MigrationExecutionRegistry implements MigrationRegistryPort {
         createTime: now,
         updateTime: now,
       } as DatasetMigrationDoc);
-      return { runId: String(doc._id), cursor: null, state: 'running', replayed: false };
+      return {
+        runId: String(doc._id),
+        cursor: null,
+        state: 'running',
+        scope,
+        backupRequired: input.definition.backupRequired,
+        backupVerified: !input.definition.backupRequired,
+        replayed: false,
+      };
     } catch {
       const raced = await this.model
         .findOne({ version: input.definition.version })
@@ -177,11 +213,40 @@ export class MigrationExecutionRegistry implements MigrationRegistryPort {
           runId: idOf(raced),
           cursor: cursorOf(raced),
           state: raced.state,
+          scope: normalizedScopeOf(raced.scope),
+          backupRequired: backupRequiredOf(raced),
+          backupVerified: backupVerifiedOf(raced),
           replayed: true,
         };
       }
       throw busy(context.requestId, input.definition.version, scope);
     }
+  }
+
+  async markBackupVerified(
+    input: { runId: string; evidence: unknown; options: PortCallOptions },
+    context: RequestContext,
+  ): Promise<void> {
+    const objectId = assertRunId(input.runId, context.requestId);
+    const current = await this.model
+      .findOne(this.runQuery(objectId, context))
+      .lean<DatasetMigrationDoc>();
+    if (!current) throw notFound(context.requestId, input.runId);
+    if (!backupRequiredOf(current)) return;
+    await this.model.updateOne(
+      { ...this.runQuery(objectId, context), backupRequired: true },
+      {
+        $set: {
+          resumeToken: {
+            ...(current.resumeToken ?? {}),
+            backupRequired: true,
+            backupVerified: true,
+            backupEvidence: input.evidence,
+          },
+          updateTime: new Date(),
+        },
+      },
+    );
   }
 
   async apply(
@@ -275,6 +340,9 @@ export class MigrationExecutionRegistry implements MigrationRegistryPort {
       .findOne(this.runQuery(objectId, context))
       .lean<DatasetMigrationDoc>();
     if (!current) throw notFound(context.requestId, input.runId);
+    if (backupRequiredOf(current) && !backupVerifiedOf(current)) {
+      throw invalidCursor(context.requestId, 'backup.verify');
+    }
     await this.model.updateOne(
       { ...this.runQuery(objectId, context), state: 'running' },
       {
@@ -349,18 +417,34 @@ export class MigrationExecutionRegistry implements MigrationRegistryPort {
   async resume(
     input: { runId: string; cursor: string; idempotencyKey: string; options: PortCallOptions },
     context: RequestContext,
-  ): Promise<{ runId: string; cursor: string | null; state: string; version: string }> {
+  ): Promise<{
+    runId: string;
+    cursor: string | null;
+    state: string;
+    scope: NormalizedMigrationScope;
+    backupRequired: boolean;
+    backupVerified: boolean;
+    version: string;
+  }> {
     const objectId = assertRunId(input.runId, context.requestId);
     const current = await this.model
       .findOne(this.runQuery(objectId, context))
       .lean<DatasetMigrationDoc>();
     if (!current) throw notFound(context.requestId, input.runId);
+    const backupRequired = backupRequiredOf(current);
+    const backupVerified = backupVerifiedOf(current);
     if (current.state === 'done') {
+      if (backupRequired && !backupVerified) {
+        throw invalidCursor(context.requestId, 'backup.verify');
+      }
       assertCursorAdvances(cursorOf(current), input.cursor, context.requestId);
       return {
         runId: idOf(current),
         cursor: cursorOf(current),
         state: current.state,
+        scope: normalizedScopeOf(current.scope),
+        backupRequired,
+        backupVerified,
         version: current.version,
       };
     }
@@ -397,6 +481,9 @@ export class MigrationExecutionRegistry implements MigrationRegistryPort {
       runId: idOf(updated),
       cursor: cursorOf(updated),
       state: updated.state,
+      scope: normalizedScopeOf(updated.scope),
+      backupRequired: backupRequiredOf(updated),
+      backupVerified: backupVerifiedOf(updated),
       version: updated.version,
     };
   }

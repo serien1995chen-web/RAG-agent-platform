@@ -51,6 +51,15 @@ export interface NormalizedMigrationScope {
   operationTypes: Array<(typeof OPERATION_TYPES)[number]>;
 }
 
+interface MigrationRegistryRun {
+  runId: string;
+  cursor: string | null;
+  state: string;
+  scope: NormalizedMigrationScope;
+  backupRequired: boolean;
+  backupVerified: boolean;
+}
+
 export const MIGRATION_DEFINITIONS: readonly MigrationDefinition[] = [
   {
     version: 'p7-framework-v1',
@@ -91,7 +100,11 @@ interface MigrationExecutionRegistryPort extends MigrationRegistryPort {
       options: PortCallOptions;
     },
     context: RequestContext,
-  ): Promise<{ runId: string; cursor: string | null; state: string; replayed: boolean }>;
+  ): Promise<MigrationRegistryRun & { replayed: boolean }>;
+  markBackupVerified(
+    input: { runId: string; evidence: unknown; options: PortCallOptions },
+    context: RequestContext,
+  ): Promise<void>;
   progress(
     input: {
       runId: string;
@@ -135,7 +148,7 @@ interface MigrationExecutionRegistryPort extends MigrationRegistryPort {
   resume(
     input: { runId: string; cursor: string; idempotencyKey: string; options: PortCallOptions },
     context: RequestContext,
-  ): Promise<{ runId: string; cursor: string | null; state: string; version: string }>;
+  ): Promise<MigrationRegistryRun & { version: string }>;
 }
 
 type MigrationExecutorDeps = {
@@ -331,37 +344,21 @@ export class MigrationExecutor {
       return { runId: started.runId, cursor: started.cursor, state: started.state };
     }
 
-    if (definition.backupRequired) {
-      const command = backupCommandOf(definition, scope);
-      try {
-        const validation = await this.deps.backupTool.validate(
-          { command, options: input.options },
-          context,
-        );
-        if (!validation.valid) throw invalidCursor(context.requestId, 'backup.validate');
-        const run = await this.deps.backupTool.run({ command, options: input.options }, context);
-        const verification = await this.deps.backupTool.verify(
-          { evidence: run.evidence, options: input.options },
-          context,
-        );
-        if (!verification.verified) throw invalidCursor(context.requestId, 'backup.verify');
-      } catch (error) {
-        await this.deps.registry.fail(
-          {
-            runId: started.runId,
-            cursor: started.cursor,
-            error: {
-              reason: 'backup_failed',
-              message: error instanceof Error ? error.message : 'unknown_backup_error',
-            },
-            failedResources: [],
-            options: input.options,
-          },
-          context,
-        );
-        if (error instanceof ApiErrorException && error.error.code === 501025) throw error;
-        throw invalidCursor(context.requestId, 'backup');
-      }
+    const backup = await this.ensureBackup(
+      {
+        definition,
+        scope,
+        runId: started.runId,
+        cursor: started.cursor,
+        options: input.options,
+      },
+      context,
+    );
+    if (backup) {
+      await this.deps.registry.markBackupVerified(
+        { runId: started.runId, evidence: backup.evidence, options: input.options },
+        context,
+      );
     }
 
     await appendAudit(
@@ -540,6 +537,50 @@ export class MigrationExecutor {
     return true;
   }
 
+  private async ensureBackup(
+    input: {
+      definition: MigrationDefinition;
+      scope: NormalizedMigrationScope;
+      runId: string;
+      cursor: string | null;
+      options: PortCallOptions;
+    },
+    context: RequestContext,
+  ): Promise<{ evidence: unknown } | null> {
+    if (!input.definition.backupRequired) return null;
+    const command = backupCommandOf(input.definition, input.scope);
+    try {
+      const validation = await this.deps.backupTool.validate(
+        { command, options: input.options },
+        context,
+      );
+      if (!validation.valid) throw invalidCursor(context.requestId, 'backup.validate');
+      const run = await this.deps.backupTool.run({ command, options: input.options }, context);
+      const verification = await this.deps.backupTool.verify(
+        { evidence: run.evidence, options: input.options },
+        context,
+      );
+      if (!verification.verified) throw invalidCursor(context.requestId, 'backup.verify');
+      return { evidence: run.evidence };
+    } catch (error) {
+      await this.deps.registry.fail(
+        {
+          runId: input.runId,
+          cursor: input.cursor,
+          error: {
+            reason: 'backup_failed',
+            message: error instanceof Error ? error.message : 'unknown_backup_error',
+          },
+          failedResources: [],
+          options: input.options,
+        },
+        context,
+      );
+      if (error instanceof ApiErrorException && error.error.code === 501025) throw error;
+      throw invalidCursor(context.requestId, 'backup');
+    }
+  }
+
   async resume(
     input: { runId: string; cursor: string; idempotencyKey: string; options: PortCallOptions },
     context: RequestContext,
@@ -549,6 +590,24 @@ export class MigrationExecutor {
       return { runId: resumed.runId, cursor: resumed.cursor, state: resumed.state };
     }
     const definition = assertKnownDefinition(this.definitions, resumed.version, context.requestId);
+    if (resumed.backupRequired && !resumed.backupVerified) {
+      const backup = await this.ensureBackup(
+        {
+          definition,
+          scope: resumed.scope,
+          runId: resumed.runId,
+          cursor: resumed.cursor,
+          options: input.options,
+        },
+        context,
+      );
+      if (backup) {
+        await this.deps.registry.markBackupVerified(
+          { runId: resumed.runId, evidence: backup.evidence, options: input.options },
+          context,
+        );
+      }
+    }
     const batches = await this.runBatches(
       { definition, runId: resumed.runId, cursor: resumed.cursor, options: input.options },
       context,
