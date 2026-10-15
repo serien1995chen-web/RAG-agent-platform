@@ -115,12 +115,13 @@ describe('DTO registry (12.8.2)', () => {
 });
 
 describe('route registry (12.9)', () => {
-  it('registers exactly 87 routes with the four minimal implementations', () => {
+  it('registers exactly 87 routes and marks all of them implemented', () => {
     expect(ROUTE_REGISTRY).toHaveLength(87);
-    const implemented = ROUTE_REGISTRY.filter((route) => route.implemented)
-      .map((route) => route.routeId)
-      .sort();
-    expect(implemented).toEqual(['API-DS-001', 'API-DS-002', 'API-DS-003', 'API-SEARCH-001']);
+    const implemented = ROUTE_REGISTRY.filter((route) => route.implemented).map(
+      (route) => route.routeId,
+    );
+    expect(implemented).toHaveLength(87);
+    expect(new Set(implemented).size).toBe(87);
     expect(new Set(ROUTE_REGISTRY.map((route) => route.routeId)).size).toBe(87);
   });
 

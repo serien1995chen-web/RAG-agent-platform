@@ -1,0 +1,541 @@
+NOTICE
+======
+
+项目: rag-agent-platform 0.1.0
+
+生成时间: 2026-10-15T09:56:16.517Z
+生成命令: pnpm sbom:generate
+生成脚本: scripts/generate-sbom.mjs（禁止手工维护本文件）
+SBOM 产物: artifacts/sbom.json
+
+一、直接依赖（51）
+名称@版本 | 许可证 | scope | 来源 workspace
+@eslint/js@9.39.5 | MIT | development | .
+@node-rs/jieba@2.0.1 | MIT | production | packages/service
+@opentelemetry/api@1.9.1 | Apache-2.0 | production | sdk/otel
+@opentelemetry/exporter-logs-otlp-http@0.203.0 | Apache-2.0 | production | sdk/otel
+@opentelemetry/exporter-metrics-otlp-http@0.203.0 | Apache-2.0 | production | sdk/otel
+@opentelemetry/exporter-trace-otlp-http@0.203.0 | Apache-2.0 | production | sdk/otel
+@opentelemetry/resources@2.11.0 | Apache-2.0 | production | sdk/otel
+@opentelemetry/sdk-logs@0.203.0 | Apache-2.0 | production | sdk/otel
+@opentelemetry/sdk-metrics@2.0.1 | Apache-2.0 | production | sdk/otel
+@opentelemetry/sdk-trace-base@2.11.0 | Apache-2.0 | production | sdk/otel
+@opentelemetry/sdk-trace-node@2.11.0 | Apache-2.0 | production | sdk/otel
+@types/node@24.19.1 | MIT | development | .,packages/acl,packages/chunk,packages/contracts,packages/dal,packages/parse,packages/qa,packages/search,packages/service,packages/web,projects/app,sdk/otel,sdk/storage
+@types/react-dom@18.3.7 | MIT | development | packages/web,projects/app
+@types/react@18.3.31 | MIT | development | packages/web,projects/app
+@vitest/coverage-v8@4.1.11 | MIT | development | .
+axios@1.18.1 | MIT | production | packages/service
+bullmq@5.52.2 | MIT | production | packages/dal,packages/service,projects/app
+cheerio@1.0.0-rc.12 | MIT | production | packages/parse
+eslint@9.39.4 | MIT | development | .
+file-type@21.3.0 | MIT | production | packages/parse
+gpt-tokenizer@3.4.0 | MIT | production | packages/chunk
+ioredis@5.11.1 | MIT | production | packages/dal,packages/service
+joplin-turndown-plugin-gfm@1.0.12 | MIT | production | packages/parse
+jsdom@26.1.0 | MIT | development | packages/web
+jsonrepair@3.13.2 | ISC | production | packages/qa
+mammoth@1.11.0 | BSD-2-Clause | production | packages/parse
+mime-types@3.0.2 | MIT | production | packages/parse
+minio@8.0.7 | Apache-2.0 | production | sdk/storage
+mongodb-memory-server@10.4.3 | MIT | development | packages/service
+mongoose@8.24.5 | MIT | production | packages/service
+next@16.3.0 | MIT | production | projects/app
+openai@6.34.0 | Apache-2.0 | production | packages/qa,packages/service
+papaparse@5.4.1 | MIT | production | packages/parse
+pdfjs-dist@4.10.38 | Apache-2.0 | production | packages/parse
+pg@8.23.1 | MIT | production | packages/service
+pino@9.14.0 | MIT | production | sdk/otel
+prettier@3.8.3 | MIT | development | .
+react-dom@18.3.1 | MIT | production | projects/app
+react@18.3.1 | MIT | production | packages/web,projects/app
+tsdown@0.21.10 | MIT | development | .
+tsx@4.23.15 | MIT | development | .
+turbo@2.10.8 | MIT | development | .
+turndown@7.2.0 | MIT | production | packages/parse
+typescript-eslint@8.71.0 | MIT | development | .
+typescript@6.0.3 | Apache-2.0 | development | .,packages/acl,packages/chunk,packages/contracts,packages/dal,packages/parse,packages/qa,packages/search,packages/service,packages/web,projects/app,sdk/otel,sdk/storage
+undici@7.29.0 | MIT | production | packages/service
+vitest@4.1.11 | MIT | development | .,packages/acl,packages/chunk,packages/contracts,packages/dal,packages/parse,packages/qa,packages/search,packages/service,packages/web,projects/app,sdk/otel,sdk/storage
+xlsx@0.18.5 | Apache-2.0 | production | packages/parse
+yauzl@3.4.0 | MIT | production | packages/parse
+zod-openapi@5.4.6 | MIT | production | packages/contracts
+zod@4.1.12 | MIT | production | packages/contracts,packages/service
+
+二、传递依赖（439）
+名称@版本 | 许可证 | scope | 依赖父链
+@asamuzakjp/css-color@3.2.0 | MIT | development | packages/web → jsdom@26.1.0 → cssstyle@4.6.0 → @asamuzakjp/css-color@3.2.0
+@babel/generator@8.0.0-rc.3 | MIT | development | . → tsdown@0.21.10 → rolldown-plugin-dts@0.23.2 → @babel/generator@8.0.0-rc.3
+@babel/helper-string-parser@7.29.7 | MIT | development | . → @vitest/coverage-v8@4.1.11 → magicast@0.5.5 → @babel/types@7.29.8 → @babel/helper-string-parser@7.29.7
+@babel/helper-string-parser@8.0.6 | MIT | development | . → tsdown@0.21.10 → rolldown-plugin-dts@0.23.2 → @babel/types@8.0.0-rc.3 → @babel/helper-string-parser@8.0.6
+@babel/helper-validator-identifier@7.29.7 | MIT | development | . → @vitest/coverage-v8@4.1.11 → magicast@0.5.5 → @babel/types@7.29.8 → @babel/helper-validator-identifier@7.29.7
+@babel/helper-validator-identifier@8.0.0-rc.3 | MIT | development | . → tsdown@0.21.10 → rolldown-plugin-dts@0.23.2 → @babel/helper-validator-identifier@8.0.0-rc.3
+@babel/helper-validator-identifier@8.0.6 | MIT | development | . → tsdown@0.21.10 → rolldown-plugin-dts@0.23.2 → ast-kit@3.0.0 → @babel/parser@8.0.6 → @babel/types@8.0.6 → @babel/helper-validator-identifier@8.0.6
+@babel/parser@7.29.9 | MIT | development | . → @vitest/coverage-v8@4.1.11 → magicast@0.5.5 → @babel/parser@7.29.9
+@babel/parser@8.0.0-rc.3 | MIT | development | . → tsdown@0.21.10 → rolldown-plugin-dts@0.23.2 → @babel/parser@8.0.0-rc.3
+@babel/parser@8.0.6 | MIT | development | . → tsdown@0.21.10 → rolldown-plugin-dts@0.23.2 → ast-kit@3.0.0 → @babel/parser@8.0.6
+@babel/types@7.29.8 | MIT | development | . → @vitest/coverage-v8@4.1.11 → magicast@0.5.5 → @babel/types@7.29.8
+@babel/types@8.0.0-rc.3 | MIT | development | . → tsdown@0.21.10 → rolldown-plugin-dts@0.23.2 → @babel/types@8.0.0-rc.3
+@babel/types@8.0.6 | MIT | development | . → tsdown@0.21.10 → rolldown-plugin-dts@0.23.2 → ast-kit@3.0.0 → @babel/parser@8.0.6 → @babel/types@8.0.6
+@bcoe/v8-coverage@1.0.2 | MIT | development | . → @vitest/coverage-v8@4.1.11 → @bcoe/v8-coverage@1.0.2
+@borewit/text-codec@0.2.2 | MIT | production | packages/parse → file-type@21.3.0 → token-types@6.1.2 → @borewit/text-codec@0.2.2
+@csstools/color-helpers@5.1.0 | MIT-0 | development | packages/web → jsdom@26.1.0 → cssstyle@4.6.0 → @asamuzakjp/css-color@3.2.0 → @csstools/css-color-parser@3.1.0 → @csstools/color-helpers@5.1.0
+@csstools/css-calc@2.1.4 | MIT | development | packages/web → jsdom@26.1.0 → cssstyle@4.6.0 → @asamuzakjp/css-color@3.2.0 → @csstools/css-calc@2.1.4
+@csstools/css-color-parser@3.1.0 | MIT | development | packages/web → jsdom@26.1.0 → cssstyle@4.6.0 → @asamuzakjp/css-color@3.2.0 → @csstools/css-color-parser@3.1.0
+@csstools/css-parser-algorithms@3.0.5 | MIT | development | packages/web → jsdom@26.1.0 → cssstyle@4.6.0 → @asamuzakjp/css-color@3.2.0 → @csstools/css-parser-algorithms@3.0.5
+@csstools/css-tokenizer@3.0.4 | MIT | development | packages/web → jsdom@26.1.0 → cssstyle@4.6.0 → @asamuzakjp/css-color@3.2.0 → @csstools/css-tokenizer@3.0.4
+@eslint-community/eslint-utils@4.10.1 | MIT | development | . → eslint@9.39.4 → @eslint-community/eslint-utils@4.10.1
+@eslint-community/regexpp@4.12.2 | MIT | development | . → eslint@9.39.4 → @eslint-community/regexpp@4.12.2
+@eslint/config-array@0.21.2 | Apache-2.0 | development | . → eslint@9.39.4 → @eslint/config-array@0.21.2
+@eslint/config-helpers@0.4.2 | Apache-2.0 | development | . → eslint@9.39.4 → @eslint/config-helpers@0.4.2
+@eslint/core@0.17.0 | Apache-2.0 | development | . → eslint@9.39.4 → @eslint/core@0.17.0
+@eslint/eslintrc@3.3.7 | MIT | development | . → eslint@9.39.4 → @eslint/eslintrc@3.3.7
+@eslint/js@9.39.4 | MIT | development | . → eslint@9.39.4 → @eslint/js@9.39.4
+@eslint/object-schema@2.1.7 | Apache-2.0 | development | . → eslint@9.39.4 → @eslint/config-array@0.21.2 → @eslint/object-schema@2.1.7
+@eslint/plugin-kit@0.4.1 | Apache-2.0 | development | . → eslint@9.39.4 → @eslint/plugin-kit@0.4.1
+@humanfs/core@0.19.2 | Apache-2.0 | development | . → eslint@9.39.4 → @humanfs/node@0.16.8 → @humanfs/core@0.19.2
+@humanfs/node@0.16.8 | Apache-2.0 | development | . → eslint@9.39.4 → @humanfs/node@0.16.8
+@humanfs/types@0.15.0 | Apache-2.0 | development | . → eslint@9.39.4 → @humanfs/node@0.16.8 → @humanfs/types@0.15.0
+@humanwhocodes/module-importer@1.0.1 | Apache-2.0 | development | . → eslint@9.39.4 → @humanwhocodes/module-importer@1.0.1
+@humanwhocodes/retry@0.4.3 | Apache-2.0 | development | . → eslint@9.39.4 → @humanwhocodes/retry@0.4.3
+@ioredis/commands@1.10.0 | MIT | production | packages/dal → ioredis@5.11.1 → @ioredis/commands@1.10.0
+@jridgewell/gen-mapping@0.3.13 | MIT | development | . → tsdown@0.21.10 → rolldown-plugin-dts@0.23.2 → @babel/generator@8.0.0-rc.3 → @jridgewell/gen-mapping@0.3.13
+@jridgewell/resolve-uri@3.1.2 | MIT | development | . → @vitest/coverage-v8@4.1.11 → ast-v8-to-istanbul@1.0.7 → @jridgewell/trace-mapping@0.3.31 → @jridgewell/resolve-uri@3.1.2
+@jridgewell/sourcemap-codec@1.6.0 | MIT | development | . → vitest@4.1.11 → magic-string@0.30.21 → @jridgewell/sourcemap-codec@1.6.0
+@jridgewell/trace-mapping@0.3.31 | MIT | development | . → @vitest/coverage-v8@4.1.11 → ast-v8-to-istanbul@1.0.7 → @jridgewell/trace-mapping@0.3.31
+@mixmark-io/domino@2.2.0 | BSD-2-Clause | production | packages/parse → turndown@7.2.0 → @mixmark-io/domino@2.2.0
+@mongodb-js/saslprep@1.5.5 | MIT | production | packages/service → mongoose@8.24.5 → mongodb@6.20.0 → @mongodb-js/saslprep@1.5.5
+@next/env@16.3.0 | MIT | production | projects/app → next@16.3.0 → @next/env@16.3.0
+@nodable/entities@3.1.0 | MIT | production | sdk/storage → minio@8.0.7 → fast-xml-parser@5.11.2 → @nodable/entities@3.1.0
+@opentelemetry/api-logs@0.203.0 | Apache-2.0 | production | sdk/otel → @opentelemetry/exporter-logs-otlp-http@0.203.0 → @opentelemetry/api-logs@0.203.0
+@opentelemetry/context-async-hooks@2.11.0 | Apache-2.0 | production | sdk/otel → @opentelemetry/sdk-trace-node@2.11.0 → @opentelemetry/context-async-hooks@2.11.0
+@opentelemetry/core@2.0.1 | Apache-2.0 | production | sdk/otel → @opentelemetry/exporter-logs-otlp-http@0.203.0 → @opentelemetry/core@2.0.1
+@opentelemetry/core@2.11.0 | Apache-2.0 | production | sdk/otel → @opentelemetry/resources@2.11.0 → @opentelemetry/core@2.11.0
+@opentelemetry/otlp-exporter-base@0.203.0 | Apache-2.0 | production | sdk/otel → @opentelemetry/exporter-logs-otlp-http@0.203.0 → @opentelemetry/otlp-exporter-base@0.203.0
+@opentelemetry/otlp-transformer@0.203.0 | Apache-2.0 | production | sdk/otel → @opentelemetry/exporter-logs-otlp-http@0.203.0 → @opentelemetry/otlp-transformer@0.203.0
+@opentelemetry/resources@2.0.1 | Apache-2.0 | production | sdk/otel → @opentelemetry/exporter-metrics-otlp-http@0.203.0 → @opentelemetry/resources@2.0.1
+@opentelemetry/sdk-trace-base@2.0.1 | Apache-2.0 | production | sdk/otel → @opentelemetry/exporter-trace-otlp-http@0.203.0 → @opentelemetry/sdk-trace-base@2.0.1
+@opentelemetry/sdk-trace@2.11.0 | Apache-2.0 | production | sdk/otel → @opentelemetry/sdk-trace-base@2.11.0 → @opentelemetry/sdk-trace@2.11.0
+@opentelemetry/semantic-conventions@1.43.0 | Apache-2.0 | production | sdk/otel → @opentelemetry/resources@2.11.0 → @opentelemetry/semantic-conventions@1.43.0
+@oxc-project/types@0.127.0 | MIT | development | . → tsdown@0.21.10 → rolldown@1.0.0-rc.17 → @oxc-project/types@0.127.0
+@oxc-project/types@0.152.0 | MIT | development | . → vitest@4.1.11 → vite@8.3.2 → rolldown@1.2.12 → @oxc-project/types@0.152.0
+@pinojs/redact@0.4.0 | MIT | production | sdk/otel → pino@9.14.0 → @pinojs/redact@0.4.0
+@protobufjs/aspromise@1.1.2 | BSD-3-Clause | production | sdk/otel → @opentelemetry/exporter-logs-otlp-http@0.203.0 → @opentelemetry/otlp-transformer@0.203.0 → protobufjs@7.6.6 → @protobufjs/aspromise@1.1.2
+@protobufjs/base64@1.1.2 | BSD-3-Clause | production | sdk/otel → @opentelemetry/exporter-logs-otlp-http@0.203.0 → @opentelemetry/otlp-transformer@0.203.0 → protobufjs@7.6.6 → @protobufjs/base64@1.1.2
+@protobufjs/codegen@2.0.5 | BSD-3-Clause | production | sdk/otel → @opentelemetry/exporter-logs-otlp-http@0.203.0 → @opentelemetry/otlp-transformer@0.203.0 → protobufjs@7.6.6 → @protobufjs/codegen@2.0.5
+@protobufjs/eventemitter@1.1.1 | BSD-3-Clause | production | sdk/otel → @opentelemetry/exporter-logs-otlp-http@0.203.0 → @opentelemetry/otlp-transformer@0.203.0 → protobufjs@7.6.6 → @protobufjs/eventemitter@1.1.1
+@protobufjs/fetch@1.1.1 | BSD-3-Clause | production | sdk/otel → @opentelemetry/exporter-logs-otlp-http@0.203.0 → @opentelemetry/otlp-transformer@0.203.0 → protobufjs@7.6.6 → @protobufjs/fetch@1.1.1
+@protobufjs/float@1.0.2 | BSD-3-Clause | production | sdk/otel → @opentelemetry/exporter-logs-otlp-http@0.203.0 → @opentelemetry/otlp-transformer@0.203.0 → protobufjs@7.6.6 → @protobufjs/float@1.0.2
+@protobufjs/path@1.1.2 | BSD-3-Clause | production | sdk/otel → @opentelemetry/exporter-logs-otlp-http@0.203.0 → @opentelemetry/otlp-transformer@0.203.0 → protobufjs@7.6.6 → @protobufjs/path@1.1.2
+@protobufjs/pool@1.1.0 | BSD-3-Clause | production | sdk/otel → @opentelemetry/exporter-logs-otlp-http@0.203.0 → @opentelemetry/otlp-transformer@0.203.0 → protobufjs@7.6.6 → @protobufjs/pool@1.1.0
+@protobufjs/utf8@1.1.2 | BSD-3-Clause | production | sdk/otel → @opentelemetry/exporter-logs-otlp-http@0.203.0 → @opentelemetry/otlp-transformer@0.203.0 → protobufjs@7.6.6 → @protobufjs/utf8@1.1.2
+@quansync/fs@1.1.0 | MIT | development | . → tsdown@0.21.10 → unconfig-core@7.5.0 → @quansync/fs@1.1.0
+@rolldown/pluginutils@1.0.0-rc.17 | MIT | development | . → tsdown@0.21.10 → rolldown@1.0.0-rc.17 → @rolldown/pluginutils@1.0.0-rc.17
+@rolldown/pluginutils@1.0.1 | MIT | development | . → vitest@4.1.11 → vite@8.3.2 → rolldown@1.2.12 → @rolldown/pluginutils@1.0.1
+@standard-schema/spec@1.1.0 | MIT | development | . → vitest@4.1.11 → @vitest/expect@4.1.11 → @standard-schema/spec@1.1.0
+@swc/helpers@0.5.15 | Apache-2.0 | production | projects/app → next@16.3.0 → @swc/helpers@0.5.15
+@tokenizer/inflate@0.4.1 | MIT | production | packages/parse → file-type@21.3.0 → @tokenizer/inflate@0.4.1
+@tokenizer/token@0.3.0 | MIT | production | packages/parse → file-type@21.3.0 → strtok3@10.3.5 → @tokenizer/token@0.3.0
+@types/chai@5.2.3 | MIT | development | . → vitest@4.1.11 → @vitest/expect@4.1.11 → @types/chai@5.2.3
+@types/deep-eql@4.0.2 | MIT | development | . → vitest@4.1.11 → @vitest/expect@4.1.11 → @types/chai@5.2.3 → @types/deep-eql@4.0.2
+@types/estree@1.0.9 | MIT | development | . → eslint@9.39.4 → @types/estree@1.0.9
+@types/jsesc@2.5.1 | MIT | development | . → tsdown@0.21.10 → rolldown-plugin-dts@0.23.2 → @babel/generator@8.0.0-rc.3 → @types/jsesc@2.5.1
+@types/json-schema@7.0.15 | MIT | development | . → eslint@9.39.4 → @eslint/core@0.17.0 → @types/json-schema@7.0.15
+@types/prop-types@15.7.15 | MIT | development | packages/web → @types/react@18.3.31 → @types/prop-types@15.7.15
+@types/webidl-conversions@7.0.3 | MIT | production | packages/service → mongoose@8.24.5 → mongodb@6.20.0 → mongodb-connection-string-url@3.0.2 → @types/whatwg-url@11.0.5 → @types/webidl-conversions@7.0.3
+@types/whatwg-url@11.0.5 | MIT | production | packages/service → mongoose@8.24.5 → mongodb@6.20.0 → mongodb-connection-string-url@3.0.2 → @types/whatwg-url@11.0.5
+@typescript-eslint/eslint-plugin@8.71.0 | MIT | development | . → typescript-eslint@8.71.0 → @typescript-eslint/eslint-plugin@8.71.0
+@typescript-eslint/parser@8.71.0 | MIT | development | . → typescript-eslint@8.71.0 → @typescript-eslint/parser@8.71.0
+@typescript-eslint/project-service@8.71.0 | MIT | development | . → typescript-eslint@8.71.0 → @typescript-eslint/typescript-estree@8.71.0 → @typescript-eslint/project-service@8.71.0
+@typescript-eslint/scope-manager@8.71.0 | MIT | development | . → typescript-eslint@8.71.0 → @typescript-eslint/eslint-plugin@8.71.0 → @typescript-eslint/scope-manager@8.71.0
+@typescript-eslint/tsconfig-utils@8.71.0 | MIT | development | . → typescript-eslint@8.71.0 → @typescript-eslint/typescript-estree@8.71.0 → @typescript-eslint/tsconfig-utils@8.71.0
+@typescript-eslint/type-utils@8.71.0 | MIT | development | . → typescript-eslint@8.71.0 → @typescript-eslint/eslint-plugin@8.71.0 → @typescript-eslint/type-utils@8.71.0
+@typescript-eslint/types@8.71.0 | MIT | development | . → typescript-eslint@8.71.0 → @typescript-eslint/parser@8.71.0 → @typescript-eslint/types@8.71.0
+@typescript-eslint/typescript-estree@8.71.0 | MIT | development | . → typescript-eslint@8.71.0 → @typescript-eslint/typescript-estree@8.71.0
+@typescript-eslint/utils@8.71.0 | MIT | development | . → typescript-eslint@8.71.0 → @typescript-eslint/utils@8.71.0
+@typescript-eslint/visitor-keys@8.71.0 | MIT | development | . → typescript-eslint@8.71.0 → @typescript-eslint/eslint-plugin@8.71.0 → @typescript-eslint/visitor-keys@8.71.0
+@vitest/expect@4.1.11 | MIT | development | . → vitest@4.1.11 → @vitest/expect@4.1.11
+@vitest/mocker@4.1.11 | MIT | development | . → vitest@4.1.11 → @vitest/mocker@4.1.11
+@vitest/pretty-format@4.1.11 | MIT | development | . → vitest@4.1.11 → @vitest/pretty-format@4.1.11
+@vitest/runner@4.1.11 | MIT | development | . → vitest@4.1.11 → @vitest/runner@4.1.11
+@vitest/snapshot@4.1.11 | MIT | development | . → vitest@4.1.11 → @vitest/snapshot@4.1.11
+@vitest/spy@4.1.11 | MIT | development | . → vitest@4.1.11 → @vitest/spy@4.1.11
+@vitest/utils@4.1.11 | MIT | development | . → @vitest/coverage-v8@4.1.11 → @vitest/utils@4.1.11
+@xmldom/xmldom@0.8.15 | MIT | production | packages/parse → mammoth@1.11.0 → @xmldom/xmldom@0.8.15
+acorn-jsx@5.3.2 | MIT | development | . → eslint@9.39.4 → espree@10.4.0 → acorn-jsx@5.3.2
+acorn@8.18.0 | MIT | development | . → eslint@9.39.4 → espree@10.4.0 → acorn@8.18.0
+adler-32@1.3.1 | Apache-2.0 | production | packages/parse → xlsx@0.18.5 → adler-32@1.3.1
+agent-base@6.0.2 | MIT | production | packages/service → axios@1.18.1 → https-proxy-agent@5.0.1 → agent-base@6.0.2
+agent-base@7.1.4 | MIT | development | packages/web → jsdom@26.1.0 → http-proxy-agent@7.0.2 → agent-base@7.1.4
+ajv@6.15.0 | MIT | development | . → eslint@9.39.4 → ajv@6.15.0
+ansi-styles@4.3.0 | MIT | development | . → eslint@9.39.4 → chalk@4.1.2 → ansi-styles@4.3.0
+ansis@4.4.0 | ISC | development | . → tsdown@0.21.10 → ansis@4.4.0
+anynum@1.0.1 | MIT | production | sdk/storage → minio@8.0.7 → fast-xml-parser@5.11.2 → strnum@2.4.2 → anynum@1.0.1
+argparse@1.0.10 | MIT | production | packages/parse → mammoth@1.11.0 → argparse@1.0.10
+argparse@2.0.1 | Python-2.0 | development | . → eslint@9.39.4 → @eslint/eslintrc@3.3.7 → js-yaml@4.3.2 → argparse@2.0.1
+assertion-error@2.0.1 | MIT | development | . → vitest@4.1.11 → @vitest/expect@4.1.11 → @types/chai@5.2.3 → assertion-error@2.0.1
+ast-kit@3.0.0 | MIT | development | . → tsdown@0.21.10 → rolldown-plugin-dts@0.23.2 → ast-kit@3.0.0
+ast-v8-to-istanbul@1.0.7 | MIT | development | . → @vitest/coverage-v8@4.1.11 → ast-v8-to-istanbul@1.0.7
+async-mutex@0.5.0 | MIT | development | packages/service → mongodb-memory-server@10.4.3 → mongodb-memory-server-core@10.4.3 → async-mutex@0.5.0
+async@3.2.6 | MIT | production | sdk/storage → minio@8.0.7 → async@3.2.6
+asynckit@0.4.0 | MIT | production | packages/service → axios@1.18.1 → form-data@4.0.6 → asynckit@0.4.0
+atomic-sleep@1.0.0 | MIT | production | sdk/otel → pino@9.14.0 → atomic-sleep@1.0.0
+b4a@1.9.0 | Apache-2.0 | development | packages/service → mongodb-memory-server@10.4.3 → mongodb-memory-server-core@10.4.3 → tar-stream@3.2.2 → b4a@1.9.0
+balanced-match@1.0.2 | MIT | development | . → eslint@9.39.4 → minimatch@3.1.5 → brace-expansion@1.1.21 → balanced-match@1.0.2
+balanced-match@4.0.4 | MIT | development | . → typescript-eslint@8.71.0 → @typescript-eslint/typescript-estree@8.71.0 → minimatch@10.2.6 → brace-expansion@5.0.12 → balanced-match@4.0.4
+bare-events@2.9.2 | Apache-2.0 | development | packages/service → mongodb-memory-server@10.4.3 → mongodb-memory-server-core@10.4.3 → tar-stream@3.2.2 → bare-fs@4.8.2 → bare-events@2.9.2
+bare-fs@4.8.2 | Apache-2.0 | development | packages/service → mongodb-memory-server@10.4.3 → mongodb-memory-server-core@10.4.3 → tar-stream@3.2.2 → bare-fs@4.8.2
+bare-path@3.1.2 | Apache-2.0 | development | packages/service → mongodb-memory-server@10.4.3 → mongodb-memory-server-core@10.4.3 → tar-stream@3.2.2 → bare-fs@4.8.2 → bare-path@3.1.2
+bare-stream@2.13.4 | Apache-2.0 | development | packages/service → mongodb-memory-server@10.4.3 → mongodb-memory-server-core@10.4.3 → tar-stream@3.2.2 → bare-fs@4.8.2 → bare-stream@2.13.4
+bare-url@2.5.4 | Apache-2.0 | development | packages/service → mongodb-memory-server@10.4.3 → mongodb-memory-server-core@10.4.3 → tar-stream@3.2.2 → bare-fs@4.8.2 → bare-url@2.5.4
+base64-js@1.5.1 | MIT | production | packages/parse → mammoth@1.11.0 → base64-js@1.5.1
+baseline-browser-mapping@2.11.27 | Apache-2.0 | production | projects/app → next@16.3.0 → baseline-browser-mapping@2.11.27
+birpc@4.2.0 | MIT | development | . → tsdown@0.21.10 → rolldown-plugin-dts@0.23.2 → birpc@4.2.0
+block-stream2@2.1.0 | MIT | production | sdk/storage → minio@8.0.7 → block-stream2@2.1.0
+bluebird@3.4.7 | MIT | production | packages/parse → mammoth@1.11.0 → bluebird@3.4.7
+boolbase@1.0.0 | ISC | production | packages/parse → cheerio@1.0.0-rc.12 → cheerio-select@2.1.0 → boolbase@1.0.0
+brace-expansion@1.1.21 | MIT | development | . → eslint@9.39.4 → minimatch@3.1.5 → brace-expansion@1.1.21
+brace-expansion@5.0.12 | MIT | development | . → typescript-eslint@8.71.0 → @typescript-eslint/typescript-estree@8.71.0 → minimatch@10.2.6 → brace-expansion@5.0.12
+browser-or-node@2.1.1 | MIT | production | sdk/storage → minio@8.0.7 → browser-or-node@2.1.1
+bson@6.10.4 | Apache-2.0 | production | packages/service → mongoose@8.24.5 → bson@6.10.4
+buffer-crc32@1.0.0 | MIT | production | sdk/storage → minio@8.0.7 → buffer-crc32@1.0.0
+cac@7.0.0 | MIT | development | . → tsdown@0.21.10 → cac@7.0.0
+call-bind-apply-helpers@1.0.2 | MIT | production | packages/service → axios@1.18.1 → form-data@4.0.6 → es-set-tostringtag@2.1.0 → get-intrinsic@1.3.0 → call-bind-apply-helpers@1.0.2
+callsites@3.1.0 | MIT | development | . → eslint@9.39.4 → @eslint/eslintrc@3.3.7 → import-fresh@3.3.1 → parent-module@1.0.1 → callsites@3.1.0
+camelcase@6.3.0 | MIT | development | packages/service → mongodb-memory-server@10.4.3 → mongodb-memory-server-core@10.4.3 → camelcase@6.3.0
+caniuse-lite@1.0.30001814 | CC-BY-4.0 | production | projects/app → next@16.3.0 → caniuse-lite@1.0.30001814
+cfb@1.2.2 | Apache-2.0 | production | packages/parse → xlsx@0.18.5 → cfb@1.2.2
+chai@6.3.0 | MIT | development | . → vitest@4.1.11 → @vitest/expect@4.1.11 → chai@6.3.0
+chalk@4.1.2 | MIT | development | . → eslint@9.39.4 → chalk@4.1.2
+cheerio-select@2.1.0 | BSD-2-Clause | production | packages/parse → cheerio@1.0.0-rc.12 → cheerio-select@2.1.0
+client-only@0.0.1 | MIT | production | projects/app → next@16.3.0 → styled-jsx@5.1.6 → client-only@0.0.1
+cluster-key-slot@1.1.1 | Apache-2.0 | production | packages/dal → ioredis@5.11.1 → cluster-key-slot@1.1.1
+codepage@1.15.0 | Apache-2.0 | production | packages/parse → xlsx@0.18.5 → codepage@1.15.0
+color-convert@2.0.1 | MIT | development | . → eslint@9.39.4 → chalk@4.1.2 → ansi-styles@4.3.0 → color-convert@2.0.1
+color-name@1.1.4 | MIT | development | . → eslint@9.39.4 → chalk@4.1.2 → ansi-styles@4.3.0 → color-convert@2.0.1 → color-name@1.1.4
+combined-stream@1.0.8 | MIT | production | packages/service → axios@1.18.1 → form-data@4.0.6 → combined-stream@1.0.8
+commondir@1.0.1 | MIT | development | packages/service → mongodb-memory-server@10.4.3 → mongodb-memory-server-core@10.4.3 → find-cache-dir@3.3.2 → commondir@1.0.1
+concat-map@0.0.1 | MIT | development | . → eslint@9.39.4 → minimatch@3.1.5 → brace-expansion@1.1.21 → concat-map@0.0.1
+convert-source-map@2.0.0 | MIT | development | . → @vitest/coverage-v8@4.1.11 → @vitest/utils@4.1.11 → convert-source-map@2.0.0
+core-util-is@1.0.3 | MIT | production | packages/parse → mammoth@1.11.0 → jszip@3.10.2 → readable-stream@2.3.8 → core-util-is@1.0.3
+crc-32@1.2.2 | Apache-2.0 | production | packages/parse → xlsx@0.18.5 → crc-32@1.2.2
+cron-parser@4.9.0 | MIT | production | packages/dal → bullmq@5.52.2 → cron-parser@4.9.0
+cross-spawn@7.0.6 | MIT | development | . → eslint@9.39.4 → cross-spawn@7.0.6
+css-select@5.2.2 | BSD-2-Clause | production | packages/parse → cheerio@1.0.0-rc.12 → cheerio-select@2.1.0 → css-select@5.2.2
+css-what@6.2.2 | BSD-2-Clause | production | packages/parse → cheerio@1.0.0-rc.12 → cheerio-select@2.1.0 → css-what@6.2.2
+cssstyle@4.6.0 | MIT | development | packages/web → jsdom@26.1.0 → cssstyle@4.6.0
+csstype@3.2.3 | MIT | development | packages/web → @types/react@18.3.31 → csstype@3.2.3
+data-urls@5.0.0 | MIT | development | packages/web → jsdom@26.1.0 → data-urls@5.0.0
+debug@4.4.3 | MIT | production | packages/dal → ioredis@5.11.1 → debug@4.4.3
+decimal.js@10.6.0 | MIT | development | packages/web → jsdom@26.1.0 → decimal.js@10.6.0
+decode-uri-component@0.2.2 | MIT | production | sdk/storage → minio@8.0.7 → query-string@7.1.3 → decode-uri-component@0.2.2
+deep-is@0.1.4 | MIT | development | . → eslint@9.39.4 → optionator@0.9.4 → deep-is@0.1.4
+defu@6.1.7 | MIT | development | . → tsdown@0.21.10 → defu@6.1.7
+delayed-stream@1.0.0 | MIT | production | packages/service → axios@1.18.1 → form-data@4.0.6 → combined-stream@1.0.8 → delayed-stream@1.0.0
+denque@2.1.0 | Apache-2.0 | production | packages/dal → ioredis@5.11.1 → denque@2.1.0
+detect-libc@2.1.2 | Apache-2.0 | development | . → vitest@4.1.11 → vite@8.3.2 → lightningcss@1.33.0 → detect-libc@2.1.2
+dingbat-to-unicode@1.0.2 | BSD-2-Clause | production | packages/parse → mammoth@1.11.0 → dingbat-to-unicode@1.0.2
+dom-serializer@2.0.0 | MIT | production | packages/parse → cheerio@1.0.0-rc.12 → dom-serializer@2.0.0
+domelementtype@2.3.0 | BSD-2-Clause | production | packages/parse → cheerio@1.0.0-rc.12 → cheerio-select@2.1.0 → domelementtype@2.3.0
+domhandler@5.0.3 | BSD-2-Clause | production | packages/parse → cheerio@1.0.0-rc.12 → domhandler@5.0.3
+domutils@3.2.2 | BSD-2-Clause | production | packages/parse → cheerio@1.0.0-rc.12 → domutils@3.2.2
+dts-resolver@2.1.3 | MIT | development | . → tsdown@0.21.10 → rolldown-plugin-dts@0.23.2 → dts-resolver@2.1.3
+duck@0.1.12 | BSD-2-Clause | production | packages/parse → mammoth@1.11.0 → lop@0.4.2 → duck@0.1.12
+dunder-proto@1.0.1 | MIT | production | packages/service → axios@1.18.1 → form-data@4.0.6 → es-set-tostringtag@2.1.0 → get-intrinsic@1.3.0 → get-proto@1.0.1 → dunder-proto@1.0.1
+empathic@2.1.0 | MIT | development | . → tsdown@0.21.10 → empathic@2.1.0
+entities@4.5.0 | BSD-2-Clause | production | packages/parse → cheerio@1.0.0-rc.12 → dom-serializer@2.0.0 → entities@4.5.0
+entities@6.0.1 | BSD-2-Clause | production | packages/parse → cheerio@1.0.0-rc.12 → parse5@7.3.0 → entities@6.0.1
+es-define-property@1.0.1 | MIT | production | packages/service → axios@1.18.1 → form-data@4.0.6 → es-set-tostringtag@2.1.0 → get-intrinsic@1.3.0 → es-define-property@1.0.1
+es-errors@1.3.0 | MIT | production | packages/service → axios@1.18.1 → form-data@4.0.6 → es-set-tostringtag@2.1.0 → es-errors@1.3.0
+es-module-lexer@2.3.2 | MIT | development | . → vitest@4.1.11 → es-module-lexer@2.3.2
+es-object-atoms@1.1.2 | MIT | production | packages/service → axios@1.18.1 → form-data@4.0.6 → es-set-tostringtag@2.1.0 → get-intrinsic@1.3.0 → es-object-atoms@1.1.2
+es-set-tostringtag@2.1.0 | MIT | production | packages/service → axios@1.18.1 → form-data@4.0.6 → es-set-tostringtag@2.1.0
+esbuild@0.28.2 | MIT | development | . → tsx@4.23.15 → esbuild@0.28.2
+escape-string-regexp@4.0.0 | MIT | development | . → eslint@9.39.4 → escape-string-regexp@4.0.0
+eslint-scope@8.4.0 | BSD-2-Clause | development | . → eslint@9.39.4 → eslint-scope@8.4.0
+eslint-visitor-keys@3.4.3 | Apache-2.0 | development | . → eslint@9.39.4 → @eslint-community/eslint-utils@4.10.1 → eslint-visitor-keys@3.4.3
+eslint-visitor-keys@4.2.1 | Apache-2.0 | development | . → eslint@9.39.4 → eslint-visitor-keys@4.2.1
+eslint-visitor-keys@5.0.1 | Apache-2.0 | development | . → typescript-eslint@8.71.0 → @typescript-eslint/eslint-plugin@8.71.0 → @typescript-eslint/visitor-keys@8.71.0 → eslint-visitor-keys@5.0.1
+espree@10.4.0 | BSD-2-Clause | development | . → eslint@9.39.4 → espree@10.4.0
+esquery@1.7.0 | BSD-3-Clause | development | . → eslint@9.39.4 → esquery@1.7.0
+esrecurse@4.3.0 | BSD-2-Clause | development | . → eslint@9.39.4 → eslint-scope@8.4.0 → esrecurse@4.3.0
+estraverse@5.3.0 | BSD-2-Clause | development | . → eslint@9.39.4 → eslint-scope@8.4.0 → estraverse@5.3.0
+estree-walker@3.0.3 | MIT | development | . → @vitest/coverage-v8@4.1.11 → ast-v8-to-istanbul@1.0.7 → estree-walker@3.0.3
+esutils@2.0.3 | BSD-2-Clause | development | . → eslint@9.39.4 → esutils@2.0.3
+eventemitter3@5.0.4 | MIT | production | sdk/storage → minio@8.0.7 → eventemitter3@5.0.4
+events-universal@1.0.1 | Apache-2.0 | development | packages/service → mongodb-memory-server@10.4.3 → mongodb-memory-server-core@10.4.3 → tar-stream@3.2.2 → streamx@2.28.1 → events-universal@1.0.1
+expect-type@1.4.0 | Apache-2.0 | development | . → vitest@4.1.11 → expect-type@1.4.0
+fast-deep-equal@3.1.3 | MIT | development | . → eslint@9.39.4 → fast-deep-equal@3.1.3
+fast-fifo@1.3.2 | MIT | development | packages/service → mongodb-memory-server@10.4.3 → mongodb-memory-server-core@10.4.3 → tar-stream@3.2.2 → fast-fifo@1.3.2
+fast-json-stable-stringify@2.1.0 | MIT | development | . → eslint@9.39.4 → ajv@6.15.0 → fast-json-stable-stringify@2.1.0
+fast-levenshtein@2.0.6 | MIT | development | . → eslint@9.39.4 → optionator@0.9.4 → fast-levenshtein@2.0.6
+fast-xml-builder@1.3.1 | MIT | production | sdk/storage → minio@8.0.7 → fast-xml-parser@5.11.2 → fast-xml-builder@1.3.1
+fast-xml-parser@5.11.2 | MIT | production | sdk/storage → minio@8.0.7 → fast-xml-parser@5.11.2
+fdir@6.5.0 | MIT | development | . → tsdown@0.21.10 → tinyglobby@0.2.17 → fdir@6.5.0
+file-entry-cache@8.0.0 | MIT | development | . → eslint@9.39.4 → file-entry-cache@8.0.0
+filter-obj@1.1.0 | MIT | production | sdk/storage → minio@8.0.7 → query-string@7.1.3 → filter-obj@1.1.0
+find-cache-dir@3.3.2 | MIT | development | packages/service → mongodb-memory-server@10.4.3 → mongodb-memory-server-core@10.4.3 → find-cache-dir@3.3.2
+find-up@4.1.0 | MIT | development | packages/service → mongodb-memory-server@10.4.3 → mongodb-memory-server-core@10.4.3 → find-cache-dir@3.3.2 → pkg-dir@4.2.0 → find-up@4.1.0
+find-up@5.0.0 | MIT | development | . → eslint@9.39.4 → find-up@5.0.0
+flat-cache@4.0.1 | MIT | development | . → eslint@9.39.4 → file-entry-cache@8.0.0 → flat-cache@4.0.1
+flatted@3.4.4 | ISC | development | . → eslint@9.39.4 → file-entry-cache@8.0.0 → flat-cache@4.0.1 → flatted@3.4.4
+follow-redirects@1.16.1 | MIT | production | packages/service → axios@1.18.1 → follow-redirects@1.16.1
+form-data@4.0.6 | MIT | production | packages/service → axios@1.18.1 → form-data@4.0.6
+frac@1.1.2 | Apache-2.0 | production | packages/parse → xlsx@0.18.5 → ssf@0.11.2 → frac@1.1.2
+function-bind@1.1.2 | MIT | production | packages/service → axios@1.18.1 → form-data@4.0.6 → hasown@2.0.4 → function-bind@1.1.2
+get-intrinsic@1.3.0 | MIT | production | packages/service → axios@1.18.1 → form-data@4.0.6 → es-set-tostringtag@2.1.0 → get-intrinsic@1.3.0
+get-proto@1.0.1 | MIT | production | packages/service → axios@1.18.1 → form-data@4.0.6 → es-set-tostringtag@2.1.0 → get-intrinsic@1.3.0 → get-proto@1.0.1
+get-tsconfig@4.14.3 | MIT | development | . → tsdown@0.21.10 → rolldown-plugin-dts@0.23.2 → get-tsconfig@4.14.3
+glob-parent@6.0.2 | ISC | development | . → eslint@9.39.4 → glob-parent@6.0.2
+globals@14.0.0 | MIT | development | . → eslint@9.39.4 → @eslint/eslintrc@3.3.7 → globals@14.0.0
+gopd@1.2.0 | MIT | production | packages/service → axios@1.18.1 → form-data@4.0.6 → es-set-tostringtag@2.1.0 → get-intrinsic@1.3.0 → gopd@1.2.0
+has-flag@4.0.0 | MIT | development | . → @vitest/coverage-v8@4.1.11 → istanbul-lib-report@3.0.1 → supports-color@7.2.0 → has-flag@4.0.0
+has-symbols@1.1.0 | MIT | production | packages/service → axios@1.18.1 → form-data@4.0.6 → es-set-tostringtag@2.1.0 → get-intrinsic@1.3.0 → has-symbols@1.1.0
+has-tostringtag@1.0.2 | MIT | production | packages/service → axios@1.18.1 → form-data@4.0.6 → es-set-tostringtag@2.1.0 → has-tostringtag@1.0.2
+hasown@2.0.4 | MIT | production | packages/service → axios@1.18.1 → form-data@4.0.6 → hasown@2.0.4
+hookable@6.1.2 | MIT | development | . → tsdown@0.21.10 → hookable@6.1.2
+html-encoding-sniffer@4.0.0 | MIT | development | packages/web → jsdom@26.1.0 → html-encoding-sniffer@4.0.0
+html-escaper@2.0.2 | MIT | development | . → @vitest/coverage-v8@4.1.11 → istanbul-reports@3.2.0 → html-escaper@2.0.2
+htmlparser2@8.0.2 | MIT | production | packages/parse → cheerio@1.0.0-rc.12 → htmlparser2@8.0.2
+http-proxy-agent@7.0.2 | MIT | development | packages/web → jsdom@26.1.0 → http-proxy-agent@7.0.2
+https-proxy-agent@5.0.1 | MIT | production | packages/service → axios@1.18.1 → https-proxy-agent@5.0.1
+https-proxy-agent@7.0.6 | MIT | development | packages/web → jsdom@26.1.0 → https-proxy-agent@7.0.6
+iconv-lite@0.6.3 | MIT | development | packages/web → jsdom@26.1.0 → whatwg-encoding@3.1.1 → iconv-lite@0.6.3
+ieee754@1.2.1 | BSD-3-Clause | production | packages/parse → file-type@21.3.0 → token-types@6.1.2 → ieee754@1.2.1
+ignore@5.3.2 | MIT | development | . → eslint@9.39.4 → ignore@5.3.2
+ignore@7.0.12 | MIT | development | . → typescript-eslint@8.71.0 → @typescript-eslint/eslint-plugin@8.71.0 → ignore@7.0.12
+immediate@3.0.6 | MIT | production | packages/parse → mammoth@1.11.0 → jszip@3.10.2 → lie@3.3.0 → immediate@3.0.6
+import-fresh@3.3.1 | MIT | development | . → eslint@9.39.4 → @eslint/eslintrc@3.3.7 → import-fresh@3.3.1
+import-without-cache@0.3.3 | MIT | development | . → tsdown@0.21.10 → import-without-cache@0.3.3
+imurmurhash@0.1.4 | MIT | development | . → eslint@9.39.4 → imurmurhash@0.1.4
+inherits@2.0.4 | ISC | production | packages/parse → mammoth@1.11.0 → jszip@3.10.2 → readable-stream@2.3.8 → inherits@2.0.4
+ipaddr.js@2.5.0 | MIT | production | sdk/storage → minio@8.0.7 → ipaddr.js@2.5.0
+is-extglob@2.1.1 | MIT | development | . → eslint@9.39.4 → is-glob@4.0.3 → is-extglob@2.1.1
+is-glob@4.0.3 | MIT | development | . → eslint@9.39.4 → is-glob@4.0.3
+is-potential-custom-element-name@1.0.1 | MIT | development | packages/web → jsdom@26.1.0 → is-potential-custom-element-name@1.0.1
+is-unsafe@2.0.2 | MIT | production | sdk/storage → minio@8.0.7 → fast-xml-parser@5.11.2 → is-unsafe@2.0.2
+isarray@1.0.0 | MIT | production | packages/parse → mammoth@1.11.0 → jszip@3.10.2 → readable-stream@2.3.8 → isarray@1.0.0
+isexe@2.0.0 | ISC | development | . → eslint@9.39.4 → cross-spawn@7.0.6 → which@2.0.2 → isexe@2.0.0
+istanbul-lib-coverage@3.2.2 | BSD-3-Clause | development | . → @vitest/coverage-v8@4.1.11 → istanbul-lib-coverage@3.2.2
+istanbul-lib-report@3.0.1 | BSD-3-Clause | development | . → @vitest/coverage-v8@4.1.11 → istanbul-lib-report@3.0.1
+istanbul-reports@3.2.0 | BSD-3-Clause | development | . → @vitest/coverage-v8@4.1.11 → istanbul-reports@3.2.0
+js-tokens@10.0.0 | MIT | development | . → @vitest/coverage-v8@4.1.11 → ast-v8-to-istanbul@1.0.7 → js-tokens@10.0.0
+js-tokens@4.0.0 | MIT | production | packages/web → react@18.3.1 → loose-envify@1.4.0 → js-tokens@4.0.0
+js-yaml@4.3.2 | MIT | development | . → eslint@9.39.4 → @eslint/eslintrc@3.3.7 → js-yaml@4.3.2
+jsesc@3.1.0 | MIT | development | . → tsdown@0.21.10 → rolldown-plugin-dts@0.23.2 → @babel/generator@8.0.0-rc.3 → jsesc@3.1.0
+json-buffer@3.0.1 | MIT | development | . → eslint@9.39.4 → file-entry-cache@8.0.0 → flat-cache@4.0.1 → keyv@4.5.4 → json-buffer@3.0.1
+json-schema-traverse@0.4.1 | MIT | development | . → eslint@9.39.4 → ajv@6.15.0 → json-schema-traverse@0.4.1
+json-stable-stringify-without-jsonify@1.0.1 | MIT | development | . → eslint@9.39.4 → json-stable-stringify-without-jsonify@1.0.1
+jszip@3.10.2 | MIT | production | packages/parse → mammoth@1.11.0 → jszip@3.10.2
+kareem@2.6.3 | Apache-2.0 | production | packages/service → mongoose@8.24.5 → kareem@2.6.3
+keyv@4.5.4 | MIT | development | . → eslint@9.39.4 → file-entry-cache@8.0.0 → flat-cache@4.0.1 → keyv@4.5.4
+levn@0.4.1 | MIT | development | . → eslint@9.39.4 → @eslint/plugin-kit@0.4.1 → levn@0.4.1
+lie@3.3.0 | MIT | production | packages/parse → mammoth@1.11.0 → jszip@3.10.2 → lie@3.3.0
+lightningcss@1.33.0 | MPL-2.0 | development | . → vitest@4.1.11 → vite@8.3.2 → lightningcss@1.33.0
+locate-path@5.0.0 | MIT | development | packages/service → mongodb-memory-server@10.4.3 → mongodb-memory-server-core@10.4.3 → find-cache-dir@3.3.2 → pkg-dir@4.2.0 → find-up@4.1.0 → locate-path@5.0.0
+locate-path@6.0.0 | MIT | development | . → eslint@9.39.4 → find-up@5.0.0 → locate-path@6.0.0
+lodash.merge@4.6.2 | MIT | development | . → eslint@9.39.4 → lodash.merge@4.6.2
+lodash@4.18.1 | MIT | production | sdk/storage → minio@8.0.7 → lodash@4.18.1
+long@5.3.2 | Apache-2.0 | production | sdk/otel → @opentelemetry/exporter-logs-otlp-http@0.203.0 → @opentelemetry/otlp-transformer@0.203.0 → protobufjs@7.6.6 → long@5.3.2
+loose-envify@1.4.0 | MIT | production | packages/web → react@18.3.1 → loose-envify@1.4.0
+lop@0.4.2 | BSD-2-Clause | production | packages/parse → mammoth@1.11.0 → lop@0.4.2
+lru-cache@10.4.3 | ISC | development | packages/web → jsdom@26.1.0 → cssstyle@4.6.0 → @asamuzakjp/css-color@3.2.0 → lru-cache@10.4.3
+luxon@3.7.2 | MIT | production | packages/dal → bullmq@5.52.2 → cron-parser@4.9.0 → luxon@3.7.2
+magic-string@0.30.21 | MIT | development | . → vitest@4.1.11 → magic-string@0.30.21
+magicast@0.5.5 | MIT | development | . → @vitest/coverage-v8@4.1.11 → magicast@0.5.5
+make-dir@3.1.0 | MIT | development | packages/service → mongodb-memory-server@10.4.3 → mongodb-memory-server-core@10.4.3 → find-cache-dir@3.3.2 → make-dir@3.1.0
+make-dir@4.0.0 | MIT | development | . → @vitest/coverage-v8@4.1.11 → istanbul-lib-report@3.0.1 → make-dir@4.0.0
+math-intrinsics@1.1.0 | MIT | production | packages/service → axios@1.18.1 → form-data@4.0.6 → es-set-tostringtag@2.1.0 → get-intrinsic@1.3.0 → math-intrinsics@1.1.0
+memory-pager@1.5.0 | MIT | production | packages/service → mongoose@8.24.5 → mongodb@6.20.0 → @mongodb-js/saslprep@1.5.5 → sparse-bitfield@3.0.3 → memory-pager@1.5.0
+mime-db@1.52.0 | MIT | production | sdk/storage → minio@8.0.7 → mime-types@2.1.35 → mime-db@1.52.0
+mime-db@1.54.0 | MIT | production | packages/parse → mime-types@3.0.2 → mime-db@1.54.0
+mime-types@2.1.35 | MIT | production | sdk/storage → minio@8.0.7 → mime-types@2.1.35
+minimatch@10.2.6 | BlueOak-1.0.0 | development | . → typescript-eslint@8.71.0 → @typescript-eslint/typescript-estree@8.71.0 → minimatch@10.2.6
+minimatch@3.1.5 | ISC | development | . → eslint@9.39.4 → minimatch@3.1.5
+mongodb-connection-string-url@3.0.2 | Apache-2.0 | production | packages/service → mongoose@8.24.5 → mongodb@6.20.0 → mongodb-connection-string-url@3.0.2
+mongodb-memory-server-core@10.4.3 | MIT | development | packages/service → mongodb-memory-server@10.4.3 → mongodb-memory-server-core@10.4.3
+mongodb@6.20.0 | Apache-2.0 | production | packages/service → mongoose@8.24.5 → mongodb@6.20.0
+mpath@0.9.0 | MIT | production | packages/service → mongoose@8.24.5 → mpath@0.9.0
+mquery@5.0.0 | MIT | production | packages/service → mongoose@8.24.5 → mquery@5.0.0
+ms@2.1.3 | MIT | production | packages/service → mongoose@8.24.5 → ms@2.1.3
+msgpackr@1.12.1 | MIT | production | packages/dal → bullmq@5.52.2 → msgpackr@1.12.1
+nanoid@3.3.20 | MIT | production | projects/app → next@16.3.0 → postcss@8.5.23 → nanoid@3.3.20
+natural-compare@1.4.0 | MIT | development | . → eslint@9.39.4 → natural-compare@1.4.0
+new-find-package-json@2.0.0 | MIT | development | packages/service → mongodb-memory-server@10.4.3 → mongodb-memory-server-core@10.4.3 → new-find-package-json@2.0.0
+node-abort-controller@3.1.1 | MIT | production | packages/dal → bullmq@5.52.2 → node-abort-controller@3.1.1
+nth-check@2.1.1 | BSD-2-Clause | production | packages/parse → cheerio@1.0.0-rc.12 → cheerio-select@2.1.0 → css-select@5.2.2 → nth-check@2.1.1
+nwsapi@2.2.28 | MIT | development | packages/web → jsdom@26.1.0 → nwsapi@2.2.28
+obug@2.2.1 | MIT | development | . → @vitest/coverage-v8@4.1.11 → obug@2.2.1
+on-exit-leak-free@2.1.2 | MIT | production | sdk/otel → pino@9.14.0 → on-exit-leak-free@2.1.2
+option@0.2.4 | BSD-2-Clause | production | packages/parse → mammoth@1.11.0 → lop@0.4.2 → option@0.2.4
+optionator@0.9.4 | MIT | development | . → eslint@9.39.4 → optionator@0.9.4
+p-limit@2.3.0 | MIT | development | packages/service → mongodb-memory-server@10.4.3 → mongodb-memory-server-core@10.4.3 → find-cache-dir@3.3.2 → pkg-dir@4.2.0 → find-up@4.1.0 → locate-path@5.0.0 → p-locate@4.1.0 → p-limit@2.3.0
+p-limit@3.1.0 | MIT | development | . → eslint@9.39.4 → find-up@5.0.0 → locate-path@6.0.0 → p-locate@5.0.0 → p-limit@3.1.0
+p-locate@4.1.0 | MIT | development | packages/service → mongodb-memory-server@10.4.3 → mongodb-memory-server-core@10.4.3 → find-cache-dir@3.3.2 → pkg-dir@4.2.0 → find-up@4.1.0 → locate-path@5.0.0 → p-locate@4.1.0
+p-locate@5.0.0 | MIT | development | . → eslint@9.39.4 → find-up@5.0.0 → locate-path@6.0.0 → p-locate@5.0.0
+p-try@2.2.0 | MIT | development | packages/service → mongodb-memory-server@10.4.3 → mongodb-memory-server-core@10.4.3 → find-cache-dir@3.3.2 → pkg-dir@4.2.0 → find-up@4.1.0 → locate-path@5.0.0 → p-locate@4.1.0 → p-limit@2.3.0 → p-try@2.2.0
+pako@1.0.11 | MIT AND Zlib | production | packages/parse → mammoth@1.11.0 → jszip@3.10.2 → pako@1.0.11
+parent-module@1.0.1 | MIT | development | . → eslint@9.39.4 → @eslint/eslintrc@3.3.7 → import-fresh@3.3.1 → parent-module@1.0.1
+parse5-htmlparser2-tree-adapter@7.1.0 | MIT | production | packages/parse → cheerio@1.0.0-rc.12 → parse5-htmlparser2-tree-adapter@7.1.0
+parse5@7.3.0 | MIT | production | packages/parse → cheerio@1.0.0-rc.12 → parse5@7.3.0
+path-exists@4.0.0 | MIT | development | . → eslint@9.39.4 → find-up@5.0.0 → path-exists@4.0.0
+path-expression-matcher@1.6.2 | MIT | production | sdk/storage → minio@8.0.7 → fast-xml-parser@5.11.2 → path-expression-matcher@1.6.2
+path-is-absolute@1.0.1 | MIT | production | packages/parse → mammoth@1.11.0 → path-is-absolute@1.0.1
+path-key@3.1.1 | MIT | development | . → eslint@9.39.4 → cross-spawn@7.0.6 → path-key@3.1.1
+pathe@2.0.3 | MIT | development | . → vitest@4.1.11 → pathe@2.0.3
+pend@1.2.0 | MIT | production | packages/parse → yauzl@3.4.0 → pend@1.2.0
+pg-connection-string@2.14.1 | MIT | production | packages/service → pg@8.23.1 → pg-connection-string@2.14.1
+pg-int8@1.0.1 | ISC | production | packages/service → pg@8.23.1 → pg-types@2.2.0 → pg-int8@1.0.1
+pg-pool@3.14.0 | MIT | production | packages/service → pg@8.23.1 → pg-pool@3.14.0
+pg-protocol@1.16.1 | MIT | production | packages/service → pg@8.23.1 → pg-protocol@1.16.1
+pg-types@2.2.0 | MIT | production | packages/service → pg@8.23.1 → pg-types@2.2.0
+pgpass@1.0.5 | MIT | production | packages/service → pg@8.23.1 → pgpass@1.0.5
+picocolors@1.1.1 | ISC | production | projects/app → next@16.3.0 → postcss@8.5.23 → picocolors@1.1.1
+picomatch@4.0.7 | MIT | development | . → tsdown@0.21.10 → picomatch@4.0.7
+pino-abstract-transport@2.0.0 | MIT | production | sdk/otel → pino@9.14.0 → pino-abstract-transport@2.0.0
+pino-std-serializers@7.1.0 | MIT | production | sdk/otel → pino@9.14.0 → pino-std-serializers@7.1.0
+pkg-dir@4.2.0 | MIT | development | packages/service → mongodb-memory-server@10.4.3 → mongodb-memory-server-core@10.4.3 → find-cache-dir@3.3.2 → pkg-dir@4.2.0
+postcss@8.5.23 | MIT | production | projects/app → next@16.3.0 → postcss@8.5.23
+postcss@8.5.29 | MIT | development | . → vitest@4.1.11 → vite@8.3.2 → postcss@8.5.29
+postgres-array@2.0.0 | MIT | production | packages/service → pg@8.23.1 → pg-types@2.2.0 → postgres-array@2.0.0
+postgres-bytea@1.0.1 | MIT | production | packages/service → pg@8.23.1 → pg-types@2.2.0 → postgres-bytea@1.0.1
+postgres-date@1.0.7 | MIT | production | packages/service → pg@8.23.1 → pg-types@2.2.0 → postgres-date@1.0.7
+postgres-interval@1.2.0 | MIT | production | packages/service → pg@8.23.1 → pg-types@2.2.0 → postgres-interval@1.2.0
+prelude-ls@1.2.1 | MIT | development | . → eslint@9.39.4 → optionator@0.9.4 → prelude-ls@1.2.1
+process-nextick-args@2.0.1 | MIT | production | packages/parse → mammoth@1.11.0 → jszip@3.10.2 → readable-stream@2.3.8 → process-nextick-args@2.0.1
+process-warning@5.1.0 | MIT | production | sdk/otel → pino@9.14.0 → process-warning@5.1.0
+protobufjs@7.6.6 | BSD-3-Clause | production | sdk/otel → @opentelemetry/exporter-logs-otlp-http@0.203.0 → @opentelemetry/otlp-transformer@0.203.0 → protobufjs@7.6.6
+proxy-from-env@2.1.0 | MIT | production | packages/service → axios@1.18.1 → proxy-from-env@2.1.0
+punycode@2.3.1 | MIT | production | packages/service → mongoose@8.24.5 → mongodb@6.20.0 → mongodb-connection-string-url@3.0.2 → whatwg-url@14.2.0 → tr46@5.1.1 → punycode@2.3.1
+quansync@1.0.0 | MIT | development | . → tsdown@0.21.10 → unconfig-core@7.5.0 → quansync@1.0.0
+query-string@7.1.3 | MIT | production | sdk/storage → minio@8.0.7 → query-string@7.1.3
+quick-format-unescaped@4.0.4 | MIT | production | sdk/otel → pino@9.14.0 → quick-format-unescaped@4.0.4
+readable-stream@2.3.8 | MIT | production | packages/parse → mammoth@1.11.0 → jszip@3.10.2 → readable-stream@2.3.8
+readable-stream@3.6.2 | MIT | production | sdk/storage → minio@8.0.7 → block-stream2@2.1.0 → readable-stream@3.6.2
+real-require@0.2.0 | MIT | production | sdk/otel → pino@9.14.0 → real-require@0.2.0
+redis-errors@1.2.0 | MIT | production | packages/dal → ioredis@5.11.1 → redis-errors@1.2.0
+redis-parser@3.0.0 | MIT | production | packages/dal → ioredis@5.11.1 → redis-parser@3.0.0
+resolve-from@4.0.0 | MIT | development | . → eslint@9.39.4 → @eslint/eslintrc@3.3.7 → import-fresh@3.3.1 → resolve-from@4.0.0
+resolve-pkg-maps@1.0.0 | MIT | development | . → tsdown@0.21.10 → rolldown-plugin-dts@0.23.2 → get-tsconfig@4.14.3 → resolve-pkg-maps@1.0.0
+rolldown-plugin-dts@0.23.2 | MIT | development | . → tsdown@0.21.10 → rolldown-plugin-dts@0.23.2
+rolldown@1.0.0-rc.17 | MIT | development | . → tsdown@0.21.10 → rolldown@1.0.0-rc.17
+rolldown@1.2.12 | MIT | development | . → vitest@4.1.11 → vite@8.3.2 → rolldown@1.2.12
+rrweb-cssom@0.8.0 | MIT | development | packages/web → jsdom@26.1.0 → rrweb-cssom@0.8.0
+safe-buffer@5.1.2 | MIT | production | packages/parse → mammoth@1.11.0 → jszip@3.10.2 → readable-stream@2.3.8 → safe-buffer@5.1.2
+safe-buffer@5.2.1 | MIT | production | sdk/storage → minio@8.0.7 → block-stream2@2.1.0 → readable-stream@3.6.2 → string_decoder@1.3.0 → safe-buffer@5.2.1
+safe-stable-stringify@2.5.0 | MIT | production | sdk/otel → pino@9.14.0 → safe-stable-stringify@2.5.0
+safer-buffer@2.1.2 | MIT | development | packages/web → jsdom@26.1.0 → whatwg-encoding@3.1.1 → iconv-lite@0.6.3 → safer-buffer@2.1.2
+sax@1.6.1 | BlueOak-1.0.0 | production | sdk/storage → minio@8.0.7 → xml2js@0.6.2 → sax@1.6.1
+saxes@6.0.0 | ISC | development | packages/web → jsdom@26.1.0 → saxes@6.0.0
+scheduler@0.23.2 | MIT | production | projects/app → react-dom@18.3.1 → scheduler@0.23.2
+semver@6.3.1 | ISC | development | packages/service → mongodb-memory-server@10.4.3 → mongodb-memory-server-core@10.4.3 → find-cache-dir@3.3.2 → make-dir@3.1.0 → semver@6.3.1
+semver@7.8.5 | ISC | production | packages/dal → bullmq@5.52.2 → semver@7.8.5
+setimmediate@1.0.5 | MIT | production | packages/parse → mammoth@1.11.0 → jszip@3.10.2 → setimmediate@1.0.5
+shebang-command@2.0.0 | MIT | development | . → eslint@9.39.4 → cross-spawn@7.0.6 → shebang-command@2.0.0
+shebang-regex@3.0.0 | MIT | development | . → eslint@9.39.4 → cross-spawn@7.0.6 → shebang-command@2.0.0 → shebang-regex@3.0.0
+sift@17.1.3 | MIT | production | packages/service → mongoose@8.24.5 → sift@17.1.3
+siginfo@2.0.0 | ISC | development | . → vitest@4.1.11 → why-is-node-running@2.3.0 → siginfo@2.0.0
+sonic-boom@4.2.1 | MIT | production | sdk/otel → pino@9.14.0 → sonic-boom@4.2.1
+source-map-js@1.2.2 | BSD-3-Clause | production | projects/app → next@16.3.0 → postcss@8.5.23 → source-map-js@1.2.2
+sparse-bitfield@3.0.3 | MIT | production | packages/service → mongoose@8.24.5 → mongodb@6.20.0 → @mongodb-js/saslprep@1.5.5 → sparse-bitfield@3.0.3
+split-on-first@1.1.0 | MIT | production | sdk/storage → minio@8.0.7 → query-string@7.1.3 → split-on-first@1.1.0
+split2@4.2.0 | ISC | production | packages/service → pg@8.23.1 → pgpass@1.0.5 → split2@4.2.0
+sprintf-js@1.0.3 | BSD-3-Clause | production | packages/parse → mammoth@1.11.0 → argparse@1.0.10 → sprintf-js@1.0.3
+ssf@0.11.2 | Apache-2.0 | production | packages/parse → xlsx@0.18.5 → ssf@0.11.2
+stackback@0.0.2 | MIT | development | . → vitest@4.1.11 → why-is-node-running@2.3.0 → stackback@0.0.2
+standard-as-callback@2.1.0 | MIT | production | packages/dal → ioredis@5.11.1 → standard-as-callback@2.1.0
+std-env@4.3.0 | MIT | development | . → @vitest/coverage-v8@4.1.11 → std-env@4.3.0
+stream-chain@2.2.5 | BSD-3-Clause | production | sdk/storage → minio@8.0.7 → stream-json@1.9.1 → stream-chain@2.2.5
+stream-json@1.9.1 | BSD-3-Clause | production | sdk/storage → minio@8.0.7 → stream-json@1.9.1
+streamx@2.28.1 | MIT | development | packages/service → mongodb-memory-server@10.4.3 → mongodb-memory-server-core@10.4.3 → tar-stream@3.2.2 → streamx@2.28.1
+strict-uri-encode@2.0.0 | MIT | production | sdk/storage → minio@8.0.7 → query-string@7.1.3 → strict-uri-encode@2.0.0
+string_decoder@1.1.1 | MIT | production | packages/parse → mammoth@1.11.0 → jszip@3.10.2 → readable-stream@2.3.8 → string_decoder@1.1.1
+string_decoder@1.3.0 | MIT | production | sdk/storage → minio@8.0.7 → block-stream2@2.1.0 → readable-stream@3.6.2 → string_decoder@1.3.0
+strip-json-comments@3.1.1 | MIT | development | . → eslint@9.39.4 → @eslint/eslintrc@3.3.7 → strip-json-comments@3.1.1
+strnum@2.4.2 | MIT | production | sdk/storage → minio@8.0.7 → fast-xml-parser@5.11.2 → strnum@2.4.2
+strtok3@10.3.5 | MIT | production | packages/parse → file-type@21.3.0 → strtok3@10.3.5
+styled-jsx@5.1.6 | MIT | production | projects/app → next@16.3.0 → styled-jsx@5.1.6
+supports-color@7.2.0 | MIT | development | . → @vitest/coverage-v8@4.1.11 → istanbul-lib-report@3.0.1 → supports-color@7.2.0
+symbol-tree@3.2.4 | MIT | development | packages/web → jsdom@26.1.0 → symbol-tree@3.2.4
+tar-stream@3.2.2 | MIT | development | packages/service → mongodb-memory-server@10.4.3 → mongodb-memory-server-core@10.4.3 → tar-stream@3.2.2
+teex@1.0.1 | MIT | development | packages/service → mongodb-memory-server@10.4.3 → mongodb-memory-server-core@10.4.3 → tar-stream@3.2.2 → bare-fs@4.8.2 → bare-stream@2.13.4 → teex@1.0.1
+text-decoder@1.2.7 | Apache-2.0 | development | packages/service → mongodb-memory-server@10.4.3 → mongodb-memory-server-core@10.4.3 → tar-stream@3.2.2 → streamx@2.28.1 → text-decoder@1.2.7
+thread-stream@3.2.0 | MIT | production | sdk/otel → pino@9.14.0 → thread-stream@3.2.0
+through2@4.0.2 | MIT | production | sdk/storage → minio@8.0.7 → through2@4.0.2
+tinybench@2.9.0 | MIT | development | . → vitest@4.1.11 → tinybench@2.9.0
+tinyexec@1.3.1 | MIT | development | . → tsdown@0.21.10 → tinyexec@1.3.1
+tinyglobby@0.2.17 | MIT | development | . → tsdown@0.21.10 → tinyglobby@0.2.17
+tinyrainbow@3.2.0 | MIT | development | . → @vitest/coverage-v8@4.1.11 → tinyrainbow@3.2.0
+tldts-core@6.1.86 | MIT | development | packages/web → jsdom@26.1.0 → tough-cookie@5.1.2 → tldts@6.1.86 → tldts-core@6.1.86
+tldts@6.1.86 | MIT | development | packages/web → jsdom@26.1.0 → tough-cookie@5.1.2 → tldts@6.1.86
+token-types@6.1.2 | MIT | production | packages/parse → file-type@21.3.0 → token-types@6.1.2
+tough-cookie@5.1.2 | BSD-3-Clause | development | packages/web → jsdom@26.1.0 → tough-cookie@5.1.2
+tr46@5.1.1 | MIT | production | packages/service → mongoose@8.24.5 → mongodb@6.20.0 → mongodb-connection-string-url@3.0.2 → whatwg-url@14.2.0 → tr46@5.1.1
+tree-kill@1.2.2 | MIT | development | . → tsdown@0.21.10 → tree-kill@1.2.2
+ts-api-utils@2.5.0 | MIT | development | . → typescript-eslint@8.71.0 → @typescript-eslint/eslint-plugin@8.71.0 → ts-api-utils@2.5.0
+tslib@2.8.1 | 0BSD | production | packages/dal → bullmq@5.52.2 → tslib@2.8.1
+type-check@0.4.0 | MIT | development | . → eslint@9.39.4 → optionator@0.9.4 → type-check@0.4.0
+uint8array-extras@1.6.0 | MIT | production | packages/parse → file-type@21.3.0 → uint8array-extras@1.6.0
+unconfig-core@7.5.0 | MIT | development | . → tsdown@0.21.10 → unconfig-core@7.5.0
+underscore@1.13.8 | MIT | production | packages/parse → mammoth@1.11.0 → underscore@1.13.8
+undici-types@7.24.6 | MIT | production | sdk/otel → @opentelemetry/exporter-logs-otlp-http@0.203.0 → @opentelemetry/otlp-transformer@0.203.0 → protobufjs@7.6.6 → @types/node@24.19.1 → undici-types@7.24.6
+unrun@0.2.39 | MIT | development | . → tsdown@0.21.10 → unrun@0.2.39
+uri-js@4.4.1 | BSD-2-Clause | development | . → eslint@9.39.4 → ajv@6.15.0 → uri-js@4.4.1
+util-deprecate@1.0.2 | MIT | production | packages/parse → mammoth@1.11.0 → jszip@3.10.2 → readable-stream@2.3.8 → util-deprecate@1.0.2
+uuid@9.0.1 | MIT | production | packages/dal → bullmq@5.52.2 → uuid@9.0.1
+vite@8.3.2 | MIT | development | . → vitest@4.1.11 → vite@8.3.2
+w3c-xmlserializer@5.0.0 | MIT | development | packages/web → jsdom@26.1.0 → w3c-xmlserializer@5.0.0
+webidl-conversions@7.0.0 | BSD-2-Clause | production | packages/service → mongoose@8.24.5 → mongodb@6.20.0 → mongodb-connection-string-url@3.0.2 → whatwg-url@14.2.0 → webidl-conversions@7.0.0
+whatwg-encoding@3.1.1 | MIT | development | packages/web → jsdom@26.1.0 → whatwg-encoding@3.1.1
+whatwg-mimetype@4.0.0 | MIT | development | packages/web → jsdom@26.1.0 → whatwg-mimetype@4.0.0
+whatwg-url@14.2.0 | MIT | production | packages/service → mongoose@8.24.5 → mongodb@6.20.0 → mongodb-connection-string-url@3.0.2 → whatwg-url@14.2.0
+which@2.0.2 | ISC | development | . → eslint@9.39.4 → cross-spawn@7.0.6 → which@2.0.2
+why-is-node-running@2.3.0 | MIT | development | . → vitest@4.1.11 → why-is-node-running@2.3.0
+wmf@1.0.2 | Apache-2.0 | production | packages/parse → xlsx@0.18.5 → wmf@1.0.2
+word-wrap@1.2.5 | MIT | development | . → eslint@9.39.4 → optionator@0.9.4 → word-wrap@1.2.5
+word@0.3.0 | Apache-2.0 | production | packages/parse → xlsx@0.18.5 → word@0.3.0
+ws@8.22.0 | MIT | development | packages/web → jsdom@26.1.0 → ws@8.22.0
+xml-name-validator@5.0.0 | Apache-2.0 | development | packages/web → jsdom@26.1.0 → xml-name-validator@5.0.0
+xml-naming@0.3.0 | MIT | production | sdk/storage → minio@8.0.7 → fast-xml-parser@5.11.2 → xml-naming@0.3.0
+xml2js@0.6.2 | MIT | production | sdk/storage → minio@8.0.7 → xml2js@0.6.2
+xmlbuilder@10.1.1 | MIT | production | packages/parse → mammoth@1.11.0 → xmlbuilder@10.1.1
+xmlbuilder@11.0.1 | MIT | production | sdk/storage → minio@8.0.7 → xml2js@0.6.2 → xmlbuilder@11.0.1
+xmlchars@2.2.0 | MIT | development | packages/web → jsdom@26.1.0 → saxes@6.0.0 → xmlchars@2.2.0
+xtend@4.0.2 | MIT | production | packages/service → pg@8.23.1 → pg-types@2.2.0 → postgres-interval@1.2.0 → xtend@4.0.2
+yocto-queue@0.1.0 | MIT | development | . → eslint@9.39.4 → find-up@5.0.0 → locate-path@6.0.0 → p-locate@5.0.0 → p-limit@3.1.0 → yocto-queue@0.1.0
+
+三、workspace 内部包（12）
+名称@版本 | 路径 | private
+@kb/acl@0.1.0 | packages/acl | true
+@kb/chunk@0.1.0 | packages/chunk | true
+@kb/contracts@0.1.0 | packages/contracts | true
+@kb/dal@0.1.0 | packages/dal | true
+@kb/parse@0.1.0 | packages/parse | true
+@kb/qa@0.1.0 | packages/qa | true
+@kb/search@0.1.0 | packages/search | true
+@kb/service@0.1.0 | packages/service | true
+@kb/web@0.1.0 | packages/web | true
+@kb/app@0.1.0 | projects/app | true
+@kb/otel@0.1.0 | sdk/otel | true
+@kb/storage@0.1.0 | sdk/storage | true
+
+四、镜像组件（4）
+服务 | registry/repository | tag | digest | 许可证 | 平台
+mongo | registry.cn-hangzhou.aliyuncs.com/fastgpt/mongo | 5.0.32 | sha256:ab12670508974afbdf3bdc7dd39a201d228a73c9c13c70a684b9eedfb063dc3e | SSPL | linux/amd64
+redis | registry.cn-hangzhou.aliyuncs.com/fastgpt/redis | 7.2-alpine | sha256:2bf71743152d3ca631d358029d504fed349ea28179667acfa755dffb4b321e7c | RSAL/SSPL | linux/amd64
+pgvector | registry.cn-hangzhou.aliyuncs.com/fastgpt/pgvector | 0.8.0-pg15 | sha256:92be4ea0424cccf17003f5803d54448e2864ac27a70e6ac5d24b3d8b463c689c | PostgreSQL | linux/amd64
+minio | registry.cn-hangzhou.aliyuncs.com/fastgpt/minio | RELEASE.2025-09-07T16-13-09Z | sha256:a63b19df59e6ec7c02ebba6e7a1097b7e032da7947b18db7ff67dae8e84fd44d | AGPL-3.0 | linux/amd64
+
+五、许可证白名单（两套清单分开）
+npm 生产闭包白名单: MIT、Apache-2.0、BSD-2-Clause、BSD-3-Clause、ISC、0BSD；字体另允许 OFL-1.1
+容器镜像白名单: mongo=SSPL、redis=RSAL/SSPL、minio=AGPL-3.0、pgvector=PostgreSQL License
+
+六、发布阻塞项（pending-legal-review，releaseBlocking=true，3 条）
+说明: 以下条目不阻断 CI，但阻断对外发布，待法务复核；不得声明为已批准。
+caniuse-lite@1.0.30001814 | CC-BY-4.0 | pending-legal-review | releaseBlocking=true | projects/app → next@16.3.0 → caniuse-lite@1.0.30001814
+pako@1.0.11 | (MIT AND Zlib) | pending-legal-review | releaseBlocking=true | packages/parse → mammoth@1.11.0 → jszip@3.10.2 → pako@1.0.11
+sax@1.6.1 | BlueOak-1.0.0 | pending-legal-review | releaseBlocking=true | sdk/storage → minio@8.0.7 → xml2js@0.6.2 → sax@1.6.1
+
+七、Clean-room 声明
+本项目为自研 clean-room 实现，未复制参照仓库内容。
+

@@ -208,8 +208,18 @@
           501061,
           501067
         ],
-        "x-kb-skeleton-implemented": false,
+        "x-kb-skeleton-implemented": true,
         "responses": {
+          "200": {
+            "description": "骨架期最小实现（真实业务语义在后续阶段实现）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiDS004ResponseData"
+                }
+              }
+            }
+          },
           "400": {
             "description": "501004 dataset.collection.invalid_parent",
             "content": {
@@ -239,16 +249,6 @@
                 }
               }
             }
-          },
-          "501": {
-            "description": "骨架期未实现（SKEL-ADR-007，code=501999）",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
           }
         }
       }
@@ -268,8 +268,18 @@
           501068,
           501070
         ],
-        "x-kb-skeleton-implemented": false,
+        "x-kb-skeleton-implemented": true,
         "responses": {
+          "200": {
+            "description": "骨架期最小实现（真实业务语义在后续阶段实现）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeleteJobResponse"
+                }
+              }
+            }
+          },
           "403": {
             "description": "501061 dataset.file.scope_forbidden",
             "content": {
@@ -299,16 +309,6 @@
                 }
               }
             }
-          },
-          "501": {
-            "description": "骨架期未实现（SKEL-ADR-007，code=501999）",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
           }
         }
       }
@@ -327,8 +327,18 @@
           501013,
           501069
         ],
-        "x-kb-skeleton-implemented": false,
+        "x-kb-skeleton-implemented": true,
         "responses": {
+          "200": {
+            "description": "骨架期最小实现（真实业务语义在后续阶段实现）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiDS006ResponseData"
+                }
+              }
+            }
+          },
           "409": {
             "description": "501069 dataset.rebuild_in_progress",
             "content": {
@@ -341,16 +351,6 @@
           },
           "500": {
             "description": "501013 dataset.vector.dimension_mismatch",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          },
-          "501": {
-            "description": "骨架期未实现（SKEL-ADR-007，code=501999）",
             "content": {
               "application/json": {
                 "schema": {
@@ -376,8 +376,18 @@
           501027,
           501070
         ],
-        "x-kb-skeleton-implemented": false,
+        "x-kb-skeleton-implemented": true,
         "responses": {
+          "200": {
+            "description": "骨架期最小实现（真实业务语义在后续阶段实现）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiCOL001ResponseData"
+                }
+              }
+            }
+          },
           "403": {
             "description": "501027 dataset.admin.forbidden",
             "content": {
@@ -390,16 +400,6 @@
           },
           "404": {
             "description": "501070 dataset.resource_not_found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          },
-          "501": {
-            "description": "骨架期未实现（SKEL-ADR-007，code=501999）",
             "content": {
               "application/json": {
                 "schema": {
@@ -425,8 +425,18 @@
           501004,
           501061
         ],
-        "x-kb-skeleton-implemented": false,
+        "x-kb-skeleton-implemented": true,
         "responses": {
+          "200": {
+            "description": "骨架期最小实现（真实业务语义在后续阶段实现）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiCOL002ResponseData"
+                }
+              }
+            }
+          },
           "400": {
             "description": "501004 dataset.collection.invalid_parent",
             "content": {
@@ -439,16 +449,6 @@
           },
           "403": {
             "description": "501061 dataset.file.scope_forbidden",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          },
-          "501": {
-            "description": "骨架期未实现（SKEL-ADR-007，code=501999）",
             "content": {
               "application/json": {
                 "schema": {
@@ -476,8 +476,18 @@
           501061,
           501065
         ],
-        "x-kb-skeleton-implemented": false,
+        "x-kb-skeleton-implemented": true,
         "responses": {
+          "200": {
+            "description": "骨架期最小实现（真实业务语义在后续阶段实现）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiCOL003ResponseData"
+                }
+              }
+            }
+          },
           "400": {
             "description": "501017 dataset.provider.not_configured",
             "content": {
@@ -500,16 +510,6 @@
           },
           "413": {
             "description": "501030 dataset.import.too_large",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          },
-          "501": {
-            "description": "骨架期未实现（SKEL-ADR-007，code=501999）",
             "content": {
               "application/json": {
                 "schema": {
@@ -542,8 +542,18 @@
           501036,
           501065
         ],
-        "x-kb-skeleton-implemented": false,
+        "x-kb-skeleton-implemented": true,
         "responses": {
+          "200": {
+            "description": "骨架期最小实现（真实业务语义在后续阶段实现）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiCOL004ResponseData"
+                }
+              }
+            }
+          },
           "400": {
             "description": "501017 dataset.provider.not_configured",
             "content": {
@@ -576,16 +586,6 @@
           },
           "422": {
             "description": "501036 dataset.link.empty_content",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          },
-          "501": {
-            "description": "骨架期未实现（SKEL-ADR-007，code=501999）",
             "content": {
               "application/json": {
                 "schema": {
@@ -631,20 +631,20 @@
           501030,
           501065
         ],
-        "x-kb-skeleton-implemented": false,
+        "x-kb-skeleton-implemented": true,
         "responses": {
-          "413": {
-            "description": "501030 dataset.import.too_large",
+          "200": {
+            "description": "骨架期最小实现（真实业务语义在后续阶段实现）",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ApiError"
+                  "$ref": "#/components/schemas/ApiCOL005ResponseData"
                 }
               }
             }
           },
-          "501": {
-            "description": "骨架期未实现（SKEL-ADR-007，code=501999）",
+          "413": {
+            "description": "501030 dataset.import.too_large",
             "content": {
               "application/json": {
                 "schema": {
@@ -671,8 +671,18 @@
           501019,
           501061
         ],
-        "x-kb-skeleton-implemented": false,
+        "x-kb-skeleton-implemented": true,
         "responses": {
+          "200": {
+            "description": "骨架期最小实现（真实业务语义在后续阶段实现）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiCOL006ResponseData"
+                }
+              }
+            }
+          },
           "400": {
             "description": "501017 dataset.provider.not_configured",
             "content": {
@@ -685,16 +695,6 @@
           },
           "403": {
             "description": "501061 dataset.file.scope_forbidden",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          },
-          "501": {
-            "description": "骨架期未实现（SKEL-ADR-007，code=501999）",
             "content": {
               "application/json": {
                 "schema": {
@@ -732,8 +732,18 @@
           501039,
           501061
         ],
-        "x-kb-skeleton-implemented": false,
+        "x-kb-skeleton-implemented": true,
         "responses": {
+          "200": {
+            "description": "骨架期最小实现（真实业务语义在后续阶段实现）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiCOL007ResponseData"
+                }
+              }
+            }
+          },
           "400": {
             "description": "501017 dataset.provider.not_configured",
             "content": {
@@ -746,16 +756,6 @@
           },
           "403": {
             "description": "501061 dataset.file.scope_forbidden",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          },
-          "501": {
-            "description": "骨架期未实现（SKEL-ADR-007，code=501999）",
             "content": {
               "application/json": {
                 "schema": {
@@ -793,8 +793,18 @@
           501061,
           501065
         ],
-        "x-kb-skeleton-implemented": false,
+        "x-kb-skeleton-implemented": true,
         "responses": {
+          "200": {
+            "description": "骨架期最小实现（真实业务语义在后续阶段实现）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiCOL008ResponseData"
+                }
+              }
+            }
+          },
           "400": {
             "description": "501009 dataset.image.invalid_temp_key",
             "content": {
@@ -824,16 +834,6 @@
                 }
               }
             }
-          },
-          "501": {
-            "description": "骨架期未实现（SKEL-ADR-007，code=501999）",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
           }
         }
       }
@@ -854,8 +854,18 @@
           501058,
           501059
         ],
-        "x-kb-skeleton-implemented": false,
+        "x-kb-skeleton-implemented": true,
         "responses": {
+          "200": {
+            "description": "骨架期最小实现（真实业务语义在后续阶段实现）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiCOL009ResponseData"
+                }
+              }
+            }
+          },
           "400": {
             "description": "501056 dataset.parse.unsupported_format",
             "content": {
@@ -868,16 +878,6 @@
           },
           "413": {
             "description": "501030 dataset.import.too_large",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          },
-          "501": {
-            "description": "骨架期未实现（SKEL-ADR-007，code=501999）",
             "content": {
               "application/json": {
                 "schema": {
@@ -903,8 +903,18 @@
           501030,
           501037
         ],
-        "x-kb-skeleton-implemented": false,
+        "x-kb-skeleton-implemented": true,
         "responses": {
+          "200": {
+            "description": "骨架期最小实现（真实业务语义在后续阶段实现）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiCOL010ResponseData"
+                }
+              }
+            }
+          },
           "404": {
             "description": "501037 dataset.template.not_found",
             "content": {
@@ -917,16 +927,6 @@
           },
           "413": {
             "description": "501030 dataset.import.too_large",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          },
-          "501": {
-            "description": "骨架期未实现（SKEL-ADR-007，code=501999）",
             "content": {
               "application/json": {
                 "schema": {
@@ -952,8 +952,18 @@
           501027,
           501070
         ],
-        "x-kb-skeleton-implemented": false,
+        "x-kb-skeleton-implemented": true,
         "responses": {
+          "200": {
+            "description": "骨架期最小实现（真实业务语义在后续阶段实现）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiCOL011ResponseData"
+                }
+              }
+            }
+          },
           "403": {
             "description": "501027 dataset.admin.forbidden",
             "content": {
@@ -966,16 +976,6 @@
           },
           "404": {
             "description": "501070 dataset.resource_not_found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          },
-          "501": {
-            "description": "骨架期未实现（SKEL-ADR-007，code=501999）",
             "content": {
               "application/json": {
                 "schema": {
@@ -1001,8 +1001,18 @@
           501004,
           501067
         ],
-        "x-kb-skeleton-implemented": false,
+        "x-kb-skeleton-implemented": true,
         "responses": {
+          "200": {
+            "description": "骨架期最小实现（真实业务语义在后续阶段实现）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiCOL012ResponseData"
+                }
+              }
+            }
+          },
           "400": {
             "description": "501004 dataset.collection.invalid_parent",
             "content": {
@@ -1015,16 +1025,6 @@
           },
           "409": {
             "description": "501067 dataset.version_conflict",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          },
-          "501": {
-            "description": "骨架期未实现（SKEL-ADR-007，code=501999）",
             "content": {
               "application/json": {
                 "schema": {
@@ -1050,8 +1050,18 @@
           501068,
           501070
         ],
-        "x-kb-skeleton-implemented": false,
+        "x-kb-skeleton-implemented": true,
         "responses": {
+          "200": {
+            "description": "骨架期最小实现（真实业务语义在后续阶段实现）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeleteJobResponse"
+                }
+              }
+            }
+          },
           "404": {
             "description": "501070 dataset.resource_not_found",
             "content": {
@@ -1064,16 +1074,6 @@
           },
           "409": {
             "description": "501068 dataset.delete_in_progress",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          },
-          "501": {
-            "description": "骨架期未实现（SKEL-ADR-007，code=501999）",
             "content": {
               "application/json": {
                 "schema": {
@@ -1099,8 +1099,18 @@
           501069,
           501071
         ],
-        "x-kb-skeleton-implemented": false,
+        "x-kb-skeleton-implemented": true,
         "responses": {
+          "200": {
+            "description": "骨架期最小实现（真实业务语义在后续阶段实现）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiCOL014ResponseData"
+                }
+              }
+            }
+          },
           "409": {
             "description": "501069 dataset.rebuild_in_progress",
             "content": {
@@ -1113,16 +1123,6 @@
           },
           "429": {
             "description": "501071 dataset.quota_exceeded",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          },
-          "501": {
-            "description": "骨架期未实现（SKEL-ADR-007，code=501999）",
             "content": {
               "application/json": {
                 "schema": {
@@ -1149,8 +1149,18 @@
           501020,
           501061
         ],
-        "x-kb-skeleton-implemented": false,
+        "x-kb-skeleton-implemented": true,
         "responses": {
+          "200": {
+            "description": "骨架期最小实现（真实业务语义在后续阶段实现）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiCOL015ResponseData"
+                }
+              }
+            }
+          },
           "400": {
             "description": "501020 dataset.extension.disabled",
             "content": {
@@ -1163,16 +1173,6 @@
           },
           "403": {
             "description": "501061 dataset.file.scope_forbidden",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          },
-          "501": {
-            "description": "骨架期未实现（SKEL-ADR-007，code=501999）",
             "content": {
               "application/json": {
                 "schema": {
@@ -1208,8 +1208,18 @@
           501027,
           501070
         ],
-        "x-kb-skeleton-implemented": false,
+        "x-kb-skeleton-implemented": true,
         "responses": {
+          "200": {
+            "description": "骨架期最小实现（真实业务语义在后续阶段实现）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiCOL016ResponseData"
+                }
+              }
+            }
+          },
           "403": {
             "description": "501027 dataset.admin.forbidden",
             "content": {
@@ -1222,16 +1232,6 @@
           },
           "404": {
             "description": "501070 dataset.resource_not_found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          },
-          "501": {
-            "description": "骨架期未实现（SKEL-ADR-007，code=501999）",
             "content": {
               "application/json": {
                 "schema": {
@@ -1257,8 +1257,18 @@
           501027,
           501070
         ],
-        "x-kb-skeleton-implemented": false,
+        "x-kb-skeleton-implemented": true,
         "responses": {
+          "200": {
+            "description": "骨架期最小实现（真实业务语义在后续阶段实现）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiDATA001ResponseData"
+                }
+              }
+            }
+          },
           "403": {
             "description": "501027 dataset.admin.forbidden",
             "content": {
@@ -1271,16 +1281,6 @@
           },
           "404": {
             "description": "501070 dataset.resource_not_found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          },
-          "501": {
-            "description": "骨架期未实现（SKEL-ADR-007，code=501999）",
             "content": {
               "application/json": {
                 "schema": {
@@ -1306,8 +1306,18 @@
           501027,
           501070
         ],
-        "x-kb-skeleton-implemented": false,
+        "x-kb-skeleton-implemented": true,
         "responses": {
+          "200": {
+            "description": "骨架期最小实现（真实业务语义在后续阶段实现）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiDATA002ResponseData"
+                }
+              }
+            }
+          },
           "403": {
             "description": "501027 dataset.admin.forbidden",
             "content": {
@@ -1320,16 +1330,6 @@
           },
           "404": {
             "description": "501070 dataset.resource_not_found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          },
-          "501": {
-            "description": "骨架期未实现（SKEL-ADR-007，code=501999）",
             "content": {
               "application/json": {
                 "schema": {
@@ -1355,20 +1355,20 @@
           501003,
           501067
         ],
-        "x-kb-skeleton-implemented": false,
+        "x-kb-skeleton-implemented": true,
         "responses": {
-          "409": {
-            "description": "501003 dataset.data.duplicate",
+          "200": {
+            "description": "骨架期最小实现（真实业务语义在后续阶段实现）",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ApiError"
+                  "$ref": "#/components/schemas/ApiDATA003ResponseData"
                 }
               }
             }
           },
-          "501": {
-            "description": "骨架期未实现（SKEL-ADR-007，code=501999）",
+          "409": {
+            "description": "501003 dataset.data.duplicate",
             "content": {
               "application/json": {
                 "schema": {
@@ -1394,8 +1394,18 @@
           501027,
           501070
         ],
-        "x-kb-skeleton-implemented": false,
+        "x-kb-skeleton-implemented": true,
         "responses": {
+          "200": {
+            "description": "骨架期最小实现（真实业务语义在后续阶段实现）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiDATA004ResponseData"
+                }
+              }
+            }
+          },
           "403": {
             "description": "501027 dataset.admin.forbidden",
             "content": {
@@ -1408,16 +1418,6 @@
           },
           "404": {
             "description": "501070 dataset.resource_not_found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          },
-          "501": {
-            "description": "骨架期未实现（SKEL-ADR-007，code=501999）",
             "content": {
               "application/json": {
                 "schema": {
@@ -1443,8 +1443,18 @@
           501003,
           501071
         ],
-        "x-kb-skeleton-implemented": false,
+        "x-kb-skeleton-implemented": true,
         "responses": {
+          "200": {
+            "description": "骨架期最小实现（真实业务语义在后续阶段实现）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiDATA005ResponseData"
+                }
+              }
+            }
+          },
           "409": {
             "description": "501003 dataset.data.duplicate",
             "content": {
@@ -1457,16 +1467,6 @@
           },
           "429": {
             "description": "501071 dataset.quota_exceeded",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          },
-          "501": {
-            "description": "骨架期未实现（SKEL-ADR-007，code=501999）",
             "content": {
               "application/json": {
                 "schema": {
@@ -1494,8 +1494,18 @@
           501011,
           501065
         ],
-        "x-kb-skeleton-implemented": false,
+        "x-kb-skeleton-implemented": true,
         "responses": {
+          "200": {
+            "description": "骨架期最小实现（真实业务语义在后续阶段实现）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiDATA006ResponseData"
+                }
+              }
+            }
+          },
           "400": {
             "description": "501009 dataset.image.invalid_temp_key",
             "content": {
@@ -1525,16 +1535,6 @@
                 }
               }
             }
-          },
-          "501": {
-            "description": "骨架期未实现（SKEL-ADR-007，code=501999）",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
           }
         }
       }
@@ -1553,20 +1553,20 @@
           501030,
           501065
         ],
-        "x-kb-skeleton-implemented": false,
+        "x-kb-skeleton-implemented": true,
         "responses": {
-          "413": {
-            "description": "501030 dataset.import.too_large",
+          "200": {
+            "description": "骨架期最小实现（真实业务语义在后续阶段实现）",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ApiError"
+                  "$ref": "#/components/schemas/ApiDATA007ResponseData"
                 }
               }
             }
           },
-          "501": {
-            "description": "骨架期未实现（SKEL-ADR-007，code=501999）",
+          "413": {
+            "description": "501030 dataset.import.too_large",
             "content": {
               "application/json": {
                 "schema": {
@@ -1592,8 +1592,18 @@
           501041,
           501067
         ],
-        "x-kb-skeleton-implemented": false,
+        "x-kb-skeleton-implemented": true,
         "responses": {
+          "200": {
+            "description": "骨架期最小实现（真实业务语义在后续阶段实现）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiIDX001ResponseData"
+                }
+              }
+            }
+          },
           "400": {
             "description": "501041 dataset.index.invalid_type",
             "content": {
@@ -1606,16 +1616,6 @@
           },
           "409": {
             "description": "501067 dataset.version_conflict",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          },
-          "501": {
-            "description": "骨架期未实现（SKEL-ADR-007，code=501999）",
             "content": {
               "application/json": {
                 "schema": {
@@ -1640,20 +1640,20 @@
         "x-kb-error-codes": [
           501067
         ],
-        "x-kb-skeleton-implemented": false,
+        "x-kb-skeleton-implemented": true,
         "responses": {
-          "409": {
-            "description": "501067 dataset.version_conflict",
+          "200": {
+            "description": "骨架期最小实现（真实业务语义在后续阶段实现）",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ApiError"
+                  "$ref": "#/components/schemas/ApiIDX002ResponseData"
                 }
               }
             }
           },
-          "501": {
-            "description": "骨架期未实现（SKEL-ADR-007，code=501999）",
+          "409": {
+            "description": "501067 dataset.version_conflict",
             "content": {
               "application/json": {
                 "schema": {
@@ -1678,20 +1678,20 @@
         "x-kb-error-codes": [
           501042
         ],
-        "x-kb-skeleton-implemented": false,
+        "x-kb-skeleton-implemented": true,
         "responses": {
-          "403": {
-            "description": "501042 dataset.index.system_index_forbidden",
+          "200": {
+            "description": "骨架期最小实现（真实业务语义在后续阶段实现）",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ApiError"
+                  "$ref": "#/components/schemas/ApiIDX003ResponseData"
                 }
               }
             }
           },
-          "501": {
-            "description": "骨架期未实现（SKEL-ADR-007，code=501999）",
+          "403": {
+            "description": "501042 dataset.index.system_index_forbidden",
             "content": {
               "application/json": {
                 "schema": {
@@ -1717,8 +1717,18 @@
           501027,
           501070
         ],
-        "x-kb-skeleton-implemented": false,
+        "x-kb-skeleton-implemented": true,
         "responses": {
+          "200": {
+            "description": "骨架期最小实现（真实业务语义在后续阶段实现）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiTASK001ResponseData"
+                }
+              }
+            }
+          },
           "403": {
             "description": "501027 dataset.admin.forbidden",
             "content": {
@@ -1731,16 +1741,6 @@
           },
           "404": {
             "description": "501070 dataset.resource_not_found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          },
-          "501": {
-            "description": "骨架期未实现（SKEL-ADR-007，code=501999）",
             "content": {
               "application/json": {
                 "schema": {
@@ -1766,8 +1766,18 @@
           501027,
           501070
         ],
-        "x-kb-skeleton-implemented": false,
+        "x-kb-skeleton-implemented": true,
         "responses": {
+          "200": {
+            "description": "骨架期最小实现（真实业务语义在后续阶段实现）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiTASK002ResponseData"
+                }
+              }
+            }
+          },
           "403": {
             "description": "501027 dataset.admin.forbidden",
             "content": {
@@ -1780,16 +1790,6 @@
           },
           "404": {
             "description": "501070 dataset.resource_not_found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          },
-          "501": {
-            "description": "骨架期未实现（SKEL-ADR-007，code=501999）",
             "content": {
               "application/json": {
                 "schema": {
@@ -1813,8 +1813,18 @@
           501027,
           501070
         ],
-        "x-kb-skeleton-implemented": false,
+        "x-kb-skeleton-implemented": true,
         "responses": {
+          "200": {
+            "description": "骨架期最小实现（真实业务语义在后续阶段实现）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiTASK007ResponseData"
+                }
+              }
+            }
+          },
           "403": {
             "description": "501027 dataset.admin.forbidden",
             "content": {
@@ -1827,16 +1837,6 @@
           },
           "404": {
             "description": "501070 dataset.resource_not_found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          },
-          "501": {
-            "description": "骨架期未实现（SKEL-ADR-007，code=501999）",
             "content": {
               "application/json": {
                 "schema": {
@@ -1861,20 +1861,20 @@
         "x-kb-error-codes": [
           501006
         ],
-        "x-kb-skeleton-implemented": false,
+        "x-kb-skeleton-implemented": true,
         "responses": {
-          "409": {
-            "description": "501006 dataset.task.retry_exhausted",
+          "200": {
+            "description": "骨架期最小实现（真实业务语义在后续阶段实现）",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ApiError"
+                  "$ref": "#/components/schemas/ApiTASK003ResponseData"
                 }
               }
             }
           },
-          "501": {
-            "description": "骨架期未实现（SKEL-ADR-007，code=501999）",
+          "409": {
+            "description": "501006 dataset.task.retry_exhausted",
             "content": {
               "application/json": {
                 "schema": {
@@ -1900,8 +1900,18 @@
           501027,
           501070
         ],
-        "x-kb-skeleton-implemented": false,
+        "x-kb-skeleton-implemented": true,
         "responses": {
+          "200": {
+            "description": "骨架期最小实现（真实业务语义在后续阶段实现）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiDEL001ResponseData"
+                }
+              }
+            }
+          },
           "403": {
             "description": "501027 dataset.admin.forbidden",
             "content": {
@@ -1914,16 +1924,6 @@
           },
           "404": {
             "description": "501070 dataset.resource_not_found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          },
-          "501": {
-            "description": "骨架期未实现（SKEL-ADR-007，code=501999）",
             "content": {
               "application/json": {
                 "schema": {
@@ -1949,8 +1949,18 @@
           501027,
           501070
         ],
-        "x-kb-skeleton-implemented": false,
+        "x-kb-skeleton-implemented": true,
         "responses": {
+          "200": {
+            "description": "骨架期最小实现（真实业务语义在后续阶段实现）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiDEL002ResponseData"
+                }
+              }
+            }
+          },
           "403": {
             "description": "501027 dataset.admin.forbidden",
             "content": {
@@ -1963,16 +1973,6 @@
           },
           "404": {
             "description": "501070 dataset.resource_not_found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          },
-          "501": {
-            "description": "骨架期未实现（SKEL-ADR-007，code=501999）",
             "content": {
               "application/json": {
                 "schema": {
@@ -1998,20 +1998,20 @@
           501024,
           501040
         ],
-        "x-kb-skeleton-implemented": false,
+        "x-kb-skeleton-implemented": true,
         "responses": {
-          "409": {
-            "description": "501024 dataset.migration.busy",
+          "200": {
+            "description": "骨架期最小实现（真实业务语义在后续阶段实现）",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ApiError"
+                  "$ref": "#/components/schemas/ApiDEL003ResponseData"
                 }
               }
             }
           },
-          "501": {
-            "description": "骨架期未实现（SKEL-ADR-007，code=501999）",
+          "409": {
+            "description": "501024 dataset.migration.busy",
             "content": {
               "application/json": {
                 "schema": {
@@ -2098,8 +2098,18 @@
           501065,
           501071
         ],
-        "x-kb-skeleton-implemented": false,
+        "x-kb-skeleton-implemented": true,
         "responses": {
+          "200": {
+            "description": "骨架期最小实现（真实业务语义在后续阶段实现）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresignUploadResponse"
+                }
+              }
+            }
+          },
           "413": {
             "description": "501065 dataset.link.size_exceeded",
             "content": {
@@ -2112,16 +2122,6 @@
           },
           "429": {
             "description": "501071 dataset.quota_exceeded",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          },
-          "501": {
-            "description": "骨架期未实现（SKEL-ADR-007，code=501999）",
             "content": {
               "application/json": {
                 "schema": {
@@ -2146,20 +2146,20 @@
         "x-kb-error-codes": [
           501060
         ],
-        "x-kb-skeleton-implemented": false,
+        "x-kb-skeleton-implemented": true,
         "responses": {
-          "409": {
-            "description": "501060 dataset.file.upload_interrupted",
+          "200": {
+            "description": "骨架期最小实现（真实业务语义在后续阶段实现）",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ApiError"
+                  "$ref": "#/components/schemas/ApiFILE002ResponseData"
                 }
               }
             }
           },
-          "501": {
-            "description": "骨架期未实现（SKEL-ADR-007，code=501999）",
+          "409": {
+            "description": "501060 dataset.file.upload_interrupted",
             "content": {
               "application/json": {
                 "schema": {
@@ -2185,8 +2185,18 @@
           501061,
           501070
         ],
-        "x-kb-skeleton-implemented": false,
+        "x-kb-skeleton-implemented": true,
         "responses": {
+          "200": {
+            "description": "骨架期最小实现（真实业务语义在后续阶段实现）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiFILE003ResponseData"
+                }
+              }
+            }
+          },
           "403": {
             "description": "501061 dataset.file.scope_forbidden",
             "content": {
@@ -2199,16 +2209,6 @@
           },
           "404": {
             "description": "501070 dataset.resource_not_found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          },
-          "501": {
-            "description": "骨架期未实现（SKEL-ADR-007，code=501999）",
             "content": {
               "application/json": {
                 "schema": {
@@ -2234,20 +2234,20 @@
           501017,
           501056
         ],
-        "x-kb-skeleton-implemented": false,
+        "x-kb-skeleton-implemented": true,
         "responses": {
-          "400": {
-            "description": "501017 dataset.provider.not_configured",
+          "200": {
+            "description": "骨架期最小实现（真实业务语义在后续阶段实现）",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ApiError"
+                  "$ref": "#/components/schemas/ApiFILE004ResponseData"
                 }
               }
             }
           },
-          "501": {
-            "description": "骨架期未实现（SKEL-ADR-007，code=501999）",
+          "400": {
+            "description": "501017 dataset.provider.not_configured",
             "content": {
               "application/json": {
                 "schema": {
@@ -2273,8 +2273,18 @@
           501024,
           501025
         ],
-        "x-kb-skeleton-implemented": false,
+        "x-kb-skeleton-implemented": true,
         "responses": {
+          "200": {
+            "description": "骨架期最小实现（真实业务语义在后续阶段实现）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiROOT001ResponseData"
+                }
+              }
+            }
+          },
           "400": {
             "description": "501025 dataset.migration.invalid_cursor",
             "content": {
@@ -2287,16 +2297,6 @@
           },
           "409": {
             "description": "501024 dataset.migration.busy",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          },
-          "501": {
-            "description": "骨架期未实现（SKEL-ADR-007，code=501999）",
             "content": {
               "application/json": {
                 "schema": {
@@ -2322,8 +2322,18 @@
           501024,
           501025
         ],
-        "x-kb-skeleton-implemented": false,
+        "x-kb-skeleton-implemented": true,
         "responses": {
+          "200": {
+            "description": "骨架期最小实现（真实业务语义在后续阶段实现）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiROOT002ResponseData"
+                }
+              }
+            }
+          },
           "400": {
             "description": "501025 dataset.migration.invalid_cursor",
             "content": {
@@ -2336,16 +2346,6 @@
           },
           "409": {
             "description": "501024 dataset.migration.busy",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          },
-          "501": {
-            "description": "骨架期未实现（SKEL-ADR-007，code=501999）",
             "content": {
               "application/json": {
                 "schema": {
@@ -2371,8 +2371,18 @@
           501024,
           501025
         ],
-        "x-kb-skeleton-implemented": false,
+        "x-kb-skeleton-implemented": true,
         "responses": {
+          "200": {
+            "description": "骨架期最小实现（真实业务语义在后续阶段实现）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiROOT003ResponseData"
+                }
+              }
+            }
+          },
           "400": {
             "description": "501025 dataset.migration.invalid_cursor",
             "content": {
@@ -2385,16 +2395,6 @@
           },
           "409": {
             "description": "501024 dataset.migration.busy",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          },
-          "501": {
-            "description": "骨架期未实现（SKEL-ADR-007，code=501999）",
             "content": {
               "application/json": {
                 "schema": {
@@ -2420,8 +2420,18 @@
           501027,
           501070
         ],
-        "x-kb-skeleton-implemented": false,
+        "x-kb-skeleton-implemented": true,
         "responses": {
+          "200": {
+            "description": "骨架期最小实现（真实业务语义在后续阶段实现）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiROOT004ResponseData"
+                }
+              }
+            }
+          },
           "403": {
             "description": "501027 dataset.admin.forbidden",
             "content": {
@@ -2434,16 +2444,6 @@
           },
           "404": {
             "description": "501070 dataset.resource_not_found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          },
-          "501": {
-            "description": "骨架期未实现（SKEL-ADR-007，code=501999）",
             "content": {
               "application/json": {
                 "schema": {
@@ -2469,8 +2469,18 @@
           501065,
           501071
         ],
-        "x-kb-skeleton-implemented": false,
+        "x-kb-skeleton-implemented": true,
         "responses": {
+          "200": {
+            "description": "骨架期最小实现（真实业务语义在后续阶段实现）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiFILE005ResponseData"
+                }
+              }
+            }
+          },
           "413": {
             "description": "501065 dataset.link.size_exceeded",
             "content": {
@@ -2483,16 +2493,6 @@
           },
           "429": {
             "description": "501071 dataset.quota_exceeded",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          },
-          "501": {
-            "description": "骨架期未实现（SKEL-ADR-007，code=501999）",
             "content": {
               "application/json": {
                 "schema": {
@@ -2518,8 +2518,18 @@
           501011,
           501061
         ],
-        "x-kb-skeleton-implemented": false,
+        "x-kb-skeleton-implemented": true,
         "responses": {
+          "200": {
+            "description": "骨架期最小实现（真实业务语义在后续阶段实现）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiFILE006ResponseData"
+                }
+              }
+            }
+          },
           "403": {
             "description": "501061 dataset.file.scope_forbidden",
             "content": {
@@ -2532,16 +2542,6 @@
           },
           "410": {
             "description": "501011 dataset.image.expired_temp_key",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          },
-          "501": {
-            "description": "骨架期未实现（SKEL-ADR-007，code=501999）",
             "content": {
               "application/json": {
                 "schema": {
@@ -2564,14 +2564,14 @@
         "x-kb-request-dto": "NoRequestBody",
         "x-kb-response-dto": "HealthResponse",
         "x-kb-error-codes": [],
-        "x-kb-skeleton-implemented": false,
+        "x-kb-skeleton-implemented": true,
         "responses": {
-          "501": {
-            "description": "骨架期未实现（SKEL-ADR-007，code=501999）",
+          "200": {
+            "description": "骨架期最小实现（真实业务语义在后续阶段实现）",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ApiError"
+                  "$ref": "#/components/schemas/HealthResponse"
                 }
               }
             }
@@ -2592,14 +2592,14 @@
         "x-kb-error-codes": [
           501016
         ],
-        "x-kb-skeleton-implemented": false,
+        "x-kb-skeleton-implemented": true,
         "responses": {
-          "501": {
-            "description": "骨架期未实现（SKEL-ADR-007，code=501999）",
+          "200": {
+            "description": "骨架期最小实现（真实业务语义在后续阶段实现）",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ApiError"
+                  "$ref": "#/components/schemas/HealthResponse"
                 }
               }
             }
@@ -2630,14 +2630,14 @@
         "x-kb-error-codes": [
           501016
         ],
-        "x-kb-skeleton-implemented": false,
+        "x-kb-skeleton-implemented": true,
         "responses": {
-          "501": {
-            "description": "骨架期未实现（SKEL-ADR-007，code=501999）",
+          "200": {
+            "description": "骨架期最小实现（真实业务语义在后续阶段实现）",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ApiError"
+                  "$ref": "#/components/schemas/HealthResponse"
                 }
               }
             }
@@ -2669,8 +2669,18 @@
           501020,
           501047
         ],
-        "x-kb-skeleton-implemented": false,
+        "x-kb-skeleton-implemented": true,
         "responses": {
+          "200": {
+            "description": "骨架期最小实现（真实业务语义在后续阶段实现）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExtensionEnvelope"
+                }
+              }
+            }
+          },
           "400": {
             "description": "501020 dataset.extension.disabled",
             "content": {
@@ -2683,16 +2693,6 @@
           },
           "409": {
             "description": "501047 dataset.acl.collaborator_conflict",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          },
-          "501": {
-            "description": "骨架期未实现（SKEL-ADR-007，code=501999）",
             "content": {
               "application/json": {
                 "schema": {
@@ -2716,8 +2716,18 @@
           501020,
           501047
         ],
-        "x-kb-skeleton-implemented": false,
+        "x-kb-skeleton-implemented": true,
         "responses": {
+          "200": {
+            "description": "骨架期最小实现（真实业务语义在后续阶段实现）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExtensionEnvelope"
+                }
+              }
+            }
+          },
           "400": {
             "description": "501020 dataset.extension.disabled",
             "content": {
@@ -2730,16 +2740,6 @@
           },
           "409": {
             "description": "501047 dataset.acl.collaborator_conflict",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          },
-          "501": {
-            "description": "骨架期未实现（SKEL-ADR-007，code=501999）",
             "content": {
               "application/json": {
                 "schema": {
@@ -2765,8 +2765,18 @@
           501027,
           501070
         ],
-        "x-kb-skeleton-implemented": false,
+        "x-kb-skeleton-implemented": true,
         "responses": {
+          "200": {
+            "description": "骨架期最小实现（真实业务语义在后续阶段实现）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiTAG001ResponseData"
+                }
+              }
+            }
+          },
           "403": {
             "description": "501027 dataset.admin.forbidden",
             "content": {
@@ -2779,16 +2789,6 @@
           },
           "404": {
             "description": "501070 dataset.resource_not_found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          },
-          "501": {
-            "description": "骨架期未实现（SKEL-ADR-007，code=501999）",
             "content": {
               "application/json": {
                 "schema": {
@@ -2814,8 +2814,18 @@
           501043,
           501044
         ],
-        "x-kb-skeleton-implemented": false,
+        "x-kb-skeleton-implemented": true,
         "responses": {
+          "200": {
+            "description": "骨架期最小实现（真实业务语义在后续阶段实现）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiTAG002ResponseData"
+                }
+              }
+            }
+          },
           "400": {
             "description": "501044 dataset.tag.limit_exceeded",
             "content": {
@@ -2828,16 +2838,6 @@
           },
           "409": {
             "description": "501043 dataset.tag.duplicate_name",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          },
-          "501": {
-            "description": "骨架期未实现（SKEL-ADR-007，code=501999）",
             "content": {
               "application/json": {
                 "schema": {
@@ -2862,20 +2862,20 @@
         "x-kb-error-codes": [
           501043
         ],
-        "x-kb-skeleton-implemented": false,
+        "x-kb-skeleton-implemented": true,
         "responses": {
-          "409": {
-            "description": "501043 dataset.tag.duplicate_name",
+          "200": {
+            "description": "骨架期最小实现（真实业务语义在后续阶段实现）",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ApiError"
+                  "$ref": "#/components/schemas/ApiTAG003ResponseData"
                 }
               }
             }
           },
-          "501": {
-            "description": "骨架期未实现（SKEL-ADR-007，code=501999）",
+          "409": {
+            "description": "501043 dataset.tag.duplicate_name",
             "content": {
               "application/json": {
                 "schema": {
@@ -2901,8 +2901,18 @@
           501061,
           501070
         ],
-        "x-kb-skeleton-implemented": false,
+        "x-kb-skeleton-implemented": true,
         "responses": {
+          "200": {
+            "description": "骨架期最小实现（真实业务语义在后续阶段实现）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiTAG004ResponseData"
+                }
+              }
+            }
+          },
           "403": {
             "description": "501061 dataset.file.scope_forbidden",
             "content": {
@@ -2915,16 +2925,6 @@
           },
           "404": {
             "description": "501070 dataset.resource_not_found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          },
-          "501": {
-            "description": "骨架期未实现（SKEL-ADR-007，code=501999）",
             "content": {
               "application/json": {
                 "schema": {
@@ -2949,20 +2949,20 @@
         "x-kb-error-codes": [
           501045
         ],
-        "x-kb-skeleton-implemented": false,
+        "x-kb-skeleton-implemented": true,
         "responses": {
-          "409": {
-            "description": "501045 dataset.tag.binding_conflict",
+          "200": {
+            "description": "骨架期最小实现（真实业务语义在后续阶段实现）",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ApiError"
+                  "$ref": "#/components/schemas/ApiTAG005ResponseData"
                 }
               }
             }
           },
-          "501": {
-            "description": "骨架期未实现（SKEL-ADR-007，code=501999）",
+          "409": {
+            "description": "501045 dataset.tag.binding_conflict",
             "content": {
               "application/json": {
                 "schema": {
@@ -2987,20 +2987,20 @@
         "x-kb-error-codes": [
           501045
         ],
-        "x-kb-skeleton-implemented": false,
+        "x-kb-skeleton-implemented": true,
         "responses": {
-          "409": {
-            "description": "501045 dataset.tag.binding_conflict",
+          "200": {
+            "description": "骨架期最小实现（真实业务语义在后续阶段实现）",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ApiError"
+                  "$ref": "#/components/schemas/ApiTAG006ResponseData"
                 }
               }
             }
           },
-          "501": {
-            "description": "骨架期未实现（SKEL-ADR-007，code=501999）",
+          "409": {
+            "description": "501045 dataset.tag.binding_conflict",
             "content": {
               "application/json": {
                 "schema": {
@@ -3026,8 +3026,18 @@
           501027,
           501070
         ],
-        "x-kb-skeleton-implemented": false,
+        "x-kb-skeleton-implemented": true,
         "responses": {
+          "200": {
+            "description": "骨架期最小实现（真实业务语义在后续阶段实现）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PathNode"
+                }
+              }
+            }
+          },
           "403": {
             "description": "501027 dataset.admin.forbidden",
             "content": {
@@ -3040,16 +3050,6 @@
           },
           "404": {
             "description": "501070 dataset.resource_not_found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          },
-          "501": {
-            "description": "骨架期未实现（SKEL-ADR-007，code=501999）",
             "content": {
               "application/json": {
                 "schema": {
@@ -3075,8 +3075,18 @@
           501027,
           501070
         ],
-        "x-kb-skeleton-implemented": false,
+        "x-kb-skeleton-implemented": true,
         "responses": {
+          "200": {
+            "description": "骨架期最小实现（真实业务语义在后续阶段实现）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PathNode"
+                }
+              }
+            }
+          },
           "403": {
             "description": "501027 dataset.admin.forbidden",
             "content": {
@@ -3089,16 +3099,6 @@
           },
           "404": {
             "description": "501070 dataset.resource_not_found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          },
-          "501": {
-            "description": "骨架期未实现（SKEL-ADR-007，code=501999）",
             "content": {
               "application/json": {
                 "schema": {
@@ -3123,20 +3123,20 @@
         "x-kb-error-codes": [
           501046
         ],
-        "x-kb-skeleton-implemented": false,
+        "x-kb-skeleton-implemented": true,
         "responses": {
-          "409": {
-            "description": "501046 dataset.path.cycle_detected",
+          "200": {
+            "description": "骨架期最小实现（真实业务语义在后续阶段实现）",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ApiError"
+                  "$ref": "#/components/schemas/ApiPATH003ResponseData"
                 }
               }
             }
           },
-          "501": {
-            "description": "骨架期未实现（SKEL-ADR-007，code=501999）",
+          "409": {
+            "description": "501046 dataset.path.cycle_detected",
             "content": {
               "application/json": {
                 "schema": {
@@ -3161,20 +3161,20 @@
         "x-kb-error-codes": [
           501046
         ],
-        "x-kb-skeleton-implemented": false,
+        "x-kb-skeleton-implemented": true,
         "responses": {
-          "409": {
-            "description": "501046 dataset.path.cycle_detected",
+          "200": {
+            "description": "骨架期最小实现（真实业务语义在后续阶段实现）",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ApiError"
+                  "$ref": "#/components/schemas/ApiPATH004ResponseData"
                 }
               }
             }
           },
-          "501": {
-            "description": "骨架期未实现（SKEL-ADR-007，code=501999）",
+          "409": {
+            "description": "501046 dataset.path.cycle_detected",
             "content": {
               "application/json": {
                 "schema": {
@@ -3200,8 +3200,18 @@
           501027,
           501070
         ],
-        "x-kb-skeleton-implemented": false,
+        "x-kb-skeleton-implemented": true,
         "responses": {
+          "200": {
+            "description": "骨架期最小实现（真实业务语义在后续阶段实现）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiACL001ResponseData"
+                }
+              }
+            }
+          },
           "403": {
             "description": "501027 dataset.admin.forbidden",
             "content": {
@@ -3214,16 +3224,6 @@
           },
           "404": {
             "description": "501070 dataset.resource_not_found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          },
-          "501": {
-            "description": "骨架期未实现（SKEL-ADR-007，code=501999）",
             "content": {
               "application/json": {
                 "schema": {
@@ -3248,20 +3248,20 @@
         "x-kb-error-codes": [
           501008
         ],
-        "x-kb-skeleton-implemented": false,
+        "x-kb-skeleton-implemented": true,
         "responses": {
-          "409": {
-            "description": "501008 dataset.acl.last_owner",
+          "200": {
+            "description": "骨架期最小实现（真实业务语义在后续阶段实现）",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ApiError"
+                  "$ref": "#/components/schemas/ApiACL002ResponseData"
                 }
               }
             }
           },
-          "501": {
-            "description": "骨架期未实现（SKEL-ADR-007，code=501999）",
+          "409": {
+            "description": "501008 dataset.acl.last_owner",
             "content": {
               "application/json": {
                 "schema": {
@@ -3286,20 +3286,20 @@
         "x-kb-error-codes": [
           501020
         ],
-        "x-kb-skeleton-implemented": false,
+        "x-kb-skeleton-implemented": true,
         "responses": {
-          "400": {
-            "description": "501020 dataset.extension.disabled",
+          "200": {
+            "description": "骨架期最小实现（真实业务语义在后续阶段实现）",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ApiError"
+                  "$ref": "#/components/schemas/ApiACL003ResponseData"
                 }
               }
             }
           },
-          "501": {
-            "description": "骨架期未实现（SKEL-ADR-007，code=501999）",
+          "400": {
+            "description": "501020 dataset.extension.disabled",
             "content": {
               "application/json": {
                 "schema": {
@@ -3325,20 +3325,20 @@
           501008,
           501047
         ],
-        "x-kb-skeleton-implemented": false,
+        "x-kb-skeleton-implemented": true,
         "responses": {
-          "409": {
-            "description": "501008 dataset.acl.last_owner",
+          "200": {
+            "description": "骨架期最小实现（真实业务语义在后续阶段实现）",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ApiError"
+                  "$ref": "#/components/schemas/ApiACL004ResponseData"
                 }
               }
             }
           },
-          "501": {
-            "description": "骨架期未实现（SKEL-ADR-007，code=501999）",
+          "409": {
+            "description": "501008 dataset.acl.last_owner",
             "content": {
               "application/json": {
                 "schema": {
@@ -3363,20 +3363,20 @@
         "x-kb-error-codes": [
           501008
         ],
-        "x-kb-skeleton-implemented": false,
+        "x-kb-skeleton-implemented": true,
         "responses": {
-          "409": {
-            "description": "501008 dataset.acl.last_owner",
+          "200": {
+            "description": "骨架期最小实现（真实业务语义在后续阶段实现）",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ApiError"
+                  "$ref": "#/components/schemas/ApiACL005ResponseData"
                 }
               }
             }
           },
-          "501": {
-            "description": "骨架期未实现（SKEL-ADR-007，code=501999）",
+          "409": {
+            "description": "501008 dataset.acl.last_owner",
             "content": {
               "application/json": {
                 "schema": {
@@ -3402,8 +3402,18 @@
           501027,
           501070
         ],
-        "x-kb-skeleton-implemented": false,
+        "x-kb-skeleton-implemented": true,
         "responses": {
+          "200": {
+            "description": "骨架期最小实现（真实业务语义在后续阶段实现）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DatasetExportResponse"
+                }
+              }
+            }
+          },
           "403": {
             "description": "501027 dataset.admin.forbidden",
             "content": {
@@ -3416,16 +3426,6 @@
           },
           "404": {
             "description": "501070 dataset.resource_not_found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          },
-          "501": {
-            "description": "骨架期未实现（SKEL-ADR-007，code=501999）",
             "content": {
               "application/json": {
                 "schema": {
@@ -3451,8 +3451,18 @@
           501027,
           501070
         ],
-        "x-kb-skeleton-implemented": false,
+        "x-kb-skeleton-implemented": true,
         "responses": {
+          "200": {
+            "description": "骨架期最小实现（真实业务语义在后续阶段实现）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CollectionExportResponse"
+                }
+              }
+            }
+          },
           "403": {
             "description": "501027 dataset.admin.forbidden",
             "content": {
@@ -3465,16 +3475,6 @@
           },
           "404": {
             "description": "501070 dataset.resource_not_found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          },
-          "501": {
-            "description": "骨架期未实现（SKEL-ADR-007，code=501999）",
             "content": {
               "application/json": {
                 "schema": {
@@ -3500,20 +3500,20 @@
           501058,
           501059
         ],
-        "x-kb-skeleton-implemented": false,
+        "x-kb-skeleton-implemented": true,
         "responses": {
-          "400": {
-            "description": "501058 dataset.import.header_invalid",
+          "200": {
+            "description": "骨架期最小实现（真实业务语义在后续阶段实现）",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ApiError"
+                  "$ref": "#/components/schemas/ApiIMP001ResponseData"
                 }
               }
             }
           },
-          "501": {
-            "description": "骨架期未实现（SKEL-ADR-007，code=501999）",
+          "400": {
+            "description": "501058 dataset.import.header_invalid",
             "content": {
               "application/json": {
                 "schema": {
@@ -3539,20 +3539,20 @@
           501017,
           501039
         ],
-        "x-kb-skeleton-implemented": false,
+        "x-kb-skeleton-implemented": true,
         "responses": {
-          "400": {
-            "description": "501017 dataset.provider.not_configured",
+          "200": {
+            "description": "骨架期最小实现（真实业务语义在后续阶段实现）",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ApiError"
+                  "$ref": "#/components/schemas/ApiAPIDS001ResponseData"
                 }
               }
             }
           },
-          "501": {
-            "description": "骨架期未实现（SKEL-ADR-007，code=501999）",
+          "400": {
+            "description": "501017 dataset.provider.not_configured",
             "content": {
               "application/json": {
                 "schema": {
@@ -3587,20 +3587,20 @@
         "x-kb-error-codes": [
           501017
         ],
-        "x-kb-skeleton-implemented": false,
+        "x-kb-skeleton-implemented": true,
         "responses": {
-          "400": {
-            "description": "501017 dataset.provider.not_configured",
+          "200": {
+            "description": "骨架期最小实现（真实业务语义在后续阶段实现）",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ApiError"
+                  "$ref": "#/components/schemas/ApiAPIDS002ResponseData"
                 }
               }
             }
           },
-          "501": {
-            "description": "骨架期未实现（SKEL-ADR-007，code=501999）",
+          "400": {
+            "description": "501017 dataset.provider.not_configured",
             "content": {
               "application/json": {
                 "schema": {
@@ -3626,20 +3626,20 @@
           501017,
           501039
         ],
-        "x-kb-skeleton-implemented": false,
+        "x-kb-skeleton-implemented": true,
         "responses": {
-          "400": {
-            "description": "501017 dataset.provider.not_configured",
+          "200": {
+            "description": "骨架期最小实现（真实业务语义在后续阶段实现）",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ApiError"
+                  "$ref": "#/components/schemas/ApiAPIDS003ResponseData"
                 }
               }
             }
           },
-          "501": {
-            "description": "骨架期未实现（SKEL-ADR-007，code=501999）",
+          "400": {
+            "description": "501017 dataset.provider.not_configured",
             "content": {
               "application/json": {
                 "schema": {
@@ -3675,8 +3675,18 @@
           501061,
           501070
         ],
-        "x-kb-skeleton-implemented": false,
+        "x-kb-skeleton-implemented": true,
         "responses": {
+          "200": {
+            "description": "骨架期最小实现（真实业务语义在后续阶段实现）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiAPIDS004ResponseData"
+                }
+              }
+            }
+          },
           "403": {
             "description": "501061 dataset.file.scope_forbidden",
             "content": {
@@ -3689,16 +3699,6 @@
           },
           "404": {
             "description": "501070 dataset.resource_not_found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          },
-          "501": {
-            "description": "骨架期未实现（SKEL-ADR-007，code=501999）",
             "content": {
               "application/json": {
                 "schema": {
@@ -3724,8 +3724,18 @@
           501006,
           501048
         ],
-        "x-kb-skeleton-implemented": false,
+        "x-kb-skeleton-implemented": true,
         "responses": {
+          "200": {
+            "description": "骨架期最小实现（真实业务语义在后续阶段实现）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiTASK004ResponseData"
+                }
+              }
+            }
+          },
           "400": {
             "description": "501048 dataset.task.scope_invalid",
             "content": {
@@ -3738,16 +3748,6 @@
           },
           "409": {
             "description": "501006 dataset.task.retry_exhausted",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          },
-          "501": {
-            "description": "骨架期未实现（SKEL-ADR-007，code=501999）",
             "content": {
               "application/json": {
                 "schema": {
@@ -3773,8 +3773,18 @@
           501027,
           501070
         ],
-        "x-kb-skeleton-implemented": false,
+        "x-kb-skeleton-implemented": true,
         "responses": {
+          "200": {
+            "description": "骨架期最小实现（真实业务语义在后续阶段实现）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiTASK005ResponseData"
+                }
+              }
+            }
+          },
           "403": {
             "description": "501027 dataset.admin.forbidden",
             "content": {
@@ -3787,16 +3797,6 @@
           },
           "404": {
             "description": "501070 dataset.resource_not_found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          },
-          "501": {
-            "description": "骨架期未实现（SKEL-ADR-007，code=501999）",
             "content": {
               "application/json": {
                 "schema": {
@@ -3822,8 +3822,18 @@
           501027,
           501070
         ],
-        "x-kb-skeleton-implemented": false,
+        "x-kb-skeleton-implemented": true,
         "responses": {
+          "200": {
+            "description": "骨架期最小实现（真实业务语义在后续阶段实现）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiTASK006ResponseData"
+                }
+              }
+            }
+          },
           "403": {
             "description": "501027 dataset.admin.forbidden",
             "content": {
@@ -3836,16 +3846,6 @@
           },
           "404": {
             "description": "501070 dataset.resource_not_found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          },
-          "501": {
-            "description": "骨架期未实现（SKEL-ADR-007，code=501999）",
             "content": {
               "application/json": {
                 "schema": {
@@ -3871,8 +3871,18 @@
           501027,
           501070
         ],
-        "x-kb-skeleton-implemented": false,
+        "x-kb-skeleton-implemented": true,
         "responses": {
+          "200": {
+            "description": "骨架期最小实现（真实业务语义在后续阶段实现）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiTASK008ResponseData"
+                }
+              }
+            }
+          },
           "403": {
             "description": "501027 dataset.admin.forbidden",
             "content": {
@@ -3885,16 +3895,6 @@
           },
           "404": {
             "description": "501070 dataset.resource_not_found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          },
-          "501": {
-            "description": "骨架期未实现（SKEL-ADR-007，code=501999）",
             "content": {
               "application/json": {
                 "schema": {
@@ -3920,8 +3920,18 @@
           501027,
           501070
         ],
-        "x-kb-skeleton-implemented": false,
+        "x-kb-skeleton-implemented": true,
         "responses": {
+          "200": {
+            "description": "骨架期最小实现（真实业务语义在后续阶段实现）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiTASK009ResponseData"
+                }
+              }
+            }
+          },
           "403": {
             "description": "501027 dataset.admin.forbidden",
             "content": {
@@ -3934,16 +3944,6 @@
           },
           "404": {
             "description": "501070 dataset.resource_not_found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          },
-          "501": {
-            "description": "骨架期未实现（SKEL-ADR-007，code=501999）",
             "content": {
               "application/json": {
                 "schema": {
@@ -3969,8 +3969,18 @@
           501010,
           501030
         ],
-        "x-kb-skeleton-implemented": false,
+        "x-kb-skeleton-implemented": true,
         "responses": {
+          "200": {
+            "description": "骨架期最小实现（真实业务语义在后续阶段实现）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiAGG001ResponseData"
+                }
+              }
+            }
+          },
           "400": {
             "description": "501010 dataset.image.capability_missing",
             "content": {
@@ -3983,16 +3993,6 @@
           },
           "413": {
             "description": "501030 dataset.import.too_large",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          },
-          "501": {
-            "description": "骨架期未实现（SKEL-ADR-007，code=501999）",
             "content": {
               "application/json": {
                 "schema": {
@@ -4018,8 +4018,18 @@
           501027,
           501070
         ],
-        "x-kb-skeleton-implemented": false,
+        "x-kb-skeleton-implemented": true,
         "responses": {
+          "200": {
+            "description": "骨架期最小实现（真实业务语义在后续阶段实现）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiVIRT001ResponseData"
+                }
+              }
+            }
+          },
           "403": {
             "description": "501027 dataset.admin.forbidden",
             "content": {
@@ -4032,16 +4042,6 @@
           },
           "404": {
             "description": "501070 dataset.resource_not_found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          },
-          "501": {
-            "description": "骨架期未实现（SKEL-ADR-007，code=501999）",
             "content": {
               "application/json": {
                 "schema": {
@@ -4070,8 +4070,18 @@
           501052,
           501064
         ],
-        "x-kb-skeleton-implemented": false,
+        "x-kb-skeleton-implemented": true,
         "responses": {
+          "200": {
+            "description": "骨架期最小实现（真实业务语义在后续阶段实现）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SearchResult"
+                }
+              }
+            }
+          },
           "400": {
             "description": "501049 dataset.search.query_required",
             "content": {
@@ -4094,16 +4104,6 @@
           },
           "429": {
             "description": "501052 dataset.search.concurrent_limit",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          },
-          "501": {
-            "description": "骨架期未实现（SKEL-ADR-007，code=501999）",
             "content": {
               "application/json": {
                 "schema": {
@@ -4139,8 +4139,18 @@
           501004,
           501061
         ],
-        "x-kb-skeleton-implemented": false,
+        "x-kb-skeleton-implemented": true,
         "responses": {
+          "200": {
+            "description": "骨架期最小实现（真实业务语义在后续阶段实现）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiCOL017ResponseData"
+                }
+              }
+            }
+          },
           "400": {
             "description": "501004 dataset.collection.invalid_parent",
             "content": {
@@ -4153,16 +4163,6 @@
           },
           "403": {
             "description": "501061 dataset.file.scope_forbidden",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          },
-          "501": {
-            "description": "骨架期未实现（SKEL-ADR-007，code=501999）",
             "content": {
               "application/json": {
                 "schema": {
@@ -4189,8 +4189,18 @@
           501061,
           501065
         ],
-        "x-kb-skeleton-implemented": false,
+        "x-kb-skeleton-implemented": true,
         "responses": {
+          "200": {
+            "description": "骨架期最小实现（真实业务语义在后续阶段实现）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UploadPartResponse"
+                }
+              }
+            }
+          },
           "403": {
             "description": "501061 dataset.file.scope_forbidden",
             "content": {
@@ -4220,16 +4230,6 @@
                 }
               }
             }
-          },
-          "501": {
-            "description": "骨架期未实现（SKEL-ADR-007，code=501999）",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
           }
         }
       }
@@ -4250,8 +4250,18 @@
           501059,
           501061
         ],
-        "x-kb-skeleton-implemented": false,
+        "x-kb-skeleton-implemented": true,
         "responses": {
+          "200": {
+            "description": "骨架期最小实现（真实业务语义在后续阶段实现）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiIMP002ResponseData"
+                }
+              }
+            }
+          },
           "400": {
             "description": "501058 dataset.import.header_invalid",
             "content": {
@@ -4274,16 +4284,6 @@
           },
           "413": {
             "description": "501030 dataset.import.too_large",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          },
-          "501": {
-            "description": "骨架期未实现（SKEL-ADR-007，code=501999）",
             "content": {
               "application/json": {
                 "schema": {
@@ -8752,7 +8752,90 @@
       "API-DS-001",
       "API-DS-002",
       "API-DS-003",
-      "API-SEARCH-001"
+      "API-DS-004",
+      "API-DS-005",
+      "API-DS-006",
+      "API-COL-001",
+      "API-COL-002",
+      "API-COL-003",
+      "API-COL-004",
+      "API-COL-005",
+      "API-COL-006",
+      "API-COL-007",
+      "API-COL-008",
+      "API-COL-009",
+      "API-COL-010",
+      "API-COL-011",
+      "API-COL-012",
+      "API-COL-013",
+      "API-COL-014",
+      "API-COL-015",
+      "API-COL-016",
+      "API-DATA-001",
+      "API-DATA-002",
+      "API-DATA-003",
+      "API-DATA-004",
+      "API-DATA-005",
+      "API-DATA-006",
+      "API-DATA-007",
+      "API-IDX-001",
+      "API-IDX-002",
+      "API-IDX-003",
+      "API-TASK-001",
+      "API-TASK-002",
+      "API-TASK-003",
+      "API-DEL-001",
+      "API-DEL-002",
+      "API-DEL-003",
+      "API-SEARCH-001",
+      "API-FILE-001",
+      "API-FILE-002",
+      "API-FILE-003",
+      "API-FILE-004",
+      "API-ROOT-001",
+      "API-ROOT-002",
+      "API-ROOT-003",
+      "API-ROOT-004",
+      "API-FILE-005",
+      "API-FILE-006",
+      "API-HEALTH-001",
+      "API-HEALTH-002",
+      "API-HEALTH-003",
+      "API-EXT-001",
+      "API-TAG-001",
+      "API-TAG-002",
+      "API-TAG-003",
+      "API-TAG-004",
+      "API-TAG-005",
+      "API-TAG-006",
+      "API-PATH-001",
+      "API-PATH-002",
+      "API-PATH-003",
+      "API-PATH-004",
+      "API-ACL-001",
+      "API-ACL-002",
+      "API-ACL-003",
+      "API-ACL-004",
+      "API-ACL-005",
+      "API-EXP-001",
+      "API-EXP-002",
+      "API-IMP-001",
+      "API-APIDS-001",
+      "API-APIDS-002",
+      "API-APIDS-003",
+      "API-APIDS-004",
+      "API-TASK-004",
+      "API-TASK-005",
+      "API-TASK-006",
+      "API-TASK-007",
+      "API-TASK-008",
+      "API-TASK-009",
+      "API-AGG-001",
+      "API-VIRT-001",
+      "API-SEARCH-002",
+      "API-COL-017",
+      "API-FILE-007",
+      "API-IMP-002"
     ],
     "unimplementedStatusCode": 501,
     "skeletonErrorCode": 501999
