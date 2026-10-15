@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest';
+import type { NextApiRequest, NextApiResponse } from 'next';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiErrorException, createApiError } from '../../packages/contracts/src/index';
 import type { BackupToolPort, MongoIndexManagerPort } from '../../packages/service/src/index';
 import type { RequestContext } from '../../packages/service/src/ports/types';
@@ -6,6 +7,7 @@ import {
   MigrationExecutor,
   type MigrationDefinition,
 } from '../../packages/service/src/modules/migration/application/executor';
+import { MigrationApplicationService } from '../../packages/service/src/modules/migration/application/migration.service';
 
 const teamId = '000000000000000000000001';
 const context: RequestContext = {
@@ -13,7 +15,15 @@ const context: RequestContext = {
   tenant: { teamId, tmbId: '000000000000000000000002', authType: 'root', isRoot: true },
   permission: { canRead: true, canWrite: true, canManage: true, isOwner: true },
 };
-const scope = { teamId, kind: 'all' };
+const scope = { teamIds: [teamId], operationTypes: ['migrate'] };
+
+const state = vi.hoisted(() => ({
+  runtime: undefined as unknown,
+}));
+
+vi.mock('../../projects/app/src/runtime', () => ({
+  getRuntime: async () => state.runtime,
+}));
 
 interface RunState {
   runId: string;
@@ -22,6 +32,7 @@ interface RunState {
   cursor: string | null;
   idempotencyKey: string;
   rollbackInfo: Record<string, unknown> | null;
+  scope: unknown;
 }
 
 function error(code: number, params: Record<string, unknown>): ApiErrorException {
@@ -38,6 +49,7 @@ class MemoryRegistry {
 
   async apply(input: {
     version: string;
+    scope: unknown;
     idempotencyKey: string;
   }): Promise<{ runId: string; cursor: string | null; state: string }> {
     const started = await this.start({
@@ -50,6 +62,7 @@ class MemoryRegistry {
         rollbackWindow: { minMs: 0, maxMs: 0 },
         backupRequired: false,
       },
+      scope: input.scope,
       idempotencyKey: input.idempotencyKey,
     });
     return { runId: started.runId, cursor: started.cursor, state: started.state };
@@ -57,6 +70,7 @@ class MemoryRegistry {
 
   async start(input: {
     definition: MigrationDefinition;
+    scope: unknown;
     idempotencyKey: string;
   }): Promise<{ runId: string; cursor: string | null; state: string; replayed: boolean }> {
     const sameVersion = [...this.runs.values()].find(
@@ -84,6 +98,7 @@ class MemoryRegistry {
       cursor: null,
       idempotencyKey: input.idempotencyKey,
       rollbackInfo: null,
+      scope: input.scope,
     };
     this.runs.set(run.runId, run);
     return { runId: run.runId, cursor: run.cursor, state: run.state, replayed: false };
@@ -152,6 +167,10 @@ class MemoryRegistry {
   rollbackInfo(runId: string): Record<string, unknown> | null {
     return this.runs.get(runId)?.rollbackInfo ?? null;
   }
+
+  run(runId: string): RunState | undefined {
+    return this.runs.get(runId);
+  }
 }
 
 function backupTool(): BackupToolPort {
@@ -219,6 +238,49 @@ function executor(
   });
 }
 
+beforeEach(() => {
+  state.runtime = undefined;
+});
+
+function responseRecorder(): {
+  response: NextApiResponse;
+  result: () => { status: number; body: { data?: unknown; code?: number } };
+} {
+  let status = 200;
+  let body: unknown;
+  const response = {
+    setHeader: () => response,
+    status(code: number) {
+      status = code;
+      return response;
+    },
+    json(value: unknown) {
+      body = value;
+      return response;
+    },
+  } as unknown as NextApiResponse;
+  return {
+    response,
+    result: () => ({ status, body: body as { data?: unknown; code?: number } }),
+  };
+}
+
+function routeRequest(): NextApiRequest {
+  return {
+    method: 'POST',
+    url: '/api/admin/dataset/migrations/apply',
+    query: {},
+    body: {
+      version: 'ops-route-v1',
+      scope: { teamIds: [teamId], operationTypes: ['migrate'] },
+    },
+    headers: {
+      'x-request-id': 'req-migration-route',
+      'idempotency-key': 'idem-route',
+    },
+  } as unknown as NextApiRequest;
+}
+
 describe('P7-07 migration operations batch (ACC-MIG-001..008)', () => {
   it('keeps dry-run free of business writes (TEST-MIG-DRY-001)', async () => {
     const registry = new MemoryRegistry();
@@ -256,6 +318,7 @@ describe('P7-07 migration operations batch (ACC-MIG-001..008)', () => {
     const running = new MemoryRegistry();
     await running.start({
       definition: definition('ops-running'),
+      scope,
       idempotencyKey: 'idem-running',
     });
     const busy = executor(running, definition('ops-v3'));
@@ -318,5 +381,41 @@ describe('P7-07 migration operations batch (ACC-MIG-001..008)', () => {
     expect(registry.rollbackInfo(failed.runId)).toMatchObject({
       runbookUri: expect.stringContaining('runbook'),
     });
+  });
+
+  it('runs route -> application service -> real executor -> registry with contract teamIds', async () => {
+    const registry = new MemoryRegistry();
+    const realService = new MigrationApplicationService({
+      executor: executor(registry, definition('ops-route-v1')),
+    });
+    state.runtime = {
+      adminAuthProvider: {
+        resolve: async () => ({
+          teamId,
+          tmbId: context.tenant.tmbId,
+          authType: 'root',
+          isRoot: true,
+          sourceName: 'migration-ops-test',
+        }),
+      },
+      migrationService: realService,
+    };
+    const route = (await import('../../projects/app/src/pages/api/admin/dataset/migrations/apply'))
+      .default;
+    const rec = responseRecorder();
+    await route(routeRequest(), rec.response);
+    const { status, body } = rec.result();
+    expect(status).toBe(200);
+    expect(body.code).toBe(200);
+    const data = body.data as { runId: string };
+    const run = registry.run(data.runId);
+    expect(run?.state).toBe('done');
+    expect(run?.scope).toEqual({
+      teamIds: [teamId],
+      datasetIds: [],
+      collectionIds: [],
+      operationTypes: ['migrate'],
+    });
+    expect(run?.scope).not.toHaveProperty('teamId');
   });
 });
