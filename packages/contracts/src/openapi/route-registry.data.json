@@ -57,7 +57,7 @@
         501061,
         501067
       ],
-      "implemented": false,
+      "implemented": true,
       "source": "public/Token/Write 或 Manage"
     },
     {
@@ -72,7 +72,7 @@
         501068,
         501070
       ],
-      "implemented": false,
+      "implemented": true,
       "source": "public/Token/Owner"
     },
     {
@@ -86,7 +86,7 @@
         501013,
         501069
       ],
-      "implemented": false,
+      "implemented": true,
       "source": "public/Token/Owner"
     },
     {
@@ -100,7 +100,7 @@
         501027,
         501070
       ],
-      "implemented": false,
+      "implemented": true,
       "source": "public/Token/Read"
     },
     {
@@ -114,7 +114,7 @@
         501004,
         501061
       ],
-      "implemented": false,
+      "implemented": true,
       "source": "public/Token/Write"
     },
     {
@@ -130,7 +130,7 @@
         501061,
         501065
       ],
-      "implemented": false,
+      "implemented": true,
       "source": "public/Token/Write"
     },
     {
@@ -151,7 +151,7 @@
         501036,
         501065
       ],
-      "implemented": false,
+      "implemented": true,
       "source": "public/Token/Write"
     },
     {
@@ -165,7 +165,7 @@
         501030,
         501065
       ],
-      "implemented": false,
+      "implemented": true,
       "source": "public/Token/Write"
     },
     {
@@ -180,7 +180,7 @@
         501019,
         501061
       ],
-      "implemented": false,
+      "implemented": true,
       "source": "public/Token/Write"
     },
     {
@@ -196,7 +196,7 @@
         501039,
         501061
       ],
-      "implemented": false,
+      "implemented": true,
       "source": "public/Token/Write"
     },
     {
@@ -212,7 +212,7 @@
         501061,
         501065
       ],
-      "implemented": false,
+      "implemented": true,
       "source": "public/Token/Write"
     },
     {
@@ -228,7 +228,7 @@
         501058,
         501059
       ],
-      "implemented": false,
+      "implemented": true,
       "source": "public/Token/Write"
     },
     {
@@ -242,7 +242,7 @@
         501030,
         501037
       ],
-      "implemented": false,
+      "implemented": true,
       "source": "public/Token/Write"
     },
     {
@@ -256,7 +256,7 @@
         501027,
         501070
       ],
-      "implemented": false,
+      "implemented": true,
       "source": "public/Token/Read"
     },
     {
@@ -270,7 +270,7 @@
         501004,
         501067
       ],
-      "implemented": false,
+      "implemented": true,
       "source": "public/Token/Write"
     },
     {
@@ -284,7 +284,7 @@
         501068,
         501070
       ],
-      "implemented": false,
+      "implemented": true,
       "source": "public/Token/Write/Owner"
     },
     {
@@ -298,7 +298,7 @@
         501069,
         501071
       ],
-      "implemented": false,
+      "implemented": true,
       "source": "public/Token/Write"
     },
     {
@@ -313,7 +313,7 @@
         501020,
         501061
       ],
-      "implemented": false,
+      "implemented": true,
       "source": "public/Token/Write"
     },
     {
@@ -327,7 +327,7 @@
         501027,
         501070
       ],
-      "implemented": false,
+      "implemented": true,
       "source": "public/Token/Read"
     },
     {
@@ -341,7 +341,7 @@
         501027,
         501070
       ],
-      "implemented": false,
+      "implemented": true,
       "source": "public/Token/Read"
     },
     {
@@ -355,7 +355,7 @@
         501027,
         501070
       ],
-      "implemented": false,
+      "implemented": true,
       "source": "public/Token/Read"
     },
     {
@@ -369,7 +369,7 @@
         501003,
         501067
       ],
-      "implemented": false,
+      "implemented": true,
       "source": "public/Token/Write"
     },
     {
@@ -383,7 +383,7 @@
         501027,
         501070
       ],
-      "implemented": false,
+      "implemented": true,
       "source": "public/Token/Write"
     },
     {
@@ -397,7 +397,7 @@
         501003,
         501071
       ],
-      "implemented": false,
+      "implemented": true,
       "source": "public/Token/Write"
     },
     {
@@ -413,7 +413,7 @@
         501011,
         501065
       ],
-      "implemented": false,
+      "implemented": true,
       "source": "public/Token/Write"
     },
     {
@@ -427,7 +427,7 @@
         501030,
         501065
       ],
-      "implemented": false,
+      "implemented": true,
       "source": "public/Token/Write"
     },
     {
@@ -441,7 +441,7 @@
         501041,
         501067
       ],
-      "implemented": false,
+      "implemented": true,
       "source": "public/Token/Write"
     },
     {
@@ -454,7 +454,7 @@
       "errorCodes": [
         501067
       ],
-      "implemented": false,
+      "implemented": true,
       "source": "public/Token/Write"
     },
     {
@@ -467,7 +467,7 @@
       "errorCodes": [
         501042
       ],
-      "implemented": false,
+      "implemented": true,
       "source": "public/Token/Write"
     },
     {
@@ -481,7 +481,7 @@
         501027,
         501070
       ],
-      "implemented": false,
+      "implemented": true,
       "source": "public/Token/Read"
     },
     {
@@ -495,7 +495,7 @@
         501027,
         501070
       ],
-      "implemented": false,
+      "implemented": true,
       "source": "public/Token/Read"
     },
     {
@@ -508,7 +508,7 @@
       "errorCodes": [
         501006
       ],
-      "implemented": false,
+      "implemented": true,
       "source": "public/Token/Write"
     },
     {
@@ -522,7 +522,7 @@
         501027,
         501070
       ],
-      "implemented": false,
+      "implemented": true,
       "source": "public/Token/Dataset Owner 或 Root"
     },
     {
@@ -536,7 +536,7 @@
         501027,
         501070
       ],
-      "implemented": false,
+      "implemented": true,
       "source": "public/Token/Owner 或 Root"
     },
     {
@@ -550,7 +550,7 @@
         501024,
         501040
       ],
-      "implemented": false,
+      "implemented": true,
       "source": "public/Token/Owner 或 Root"
     },
     {
@@ -580,7 +580,7 @@
         501065,
         501071
       ],
-      "implemented": false,
+      "implemented": true,
       "source": "public/Token/Write"
     },
     {
@@ -593,7 +593,7 @@
       "errorCodes": [
         501060
       ],
-      "implemented": false,
+      "implemented": true,
       "source": "public/Token/Write"
     },
     {
@@ -607,7 +607,7 @@
         501061,
         501070
       ],
-      "implemented": false,
+      "implemented": true,
       "source": "public/Token/Write"
     },
     {
@@ -621,7 +621,7 @@
         501017,
         501056
       ],
-      "implemented": false,
+      "implemented": true,
       "source": "dev/Token/Write"
     },
     {
@@ -635,7 +635,7 @@
         501024,
         501025
       ],
-      "implemented": false,
+      "implemented": true,
       "source": "root/Root/Admin"
     },
     {
@@ -649,7 +649,7 @@
         501024,
         501025
       ],
-      "implemented": false,
+      "implemented": true,
       "source": "root/Root/Admin"
     },
     {
@@ -663,7 +663,7 @@
         501024,
         501025
       ],
-      "implemented": false,
+      "implemented": true,
       "source": "root/Root/Admin"
     },
     {
@@ -677,7 +677,7 @@
         501027,
         501070
       ],
-      "implemented": false,
+      "implemented": true,
       "source": "root / 授权租户管理员"
     },
     {
@@ -691,7 +691,7 @@
         501065,
         501071
       ],
-      "implemented": false,
+      "implemented": true,
       "source": "public/Token/Write"
     },
     {
@@ -705,7 +705,7 @@
         501011,
         501061
       ],
-      "implemented": false,
+      "implemented": true,
       "source": "public/Token/Read"
     },
     {
@@ -716,7 +716,7 @@
       "requestDto": "NoRequestBody",
       "responseDto": "HealthResponse",
       "errorCodes": [],
-      "implemented": false,
+      "implemented": true,
       "source": "internal/无认证或内网"
     },
     {
@@ -729,7 +729,7 @@
       "errorCodes": [
         501016
       ],
-      "implemented": false,
+      "implemented": true,
       "source": "internal/无认证或内网"
     },
     {
@@ -742,7 +742,7 @@
       "errorCodes": [
         501016
       ],
-      "implemented": false,
+      "implemented": true,
       "source": "internal/无认证或内网"
     },
     {
@@ -756,7 +756,7 @@
         501020,
         501047
       ],
-      "implemented": false,
+      "implemented": true,
       "source": "extension/调用者上下文"
     },
     {
@@ -770,7 +770,7 @@
         501027,
         501070
       ],
-      "implemented": false,
+      "implemented": true,
       "source": "public/Token/Read"
     },
     {
@@ -784,7 +784,7 @@
         501043,
         501044
       ],
-      "implemented": false,
+      "implemented": true,
       "source": "public/Token/Write"
     },
     {
@@ -797,7 +797,7 @@
       "errorCodes": [
         501043
       ],
-      "implemented": false,
+      "implemented": true,
       "source": "public/Token/Manage"
     },
     {
@@ -811,7 +811,7 @@
         501061,
         501070
       ],
-      "implemented": false,
+      "implemented": true,
       "source": "public/Token/Manage"
     },
     {
@@ -824,7 +824,7 @@
       "errorCodes": [
         501045
       ],
-      "implemented": false,
+      "implemented": true,
       "source": "public/Token/Write"
     },
     {
@@ -837,7 +837,7 @@
       "errorCodes": [
         501045
       ],
-      "implemented": false,
+      "implemented": true,
       "source": "public/Token/Write"
     },
     {
@@ -851,7 +851,7 @@
         501027,
         501070
       ],
-      "implemented": false,
+      "implemented": true,
       "source": "public/Token/Read"
     },
     {
@@ -865,7 +865,7 @@
         501027,
         501070
       ],
-      "implemented": false,
+      "implemented": true,
       "source": "public/Token/Read"
     },
     {
@@ -878,7 +878,7 @@
       "errorCodes": [
         501046
       ],
-      "implemented": false,
+      "implemented": true,
       "source": "public/Token/Write"
     },
     {
@@ -891,7 +891,7 @@
       "errorCodes": [
         501046
       ],
-      "implemented": false,
+      "implemented": true,
       "source": "public/Token/Write"
     },
     {
@@ -905,7 +905,7 @@
         501027,
         501070
       ],
-      "implemented": false,
+      "implemented": true,
       "source": "public/Token/Read"
     },
     {
@@ -918,7 +918,7 @@
       "errorCodes": [
         501008
       ],
-      "implemented": false,
+      "implemented": true,
       "source": "public/Token/Manage"
     },
     {
@@ -931,7 +931,7 @@
       "errorCodes": [
         501020
       ],
-      "implemented": false,
+      "implemented": true,
       "source": "extension/调用者上下文/Manage"
     },
     {
@@ -945,7 +945,7 @@
         501008,
         501047
       ],
-      "implemented": false,
+      "implemented": true,
       "source": "extension/调用者上下文/Manage"
     },
     {
@@ -958,7 +958,7 @@
       "errorCodes": [
         501008
       ],
-      "implemented": false,
+      "implemented": true,
       "source": "extension/调用者上下文/Owner"
     },
     {
@@ -972,7 +972,7 @@
         501027,
         501070
       ],
-      "implemented": false,
+      "implemented": true,
       "source": "public/Token/Read"
     },
     {
@@ -986,7 +986,7 @@
         501027,
         501070
       ],
-      "implemented": false,
+      "implemented": true,
       "source": "public/Token/Read"
     },
     {
@@ -1000,7 +1000,7 @@
         501058,
         501059
       ],
-      "implemented": false,
+      "implemented": true,
       "source": "public/Token/Write"
     },
     {
@@ -1014,7 +1014,7 @@
         501017,
         501039
       ],
-      "implemented": false,
+      "implemented": true,
       "source": "public/Token/Write"
     },
     {
@@ -1027,7 +1027,7 @@
       "errorCodes": [
         501017
       ],
-      "implemented": false,
+      "implemented": true,
       "source": "public/Token/Write"
     },
     {
@@ -1041,7 +1041,7 @@
         501017,
         501039
       ],
-      "implemented": false,
+      "implemented": true,
       "source": "public/Token/Write"
     },
     {
@@ -1055,7 +1055,7 @@
         501061,
         501070
       ],
-      "implemented": false,
+      "implemented": true,
       "source": "public/Token/Write"
     },
     {
@@ -1069,7 +1069,7 @@
         501006,
         501048
       ],
-      "implemented": false,
+      "implemented": true,
       "source": "public/Token/Write"
     },
     {
@@ -1083,7 +1083,7 @@
         501027,
         501070
       ],
-      "implemented": false,
+      "implemented": true,
       "source": "public/Token/Manage"
     },
     {
@@ -1097,7 +1097,7 @@
         501027,
         501070
       ],
-      "implemented": false,
+      "implemented": true,
       "source": "public/Token/Read"
     },
     {
@@ -1111,7 +1111,7 @@
         501027,
         501070
       ],
-      "implemented": false,
+      "implemented": true,
       "source": "public/Token/Read"
     },
     {
@@ -1125,7 +1125,7 @@
         501027,
         501070
       ],
-      "implemented": false,
+      "implemented": true,
       "source": "public/Token/Read"
     },
     {
@@ -1139,7 +1139,7 @@
         501027,
         501070
       ],
-      "implemented": false,
+      "implemented": true,
       "source": "public/Token/Read"
     },
     {
@@ -1153,7 +1153,7 @@
         501010,
         501030
       ],
-      "implemented": false,
+      "implemented": true,
       "source": "public/Token/Team Dataset Create"
     },
     {
@@ -1167,7 +1167,7 @@
         501027,
         501070
       ],
-      "implemented": false,
+      "implemented": true,
       "source": "public/Token/Read"
     },
     {
@@ -1184,7 +1184,7 @@
         501052,
         501064
       ],
-      "implemented": false,
+      "implemented": true,
       "source": "internal/服务身份（teamId 由主体解析）"
     },
     {
@@ -1198,7 +1198,7 @@
         501004,
         501061
       ],
-      "implemented": false,
+      "implemented": true,
       "source": "public/Token/Write"
     },
     {
@@ -1213,7 +1213,7 @@
         501061,
         501065
       ],
-      "implemented": false,
+      "implemented": true,
       "source": "public/Token/Write"
     },
     {
@@ -1229,7 +1229,7 @@
         501059,
         501061
       ],
-      "implemented": false,
+      "implemented": true,
       "source": "public/Token/Write"
     }
   ]
