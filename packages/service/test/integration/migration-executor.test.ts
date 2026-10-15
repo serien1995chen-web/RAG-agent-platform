@@ -1,6 +1,6 @@
 import { MongoMemoryServer } from 'mongodb-memory-server';
 import mongoose from 'mongoose';
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AuditPort, AuditRecord, BackupToolPort, MongoIndexManagerPort } from '../../src';
 import type { RequestContext } from '../../src/ports/types';
 import {
@@ -205,12 +205,20 @@ describe('MigrationExecutor (P7-04)', () => {
 
   it('apply is idempotent for the same key and rejects concurrent scope runs (TEST-REP-MIG-001, ACC-MIG-002)', async () => {
     let executions = 0;
+    const registry = createMigrationRunAdapter({ connection });
+    const startSpy = vi.spyOn(registry, 'start');
+    const backup = {
+      validate: vi.fn(async () => ({ valid: true })),
+      run: vi.fn(async () => ({ evidence: { mode: 'mock', checksum: 'sha256:test' } })),
+      verify: vi.fn(async () => ({ verified: true })),
+    } satisfies BackupToolPort;
     const executor = new MigrationExecutor({
-      registry: createMigrationRunAdapter({ connection }),
-      backupTool: backupTool(),
+      registry,
+      backupTool: backup,
       mongoIndexManager: indexManager(),
       definitions: [
         definition({
+          backupRequired: true,
           batches: [
             {
               id: 'batch-1',
@@ -249,6 +257,11 @@ describe('MigrationExecutor (P7-04)', () => {
 
     expect(first.runId).toBe(replay.runId);
     expect(executions).toBe(1);
+    expect(startSpy).toHaveBeenCalledTimes(2);
+    expect(await migrations.countDocuments({ version: 'test-migration-v1' })).toBe(1);
+    expect(backup.validate).toHaveBeenCalledTimes(1);
+    expect(backup.run).toHaveBeenCalledTimes(1);
+    expect(backup.verify).toHaveBeenCalledTimes(1);
     await expectApiError(
       executor.apply(
         {
@@ -428,7 +441,8 @@ describe('MigrationExecutor (P7-04)', () => {
       ),
       501025,
     );
-    expect(await migrations.countDocuments({ version: 'test-backup-v1' })).toBe(0);
+    const failed = await migrations.findOne({ version: 'test-backup-v1' }).lean();
+    expect(failed?.state).toBe('failed');
     expect(auditRecords).toHaveLength(0);
   });
 });
