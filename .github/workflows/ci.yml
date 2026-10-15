@@ -69,3 +69,74 @@ jobs:
         run: pnpm test
       - name: Build
         run: pnpm build
+
+  release-smoke:
+    needs: verify
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.23.2'
+          cache: pnpm
+      - name: Install (frozen lockfile)
+        run: pnpm install --frozen-lockfile
+      - name: Generate release artifacts
+        run: pnpm sbom:generate
+      - name: Verify release artifacts
+        run: |
+          test -s NOTICE
+          test -s artifacts/sbom.json
+      - name: Generate CI-only image override
+        run: |
+          cat > "$RUNNER_TEMP/ci-images.override.yml" <<'YAML'
+          services:
+            mongo:
+              image: mongo:5.0.32
+            redis:
+              image: redis:7.2-alpine
+            pgvector:
+              image: pgvector/pgvector:0.8.0-pg15
+            minio:
+              image: registry.cn-hangzhou.aliyuncs.com/fastgpt/minio@sha256:a63b19df59e6ec7c02ebba6e7a1097b7e032da7947b18db7ff67dae8e84fd44d
+          YAML
+      - name: Validate Compose
+        run: docker compose -f deploy/docker-compose.yml -f "$RUNNER_TEMP/ci-images.override.yml" config
+      - name: Build application image
+        run: docker compose -f deploy/docker-compose.yml build app
+      - name: Inspect application image
+        run: |
+          app_image_id="$(docker image inspect --format '{{.Id}}' rag-agent-platform-app)"
+          test -n "$app_image_id"
+          printf 'app_image_id=%s\n' "$app_image_id"
+      - name: Compose health smoke
+        run: |
+          docker compose -f deploy/docker-compose.yml -f "$RUNNER_TEMP/ci-images.override.yml" up -d
+          for url in \
+            http://127.0.0.1:3000/healthz/live \
+            http://127.0.0.1:3000/readyz \
+            http://127.0.0.1:3000/startupz; do
+            healthy=0
+            for attempt in $(seq 1 30); do
+              if curl --fail --silent --show-error --max-time 5 "$url" >/dev/null; then
+                healthy=1
+                break
+              fi
+              sleep 2
+            done
+            if [ "$healthy" -ne 1 ]; then
+              docker compose -f deploy/docker-compose.yml -f "$RUNNER_TEMP/ci-images.override.yml" ps
+              docker compose -f deploy/docker-compose.yml -f "$RUNNER_TEMP/ci-images.override.yml" logs --no-color
+              echo "health check failed: $url"
+              exit 1
+            fi
+          done
+      - name: Cleanup
+        if: always()
+        run: |
+          if [ -f "$RUNNER_TEMP/ci-images.override.yml" ]; then
+            docker compose -f deploy/docker-compose.yml -f "$RUNNER_TEMP/ci-images.override.yml" down -v
+          fi
