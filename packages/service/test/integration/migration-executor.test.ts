@@ -30,7 +30,7 @@ const context: RequestContext = {
   permission: { canRead: true, canWrite: true, canManage: true, isOwner: true },
 };
 
-const scope = { teamId: String(teamId), kind: 'all' };
+const scope = { teamIds: [String(teamId)], operationTypes: ['migrate'] };
 
 let mongo: MongoMemoryServer;
 let connection: mongoose.Connection;
@@ -148,6 +148,59 @@ describe('MigrationExecutor (P7-04)', () => {
     expect(result.state).toBe('dry_run');
     expect(await migrations.countDocuments({})).toBe(0);
     expect(await logs.countDocuments({})).toBe(0);
+  });
+
+  it('normalizes contract ScopeSelector and enforces root/non-root tenant semantics', async () => {
+    const executor = new MigrationExecutor({
+      registry: createMigrationRunAdapter({ connection }),
+      backupTool: backupTool(),
+      mongoIndexManager: indexManager(),
+      definitions: [definition()],
+    });
+    const normalized = await executor.dryRun(
+      {
+        version: 'test-migration-v1',
+        scope: {
+          teamIds: [String(teamId), String(teamId).toUpperCase()],
+          operationTypes: ['migrate', 'migrate'],
+        },
+        options: { timeoutMs: 5_000 },
+      },
+      context,
+    );
+    expect(normalized.state).toBe('dry_run');
+
+    await expectApiError(
+      executor.dryRun(
+        {
+          version: 'test-migration-v1',
+          scope: { teamIds: [String(teamId)], kind: 'all' },
+          options: { timeoutMs: 5_000 },
+        },
+        context,
+      ),
+      501025,
+    );
+
+    const nonRootContext: RequestContext = {
+      ...context,
+      tenant: {
+        ...context.tenant,
+        authType: 'token',
+        isRoot: false,
+      },
+    };
+    await expectApiError(
+      executor.dryRun(
+        {
+          version: 'test-migration-v1',
+          scope: { teamIds: [String(new mongoose.Types.ObjectId())] },
+          options: { timeoutMs: 5_000 },
+        },
+        nonRootContext,
+      ),
+      501070,
+    );
   });
 
   it('apply is idempotent for the same key and rejects concurrent scope runs (TEST-REP-MIG-001, ACC-MIG-002)', async () => {

@@ -6,7 +6,10 @@ import type {
   MongoIndexManagerPort,
 } from '../../../ports/capabilities';
 import type { PortCallOptions, RequestContext } from '../../../ports/types';
-import { scopeTeamId } from '../domain/registry';
+
+const OBJECT_ID_PATTERN = /^[0-9a-f]{24}$/i;
+const OPERATION_TYPES = ['migrate', 'reconcile', 'report', 'cleanup'] as const;
+const SCOPE_FIELDS = new Set(['teamIds', 'datasetIds', 'collectionIds', 'operationTypes']);
 
 export interface MigrationBatch {
   id: string;
@@ -39,6 +42,13 @@ export interface MigrationExecutionResult {
   runId: string;
   cursor: string | null;
   state: string;
+}
+
+export interface NormalizedMigrationScope {
+  teamIds: string[];
+  datasetIds: string[];
+  collectionIds: string[];
+  operationTypes: Array<(typeof OPERATION_TYPES)[number]>;
 }
 
 export const MIGRATION_DEFINITIONS: readonly MigrationDefinition[] = [
@@ -76,7 +86,7 @@ interface MigrationExecutionRegistryPort extends MigrationRegistryPort {
   start(
     input: {
       definition: MigrationDefinition;
-      scope: unknown;
+      scope: NormalizedMigrationScope;
       idempotencyKey: string;
       options: PortCallOptions;
     },
@@ -140,6 +150,84 @@ function invalidCursor(requestId: string, cursor: string): ApiErrorException {
   return new ApiErrorException(createApiError({ code: 501025, requestId, params: { cursor } }));
 }
 
+function invalidScope(requestId: string, field: string): ApiErrorException {
+  return invalidCursor(requestId, `scope.${field}`);
+}
+
+function crossTenantScope(requestId: string, teamId: string): ApiErrorException {
+  return new ApiErrorException(
+    createApiError({
+      code: 501070,
+      requestId,
+      params: { resourceType: 'migration_scope', resourceId: teamId },
+    }),
+  );
+}
+
+function normalizedIdArray(
+  value: unknown,
+  field: string,
+  requestId: string,
+): string[] {
+  if (value === undefined) return [];
+  if (!Array.isArray(value)) throw invalidScope(requestId, field);
+  const ids = value.map((item) => {
+    if (typeof item !== 'string' || !OBJECT_ID_PATTERN.test(item)) {
+      throw invalidScope(requestId, field);
+    }
+    return item.toLowerCase();
+  });
+  return [...new Set(ids)].sort();
+}
+
+function normalizeOperationTypes(
+  value: unknown,
+  requestId: string,
+): NormalizedMigrationScope['operationTypes'] {
+  if (value === undefined) return [];
+  if (!Array.isArray(value)) throw invalidScope(requestId, 'operationTypes');
+  const operations = value.map((item) => {
+    if (
+      typeof item !== 'string' ||
+      !OPERATION_TYPES.includes(item as (typeof OPERATION_TYPES)[number])
+    ) {
+      throw invalidScope(requestId, 'operationTypes');
+    }
+    return item as (typeof OPERATION_TYPES)[number];
+  });
+  return [...new Set(operations)].sort();
+}
+
+export function normalizeMigrationScope(
+  scope: unknown,
+  context: RequestContext,
+): NormalizedMigrationScope {
+  if (typeof scope !== 'object' || scope === null || Array.isArray(scope)) {
+    throw invalidScope(context.requestId, 'shape');
+  }
+  const value = scope as Record<string, unknown>;
+  for (const key of Object.keys(value)) {
+    if (!SCOPE_FIELDS.has(key)) throw invalidScope(context.requestId, key);
+  }
+
+  const teamIds = normalizedIdArray(value.teamIds, 'teamIds', context.requestId);
+  const datasetIds = normalizedIdArray(value.datasetIds, 'datasetIds', context.requestId);
+  const collectionIds = normalizedIdArray(value.collectionIds, 'collectionIds', context.requestId);
+  const operationTypes = normalizeOperationTypes(value.operationTypes, context.requestId);
+  if (teamIds.length === 0 && datasetIds.length === 0 && collectionIds.length === 0) {
+    throw invalidScope(context.requestId, 'range');
+  }
+
+  if (!context.tenant.isRoot) {
+    const teamId = context.tenant.teamId.toLowerCase();
+    if (teamIds.length !== 1 || teamIds[0] !== teamId) {
+      throw crossTenantScope(context.requestId, context.tenant.teamId);
+    }
+  }
+
+  return { teamIds, datasetIds, collectionIds, operationTypes };
+}
+
 function assertKnownDefinition(
   definitions: ReadonlyMap<string, MigrationDefinition>,
   version: string,
@@ -150,24 +238,16 @@ function assertKnownDefinition(
   return definition;
 }
 
-function assertScope(scope: unknown, context: RequestContext): void {
-  if (scopeTeamId(scope) !== context.tenant.teamId) {
-    throw new ApiErrorException(
-      createApiError({
-        code: 501025,
-        requestId: context.requestId,
-        params: { cursor: 'scope.teamId' },
-      }),
-    );
-  }
-}
-
-function backupCommandOf(definition: MigrationDefinition, scope: unknown): Record<string, unknown> {
-  const teamId = scopeTeamId(scope) ?? 'unknown';
+function backupCommandOf(
+  definition: MigrationDefinition,
+  scope: NormalizedMigrationScope,
+): Record<string, unknown> {
+  const scopeRef =
+    [...scope.teamIds, ...scope.datasetIds, ...scope.collectionIds].join('|') || 'global';
   return {
     toolRef: `migration-backup:${definition.version}`,
     artifactRef: `dataset_migrations:${definition.version}`,
-    changeId: `${definition.version}:${teamId}`,
+    changeId: `${definition.version}:${scopeRef}`,
   };
 }
 
@@ -213,15 +293,15 @@ export class MigrationExecutor {
     input: { version: string; scope: unknown; options: PortCallOptions },
     context: RequestContext,
   ): Promise<{ diff: unknown; state: string }> {
-    assertScope(input.scope, context);
+    const scope = normalizeMigrationScope(input.scope, context);
     const definition = assertKnownDefinition(this.definitions, input.version, context.requestId);
     if (definition.validate) {
-      const validation = await definition.validate(input, context);
+      const validation = await definition.validate({ ...input, scope }, context);
       if (!validation.ok) {
         throw invalidCursor(context.requestId, `validation:${definition.version}`);
       }
     }
-    const result = await this.deps.registry.dryRun(input, context);
+    const result = await this.deps.registry.dryRun({ ...input, scope }, context);
     return {
       diff: {
         ...(typeof result.diff === 'object' && result.diff !== null ? result.diff : {}),
@@ -240,11 +320,11 @@ export class MigrationExecutor {
     input: { version: string; scope: unknown; idempotencyKey: string; options: PortCallOptions },
     context: RequestContext,
   ): Promise<MigrationExecutionResult> {
-    assertScope(input.scope, context);
+    const scope = normalizeMigrationScope(input.scope, context);
     const definition = assertKnownDefinition(this.definitions, input.version, context.requestId);
     let backupVerified = !definition.backupRequired;
     if (definition.backupRequired) {
-      const command = backupCommandOf(definition, input.scope);
+      const command = backupCommandOf(definition, scope);
       const validation = await this.deps.backupTool.validate(
         { command, options: input.options },
         context,
@@ -262,7 +342,7 @@ export class MigrationExecutor {
     const started = await this.deps.registry.start(
       {
         definition,
-        scope: input.scope,
+        scope,
         idempotencyKey: input.idempotencyKey,
         options: input.options,
       },
@@ -277,7 +357,7 @@ export class MigrationExecutor {
         resourceId: started.runId,
         payload: {
           version: definition.version,
-          scope: input.scope,
+          scope,
           dryRun: false,
           result: 'running',
           requestId: context.requestId,

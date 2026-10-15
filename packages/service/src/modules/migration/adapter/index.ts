@@ -8,8 +8,10 @@ import {
   type DatasetMigrationDoc,
   type DatasetMigrationLogDoc,
 } from '../../../shared/persistence/schemas';
-import type { MigrationDefinition } from '../application/executor';
-import { assertScopeTenant } from '../domain/registry';
+import type {
+  MigrationDefinition,
+  NormalizedMigrationScope,
+} from '../application/executor';
 
 const STALE_RUN_FLOOR_MS = 60_000;
 
@@ -56,6 +58,36 @@ function idOf(doc: DatasetMigrationDoc): string {
   return String((doc as { _id?: unknown })._id ?? '');
 }
 
+function normalizedScopeOf(scope: unknown): NormalizedMigrationScope {
+  if (typeof scope !== 'object' || scope === null || Array.isArray(scope)) {
+    throw new ApiErrorException(
+      createApiError({
+        code: 501025,
+        requestId: 'migration-scope',
+        params: { cursor: 'scope.canonical' },
+      }),
+    );
+  }
+  const value = scope as Record<string, unknown>;
+  if (!Array.isArray(value.teamIds) || 'teamId' in value) {
+    throw new ApiErrorException(
+      createApiError({
+        code: 501025,
+        requestId: 'migration-scope',
+        params: { cursor: 'scope.canonical' },
+      }),
+    );
+  }
+  return value as unknown as NormalizedMigrationScope;
+}
+
+function sameScope(left: unknown, right: NormalizedMigrationScope): boolean {
+  if (typeof left !== 'object' || left === null) return false;
+  const value = left as Record<string, unknown>;
+  const fields = ['teamIds', 'datasetIds', 'collectionIds', 'operationTypes'] as const;
+  return fields.every((field) => JSON.stringify(value[field] ?? []) === JSON.stringify(right[field]));
+}
+
 /** Mongo execution ledger for P7 migration runs. It never writes business collections. */
 export class MigrationExecutionRegistry implements MigrationRegistryPort {
   private readonly model: Model<DatasetMigrationDoc>;
@@ -70,11 +102,22 @@ export class MigrationExecutionRegistry implements MigrationRegistryPort {
       connection.model<DatasetMigrationLogDoc>('DatasetMigrationLog', DatasetMigrationLogSchema);
   }
 
+  private runQuery(
+    objectId: Types.ObjectId,
+    context: RequestContext,
+  ): { _id: Types.ObjectId; 'scope.teamIds'?: string } {
+    return {
+      _id: objectId,
+      ...(!context.tenant.isRoot
+        ? { 'scope.teamIds': context.tenant.teamId.toLowerCase() }
+        : {}),
+    };
+  }
+
   async dryRun(
     input: { version: string; scope: unknown; options: PortCallOptions },
-    context: RequestContext,
+    _context: RequestContext,
   ): Promise<{ diff: unknown; state: string }> {
-    assertScopeTenant(input.scope, context.tenant.teamId, context.requestId);
     return { diff: { version: input.version, scope: input.scope }, state: 'dry_run' };
   }
 
@@ -87,12 +130,15 @@ export class MigrationExecutionRegistry implements MigrationRegistryPort {
     },
     context: RequestContext,
   ): Promise<{ runId: string; cursor: string | null; state: string; replayed: boolean }> {
-    assertScopeTenant(input.scope, context.tenant.teamId, context.requestId);
+    const scope = normalizedScopeOf(input.scope);
     const existing = await this.model
       .findOne({ version: input.definition.version })
       .lean<DatasetMigrationDoc>();
     if (existing) {
-      if (idempotencyKeyOf(existing) === input.idempotencyKey) {
+      if (
+        idempotencyKeyOf(existing) === input.idempotencyKey &&
+        sameScope(existing.scope, scope)
+      ) {
         return {
           runId: idOf(existing),
           cursor: cursorOf(existing),
@@ -100,7 +146,7 @@ export class MigrationExecutionRegistry implements MigrationRegistryPort {
           replayed: true,
         };
       }
-      throw busy(context.requestId, input.definition.version, input.scope);
+      throw busy(context.requestId, input.definition.version, scope);
     }
 
     const now = new Date();
@@ -114,7 +160,7 @@ export class MigrationExecutionRegistry implements MigrationRegistryPort {
         resumeToken: { cursor: null, idempotencyKey: input.idempotencyKey },
         rollbackInfo: null,
         error: null,
-        scope: input.scope as Record<string, unknown>,
+        scope: scope as unknown as Record<string, unknown>,
         writeMode: input.definition.writeMode,
         estimatedWindow: input.definition.estimatedWindow,
         rollbackWindow: input.definition.rollbackWindow,
@@ -128,7 +174,11 @@ export class MigrationExecutionRegistry implements MigrationRegistryPort {
       const raced = await this.model
         .findOne({ version: input.definition.version })
         .lean<DatasetMigrationDoc>();
-      if (raced && idempotencyKeyOf(raced) === input.idempotencyKey) {
+      if (
+        raced &&
+        idempotencyKeyOf(raced) === input.idempotencyKey &&
+        sameScope(raced.scope, scope)
+      ) {
         return {
           runId: idOf(raced),
           cursor: cursorOf(raced),
@@ -136,7 +186,7 @@ export class MigrationExecutionRegistry implements MigrationRegistryPort {
           replayed: true,
         };
       }
-      throw busy(context.requestId, input.definition.version, input.scope);
+      throw busy(context.requestId, input.definition.version, scope);
     }
   }
 
@@ -183,12 +233,12 @@ export class MigrationExecutionRegistry implements MigrationRegistryPort {
   ): Promise<void> {
     const objectId = assertRunId(input.runId, context.requestId);
     const current = await this.model
-      .findOne({ _id: objectId, 'scope.teamId': context.tenant.teamId })
+      .findOne(this.runQuery(objectId, context))
       .lean<DatasetMigrationDoc>();
     if (!current) throw notFound(context.requestId, input.runId);
     assertCursorAdvances(cursorOf(current), input.cursor, context.requestId);
     await this.model.updateOne(
-      { _id: objectId, 'scope.teamId': context.tenant.teamId, state: 'running' },
+      { ...this.runQuery(objectId, context), state: 'running' },
       {
         $set: {
           'resumeToken.cursor': input.cursor,
@@ -228,11 +278,11 @@ export class MigrationExecutionRegistry implements MigrationRegistryPort {
     }
     const objectId = assertRunId(input.runId, context.requestId);
     const current = await this.model
-      .findOne({ _id: objectId, 'scope.teamId': context.tenant.teamId })
+      .findOne(this.runQuery(objectId, context))
       .lean<DatasetMigrationDoc>();
     if (!current) throw notFound(context.requestId, input.runId);
     await this.model.updateOne(
-      { _id: objectId, 'scope.teamId': context.tenant.teamId, state: 'running' },
+      { ...this.runQuery(objectId, context), state: 'running' },
       {
         $set: {
           state: 'done',
@@ -271,11 +321,11 @@ export class MigrationExecutionRegistry implements MigrationRegistryPort {
   ): Promise<void> {
     const objectId = assertRunId(input.runId, context.requestId);
     const current = await this.model
-      .findOne({ _id: objectId, 'scope.teamId': context.tenant.teamId })
+      .findOne(this.runQuery(objectId, context))
       .lean<DatasetMigrationDoc>();
     if (!current) throw notFound(context.requestId, input.runId);
     await this.model.updateOne(
-      { _id: objectId, 'scope.teamId': context.tenant.teamId, state: 'running' },
+      { ...this.runQuery(objectId, context), state: 'running' },
       {
         $set: {
           state: 'failed',
@@ -308,7 +358,7 @@ export class MigrationExecutionRegistry implements MigrationRegistryPort {
   ): Promise<{ runId: string; cursor: string | null; state: string; version: string }> {
     const objectId = assertRunId(input.runId, context.requestId);
     const current = await this.model
-      .findOne({ _id: objectId, 'scope.teamId': context.tenant.teamId })
+      .findOne(this.runQuery(objectId, context))
       .lean<DatasetMigrationDoc>();
     if (!current) throw notFound(context.requestId, input.runId);
     if (current.state === 'done') {
@@ -333,8 +383,7 @@ export class MigrationExecutionRegistry implements MigrationRegistryPort {
     const updated = await this.model
       .findOneAndUpdate(
         {
-          _id: objectId,
-          'scope.teamId': context.tenant.teamId,
+          ...this.runQuery(objectId, context),
           state: { $in: ['failed', 'running'] },
         },
         {
@@ -364,13 +413,13 @@ export class MigrationExecutionRegistry implements MigrationRegistryPort {
   ): Promise<{ state: string }> {
     const objectId = assertRunId(input.runId, context.requestId);
     const current = await this.model
-      .findOne({ _id: objectId, 'scope.teamId': context.tenant.teamId })
+      .findOne(this.runQuery(objectId, context))
       .lean<DatasetMigrationDoc>();
     if (!current) throw notFound(context.requestId, input.runId);
     if (current.state === 'cancelled') return { state: current.state };
     if (current.state !== 'failed') throw invalidCursor(context.requestId, current.state);
     await this.model.updateOne(
-      { _id: objectId, 'scope.teamId': context.tenant.teamId, state: 'failed' },
+      { ...this.runQuery(objectId, context), state: 'failed' },
       { $set: { state: 'cancelled', rollbackInfo: input.rollbackInfo, updateTime: new Date() } },
     );
     return { state: 'cancelled' };
