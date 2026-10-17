@@ -252,7 +252,9 @@ describe('TEST-E2E-INGEST-001 P4-08 collection create routes', () => {
       res.response,
     );
     expect(res.result().status).toBe(200);
-    expect(state.collections.at(-1)?.trainingPolicy).toEqual({ mode: 'chunk', autoIndexes: true });
+    // ISSUE-002：训练模式独立落库，不再复用 chunkPolicy.mode。
+    expect(state.collections.at(-1)?.trainingMode).toBe('chunk');
+    expect(state.collections.at(-1)?.autoIndexes).toBe(true);
   });
 });
 
