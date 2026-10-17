@@ -16,8 +16,9 @@ import { registerMongoModels } from '../../src/shared/persistence/schemas';
 import type { KnowledgeItemSnapshot, PortCallOptions, RequestContext } from '../../src/ports/types';
 import type { FullTextStore, VectorController } from '../../src/ports/capabilities';
 
-const connectionString =
-  process.env.KB_TEST_PG_URL ?? 'postgresql://kb:kb_dev_password@127.0.0.1:5432/kb';
+// ISSUE-010：未配置测试依赖地址即显式跳过，禁止静默回落。
+const connectionString = process.env.KB_TEST_PG_URL;
+const describePg = connectionString ? describe : describe.skip;
 const options: PortCallOptions = { timeoutMs: 5_000 };
 
 function unitVector(position: number): number[] {
@@ -64,7 +65,7 @@ beforeAll(async () => {
   await connection.models.DatasetData.init();
   await connection.models.DatasetDataText.init();
 
-  pool = new Pool({ connectionString, max: 4 });
+  pool = new Pool({ connectionString: connectionString ?? '', max: 4 });
   await ensurePgvectorDdl(pool);
 
   items = new MongoKnowledgeItemRepository(connection);
@@ -120,7 +121,7 @@ async function seedItem(): Promise<{
   };
 }
 
-describe('P5-01 index write', () => {
+describePg('P5-01 index write', () => {
   it('TEST-INDEX-WRITE-001 writes the first vector and switches the Mongo reference', async () => {
     const seeded = await seedItem();
     const indexVersion = generateIndexVersion('bge-m3');

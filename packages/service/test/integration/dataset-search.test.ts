@@ -17,8 +17,9 @@ import type { KnowledgeItemSnapshot, PortCallOptions, RequestContext } from '../
 import { ensurePgvectorDdl } from '../../src/shared/persistence/pgvector';
 import { registerMongoModels } from '../../src/shared/persistence/schemas';
 
-const connectionString =
-  process.env.KB_TEST_PG_URL ?? 'postgresql://kb:kb_dev_password@127.0.0.1:5432/kb';
+// ISSUE-010：未配置测试依赖地址即显式跳过，禁止静默回落。
+const connectionString = process.env.KB_TEST_PG_URL;
+const describePg = connectionString ? describe : describe.skip;
 const options: PortCallOptions = { timeoutMs: 5_000 };
 const indexVersion = 'bge-m3:1536:v1';
 
@@ -80,7 +81,7 @@ beforeAll(async () => {
   await connection.models.DatasetData.init();
   await connection.models.DatasetDataText.init();
 
-  pool = new Pool({ connectionString, max: 4 });
+  pool = new Pool({ connectionString: connectionString ?? '', max: 4 });
   await ensurePgvectorDdl(pool);
   items = new MongoKnowledgeItemRepository(connection);
   rawVectors = createVectorControllerAdapter(pool);
@@ -225,7 +226,7 @@ function createAdapter(
   });
 }
 
-describe('P5-02 dataset search adapter', () => {
+describePg('P5-02 dataset search adapter', () => {
   it('returns embedding, full-text and mixed recall citations', async () => {
     const seeded = await seedDocument();
     const adapter = createAdapter();

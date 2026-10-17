@@ -22,8 +22,10 @@ function multipartEtagFromPartEtags(etags: readonly string[]): string {
   return `${createHash('md5').update(Buffer.concat(digests)).digest('hex')}-${etags.length}`;
 }
 
-const endpoint = process.env.KB_TEST_S3_ENDPOINT ?? 'http://127.0.0.1:9000';
-const url = new URL(endpoint);
+// ISSUE-010：未配置测试依赖地址即显式跳过，禁止静默连到开发者本机 9000。
+const endpoint = process.env.KB_TEST_S3_ENDPOINT;
+const describeS3 = endpoint ? describe : describe.skip;
+const url = new URL(endpoint ?? 'http://invalid.invalid');
 
 const baseConfig = {
   endPoint: url.hostname,
@@ -37,7 +39,7 @@ const baseConfig = {
 
 const store = createObjectStore(baseConfig);
 
-describe('MinioObjectStore integration', () => {
+describeS3('MinioObjectStore integration', () => {
   it('puts, gets, promotes and deletes a tenant-scoped object', async () => {
     const context = { teamId: 'team-a' };
     const key = `temp/team-a/${Date.now()}-integration.txt`;

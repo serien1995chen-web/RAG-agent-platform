@@ -4,8 +4,9 @@ import { createVectorControllerAdapter } from '../../src/modules/index/adapter/v
 import { PGVECTOR_DIMENSION, ensurePgvectorDdl } from '../../src/shared/persistence/pgvector';
 import type { RequestContext, VectorController } from '../../src/index';
 
-const connectionString =
-  process.env.KB_TEST_PG_URL ?? 'postgresql://kb:kb_dev_password@127.0.0.1:5432/kb';
+// ISSUE-010：未配置测试依赖地址即显式跳过，禁止静默回落。
+const connectionString = process.env.KB_TEST_PG_URL;
+const describePg = connectionString ? describe : describe.skip;
 const options = { timeoutMs: 5000 };
 const datasetId = 'vec-it-ds';
 const collectionId = 'vec-it-col';
@@ -31,8 +32,8 @@ let client: Client;
 let controller: VectorController;
 
 beforeAll(async () => {
-  pool = new Pool({ connectionString, max: 4 });
-  client = new Client({ connectionString });
+  pool = new Pool({ connectionString: connectionString ?? '', max: 4 });
+  client = new Client({ connectionString: connectionString ?? '' });
   await client.connect();
   await ensurePgvectorDdl(pool);
   await ensurePgvectorDdl(pool);
@@ -46,7 +47,7 @@ afterAll(async () => {
   await pool.end();
 });
 
-describe('VectorController adapter (10.16 / ADR-002)', () => {
+describePg('VectorController adapter (10.16 / ADR-002)', () => {
   it('keeps the frozen DDL idempotent with 1536 dimensions and HNSW parameters', async () => {
     const dimension = await client.query<{ type: string }>(
       `SELECT format_type(atttypid, atttypmod) AS type

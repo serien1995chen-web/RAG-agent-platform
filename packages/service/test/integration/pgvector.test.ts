@@ -3,13 +3,14 @@ import { resolve } from 'node:path';
 import { Client } from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
-const connectionString =
-  process.env.KB_TEST_PG_URL ?? 'postgresql://kb:kb_dev_password@127.0.0.1:5432/kb';
+// ISSUE-010：未配置测试依赖地址即显式跳过，禁止静默回落到开发者本机 5432。
+const connectionString = process.env.KB_TEST_PG_URL;
+const describePg = connectionString ? describe : describe.skip;
 const ddlPath = resolve(import.meta.dirname, '../../../../deploy/init/pgvector.sql');
 const ddl = readFileSync(ddlPath, 'utf8');
 const zeroVector = `[${Array.from({ length: 1536 }, () => '0').join(',')}]`;
 
-const client = new Client({ connectionString });
+const client = new Client({ connectionString: connectionString ?? '' });
 
 beforeAll(async () => {
   await client.connect();
@@ -21,7 +22,7 @@ afterAll(async () => {
   await client.end();
 });
 
-describe('pgvector DDL (10.16 / ADR-002)', () => {
+describePg('pgvector DDL (10.16 / ADR-002)', () => {
   it('creates modeldata, HNSW and filter indexes idempotently', async () => {
     const table = await client.query(
       "SELECT column_name, data_type FROM information_schema.columns WHERE table_name = 'modeldata' ORDER BY ordinal_position",
