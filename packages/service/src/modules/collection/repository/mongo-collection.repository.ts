@@ -10,6 +10,7 @@ import {
   type DatasetDoc,
 } from '../../../shared/persistence/schemas';
 import { DEFAULT_CHUNK_POLICY } from '../../../shared/persistence/schemas/common';
+import { toPersistedCollectionType } from '../domain/collection-type';
 import type { CollectionTreeRepository, PathNode } from '../domain/tree';
 import { MAX_COLLECTION_TAGS } from '../domain/tree';
 
@@ -203,7 +204,8 @@ export class MongoCollectionRepository implements CollectionTreeRepository {
         teamId,
         datasetId,
         parentId,
-        type: input.collection.type,
+        // ISSUE-001：来源类型在写入边界归一；非法值抛 501001 而不是 Mongoose ValidationError。
+        type: toPersistedCollectionType(input.collection.type, context.requestId),
         name: input.collection.name,
         tagIds,
         sourceRef: null,
