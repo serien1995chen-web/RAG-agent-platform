@@ -37,8 +37,11 @@ export type ApiRouteHandler = (
 ) => Promise<void> | void;
 
 export interface ApiRouteOptions {
-  /** Zod 入参错误映射到该路由在 12.4 矩阵中声明的 400 业务码。 */
-  validationErrorCode?: number;
+  /**
+   * Zod 入参错误映射到该路由在 12.4 矩阵中声明的业务码。
+   * ISSUE-006：需要按 issue 区分语义时（如维度不匹配 vs 普通缺参）可传解析函数。
+   */
+  validationErrorCode?: number | ((issues: unknown) => number);
   /** 路由级原始/解码 body 上限覆盖（如 import 允许 20MB）；缺省用配置 maxRequestBodyBytes。 */
   maxRequestBodyBytes?: number;
 }
@@ -117,12 +120,16 @@ async function writeErrorResponse(
     return;
   }
   if (isZodError(error) && options.validationErrorCode !== undefined) {
+    const resolvedCode =
+      typeof options.validationErrorCode === 'function'
+        ? options.validationErrorCode(error.issues)
+        : options.validationErrorCode;
     const apiError = createApiError({
-      code: options.validationErrorCode,
+      code: resolvedCode,
       requestId,
       zodError: error.issues,
     });
-    const meta = getErrorMeta(options.validationErrorCode);
+    const meta = getErrorMeta(resolvedCode);
     status(meta?.httpStatus ?? 400);
     json(toApiResponse(apiError));
     return;
