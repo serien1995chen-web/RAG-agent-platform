@@ -30,14 +30,14 @@ export default withApiHandler(
     const normalized =
       requested === 'image' || requested === 'imageParse' || requested === 'auto'
         ? normalizeImageMode(requested)
-        : { mode: requested, autoIndexes: body.autoIndexes ?? false };
+        : { trainingMode: requested, autoIndexes: body.autoIndexes ?? false };
     const options = { timeoutMs: 60_000 };
     const collection = await runtime.collectionService.getCollection(
       { collectionId: body.collectionId, options },
       context,
     );
     const items: JsonValue[] = [];
-    if (IMAGE_MODES.has(normalized.mode)) {
+    if (IMAGE_MODES.has(normalized.trainingMode)) {
       const assets = createImageAssetRepository(runtime.clients.mongo as never);
       const fullText = runtime.fullTextStore;
       if (!assets || !fullText) {
@@ -65,7 +65,7 @@ export default withApiHandler(
             objectKey: source,
             mimeType: 'image/png',
             size: 0,
-            mode: normalized.mode as 'image' | 'imageParse',
+            mode: normalized.trainingMode as 'image' | 'imageParse',
             options,
           },
           context,

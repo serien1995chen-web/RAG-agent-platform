@@ -81,11 +81,11 @@ export interface CreateImageInput {
 
 /** BR-WRITE-005：auto 在输入预处理层改写为 chunk + autoIndexes=true，绝不持久化 mode=auto。 */
 export function normalizeImageMode(mode: ImageMode | 'auto'): {
-  mode: 'image' | 'imageParse' | 'chunk';
+  trainingMode: 'image' | 'imageParse' | 'chunk';
   autoIndexes: boolean;
 } {
-  if (mode === 'auto') return { mode: 'chunk', autoIndexes: true };
-  return { mode, autoIndexes: false };
+  if (mode === 'auto') return { trainingMode: 'chunk', autoIndexes: true };
+  return { trainingMode: mode, autoIndexes: false };
 }
 
 export class ImageApplicationService {

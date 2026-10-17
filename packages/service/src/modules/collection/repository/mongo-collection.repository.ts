@@ -9,7 +9,10 @@ import {
   type DatasetCollectionDoc,
   type DatasetDoc,
 } from '../../../shared/persistence/schemas';
-import { DEFAULT_CHUNK_POLICY } from '../../../shared/persistence/schemas/common';
+import {
+  DEFAULT_CHUNK_POLICY,
+  inferTrainingMode,
+} from '../../../shared/persistence/schemas/common';
 import { toPersistedCollectionType } from '../domain/collection-type';
 import type { CollectionTreeRepository, PathNode } from '../domain/tree';
 import { MAX_COLLECTION_TAGS } from '../domain/tree';
@@ -105,6 +108,8 @@ export class MongoCollectionRepository implements CollectionTreeRepository {
       tagIds: doc.tagIds.map(String),
       ...(doc.sourceRef ? { sourceRef: JSON.stringify(doc.sourceRef) } : {}),
       trainingPolicy: doc.trainingPolicy,
+      // ISSUE-002：历史文档缺 trainingMode 时兜底推断，保证旧数据可读。
+      trainingMode: inferTrainingMode(doc.trainingMode, doc.trainingPolicy?.mode),
       version: doc.updateTime.getTime(),
       createTime: doc.createTime.toISOString(),
       updateTime: doc.updateTime.toISOString(),
@@ -213,6 +218,9 @@ export class MongoCollectionRepository implements CollectionTreeRepository {
         externalFileIdNormalized: normalized,
         hashRawText: null,
         trainingPolicy: input.collection.trainingPolicy ?? DEFAULT_CHUNK_POLICY,
+        trainingMode:
+          (input.collection as { trainingMode?: string }).trainingMode ?? 'chunk',
+        autoIndexes: (input.collection as { autoIndexes?: boolean }).autoIndexes ?? false,
         indexVersion: null,
         forbid: false,
         trainingState: 'ready',

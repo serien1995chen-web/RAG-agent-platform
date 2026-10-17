@@ -3,8 +3,11 @@ import { defineIndex } from '../define-index';
 import {
   ChunkPolicySchema,
   SourceRefSchema,
+  TRAINING_MODES,
+  DEFAULT_TRAINING_MODE,
   type ChunkPolicyValue,
   type SourceRefValue,
+  type TrainingModeValue,
 } from './common';
 
 /** 设计文档 10.4 dataset_collections 字段字典。 */
@@ -20,6 +23,10 @@ export interface DatasetCollectionDoc {
   externalFileIdNormalized: string | null;
   hashRawText: string | null;
   trainingPolicy: ChunkPolicyValue;
+  /** 训练模式（chunk/qa/image/imageParse），与 trainingPolicy.mode 相互独立。 */
+  trainingMode: TrainingModeValue;
+  /** ADR-011：auto 改写后置 true。 */
+  autoIndexes: boolean;
   indexVersion: string | null;
   forbid: boolean;
   trainingState: 'running' | 'error' | 'ready';
@@ -45,6 +52,13 @@ export const DatasetCollectionSchema = new Schema<DatasetCollectionDoc>(
     externalFileIdNormalized: { type: String, default: null },
     hashRawText: { type: String, default: null },
     trainingPolicy: { type: ChunkPolicySchema, required: true },
+    trainingMode: {
+      type: String,
+      enum: TRAINING_MODES,
+      default: DEFAULT_TRAINING_MODE,
+      required: true,
+    },
+    autoIndexes: { type: Boolean, default: false, required: true },
     indexVersion: { type: String, default: null },
     forbid: { type: Boolean, default: false, required: true },
     trainingState: {
