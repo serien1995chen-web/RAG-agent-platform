@@ -5,6 +5,8 @@ services:
   mongo:
     image: registry.cn-hangzhou.aliyuncs.com/fastgpt/mongo:5.0.32@sha256:ab12670508974afbdf3bdc7dd39a201d228a73c9c13c70a684b9eedfb063dc3e
     restart: unless-stopped
+    # ISSUE-003：删除编排依赖多文档事务，Mongo 必须是副本集（单节点即可）。
+    command: ['--replSet', 'rs0', '--bind_ip_all']
     ports:
       - '27017:27017'
     volumes:
@@ -14,6 +16,29 @@ services:
       interval: 10s
       timeout: 5s
       retries: 10
+
+  # ISSUE-003：一次性初始化单节点副本集；PRIMARY 就绪后应用才启动。
+  mongo-init:
+    image: registry.cn-hangzhou.aliyuncs.com/fastgpt/mongo:5.0.32@sha256:ab12670508974afbdf3bdc7dd39a201d228a73c9c13c70a684b9eedfb063dc3e
+    restart: 'no'
+    depends_on:
+      mongo:
+        condition: service_healthy
+    entrypoint:
+      - bash
+      - -c
+      - >
+        until mongo --host mongo:27017 --quiet --eval "db.adminCommand('ping').ok" >/dev/null 2>&1; do sleep 1; done;
+        mongo --host mongo:27017 --quiet --eval '
+        const h = db.hello();
+        if (!h.setName) { rs.initiate({_id: "rs0", members: [{_id: 0, host: "mongo:27017"}]}); }
+        ';
+        for i in $(seq 1 60); do
+        state=$(mongo --host mongo:27017 --quiet --eval "try{rs.status().myState}catch(e){-1}");
+        [ \"$$state\" = \"1\" ] && echo 'replica set PRIMARY ready' && exit 0;
+        sleep 1;
+        done;
+        echo 'replica set did not reach PRIMARY' >&2; exit 1;
 
   redis:
     image: registry.cn-hangzhou.aliyuncs.com/fastgpt/redis:7.2-alpine@sha256:2bf71743152d3ca631d358029d504fed349ea28179667acfa755dffb4b321e7c

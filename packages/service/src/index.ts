@@ -77,6 +77,10 @@ export type {
 } from './shared/index';
 
 export { DEFAULT_PORT_IDS, createDefaultPorts, createUnimplementedPort } from './ports/index';
+export {
+  MONGO_TRANSACTION_PROBE_NAME,
+  checkMongoTransactions,
+} from './shared/index';
 export type {
   AdminDatasetPort,
   ApiDatasetCapability,
