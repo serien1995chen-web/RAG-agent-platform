@@ -599,7 +599,9 @@ function propertyValue(component, name) {
 
 /**
  * NOTICE 渲染：只由 `pnpm sbom:generate` 产出，禁止手工维护。
- * 除 `生成时间:` 一行外，全部内容按 name+version 确定性排序。
+ * ISSUE-011：NOTICE 是受版本控制的发布文件，必须逐字节可重复；
+ * 生成时间只写入未跟踪的 artifacts/sbom.json，不进入 NOTICE。
+ * 全部内容按 name+version 确定性排序。
  */
 export function renderNotice(model) {
   const licenseById = new Map(
@@ -612,7 +614,6 @@ export function renderNotice(model) {
   const lines = [];
 
   lines.push('NOTICE', '======', '', `项目: ${model.project.name} ${model.project.version}`, '');
-  lines.push(`生成时间: ${model.generatedAt}`);
   lines.push('生成命令: pnpm sbom:generate');
   lines.push('生成脚本: scripts/generate-sbom.mjs（禁止手工维护本文件）');
   lines.push('SBOM 产物: artifacts/sbom.json');
