@@ -73,5 +73,6 @@ export default withApiHandler(
     );
     response.status(200).json(successResponse(result, requestId));
   },
-  { validationErrorCode: 501013 },
+  // ISSUE-006：参数校验失败走通用输入错误码；501013 仅保留给真实维度不匹配。
+  { validationErrorCode: 501072 },
 );
