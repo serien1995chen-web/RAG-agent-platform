@@ -20,6 +20,10 @@ import {
   executeWithIdempotency,
   readIdempotencyKey,
 } from './idempotency';
+import {
+  describeInternalError,
+  newErrorEventId,
+} from './internal-error-log';
 import { resolveRequestId } from './request-id';
 
 export interface ApiHandlerContext {
@@ -67,15 +71,45 @@ function idempotencyUnavailable(requestId: string): ApiErrorException {
   );
 }
 
+/**
+ * ISSUE-007：未知内部错误落结构化日志。日志失败绝不影响响应
+ * （logger 自身也是 no-op 降级），且不输出完整错误对象与请求上下文。
+ */
+async function logInternalError(
+  error: unknown,
+  requestId: string,
+  operation: string,
+  errorEventId: string,
+): Promise<void> {
+  try {
+    const { getRuntime } = await import('../../runtime/health');
+    const runtime = await getRuntime();
+    const summary = describeInternalError(error);
+    runtime.clients.logger.log('api.internal_error', {
+      requestId,
+      operation,
+      errorEventId,
+      httpStatus: 500,
+      errorCode: 501998,
+      errorType: 'internal',
+      errorName: summary.errorName,
+      detail: summary.detail,
+      stackHead: summary.stackHead,
+    });
+  } catch {
+    // 观测失败不阻塞业务响应。
+  }
+}
+
 /** 统一 error → HTTP 响应映射；只允许通过本函数写错误响应。 */
-function writeErrorResponse(
+async function writeErrorResponse(
   status: StatusWriter,
   json: JsonWriter,
   requestId: string,
   operation: string,
   error: unknown,
   options: ApiRouteOptions,
-): void {
+): Promise<void> {
   if (error instanceof ApiErrorException) {
     const meta = getErrorMeta(error.error.code);
     status(meta?.httpStatus ?? 500);
@@ -93,7 +127,10 @@ function writeErrorResponse(
     json(toApiResponse(apiError));
     return;
   }
+  const errorEventId = newErrorEventId();
   const internal = createInternalError(operation, requestId);
+  internal.params = { ...internal.params, errorEventId };
+  await logInternalError(error, requestId, operation, errorEventId);
   status(500);
   json(toApiResponse(internal));
 }
@@ -138,7 +175,7 @@ export function withApiHandler(
         requestId,
       });
     } catch (error) {
-      writeErrorResponse(rawStatus, rawJson, requestId, operation, error, options);
+      await writeErrorResponse(rawStatus, rawJson, requestId, operation, error, options);
       return;
     }
 
@@ -148,7 +185,7 @@ export function withApiHandler(
       try {
         await handler(request, response, { requestId });
       } catch (error) {
-        writeErrorResponse(rawStatus, rawJson, requestId, operation, error, options);
+        await writeErrorResponse(rawStatus, rawJson, requestId, operation, error, options);
       }
       return;
     }
@@ -168,7 +205,7 @@ export function withApiHandler(
     try {
       idempotencyContext = await resolveIdempotencyContext(request, requestId);
     } catch {
-      writeErrorResponse(
+      await writeErrorResponse(
         rawStatus,
         rawJson,
         requestId,
@@ -203,7 +240,7 @@ export function withApiHandler(
         rawJson(buildConflictResponse(requestId, error.keyHash));
         return;
       }
-      writeErrorResponse(rawStatus, rawJson, requestId, operation, error, options);
+      await writeErrorResponse(rawStatus, rawJson, requestId, operation, error, options);
     }
   };
 }
