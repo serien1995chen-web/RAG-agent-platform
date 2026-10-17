@@ -185,7 +185,7 @@ export function buildOpenApiDocument(repoRoot) {
         'requestId',
       ],
       properties: {
-        code: { type: 'integer', minimum: 501001, maximum: 501071 },
+        code: { type: 'integer', minimum: 501001, maximum: 501072 },
         statusText: { type: 'string' },
         messageKey: { type: 'string' },
         params: { type: 'object', additionalProperties: true },
@@ -305,7 +305,7 @@ export function validateContractClosure(repoRoot) {
   const problems = [];
   if (routes.length !== 87) problems.push(`路由数量应为 87，实际 ${routes.length}`);
   if (dtos.length !== 198) problems.push(`DTO 表应为 198 行，实际 ${dtos.length}`);
-  if (errors.length !== 71) problems.push(`错误码应为 71 个，实际 ${errors.length}`);
+  if (errors.length !== 72) problems.push(`错误码应为 72 个，实际 ${errors.length}`);
 
   const dtoNames = new Set([...dtos.map((dto) => dto.name), ...BUILTIN_DTO_NAMES, 'ApiError']);
   const errorCodes = new Set(errors.map((error) => error.code));

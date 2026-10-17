@@ -923,6 +923,19 @@
         "current"
       ],
       "paramsSchema": "{quota,limit,current}"
+  },
+  {
+    "code": 501072,
+    "messageKey": "dataset.request.invalid",
+    "httpStatus": 400,
+    "retryable": "no-retry",
+    "severity": "warning",
+    "description": "请求参数未通过 DTO 校验（缺字段、类型错误或越界）",
+    "params": [
+      "route",
+      "field"
+    ],
+    "paramsSchema": "{route,field}"
     }
   ]
 }
