@@ -1,5 +1,16 @@
 {
   "$schema": "https://turbo.build/schema.json",
+  "globalPassThroughEnv": [
+    "KB_TEST_MONGO_URI",
+    "KB_TEST_MONGO_FULLTEXT_URI",
+    "KB_TEST_MONGO_INDEX_URI",
+    "KB_TEST_PG_URL",
+    "KB_TEST_REDIS_URL",
+    "KB_TEST_S3_ENDPOINT",
+    "KB_TEST_S3_REGION",
+    "KB_TEST_S3_ACCESS_KEY",
+    "KB_TEST_S3_SECRET_KEY"
+  ],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
