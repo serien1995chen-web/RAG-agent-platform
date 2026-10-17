@@ -161,9 +161,10 @@ const options = { timeoutMs: 5000 };
 describe('TEST-IMAGE-AUTO-001 image pipeline and handler', () => {
   it('rewrites auto to chunk + autoIndexes', () => {
     const rewritten = normalizeImageMode('auto');
-    expect(rewritten.mode).toBe('chunk');
+    // ISSUE-002：训练模式独立为 trainingMode，不再复用 chunkPolicy.mode。
+    expect(rewritten.trainingMode).toBe('chunk');
     expect(rewritten.autoIndexes).toBe(true);
-    expect(normalizeImageMode('image').mode).toBe('image');
+    expect(normalizeImageMode('image').trainingMode).toBe('image');
   });
 
   it('writes vector, data and removes TTL on success', async () => {
