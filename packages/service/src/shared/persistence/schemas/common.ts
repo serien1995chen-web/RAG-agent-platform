@@ -12,10 +12,7 @@ export type TrainingModeValue = (typeof TRAINING_MODES)[number];
 export const DEFAULT_TRAINING_MODE: TrainingModeValue = 'chunk';
 
 /** 历史文档兜底：字段缺失时优先读取曾被误写入 trainingPolicy.mode 的训练词汇。 */
-export function inferTrainingMode(
-  stored: unknown,
-  chunkPolicyMode?: unknown,
-): TrainingModeValue {
+export function inferTrainingMode(stored: unknown, chunkPolicyMode?: unknown): TrainingModeValue {
   if (typeof stored === 'string' && (TRAINING_MODES as readonly string[]).includes(stored)) {
     return stored as TrainingModeValue;
   }

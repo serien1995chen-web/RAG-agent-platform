@@ -10,9 +10,7 @@ describe('route reachability (ISSUE-004)', () => {
   it('rewrites /proApi/** to the actual /api/proApi/** mount', async () => {
     const rewrites = (await nextConfig.rewrites?.()) ?? [];
     expect(rewrites).toEqual(
-      expect.arrayContaining([
-        { source: '/proApi/:path*', destination: '/api/proApi/:path*' },
-      ]),
+      expect.arrayContaining([{ source: '/proApi/:path*', destination: '/api/proApi/:path*' }]),
     );
   });
 

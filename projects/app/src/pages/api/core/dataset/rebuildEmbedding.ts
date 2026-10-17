@@ -88,7 +88,6 @@ export default withApiHandler(
   {
     // ISSUE-006：普通缺参/类型错误走通用输入错误码；
     // 维度不匹配属于存储语义，仍返回 501013（设计 12.4）。
-    validationErrorCode: (issues) =>
-      isDimensionIssue(issues) ? 501013 : 501072,
+    validationErrorCode: (issues) => (isDimensionIssue(issues) ? 501013 : 501072),
   },
 );

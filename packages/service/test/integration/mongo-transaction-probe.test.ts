@@ -30,9 +30,7 @@ describe('mongo transaction probe (ISSUE-003)', () => {
   });
 
   it('rejects a standalone mongod (no replica set)', async () => {
-    await expect(checkMongoTransactions(standaloneConn)).rejects.toThrow(
-      /501016/,
-    );
+    await expect(checkMongoTransactions(standaloneConn)).rejects.toThrow(/501016/);
   });
 
   it('accepts a single-node replica set', async () => {

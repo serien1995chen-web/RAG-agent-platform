@@ -11,9 +11,9 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
  */
 const hasInfra = Boolean(
   process.env.KB_MONGO_URI &&
-    process.env.KB_PG_URL &&
-    process.env.KB_REDIS_URL &&
-    process.env.KB_S3_ENDPOINT,
+  process.env.KB_PG_URL &&
+  process.env.KB_REDIS_URL &&
+  process.env.KB_S3_ENDPOINT,
 );
 const describeReal = hasInfra ? describe : describe.skip;
 
@@ -44,8 +44,9 @@ vi.mock('../../../projects/app/src/runtime/auth', () => ({
 }));
 
 const { bootstrapRuntime } = await import('../../../projects/app/src/runtime/bootstrap');
-const createDatasetHandler = (await import('../../../projects/app/src/pages/api/core/dataset/create'))
-  .default;
+const createDatasetHandler = (
+  await import('../../../projects/app/src/pages/api/core/dataset/create')
+).default;
 const listHandler = (await import('../../../projects/app/src/pages/api/core/dataset/list')).default;
 const createTextHandler = (
   await import('../../../projects/app/src/pages/api/core/dataset/collection/create/text')

@@ -1,7 +1,9 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const state = vi.hoisted(() => ({ records: [] as { event: string; fields: Record<string, unknown> }[] }));
+const state = vi.hoisted(() => ({
+  records: [] as { event: string; fields: Record<string, unknown> }[],
+}));
 
 vi.mock('../../projects/app/src/runtime/health', () => ({
   getRuntime: async () => ({

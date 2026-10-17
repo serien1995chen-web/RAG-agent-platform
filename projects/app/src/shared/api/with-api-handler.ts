@@ -20,10 +20,7 @@ import {
   executeWithIdempotency,
   readIdempotencyKey,
 } from './idempotency';
-import {
-  describeInternalError,
-  newErrorEventId,
-} from './internal-error-log';
+import { describeInternalError, newErrorEventId } from './internal-error-log';
 import { resolveRequestId } from './request-id';
 
 export interface ApiHandlerContext {

@@ -218,8 +218,7 @@ export class MongoCollectionRepository implements CollectionTreeRepository {
         externalFileIdNormalized: normalized,
         hashRawText: null,
         trainingPolicy: input.collection.trainingPolicy ?? DEFAULT_CHUNK_POLICY,
-        trainingMode:
-          (input.collection as { trainingMode?: string }).trainingMode ?? 'chunk',
+        trainingMode: (input.collection as { trainingMode?: string }).trainingMode ?? 'chunk',
         autoIndexes: (input.collection as { autoIndexes?: boolean }).autoIndexes ?? false,
         indexVersion: null,
         forbid: false,
