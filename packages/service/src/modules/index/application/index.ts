@@ -9,6 +9,7 @@ export {
   EMBEDDING_DIMENSION,
   EmbeddingService,
   createUnimplementedEmbeddingGateway,
+  createMockEmbeddingGateway,
 } from './embedding.service';
 export type { EmbeddingGateway, EmbeddingRequest, EmbeddingServiceDeps } from './embedding.service';
 export { IndexingService } from './indexing.service';

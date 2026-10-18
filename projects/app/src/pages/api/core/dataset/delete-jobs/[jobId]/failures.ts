@@ -5,14 +5,13 @@ import { getRuntime } from '../../../../../../runtime';
 import { authenticateRequest } from '../../../../../../runtime/auth';
 import { parseDto, successResponse, withApiHandler } from '../../../../../../shared/api';
 import type { ApiHandlerContext } from '../../../../../../shared/api';
+import { isDeleteJobVisibleTo } from '../../../../../../shared/api/delete-job-auth';
 
 interface DeleteFailuresQuery {
   jobId: string;
   cursor?: string;
   limit?: number;
 }
-
-const OWNER_PERMISSION = 8;
 
 function resourceIdHash(resourceId: string): string {
   return createHash('sha256').update(resourceId).digest('hex');
@@ -35,11 +34,8 @@ export default withApiHandler(
     const query = parseDto<DeleteFailuresQuery>('DeleteFailuresQuery', request.query);
     const options = { timeoutMs: 5_000 };
     const job = await runtime.deleteService.getDeleteJob({ jobId: query.jobId, options }, context);
-    const permission = await runtime.datasetPermission.getPermission(
-      { datasetId: job.datasetId, options },
-      context,
-    );
-    if (!context.tenant.isRoot && (permission.permissionMask & OWNER_PERMISSION) === 0) {
+    // DEMO-001：Dataset 已软删除，按任务归属鉴权（见 delete-job-auth）。
+    if (!isDeleteJobVisibleTo(job, context)) {
       throw new ApiErrorException(
         createApiError({
           code: 501027,

@@ -156,9 +156,20 @@ export class ImportSourceService {
       context,
     );
     // 2) 事实成功后再投递队列
+    // DEMO-002：Worker 的 parseEnvelope 需要 teamId/mode/payload.taskId，
+    // 只投 sourceType/contentHash 会被判为 invalid_envelope（501005）并静默丢任务。
     await queue.enqueue(queueName, jobId, {
-      sourceType: input.sourceType,
-      contentHash: read.contentHash,
+      jobId,
+      teamId: context.tenant.teamId,
+      datasetId: input.collection.datasetId,
+      collectionId: collection.collectionId,
+      mode: 'parse',
+      payload: {
+        taskId: jobId,
+        sourceType: input.sourceType,
+        contentHash: read.contentHash,
+      },
+      retryCount: 0,
     });
     return {
       collectionId: collection.collectionId,

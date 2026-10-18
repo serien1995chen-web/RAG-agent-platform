@@ -8,6 +8,7 @@ export {
   EMBEDDING_DIMENSION,
   EmbeddingService,
   createUnimplementedEmbeddingGateway,
+  createMockEmbeddingGateway,
 } from './application';
 export type { EmbeddingGateway, EmbeddingRequest, EmbeddingServiceDeps } from './application';
 export { createKnowledgeItemIndexRepository } from './repository';

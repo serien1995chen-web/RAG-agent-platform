@@ -237,6 +237,7 @@ export {
   createKnowledgeItemIndexJobHandler,
   createKnowledgeItemIndexRepository,
   createUnimplementedEmbeddingGateway,
+  createMockEmbeddingGateway,
   validateKnowledgeItemIndex,
 } from './modules/index';
 export type {

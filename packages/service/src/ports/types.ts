@@ -150,6 +150,12 @@ export interface DeleteJobSnapshot {
   stage: string;
   progress: number;
   failureCount: number;
+  /**
+   * DEMO-001：提交删除的成员与数据集 Owner。
+   * Dataset 软删除后无法再读 ACL，删除任务的读取/重试只能按这两个字段鉴权。
+   */
+  actorTmbId?: string | null;
+  ownerTmbId?: string | null;
   createTime: string;
   updateTime: string;
 }

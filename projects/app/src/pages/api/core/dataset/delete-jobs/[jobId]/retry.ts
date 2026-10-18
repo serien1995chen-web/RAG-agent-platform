@@ -10,13 +10,12 @@ import {
   withApiHandler,
 } from '../../../../../../shared/api';
 import type { ApiHandlerContext } from '../../../../../../shared/api';
+import { isDeleteJobVisibleTo } from '../../../../../../shared/api/delete-job-auth';
 
 interface DeleteRetryBody {
   jobId: string;
   'Idempotency-Key': string;
 }
-
-const OWNER_PERMISSION = 8;
 
 function retryDenied(requestId: string, jobId: string): ApiErrorException {
   return new ApiErrorException(
@@ -56,11 +55,8 @@ export default withApiHandler(
       }
       throw error;
     }
-    const permission = await runtime.datasetPermission.getPermission(
-      { datasetId: job.datasetId, options },
-      context,
-    );
-    if (!context.tenant.isRoot && (permission.permissionMask & OWNER_PERMISSION) === 0) {
+    // DEMO-001：Dataset 已软删除，按任务归属鉴权（见 delete-job-auth）。
+    if (!isDeleteJobVisibleTo(job, context)) {
       throw retryDenied(requestId, body.jobId);
     }
     await runtime.deleteService.retryDeleteJob({ jobId: body.jobId, options }, context);

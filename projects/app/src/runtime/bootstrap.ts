@@ -17,6 +17,7 @@ import {
   createKnowledgeItemRepository,
   createMigrationRunAdapter,
   createMigrationRunRepository,
+  createMockEmbeddingGateway,
   createProcessingJobRepository,
   createSourceCollectionRepository,
   createSourceProviderRegistry,
@@ -131,7 +132,16 @@ export async function bootstrapRuntime(
   const crossStoreRepository = new MongoCrossStoreOperationRepository(clients.mongo);
   const migrationRepository = createMigrationRunRepository(clients.mongo);
   const datasetPermission = createDatasetAclRepository(clients.mongo);
-  const embeddingService = new EmbeddingService({ gateway: options.embeddingGateway });
+  // DEMO-002：`model: mock` 时必须给出确定性本地向量；否则文本导入会在训练阶段
+  // 以 501062 静默失败，而集合已被标记 ready。real 模式仍回落到未接入（501062）。
+  const embeddingMockMode =
+    (base.config as { externalMockMode?: { model?: 'mock' | 'real' } } | undefined)?.externalMockMode
+      ?.model ?? 'mock';
+  const embeddingService = new EmbeddingService({
+    gateway:
+      options.embeddingGateway ??
+      (embeddingMockMode === 'mock' ? createMockEmbeddingGateway() : undefined),
+  });
   const objectStorePort = createRuntimeObjectStorePort(clients.objectStore);
   const fileParser = options.fileParser ?? createDefaultDocumentParser();
   const basePorts = options.ports ?? createDefaultPorts();

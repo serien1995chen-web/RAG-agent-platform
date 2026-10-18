@@ -26,8 +26,13 @@ fi
 export PATH="$HOME/.nvm/versions/node/v22.23.2/bin:$PATH"
 
 echo "== 1/6 检查端口 =="
+# 自己的 kb-demo 容器已经占用这些端口时视为正常（重复执行 demo-up 属于幂等场景）。
+OWN_PORTS=$(docker ps --filter "name=${PROJECT}" --format '{{.Ports}}' 2>/dev/null || true)
 for p in 27019 6381 5434 9004 9005 "$PORT"; do
   if ss -ltn 2>/dev/null | grep -q ":$p "; then
+    if printf '%s\n' "$OWN_PORTS" | grep -q ":$p->"; then
+      continue
+    fi
     echo "端口 $p 已被占用；demo 需要独立端口，请先释放或换 --port" >&2
     exit 3
   fi
@@ -39,7 +44,8 @@ docker compose -f "$REPO/deploy/demo/compose.demo.yml" -p "$PROJECT" up -d mongo
 echo "== 3/6 初始化 Mongo 副本集 =="
 docker compose -f "$REPO/deploy/demo/compose.demo.yml" -p "$PROJECT" up -d mongo-init
 for _ in $(seq 1 90); do
-  cid=$(docker compose -f "$REPO/deploy/demo/compose.demo.yml" -p "$PROJECT" ps -q mongo-init || true)
+  # 用 -a：mongo-init 是一次性容器，成功后即退出；ps -q 只看运行中会永远等不到。
+  cid=$(docker compose -f "$REPO/deploy/demo/compose.demo.yml" -p "$PROJECT" ps -aq mongo-init || true)
   if [ -n "$cid" ]; then
     state=$(docker inspect -f '{{.State.Status}} {{.State.ExitCode}}' "$cid" 2>/dev/null || true)
     case "$state" in

@@ -34,6 +34,40 @@ export function createUnimplementedEmbeddingGateway(): EmbeddingGateway {
   };
 }
 
+/**
+ * 开发/演示用确定性 mock 网关（`KB_EXTERNAL_MOCK_MODE.model=mock`）。
+ *
+ * 与真实 Provider 的边界保持一致：只在本机计算，不出网；同一文本永远得到同一向量，
+ * 因此同一份数据写入后可以被检索命中。生产环境必须显式关闭（默认即未接入）。
+ */
+export function createMockEmbeddingGateway(): EmbeddingGateway {
+  return {
+    async embed(request: EmbeddingRequest, _context: RequestContext): Promise<number[][]> {
+      return request.texts.map((text) => mockVector(text));
+    },
+  };
+}
+
+function mockVector(text: string): number[] {
+  // FNV-1a 生成 32 位种子，再用线性同余发生器铺满 1536 维并归一化。
+  let seed = 2166136261;
+  for (let i = 0; i < text.length; i += 1) {
+    seed ^= text.charCodeAt(i);
+    seed = Math.imul(seed, 16777619) >>> 0;
+  }
+  const vector: number[] = new Array(EMBEDDING_DIMENSION);
+  let state = seed || 1;
+  let norm = 0;
+  for (let i = 0; i < EMBEDDING_DIMENSION; i += 1) {
+    state = (Math.imul(state, 1664525) + 1013904223) >>> 0;
+    const value = state / 4294967296 - 0.5;
+    vector[i] = value;
+    norm += value * value;
+  }
+  const scale = norm === 0 ? 1 : 1 / Math.sqrt(norm);
+  return vector.map((value) => value * scale);
+}
+
 export interface EmbeddingServiceDeps {
   gateway?: EmbeddingGateway;
 }
