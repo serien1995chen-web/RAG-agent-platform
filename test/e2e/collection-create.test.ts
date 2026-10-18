@@ -17,6 +17,7 @@ interface State {
   enqueued: string[];
   deleted: string[];
   apiConfigs: unknown[];
+  trainingStates: string[];
   createFailAt: number;
   runtime: unknown;
 }
@@ -26,6 +27,7 @@ const state = vi.hoisted<State>(() => ({
   enqueued: [],
   deleted: [],
   apiConfigs: [],
+  trainingStates: [],
   createFailAt: -1,
   runtime: undefined,
 }));
@@ -108,7 +110,9 @@ function buildRuntime() {
         state.deleted.push(input.collectionId);
         return { deleteJobId: 'del-' + input.collectionId };
       },
-      markTrainingState: async () => undefined,
+      markTrainingState: async (input: { trainingState: string }) => {
+        state.trainingStates.push(input.trainingState);
+      },
     },
     datasetSourceProvider: {
       read: async (sourceRequest: {
@@ -183,6 +187,7 @@ beforeEach(() => {
   state.deleted = [];
   state.apiConfigs = [];
   state.createFailAt = -1;
+  state.trainingStates = [];
   state.runtime = buildRuntime();
 });
 
@@ -304,6 +309,37 @@ describe('TEST-E2E-INGEST-001 P4-08 collection create routes', () => {
     // ISSUE-002：训练模式独立落库，不再复用 chunkPolicy.mode。
     expect(state.collections.at(-1)?.trainingMode).toBe('chunk');
     expect(state.collections.at(-1)?.autoIndexes).toBe(true);
+  });
+
+  it('marks the collection error when a single image fails', async () => {
+    const images = (
+      await import('../../projects/app/src/pages/api/core/dataset/collection/create/images')
+    ).default;
+    const runtime = state.runtime as {
+      ports: { imageTrainingProcessor: { processImage: unknown } };
+    };
+    runtime.ports.imageTrainingProcessor.processImage = async () => ({
+      imageId: 'image-1',
+      state: 'failed',
+      errorMsg: 'provider_down',
+    });
+    const res = responseRecorder();
+    await images(
+      request({
+        method: 'POST',
+        url: '/api/core/dataset/collection/create/images',
+        body: {
+          datasetId: DATASET_ID,
+          images: [`dataset/${DATASET_ID}/uploads/image-1.png`],
+          trainingType: 'auto',
+        },
+      }),
+      res.response,
+    );
+    expect(res.result().status).toBe(200);
+    const items = (res.result().body.data as { items: { state: string }[] }).items;
+    expect(items[0]?.state).toBe('failed');
+    expect(state.trainingStates).toContain('error');
   });
 });
 

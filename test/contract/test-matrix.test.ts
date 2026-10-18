@@ -104,7 +104,7 @@ const KEY_DESIGN_TESTS = [
 /** e2e 逐文件非空清单：21 文件 / 113 用例（test:e2e 带 --passWithNoTests，必须非空）。 */
 const E2E_CASES = [
   ['test/e2e/admin-security.test.ts', 5],
-  ['test/e2e/collection-create.test.ts', 11],
+  ['test/e2e/collection-create.test.ts', 12],
   ['test/e2e/collection-management.test.ts', 1],
   ['test/e2e/data-read-acl.test.ts', 1],
   ['test/e2e/data-write.test.ts', 6],
@@ -167,11 +167,11 @@ describe('P8-01 e2e 非空清单（ACC-TEST-003 / TEST-TRACE-001）', () => {
     expect(failures).toEqual([]);
   });
 
-  it('e2e 用例总数为 113，逐文件计数与盘点一致（不得以 --passWithNoTests 空跑冒充）', () => {
+  it('e2e 用例总数为 114，逐文件计数与盘点一致（不得以 --passWithNoTests 空跑冒充）', () => {
     const actual = E2E_CASES.map(([file]) => `${file}:${countCases(file)}`);
     const expected = E2E_CASES.map(([file, count]) => `${file}:${count}`);
     expect(actual).toEqual(expected);
     const total = E2E_CASES.reduce((sum, [, count]) => sum + count, 0);
-    expect(total).toBe(113);
+    expect(total).toBe(114);
   });
 });
