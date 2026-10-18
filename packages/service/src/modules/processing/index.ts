@@ -13,6 +13,8 @@ export {
 export type { ProcessingBudgetKind, ProcessingJob } from './domain';
 export { ProcessingApplicationService } from './application';
 export type { ProcessingServiceDeps } from './application';
+export { createTrainingProcessor } from './application/training-processor';
+export type { TrainingProcessorDeps } from './application/training-processor';
 export { createProcessingJobRepository } from './repository';
 export { createProcessingJobAdapter } from './adapter';
 export { PROCESSING_JOB_JOB_DEFINITIONS, createProcessingJobJobHandler } from './jobs';

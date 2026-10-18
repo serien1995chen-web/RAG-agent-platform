@@ -119,7 +119,9 @@ export function RunSpine() {
                   {run.requestBody !== undefined ? (
                     <>
                       <div className={`${styles.kvKey} ${styles.mt8}`}>请求体</div>
-                      <pre className={styles.codeBlock}>{JSON.stringify(run.requestBody, null, 2)}</pre>
+                      <pre className={styles.codeBlock}>
+                        {JSON.stringify(run.requestBody, null, 2)}
+                      </pre>
                     </>
                   ) : null}
                   <div className={`${styles.kvKey} ${styles.mt8}`}>响应体</div>

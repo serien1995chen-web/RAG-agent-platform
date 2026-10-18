@@ -9,9 +9,10 @@ import type {
 } from '../../../ports/capabilities';
 import type { CollectionRepository, ProcessingJobRepository } from '../../../ports/repositories';
 import type { CollectionSnapshot, PortCallOptions, RequestContext } from '../../../ports/types';
+import type { CollectionTreeRepository } from '../domain/tree';
 
 export interface ImportSourceServiceDeps {
-  collections: CollectionRepository;
+  collections: CollectionRepository & Partial<Pick<CollectionTreeRepository, 'markTrainingState'>>;
   sourceProvider: DatasetSourceProvider;
   trainingProcessor: TrainingProcessorPort;
   /** 训练任务事实仓储；与 queue 一起用于路径 A 的真实投递。 */
@@ -141,37 +142,47 @@ export class ImportSourceService {
     const queueName = JOB_MODE_TO_QUEUE.parse as NonNullable<typeof JOB_MODE_TO_QUEUE.parse>;
     const jobs = this.deps.jobs as NonNullable<typeof this.deps.jobs>;
     const queue = this.deps.queue as NonNullable<typeof this.deps.queue>;
-    // 1) 先写 Mongo 训练任务事实
-    const enqueued = await jobs.enqueue(
-      {
-        job: {
-          jobId,
-          teamId: context.tenant.teamId,
-          datasetId: input.collection.datasetId,
-          mode: 'parse',
-          expireAt: null,
+    // 入队前先置 running：防止轮询在 Worker 领取前把初始 ready 误报为训练完成。
+    await this.markTrainingState(collection.collectionId, 'running', 1, context);
+    let enqueued: { taskId: string };
+    try {
+      // 1) 先写 Mongo 训练任务事实
+      enqueued = await jobs.enqueue(
+        {
+          job: {
+            jobId,
+            teamId: context.tenant.teamId,
+            datasetId: input.collection.datasetId,
+            mode: 'parse',
+            expireAt: null,
+          },
+          options: input.options,
         },
-        options: input.options,
-      },
-      context,
-    );
-    // 2) 事实成功后再投递队列
-    // DEMO-002：Worker 的 parseEnvelope 需要 teamId/mode/payload.taskId，
-    // 只投 sourceType/contentHash 会被判为 invalid_envelope（501005）并静默丢任务。
-    await queue.enqueue(queueName, jobId, {
-      jobId,
-      teamId: context.tenant.teamId,
-      datasetId: input.collection.datasetId,
-      collectionId: collection.collectionId,
-      mode: 'parse',
-      payload: {
-        // claim() 需要 Mongo 任务文档的 _id（enqueue 返回的 taskId），不是业务 jobId。
-        taskId: String(enqueued.taskId),
-        sourceType: input.sourceType,
-        contentHash: read.contentHash,
-      },
-      retryCount: 0,
-    });
+        context,
+      );
+      // 2) 事实成功后再投递队列
+      // DEMO-002：Worker 的 parseEnvelope 需要 teamId/mode/payload.taskId，
+      // 只投 sourceType/contentHash 会被判为 invalid_envelope（501005）并静默丢任务。
+      await queue.enqueue(queueName, jobId, {
+        jobId,
+        teamId: context.tenant.teamId,
+        datasetId: input.collection.datasetId,
+        collectionId: collection.collectionId,
+        mode: 'parse',
+        payload: {
+          // claim() 需要 Mongo 任务文档的 _id（enqueue 返回的 taskId），不是业务 jobId。
+          taskId: String(enqueued.taskId),
+          sourceType: input.sourceType,
+          contentHash: read.contentHash,
+          // 训练处理器需要原文：文本来源直接随任务携带（受 rawText 10MiB 上限约束）。
+          sourceRef: input.sourceRef,
+        },
+        retryCount: 0,
+      });
+    } catch (error) {
+      await this.markTrainingState(collection.collectionId, 'error', 0, context);
+      throw error;
+    }
     return {
       collectionId: collection.collectionId,
       insertLen: 0,
@@ -188,5 +199,27 @@ export class ImportSourceService {
   private rawTextOf(read: SourceReadResult, context: RequestContext): string {
     if (this.deps.resolveRawText) return this.deps.resolveRawText(read, context);
     return read.rawText ?? '';
+  }
+
+  private async markTrainingState(
+    collectionId: string,
+    trainingState: 'running' | 'error',
+    remainingTraining: number,
+    context: RequestContext,
+  ): Promise<void> {
+    const mark = this.deps.collections.markTrainingState;
+    if (!mark) return;
+    await mark
+      .call(
+        this.deps.collections,
+        {
+          collectionId,
+          trainingState,
+          remainingTraining,
+          options: { timeoutMs: 5_000 },
+        },
+        context,
+      )
+      .catch(() => undefined);
   }
 }

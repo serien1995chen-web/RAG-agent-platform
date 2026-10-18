@@ -8,6 +8,7 @@ coverage/
 *.tsbuildinfo
 artifacts/
 *.log
+.demo-*.pid
 .env
 .env.local
 .env.*.local

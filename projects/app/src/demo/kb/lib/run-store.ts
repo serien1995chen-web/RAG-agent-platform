@@ -44,7 +44,10 @@ function hydrate(): void {
     runs: safeParse<RunEntry[]>(window.sessionStorage.getItem(RUN_KEY), []),
     defects: safeParse<Defect[]>(window.sessionStorage.getItem(DEFECT_KEY), []),
     scenarios: safeParse<ScenarioRun[]>(window.sessionStorage.getItem(SCENARIO_KEY), []),
-    createdIds: safeParse<{ kind: string; id: string }[]>(window.sessionStorage.getItem(IDS_KEY), []),
+    createdIds: safeParse<{ kind: string; id: string }[]>(
+      window.sessionStorage.getItem(IDS_KEY),
+      [],
+    ),
   };
   seqCounter = state.runs.reduce((max, run) => Math.max(max, run.seq), 0);
 }
@@ -107,9 +110,7 @@ export function updateDefect(id: string, patch: Partial<Defect>): void {
   hydrate();
   state = {
     ...state,
-    defects: state.defects.map((defect) =>
-      defect.id === id ? { ...defect, ...patch } : defect,
-    ),
+    defects: state.defects.map((defect) => (defect.id === id ? { ...defect, ...patch } : defect)),
   };
   commit();
 }
@@ -118,7 +119,10 @@ export function saveScenario(run: ScenarioRun): void {
   hydrate();
   state = {
     ...state,
-    scenarios: [run, ...state.scenarios.filter((item) => item.startedAt !== run.startedAt)].slice(0, 50),
+    scenarios: [run, ...state.scenarios.filter((item) => item.startedAt !== run.startedAt)].slice(
+      0,
+      50,
+    ),
   };
   commit();
 }

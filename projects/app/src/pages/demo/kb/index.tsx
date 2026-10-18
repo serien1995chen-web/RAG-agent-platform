@@ -30,7 +30,9 @@ export default function DemoOverviewPage() {
 
   const coverage = computeCoverage(runs);
   const summary = coverageSummary(coverage);
-  const failureCount = runs.filter((run) => run.status >= 400 || run.code >= 400 || run.status === 0).length;
+  const failureCount = runs.filter(
+    (run) => run.status >= 400 || run.code >= 400 || run.status === 0,
+  ).length;
   const avg = runs.length
     ? Math.round(runs.reduce((acc, run) => acc + run.durationMs, 0) / runs.length)
     : 0;
@@ -59,12 +61,16 @@ export default function DemoOverviewPage() {
             <span className={`${styles.badge} ${styles.badgeOk}`}>已测通过 {summary.passed}</span>
             <span className={`${styles.badge} ${styles.badgeErr}`}>已测失败 {summary.failed}</span>
             <span className={`${styles.badge} ${styles.badgeMuted}`}>未测 {summary.untested}</span>
-            <span className={`${styles.badge} ${styles.badgeWarn}`}>不适用 {summary.notApplicable}</span>
+            <span className={`${styles.badge} ${styles.badgeWarn}`}>
+              不适用 {summary.notApplicable}
+            </span>
           </div>
           <div className={`${styles.progress} ${styles.mt12}`} aria-hidden="true">
             <div
               className={styles.progressBar}
-              style={{ width: `${Math.round(((summary.passed + summary.failed) / Math.max(summary.total, 1)) * 100)}%` }}
+              style={{
+                width: `${Math.round(((summary.passed + summary.failed) / Math.max(summary.total, 1)) * 100)}%`,
+              }}
             />
           </div>
           <div className={styles.tiny}>
@@ -88,9 +94,12 @@ export default function DemoOverviewPage() {
                     <strong>{latest.scenarioId}</strong> {latest.title}
                   </div>
                   <div className={styles.tiny}>
-                    通过 {latest.summary.passed} · 失败 {latest.summary.failed} · 阻塞 {latest.summary.blocked}
+                    通过 {latest.summary.passed} · 失败 {latest.summary.failed} · 阻塞{' '}
+                    {latest.summary.blocked}
                   </div>
-                  <div className={styles.tiny}>{new Date(latest.startedAt).toLocaleString('zh-CN')}</div>
+                  <div className={styles.tiny}>
+                    {new Date(latest.startedAt).toLocaleString('zh-CN')}
+                  </div>
                 </div>
               </div>
             </div>
@@ -111,7 +120,10 @@ export default function DemoOverviewPage() {
       <section className={`${styles.panel} ${styles.panelPad} ${styles.mt16}`}>
         <h2 className={styles.sectionTitle}>最近调用</h2>
         {runs.length === 0 ? (
-          <EmptyState title="暂无调用记录" hint="打开知识库列表或执行一个场景后，这里会出现记录。" />
+          <EmptyState
+            title="暂无调用记录"
+            hint="打开知识库列表或执行一个场景后，这里会出现记录。"
+          />
         ) : (
           <table className={`${styles.table} ${styles.tableCardMode}`}>
             <thead>

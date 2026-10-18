@@ -152,6 +152,8 @@ function scopeInvalid(scope: string, allowed: string[], requestId: string): ApiE
   );
 }
 
+export { createTrainingProcessor, type TrainingProcessorDeps } from './training-processor';
+
 export interface ProcessingServiceDeps {
   repository: ProcessingJobRepository;
 }

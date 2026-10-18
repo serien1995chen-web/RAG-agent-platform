@@ -29,7 +29,11 @@ export interface ScenarioDef {
   steps: ScenarioStep[];
 }
 
-const stamp = () => new Date().toISOString().replace(/[-:T.]/g, '').slice(0, 14);
+const stamp = () =>
+  new Date()
+    .toISOString()
+    .replace(/[-:T.]/g, '')
+    .slice(0, 14);
 
 function fail(detail: string): StepOutcome {
   return { status: 'failed', detail };
@@ -39,7 +43,10 @@ function blocked(detail: string): StepOutcome {
   return { status: 'blocked', detail };
 }
 
-function describe(result: { entry: { status: number; code: number; messageKey?: string }; ok: boolean }): string {
+function describe(result: {
+  entry: { status: number; code: number; messageKey?: string };
+  ok: boolean;
+}): string {
   return `HTTP ${result.entry.status} · code ${result.entry.code}${
     result.entry.messageKey ? ` · ${result.entry.messageKey}` : ''
   }`;
@@ -55,10 +62,18 @@ async function pollTraining(collectionId: string, ctx: StepContext): Promise<Ste
     const status = String(result.envelope.data?.trainingState ?? 'unknown');
     last = status;
     if (status === 'ready') {
-      return { status: 'passed', detail: `trainingState=ready（${Math.round((Date.now() - startedAt) / 1000)}s）`, seq: result.entry.seq };
+      return {
+        status: 'passed',
+        detail: `trainingState=ready（${Math.round((Date.now() - startedAt) / 1000)}s）`,
+        seq: result.entry.seq,
+      };
     }
     if (status === 'error') {
-      return { status: 'failed', detail: 'trainingState=error（训练任务失败，查看 training/errors）', seq: result.entry.seq };
+      return {
+        status: 'failed',
+        detail: 'trainingState=error（训练任务失败，查看 training/errors）',
+        seq: result.entry.seq,
+      };
     }
     await new Promise((resolve) => setTimeout(resolve, delay));
     delay = Math.min(Math.round(delay * 1.5), 5000);
@@ -78,7 +93,11 @@ export const SCENARIOS: ScenarioDef[] = [
         title: '创建知识库',
         async run(ctx) {
           const name = `[DEMO] S1-${stamp()}`;
-          const result = await api.createDataset({ name, type: 'dataset', embeddingModel: 'bge-m3' });
+          const result = await api.createDataset({
+            name,
+            type: 'dataset',
+            embeddingModel: 'bge-m3',
+          });
           if (!result.ok) return fail(describe(result));
           const datasetId = String(result.envelope.data?.datasetId ?? '');
           ctx.state.datasetId = datasetId;
@@ -111,7 +130,11 @@ export const SCENARIOS: ScenarioDef[] = [
           ctx.state.deleteKey = key;
           if (result.entry.status !== 200) return fail(describe(result));
           ctx.state.jobId = String(result.envelope.data?.jobId ?? '');
-          return { status: 'passed', detail: `jobId=${ctx.state.jobId || '（未返回）'}`, seq: result.entry.seq };
+          return {
+            status: 'passed',
+            detail: `jobId=${ctx.state.jobId || '（未返回）'}`,
+            seq: result.entry.seq,
+          };
         },
       },
       {
@@ -133,7 +156,10 @@ export const SCENARIOS: ScenarioDef[] = [
         title: '重复删除（幂等）',
         async run(ctx) {
           if (!ctx.state.datasetId) return blocked('缺少 datasetId');
-          const result = await api.deleteDataset(String(ctx.state.datasetId), String(ctx.state.deleteKey));
+          const result = await api.deleteDataset(
+            String(ctx.state.datasetId),
+            String(ctx.state.deleteKey),
+          );
           if (result.entry.status !== 200) return fail(`重复删除未返回 200：${describe(result)}`);
           return { status: 'passed', detail: '同 key 重放返回 200', seq: result.entry.seq };
         },
@@ -150,7 +176,11 @@ export const SCENARIOS: ScenarioDef[] = [
         title: '创建知识库',
         async run(ctx) {
           const name = `[DEMO] S2-${stamp()}`;
-          const result = await api.createDataset({ name, type: 'dataset', embeddingModel: 'bge-m3' });
+          const result = await api.createDataset({
+            name,
+            type: 'dataset',
+            embeddingModel: 'bge-m3',
+          });
           if (!result.ok) return fail(describe(result));
           const datasetId = String(result.envelope.data?.datasetId ?? '');
           ctx.state.datasetId = datasetId;
@@ -168,7 +198,10 @@ export const SCENARIOS: ScenarioDef[] = [
             '这一段文本用于切分与向量化，验证检索能否命中。',
             '如果 Embedding 未配置，导入会在训练阶段失败。',
           ].join('\n');
-          const result = await api.createTextCollection({ datasetId: String(ctx.state.datasetId), text });
+          const result = await api.createTextCollection({
+            datasetId: String(ctx.state.datasetId),
+            text,
+          });
           if (!result.ok) return fail(describe(result));
           const collectionId = String(result.envelope.data?.collectionId ?? '');
           ctx.state.collectionId = collectionId;
@@ -216,7 +249,11 @@ export const SCENARIOS: ScenarioDef[] = [
             const stats = JSON.stringify(result.envelope.data?.searchRes?.stats ?? {});
             return fail(`检索 0 命中；stats=${stats.slice(0, 220)}`);
           }
-          return { status: 'passed', detail: `citations=${citations.length}`, seq: result.entry.seq };
+          return {
+            status: 'passed',
+            detail: `citations=${citations.length}`,
+            seq: result.entry.seq,
+          };
         },
       },
       {
@@ -224,7 +261,10 @@ export const SCENARIOS: ScenarioDef[] = [
         title: '清理本场景知识库',
         async run(ctx) {
           if (!ctx.state.datasetId) return blocked('缺少 datasetId');
-          const result = await api.deleteDataset(String(ctx.state.datasetId), `demo-s2-${Date.now()}`);
+          const result = await api.deleteDataset(
+            String(ctx.state.datasetId),
+            `demo-s2-${Date.now()}`,
+          );
           if (result.entry.status !== 200) return fail(describe(result));
           return { status: 'passed', detail: '已提交删除任务', seq: result.entry.seq };
         },
@@ -258,7 +298,11 @@ export const SCENARIOS: ScenarioDef[] = [
           const collectionId = String(collection.envelope.data?.collectionId ?? '');
           ctx.state.collectionId = collectionId;
           ctx.remember('collection', collectionId);
-          return { status: 'passed', detail: `collectionId=${collectionId}`, seq: collection.entry.seq };
+          return {
+            status: 'passed',
+            detail: `collectionId=${collectionId}`,
+            seq: collection.entry.seq,
+          };
         },
       },
       {
@@ -272,7 +316,11 @@ export const SCENARIOS: ScenarioDef[] = [
             a: '验收平台直接插入的回答',
           });
           if (!result.ok) return fail(describe(result));
-          return { status: 'passed', detail: `dataId=${result.envelope.data?.dataId}`, seq: result.entry.seq };
+          return {
+            status: 'passed',
+            detail: `dataId=${result.envelope.data?.dataId}`,
+            seq: result.entry.seq,
+          };
         },
       },
       {
@@ -285,7 +333,11 @@ export const SCENARIOS: ScenarioDef[] = [
             items: [{ q: '批量推送问题一' }, { q: '批量推送问题二', a: '答案二' }],
           });
           if (!result.ok) return fail(describe(result));
-          return { status: 'passed', detail: `queued=${JSON.stringify(result.envelope.data)}`, seq: result.entry.seq };
+          return {
+            status: 'passed',
+            detail: `queued=${JSON.stringify(result.envelope.data)}`,
+            seq: result.entry.seq,
+          };
         },
       },
       {
@@ -295,7 +347,11 @@ export const SCENARIOS: ScenarioDef[] = [
           if (!ctx.state.collectionId) return blocked('缺少 collectionId');
           const result = await api.listData({ collectionId: String(ctx.state.collectionId) });
           if (!result.ok) return fail(describe(result));
-          return { status: 'passed', detail: `total=${result.envelope.data?.total}`, seq: result.entry.seq };
+          return {
+            status: 'passed',
+            detail: `total=${result.envelope.data?.total}`,
+            seq: result.entry.seq,
+          };
         },
       },
     ],
@@ -331,7 +387,11 @@ export const SCENARIOS: ScenarioDef[] = [
           if (!ctx.state.jobId) return blocked('缺少 jobId');
           const result = await api.deleteJobFailures(String(ctx.state.jobId));
           if (!result.ok) return fail(describe(result));
-          return { status: 'passed', detail: `total=${result.envelope.data?.total ?? 0}`, seq: result.entry.seq };
+          return {
+            status: 'passed',
+            detail: `total=${result.envelope.data?.total ?? 0}`,
+            seq: result.entry.seq,
+          };
         },
       },
       {
@@ -340,8 +400,21 @@ export const SCENARIOS: ScenarioDef[] = [
         async run(ctx) {
           if (!ctx.state.jobId) return blocked('缺少 jobId');
           const result = await api.retryDeleteJob(String(ctx.state.jobId));
+          // 设计 3.5.1 / 错误码 501040：没有失败项时应以 409 retry_unavailable 拒绝，
+          // 这不是缺陷，而是可验证的正确行为。
+          if (result.entry.status === 409 && result.entry.code === 501040) {
+            return {
+              status: 'passed',
+              detail: '无失败项，后端按设计返回 409 / 501040（retry_unavailable）',
+              seq: result.entry.seq,
+            };
+          }
           if (!result.ok) return fail(describe(result));
-          return { status: 'passed', detail: `state=${result.envelope.data?.state}`, seq: result.entry.seq };
+          return {
+            status: 'passed',
+            detail: `state=${result.envelope.data?.state}`,
+            seq: result.entry.seq,
+          };
         },
       },
     ],
@@ -378,7 +451,11 @@ export const SCENARIOS: ScenarioDef[] = [
           });
           if (!result.ok) return fail(describe(result));
           ctx.remember('collection', String(result.envelope.data?.collectionId ?? ''));
-          return { status: 'passed', detail: `collectionId=${result.envelope.data?.collectionId}`, seq: result.entry.seq };
+          return {
+            status: 'passed',
+            detail: `collectionId=${result.envelope.data?.collectionId}`,
+            seq: result.entry.seq,
+          };
         },
       },
       {
@@ -388,7 +465,11 @@ export const SCENARIOS: ScenarioDef[] = [
           if (!ctx.state.datasetId) return blocked('缺少 datasetId');
           const result = await api.listTags(String(ctx.state.datasetId));
           if (!result.ok) return fail(describe(result));
-          return { status: 'passed', detail: `total=${result.envelope.data?.total ?? 0}`, seq: result.entry.seq };
+          return {
+            status: 'passed',
+            detail: `total=${result.envelope.data?.total ?? 0}`,
+            seq: result.entry.seq,
+          };
         },
       },
     ],
@@ -410,7 +491,11 @@ export const SCENARIOS: ScenarioDef[] = [
           if (!created.ok) return fail(describe(created));
           ctx.state.datasetId = String(created.envelope.data?.datasetId ?? '');
           ctx.remember('dataset', String(ctx.state.datasetId));
-          return { status: 'passed', detail: `datasetId=${ctx.state.datasetId}`, seq: created.entry.seq };
+          return {
+            status: 'passed',
+            detail: `datasetId=${ctx.state.datasetId}`,
+            seq: created.entry.seq,
+          };
         },
       },
       {
@@ -423,13 +508,17 @@ export const SCENARIOS: ScenarioDef[] = [
             path: '/api/core/dataset/file/presignUpload',
             body: {
               datasetId: String(ctx.state.datasetId),
-              fileName: 'demo.txt',
+              filename: 'demo.txt',
               size: 18,
-              mimeType: 'text/plain',
+              mime: 'text/plain',
             },
           });
           if (!result.ok) return fail(describe(result));
-          return { status: 'passed', detail: `fileId=${result.envelope.data?.fileId ?? '—'}`, seq: result.entry.seq };
+          return {
+            status: 'passed',
+            detail: `fileId=${result.envelope.data?.fileId ?? '—'}`,
+            seq: result.entry.seq,
+          };
         },
       },
       {
@@ -447,7 +536,18 @@ export const SCENARIOS: ScenarioDef[] = [
             },
           });
           if (!result.ok) return fail(describe(result));
-          const items = (result.envelope.data?.items ?? []) as { state?: string; errorMsg?: string }[];
+          const items = (result.envelope.data?.items ?? []) as {
+            state?: string;
+            errorMsg?: string;
+          }[];
+          if (items.length === 0) {
+            return {
+              status: 'blocked',
+              detail:
+                '后端未返回图片处理结果：auto 模式只创建集合，需先上传真实图片并以 image/imageParse 模式训练',
+              seq: result.entry.seq,
+            };
+          }
           const failed = items.find((item) => item.state === 'failed');
           if (failed) {
             return {
@@ -478,7 +578,11 @@ export const SCENARIOS: ScenarioDef[] = [
           if (!created.ok) return fail(describe(created));
           ctx.state.datasetId = String(created.envelope.data?.datasetId ?? '');
           ctx.remember('dataset', String(ctx.state.datasetId));
-          return { status: 'passed', detail: `datasetId=${ctx.state.datasetId}`, seq: created.entry.seq };
+          return {
+            status: 'passed',
+            detail: `datasetId=${ctx.state.datasetId}`,
+            seq: created.entry.seq,
+          };
         },
       },
       {
@@ -505,7 +609,11 @@ export const SCENARIOS: ScenarioDef[] = [
             path: `/proApi/core/dataset/collaborator/list?datasetId=${encodeURIComponent(String(ctx.state.datasetId))}`,
           });
           if (!result.ok) return fail(describe(result));
-          return { status: 'passed', detail: `list=${result.envelope.data?.list?.length ?? 0}`, seq: result.entry.seq };
+          return {
+            status: 'passed',
+            detail: `list=${result.envelope.data?.list?.length ?? 0}`,
+            seq: result.entry.seq,
+          };
         },
       },
     ],
@@ -527,7 +635,11 @@ export const SCENARIOS: ScenarioDef[] = [
           if (!created.ok) return fail(describe(created));
           ctx.state.datasetId = String(created.envelope.data?.datasetId ?? '');
           ctx.remember('dataset', String(ctx.state.datasetId));
-          return { status: 'passed', detail: `datasetId=${ctx.state.datasetId}`, seq: created.entry.seq };
+          return {
+            status: 'passed',
+            detail: `datasetId=${ctx.state.datasetId}`,
+            seq: created.entry.seq,
+          };
         },
       },
       {
@@ -551,7 +663,10 @@ export function scenarioById(id: string): ScenarioDef | undefined {
   return SCENARIOS.find((item) => item.scenarioId === id);
 }
 
-export function emptyRun(def: ScenarioDef, baseline: { commit: string; branch: string }): ScenarioRun {
+export function emptyRun(
+  def: ScenarioDef,
+  baseline: { commit: string; branch: string },
+): ScenarioRun {
   return {
     scenarioId: def.scenarioId,
     title: def.title,

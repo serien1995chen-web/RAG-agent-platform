@@ -6,14 +6,26 @@ REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PROJECT=kb-demo
 
 echo "== 停止 worker =="
-if [ -f /tmp/kb-demo-worker.pid ]; then
-  kill "$(cat /tmp/kb-demo-worker.pid)" 2>/dev/null || true
-  rm -f /tmp/kb-demo-worker.pid
+if [ -f "$REPO/.demo-worker.pid" ]; then
+  kill "$(cat "$REPO/.demo-worker.pid")" 2>/dev/null || true
+  rm -f "$REPO/.demo-worker.pid"
 fi
-pkill -f 'projects/app/src/runtime/worker.ts' 2>/dev/null || true
+for pid in $(pgrep -f 'projects/app/src/runtime/worker.ts' 2>/dev/null || true); do
+  if [ "$(readlink -f "/proc/$pid/cwd" 2>/dev/null || true)" = "$REPO" ]; then
+    kill "$pid" 2>/dev/null || true
+  fi
+done
 
 echo "== 停止 app =="
-pkill -f 'next dev -p 3200' 2>/dev/null || true
+if [ -f "$REPO/.demo-app.pid" ]; then
+  kill "$(cat "$REPO/.demo-app.pid")" 2>/dev/null || true
+  rm -f "$REPO/.demo-app.pid"
+fi
+for pid in $(pgrep -f 'next dev -p 3200' 2>/dev/null || true); do
+  if [ "$(readlink -f "/proc/$pid/cwd" 2>/dev/null || true)" = "$REPO/projects/app" ]; then
+    kill "$pid" 2>/dev/null || true
+  fi
+done
 
 echo "== 停止依赖（$PROJECT）=="
 docker compose -f "$REPO/deploy/demo/compose.demo.yml" -p "$PROJECT" down "$@"

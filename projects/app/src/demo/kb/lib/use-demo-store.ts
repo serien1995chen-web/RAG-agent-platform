@@ -6,9 +6,5 @@ const EMPTY_STATE: DemoState = { runs: [], defects: [], scenarios: [], createdId
 
 /** 订阅会话证据链（Run Spine / 缺陷 / 场景共用）。 */
 export function useDemoStore() {
-  return useSyncExternalStore(
-    subscribe,
-    snapshot,
-    () => EMPTY_STATE,
-  );
+  return useSyncExternalStore(subscribe, snapshot, () => EMPTY_STATE);
 }

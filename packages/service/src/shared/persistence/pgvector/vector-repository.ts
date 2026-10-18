@@ -131,6 +131,7 @@ export class PgVectorRepository implements VectorController {
       teamId: string;
       datasetId: string;
       collectionId?: string;
+      collectionIds?: string[];
       vector: number[];
       limit: number;
       indexVersion?: string;
@@ -139,16 +140,20 @@ export class PgVectorRepository implements VectorController {
     context: RequestContext,
   ): Promise<VectorSearchHit[]> {
     return this.run('embRecall', context, async () => {
-      this.assertScope(context, input, true);
-      const values: unknown[] = [
-        this.toVectorLiteral(input.vector),
-        input.teamId,
-        input.datasetId,
-        input.collectionId,
-      ];
+      this.assertScope(context, input, false);
+      const values: unknown[] = [this.toVectorLiteral(input.vector), input.teamId, input.datasetId];
       let sql = `SELECT id, 1 - (vector <=> $1::vector) AS score
         FROM modeldata
-        WHERE team_id = $2 AND dataset_id = $3 AND collection_id = $4`;
+        WHERE team_id = $2 AND dataset_id = $3`;
+      // collectionId 是单集合过滤，collectionIds 是多集合过滤；都缺省时按 dataset 全量召回。
+      // 旧实现始终拼 `collection_id = $4`，未传时参数为 null，会静默返回 0 行。
+      if (input.collectionId !== undefined) {
+        values.push(input.collectionId);
+        sql += ` AND collection_id = $${values.length}`;
+      } else if (input.collectionIds !== undefined) {
+        values.push(input.collectionIds);
+        sql += ` AND collection_id = ANY($${values.length})`;
+      }
       if (input.indexVersion !== undefined) {
         values.push(input.indexVersion);
         sql += ` AND index_version = $${values.length}`;

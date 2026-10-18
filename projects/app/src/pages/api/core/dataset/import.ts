@@ -263,6 +263,7 @@ export default withApiHandler(
       vectors: runtime.vectorController,
       fullText: runtime.fullTextStore ?? runtime.ports.fullTextStore,
     });
+    const datasetDetail = await runtime.datasetApi.getDatasetDetail(fields.datasetId, context);
     const report = { success: 0, skipped: 0, failed: 0, errors: [] as unknown[] };
     for (let index = 0; index < rows.length; index += 1) {
       const row = rows[index];
@@ -279,7 +280,11 @@ export default withApiHandler(
       }
       try {
         const vectors = await runtime.embeddingService.embed(
-          { models: { embeddingModel: 'bge-m3' }, texts: [row.q], options },
+          {
+            models: { embeddingModel: datasetDetail.dataset.vectorModel },
+            texts: [row.q],
+            options,
+          },
           context,
         );
         const result = await service.insertDirect(
@@ -289,6 +294,7 @@ export default withApiHandler(
             collectionId,
             q: row.q,
             ...(row.a ? { a: row.a } : {}),
+            indexVersion: datasetDetail.dataset.indexVersion,
             vector: vectors[0] ?? [],
             options,
           },

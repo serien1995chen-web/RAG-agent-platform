@@ -75,7 +75,10 @@ export function DemoShell({
         <meta name="viewport" content="width=device-width, initial-scale=1" />
       </Head>
       <div className={styles.shell}>
-        <aside className={`${styles.sidebar} ${navOpen ? styles.sidebarOpen : ''}`} aria-label="主导航">
+        <aside
+          className={`${styles.sidebar} ${navOpen ? styles.sidebarOpen : ''}`}
+          aria-label="主导航"
+        >
           <div className={styles.brand}>
             <div className={styles.brandTitle}>知识库验收平台</div>
             <div className={styles.brandSub}>

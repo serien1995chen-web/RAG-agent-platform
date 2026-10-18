@@ -17,7 +17,9 @@ function download(filename: string, content: string, type: string): void {
 
 function toMarkdown(defects: Defect[]): string {
   const lines = ['# 知识库 Demo 缺陷记录', '', `导出时间：${new Date().toISOString()}`, ''];
-  for (const defect of [...defects].sort((a, b) => severityRank[a.severity] - severityRank[b.severity])) {
+  for (const defect of [...defects].sort(
+    (a, b) => severityRank[a.severity] - severityRank[b.severity],
+  )) {
     lines.push(`## ${defect.id} ${defect.title}`, '');
     lines.push(`- 严重度：${defect.severity}`);
     lines.push(`- 区域：${defect.area}`);
@@ -43,7 +45,8 @@ export default function DemoDefectsPage() {
     () => [...defects].sort((a, b) => severityRank[a.severity] - severityRank[b.severity]),
     [defects],
   );
-  const bySeverity = (severity: Defect['severity']) => defects.filter((item) => item.severity === severity).length;
+  const bySeverity = (severity: Defect['severity']) =>
+    defects.filter((item) => item.severity === severity).length;
 
   return (
     <DemoShell
@@ -58,7 +61,11 @@ export default function DemoDefectsPage() {
             onClick={() =>
               download(
                 'kb-demo-defects.json',
-                JSON.stringify({ exportedAt: new Date().toISOString(), runs, defects: sorted }, null, 2),
+                JSON.stringify(
+                  { exportedAt: new Date().toISOString(), runs, defects: sorted },
+                  null,
+                  2,
+                ),
                 'application/json',
               )
             }
@@ -143,14 +150,18 @@ export default function DemoDefectsPage() {
                           <span className={styles.kvKey}>实际</span>
                           <span>{defect.actual}</span>
                           <span className={styles.kvKey}>关联调用</span>
-                          <span className={styles.mono}>#{String(defect.runEntryRef).padStart(3, '0')}</span>
+                          <span className={styles.mono}>
+                            #{String(defect.runEntryRef).padStart(3, '0')}
+                          </span>
                         </div>
                         <ol className={styles.small} style={{ marginTop: 8 }}>
                           {defect.steps.map((step) => (
                             <li key={step}>{step}</li>
                           ))}
                         </ol>
-                        {defect.note ? <div className={styles.tiny}>备注：{defect.note}</div> : null}
+                        {defect.note ? (
+                          <div className={styles.tiny}>备注：{defect.note}</div>
+                        ) : null}
                       </td>
                     </tr>
                   ) : null}

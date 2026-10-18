@@ -49,7 +49,11 @@ export default function DemoRuntimePage() {
     <DemoShell title="运行环境" breadcrumb="基线、身份、探针与依赖">
       <div className={styles.statGrid}>
         <Stat label="分支" value={BRANCH} hint="demo 基于当前 HEAD" />
-        <Stat label="Commit" value={<span className={styles.mono}>{COMMIT.slice(0, 7)}</span>} hint={COMMIT} />
+        <Stat
+          label="Commit"
+          value={<span className={styles.mono}>{COMMIT.slice(0, 7)}</span>}
+          hint={COMMIT}
+        />
         <Stat label="Worker" value={WORKER_MODE} hint="APP_WORKER_MODE" />
         <Stat label="本会话调用" value={runs.length} hint="见右侧脊柱" />
       </div>
@@ -80,7 +84,13 @@ export default function DemoRuntimePage() {
                     <td className={styles.mono}>{probe.name}</td>
                     <td>
                       <StatusText
-                        status={probe.status === 'ok' ? 'passed' : probe.status === 'degraded' ? 'blocked' : 'failed'}
+                        status={
+                          probe.status === 'ok'
+                            ? 'passed'
+                            : probe.status === 'degraded'
+                              ? 'blocked'
+                              : 'failed'
+                        }
                         label={probe.status}
                       />
                     </td>

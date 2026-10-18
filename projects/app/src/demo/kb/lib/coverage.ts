@@ -39,9 +39,7 @@ export function normalizePath(raw: string): string {
 export function matchRoute(entry: Pick<RunEntry, 'method' | 'path'>): RouteEntry | undefined {
   const pathname = normalizePath(entry.path);
   const method = entry.method.toUpperCase();
-  return compiled.find(
-    (item) => item.methods.includes(method) && item.regex.test(pathname),
-  )?.route;
+  return compiled.find((item) => item.methods.includes(method) && item.regex.test(pathname))?.route;
 }
 
 function applicability(route: RouteEntry): { status: CoverageStatus; note?: string } | null {
@@ -66,7 +64,12 @@ export function computeCoverage(runs: readonly RunEntry[]): RouteCoverage[] {
     const special = applicability(route);
     const lastRun = lastByRoute.get(route.routeId);
     if (special) {
-      return { route, status: special.status, ...(lastRun ? { lastRun } : {}), ...(special.note ? { note: special.note } : {}) };
+      return {
+        route,
+        status: special.status,
+        ...(lastRun ? { lastRun } : {}),
+        ...(special.note ? { note: special.note } : {}),
+      };
     }
     if (!lastRun) return { route, status: 'untested' as const };
     const ok = lastRun.status >= 200 && lastRun.status < 300 && lastRun.code === 200;

@@ -33,6 +33,7 @@ export interface SourceCollectionJobHandlerDeps {
 const COLLECTION_PAYLOAD_FIELDS = [
   'taskId',
   'version',
+  'sourceType',
   'sourceRef',
   'policy',
   'datasetId',

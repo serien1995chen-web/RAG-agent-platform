@@ -117,15 +117,7 @@ export function EmptyState({
   );
 }
 
-export function Stat({
-  label,
-  value,
-  hint,
-}: {
-  label: string;
-  value: ReactNode;
-  hint?: string;
-}) {
+export function Stat({ label, value, hint }: { label: string; value: ReactNode; hint?: string }) {
   return (
     <div className={styles.stat}>
       <div className={styles.statLabel}>{label}</div>
@@ -135,7 +127,11 @@ export function Stat({
   );
 }
 
-export function Glyph({ name }: { name: 'overview' | 'datasets' | 'runs' | 'coverage' | 'defects' | 'runtime' }) {
+export function Glyph({
+  name,
+}: {
+  name: 'overview' | 'datasets' | 'runs' | 'coverage' | 'defects' | 'runtime';
+}) {
   const paths: Record<string, ReactNode> = {
     overview: (
       <>

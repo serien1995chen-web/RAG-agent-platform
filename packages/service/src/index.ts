@@ -252,6 +252,7 @@ export type {
 export {
   PROCESSING_JOB_INVARIANTS,
   ProcessingApplicationService,
+  createTrainingProcessor,
   PROCESSING_JOB_JOB_DEFINITIONS,
   PushDataService,
   createProcessingJobAdapter,

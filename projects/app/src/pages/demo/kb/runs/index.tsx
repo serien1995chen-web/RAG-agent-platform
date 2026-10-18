@@ -2,7 +2,12 @@ import { useState } from 'react';
 import { DemoShell } from '../../../../demo/kb/components/demo-shell';
 import { EmptyState, StatusText } from '../../../../demo/kb/components/primitives';
 import { rememberId, saveScenario } from '../../../../demo/kb/lib/run-store';
-import { SCENARIOS, emptyRun, summarize, type ScenarioDef } from '../../../../demo/kb/lib/scenarios';
+import {
+  SCENARIOS,
+  emptyRun,
+  summarize,
+  type ScenarioDef,
+} from '../../../../demo/kb/lib/scenarios';
 import { useDemoStore } from '../../../../demo/kb/lib/use-demo-store';
 import styles from '../../../../demo/kb/styles/demo.module.css';
 import type { ScenarioRun, ScenarioStepState } from '../../../../demo/kb/types';
@@ -33,7 +38,11 @@ export default function DemoRunsPage() {
   const selectScenario = (id: string) => {
     setActiveId(id);
     const def = SCENARIOS.find((item) => item.scenarioId === id);
-    setSteps(def ? def.steps.map((step) => ({ stepId: step.stepId, title: step.title, status: 'idle' })) : []);
+    setSteps(
+      def
+        ? def.steps.map((step) => ({ stepId: step.stepId, title: step.title, status: 'idle' }))
+        : [],
+    );
     setCurrentRun(null);
     setMessage(null);
   };
@@ -136,7 +145,9 @@ export default function DemoRunsPage() {
               <h2 className={styles.sectionTitle}>
                 {active.scenarioId} {active.title}
               </h2>
-              <div className={`${styles.small} ${styles.muted} ${styles.mb12}`}>{active.description}</div>
+              <div className={`${styles.small} ${styles.muted} ${styles.mb12}`}>
+                {active.description}
+              </div>
               <div className={styles.rowActions}>
                 <button
                   type="button"
@@ -164,14 +175,14 @@ export default function DemoRunsPage() {
               {message ? <div className={`${styles.mt12} ${styles.small}`}>{message}</div> : null}
 
               <div className={`${styles.timeline} ${styles.mt16}`}>
-              {(steps.length > 0
-                ? steps
-                : active.steps.map<ScenarioStepState>((step) => ({
-                    stepId: step.stepId,
-                    title: step.title,
-                    status: 'idle',
-                  }))
-              ).map((step, index) => (
+                {(steps.length > 0
+                  ? steps
+                  : active.steps.map<ScenarioStepState>((step) => ({
+                      stepId: step.stepId,
+                      title: step.title,
+                      status: 'idle',
+                    }))
+                ).map((step, index) => (
                   <div key={step.stepId} className={styles.timelineRow}>
                     <span
                       className={styles.timelineDot}
@@ -192,9 +203,13 @@ export default function DemoRunsPage() {
                         <span>{step.title}</span>
                         <StatusText status={step.status} />
                       </div>
-                      {step.detail ? <div className={`${styles.tiny} ${styles.muted}`}>{step.detail}</div> : null}
+                      {step.detail ? (
+                        <div className={`${styles.tiny} ${styles.muted}`}>{step.detail}</div>
+                      ) : null}
                       {step.runEntrySeq ? (
-                        <div className={`${styles.tiny} ${styles.mono}`}>run #{String(step.runEntrySeq).padStart(3, '0')}</div>
+                        <div className={`${styles.tiny} ${styles.mono}`}>
+                          run #{String(step.runEntrySeq).padStart(3, '0')}
+                        </div>
                       ) : null}
                       {step.status === 'idle' && index === 0 ? (
                         <div className={styles.tiny}>从这一步开始执行</div>
@@ -233,9 +248,12 @@ export default function DemoRunsPage() {
                       <strong>{item.scenarioId}</strong> {item.title}
                     </div>
                     <div className={styles.tiny}>
-                      通过 {item.summary.passed} · 失败 {item.summary.failed} · 阻塞 {item.summary.blocked}
+                      通过 {item.summary.passed} · 失败 {item.summary.failed} · 阻塞{' '}
+                      {item.summary.blocked}
                     </div>
-                    <div className={styles.tiny}>{new Date(item.startedAt).toLocaleString('zh-CN')}</div>
+                    <div className={styles.tiny}>
+                      {new Date(item.startedAt).toLocaleString('zh-CN')}
+                    </div>
                     <button
                       type="button"
                       className={`${styles.button} ${styles.buttonSmall} ${styles.mt8}`}

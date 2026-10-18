@@ -17,13 +17,21 @@ export default withApiHandler(
       'CollectionTrainingStatusQuery',
       request.query,
     );
-    await runtime.collectionService.getCollection(
+    const collection = await runtime.collectionService.getCollection(
       { collectionId: query.collectionId, options: { timeoutMs: 5_000 } },
       context,
     );
-    response
-      .status(200)
-      .json(successResponse({ trainingState: 'ready', stage: 'mongo', remaining: 0 }, requestId));
+    response.status(200).json(
+      successResponse(
+        {
+          collectionId: collection.collectionId,
+          trainingState: collection.trainingState ?? 'ready',
+          stage: 'mongo',
+          remaining: collection.remainingTraining ?? 0,
+        },
+        requestId,
+      ),
+    );
   },
   { validationErrorCode: 501070 },
 );

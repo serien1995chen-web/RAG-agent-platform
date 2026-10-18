@@ -21,6 +21,10 @@ export interface PushDataServiceDeps {
   maxBytes?: number;
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
 export interface PushBatchItem {
   dataId: string;
   version: number | string;
@@ -94,7 +98,14 @@ export class PushDataService {
     const fact = await this.deps.jobs.enqueue(input, context);
     await (this.deps.queue as QueuePort).enqueue(queueName, input.job.jobId, {
       jobId: input.job.jobId,
+      teamId: input.job.teamId,
+      datasetId: input.job.datasetId,
+      ...(input.job.collectionId ? { collectionId: input.job.collectionId } : {}),
+      ...(input.job.dataId ? { dataId: input.job.dataId } : {}),
       mode: input.job.mode,
+      // Worker 的 parseEnvelope 以 payload.taskId 认领 Mongo 任务事实；缺失会判 invalid_envelope。
+      payload: { taskId: fact.taskId },
+      retryCount: 0,
     });
     return fact;
   }
@@ -184,7 +195,24 @@ export class PushDataService {
         context,
       );
       // 2) 事实成功后再投递队列
-      await this.deliver(input.mode, jobId, item.payload, context);
+      await this.deliver(
+        input.mode,
+        jobId,
+        {
+          jobId,
+          teamId: context.tenant.teamId,
+          datasetId: input.datasetId,
+          collectionId: input.collectionId,
+          ...(item.dataId ? { dataId: item.dataId } : {}),
+          mode: input.mode,
+          payload: {
+            ...(isRecord(item.payload) ? item.payload : {}),
+            taskId: fact.taskId,
+          },
+          retryCount: 0,
+        },
+        context,
+      );
       taskIds.push(fact.taskId);
     }
     return { accepted: taskIds.length, skipped, taskIds };

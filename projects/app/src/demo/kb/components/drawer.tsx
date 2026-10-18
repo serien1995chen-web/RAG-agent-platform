@@ -84,7 +84,13 @@ export function ConfirmDialog({
     <div className={styles.drawerBackdrop} role="presentation" onClick={onCancel}>
       <div
         className={styles.drawer}
-        style={{ width: 'min(440px, 100%)', height: 'auto', margin: 'auto', borderLeft: 'none', borderRadius: 6 }}
+        style={{
+          width: 'min(440px, 100%)',
+          height: 'auto',
+          margin: 'auto',
+          borderLeft: 'none',
+          borderRadius: 6,
+        }}
         role="alertdialog"
         aria-modal="true"
         aria-label={title}

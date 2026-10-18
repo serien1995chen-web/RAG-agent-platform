@@ -131,13 +131,15 @@ function parseField(rawField: string): FieldSpec | null {
 
 function numericBounds(constraints: string): { min?: number; max?: number } {
   const bounds: { min?: number; max?: number } = {};
-  const range = constraints.match(/(\d+)\s*-\s*(\d+)/);
+  // 小数区间（如 overlapRatio 的 0-0.9）必须整体匹配，否则 /\d+-\d+/ 会截断为 0-0。
+  const decimal = '\\d+(?:\\.\\d+)?';
+  const range = constraints.match(new RegExp(`(${decimal})\\s*-\\s*(${decimal})`));
   if (range?.[1] !== undefined && range[2] !== undefined) {
     bounds.min = Number(range[1]);
     bounds.max = Number(range[2]);
   }
-  const min = constraints.match(/[≥>]=?\s*(\d+)/);
-  const max = constraints.match(/[≤<]=?\s*(\d+)/);
+  const min = constraints.match(new RegExp(`[≥>]=?\\s*(${decimal})`));
+  const max = constraints.match(new RegExp(`[≤<]=?\\s*(${decimal})`));
   if (min?.[1] !== undefined) bounds.min = Number(min[1]);
   if (max?.[1] !== undefined) bounds.max = Number(max[1]);
   return bounds;

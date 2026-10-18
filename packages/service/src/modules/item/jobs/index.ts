@@ -30,8 +30,11 @@ export interface KnowledgeItemJobHandlerDeps {
 const ITEM_PAYLOAD_FIELDS = [
   'taskId',
   'version',
+  'sourceType',
   'sourceRef',
   'policy',
+  'q',
+  'a',
   'datasetId',
   'collectionId',
   'dataId',

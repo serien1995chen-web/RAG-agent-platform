@@ -56,6 +56,25 @@ describe('DTO 闭包四件套（ACC-API-009 / ACC-API-010）', () => {
     expect(dtoRegistry['DatasetCreateBody']!.safeParse({ type: 'dataset' }).success).toBe(false);
   });
 
+  it('小数区间可解析：ChunkPolicy.overlapRatio 0-0.9 不再被截断为 0-0', () => {
+    const policy = {
+      mode: 'auto',
+      chunkSize: 1000,
+      minSize: 100,
+      maxSize: 8000,
+      overlapRatio: 0.15,
+      paragraphDeep: 5,
+      customRegs: [],
+      lengthUnit: 'token',
+      forceSplit: true,
+      maxChunks: 50000,
+    };
+    expect(dtoRegistry['ChunkPolicy']!.safeParse(policy).success).toBe(true);
+    expect(dtoRegistry['ChunkPolicy']!.safeParse({ ...policy, overlapRatio: 0.95 }).success).toBe(
+      false,
+    );
+  });
+
   it('TEST-API-NESTED-001 嵌套 Schema 具名：嵌套引用全部可解析且无匿名对象', () => {
     const unresolved = DTO_SPECS.flatMap((spec) =>
       nestedTypeNames(spec.fields)

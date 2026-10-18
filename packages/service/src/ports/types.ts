@@ -91,6 +91,8 @@ export interface CollectionSnapshot {
   tagIds: string[];
   sourceRef?: string;
   trainingPolicy?: unknown;
+  trainingState?: 'running' | 'error' | 'ready';
+  remainingTraining?: number;
   /** ISSUE-002：训练模式（chunk/qa/image/imageParse），与 trainingPolicy.mode 独立。 */
   trainingMode?: string;
   /** ADR-011：auto 改写后为 true。 */

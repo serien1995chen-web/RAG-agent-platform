@@ -1,4 +1,4 @@
-import { ApiErrorException, createApiError } from '@kb/contracts';
+import { ApiErrorException, buildIndexVersion, createApiError } from '@kb/contracts';
 import type { FullTextStore, VectorController, VectorSearchHit } from '../../../ports/capabilities';
 import type { KnowledgeItemRepository } from '../../../ports/repositories';
 import type {
@@ -25,6 +25,8 @@ export interface InsertDirectInput {
   q: string;
   a?: string;
   indexType?: string;
+  chunkIndex?: number;
+  indexVersion?: string;
   vector: number[];
   imageId?: string;
   imageRef?: ObjectRef;
@@ -82,9 +84,13 @@ export class InsertDataService {
     const answer = normalizeQaText(input.a ?? '');
     const dedupKey = buildQaDedupKey(question, answer);
     const text = answer.length > 0 ? question + '\n' + answer : question;
-    const indexType = input.indexType ?? 'qa';
+    // `qa` 不是 DatasetData.indexes.type 的合法枚举值（会触发 Mongoose 校验 → 501998）。
+    // 直接插入的问答数据按设计使用 `question` 索引类型。
+    const indexType = input.indexType ?? 'question';
     const indexId = input.dataId + ':' + indexType;
-    const indexVersion = '1';
+    // 索引版本必须与 Dataset 记录的 indexVersion 同构（model:dimension:schema），
+    // 否则向量写入成功但检索侧按版本过滤会 0 命中。
+    const indexVersion = input.indexVersion ?? buildIndexVersion('bge-m3', 1536, 'v1');
     const now = new Date().toISOString();
     const item: KnowledgeItemSnapshot = {
       dataId: input.dataId,
@@ -93,6 +99,7 @@ export class InsertDataService {
       collectionId: input.collectionId,
       q: question,
       a: answer,
+      chunkIndex: input.chunkIndex ?? 0,
       indexes: [{ indexId, type: indexType, dataId: input.dataId, text }],
       rebuilding: false,
       version: 1,

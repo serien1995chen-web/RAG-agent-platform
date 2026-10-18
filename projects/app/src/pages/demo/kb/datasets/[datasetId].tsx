@@ -4,7 +4,13 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ConfirmDialog } from '../../../../demo/kb/components/drawer';
 import { DemoShell } from '../../../../demo/kb/components/demo-shell';
 import { EmptyState, Field, StatusText } from '../../../../demo/kb/components/primitives';
-import { api, type CollectionSummary, type DataSummary, type DatasetDetailData, type SearchCitation } from '../../../../demo/kb/lib/api';
+import {
+  api,
+  type CollectionSummary,
+  type DataSummary,
+  type DatasetDetailData,
+  type SearchCitation,
+} from '../../../../demo/kb/lib/api';
 import { demoFetch } from '../../../../demo/kb/lib/demo-fetch';
 import { useDemoStore } from '../../../../demo/kb/lib/use-demo-store';
 import { useOnce } from '../../../../demo/kb/lib/use-once';
@@ -120,7 +126,8 @@ export default function DatasetDetailPage() {
     track('创建文本集合', result.ok, `${result.entry.status}/${result.entry.code}`);
     if (result.ok) {
       await loadCollections();
-      if (result.envelope.data?.collectionId) setActiveCollection(String(result.envelope.data.collectionId));
+      if (result.envelope.data?.collectionId)
+        setActiveCollection(String(result.envelope.data.collectionId));
     }
   };
 
@@ -172,7 +179,13 @@ export default function DatasetDetailPage() {
   const runSearch = async () => {
     if (!datasetId) return;
     setBusy('search');
-    const result = await api.searchTest({ datasetId, text: searchText, limit, similarity, searchMode });
+    const result = await api.searchTest({
+      datasetId,
+      text: searchText,
+      limit,
+      similarity,
+      searchMode,
+    });
     setBusy(null);
     if (!result.ok) {
       setActionError(`检索失败：${result.entry.status}/${result.entry.code}`);
@@ -181,7 +194,9 @@ export default function DatasetDetailPage() {
     }
     setActionError(null);
     setCitations(result.envelope.data?.searchRes?.citations ?? []);
-    setSearchStats((result.envelope.data?.searchRes?.stats ?? null) as Record<string, unknown> | null);
+    setSearchStats(
+      (result.envelope.data?.searchRes?.stats ?? null) as Record<string, unknown> | null,
+    );
   };
 
   const loadJob = async () => {
@@ -223,7 +238,11 @@ export default function DatasetDetailPage() {
     setBusy('rebuild');
     const result = await api.rebuildEmbedding({
       datasetId,
-      modelRef: { provider: 'openai', model: detail.dataset.vectorModel ?? 'bge-m3', dimension: 1536 },
+      modelRef: {
+        provider: 'openai',
+        model: detail.dataset.vectorModel ?? 'bge-m3',
+        dimension: 1536,
+      },
     });
     track('重建向量', result.ok, `${result.entry.status}/${result.entry.code}`);
   };
@@ -284,11 +303,16 @@ export default function DatasetDetailPage() {
       title={detail?.dataset.name ?? '知识库详情'}
       breadcrumb={
         <span>
-          <Link href="/demo/kb/datasets">知识库</Link> / <span className={styles.mono}>{datasetId}</span>
+          <Link href="/demo/kb/datasets">知识库</Link> /{' '}
+          <span className={styles.mono}>{datasetId}</span>
         </span>
       }
       actions={
-        <button type="button" className={`${styles.button} ${styles.buttonDanger}`} onClick={() => setConfirmDelete(true)}>
+        <button
+          type="button"
+          className={`${styles.button} ${styles.buttonDanger}`}
+          onClick={() => setConfirmDelete(true)}
+        >
           删除知识库
         </button>
       }
@@ -335,7 +359,12 @@ export default function DatasetDetailPage() {
               <span>{detail?.stats.datas ?? '—'}</span>
             </div>
             <div className={`${styles.rowActions} ${styles.mt16}`}>
-              <button type="button" className={styles.button} onClick={() => void rebuild()} disabled={busy === 'rebuild'}>
+              <button
+                type="button"
+                className={styles.button}
+                onClick={() => void rebuild()}
+                disabled={busy === 'rebuild'}
+              >
                 {busy === 'rebuild' ? '重建中…' : '重建向量'}
               </button>
               <button type="button" className={styles.button} onClick={() => void loadDetail()}>
@@ -362,7 +391,11 @@ export default function DatasetDetailPage() {
             <div className={styles.flex}>
               <h2 className={styles.sectionTitle}>集合（{collections.length}）</h2>
               <span className={styles.topSpacer} />
-              <button type="button" className={styles.button} onClick={() => void loadCollections()}>
+              <button
+                type="button"
+                className={styles.button}
+                onClick={() => void loadCollections()}
+              >
                 刷新
               </button>
             </div>
@@ -398,7 +431,13 @@ export default function DatasetDetailPage() {
                       <td data-label="类型">{row.type}</td>
                       <td data-label="训练状态">
                         <StatusText
-                          status={row.trainingState === 'ready' ? 'passed' : row.trainingState === 'error' ? 'failed' : 'running'}
+                          status={
+                            row.trainingState === 'ready'
+                              ? 'passed'
+                              : row.trainingState === 'error'
+                                ? 'failed'
+                                : 'running'
+                          }
                           label={row.trainingState ?? 'unknown'}
                         />
                       </td>
@@ -432,7 +471,12 @@ export default function DatasetDetailPage() {
                 onChange={(event) => setTextInput(event.target.value)}
               />
             </Field>
-            <button type="button" className={styles.button} onClick={() => void createText()} disabled={busy === 'text'}>
+            <button
+              type="button"
+              className={styles.button}
+              onClick={() => void createText()}
+              disabled={busy === 'text'}
+            >
               {busy === 'text' ? '创建中…' : '创建文本集合'}
             </button>
             <div className={styles.mt16}>
@@ -444,7 +488,12 @@ export default function DatasetDetailPage() {
                   onChange={(event) => setFolderName(event.target.value)}
                 />
               </Field>
-              <button type="button" className={styles.button} onClick={() => void createFolder()} disabled={busy === 'folder'}>
+              <button
+                type="button"
+                className={styles.button}
+                onClick={() => void createFolder()}
+                disabled={busy === 'folder'}
+              >
                 创建文件夹
               </button>
             </div>
@@ -457,7 +506,12 @@ export default function DatasetDetailPage() {
                   onChange={(event) => setLinkUrl(event.target.value)}
                 />
               </Field>
-              <button type="button" className={styles.button} onClick={() => void createLink()} disabled={busy === 'link'}>
+              <button
+                type="button"
+                className={styles.button}
+                onClick={() => void createLink()}
+                disabled={busy === 'link'}
+              >
                 创建链接集合
               </button>
             </div>
@@ -485,7 +539,11 @@ export default function DatasetDetailPage() {
             </select>
             <span className={styles.topSpacer} />
             <span className={styles.tiny}>total {dataTotal}</span>
-            <button type="button" className={styles.button} onClick={() => void loadData(activeCollection)}>
+            <button
+              type="button"
+              className={styles.button}
+              onClick={() => void loadData(activeCollection)}
+            >
               刷新
             </button>
           </div>
@@ -493,7 +551,10 @@ export default function DatasetDetailPage() {
             {!activeCollection ? (
               <EmptyState title="先选择一个集合" hint="集合标签页可创建文本集合。" />
             ) : dataRows.length === 0 ? (
-              <EmptyState title="该集合暂无数据" hint="训练完成后数据才会出现；也可直接插入一条。" />
+              <EmptyState
+                title="该集合暂无数据"
+                hint="训练完成后数据才会出现；也可直接插入一条。"
+              />
             ) : (
               <table className={`${styles.table} ${styles.tableCardMode}`}>
                 <thead>
@@ -524,16 +585,36 @@ export default function DatasetDetailPage() {
           <div className={`${styles.split} ${styles.mt16}`}>
             <div>
               <Field label="q（问题）" htmlFor="data-q">
-                <input id="data-q" className={styles.input} value={q} onChange={(event) => setQ(event.target.value)} />
+                <input
+                  id="data-q"
+                  className={styles.input}
+                  value={q}
+                  onChange={(event) => setQ(event.target.value)}
+                />
               </Field>
               <Field label="a（回答，可选）" htmlFor="data-a">
-                <input id="data-a" className={styles.input} value={a} onChange={(event) => setA(event.target.value)} />
+                <input
+                  id="data-a"
+                  className={styles.input}
+                  value={a}
+                  onChange={(event) => setA(event.target.value)}
+                />
               </Field>
               <div className={styles.rowActions}>
-                <button type="button" className={styles.button} onClick={() => void insertData()} disabled={busy === 'insert' || !activeCollection}>
+                <button
+                  type="button"
+                  className={styles.button}
+                  onClick={() => void insertData()}
+                  disabled={busy === 'insert' || !activeCollection}
+                >
                   {busy === 'insert' ? '插入中…' : '直接插入'}
                 </button>
-                <button type="button" className={styles.button} onClick={() => void pushData()} disabled={busy === 'push' || !activeCollection}>
+                <button
+                  type="button"
+                  className={styles.button}
+                  onClick={() => void pushData()}
+                  disabled={busy === 'push' || !activeCollection}
+                >
                   {busy === 'push' ? '推送中…' : '批量推送 2 条'}
                 </button>
               </div>
@@ -578,7 +659,9 @@ export default function DatasetDetailPage() {
                   min={1}
                   max={50}
                   value={limit}
-                  onChange={(event) => setLimit(Math.max(1, Math.min(50, Number(event.target.value) || 1)))}
+                  onChange={(event) =>
+                    setLimit(Math.max(1, Math.min(50, Number(event.target.value) || 1)))
+                  }
                 />
               </Field>
               <Field label="相似度阈值" htmlFor="search-sim">
@@ -590,11 +673,18 @@ export default function DatasetDetailPage() {
                   max={1}
                   step={0.05}
                   value={similarity}
-                  onChange={(event) => setSimilarity(Math.max(0, Math.min(1, Number(event.target.value) || 0)))}
+                  onChange={(event) =>
+                    setSimilarity(Math.max(0, Math.min(1, Number(event.target.value) || 0)))
+                  }
                 />
               </Field>
             </div>
-            <button type="button" className={styles.button} onClick={() => void runSearch()} disabled={busy === 'search'}>
+            <button
+              type="button"
+              className={styles.button}
+              onClick={() => void runSearch()}
+              disabled={busy === 'search'}
+            >
               {busy === 'search' ? '检索中…' : '执行检索'}
             </button>
           </section>
@@ -662,7 +752,12 @@ export default function DatasetDetailPage() {
                 placeholder="粘贴删除返回的 jobId"
               />
             </Field>
-            <button type="button" className={styles.button} onClick={() => void loadJob()} disabled={busy === 'job'}>
+            <button
+              type="button"
+              className={styles.button}
+              onClick={() => void loadJob()}
+              disabled={busy === 'job'}
+            >
               {busy === 'job' ? '读取中…' : '读取任务'}
             </button>
           </div>
@@ -684,7 +779,10 @@ export default function DatasetDetailPage() {
             </button>
           </div>
           {tags.length === 0 ? (
-            <EmptyState title="暂无标签" hint="标签创建能力按后端支持度展示；未提供时不会伪造入口。" />
+            <EmptyState
+              title="暂无标签"
+              hint="标签创建能力按后端支持度展示；未提供时不会伪造入口。"
+            />
           ) : (
             <ul>
               {tags.map((tag) => (
@@ -715,7 +813,11 @@ export default function DatasetDetailPage() {
             />
           )}
           <div className={styles.mt12}>
-            <Link className={styles.button} href={`/proApi/core/dataset/collaborator/list?datasetId=${datasetId}`} target="_blank">
+            <Link
+              className={styles.button}
+              href={`/proApi/core/dataset/collaborator/list?datasetId=${datasetId}`}
+              target="_blank"
+            >
               打开协作者列表（/proApi）
             </Link>
           </div>
@@ -726,7 +828,12 @@ export default function DatasetDetailPage() {
         <section className={`${styles.panel} ${styles.panelPad}`}>
           <h2 className={styles.sectionTitle}>导入导出</h2>
           <div className={styles.rowActions}>
-            <button type="button" className={styles.button} onClick={() => void exportDataset()} disabled={busy === 'export'}>
+            <button
+              type="button"
+              className={styles.button}
+              onClick={() => void exportDataset()}
+              disabled={busy === 'export'}
+            >
               {busy === 'export' ? '导出中…' : '导出 Dataset'}
             </button>
             <Link className={styles.button} href="/demo/kb/coverage">
@@ -744,12 +851,18 @@ export default function DatasetDetailPage() {
         <section className={`${styles.panel} ${styles.panelPad}`}>
           <h2 className={styles.sectionTitle}>文件与图片</h2>
           <div className={styles.rowActions}>
-            <button type="button" className={styles.button} onClick={() => void presign()} disabled={busy === 'presign'}>
+            <button
+              type="button"
+              className={styles.button}
+              onClick={() => void presign()}
+              disabled={busy === 'presign'}
+            >
               {busy === 'presign' ? '申请中…' : '申请上传签名'}
             </button>
           </div>
           <div className={`${styles.tiny} ${styles.mt12}`}>
-            图片集合、分片上传与预览依赖 MinIO 与图片处理 Port；未接入时返回 501999 / 501062，会如实显示。
+            图片集合、分片上传与预览依赖 MinIO 与图片处理 Port；未接入时返回 501999 /
+            501062，会如实显示。
           </div>
         </section>
       ) : null}

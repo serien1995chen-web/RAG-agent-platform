@@ -6,6 +6,7 @@ import type {
   SearchResult,
 } from '@kb/contracts';
 import type {
+  CollectionSnapshot,
   ObjectRef,
   PageResult,
   PermissionContext,
@@ -94,6 +95,7 @@ export interface VectorController {
       teamId: string;
       datasetId: string;
       collectionId?: string;
+      collectionIds?: string[];
       vector: number[];
       limit: number;
       indexVersion?: string;
@@ -339,6 +341,55 @@ export interface TaskResult {
 
 export interface TrainingProcessorPort {
   process(task: TaskEnvelope, context: RequestContext): Promise<TaskResult>;
+}
+
+/** 训练处理器的依赖收敛在 Ports 层，避免 processing 跨模块导入 collection/index/item 内部实现。 */
+export interface TrainingCollectionPort {
+  get(
+    input: { collectionId: string; options: PortCallOptions },
+    context: RequestContext,
+  ): Promise<CollectionSnapshot>;
+  markTrainingState(
+    input: {
+      collectionId: string;
+      trainingState: 'running' | 'error' | 'ready';
+      remainingTraining: number;
+      options: PortCallOptions;
+    },
+    context: RequestContext,
+  ): Promise<void>;
+}
+
+export interface TrainingDatasetPort {
+  findByDatasetId(
+    input: { datasetId: string },
+    context: RequestContext,
+  ): Promise<{ vectorModel: string; indexVersion: string } | null>;
+}
+
+export interface TrainingEmbeddingPort {
+  embed(
+    input: { models: ModelSelection; texts: string[]; options: PortCallOptions },
+    context: RequestContext,
+  ): Promise<number[][]>;
+}
+
+export interface TrainingInsertPort {
+  insertDirect(
+    input: {
+      dataId: string;
+      datasetId: string;
+      collectionId: string;
+      q: string;
+      a?: string;
+      indexType?: string;
+      chunkIndex?: number;
+      indexVersion?: string;
+      vector: number[];
+      options: PortCallOptions;
+    },
+    context: RequestContext,
+  ): Promise<{ dataId: string; inserted: number; duplicates: number; dedupKey: string }>;
 }
 
 export interface ImageTaskResult {

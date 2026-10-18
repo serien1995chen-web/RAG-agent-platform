@@ -108,6 +108,8 @@ export class MongoCollectionRepository implements CollectionTreeRepository {
       tagIds: doc.tagIds.map(String),
       ...(doc.sourceRef ? { sourceRef: JSON.stringify(doc.sourceRef) } : {}),
       trainingPolicy: doc.trainingPolicy,
+      trainingState: doc.trainingState,
+      remainingTraining: doc.remainingTraining,
       // ISSUE-002：历史文档缺 trainingMode 时兜底推断，保证旧数据可读。
       trainingMode: inferTrainingMode(doc.trainingMode, doc.trainingPolicy?.mode),
       version: doc.updateTime.getTime(),
@@ -381,6 +383,29 @@ export class MongoCollectionRepository implements CollectionTreeRepository {
       );
     }
     return { version: updated.updateTime.getTime() };
+  }
+
+  async markTrainingState(
+    input: {
+      collectionId: string;
+      trainingState: 'running' | 'error' | 'ready';
+      remainingTraining: number;
+      options: { timeoutMs: number };
+    },
+    context: RequestContext,
+  ): Promise<void> {
+    const teamId = this.teamId(context);
+    const collectionId = toOid(input.collectionId, 'collectionId', context.requestId);
+    await this.model.updateOne(
+      { _id: collectionId, teamId },
+      {
+        $set: {
+          trainingState: input.trainingState,
+          remainingTraining: input.remainingTraining,
+          updateTime: new Date(),
+        },
+      },
+    );
   }
 
   async deleteTree(

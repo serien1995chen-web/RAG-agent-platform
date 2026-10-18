@@ -24,8 +24,9 @@ export default withApiHandler(
       { collectionId: body.collectionId, options },
       context,
     );
+    const detail = await runtime.datasetApi.getDatasetDetail(collection.datasetId, context);
     const vectors = await runtime.embeddingService.embed(
-      { models: { embeddingModel: 'bge-m3' }, texts: [body.q], options },
+      { models: { embeddingModel: detail.dataset.vectorModel }, texts: [body.q], options },
       context,
     );
     const dataId = randomBytes(12).toString('hex');
@@ -41,6 +42,7 @@ export default withApiHandler(
         collectionId: body.collectionId,
         q: body.q,
         ...(body.a !== undefined ? { a: body.a } : {}),
+        indexVersion: detail.dataset.indexVersion,
         vector: vectors[0] ?? [],
         options,
       },

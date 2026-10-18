@@ -34,6 +34,7 @@ export class VectorControllerAdapter implements VectorController {
       teamId: string;
       datasetId: string;
       collectionId?: string;
+      collectionIds?: string[];
       vector: number[];
       limit: number;
       indexVersion?: string;

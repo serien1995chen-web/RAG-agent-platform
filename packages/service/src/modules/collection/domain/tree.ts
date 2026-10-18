@@ -27,6 +27,19 @@ export interface CollectionTreeRepository extends CollectionRepository {
     },
     context: RequestContext,
   ): Promise<{ version: number }>;
+  /**
+   * 训练状态推进（parse/chunk 处理器使用）。
+   * 只更新状态字段，不参与 version CAS（后台任务与前台编辑互不阻塞）。
+   */
+  markTrainingState(
+    input: {
+      collectionId: string;
+      trainingState: 'running' | 'error' | 'ready';
+      remainingTraining: number;
+      options: { timeoutMs: number };
+    },
+    context: RequestContext,
+  ): Promise<void>;
 }
 
 export function isSameId(

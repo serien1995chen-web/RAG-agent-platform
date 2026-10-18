@@ -26,6 +26,26 @@ fi
 export PATH="$HOME/.nvm/versions/node/v22.23.2/bin:$PATH"
 
 echo "== 1/6 检查端口 =="
+# 只清理由本仓库启动的旧 app / worker（按 /proc/<pid>/cwd 校验），保证重复执行幂等。
+PORT_PID=$(ss -ltnp 2>/dev/null | sed -n "s/.*:${PORT} .*pid=\([0-9]*\).*/\1/p" | head -n1)
+if [ -n "${PORT_PID:-}" ] &&
+  [ "$(readlink -f "/proc/$PORT_PID/cwd" 2>/dev/null || true)" = "$REPO/projects/app" ]; then
+  echo "停止旧 demo app（pid=$PORT_PID）"
+  kill "$PORT_PID" 2>/dev/null || true
+  for _ in $(seq 1 20); do
+    kill -0 "$PORT_PID" 2>/dev/null || break
+    sleep 0.5
+  done
+  kill -9 "$PORT_PID" 2>/dev/null || true
+fi
+for pid in $(pgrep -f 'projects/app/src/runtime/worker.ts' 2>/dev/null || true); do
+  if [ "$(readlink -f "/proc/$pid/cwd" 2>/dev/null || true)" = "$REPO" ]; then
+    echo "停止旧 demo worker（pid=$pid）"
+    kill "$pid" 2>/dev/null || true
+  fi
+done
+sleep 1
+
 # 自己的 kb-demo 容器已经占用这些端口时视为正常（重复执行 demo-up 属于幂等场景）。
 OWN_PORTS=$(docker ps --filter "name=${PROJECT}" --format '{{.Ports}}' 2>/dev/null || true)
 for p in 27019 6381 5434 9004 9005 "$PORT"; do
@@ -96,9 +116,12 @@ export NEXT_PUBLIC_DEMO_WORKER_MODE=all
 export NEXT_PUBLIC_DEMO_IDENTITY="0000000000000000000000d1/0000000000000000000000d2"
 
 echo "== 5/6 启动 @kb/app（端口 $PORT）=="
-cd "$REPO/projects/app"
-pnpm exec next dev -p "$PORT" >"$REPO/.demo-app.log" 2>&1 &
-APP_PID=$!
+(
+  cd "$REPO/projects/app"
+  setsid nohup pnpm exec next dev -p "$PORT" >"$REPO/.demo-app.log" 2>&1 </dev/null &
+  echo $! >"$REPO/.demo-app.pid"
+)
+APP_PID=$(cat "$REPO/.demo-app.pid")
 echo "app pid=$APP_PID, log=$REPO/.demo-app.log"
 
 echo "== 6/6 等待探针 =="
@@ -116,7 +139,21 @@ fi
 
 if [ "$START_WORKER" = "1" ]; then
   echo "启动 worker（训练任务消费者）"
-  ( cd "$REPO" && pnpm exec tsx projects/app/src/runtime/worker.ts >"$REPO/.demo-worker.log" 2>&1 & echo $! >/tmp/kb-demo-worker.pid )
+  # setsid 让 worker 脱离当前终端会话，脚本退出后不会被 SIGHUP 带走。
+  (
+    cd "$REPO"
+    setsid nohup pnpm exec tsx projects/app/src/runtime/worker.ts \
+      >"$REPO/.demo-worker.log" 2>&1 </dev/null &
+    echo $! >"$REPO/.demo-worker.pid"
+  )
+  WORKER_PID=$(cat "$REPO/.demo-worker.pid")
+  echo "worker pid=$WORKER_PID, log=$REPO/.demo-worker.log"
+  sleep 4
+  if ! kill -0 "$WORKER_PID" 2>/dev/null || grep -q 'worker 启动失败' "$REPO/.demo-worker.log"; then
+    echo "worker 启动失败，最近日志：" >&2
+    tail -30 "$REPO/.demo-worker.log" >&2 || true
+    exit 5
+  fi
 fi
 
 cat <<EOF

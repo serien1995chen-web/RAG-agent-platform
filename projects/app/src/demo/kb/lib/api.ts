@@ -132,7 +132,10 @@ export const api = {
     });
   },
 
-  rebuildEmbedding(body: { datasetId: string; modelRef: { provider: string; model: string; dimension: number } }) {
+  rebuildEmbedding(body: {
+    datasetId: string;
+    modelRef: { provider: string; model: string; dimension: number };
+  }) {
     return demoFetch<{ state?: string }>({
       method: 'POST',
       path: '/api/core/dataset/rebuildEmbedding',
@@ -140,7 +143,11 @@ export const api = {
     });
   },
 
-  listCollections(input: { datasetId: string; page?: number; limit?: number }): R<CollectionListData> {
+  listCollections(input: {
+    datasetId: string;
+    page?: number;
+    limit?: number;
+  }): R<CollectionListData> {
     const params = new URLSearchParams({
       datasetId: input.datasetId,
       page: String(input.page ?? 1),
@@ -186,10 +193,12 @@ export const api = {
   },
 
   collectionTrainingStatus(collectionId: string) {
-    return demoFetch<{ collectionId?: string; trainingState?: string; remainingTraining?: number }>({
-      method: 'GET',
-      path: `/api/core/dataset/collection/trainingStatus?collectionId=${encodeURIComponent(collectionId)}`,
-    });
+    return demoFetch<{ collectionId?: string; trainingState?: string; remainingTraining?: number }>(
+      {
+        method: 'GET',
+        path: `/api/core/dataset/collection/trainingStatus?collectionId=${encodeURIComponent(collectionId)}`,
+      },
+    );
   },
 
   listData(input: { collectionId: string; page?: number; limit?: number }): R<DataListData> {
@@ -285,7 +294,10 @@ export const api = {
   },
 
   startup() {
-    return demoFetch<{ status: string; checks?: { name: string; status: string; durationMs?: number }[] }>({
+    return demoFetch<{
+      status: string;
+      checks?: { name: string; status: string; durationMs?: number }[];
+    }>({
       method: 'GET',
       path: '/api/startupz',
     });

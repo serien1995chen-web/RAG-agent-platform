@@ -169,7 +169,20 @@ describe('TEST-FI-INGEST-001 path A source import', () => {
       {
         queue: JOB_MODE_TO_QUEUE.parse ?? QUEUE_NAMES.parse,
         jobId: expectedJobId,
-        payload: { sourceType: 'text', contentHash: 'sha256:text' },
+        payload: {
+          jobId: expectedJobId,
+          teamId: 'team-1',
+          datasetId: 'd',
+          collectionId: 'col-1',
+          mode: 'parse',
+          payload: {
+            taskId: 'task-' + expectedJobId,
+            sourceType: 'text',
+            contentHash: 'sha256:text',
+            sourceRef: '正文',
+          },
+          retryCount: 0,
+        },
       },
     ]);
   });
@@ -324,11 +337,33 @@ describe('TEST-REP-PUSH-001 path C batch push', () => {
     expect(result.skipped).toBe(1);
     expect(facts).toEqual(['fact:' + expected, 'fact:' + buildQaJobId('team-1', 'data-2', 1)]);
     expect(queued).toEqual([
-      { queue: JOB_MODE_TO_QUEUE.qa ?? QUEUE_NAMES.qa, jobId: expected, payload: { q: 'a' } },
+      {
+        queue: JOB_MODE_TO_QUEUE.qa ?? QUEUE_NAMES.qa,
+        jobId: expected,
+        payload: {
+          jobId: expected,
+          teamId: 'team-1',
+          datasetId: 'd',
+          collectionId: 'c',
+          dataId: 'data-1',
+          mode: 'qa',
+          payload: { q: 'a', taskId: 'task-' + expected },
+          retryCount: 0,
+        },
+      },
       {
         queue: JOB_MODE_TO_QUEUE.qa ?? QUEUE_NAMES.qa,
         jobId: buildQaJobId('team-1', 'data-2', 1),
-        payload: { q: 'b' },
+        payload: {
+          jobId: buildQaJobId('team-1', 'data-2', 1),
+          teamId: 'team-1',
+          datasetId: 'd',
+          collectionId: 'c',
+          dataId: 'data-2',
+          mode: 'qa',
+          payload: { q: 'b', taskId: 'task-' + buildQaJobId('team-1', 'data-2', 1) },
+          retryCount: 0,
+        },
       },
     ]);
   });

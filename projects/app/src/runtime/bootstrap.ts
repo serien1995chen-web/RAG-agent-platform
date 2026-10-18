@@ -3,6 +3,7 @@ import {
   DatasetApiService,
   EmbeddingService,
   IndexApplicationService,
+  InsertDataService,
   KnowledgeItemApplicationService,
   MigrationApplicationService,
   MongoKnowledgeBaseRepository,
@@ -21,6 +22,7 @@ import {
   createProcessingJobRepository,
   createSourceCollectionRepository,
   createSourceProviderRegistry,
+  createTrainingProcessor,
   createApiError,
   type AuthSubjectProvider,
   type DatasetSourceProvider,
@@ -135,8 +137,8 @@ export async function bootstrapRuntime(
   // DEMO-002：`model: mock` 时必须给出确定性本地向量；否则文本导入会在训练阶段
   // 以 501062 静默失败，而集合已被标记 ready。real 模式仍回落到未接入（501062）。
   const embeddingMockMode =
-    (base.config as { externalMockMode?: { model?: 'mock' | 'real' } } | undefined)?.externalMockMode
-      ?.model ?? 'mock';
+    (base.config as { externalMockMode?: { model?: 'mock' | 'real' } } | undefined)
+      ?.externalMockMode?.model ?? 'mock';
   const embeddingService = new EmbeddingService({
     gateway:
       options.embeddingGateway ??
@@ -157,6 +159,20 @@ export async function bootstrapRuntime(
   const adapters = createKnowledgeItemIndexAdapter({
     pool: clients.pg,
     connection: clients.mongo,
+  });
+
+  // 训练链最小闭环：parse 处理器负责 切分 → Embedding → 写 Data/向量/全文。
+  const insertDataService = new InsertDataService({
+    items: knowledgeItemRepository,
+    vectors: adapters,
+    fullText: adapters.fullText ?? basePorts.fullTextStore,
+  });
+  const trainingProcessor = createTrainingProcessor({
+    collections: collectionRepository,
+    datasets: knowledgeBaseRepository,
+    sourceProvider: datasetSourceProvider,
+    embedding: embeddingService,
+    inserts: insertDataService,
   });
   // P5-03-S09：从（可能被契约测试精简 mock 的）base.config 读取装配所需字段，缺省回落冻结默认值。
   const runtimeConfig = base.config as
@@ -277,6 +293,7 @@ export async function bootstrapRuntime(
   });
   const ports: ServicePorts = {
     ...basePorts,
+    trainingProcessor,
     deleteJobRepository: deleteRepository,
     objectStore: objectStorePort,
     reconcileResult: reconcileResultAdapter,

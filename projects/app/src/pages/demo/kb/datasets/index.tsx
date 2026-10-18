@@ -25,7 +25,11 @@ export default function DemoDatasetsPage() {
   const [createError, setCreateError] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<DatasetSummary | null>(null);
   const [deleting, setDeleting] = useState(false);
-  const [lastJob, setLastJob] = useState<{ datasetId: string; jobId: string; state: string } | null>(null);
+  const [lastJob, setLastJob] = useState<{
+    datasetId: string;
+    jobId: string;
+    state: string;
+  } | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -53,7 +57,11 @@ export default function DemoDatasetsPage() {
     if (!name.trim()) return;
     setCreating(true);
     setCreateError(null);
-    const result = await api.createDataset({ name: name.trim(), type: 'dataset', embeddingModel: model });
+    const result = await api.createDataset({
+      name: name.trim(),
+      type: 'dataset',
+      embeddingModel: model,
+    });
     setCreating(false);
     if (!result.ok) {
       setCreateError(
@@ -101,7 +109,11 @@ export default function DemoDatasetsPage() {
       title="知识库"
       breadcrumb={`共 ${total} 个 · 本页 ${rows.length} 个 · 失败调用 ${failedCalls}`}
       actions={
-        <button type="button" className={`${styles.button} ${styles.buttonPrimary}`} onClick={() => setCreateOpen(true)}>
+        <button
+          type="button"
+          className={`${styles.button} ${styles.buttonPrimary}`}
+          onClick={() => setCreateOpen(true)}
+        >
           新建知识库
         </button>
       }
@@ -139,7 +151,12 @@ export default function DemoDatasetsPage() {
               placeholder="按名称过滤当前页"
             />
           </Field>
-          <button type="button" className={styles.button} onClick={() => void load()} disabled={loading}>
+          <button
+            type="button"
+            className={styles.button}
+            onClick={() => void load()}
+            disabled={loading}
+          >
             {loading ? '刷新中…' : '刷新'}
           </button>
         </div>
@@ -186,7 +203,10 @@ export default function DemoDatasetsPage() {
                   </td>
                   <td data-label="操作" className={styles.right}>
                     <div className={styles.rowActions} style={{ justifyContent: 'flex-end' }}>
-                      <Link className={`${styles.button} ${styles.buttonSmall}`} href={`/demo/kb/datasets/${row.datasetId}`}>
+                      <Link
+                        className={`${styles.button} ${styles.buttonSmall}`}
+                        href={`/demo/kb/datasets/${row.datasetId}`}
+                      >
                         打开
                       </Link>
                       <button
@@ -226,7 +246,12 @@ export default function DemoDatasetsPage() {
           }
         >
           {createError ? <div className={styles.banner}>{createError}</div> : null}
-          <Field label="名称" required hint="演示数据建议以 [DEMO] 开头，便于识别" htmlFor="new-dataset-name">
+          <Field
+            label="名称"
+            required
+            hint="演示数据建议以 [DEMO] 开头，便于识别"
+            htmlFor="new-dataset-name"
+          >
             <input
               id="new-dataset-name"
               className={styles.input}

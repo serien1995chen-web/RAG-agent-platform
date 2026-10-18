@@ -96,7 +96,7 @@ describePg('VectorController adapter (10.16 / ADR-002)', () => {
         { teamId: 'team-a', datasetId, vector: unitVector(0), limit: 5, options },
         contextA,
       ),
-    ).rejects.toMatchObject({ error: { code: 501012 } });
+    ).resolves.toEqual([]); // collectionId 可省略：按 dataset 全量召回（多集合检索路径）
     await expect(
       controller.embRecall(
         { teamId: 'team-a', datasetId: '', collectionId, vector: unitVector(0), limit: 5, options },

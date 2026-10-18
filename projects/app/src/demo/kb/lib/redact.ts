@@ -3,7 +3,8 @@
  * 规则来源：修复任务 §11.4 / §8.1。
  */
 
-const SENSITIVE_KEY = /(authorization|cookie|set-cookie|token|secret|password|signature|credential|apikey|api_key)/i;
+const SENSITIVE_KEY =
+  /(authorization|cookie|set-cookie|token|secret|password|signature|credential|apikey|api_key)/i;
 
 const REDACTED = '[REDACTED]';
 
