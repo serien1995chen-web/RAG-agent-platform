@@ -66,7 +66,8 @@ export default function DatasetDetailPage() {
 
   const updateQuery = useCallback(
     (patch: Record<string, string | number | undefined>) => {
-      const next = { ...router.query, ...patch };
+      const { datasetId: _routeDatasetId, ...baseQuery } = router.query;
+      const next = { ...baseQuery, ...patch };
       for (const [key, value] of Object.entries(next)) {
         if (value === undefined || value === '') delete next[key];
       }
