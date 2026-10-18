@@ -7,6 +7,7 @@ import {
   MongoKnowledgeBaseRepository,
   createApiError,
   createKnowledgeItemIndexAdapter,
+  createMockEmbeddingGateway,
   createSourceCollectionRepository,
   checkMongoTransactions,
   resolveSecretRef,
@@ -191,7 +192,13 @@ async function bootstrap(): Promise<AppRuntime> {
     {
       vectors: adapters,
       fullText: adapters.fullText,
-      embedding: new EmbeddingService({}),
+      // DEMO-002：与 bootstrap 保持一致——mock 模式下用确定性本地向量，real 模式仍为未接入。
+      embedding: new EmbeddingService({
+        ...((config as unknown as { externalMockMode?: { model?: 'mock' | 'real' } })
+          .externalMockMode?.model ?? 'mock') === 'mock'
+          ? { gateway: createMockEmbeddingGateway() }
+          : {},
+      }),
       resolveTexts: createTextResolver(clients.mongo),
       rerank: createRerankAdapter({
         environment: config.system.environment,

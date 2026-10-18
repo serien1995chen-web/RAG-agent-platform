@@ -142,7 +142,7 @@ export class ImportSourceService {
     const jobs = this.deps.jobs as NonNullable<typeof this.deps.jobs>;
     const queue = this.deps.queue as NonNullable<typeof this.deps.queue>;
     // 1) 先写 Mongo 训练任务事实
-    await jobs.enqueue(
+    const enqueued = await jobs.enqueue(
       {
         job: {
           jobId,
@@ -165,7 +165,8 @@ export class ImportSourceService {
       collectionId: collection.collectionId,
       mode: 'parse',
       payload: {
-        taskId: jobId,
+        // claim() 需要 Mongo 任务文档的 _id（enqueue 返回的 taskId），不是业务 jobId。
+        taskId: String(enqueued.taskId),
         sourceType: input.sourceType,
         contentHash: read.contentHash,
       },
