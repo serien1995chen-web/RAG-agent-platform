@@ -61,5 +61,6 @@ export default withApiHandler(
     }
     response.status(200).json(successResponse({ dataId: result.dataId }, requestId));
   },
-  { validationErrorCode: 501071 },
+  // ISSUE-005：参数校验失败走通用输入错误码；501071 仅保留给真实配额超限。
+  { validationErrorCode: 501072 },
 );

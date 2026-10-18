@@ -31,7 +31,7 @@ export default withApiHandler(
     const normalized =
       requested === 'image' || requested === 'imageParse' || requested === 'auto'
         ? normalizeImageMode(requested)
-        : { mode: requested, autoIndexes: body.autoIndexes ?? false };
+        : { trainingMode: requested, autoIndexes: body.autoIndexes ?? false };
     const options = { timeoutMs: 60_000 };
     const created = await runtime.collectionRepository.create(
       {
@@ -42,7 +42,9 @@ export default withApiHandler(
           type: 'image',
           name: 'images',
           tagIds: [],
-          trainingPolicy: { mode: normalized.mode, autoIndexes: normalized.autoIndexes },
+          // ISSUE-002：训练模式独立落库，chunkPolicy 保持自身切分语义。
+          trainingMode: normalized.trainingMode,
+          autoIndexes: normalized.autoIndexes,
         },
         options,
       },
@@ -50,7 +52,7 @@ export default withApiHandler(
     );
 
     const items: JsonValue[] = [];
-    if (IMAGE_MODES.has(normalized.mode)) {
+    if (IMAGE_MODES.has(normalized.trainingMode)) {
       const assets = createImageAssetRepository(runtime.clients.mongo as never);
       const fullText = runtime.fullTextStore;
       if (!assets || !fullText) {
@@ -82,7 +84,7 @@ export default withApiHandler(
             objectKey: source,
             mimeType: 'image/png',
             size: 0,
-            mode: normalized.mode as 'image' | 'imageParse',
+            mode: normalized.trainingMode as 'image' | 'imageParse',
             options,
           },
           context,

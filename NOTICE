@@ -3,7 +3,6 @@ NOTICE
 
 项目: rag-agent-platform 0.1.0
 
-生成时间: 2026-10-15T09:56:16.517Z
 生成命令: pnpm sbom:generate
 生成脚本: scripts/generate-sbom.mjs（禁止手工维护本文件）
 SBOM 产物: artifacts/sbom.json

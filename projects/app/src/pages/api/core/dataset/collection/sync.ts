@@ -42,5 +42,6 @@ export default withApiHandler(
     );
     response.status(200).json(successResponse(result, requestId));
   },
-  { validationErrorCode: 501019 },
+  // ISSUE-006：参数校验失败走通用输入错误码；501019 仅保留给 Provider 明确拒绝。
+  { validationErrorCode: 501072 },
 );

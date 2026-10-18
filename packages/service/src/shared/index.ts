@@ -75,6 +75,7 @@ export type {
 
 export { HealthProbeService, liveProbeResponse } from './health';
 export type { DependencyProbe, HealthSummary } from './health';
+export { MONGO_TRANSACTION_PROBE_NAME, checkMongoTransactions } from './health';
 
 export { tenantScopedModel } from './persistence/tenant-scoped-model';
 export type { TenantScopedModel } from './persistence/tenant-scoped-model';

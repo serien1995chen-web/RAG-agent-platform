@@ -106,9 +106,9 @@ describe('追溯规则 V4/V5/V6/V9/V10/V11（ACC-COVER-009 / TEST-TRACE-002 / TE
     }
   });
 
-  it('V5 错误码集合一致且连续：501001-501071 共 71 个无跳号', () => {
+  it('V5 错误码集合一致且连续：501001-501072 共 72 个无跳号', () => {
     expect(ERROR_CATALOG.map((entry) => entry.code)).toEqual(
-      Array.from({ length: 71 }, (_, index) => 501001 + index),
+      Array.from({ length: 72 }, (_, index) => 501001 + index),
     );
     const registered = new Set(ERROR_CATALOG.map((entry) => entry.code));
     const dangling = ROUTE_REGISTRY.flatMap((route) =>
@@ -123,7 +123,7 @@ describe('追溯规则 V4/V5/V6/V9/V10/V11（ACC-COVER-009 / TEST-TRACE-002 / TE
     const missing = ROUTE_REGISTRY.filter(
       (route) =>
         route.routeId !== LIVE_PROBE_ROUTE &&
-        !route.errorCodes.some((code) => code >= 501001 && code <= 501071),
+        !route.errorCodes.some((code) => code >= 501001 && code <= 501072),
     ).map((route) => route.routeId);
     expect(missing).toEqual([]);
     const liveProbe = ROUTE_REGISTRY.find((route) => route.routeId === LIVE_PROBE_ROUTE);

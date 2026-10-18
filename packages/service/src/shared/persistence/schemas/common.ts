@@ -1,5 +1,30 @@
 import { Schema } from 'mongoose';
 
+/**
+ * 训练模式（设计文档 ADR-011 / BR-WRITE-005）。
+ * 与切分模式（ChunkPolicy.mode: auto/paragraph/custom）是两个独立词汇表，
+ * 禁止共用同一字段（ISSUE-002）。
+ */
+export const TRAINING_MODES = ['chunk', 'qa', 'image', 'imageParse'] as const;
+
+export type TrainingModeValue = (typeof TRAINING_MODES)[number];
+
+export const DEFAULT_TRAINING_MODE: TrainingModeValue = 'chunk';
+
+/** 历史文档兜底：字段缺失时优先读取曾被误写入 trainingPolicy.mode 的训练词汇。 */
+export function inferTrainingMode(stored: unknown, chunkPolicyMode?: unknown): TrainingModeValue {
+  if (typeof stored === 'string' && (TRAINING_MODES as readonly string[]).includes(stored)) {
+    return stored as TrainingModeValue;
+  }
+  if (
+    typeof chunkPolicyMode === 'string' &&
+    (TRAINING_MODES as readonly string[]).includes(chunkPolicyMode)
+  ) {
+    return chunkPolicyMode as TrainingModeValue;
+  }
+  return DEFAULT_TRAINING_MODE;
+}
+
 /** 设计文档 9.8.1 的 ChunkPolicy 默认值。 */
 export interface ChunkPolicyValue {
   mode: 'auto' | 'paragraph' | 'custom';

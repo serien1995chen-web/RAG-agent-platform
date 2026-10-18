@@ -325,7 +325,8 @@
         "x-kb-response-dto": "ApiResponse<ApiDS006ResponseData>",
         "x-kb-error-codes": [
           501013,
-          501069
+          501069,
+          501072
         ],
         "x-kb-skeleton-implemented": true,
         "responses": {
@@ -335,6 +336,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ApiDS006ResponseData"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "501072 dataset.request.invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
                 }
               }
             }
@@ -1147,7 +1158,8 @@
         "x-kb-error-codes": [
           501019,
           501020,
-          501061
+          501061,
+          501072
         ],
         "x-kb-skeleton-implemented": true,
         "responses": {
@@ -1441,7 +1453,8 @@
         "x-kb-response-dto": "ApiResponse<ApiDATA005ResponseData>",
         "x-kb-error-codes": [
           501003,
-          501071
+          501071,
+          501072
         ],
         "x-kb-skeleton-implemented": true,
         "responses": {
@@ -1451,6 +1464,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ApiDATA005ResponseData"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "501072 dataset.request.invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
                 }
               }
             }
@@ -8747,7 +8770,7 @@
     ],
     "routeCount": 87,
     "dtoCount": 199,
-    "errorCount": 71,
+    "errorCount": 72,
     "implementedRoutes": [
       "API-DS-001",
       "API-DS-002",

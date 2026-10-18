@@ -84,7 +84,8 @@
       "responseDto": "ApiResponse<ApiDS006ResponseData>",
       "errorCodes": [
         501013,
-        501069
+        501069,
+        501072
       ],
       "implemented": true,
       "source": "public/Token/Owner"
@@ -311,7 +312,8 @@
       "errorCodes": [
         501019,
         501020,
-        501061
+        501061,
+        501072
       ],
       "implemented": true,
       "source": "public/Token/Write"
@@ -395,7 +397,8 @@
       "responseDto": "ApiResponse<ApiDATA005ResponseData>",
       "errorCodes": [
         501003,
-        501071
+        501071,
+        501072
       ],
       "implemented": true,
       "source": "public/Token/Write"

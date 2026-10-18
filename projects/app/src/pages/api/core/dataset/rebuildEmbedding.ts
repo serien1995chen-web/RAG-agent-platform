@@ -18,6 +18,18 @@ interface RebuildEmbeddingBody {
 
 const OWNER_PERMISSION = 8;
 
+/**
+ * ISSUE-006：`ModelReference.dimension` 的 refinement 属于维度校验，
+ * 语义码保持 501013；其余 DTO 错误归入 501072。
+ */
+function isDimensionIssue(issues: unknown): boolean {
+  if (!Array.isArray(issues)) return false;
+  return issues.some((issue) => {
+    const path = (issue as { path?: unknown }).path;
+    return Array.isArray(path) && path.join('.') === 'modelRef.dimension';
+  });
+}
+
 /** API-DS-006 POST /api/core/dataset/rebuildEmbedding */
 export default withApiHandler(
   async (request: NextApiRequest, response: NextApiResponse, { requestId }: ApiHandlerContext) => {
@@ -73,5 +85,9 @@ export default withApiHandler(
     );
     response.status(200).json(successResponse(result, requestId));
   },
-  { validationErrorCode: 501013 },
+  {
+    // ISSUE-006：普通缺参/类型错误走通用输入错误码；
+    // 维度不匹配属于存储语义，仍返回 501013（设计 12.4）。
+    validationErrorCode: (issues) => (isDimensionIssue(issues) ? 501013 : 501072),
+  },
 );

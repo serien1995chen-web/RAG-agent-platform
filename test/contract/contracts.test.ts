@@ -19,9 +19,9 @@ import {
 } from '../../packages/contracts/src/index';
 
 describe('error matrix (12.4 / 12.4.1 / 12.4.2)', () => {
-  it('registers exactly 501001-501071 once each', () => {
+  it('registers exactly 501001-501072 once each', () => {
     expect(ERROR_CATALOG.map((entry) => entry.code)).toEqual(
-      Array.from({ length: 71 }, (_, index) => 501001 + index),
+      Array.from({ length: 72 }, (_, index) => 501001 + index),
     );
   });
 

@@ -1,4 +1,10 @@
 import type { CollectionSnapshot } from '../../../ports/types';
+export {
+  PERSISTED_COLLECTION_TYPES,
+  isPersistedCollectionType,
+  toPersistedCollectionType,
+  type PersistedCollectionType,
+} from './collection-type';
 /**
  * SourceCollection 领域骨架（设计文档 7.2 / 7.4）。
  * 该层只允许实体、值对象、不变量与 Port 引用；禁止导入基础设施客户端。

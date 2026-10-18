@@ -29,7 +29,7 @@ describe('错误矩阵与 i18n 契约（ACC-ERR-001）', () => {
     const missing = ROUTE_REGISTRY.filter(
       (route) =>
         route.routeId !== LIVE_PROBE_ROUTE &&
-        !route.errorCodes.some((code) => code >= 501001 && code <= 501071),
+        !route.errorCodes.some((code) => code >= 501001 && code <= 501072),
     ).map((route) => route.routeId);
     expect(missing).toEqual([]);
 
@@ -39,13 +39,13 @@ describe('错误矩阵与 i18n 契约（ACC-ERR-001）', () => {
         .map((code) => `${route.routeId}: ${code}`),
     );
     expect(unregistered).toEqual([]);
-    expect(ERROR_CATALOG).toHaveLength(71);
+    expect(ERROR_CATALOG).toHaveLength(72);
   });
 
   it('TEST-ERROR-COMPAT-001 错误字段稳定：HTTP/retryable/severity 与 12.4 对齐', () => {
     for (const entry of ERROR_CATALOG) {
       expect(entry.code, `code ${entry.code}`).toBeGreaterThanOrEqual(501001);
-      expect(entry.code, `code ${entry.code}`).toBeLessThanOrEqual(501071);
+      expect(entry.code, `code ${entry.code}`).toBeLessThanOrEqual(501072);
       expect(ALLOWED_HTTP_STATUS, `code ${entry.code}`).toContain(entry.httpStatus);
       expect(ALLOWED_RETRYABILITY, `code ${entry.code}`).toContain(entry.retryable);
       expect(ALLOWED_SEVERITY, `code ${entry.code}`).toContain(entry.severity);
@@ -64,7 +64,7 @@ describe('错误矩阵与 i18n 契约（ACC-ERR-001）', () => {
     expect(getErrorMeta(501016)?.httpStatus).toBe(503);
   });
 
-  it('TEST-ERROR-I18N-001 messageKey+params 可渲染全部 71 个错误，无缺失 key', () => {
+  it('TEST-ERROR-I18N-001 messageKey+params 可渲染全部 72 个错误，无缺失 key', () => {
     const seenKeys = new Set<string>();
     for (const entry of ERROR_CATALOG) {
       expect(entry.messageKey, `code ${entry.code}`).toMatch(/^dataset\./);
@@ -90,6 +90,6 @@ describe('错误矩阵与 i18n 契约（ACC-ERR-001）', () => {
       expect(Object.keys(error.params).sort(), `code ${entry.code}`).toEqual(schemaNames.sort());
       expect(error.message.trim().length, `code ${entry.code}`).toBeGreaterThan(0);
     }
-    expect(seenKeys.size).toBe(71);
+    expect(seenKeys.size).toBe(72);
   });
 });

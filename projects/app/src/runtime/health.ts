@@ -3,10 +3,12 @@ import {
   DatasetApiService,
   EmbeddingService,
   HealthProbeService,
+  MONGO_TRANSACTION_PROBE_NAME,
   MongoKnowledgeBaseRepository,
   createApiError,
   createKnowledgeItemIndexAdapter,
   createSourceCollectionRepository,
+  checkMongoTransactions,
   resolveSecretRef,
   type AppConfig,
   type CollectionRepository,
@@ -109,6 +111,16 @@ export function buildHealthService(config: AppConfig, clients: RuntimeClients): 
       const match = /redis_version:([^\r\n]+)/.exec(info);
       return match?.[1] ?? null;
     },
+  });
+
+  /**
+   * ISSUE-003：删除/对账依赖多文档事务，单机 Mongo 必须在启动期显式失败，
+   * 而不是等到第一次删除才以 501998 暴露。
+   */
+  health.register({
+    name: MONGO_TRANSACTION_PROBE_NAME,
+    required: true,
+    check: async () => checkMongoTransactions(clients.mongo),
   });
 
   health.registerVersionedProbe({

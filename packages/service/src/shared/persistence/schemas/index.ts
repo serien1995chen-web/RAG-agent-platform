@@ -54,7 +54,10 @@ export type {
   DataHistoryEntryValue,
   KnowledgeItemIndexValue,
   SourceRefValue,
+  TrainingModeValue,
 } from './common';
+
+export { DEFAULT_TRAINING_MODE, TRAINING_MODES, inferTrainingMode } from './common';
 
 export {
   CrossStoreOperationSchema,
