@@ -477,7 +477,7 @@ export const SCENARIOS: ScenarioDef[] = [
   {
     scenarioId: 'S6',
     title: '文件与图片',
-    description: 'presign → 上传 → 完成 → 图片集合（依赖 MinIO 与图片处理能力）。',
+    description: '真实 PNG 上传 → 图片集合 → 训练 → 数据 → 检索 → 删除。',
     steps: [
       {
         stepId: 'S6-1',
@@ -500,23 +500,21 @@ export const SCENARIOS: ScenarioDef[] = [
       },
       {
         stepId: 'S6-2',
-        title: '申请上传签名',
+        title: '上传真实 PNG',
         async run(ctx) {
           if (!ctx.state.datasetId) return blocked('缺少 datasetId');
-          const result = await demoFetch<{ fileId?: string; uploadUrl?: string; key?: string }>({
+          const result = await demoFetch<{ fileRef?: string; size?: number }>({
             method: 'POST',
-            path: '/api/core/dataset/file/presignUpload',
-            body: {
-              datasetId: String(ctx.state.datasetId),
-              filename: 'demo.txt',
-              size: 18,
-              mime: 'text/plain',
-            },
+            path: '/api/demo/kb/upload-image',
+            body: { datasetId: String(ctx.state.datasetId) },
           });
           if (!result.ok) return fail(describe(result));
+          const fileRef = String(result.envelope.data?.fileRef ?? '');
+          if (!fileRef) return fail('上传未返回 fileRef');
+          ctx.state.fileRef = fileRef;
           return {
             status: 'passed',
-            detail: `fileId=${result.envelope.data?.fileId ?? '—'}`,
+            detail: `size=${result.envelope.data?.size ?? '—'}B`,
             seq: result.entry.seq,
           };
         },
@@ -525,38 +523,115 @@ export const SCENARIOS: ScenarioDef[] = [
         stepId: 'S6-3',
         title: '创建图片集合',
         async run(ctx) {
-          if (!ctx.state.datasetId) return blocked('缺少 datasetId');
-          const result = await demoFetch<{ collectionId?: string; items?: unknown[] }>({
+          if (!ctx.state.datasetId || !ctx.state.fileRef) return blocked('缺少 fileRef');
+          const result = await demoFetch<{
+            collectionId?: string;
+            items?: { state?: string; errorMsg?: string }[];
+          }>({
             method: 'POST',
             path: '/api/core/dataset/collection/create/images',
             body: {
               datasetId: String(ctx.state.datasetId),
-              images: [`temp/demo/none.png`],
+              images: [String(ctx.state.fileRef)],
               trainingType: 'auto',
             },
           });
           if (!result.ok) return fail(describe(result));
-          const items = (result.envelope.data?.items ?? []) as {
-            state?: string;
-            errorMsg?: string;
-          }[];
-          if (items.length === 0) {
-            return {
-              status: 'blocked',
-              detail:
-                '后端未返回图片处理结果：auto 模式只创建集合，需先上传真实图片并以 image/imageParse 模式训练',
-              seq: result.entry.seq,
-            };
-          }
-          const failed = items.find((item) => item.state === 'failed');
-          if (failed) {
+          const items = result.envelope.data?.items ?? [];
+          if (items.length !== 1) {
             return {
               status: 'failed',
-              detail: `集合已创建，但单图处理失败：${failed.errorMsg ?? 'unknown'}`,
+              detail: `items 数量不符：期望 1，实际 ${items.length}`,
               seq: result.entry.seq,
             };
           }
-          return { status: 'passed', detail: `items=${items.length}`, seq: result.entry.seq };
+          if (items[0]?.state !== 'success') {
+            return {
+              status: 'failed',
+              detail: `单图处理失败：${items[0]?.errorMsg ?? 'unknown'}`,
+              seq: result.entry.seq,
+            };
+          }
+          const collectionId = String(result.envelope.data?.collectionId ?? '');
+          ctx.state.collectionId = collectionId;
+          ctx.remember('collection', collectionId);
+          return {
+            status: 'passed',
+            detail: `collectionId=${collectionId} items=1`,
+            seq: result.entry.seq,
+          };
+        },
+      },
+      {
+        stepId: 'S6-4',
+        title: '轮询训练状态',
+        async run(ctx) {
+          if (!ctx.state.collectionId) return blocked('缺少 collectionId');
+          return pollTraining(String(ctx.state.collectionId), ctx);
+        },
+      },
+      {
+        stepId: 'S6-5',
+        title: '数据列表',
+        async run(ctx) {
+          if (!ctx.state.collectionId) return blocked('缺少 collectionId');
+          const result = await api.listData({ collectionId: String(ctx.state.collectionId) });
+          if (!result.ok) return fail(describe(result));
+          const total = result.envelope.data?.total ?? 0;
+          if (total < 1) return fail('图片数据未落库（total=0）');
+          return { status: 'passed', detail: `total=${total}`, seq: result.entry.seq };
+        },
+      },
+      {
+        stepId: 'S6-6',
+        title: '检索命中图片',
+        async run(ctx) {
+          if (!ctx.state.datasetId) return blocked('缺少 datasetId');
+          const result = await api.searchTest({
+            datasetId: String(ctx.state.datasetId),
+            text: '图片',
+            limit: 5,
+          });
+          if (!result.ok) return fail(describe(result));
+          const citations = result.envelope.data?.searchRes?.citations ?? [];
+          if (citations.length === 0) return fail('检索 0 命中');
+          return {
+            status: 'passed',
+            detail: `citations=${citations.length}`,
+            seq: result.entry.seq,
+          };
+        },
+      },
+      {
+        stepId: 'S6-7',
+        title: '删除知识库',
+        async run(ctx) {
+          if (!ctx.state.datasetId) return blocked('缺少 datasetId');
+          const result = await api.deleteDataset(
+            String(ctx.state.datasetId),
+            `demo-s6-${Date.now()}`,
+          );
+          if (result.entry.status !== 200) return fail(describe(result));
+          ctx.state.jobId = String(result.envelope.data?.jobId ?? '');
+          return {
+            status: 'passed',
+            detail: `jobId=${ctx.state.jobId || '（未返回）'}`,
+            seq: result.entry.seq,
+          };
+        },
+      },
+      {
+        stepId: 'S6-8',
+        title: '查询删除任务',
+        async run(ctx) {
+          if (!ctx.state.jobId) return blocked('删除未返回 jobId');
+          const result = await api.getDeleteJob(String(ctx.state.jobId));
+          if (!result.ok) return fail(describe(result));
+          return {
+            status: 'passed',
+            detail: `state=${result.envelope.data?.state}`,
+            seq: result.entry.seq,
+          };
         },
       },
     ],

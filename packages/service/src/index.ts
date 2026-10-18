@@ -199,10 +199,14 @@ export {
   createSourceCollectionJobHandler,
   createSourceCollectionRepository,
   createSourceProviderRegistry,
+  createImageProcessorAdapter,
+  createMockImageCapability,
+  detectImageMimeType,
   validateSourceCollection,
 } from './modules/collection';
 export type {
   FileParserLike,
+  ImageCapabilityPort,
   ImportSourceServiceDeps,
   SourceCollection,
   SourceCollectionJobHandler,
@@ -215,12 +219,17 @@ export {
   KnowledgeItemApplicationService,
   KNOWLEDGE_ITEM_JOB_DEFINITIONS,
   InsertDataService,
+  ImageApplicationService,
+  normalizeImageMode,
   createKnowledgeItemAdapter,
   createKnowledgeItemJobHandler,
   createKnowledgeItemRepository,
   validateKnowledgeItem,
 } from './modules/item';
 export type {
+  CreateImageInput,
+  ImageApplicationServiceDeps,
+  ImageMode,
   InsertDataServiceDeps,
   KnowledgeItem,
   KnowledgeItemJobHandler,

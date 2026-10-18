@@ -13,4 +13,10 @@ export { KNOWLEDGE_ITEM_JOB_DEFINITIONS, createKnowledgeItemJobHandler } from '.
 export type { KnowledgeItemJobHandler } from './jobs';
 export { InsertDataService } from './application/insert-data.service';
 export type { InsertDataServiceDeps } from './application/insert-data.service';
+export { ImageApplicationService, normalizeImageMode } from './application/image.service';
+export type {
+  CreateImageInput,
+  ImageApplicationServiceDeps,
+  ImageMode,
+} from './application/image.service';
 export { MongoKnowledgeItemRepository } from './repository/mongo-knowledge-item.repository';

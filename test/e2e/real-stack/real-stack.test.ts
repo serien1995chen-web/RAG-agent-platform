@@ -54,6 +54,9 @@ const createTextHandler = (
 const createImagesHandler = (
   await import('../../../projects/app/src/pages/api/core/dataset/collection/create/images')
 ).default;
+const uploadImageHandler = (
+  await import('../../../projects/app/src/pages/api/demo/kb/upload-image')
+).default;
 const pushDataHandler = (
   await import('../../../projects/app/src/pages/api/core/dataset/data/pushData')
 ).default;
@@ -148,34 +151,47 @@ describeReal('real stack e2e (ISSUE-009)', () => {
   });
 
   it('REAL-03 image collection persists trainingMode=chunk and autoIndexes', async () => {
+    const uploaded = await call(uploadImageHandler, {
+      method: 'POST',
+      url: '/api/demo/kb/upload-image',
+      body: { datasetId },
+    });
+    expect(uploaded.status).toBe(200);
+    const fileRef = String(data(uploaded).fileRef);
+    expect(fileRef.length).toBeGreaterThan(0);
     const images = await call(createImagesHandler, {
       method: 'POST',
       url: '/api/core/dataset/collection/create/images',
       body: {
         datasetId,
-        images: [`temp/${TEAM_A}/real-stack.png`],
+        images: [fileRef],
         trainingType: 'auto',
       },
     });
-    expect([200, 400]).toContain(images.status);
+    expect(images.status).toBe(200);
+    const items = (data(images).items ?? []) as { state?: string }[];
+    expect(items).toHaveLength(1);
+    expect(items[0]?.state).toBe('success');
     const runtime = runtimeState.runtime as {
       collectionRepository: {
-        get(input: unknown, ctx: unknown): Promise<{ trainingMode?: string; type?: string }>;
+        get(
+          input: unknown,
+          ctx: unknown,
+        ): Promise<{ trainingMode?: string; type?: string; autoIndexes?: boolean }>;
       };
     };
-    if (images.status === 200) {
-      const id = String(data(images).collectionId);
-      const snapshot = await runtime.collectionRepository.get(
-        { collectionId: id, options: { timeoutMs: 10_000 } },
-        {
-          requestId: 'real-stack',
-          tenant: { teamId: TEAM_A, tmbId: TMB_A, authType: 'token', isRoot: false },
-          permission: { canRead: true, canWrite: true, canManage: true, isOwner: true },
-        },
-      );
-      expect(snapshot.type).toBe('images');
-      expect(snapshot.trainingMode).toBe('chunk');
-    }
+    const id = String(data(images).collectionId);
+    const snapshot = await runtime.collectionRepository.get(
+      { collectionId: id, options: { timeoutMs: 10_000 } },
+      {
+        requestId: 'real-stack',
+        tenant: { teamId: TEAM_A, tmbId: TMB_A, authType: 'token', isRoot: false },
+        permission: { canRead: true, canWrite: true, canManage: true, isOwner: true },
+      },
+    );
+    expect(snapshot.type).toBe('images');
+    expect(snapshot.trainingMode).toBe('chunk');
+    expect(snapshot.autoIndexes).toBe(true);
   });
 
   it('REAL-04 pushData rejects 201 items without creating resources', async () => {

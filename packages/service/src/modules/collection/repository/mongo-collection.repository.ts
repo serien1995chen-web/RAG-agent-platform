@@ -112,6 +112,7 @@ export class MongoCollectionRepository implements CollectionTreeRepository {
       remainingTraining: doc.remainingTraining,
       // ISSUE-002：历史文档缺 trainingMode 时兜底推断，保证旧数据可读。
       trainingMode: inferTrainingMode(doc.trainingMode, doc.trainingPolicy?.mode),
+      autoIndexes: doc.autoIndexes,
       version: doc.updateTime.getTime(),
       createTime: doc.createTime.toISOString(),
       updateTime: doc.updateTime.toISOString(),

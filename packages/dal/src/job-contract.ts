@@ -49,7 +49,7 @@ export function buildImageJobId(
   teamId: string,
   datasetId: string,
   imageId: string,
-  mode: 'image' | 'imageParse',
+  mode: 'chunk' | 'image' | 'imageParse',
 ): string {
   return `${teamId}:${datasetId}:${imageId}:${mode}`;
 }

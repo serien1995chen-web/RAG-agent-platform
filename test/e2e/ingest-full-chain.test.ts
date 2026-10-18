@@ -212,6 +212,16 @@ beforeEach(() => {
         updateTime: 'now',
       }),
     },
+    datasetApi: {
+      getDatasetDetail: async () => ({
+        dataset: {
+          datasetId: '0000000000000000000000d1',
+          vectorModel: 'bge-m3',
+          indexVersion: 'bge-m3:1536:v1',
+        },
+        stats: { collections: 0, datas: 0 },
+      }),
+    },
     embeddingService: { embed: async () => [new Array<number>(1536).fill(0.1)] },
     vectorController: {
       insert: async (input: { records: { dataId: string }[] }) => {

@@ -14,11 +14,13 @@ import {
   createDatasetAclRepository,
   createDefaultPorts,
   createFailureQueryAdapter,
+  createImageProcessorAdapter,
   createKnowledgeItemIndexAdapter,
   createKnowledgeItemRepository,
   createMigrationRunAdapter,
   createMigrationRunRepository,
   createMockEmbeddingGateway,
+  createMockImageCapability,
   createProcessingJobRepository,
   createSourceCollectionRepository,
   createSourceProviderRegistry,
@@ -29,6 +31,8 @@ import {
   type EmbeddingGateway,
   type FileParserLike,
   type FullTextStore,
+  type ImageCapabilityPort,
+  type ImageTrainingProcessorPort,
   type ServicePorts,
   type VectorController,
 } from '@kb/service';
@@ -88,6 +92,8 @@ export interface RuntimeBootstrapOptions {
   s3OrphanScanner?: S3OrphanScanner;
   /** P7-05 独立 Root/Admin 身份 provider；不得用 identity extension 替代。 */
   adminAuthProvider?: AuthSubjectProvider;
+  /** S6：图片处理器注入（测试可覆盖）；默认按 mock/real 模式装配。 */
+  imageTrainingProcessor?: ImageTrainingProcessorPort;
 }
 
 export interface ExtendedAppRuntime extends AppRuntime {
@@ -114,6 +120,8 @@ export interface ExtendedAppRuntime extends AppRuntime {
   datasetSourceProvider: DatasetSourceProvider;
   vectorController: VectorController;
   fullTextStore?: FullTextStore;
+  /** mock 模式下的图片能力；real 未配置时为空，路由据此返回 501010。 */
+  imageCapability?: ImageCapabilityPort;
   ports: ServicePorts;
   drain: () => Promise<void>;
   shutdown: () => Promise<void>;
@@ -134,11 +142,20 @@ export async function bootstrapRuntime(
   const crossStoreRepository = new MongoCrossStoreOperationRepository(clients.mongo);
   const migrationRepository = createMigrationRunRepository(clients.mongo);
   const datasetPermission = createDatasetAclRepository(clients.mongo);
+  // P5-03-S09：从（可能被契约测试精简 mock 的）base.config 读取装配所需字段，缺省回落冻结默认值。
+  const runtimeConfig = base.config as
+    | {
+        system?: { environment?: string };
+        externalMockMode?: { model?: 'mock' | 'real' };
+        datasetRuntime?: { search?: { rerankFailureMode?: 'fallback' | 'strict' } };
+      }
+    | undefined;
+  const modelEnvironment = runtimeConfig?.system?.environment ?? 'production';
+  const modelMockMode = runtimeConfig?.externalMockMode?.model ?? 'mock';
+  const rerankFailureMode = runtimeConfig?.datasetRuntime?.search?.rerankFailureMode ?? 'fallback';
   // DEMO-002：`model: mock` 时必须给出确定性本地向量；否则文本导入会在训练阶段
   // 以 501062 静默失败，而集合已被标记 ready。real 模式仍回落到未接入（501062）。
-  const embeddingMockMode =
-    (base.config as { externalMockMode?: { model?: 'mock' | 'real' } } | undefined)
-      ?.externalMockMode?.model ?? 'mock';
+  const embeddingMockMode = modelMockMode;
   const embeddingService = new EmbeddingService({
     gateway:
       options.embeddingGateway ??
@@ -174,17 +191,20 @@ export async function bootstrapRuntime(
     embedding: embeddingService,
     inserts: insertDataService,
   });
-  // P5-03-S09：从（可能被契约测试精简 mock 的）base.config 读取装配所需字段，缺省回落冻结默认值。
-  const runtimeConfig = base.config as
-    | {
-        system?: { environment?: string };
-        externalMockMode?: { model?: 'mock' | 'real' };
-        datasetRuntime?: { search?: { rerankFailureMode?: 'fallback' | 'strict' } };
-      }
-    | undefined;
-  const modelEnvironment = runtimeConfig?.system?.environment ?? 'production';
-  const modelMockMode = runtimeConfig?.externalMockMode?.model ?? 'mock';
-  const rerankFailureMode = runtimeConfig?.datasetRuntime?.search?.rerankFailureMode ?? 'fallback';
+  // S6：mock 模式提供真实读取 S3 + 图片魔数校验的确定性能力；real 模式未配置 Provider 时
+  // 不装配能力，路由返回 501010，禁止回退 mock。
+  const imageCapability =
+    modelMockMode === 'mock'
+      ? createMockImageCapability({ objectStore: objectStorePort })
+      : undefined;
+  const imageTrainingProcessor =
+    options.imageTrainingProcessor ??
+    createImageProcessorAdapter({
+      capability: imageCapability,
+      configured: imageCapability !== undefined,
+      mock: modelMockMode === 'mock',
+      environment: modelEnvironment,
+    });
 
   const datasetApi = new DatasetApiService({ repository: knowledgeBaseRepository });
   const collectionService = new SourceCollectionApplicationService({
@@ -294,6 +314,7 @@ export async function bootstrapRuntime(
   const ports: ServicePorts = {
     ...basePorts,
     trainingProcessor,
+    imageTrainingProcessor,
     deleteJobRepository: deleteRepository,
     objectStore: objectStorePort,
     reconcileResult: reconcileResultAdapter,
@@ -374,6 +395,7 @@ export async function bootstrapRuntime(
     datasetSourceProvider,
     vectorController: adapters,
     ...(adapters.fullText ? { fullTextStore: adapters.fullText } : {}),
+    imageCapability,
     ports,
     drain,
     async shutdown(): Promise<void> {

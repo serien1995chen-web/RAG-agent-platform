@@ -1,15 +1,15 @@
 import { ApiErrorException, createApiError } from '@kb/contracts';
-import type { JsonValue } from '@kb/contracts';
+import { normalizeImageMode, type ImageMode } from '@kb/service';
 import type { NextApiRequest, NextApiResponse } from 'next';
-import {
-  ImageApplicationService,
-  normalizeImageMode,
-} from '../../../../../../../../../packages/service/src/modules/item/application/index';
-import { createImageAssetRepository } from '../../../../../../../../../packages/service/src/modules/item/repository/index';
 import { authenticateRequest } from '../../../../../../runtime/auth';
 import { getRuntime } from '../../../../../../runtime';
 import { parseDto, successResponse, withApiHandler } from '../../../../../../shared/api';
 import type { ApiHandlerContext } from '../../../../../../shared/api';
+import {
+  assertImageCapability,
+  ingestResolvedImages,
+  resolveImageSources,
+} from '../../../../../../shared/api/image-ingest';
 
 interface CollectionCreateImagesBody {
   datasetId: string;
@@ -19,7 +19,22 @@ interface CollectionCreateImagesBody {
   imageIndex?: boolean;
 }
 
-const IMAGE_MODES = new Set(['image', 'imageParse']);
+function normalizeRequestedMode(
+  requested: NonNullable<CollectionCreateImagesBody['trainingType']>,
+  requestId: string,
+): { trainingMode: ImageMode; autoIndexes: boolean } {
+  if (requested === 'qa') {
+    throw new ApiErrorException(
+      createApiError({
+        code: 501001,
+        requestId,
+        params: { type: 'qa' },
+      }),
+    );
+  }
+  if (requested === 'auto') return normalizeImageMode('auto');
+  return normalizeImageMode(requested);
+}
 
 /** API-COL-008 POST /api/core/dataset/collection/create/images */
 export default withApiHandler(
@@ -27,12 +42,17 @@ export default withApiHandler(
     const runtime = await getRuntime();
     const { context } = await authenticateRequest(runtime, request, requestId);
     const body = parseDto<CollectionCreateImagesBody>('CollectionCreateImagesBody', request.body);
-    const requested = body.trainingType ?? 'auto';
-    const normalized =
-      requested === 'image' || requested === 'imageParse' || requested === 'auto'
-        ? normalizeImageMode(requested)
-        : { trainingMode: requested, autoIndexes: body.autoIndexes ?? false };
+    const { trainingMode, autoIndexes } = normalizeRequestedMode(
+      body.trainingType ?? 'auto',
+      requestId,
+    );
+    assertImageCapability(runtime, requestId);
+
+    const detail = await runtime.datasetApi.getDatasetDetail(body.datasetId, context);
     const options = { timeoutMs: 60_000 };
+    // 先完成来源校验与对象读取；任何失败都发生在集合创建之前。
+    const resolved = await resolveImageSources(runtime, context, body.datasetId, body.images);
+
     const created = await runtime.collectionRepository.create(
       {
         collection: {
@@ -42,56 +62,46 @@ export default withApiHandler(
           type: 'image',
           name: 'images',
           tagIds: [],
-          // ISSUE-002：训练模式独立落库，chunkPolicy 保持自身切分语义。
-          trainingMode: normalized.trainingMode,
-          autoIndexes: normalized.autoIndexes,
+          trainingMode,
+          autoIndexes,
         },
         options,
       },
       context,
     );
 
-    const items: JsonValue[] = [];
-    if (IMAGE_MODES.has(normalized.trainingMode)) {
-      const assets = createImageAssetRepository(runtime.clients.mongo as never);
-      const fullText = runtime.fullTextStore;
-      if (!assets || !fullText) {
-        throw new ApiErrorException(
-          createApiError({
-            code: 501062,
-            requestId,
-            params: { dependency: 'image_pipeline' },
-          }),
-        );
-      }
-      const service = new ImageApplicationService({
-        assets,
-        items: runtime.knowledgeItemRepository,
-        vectors: runtime.vectorController,
-        fullText,
-        processor: runtime.ports.imageTrainingProcessor,
-      });
-      for (let index = 0; index < body.images.length; index += 1) {
-        const source = body.images[index] ?? '';
-        const dataId = `${created.collectionId}:${index}`;
-        const result = await service.createImage(
-          {
-            imageId: dataId,
-            datasetId: body.datasetId,
-            collectionId: created.collectionId,
-            dataId,
-            bucketName: runtime.config.system.s3.bucket,
-            objectKey: source,
-            mimeType: 'image/png',
-            size: 0,
-            mode: normalized.trainingMode as 'image' | 'imageParse',
-            options,
-          },
-          context,
-        );
-        items.push({ source, state: result.state, errorMsg: result.errorMsg ?? null });
-      }
-    }
+    await runtime.collectionRepository.markTrainingState(
+      {
+        collectionId: created.collectionId,
+        trainingState: 'running',
+        remainingTraining: resolved.length,
+        options: { timeoutMs: 5_000 },
+      },
+      context,
+    );
+    const items = await ingestResolvedImages(runtime, context, {
+      datasetId: body.datasetId,
+      collectionId: created.collectionId,
+      indexVersion: detail.dataset.indexVersion,
+      mode: trainingMode,
+      resolved,
+      options,
+    });
+    const failed = items.some(
+      (item) =>
+        typeof item === 'object' &&
+        item !== null &&
+        (item as { state?: string }).state !== 'success',
+    );
+    await runtime.collectionRepository.markTrainingState(
+      {
+        collectionId: created.collectionId,
+        trainingState: failed ? 'error' : 'ready',
+        remainingTraining: 0,
+        options: { timeoutMs: 5_000 },
+      },
+      context,
+    );
     response
       .status(200)
       .json(successResponse({ collectionId: created.collectionId, items }, requestId));

@@ -148,6 +148,16 @@ function buildRuntime() {
       bulkUpsert: async () =>
         state.forceDuplicates ? { upserted: 0, duplicates: 1 } : { upserted: 1, duplicates: 0 },
     },
+    datasetApi: {
+      getDatasetDetail: async () => ({
+        dataset: {
+          datasetId: DATASET_ID,
+          vectorModel: 'bge-m3',
+          indexVersion: 'bge-m3:1536:v1',
+        },
+        stats: { collections: 0, datas: 0 },
+      }),
+    },
     vectorController: { insert: async () => ({ inserted: 1 }) },
     embeddingService: { embed: async () => [new Array<number>(1536).fill(0)] },
     fullTextStore: { write: async () => undefined },

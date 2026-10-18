@@ -36,7 +36,9 @@ export const UPLOAD_TOKEN_TTL_MS = 15 * 60 * 1000;
 export const FILE_REF_TTL_MS = 24 * 60 * 60 * 1000;
 
 // 进程内 HMAC 密钥：方案已声明多实例无状态上传为已知风险（Plan §12.3）。
-const TOKEN_SECRET = randomBytes(32);
+// Next dev/生产打包可能让同一模块在不同路由中各有一份实例；放 globalThis 保证进程内一致。
+const globalStore = globalThis as typeof globalThis & { __kbUploadTokenSecret?: Buffer };
+const TOKEN_SECRET = (globalStore.__kbUploadTokenSecret ??= randomBytes(32));
 
 function b64url(input: string): string {
   return Buffer.from(input, 'utf8').toString('base64url');

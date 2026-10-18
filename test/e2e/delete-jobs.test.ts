@@ -203,6 +203,8 @@ function buildRuntime(options: RuntimeOptions = {}) {
           jobId,
           teamId: context.tenant.teamId,
           datasetId,
+          actorTmbId: context.tenant.tmbId,
+          ownerTmbId: context.tenant.tmbId,
           state: 'failed',
           stage: 'vector',
           progress: 40,

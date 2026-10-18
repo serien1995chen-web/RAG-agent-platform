@@ -193,6 +193,7 @@ describe('TEST-IMAGE-AUTO-001 image pipeline and handler', () => {
         mimeType: 'image/png',
         size: 10,
         mode: 'image',
+        indexVersion: 'bge-m3:1536:v1',
         vector: [0.5],
         options,
       },
@@ -224,6 +225,7 @@ describe('TEST-IMAGE-AUTO-001 image pipeline and handler', () => {
         mimeType: 'image/png',
         size: 10,
         mode: 'imageParse',
+        indexVersion: 'bge-m3:1536:v1',
         options,
       },
       ctx(teamA),
@@ -284,7 +286,9 @@ describe('TEST-IMAGE-AUTO-001 (RK-08a) embedding, index type, imageDescMap, stab
 
   function makeHarness() {
     const ops: string[] = [];
-    const vectorCalls: Array<{ records: Array<{ indexId: string; vector: number[] }> }> = [];
+    const vectorCalls: Array<{
+      records: Array<{ indexId: string; vector: number[]; indexVersion: string }>;
+    }> = [];
     const itemCalls: Array<{
       dataId: string;
       metadata?: unknown;
@@ -325,13 +329,20 @@ describe('TEST-IMAGE-AUTO-001 (RK-08a) embedding, index type, imageDescMap, stab
       },
     } as unknown as KnowledgeItemRepository;
     const vectors = {
-      insert: async (input: { records: Array<{ indexId: string; vector: number[] }> }) => {
+      insert: async (input: {
+        records: Array<{ indexId: string; vector: number[]; indexVersion: string }>;
+      }) => {
         vectorCalls.push({ records: input.records });
         return { inserted: 1 };
       },
     } as unknown as VectorController;
-    const fullText = { write: async () => undefined } as unknown as FullTextStore;
-    return { ops, vectorCalls, itemCalls, assets, items, vectors, fullText };
+    const fullTextWrites: string[] = [];
+    const fullText = {
+      write: async (input: { text: string }) => {
+        fullTextWrites.push(input.text);
+      },
+    } as unknown as FullTextStore;
+    return { ops, vectorCalls, itemCalls, assets, items, vectors, fullText, fullTextWrites };
   }
 
   const baseProcessor = (embedding?: number[]): ImageTrainingProcessorPort =>
@@ -364,6 +375,7 @@ describe('TEST-IMAGE-AUTO-001 (RK-08a) embedding, index type, imageDescMap, stab
         mimeType: 'image/png',
         size: 10,
         mode: 'image',
+        indexVersion: 'bge-m3:1536:v1',
         options: { timeoutMs: 5000 },
       },
       ctx(teamA),
@@ -396,6 +408,7 @@ describe('TEST-IMAGE-AUTO-001 (RK-08a) embedding, index type, imageDescMap, stab
       mimeType: 'image/png',
       size: 10,
       mode: 'image' as const,
+      indexVersion: 'bge-m3:1536:v1',
       options: { timeoutMs: 5000 },
     };
     await service.createImage(input, ctx(teamA));
@@ -424,11 +437,110 @@ describe('TEST-IMAGE-AUTO-001 (RK-08a) embedding, index type, imageDescMap, stab
       mimeType: 'image/png',
       size: 10,
       mode: 'imageParse' as const,
+      indexVersion: 'bge-m3:1536:v1',
       options: { timeoutMs: 5000 },
     };
     await service.createImage(input, ctx(teamA));
     await service.createImage(input, ctx(teamA));
     const distinctDataIds = new Set(h.itemCalls.map((entry) => entry.dataId));
     expect(distinctDataIds.size).toBe(1);
+  });
+
+  it('writes the Dataset indexVersion instead of hard-coded 1', async () => {
+    const h = makeHarness();
+    const service = new ImageApplicationService({
+      assets: h.assets as never,
+      items: h.items,
+      vectors: h.vectors,
+      fullText: h.fullText,
+      processor: baseProcessor([0.5]),
+    });
+    await service.createImage(
+      {
+        imageId: 'img-version',
+        datasetId,
+        collectionId,
+        dataId: 'data-version',
+        bucketName: 'kb-images',
+        objectKey: 'team/img-version.png',
+        mimeType: 'image/png',
+        size: 10,
+        mode: 'image',
+        indexVersion: 'bge-m3:1536:v1',
+        options: { timeoutMs: 5000 },
+      },
+      ctx(teamA),
+    );
+    expect(h.vectorCalls[0]?.records[0]?.indexVersion).toBe('bge-m3:1536:v1');
+  });
+
+  it('chunk mode keeps embedding, skips empty fullText, and has no imageDescMap', async () => {
+    const h = makeHarness();
+    const service = new ImageApplicationService({
+      assets: h.assets as never,
+      items: h.items,
+      vectors: h.vectors,
+      fullText: h.fullText,
+      processor: {
+        processImage: async (task) => ({
+          imageId: task.payload.imageRef.key,
+          state: 'success',
+          description: '',
+          embedding: [0.3, 0.4],
+        }),
+      },
+    });
+    await service.createImage(
+      {
+        imageId: 'img-chunk',
+        datasetId,
+        collectionId,
+        dataId: 'data-chunk',
+        bucketName: 'kb-images',
+        objectKey: 'team/img-chunk.png',
+        mimeType: 'image/png',
+        size: 10,
+        mode: 'chunk',
+        indexVersion: 'bge-m3:1536:v1',
+        options: { timeoutMs: 5000 },
+      },
+      ctx(teamA),
+    );
+    expect(h.fullTextWrites).toEqual([]);
+    expect(h.itemCalls[0]?.metadata).toEqual({});
+    expect(h.itemCalls[0]?.indexes.map((index) => index.type)).toEqual(['image', 'imageEmbedding']);
+    expect(h.vectorCalls[0]?.records[0]?.vector).toEqual([0.3, 0.4]);
+  });
+
+  it('imageParse stores the description under imageDescMap.imageParse', async () => {
+    const h = makeHarness();
+    const service = new ImageApplicationService({
+      assets: h.assets as never,
+      items: h.items,
+      vectors: h.vectors,
+      fullText: h.fullText,
+      processor: baseProcessor([0.5]),
+    });
+    await service.createImage(
+      {
+        imageId: 'img-parse',
+        datasetId,
+        collectionId,
+        dataId: 'data-parse',
+        bucketName: 'kb-images',
+        objectKey: 'team/img-parse.png',
+        mimeType: 'image/png',
+        size: 10,
+        mode: 'imageParse',
+        indexVersion: 'bge-m3:1536:v1',
+        options: { timeoutMs: 5000 },
+      },
+      ctx(teamA),
+    );
+    expect(
+      (h.itemCalls[0]?.metadata as { imageDescMap?: { imageParse?: string } })?.imageDescMap
+        ?.imageParse,
+    ).toBe('图像描述');
+    expect(h.fullTextWrites).toEqual(['图像描述']);
   });
 });

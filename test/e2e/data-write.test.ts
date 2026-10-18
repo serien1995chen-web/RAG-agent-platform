@@ -96,6 +96,16 @@ function buildRuntime() {
         };
       },
     },
+    datasetApi: {
+      getDatasetDetail: async () => ({
+        dataset: {
+          datasetId: DATASET_ID,
+          vectorModel: 'bge-m3',
+          indexVersion: 'bge-m3:1536:v1',
+        },
+        stats: { collections: 0, datas: 0 },
+      }),
+    },
     embeddingService: {
       embed: async () => [new Array<number>(1536).fill(0)],
     },

@@ -1,15 +1,15 @@
 import { ApiErrorException, createApiError } from '@kb/contracts';
-import type { JsonValue } from '@kb/contracts';
+import { normalizeImageMode, type ImageMode } from '@kb/service';
 import type { NextApiRequest, NextApiResponse } from 'next';
-import {
-  ImageApplicationService,
-  normalizeImageMode,
-} from '../../../../../../../../packages/service/src/modules/item/application/index';
-import { createImageAssetRepository } from '../../../../../../../../packages/service/src/modules/item/repository/index';
 import { authenticateRequest } from '../../../../../runtime/auth';
 import { getRuntime } from '../../../../../runtime';
 import { parseDto, successResponse, withApiHandler } from '../../../../../shared/api';
 import type { ApiHandlerContext } from '../../../../../shared/api';
+import {
+  assertImageCapability,
+  ingestResolvedImages,
+  resolveImageSources,
+} from '../../../../../shared/api/image-ingest';
 
 interface InsertImagesBody {
   collectionId: string;
@@ -18,7 +18,23 @@ interface InsertImagesBody {
   autoIndexes?: boolean;
 }
 
-const IMAGE_MODES = new Set(['image', 'imageParse']);
+function normalizeRequestedMode(
+  requested: NonNullable<InsertImagesBody['trainingType']>,
+  requestId: string,
+): { trainingMode: ImageMode } {
+  if (requested === 'qa') {
+    throw new ApiErrorException(
+      createApiError({
+        code: 501001,
+        requestId,
+        params: { type: 'qa' },
+      }),
+    );
+  }
+  return {
+    trainingMode: requested === 'auto' ? normalizeImageMode('auto').trainingMode : requested,
+  };
+}
 
 /** API-DATA-006 POST /api/core/dataset/data/insertImages */
 export default withApiHandler(
@@ -26,53 +42,58 @@ export default withApiHandler(
     const runtime = await getRuntime();
     const { context } = await authenticateRequest(runtime, request, requestId);
     const body = parseDto<InsertImagesBody>('InsertImagesBody', request.body);
-    const requested = body.trainingType ?? 'auto';
-    const normalized =
-      requested === 'image' || requested === 'imageParse' || requested === 'auto'
-        ? normalizeImageMode(requested)
-        : { trainingMode: requested, autoIndexes: body.autoIndexes ?? false };
+    const { trainingMode } = normalizeRequestedMode(body.trainingType ?? 'auto', requestId);
+    assertImageCapability(runtime, requestId);
+
     const options = { timeoutMs: 60_000 };
     const collection = await runtime.collectionService.getCollection(
       { collectionId: body.collectionId, options },
       context,
     );
-    const items: JsonValue[] = [];
-    if (IMAGE_MODES.has(normalized.trainingMode)) {
-      const assets = createImageAssetRepository(runtime.clients.mongo as never);
-      const fullText = runtime.fullTextStore;
-      if (!assets || !fullText) {
-        throw new ApiErrorException(
-          createApiError({ code: 501062, requestId, params: { dependency: 'image_pipeline' } }),
-        );
-      }
-      const service = new ImageApplicationService({
-        assets,
-        items: runtime.knowledgeItemRepository,
-        vectors: runtime.vectorController,
-        fullText,
-        processor: runtime.ports.imageTrainingProcessor,
-      });
-      for (let index = 0; index < body.files.length; index += 1) {
-        const source = body.files[index] ?? '';
-        const dataId = `${body.collectionId}:${index}`;
-        const result = await service.createImage(
-          {
-            imageId: dataId,
-            datasetId: collection.datasetId,
-            collectionId: body.collectionId,
-            dataId,
-            bucketName: runtime.config.system.s3.bucket,
-            objectKey: source,
-            mimeType: 'image/png',
-            size: 0,
-            mode: normalized.trainingMode as 'image' | 'imageParse',
-            options,
-          },
-          context,
-        );
-        items.push({ source, state: result.state, errorMsg: result.errorMsg ?? null });
-      }
+    if (collection.type !== 'images') {
+      throw new ApiErrorException(
+        createApiError({
+          code: 501001,
+          requestId,
+          params: { type: collection.type },
+        }),
+      );
     }
+    const detail = await runtime.datasetApi.getDatasetDetail(collection.datasetId, context);
+    const resolved = await resolveImageSources(runtime, context, collection.datasetId, body.files);
+
+    await runtime.collectionRepository.markTrainingState(
+      {
+        collectionId: body.collectionId,
+        trainingState: 'running',
+        remainingTraining: resolved.length,
+        options: { timeoutMs: 5_000 },
+      },
+      context,
+    );
+    const items = await ingestResolvedImages(runtime, context, {
+      datasetId: collection.datasetId,
+      collectionId: body.collectionId,
+      indexVersion: detail.dataset.indexVersion,
+      mode: trainingMode,
+      resolved,
+      options,
+    });
+    const failed = items.some(
+      (item) =>
+        typeof item === 'object' &&
+        item !== null &&
+        (item as { state?: string }).state !== 'success',
+    );
+    await runtime.collectionRepository.markTrainingState(
+      {
+        collectionId: body.collectionId,
+        trainingState: failed ? 'error' : 'ready',
+        remainingTraining: 0,
+        options: { timeoutMs: 5_000 },
+      },
+      context,
+    );
     response.status(200).json(successResponse({ items }, requestId));
   },
   { validationErrorCode: 501065 },

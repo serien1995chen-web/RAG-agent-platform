@@ -1,6 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { RequestContext } from '../../packages/service/src/ports/types';
+import type * as ItemRepositoryModule from '../../packages/service/src/modules/item/repository/index';
 
 const TEAM_ID = '000000000000000000000001';
 const DATASET_ID = '0000000000000000000000d1';
@@ -36,6 +37,23 @@ vi.mock('../../projects/app/src/runtime', () => ({
 vi.mock('../../projects/app/src/runtime/auth', () => ({
   authenticateRequest: async () => ({ context, subject: context.tenant }),
 }));
+
+vi.mock('../../packages/service/src/modules/item/repository/index', async (importOriginal) => {
+  const actual = await importOriginal<typeof ItemRepositoryModule>();
+  return {
+    ...actual,
+    createImageAssetRepository: () => ({
+      createTemporary: async (input: { imageId: string }) => ({
+        imageId: input.imageId,
+        state: 'temporary',
+        ttlExpireAt: new Date(),
+      }),
+      findById: async () => null,
+      promoteToReferenced: async (imageId: string) => ({ imageId, state: 'referenced' }),
+      markFailed: async () => undefined,
+    }),
+  };
+});
 
 function responseRecorder(): {
   response: NextApiResponse;
@@ -90,6 +108,7 @@ function buildRuntime() {
         state.deleted.push(input.collectionId);
         return { deleteJobId: 'del-' + input.collectionId };
       },
+      markTrainingState: async () => undefined,
     },
     datasetSourceProvider: {
       read: async (sourceRequest: {
@@ -117,8 +136,31 @@ function buildRuntime() {
     fullTextStore: { write: async () => undefined },
     datasetApi: {
       createDataset: async () => ({ datasetId: DATASET_ID, state: 'ready' }),
+      getDatasetDetail: async () => ({
+        dataset: { datasetId: DATASET_ID, vectorModel: 'bge-m3', indexVersion: 'bge-m3:1536:v1' },
+        stats: { collections: 0, datas: 0 },
+      }),
     },
-    ports: { trainingProcessor: { process: async () => ({ state: 'success' }) } },
+    imageCapability: {},
+    ports: {
+      trainingProcessor: { process: async () => ({ state: 'success' }) },
+      imageTrainingProcessor: {
+        processImage: async () => ({
+          imageId: 'image-1',
+          state: 'success',
+          embedding: new Array<number>(1536).fill(0.1),
+        }),
+      },
+      objectStore: {
+        get: async () => ({
+          ref: { bucket: 'kb-objects', key: 'k' },
+          body: Buffer.from(
+            'iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAIAAABLbSncAAAAEklEQVR4nGP478+AFWEXHbQSAOBoU4FwyX8rAAAAAElFTkSuQmCC',
+            'base64',
+          ),
+        }),
+      },
+    },
     clients: {
       queue: {
         enqueue: async () => ({ jobId: 'job-1', enqueued: true }),
@@ -128,7 +170,10 @@ function buildRuntime() {
       redis: undefined,
       mongo: undefined,
     },
-    config: { system: { s3: { bucket: 'kb-objects' } } },
+    config: {
+      system: { s3: { bucket: 'kb-objects' } },
+      datasetRuntime: { maxImagesPerRequest: 10, maxRequestBodyBytes: 10 * 1024 * 1024 },
+    },
   };
 }
 
@@ -247,7 +292,11 @@ describe('TEST-E2E-INGEST-001 P4-08 collection create routes', () => {
       request({
         method: 'POST',
         url: '/api/core/dataset/collection/create/images',
-        body: { datasetId: DATASET_ID, images: ['image-1'], trainingType: 'auto' },
+        body: {
+          datasetId: DATASET_ID,
+          images: [`dataset/${DATASET_ID}/uploads/image-1.png`],
+          trainingType: 'auto',
+        },
       }),
       res.response,
     );

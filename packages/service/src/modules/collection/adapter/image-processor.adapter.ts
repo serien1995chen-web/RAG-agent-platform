@@ -19,7 +19,12 @@ export interface ImageProcessingOutcome extends ImageTaskResult {
 
 export interface ImageCapabilityPort {
   describeImage(
-    input: { imageRef: ObjectRef; options: { timeoutMs: number } },
+    input: {
+      imageRef: ObjectRef;
+      datasetId: string;
+      mode: 'chunk' | 'image' | 'imageParse';
+      options: { timeoutMs: number };
+    },
     context: RequestContext,
   ): Promise<{ description: string; embedding: number[] }>;
 }
@@ -55,8 +60,9 @@ export function createImageProcessorAdapter(
         );
       }
       try {
+        const mode = task.mode === 'chunk' || task.mode === 'imageParse' ? task.mode : 'image';
         const result = await options.capability.describeImage(
-          { imageRef, options: { timeoutMs: 30000 } },
+          { imageRef, datasetId: task.datasetId ?? '', mode, options: { timeoutMs: 30000 } },
           context,
         );
         const outcome: ImageProcessingOutcome = {
@@ -66,8 +72,14 @@ export function createImageProcessorAdapter(
           embedding: result.embedding,
         };
         return outcome;
-      } catch {
-        return { imageId, state: 'failed', errorMsg: 'image_processor_failed' };
+      } catch (error) {
+        const detail =
+          error instanceof ApiErrorException
+            ? `${error.error.code}:${error.error.messageKey}`
+            : error instanceof Error
+              ? error.message
+              : 'image_processor_failed';
+        return { imageId, state: 'failed', errorMsg: detail.slice(0, 200) };
       }
     },
   };
