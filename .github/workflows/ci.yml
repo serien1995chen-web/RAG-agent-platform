@@ -13,6 +13,16 @@ concurrency:
 jobs:
   verify:
     runs-on: ubuntu-latest
+    env:
+      KB_ENV: test
+      KB_TEST_MONGO_URI: mongodb://127.0.0.1:27017/kb_test?replicaSet=rs0
+      KB_TEST_REDIS_URL: redis://127.0.0.1:6379/0
+      KB_TEST_PG_URL: postgresql://kb:kb_dev_password@127.0.0.1:5432/kb
+      KB_TEST_S3_ENDPOINT: http://127.0.0.1:9000
+      KB_TEST_S3_REGION: us-east-1
+      KB_TEST_S3_BUCKET: kb-test
+      KB_TEST_S3_ACCESS_KEY: minioadmin
+      KB_TEST_S3_SECRET_KEY: minioadmin
     services:
       mongo:
         image: mongo:5.0.32
@@ -57,18 +67,64 @@ jobs:
           cache: pnpm
       - name: Install (frozen lockfile)
         run: pnpm install --frozen-lockfile
-      - name: Static gates
-        run: pnpm lint && pnpm format:check && pnpm typecheck
-      - name: Architecture and compliance gates
-        run: pnpm architecture:check && pnpm openapi:check && pnpm forbidden-files:check && pnpm license:check
-      - name: Unit and contract tests
-        run: pnpm test:unit && pnpm test:contract
+      - name: Initialize Mongo single-node replica set
+        run: |
+          container_id="$(docker ps --filter ancestor=mongo:5.0.32 --format '{{.ID}}' | head -n1)"
+          test -n "$container_id"
+          docker exec "$container_id" mongo --quiet --eval '
+            try {
+              rs.status();
+            } catch (error) {
+              rs.initiate({_id: "rs0", members: [{_id: 0, host: "127.0.0.1:27017"}]});
+            }
+          '
+          for attempt in $(seq 1 60); do
+            state="$(docker exec "$container_id" mongo --quiet --eval 'try { rs.status().myState } catch (error) { -1 }')"
+            if [ "$state" = "1" ]; then
+              exit 0
+            fi
+            sleep 1
+          done
+          docker exec "$container_id" mongo --quiet --eval 'rs.status()'
+          exit 1
+      - name: Lint
+        run: pnpm lint
+      - name: Format check
+        run: pnpm format:check
+      - name: Typecheck
+        run: pnpm typecheck
+      - name: Architecture
+        run: pnpm architecture:check
+      - name: Forbidden files
+        run: pnpm forbidden-files:check
+      - name: Licenses
+        run: pnpm license:check
+      - name: SBOM
+        run: pnpm sbom:generate
+      - name: OpenAPI
+        run: pnpm openapi:check
+      - name: Knowledge inventory
+        run: pnpm knowledge:inventory
+      - name: Runtime boundary
+        run: pnpm knowledge:check-runtime
+      - name: Unit tests
+        run: pnpm test:unit
+      - name: Contract tests
+        run: pnpm test:contract
       - name: Integration tests
         run: pnpm test:integration
-      - name: Full test suites
-        run: pnpm test
-      - name: Build
+      - name: Tenant tests
+        run: pnpm test:tenant
+      - name: Concurrency tests
+        run: pnpm test:concurrency
+      - name: Fault tests
+        run: pnpm test:fault
+      - name: End-to-end tests
+        run: pnpm test:e2e
+      - name: Build application
         run: pnpm build
+      - name: Build worker
+        run: pnpm build:workers
 
   release-smoke:
     needs: verify
@@ -85,16 +141,17 @@ jobs:
       - name: Install (frozen lockfile)
         run: pnpm install --frozen-lockfile
       - name: Generate release artifacts
-        run: pnpm sbom:generate
-      - name: Verify release artifacts
         run: |
+          pnpm sbom:generate
           test -s NOTICE
           test -s artifacts/sbom.json
-      - name: Generate CI-only image override
+      - name: Generate CI image override
         run: |
           cat > "$RUNNER_TEMP/ci-images.override.yml" <<'YAML'
           services:
             mongo:
+              image: mongo:5.0.32
+            mongo-init:
               image: mongo:5.0.32
             redis:
               image: redis:7.2-alpine
@@ -109,18 +166,18 @@ jobs:
         run: docker compose -f deploy/docker-compose.yml build app
       - name: Inspect application image
         run: |
-          app_image_id="$(docker image inspect --format '{{.Id}}' rag-agent-platform-app)"
+          app_image_id="$(docker image inspect --format '{{.Id}}' rag-agent-platform:kb-baseline)"
           test -n "$app_image_id"
           printf 'app_image_id=%s\n' "$app_image_id"
       - name: Compose health smoke
         run: |
-          docker compose -f deploy/docker-compose.yml -f "$RUNNER_TEMP/ci-images.override.yml" up -d
+          compose_args=(-f deploy/docker-compose.yml -f "$RUNNER_TEMP/ci-images.override.yml")
+          docker compose "${compose_args[@]}" up -d
           for url in \
-            http://127.0.0.1:3000/healthz/live \
-            http://127.0.0.1:3000/readyz \
-            http://127.0.0.1:3000/startupz; do
+            http://127.0.0.1:3010/healthz \
+            http://127.0.0.1:3010/readyz; do
             healthy=0
-            for attempt in $(seq 1 30); do
+            for attempt in $(seq 1 45); do
               if curl --fail --silent --show-error --max-time 5 "$url" >/dev/null; then
                 healthy=1
                 break
@@ -128,12 +185,17 @@ jobs:
               sleep 2
             done
             if [ "$healthy" -ne 1 ]; then
-              docker compose -f deploy/docker-compose.yml -f "$RUNNER_TEMP/ci-images.override.yml" ps
-              docker compose -f deploy/docker-compose.yml -f "$RUNNER_TEMP/ci-images.override.yml" logs --no-color
+              docker compose "${compose_args[@]}" ps
+              docker compose "${compose_args[@]}" logs --no-color
               echo "health check failed: $url"
               exit 1
             fi
           done
+          worker_id="$(docker compose "${compose_args[@]}" ps -q worker)"
+          test -n "$worker_id"
+          test "$(docker inspect --format '{{.State.Health.Status}}' "$worker_id")" = "healthy"
+          test -z "$(docker compose "${compose_args[@]}" port worker 3010)"
+          test -n "$(docker compose "${compose_args[@]}" port app 3010)"
       - name: Cleanup
         if: always()
         run: |

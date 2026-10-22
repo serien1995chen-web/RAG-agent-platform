@@ -42,30 +42,30 @@ describe('TEST-CHUNK-BOUNDARY-001 deterministic boundaries', () => {
     expect(joined).toBe(text);
   });
 
-  it('throws 501053 for an oversized sentence when forceSplit is false', () => {
+  it('throws KNOWLEDGE_VALIDATION_FAILED for an oversized sentence when forceSplit is false', () => {
     const text = '字'.repeat(300);
     const error = (() => {
       try {
         chunkText({ text, policy: policy({ chunkSize: 80, minSize: 10, forceSplit: false }) });
         return null;
       } catch (thrown) {
-        return thrown as { error: { code: number } };
+        return thrown as { problem: { error: { code: string } } };
       }
     })();
-    expect(error?.error.code).toBe(501053);
+    expect(error?.problem.error.code).toBe('KNOWLEDGE_VALIDATION_FAILED');
   });
 
-  it('throws 501053 when chunk count exceeds maxChunks', () => {
+  it('throws KNOWLEDGE_VALIDATION_FAILED when chunk count exceeds maxChunks', () => {
     const text = Array.from({ length: 50 }, () => '段落内容较长需要独立成块').join('\n\n');
     const error = (() => {
       try {
         chunkText({ text, policy: policy({ chunkSize: 64, minSize: 1, maxChunks: 2 }) });
         return null;
       } catch (thrown) {
-        return thrown as { error: { code: number } };
+        return thrown as { problem: { error: { code: string } } };
       }
     })();
-    expect(error?.error.code).toBe(501053);
+    expect(error?.problem.error.code).toBe('KNOWLEDGE_VALIDATION_FAILED');
   });
 
   it('is deterministic: identical input yields identical chunks and hashes', () => {

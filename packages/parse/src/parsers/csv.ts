@@ -1,5 +1,5 @@
 /**
- * @kb/parse CSV 解析（设计 9.8.1）：PapaParse 转 Markdown；表头缺失或重复返回 501058。
+ * CSV 解析：PapaParse 转 Markdown；表头缺失或重复时返回验证错误。
  * papaparse 无自带类型，采用带类型断言的动态 import（不新增依赖、不新增 .d.ts）。
  */
 import { createRequire } from 'node:module';
@@ -50,7 +50,10 @@ export const parseCsv: ParseHandler = async (context) => {
     else seen.add(name);
   }
   if (missingHeaders.length > 0 || duplicateHeaders.length > 0) {
-    throw parseError(501058, requestId, { missingHeaders, duplicateHeaders });
+    throw parseError('KNOWLEDGE_VALIDATION_FAILED', requestId, {
+      missingHeaders,
+      duplicateHeaders,
+    });
   }
   const body = rows.slice(1).map((row) => header.map((_name, index) => String(row[index] ?? '')));
   return makeResult('csv', toMarkdownTable(header, body));

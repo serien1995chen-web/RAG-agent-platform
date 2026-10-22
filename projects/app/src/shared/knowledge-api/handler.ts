@@ -54,14 +54,6 @@ function internalError(
   });
 }
 
-function unauthorized(requestId: string, traceId: string): KnowledgeApiError {
-  return createKnowledgeError({
-    code: 'KNOWLEDGE_AUTH_REQUIRED',
-    requestId,
-    traceId,
-  });
-}
-
 function forbidden(requestId: string, traceId: string): KnowledgeApiError {
   return createKnowledgeError({
     code: 'KNOWLEDGE_FORBIDDEN',
@@ -209,11 +201,7 @@ export function createKnowledgeApiHandler(): NextApiHandler {
           traceId,
         });
       }
-      const authorization = header(request, 'authorization');
       const isPublic = PUBLIC_OPERATIONS.has(route.operationId);
-      if (!isPublic && (!authorization || !authorization.startsWith('Bearer '))) {
-        throw unauthorized(requestId, traceId);
-      }
       const subject = isPublic
         ? {
             authType: 'jwt' as const,
@@ -252,30 +240,20 @@ export function createKnowledgeApiHandler(): NextApiHandler {
               status: 200,
               data: OPENAPI_DOCUMENT,
             }))
-          : route.operationId === 'API-OPS-STATUS'
-            ? runtime.readiness(requestId).then((result) => ({
-                status: result.status,
-                data: {
-                  status: result.body.status,
-                  checks: result.body.checks,
-                  queues: [],
-                  timestamp: result.body.timestamp,
-                },
-              }))
-            : runtime.dispatch({
-                route,
-                params: match.params,
-                query: request.query,
-                body: request.body,
-                context: {
-                  subject,
-                  workspaceId,
-                  memberId: subject.memberId,
-                  scopes: subject.scopes,
-                  requestId,
-                  traceId,
-                },
-              });
+          : runtime.dispatch({
+              route,
+              params: match.params,
+              query: request.query,
+              body: request.body,
+              context: {
+                subject,
+                workspaceId,
+                memberId: subject.memberId,
+                scopes: subject.scopes,
+                requestId,
+                traceId,
+              },
+            });
 
       let result: KnowledgeDispatchResult;
       if (route.idempotent && WRITE_METHODS.has(method)) {
@@ -295,6 +273,17 @@ export function createKnowledgeApiHandler(): NextApiHandler {
 
       for (const [name, value] of Object.entries(result.headers ?? {})) {
         response.setHeader(name, value);
+      }
+      if (result.status === 204) {
+        response.status(204).end();
+        runtime.log({
+          event: 'knowledge.api.request.completed',
+          requestId,
+          traceId,
+          operationId: route.operationId,
+          details: { status: 204, workspaceId },
+        });
+        return;
       }
       response.status(result.status).json({
         success: true,

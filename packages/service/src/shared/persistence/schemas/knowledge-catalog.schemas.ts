@@ -19,6 +19,7 @@ export interface KnowledgeSpaceDoc extends WorkspaceFields {
   sourceAclMode: 'inherited' | 'enforced';
   sourcePermissionEnabled: boolean;
   referenceRevision: number;
+  permissionRevision: number;
   modelBindings: Record<string, unknown>;
   defaultChunking: Record<string, unknown>;
   status: 'active' | 'deleting' | 'deleted';
@@ -40,6 +41,7 @@ export const KnowledgeSpaceSchema = new Schema(
     sourceAclMode: { type: String, enum: ['inherited', 'enforced'], required: true },
     sourcePermissionEnabled: { type: Boolean, required: true, default: true },
     referenceRevision: { type: Number, required: true, min: 0, default: 0 },
+    permissionRevision: { type: Number, required: true, min: 0, default: 0 },
     modelBindings: { type: Schema.Types.Mixed, required: true, default: {} },
     defaultChunking: { type: Schema.Types.Mixed, required: true, default: {} },
     status: {
@@ -79,6 +81,8 @@ export interface KnowledgeDirectoryDoc extends WorkspaceFields {
   depth: number;
   sortOrder: number;
   aclMode: 'inherited' | 'override';
+  permissionRevision: number;
+  ownershipMemberId: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -98,6 +102,8 @@ export const KnowledgeDirectorySchema = new Schema(
       required: true,
       default: 'inherited',
     },
+    permissionRevision: { type: Number, required: true, min: 0, default: 0 },
+    ownershipMemberId: { type: String, required: true },
   },
   knowledgeSchemaOptions('knowledge_directories'),
 );
@@ -164,6 +170,7 @@ export interface KnowledgeSourceDoc extends WorkspaceFields {
   searchEnabled: boolean;
   permissionState: 'disabled' | 'inherited' | 'independent';
   permissionRevision: number;
+  ownershipMemberId: string;
   metadata: Record<string, unknown>;
   tagValues: Array<{ tagId: Types.ObjectId; valueKey: string; value: unknown }>;
   createdAt: Date;
@@ -197,7 +204,11 @@ export const KnowledgeSourceSchema = new Schema(
     originalUrl: { type: String, default: null },
     mimeType: { type: String, required: true, default: 'application/octet-stream' },
     sizeBytes: { type: Number, required: true, min: 0, default: 0 },
-    contentHash: { type: String, required: true, default: '' },
+    contentHash: {
+      type: String,
+      required: true,
+      default: 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
+    },
     parseProvider: {
       type: String,
       enum: ['liteparse', 'sangfor', 'somark', 'textin', 'doc2x'],
@@ -229,6 +240,7 @@ export const KnowledgeSourceSchema = new Schema(
       default: 'disabled',
     },
     permissionRevision: { type: Number, required: true, min: 0, default: 0 },
+    ownershipMemberId: { type: String, required: true },
     metadata: { type: Schema.Types.Mixed, required: true, default: {} },
     tagValues: { type: [Schema.Types.Mixed], required: true, default: [] },
   },
@@ -336,7 +348,7 @@ export const KnowledgeSegmentSchema = new Schema(
     question: { type: String, required: true, maxlength: 100000 },
     answer: { type: String, required: true, maxlength: 100000 },
     content: { type: String, required: true },
-    fullTextTokens: { type: String, required: true, default: '' },
+    fullTextTokens: { type: String, default: '' },
     metadata: { type: Schema.Types.Mixed, required: true, default: {} },
     history: { type: [Schema.Types.Mixed], required: true, default: [] },
     indexes: { type: [SegmentIndexSchema], required: true, default: [] },

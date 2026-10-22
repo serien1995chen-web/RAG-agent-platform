@@ -1,6 +1,6 @@
 /**
  * @kb/parse — 文档解析与 9 种格式矩阵（CR-FEATURE-04，设计文档 9.8.1）。
- * 未注册格式返回 501056；备选解析器通过 DocumentParserPort 扩展，禁止引入来源项目 anydoc SDK。
+ * 未注册格式返回 KNOWLEDGE_UNSUPPORTED_CONTENT；备选解析器通过 Port 扩展。
  */
 import type { objectStoreLike, ParseHandlerContext } from './format-registry';
 import { parseFailedError, unsupportedFormatError } from './format-registry';
@@ -54,7 +54,7 @@ function toHandlerContext(request: ParseRequest): ParseHandlerContext | null {
 
 /**
  * 真实解析入口：按扩展名/MIME 分派到 9 类解析器之一。
- * 未登记格式抛 501056；缺少字节上下文时以稳定 501057 拒绝，绝不静默返回空文本。
+ * 未登记格式或缺少字节上下文时稳定拒绝，绝不静默返回空文本。
  */
 export function createDefaultDocumentParser(): DocumentParserPort {
   const registry: ParseFormatRegistry = createParserRegistry();

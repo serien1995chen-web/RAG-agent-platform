@@ -10,7 +10,7 @@ import {
 import { createKnowledgeError } from '@kb/contracts';
 import { registerKnowledgeModels } from '../schemas/knowledge-index';
 import type { KnowledgeOutboxEventDoc } from '../schemas/knowledge-job.schemas';
-import type { TenantContext } from './tenant';
+import { requireWorkspaceId, type TenantContext } from './tenant';
 
 export interface CreateKnowledgeOutboxEventInput {
   workspaceId: string;
@@ -44,6 +44,7 @@ export async function createKnowledgeOutboxEvent(
   context: TenantContext,
   session: ClientSession,
 ): Promise<KnowledgeOutboxEventDoc> {
+  const tenantWorkspaceId = requireWorkspaceId(context);
   if (!input.queue || !(KNOWLEDGE_QUEUE_NAMES as readonly string[]).includes(input.queue)) {
     throw createKnowledgeError({
       code: 'KNOWLEDGE_VALIDATION_FAILED',
@@ -52,7 +53,7 @@ export async function createKnowledgeOutboxEvent(
       details: { field: 'queue', reason: 'not_canonical' },
     });
   }
-  if (input.workspaceId !== context.workspaceId) {
+  if (input.workspaceId !== tenantWorkspaceId) {
     throw createKnowledgeError({
       code: 'KNOWLEDGE_VALIDATION_FAILED',
       requestId: context.requestId,
@@ -74,7 +75,7 @@ export async function createKnowledgeOutboxEvent(
   const [event] = await model.create(
     [
       {
-        workspaceId: input.workspaceId,
+        workspaceId: tenantWorkspaceId,
         knowledgeSpaceId: input.knowledgeSpaceId
           ? new Types.ObjectId(input.knowledgeSpaceId)
           : null,
@@ -117,12 +118,13 @@ export class KnowledgeOutboxDispatcher {
   }
 
   async dispatchOnce(context: TenantContext): Promise<{ dispatched: boolean; eventKey?: string }> {
+    const workspaceId = requireWorkspaceId(context);
     const model = this.connection.models.KnowledgeOutboxEvent;
     if (!model) return { dispatched: false };
     const now = new Date();
     const event = await model.findOneAndUpdate(
       {
-        workspaceId: context.workspaceId,
+        workspaceId,
         status: 'pending',
         availableAt: { $lte: now },
       },
@@ -137,7 +139,7 @@ export class KnowledgeOutboxDispatcher {
     const queueName = String(event.payload.queue ?? '') as KnowledgeQueueName;
     if (!(KNOWLEDGE_QUEUE_NAMES as readonly string[]).includes(queueName)) {
       await model.updateOne(
-        { _id: event._id, workspaceId: context.workspaceId, version: event.version },
+        { _id: event._id, workspaceId, version: event.version },
         {
           $set: {
             status: 'dead_letter',
@@ -164,7 +166,7 @@ export class KnowledgeOutboxDispatcher {
         payload: event.payload,
       });
       await model.updateOne(
-        { _id: event._id, workspaceId: context.workspaceId, version: event.version },
+        { _id: event._id, workspaceId, version: event.version },
         {
           $set: {
             status: 'published',
@@ -178,7 +180,7 @@ export class KnowledgeOutboxDispatcher {
     } catch {
       const retryAt = new Date(Date.now() + Math.min(30_000, 1_000 * 2 ** event.attempts));
       await model.updateOne(
-        { _id: event._id, workspaceId: context.workspaceId, version: event.version },
+        { _id: event._id, workspaceId, version: event.version },
         {
           $set: {
             status: event.attempts >= 10 ? 'dead_letter' : 'failed',
@@ -194,12 +196,13 @@ export class KnowledgeOutboxDispatcher {
   }
 
   async replay(eventId: string, context: TenantContext): Promise<boolean> {
+    const workspaceId = requireWorkspaceId(context);
     const model = this.connection.models.KnowledgeOutboxEvent;
     if (!model) return false;
     const result = await model.updateOne(
       {
         _id: eventId,
-        workspaceId: context.workspaceId,
+        workspaceId,
         status: { $in: ['failed', 'dead_letter'] },
       },
       {

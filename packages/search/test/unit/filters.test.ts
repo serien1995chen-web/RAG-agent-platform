@@ -1,15 +1,16 @@
 import type { SearchRequest } from '@kb/contracts';
 import { describe, expect, it } from 'vitest';
-import { createSearchEngine, parseCollectionFilterMatch } from '../../src/index';
+import { createSearchEngine, parseTagFilterMatch } from '../../src/index';
 import type { SearchEngineDeps } from '../../src/index';
 
-const context = { requestId: 'req-filters', tenant: { teamId: 'team-a', tmbId: 'tmb-a' } };
+const context = { requestId: 'req-filters', workspaceId: 'ws-a' };
 
 function request(overrides: Partial<SearchRequest> = {}): SearchRequest {
   return {
     requestId: 'req-filters',
-    teamId: 'team-a',
-    datasetIds: ['ds1'],
+    workspaceId: 'ws-a',
+    memberId: 'mem-a',
+    knowledgeSpaceIds: ['space-1'],
     textQueries: ['alpha'],
     imageQueries: [],
     models: { embeddingModel: 'bge-m3' },
@@ -22,7 +23,9 @@ function request(overrides: Partial<SearchRequest> = {}): SearchRequest {
 }
 
 const deps: SearchEngineDeps = {
-  vectors: { embRecall: async () => [{ dataId: 'd1', indexId: 'i1', score: 0.9 }] },
+  vectors: {
+    embRecall: async () => [{ segmentId: 'd1', sourceId: 'src-1', indexId: 'i1', score: 0.9 }],
+  },
   embedding: { embed: async ({ texts }) => texts.map(() => [0.1]) },
   resolveTexts: async (candidates) =>
     new Map(candidates.map((candidate) => [candidate.docId, `${candidate.docId} text`])),
@@ -30,12 +33,12 @@ const deps: SearchEngineDeps = {
 
 describe('P5-06 collection filter / batch (TEST-SEARCH-FILTER-001 / ACC-SEARCH-006)', () => {
   it('maps tags.$and / tags.$or to tagIds', () => {
-    expect(parseCollectionFilterMatch("{tags:{$and:['t1','t2']}}")).toEqual({
+    expect(parseTagFilterMatch("{tags:{$and:['t1','t2']}}")).toEqual({
       matched: true,
       tagsAnd: ['t1', 't2'],
       tagsOr: [],
     });
-    expect(parseCollectionFilterMatch("{tags:{$or:['t1','t2']}}")).toEqual({
+    expect(parseTagFilterMatch("{tags:{$or:['t1','t2']}}")).toEqual({
       matched: true,
       tagsAnd: [],
       tagsOr: ['t1', 't2'],
@@ -43,36 +46,40 @@ describe('P5-06 collection filter / batch (TEST-SEARCH-FILTER-001 / ACC-SEARCH-0
   });
 
   it('treats null in $and as matched=false and drops null from $or', () => {
-    expect(parseCollectionFilterMatch("{tags:{$and:['t1',null]}}")).toEqual({
+    expect(parseTagFilterMatch("{tags:{$and:['t1',null]}}")).toEqual({
       matched: false,
       tagsAnd: [],
       tagsOr: [],
     });
-    expect(parseCollectionFilterMatch("{tags:{$or:['t1',null,'t2']}}")).toEqual({
+    expect(parseTagFilterMatch("{tags:{$or:['t1',null,'t2']}}")).toEqual({
       matched: true,
       tagsAnd: [],
       tagsOr: ['t1', 't2'],
     });
   });
 
-  it('rejects illegal keys/operators with 501050', () => {
-    expect(() => parseCollectionFilterMatch("{tags:{$not:['t1']}}")).toThrowError();
-    expect(() => parseCollectionFilterMatch('{other:1}')).toThrowError();
+  it('rejects illegal keys/operators with a validation problem', () => {
+    expect(() => parseTagFilterMatch("{tags:{$not:['t1']}}")).toThrowError();
+    expect(() => parseTagFilterMatch('{other:1}')).toThrowError();
     try {
-      parseCollectionFilterMatch("{tags:{$not:['t1']}}");
+      parseTagFilterMatch("{tags:{$not:['t1']}}");
     } catch (error) {
-      expect((error as { error: { code: number } }).error.code).toBe(501050);
+      expect((error as { problem: { error: { code: string } } }).problem.error.code).toBe(
+        'KNOWLEDGE_VALIDATION_FAILED',
+      );
     }
   });
 
-  it('rejects searchBatch over ten requests with 501050', async () => {
+  it('rejects searchBatch over ten requests with a validation problem', async () => {
     const engine = createSearchEngine(deps);
     await expect(
       engine.searchBatch(
         Array.from({ length: 11 }, () => request()),
         context,
       ),
-    ).rejects.toMatchObject({ error: { code: 501050 } });
+    ).rejects.toMatchObject({
+      problem: { error: { code: 'KNOWLEDGE_VALIDATION_FAILED' } },
+    });
   });
 
   it('degrades a single failing batch item with stage=request', async () => {

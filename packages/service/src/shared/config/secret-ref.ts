@@ -1,5 +1,11 @@
 import { ConfigValidationException } from './config-error';
-import { readString, type EnvSource } from './env';
+
+type EnvSource = Readonly<Record<string, string | undefined>>;
+
+function readString(env: EnvSource, key: string): string | undefined {
+  const value = env[key];
+  return value === undefined || value.trim() === '' ? undefined : value.trim();
+}
 
 /**
  * 密钥只保存引用（设计文档 6.6 / 18.5）。

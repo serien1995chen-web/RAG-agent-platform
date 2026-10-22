@@ -3,7 +3,7 @@
  * 输出解析失败必须回退 chunk_split 并记录指标，不得伪造 QA。
  */
 import { createHash } from 'node:crypto';
-import { ApiErrorException, createApiError } from '@kb/contracts';
+import { KnowledgeApiError, createKnowledgeError, type KnowledgeErrorCode } from '@kb/contracts';
 import { dedupeQaItems } from './dedup';
 import { buildQaDedupKey, normalizeQaText } from './dedup';
 import { parseQaOutput } from './parser';
@@ -51,15 +51,20 @@ export interface GenerateQaOptions {
 }
 
 function qaError(
-  code: number,
+  code: KnowledgeErrorCode,
   params: Record<string, unknown>,
   requestId: string,
-): ApiErrorException {
-  return new ApiErrorException(createApiError({ code, requestId, params }));
+): KnowledgeApiError {
+  return createKnowledgeError({
+    code,
+    requestId,
+    traceId: requestId,
+    details: params,
+  });
 }
 
 function isRetryableModelError(error: unknown): boolean {
-  if (error instanceof ApiErrorException) return error.error.retryable === 'retryable';
+  if (error instanceof KnowledgeApiError) return error.problem.error.retryable;
   if (typeof error === 'object' && error !== null) {
     const record = error as Record<string, unknown>;
     if (record.retryable === 'retryable') return true;
@@ -76,21 +81,21 @@ function chunkHashOf(text: string): string {
 
 /**
  * 编排：模板解析 → 模型调用 → 输出解析 → 去重 → 回退。
- * 模板未注册 → 501037；模型 429/5xx/超时 → 501054（retryable）；
- * 解析失败/为空 → fallback=chunk_split（501055 语义），不伪造 QA。
+ * 模板未注册 → KNOWLEDGE_NOT_FOUND；模型失败 → KNOWLEDGE_MODEL_FAILED；
+ * 解析失败/为空 → fallback=chunk_split，不伪造 QA。
  */
 export async function generateQa(
   request: QaRequest,
   options: GenerateQaOptions,
 ): Promise<QaResult> {
   const requestId =
-    request.collectionId + ':' + request.qaTemplateId + '@' + String(request.qaTemplateVersion);
+    request.sourceId + ':' + request.qaTemplateId + '@' + String(request.qaTemplateVersion);
   const template = await options.templateRegistry.find(
     request.qaTemplateId,
     request.qaTemplateVersion,
   );
   if (!template || template.status !== 'active') {
-    throw qaError(501037, { templateId: request.qaTemplateId }, requestId);
+    throw qaError('KNOWLEDGE_NOT_FOUND', { templateId: request.qaTemplateId }, requestId);
   }
 
   const prompt = buildQaPrompt(resolvePrompt(template, request), request.chunkText);
@@ -104,7 +109,11 @@ export async function generateQa(
     });
   } catch (error) {
     const reason = isRetryableModelError(error) ? 'model_retryable_error' : 'model_error';
-    throw qaError(501054, { model: request.models.llmModel, taskId: requestId, reason }, requestId);
+    throw qaError(
+      'KNOWLEDGE_MODEL_FAILED',
+      { model: request.models.llmModel, taskId: requestId, reason },
+      requestId,
+    );
   }
 
   const sourceChunkHash = chunkHashOf(request.chunkText);

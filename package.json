@@ -20,7 +20,7 @@
     "test:unit": "turbo run test:unit",
     "test:integration": "turbo run test:integration",
     "test:contract": "vitest run --config test/contract/vitest.config.ts",
-    "test:e2e": "vitest run --config test/e2e/vitest.config.ts --passWithNoTests",
+    "test:e2e": "vitest run --config test/e2e/vitest.config.ts",
     "test:tenant": "vitest run --config test/tenant/vitest.config.ts",
     "test:concurrency": "vitest run --config test/concurrency/vitest.config.ts",
     "test:fault": "vitest run --config test/fault/vitest.config.ts",

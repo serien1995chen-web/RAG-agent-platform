@@ -13,7 +13,7 @@ function candidate(docId: string, score: number): Candidate {
   return {
     docId,
     itemId: docId,
-    collectionId: 'collection-a',
+    knowledgeSpaceId: 'space-a',
     score,
     scores: [{ type: 'embedding', value: score, index: 0 }],
     text: `question ${docId}answer`,

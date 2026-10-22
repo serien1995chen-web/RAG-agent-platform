@@ -3,20 +3,25 @@
  * 相同输入与策略必须产生完全相同的 chunk 序列；空输入返回空数组。
  * overlap 仅在相邻文本块之间生效，表格/自定义分隔边界不重叠。
  */
-import { ApiErrorException, createApiError } from '@kb/contracts';
+import { createKnowledgeError, type KnowledgeApiError } from '@kb/contracts';
 import { contentHashOfChunk, type ChunkOutput, type ChunkPolicy } from './token-count';
 import type { Segment } from './paragraph';
 import { buildSegments, normalizeChunkText } from './paragraph';
 import type { Counter } from './token-count';
 import { createCounter } from './token-count';
 
-export const CHUNK_LIMIT_ERROR_CODE = 501053;
+export const CHUNK_LIMIT_ERROR_CODE = 'KNOWLEDGE_VALIDATION_FAILED' as const;
 
 export function chunkLimitError(
   params: Record<string, unknown>,
   requestId = 'chunk',
-): ApiErrorException {
-  return new ApiErrorException(createApiError({ code: CHUNK_LIMIT_ERROR_CODE, requestId, params }));
+): KnowledgeApiError {
+  return createKnowledgeError({
+    code: CHUNK_LIMIT_ERROR_CODE,
+    requestId,
+    traceId: requestId,
+    details: params,
+  });
 }
 
 function validatePolicy(policy: ChunkPolicy): void {
@@ -47,7 +52,7 @@ function splitSentences(text: string): string[] {
     .filter((part) => part.length > 0);
 }
 
-/** 超长片段：按句子边界，再按 code point 硬切；forceSplit=false 时抛 501053。 */
+/** 超长片段：按句子边界，再按 code point 硬切；forceSplit=false 时稳定拒绝。 */
 function expandOversized(segments: Segment[], policy: ChunkPolicy, counter: Counter): Segment[] {
   const expanded: Segment[] = [];
   for (const segment of segments) {

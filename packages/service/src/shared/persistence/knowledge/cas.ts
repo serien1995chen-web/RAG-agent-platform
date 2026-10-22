@@ -1,6 +1,6 @@
 import { createKnowledgeError } from '@kb/contracts';
 import { Types, type Model } from 'mongoose';
-import type { TenantContext, WorkspaceFields } from './tenant';
+import { requireWorkspaceId, type TenantContext, type WorkspaceFields } from './tenant';
 
 export interface CasUpdateInput {
   id: string;
@@ -14,6 +14,7 @@ export async function workspaceCasUpdate<TDoc extends WorkspaceFields>(
   input: CasUpdateInput,
   context: TenantContext,
 ): Promise<TDoc> {
+  const workspaceId = requireWorkspaceId(context);
   if (!Types.ObjectId.isValid(input.id)) {
     throw createKnowledgeError({
       code: 'KNOWLEDGE_VALIDATION_FAILED',
@@ -25,7 +26,7 @@ export async function workspaceCasUpdate<TDoc extends WorkspaceFields>(
   const updated = await model.findOneAndUpdate(
     {
       _id: new Types.ObjectId(input.id),
-      workspaceId: context.workspaceId,
+      workspaceId,
       version: input.expectedVersion,
       deletedAt: null,
     },

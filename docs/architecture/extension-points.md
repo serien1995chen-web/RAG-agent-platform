@@ -1,30 +1,23 @@
-# 扩展点（非 Dataset 模块）
+# 架构扩展边界
 
-> 权威依据：设计文档 2.7、2.8、5.7、9.1-9.4；SKEL-ADR-006。
+当前基座不保留旧扩展注册表或旧扩展 catch-all 路由。所有能力必须通过已冻结的
+`/v1/knowledge/*` operation、application Port 或 Deferred manifest 扩展。
 
-## 1. 四个扩展点
+## 允许的扩展方向
 
-| 扩展        | 契约文件                                                           | 首期实现                                                                                  | 未启用语义                          |
-| ----------- | ------------------------------------------------------------------ | ----------------------------------------------------------------------------------------- | ----------------------------------- |
-| identity    | `projects/app/src/extensions/identity/dev-identity.provider.ts`    | 仅 development/test 提供固定主体（`KB_DEV_TEAM_ID`/`KB_DEV_TMB_ID`，必须为合法 ObjectId） | 501020 `dataset.extension.disabled` |
-| agent       | `projects/app/src/extensions/agent/agent.extension.ts`             | 注册 + 关闭                                                                               | 501020                              |
-| application | `projects/app/src/extensions/application/application.extension.ts` | 注册 + 关闭                                                                               | 501020                              |
-| publish     | `projects/app/src/extensions/publish/publish.extension.ts`         | 注册 + 关闭                                                                               | 501020                              |
+| 方向       | 当前基座                                                    | 后续状态 |
+| ---------- | ----------------------------------------------------------- | -------- |
+| Provider   | AIProxy、OCR、飞书、语雀、钉钉判别联合合同、timeout 和 mock | F5       |
+| Repository | workspace-scoped repository 与真实基础设施 Port             | 已实施   |
+| Jobs       | Mongo CAS/租约/fencing + Outbox + BullMQ 投递               | F2       |
+| Search     | 搜索算法包与合同；runtime search operation 仍 Deferred      | F3       |
+| Connectors | connector 集合与 mock 合同；同步和目录浏览仍 Deferred       | F1/F5    |
+| Console UI | 九个基座页面与 App Shell                                    | 已实施   |
 
-## 2. 注册表语义
+## 约束
 
-- `ExtensionRegistry.register/get/require/isEnabled/describe`，落点 `projects/app/src/extensions/registry.ts`。
-- `require(id)` 在未启用时抛稳定错误 501020，禁止回退到猜测实现。
-- 核心 Dataset 路由不依赖任何扩展启用；identity 未启用时核心路由返回 501020，启用后正常工作（ACC-ARCH-004）。
-- 扩展只能通过公开 Port / 扩展 API 访问核心数据，必须携带调用者 `teamId`、`tmbId` 与权限上下文。
-
-## 3. 扩展 API 路径
-
-- 逻辑基路径：`/proApi/core/dataset/**`（设计文档 12.1）。
-- 实际暴露：Next.js Pages Router 原生 `/api/proApi/[...path]`，不在 `next.config.ts` 做 rewrite（SKEL-ADR-006，proposed）。
-- 当前响应：HTTP 400 + 501020，`params.extension` 为匹配到的 Route ID（未匹配时为 `proApi`）。
-
-## 4. 契约测试
-
-- `test/contract/extensions.test.ts`：dev/prod identity 开关、三个扩展未启用稳定错误、扩展全关闭时 Dataset 核心可用。
-- `test/contract/route-matcher.test.ts`：12.9 注册表匹配与具体路由优先于扩展 catch-all。
+- 新 operation 必须先进入目标合同并获得用户批准，不能通过 catch-all 动态放行。
+- Deferred operation 不得注册运行时路由，也不得在 UI 显示为可用。
+- 外部 Provider 未取得真实凭证和联调证据时保持 `EXTERNAL_UNVERIFIED`。
+- 禁止复制来源项目的源码、Prompt、Schema、目录、部署文件、页面或品牌素材。
+- 禁止引入旧数字业务码、假成功、空对象占位或未批准 alias。

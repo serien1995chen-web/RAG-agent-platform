@@ -4,17 +4,26 @@ import { describe, expect, it } from 'vitest';
 import { applyTokenBudget, createSearchEngine } from '../../src/index';
 import type { Candidate, SearchEngineDeps } from '../../src/index';
 
-const context = { requestId: 'req-budget', tenant: { teamId: 'team-a', tmbId: 'tmb-a' } };
+const context = { requestId: 'req-budget', workspaceId: 'ws-a' };
 
 function candidate(docId: string, text: string): Candidate {
-  return { docId, itemId: docId, collectionId: 'c1', score: 1, scores: [], text };
+  return {
+    docId,
+    segmentId: docId,
+    sourceId: 'src-1',
+    knowledgeSpaceId: 'space-1',
+    score: 1,
+    scores: [],
+    text,
+  };
 }
 
 function request(overrides: Partial<SearchRequest> = {}): SearchRequest {
   return {
     requestId: 'req-budget',
-    teamId: 'team-a',
-    datasetIds: ['ds1'],
+    workspaceId: 'ws-a',
+    memberId: 'mem-a',
+    knowledgeSpaceIds: ['space-1'],
     textQueries: ['alpha'],
     imageQueries: [],
     models: { embeddingModel: 'bge-m3' },
@@ -53,9 +62,9 @@ describe('P5-06 token budget (TEST-SEARCH-BUDGET-001 / ACC-SEARCH-006)', () => {
     const deps: SearchEngineDeps = {
       vectors: {
         embRecall: async () => [
-          { dataId: 'a', indexId: 'i', score: 0.9 },
-          { dataId: 'b', indexId: 'i', score: 0.8 },
-          { dataId: 'c', indexId: 'i', score: 0.7 },
+          { segmentId: 'a', sourceId: 'src-1', indexId: 'i', score: 0.9 },
+          { segmentId: 'b', sourceId: 'src-1', indexId: 'i', score: 0.8 },
+          { segmentId: 'c', sourceId: 'src-1', indexId: 'i', score: 0.7 },
         ],
       },
       embedding: { embed: async ({ texts }) => texts.map(() => [0.1]) },

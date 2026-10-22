@@ -5,12 +5,12 @@
 | ID    | 冲突                               | 裁决                                            |
 | ----- | ---------------------------------- | ----------------------------------------------- |
 | C-001 | 历史路由数量 84/86/87 并存         | 目标合同固定 92 paths / 120 operations          |
-| C-002 | 历史错误码 501001–501071 与 501999 | 全部退出 canonical；只使用 `KNOWLEDGE_*`        |
+| C-002 | 历史数字错误码与骨架占位码         | 全部退出 canonical；只使用 `KNOWLEDGE_*`        |
 | C-003 | 历史 `teamId` 与新版 `workspaceId` | `workspaceId` 是唯一租户键                      |
 | C-004 | 旧规范禁止 Outbox/Saga             | 新版要求 Mongo 事务内 Outbox 与 Saga step       |
 | C-005 | 历史 Dataset 聚合                  | 硬切为 Knowledge Space/Directory/Source/Segment |
 | C-006 | 1536-only pgvector                 | 768/1024/1536 `vector`，3072 `halfvec`          |
-| C-007 | 旧 10 个 `dataset-*` 队列          | 硬切为 13 个 `knowledge-*` 队列                 |
+| C-007 | 旧十个 Dataset 队列                | 硬切为 13 个 `knowledge-*` 队列                 |
 
 ## EXTERNAL_UNVERIFIED
 

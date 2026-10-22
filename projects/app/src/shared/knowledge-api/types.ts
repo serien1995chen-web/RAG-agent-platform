@@ -52,6 +52,17 @@ export interface KnowledgeApiRuntime {
     requestId: string;
   }): Promise<RateLimitDecision | null>;
   readiness(requestId: string): Promise<{ status: number; body: HealthResponse }>;
+  operationsStatus(input: { requestId: string; traceId: string; workspaceId: string }): Promise<{
+    status: 'ok' | 'degraded';
+    queueDepth: Record<string, number>;
+    storage: { provider: 'minio' | 'aws-s3' | 'r2' | 'cos' | 'oss'; healthy: boolean };
+    vector: { backend: 'pgvector'; healthy: boolean; profiles: number[] };
+    reconciliation: {
+      lastRunAt: string;
+      orphanObjects: number;
+      orphanVectors: number;
+    };
+  }>;
   dispatch(input: KnowledgeDispatchInput): Promise<KnowledgeDispatchResult>;
   log(input: {
     event: string;

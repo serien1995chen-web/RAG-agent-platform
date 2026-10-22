@@ -3,13 +3,14 @@ import { describe, expect, it } from 'vitest';
 import { createSearchEngine, rrfFuseWeighted } from '../../src/index';
 import type { SearchEngineDeps } from '../../src/index';
 
-const context = { requestId: 'req-weights', tenant: { teamId: 'team-a', tmbId: 'tmb-a' } };
+const context = { requestId: 'req-weights', workspaceId: 'ws-a' };
 
 function request(overrides: Partial<SearchRequest> = {}): SearchRequest {
   return {
     requestId: 'req-weights',
-    teamId: 'team-a',
-    datasetIds: ['ds1'],
+    workspaceId: 'ws-a',
+    memberId: 'mem-a',
+    knowledgeSpaceIds: ['space-1'],
     textQueries: ['alpha'],
     imageQueries: [],
     models: { embeddingModel: 'bge-m3' },
@@ -23,8 +24,12 @@ function request(overrides: Partial<SearchRequest> = {}): SearchRequest {
 
 function deps(overrides: Partial<SearchEngineDeps> = {}): SearchEngineDeps {
   return {
-    vectors: { embRecall: async () => [{ dataId: 'v1', indexId: 'i1', score: 0.9 }] },
-    fullText: { search: async () => [{ dataId: 'f1', collectionId: 'c1', score: 0.7 }] },
+    vectors: {
+      embRecall: async () => [{ segmentId: 'v1', sourceId: 'src-1', indexId: 'i1', score: 0.9 }],
+    },
+    fullText: {
+      search: async () => [{ segmentId: 'f1', sourceId: 'src-1', score: 0.7 }],
+    },
     embedding: { embed: async ({ texts }) => texts.map(() => [0.1]) },
     resolveTexts: async (candidates) =>
       new Map(candidates.map((candidate) => [candidate.docId, `${candidate.docId} text`])),
@@ -42,26 +47,38 @@ describe('P5-06 weights (TEST-SEARCH-WEIGHT-001 / ACC-SEARCH-006)', () => {
     ).toBe(1 / 61);
   });
 
-  it('rejects out-of-range weights with 501050', async () => {
+  it('rejects out-of-range weights with a stable validation problem', async () => {
     const engine = createSearchEngine(deps());
     await expect(
       engine.search(request({ weights: { embedding: -0.01, rerank: 0.5 } }), context),
-    ).rejects.toMatchObject({ error: { code: 501050 } });
+    ).rejects.toMatchObject({
+      problem: { error: { code: 'KNOWLEDGE_VALIDATION_FAILED' } },
+    });
     await expect(
       engine.search(request({ weights: { embedding: 1.01, rerank: 0.5 } }), context),
-    ).rejects.toMatchObject({ error: { code: 501050 } });
+    ).rejects.toMatchObject({
+      problem: { error: { code: 'KNOWLEDGE_VALIDATION_FAILED' } },
+    });
     await expect(
       engine.search(request({ weights: { embedding: 0.5, rerank: -0.01 } }), context),
-    ).rejects.toMatchObject({ error: { code: 501050 } });
+    ).rejects.toMatchObject({
+      problem: { error: { code: 'KNOWLEDGE_VALIDATION_FAILED' } },
+    });
     await expect(
       engine.search(request({ weights: { embedding: 0.5, rerank: 1.01 } }), context),
-    ).rejects.toMatchObject({ error: { code: 501050 } });
+    ).rejects.toMatchObject({
+      problem: { error: { code: 'KNOWLEDGE_VALIDATION_FAILED' } },
+    });
   });
 
   it('defaults to embedding 0.5 (a mutual rank-one candidate scores 1/61)', async () => {
     const shared = deps({
-      vectors: { embRecall: async () => [{ dataId: 'd1', indexId: 'i1', score: 0.9 }] },
-      fullText: { search: async () => [{ dataId: 'd1', collectionId: 'c1', score: 0.7 }] },
+      vectors: {
+        embRecall: async () => [{ segmentId: 'd1', sourceId: 'src-1', indexId: 'i1', score: 0.9 }],
+      },
+      fullText: {
+        search: async () => [{ segmentId: 'd1', sourceId: 'src-1', score: 0.7 }],
+      },
     });
     const result = await createSearchEngine(shared).search(request(), context);
     const rrfScore = result.citations[0]?.scores.find((score) => score.type === 'rrf')?.value;
@@ -74,7 +91,7 @@ describe('P5-06 weights (TEST-SEARCH-WEIGHT-001 / ACC-SEARCH-006)', () => {
       request({ weights: { embedding: 0, rerank: 0.5 } }),
       context,
     );
-    const vectorOnly = result.citations.find((citation) => citation.dataId === 'v1');
+    const vectorOnly = result.citations.find((citation) => citation.segmentId === 'v1');
     const rrfScore = vectorOnly?.scores.find((score) => score.type === 'rrf')?.value;
     expect(rrfScore).toBe(0);
   });

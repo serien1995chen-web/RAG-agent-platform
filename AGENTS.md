@@ -28,7 +28,8 @@
 1. 业务代码不得直接读取 `process.env`；唯一入口是
    `packages/service/src/shared/config`。
 2. 所有业务错误必须经统一错误工厂 `createKnowledgeError` 生成
-   `KNOWLEDGE_*` 合同；禁止数字业务码、`501999`、`not_implemented` 和临时错误码。
+   `KNOWLEDGE_*` 合同；禁止数字业务码、骨架占位码、not-implemented 文案和
+   临时错误码。
 3. 所有资源写入使用 `version` CAS。权限状态或 ACL 主体变化必须递增
    `permissionRevision` 并写审计事实。
 4. Job 在 Mongo 中保存业务真相；领取、租约、心跳和提交使用

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 import {
   buildKnowledgeContractArtifacts,
@@ -45,6 +45,7 @@ for (const operation of deferredManifest.operations) {
 }
 
 const pagesRoot = join(repoRoot, 'projects', 'app', 'src', 'pages');
+const apiRoot = join(pagesRoot, 'api');
 function walk(directory) {
   const files = [];
   for (const entry of readdirSync(directory, { withFileTypes: true })) {
@@ -61,6 +62,20 @@ try {
 } catch {
   problems.push('缺少 projects/app/src/pages');
 }
+
+const allowedApiPages = new Set([
+  'console/session.ts',
+  'healthz.ts',
+  'readyz.ts',
+  join('v1', 'knowledge', '[...path].ts'),
+]);
+for (const file of pageFiles) {
+  const relativeApiPath = relative(apiRoot, file);
+  if (!relativeApiPath.startsWith('..') && !allowedApiPages.has(relativeApiPath)) {
+    problems.push(`未批准的 API page 仍存在: ${relativeApiPath}`);
+  }
+}
+
 const forbiddenPageFragments = [
   join('api', 'core'),
   join('api', 'internal', 'dataset'),
@@ -74,18 +89,74 @@ for (const file of pageFiles) {
   }
 }
 
-const runtimeEntryFiles = pageFiles
-  .map((file) => relative(repoRoot, file))
-  .filter((file) => file.includes(join('api', 'v1', 'knowledge')) || file.endsWith('.tsx'));
-for (const file of runtimeEntryFiles) {
+const runtimeRoots = [
+  join(repoRoot, 'packages', 'contracts', 'src'),
+  join(repoRoot, 'packages', 'dal', 'src'),
+  join(repoRoot, 'packages', 'service', 'src'),
+  join(repoRoot, 'projects', 'app', 'src'),
+];
+const runtimeSourceFiles = runtimeRoots.flatMap((root) => walk(root));
+const forbiddenSourceFragments = [
+  '/api/core/dataset',
+  '/api/internal/dataset',
+  '/api/admin/dataset',
+  '/proApi/core/dataset',
+  'dataset_collections',
+  'dataset_datas',
+  'dataset_trainings',
+  'dataset_acl',
+  'dataset_tags',
+  'dataset_migrations',
+  'dataset-delete',
+  'dataset-parse',
+  'dataset-sync',
+  'collectionFilterMatch',
+  'parseCollectionFilterMatch',
+  'collectionId',
+  'modeldata',
+  'VECTOR(1536)',
+  'SKELETON_NOT_IMPLEMENTED',
+  '501999',
+];
+for (const file of runtimeSourceFiles) {
   let content;
   try {
-    content = readFileSync(join(repoRoot, file), 'utf8');
+    content = readFileSync(file, 'utf8');
   } catch {
     continue;
   }
-  if (content.includes('SKELETON_NOT_IMPLEMENTED') || content.includes('501999')) {
-    problems.push(`runtime page 含占位实现: ${file}`);
+  const relativeFile = relative(repoRoot, file);
+  for (const fragment of forbiddenSourceFragments) {
+    if (content.includes(fragment)) {
+      problems.push(`${relativeFile} 含旧 canonical 或占位片段: ${fragment}`);
+    }
+  }
+}
+
+const forbiddenModuleDirectories = [
+  'collection',
+  'delete',
+  'index',
+  'item',
+  'knowledge-base',
+  'migration',
+  'permission',
+  'processing',
+];
+for (const directory of forbiddenModuleDirectories) {
+  const path = join(repoRoot, 'packages', 'service', 'src', 'modules', directory);
+  if (existsSync(path) && statSync(path).isDirectory()) {
+    problems.push(`旧 service module 仍存在: ${directory}`);
+  }
+}
+
+const knowledgeCatchAll = join(apiRoot, 'v1', 'knowledge', '[...path].ts');
+if (!existsSync(knowledgeCatchAll)) {
+  problems.push('缺少唯一 canonical knowledge catch-all');
+}
+for (const file of pageFiles) {
+  if (file !== knowledgeCatchAll && file.includes('[...') && relative(apiRoot, file) !== file) {
+    problems.push(`发现未批准 catch-all: ${relative(repoRoot, file)}`);
   }
 }
 

@@ -8,6 +8,7 @@ export interface TenantContext {
   traceId: string;
   apiKeyId?: string;
   scopes: readonly string[];
+  isWorkspaceOwner?: boolean;
 }
 
 export interface WorkspaceFields {
@@ -21,7 +22,10 @@ export interface WorkspaceFields {
 
 export function tenantError(
   context: Pick<TenantContext, 'requestId' | 'traceId'>,
-  code: 'KNOWLEDGE_VALIDATION_FAILED' | 'KNOWLEDGE_NOT_FOUND' = 'KNOWLEDGE_VALIDATION_FAILED',
+  code:
+    | 'KNOWLEDGE_VALIDATION_FAILED'
+    | 'KNOWLEDGE_NOT_FOUND'
+    | 'KNOWLEDGE_CONFLICT' = 'KNOWLEDGE_VALIDATION_FAILED',
   details: Record<string, unknown> = {},
 ) {
   return createKnowledgeError({

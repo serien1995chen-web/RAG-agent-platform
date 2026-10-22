@@ -48,57 +48,6 @@ export type {
 } from './errors/knowledge-errors';
 
 export {
-  ERROR_CATALOG,
-  ERROR_CATALOG_BY_CODE,
-  SKELETON_INTERNAL_ERROR,
-  SKELETON_INTERNAL_ERROR_META,
-  SKELETON_NOT_IMPLEMENTED,
-  SKELETON_NOT_IMPLEMENTED_META,
-  getErrorMeta,
-} from './errors/error-catalog';
-export type { ErrorCatalogEntry } from './errors/error-catalog';
-
-export {
-  ApiErrorException,
-  classifyRetryableError,
-  createApiError,
-  createInternalError,
-  createSkeletonError,
-  toApiResponse,
-} from './errors/error-factory';
-export type { CreateApiErrorInput } from './errors/error-factory';
-
-export {
-  ACCEPTED_DATASET_TYPES,
-  COLLECTION_TRAINING_STATES,
-  DELETE_JOB_STATES,
-  DatasetTypeSchema,
-  INDEX_TYPES,
-  IndexTypeSchema,
-  REJECTED_DATASET_TYPES,
-  SEARCH_MODES,
-  SearchModeSchema,
-  TRAINING_MODES,
-  TRAINING_TASK_STATES,
-  TrainingModeSchema,
-  WEBSITE_DATASET_TYPE,
-  datasetTypeRejection,
-  isDatasetTypeAccepted,
-} from './enums/dataset';
-export type { DatasetType, IndexType, SearchMode, TrainingMode } from './enums/dataset';
-
-export {
-  DTO_SCHEMA_ERRORS,
-  DTO_SPECS,
-  dtoRegistry,
-  getDtoSchema,
-  missingDtoReferences,
-  resolveDtoExpression,
-  unwrapDtoExpression,
-} from './dataset/registry';
-export type { DtoSpec } from './dataset/registry';
-
-export {
   DEFERRED_OPERATION_MANIFEST,
   FULL_ROUTE_REGISTRY,
   FULL_ROUTE_REGISTRY_BY_ID,
@@ -128,10 +77,11 @@ export {
   SearchRequestSchema,
   SearchResultSchema,
   SearchStatsSchema,
+  SearchModeSchema,
   SearchVersionPolicySchema,
   SearchWeightsSchema,
   buildIndexVersion,
-} from './dataset/search/types';
+} from './search/types';
 export type {
   Citation,
   CitationScore,
@@ -142,6 +92,7 @@ export type {
   SearchRequest,
   SearchResult,
   SearchStats,
+  SearchMode,
   SearchVersionPolicy,
   SearchWeights,
-} from './dataset/search/types';
+} from './search/types';

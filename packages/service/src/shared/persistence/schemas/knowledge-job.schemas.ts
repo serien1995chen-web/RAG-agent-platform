@@ -35,7 +35,17 @@ export interface KnowledgeJobDoc extends WorkspaceFields {
     | 'cleanup'
     | 'reconcile'
     | 'outbox';
-  resourceType: 'source' | 'segment' | 'space' | 'connector' | 'synonym' | 'system';
+  resourceType:
+    | 'workspace'
+    | 'space'
+    | 'directory'
+    | 'source'
+    | 'segment'
+    | 'job'
+    | 'connector'
+    | 'api_key'
+    | 'synonym'
+    | 'system';
   resourceId: string;
   status: KnowledgeJobStatus;
   priority: number;
@@ -88,7 +98,18 @@ export const KnowledgeJobSchema = new Schema(
     },
     resourceType: {
       type: String,
-      enum: ['source', 'segment', 'space', 'connector', 'synonym', 'system'],
+      enum: [
+        'workspace',
+        'space',
+        'directory',
+        'source',
+        'segment',
+        'job',
+        'connector',
+        'api_key',
+        'synonym',
+        'system',
+      ],
       required: true,
     },
     resourceId: { type: String, required: true },
@@ -116,7 +137,7 @@ export const KnowledgeJobSchema = new Schema(
     attempts: { type: Number, required: true, min: 0, default: 0 },
     maxAttempts: { type: Number, required: true, min: 1, default: 3 },
     attemptEpoch: { type: Number, required: true, min: 0, default: 0 },
-    fencingToken: { type: String, required: true, default: '' },
+    fencingToken: { type: String, required: true, default: 'unassigned' },
     leaseOwner: { type: String, default: null },
     leaseExpiresAt: { type: Date, default: null },
     heartbeatAt: { type: Date, default: null },

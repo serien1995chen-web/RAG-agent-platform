@@ -9,8 +9,9 @@ export interface RankedEntry {
 
 export interface Candidate {
   docId: string;
-  itemId: string;
-  collectionId: string;
+  segmentId: string;
+  sourceId: string;
+  knowledgeSpaceId: string;
   score: number;
   scores: CitationScore[];
   text: string;
@@ -25,29 +26,28 @@ export interface SearchEngineDeps {
   vectors: {
     embRecall(
       input: {
-        teamId: string;
-        datasetId: string;
-        collectionId?: string;
-        collectionIds?: string[];
+        workspaceId: string;
+        knowledgeSpaceId: string;
+        sourceIds?: string[];
         vector: number[];
         limit: number;
         indexVersion: string;
         options: { timeoutMs: number };
       },
-      context: { requestId: string; tenant: { teamId: string; tmbId: string } },
-    ): Promise<{ dataId: string; indexId: string; score: number }[]>;
+      context: { requestId: string; workspaceId: string },
+    ): Promise<{ segmentId: string; sourceId: string; indexId: string; score: number }[]>;
   };
   fullText?: {
     search(
       input: {
-        datasetId: string;
-        collectionIds?: string[];
+        knowledgeSpaceId: string;
+        sourceIds?: string[];
         text: string;
         limit: number;
         options: { timeoutMs: number };
       },
-      context: { requestId: string; tenant: { teamId: string; tmbId: string } },
-    ): Promise<{ dataId: string; collectionId: string; score: number }[]>;
+      context: { requestId: string; workspaceId: string },
+    ): Promise<{ segmentId: string; sourceId: string; score: number }[]>;
   };
   embedding: {
     embed(
@@ -56,12 +56,12 @@ export interface SearchEngineDeps {
         texts: string[];
         options: { timeoutMs: number };
       },
-      context: { requestId: string; tenant: { teamId: string; tmbId: string } },
+      context: { requestId: string; workspaceId: string },
     ): Promise<number[][]>;
   };
   resolveTexts?: (
     candidates: readonly Candidate[],
-    context: { requestId: string; tenant: { teamId: string; tmbId: string } },
+    context: { requestId: string; workspaceId: string },
   ) => Promise<Map<string, string>>;
   rerank?: {
     rerank(
@@ -70,7 +70,7 @@ export interface SearchEngineDeps {
         items: { id: string; score: number }[];
         options: { timeoutMs: number };
       },
-      context: { requestId: string; tenant: { teamId: string; tmbId: string } },
+      context: { requestId: string; workspaceId: string },
     ): Promise<{ id: string; score: number }[]>;
   };
 }
@@ -78,11 +78,11 @@ export interface SearchEngineDeps {
 export interface SearchPipelinePort {
   search(
     request: SearchRequest,
-    context: { requestId: string; tenant: { teamId: string; tmbId: string } },
+    context: { requestId: string; workspaceId: string },
   ): Promise<SearchResult>;
   searchBatch(
     requests: readonly SearchRequest[],
-    context: { requestId: string; tenant: { teamId: string; tmbId: string } },
+    context: { requestId: string; workspaceId: string },
   ): Promise<SearchResult[]>;
 }
 

@@ -1,5 +1,10 @@
 import { countTokens } from '@kb/chunk';
-import { ApiErrorException, SEARCH_BATCH_LIMIT, createApiError } from '@kb/contracts';
+import {
+  SEARCH_BATCH_LIMIT,
+  createKnowledgeError,
+  type KnowledgeApiError,
+  type KnowledgeErrorCode,
+} from '@kb/contracts';
 import type {
   Citation,
   CitationScore,
@@ -27,10 +32,15 @@ import type {
 
 function error(
   request: SearchRequest,
-  code: number,
+  code: KnowledgeErrorCode,
   params: Record<string, unknown>,
-): ApiErrorException {
-  return new ApiErrorException(createApiError({ code, requestId: request.requestId, params }));
+): KnowledgeApiError {
+  return createKnowledgeError({
+    code,
+    requestId: request.requestId,
+    traceId: request.requestId,
+    details: params,
+  });
 }
 
 function emptyResult(request: SearchRequest, degraded: DegradedInfo[]): SearchResult {
@@ -52,24 +62,22 @@ function hasType(candidate: Candidate, type: CitationScore['type']): boolean {
   return candidate.scores.some((score) => score.type === type);
 }
 
-function datasetIdOf(candidate: Candidate): string {
-  return candidate.docId.split(':')[0] ?? '';
-}
-
 function validate(request: SearchRequest): void {
   const hasText = request.textQueries.some((query) => query.trim().length > 0);
   if (!hasText && request.imageQueries.length === 0) {
-    throw error(request, 501049, { reason: 'text_or_image_query_required' });
+    throw error(request, 'KNOWLEDGE_VALIDATION_FAILED', {
+      reason: 'text_or_image_query_required',
+    });
   }
   if (request.limit < 1 || request.limit > 50) {
-    throw error(request, 501050, {
+    throw error(request, 'KNOWLEDGE_VALIDATION_FAILED', {
       field: 'limit',
       value: request.limit,
       rangeOrVersion: '1-50',
     });
   }
   if (request.similarity < 0 || request.similarity > 1) {
-    throw error(request, 501050, {
+    throw error(request, 'KNOWLEDGE_VALIDATION_FAILED', {
       field: 'similarity',
       value: request.similarity,
       rangeOrVersion: '0-1',
@@ -77,14 +85,14 @@ function validate(request: SearchRequest): void {
   }
   if (request.weights) {
     if (request.weights.embedding < 0 || request.weights.embedding > 1) {
-      throw error(request, 501050, {
+      throw error(request, 'KNOWLEDGE_VALIDATION_FAILED', {
         field: 'weights.embedding',
         value: request.weights.embedding,
         rangeOrVersion: '0-1',
       });
     }
     if (request.weights.rerank < 0 || request.weights.rerank > 1) {
-      throw error(request, 501050, {
+      throw error(request, 'KNOWLEDGE_VALIDATION_FAILED', {
         field: 'weights.rerank',
         value: request.weights.rerank,
         rangeOrVersion: '0-1',
@@ -92,7 +100,7 @@ function validate(request: SearchRequest): void {
     }
   }
   if (request.maxTokens <= 0) {
-    throw error(request, 501050, {
+    throw error(request, 'KNOWLEDGE_VALIDATION_FAILED', {
       field: 'maxTokens',
       value: request.maxTokens,
       rangeOrVersion: 'positive',
@@ -120,13 +128,12 @@ function toCitation(candidate: Candidate, index: number, usingReRank: boolean): 
   ];
   if (usingReRank) scores.push({ type: 'reRank', value: candidate.score, index });
   return {
-    dataId: candidate.itemId,
-    chunkIndex: 0,
-    datasetId: datasetIdOf(candidate),
-    collectionId: candidate.collectionId || candidate.itemId,
-    collectionName: 'pending',
-    sourceName: 'pending',
-    sourceType: 'virtual',
+    citationId: `${candidate.knowledgeSpaceId}:${candidate.segmentId}:${index}`,
+    segmentId: candidate.segmentId,
+    sourceId: candidate.sourceId,
+    knowledgeSpaceId: candidate.knowledgeSpaceId,
+    title: candidate.segmentId,
+    sourceUrl: null,
     quoteText: '',
     updateTime: new Date(0).toISOString(),
     scores,
@@ -139,7 +146,7 @@ export function createSearchEngine(
 ): SearchPipelinePort {
   const search = async (
     request: SearchRequest,
-    context: { requestId: string; tenant: { teamId: string; tmbId: string } },
+    context: { requestId: string; workspaceId: string },
   ): Promise<SearchResult> => {
     const startedAt = Date.now();
     validate(request);
@@ -196,7 +203,7 @@ export function createSearchEngine(
         } catch (caught) {
           const reason = caught instanceof Error ? caught.message : String(caught);
           if ((options.rerankFailureMode ?? 'fallback') === 'strict') {
-            throw error(request, 501064, {
+            throw error(request, 'KNOWLEDGE_MODEL_FAILED', {
               model: request.models.rerankModel,
               reason,
               requestId: request.requestId,
@@ -242,13 +249,12 @@ export function createSearchEngine(
     search,
     searchBatch: async (requests, context) => {
       if (requests.length > SEARCH_BATCH_LIMIT) {
-        throw new ApiErrorException(
-          createApiError({
-            code: 501050,
-            requestId: context.requestId,
-            params: { field: 'requests', value: requests.length, rangeOrVersion: '1-10' },
-          }),
-        );
+        throw createKnowledgeError({
+          code: 'KNOWLEDGE_VALIDATION_FAILED',
+          requestId: context.requestId,
+          traceId: context.requestId,
+          details: { field: 'requests', value: requests.length, rangeOrVersion: '1-10' },
+        });
       }
       return Promise.all(
         requests.map(async (request) => {

@@ -12,7 +12,7 @@
 | deferred operations  |   74 |
 
 完整合同是唯一目标合同；运行时只注册 46 个已批准 operation。Deferred
-operation 不得用占位路由、501999、200 空对象或其他假成功实现。
+operation 不得用占位路由、骨架占位码、200 空对象或其他假成功实现。
 
 ## 公共合同
 

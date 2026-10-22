@@ -13,8 +13,8 @@ export interface SafeLogger {
 /** 设计 15.3：固定字段字典（13）。 */
 export const LOG_FIELD_DICTIONARY: readonly LogFieldName[] = [
   'requestId',
-  'teamId',
-  'tmbId',
+  'workspaceId',
+  'knowledgeSpaceId',
   'route',
   'method',
   'resourceType',

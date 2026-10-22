@@ -1,6 +1,6 @@
 /**
  * @kb/parse 电子书（EPUB）解析（设计 9.8.1）：经 DocumentParserPort 自研扩展点实现，按段落。
- * 仅使用自研扩展点实现，不引入来源项目 SDK；不支持格式返回 501056。
+ * 仅使用自研扩展点实现；不支持格式返回 KNOWLEDGE_UNSUPPORTED_CONTENT。
  */
 import {
   makeResult,
@@ -76,7 +76,7 @@ export const parseEbook: ParseHandler = async (context) => {
     }
     return makeResult('ebook', normalizeRawText(sections.join('\n\n')));
   } catch (error) {
-    if (error instanceof Error && error.name === 'ApiErrorException') throw error;
+    if (error instanceof Error && error.name === 'KnowledgeApiError') throw error;
     throw parseFailedError('ebook', 'ebook_parse_failed', requestId);
   }
 };

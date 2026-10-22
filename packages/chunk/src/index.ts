@@ -26,7 +26,7 @@ export { buildSegments, normalizeChunkText } from './paragraph';
 export type { Segment, SegmentKind, SegmentOptions } from './paragraph';
 export { CHUNK_LIMIT_ERROR_CODE, chunkLimitError } from './chunker';
 
-/** 确定性切分入口：空输入返回空数组；上限越界抛 501053。 */
+/** 确定性切分入口：空输入返回空数组；上限越界抛 KNOWLEDGE_VALIDATION_FAILED。 */
 export function chunkText(input: ChunkInput): ChunkOutput {
   return runChunk(input);
 }
