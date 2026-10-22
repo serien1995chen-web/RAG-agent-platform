@@ -17,3 +17,20 @@ export type {
 } from './interface';
 export { presignObjectUrl } from './presign';
 export { OBJECT_KEY_PREFIXES, assertObjectKeyScope, objectKeyHash } from './tenant-scope';
+export {
+  KNOWLEDGE_OBJECT_PROVIDERS,
+  MinioKnowledgeObjectStore,
+  assertKnowledgeObjectScope,
+  createKnowledgeObjectStore,
+  knowledgeObjectKey,
+} from './knowledge-object-store';
+export type {
+  ExternalKnowledgeObjectStoreContract,
+  KnowledgeObjectContext,
+  KnowledgeObjectKeyInput,
+  KnowledgeObjectProvider,
+  KnowledgeObjectPurpose,
+  KnowledgeObjectRef,
+  KnowledgeObjectStoreConfig,
+  MinioKnowledgeObjectStoreConfig,
+} from './knowledge-object-store';

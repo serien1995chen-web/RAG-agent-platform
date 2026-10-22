@@ -1,84 +1,55 @@
-/**
- * 异步 Job 契约（设计文档 12.10）：稳定 jobId、队列名与幂等语义。
- * 规则：必须先写 Mongo 事实再投递 BullMQ；成功任务删除，不写虚假 completed。
- */
-export const QUEUE_NAMES = {
-  parse: 'dataset-parse',
-  chunk: 'dataset-chunk',
-  qa: 'dataset-qa',
-  vector: 'dataset-vector',
-  image: 'dataset-image',
-  imageParse: 'dataset-image-parse',
-  delete: 'dataset-delete',
-  sync: 'dataset-sync',
-  reconcile: 'dataset-reconcile',
-  migration: 'dataset-migration',
-} as const;
+import { createHash } from 'node:crypto';
 
-export type QueueName = (typeof QUEUE_NAMES)[keyof typeof QUEUE_NAMES];
+export const KNOWLEDGE_QUEUE_NAMES = [
+  'knowledge-import',
+  'knowledge-parse',
+  'knowledge-segment',
+  'knowledge-qa',
+  'knowledge-ocr',
+  'knowledge-caption',
+  'knowledge-embed',
+  'knowledge-index',
+  'knowledge-rebuild',
+  'knowledge-sync',
+  'knowledge-delete',
+  'knowledge-outbox',
+  'knowledge-cleanup',
+] as const;
 
-export type JobMode = 'parse' | 'chunk' | 'qa' | 'image' | 'imageParse' | 'delete' | 'sync';
+export type KnowledgeQueueName = (typeof KNOWLEDGE_QUEUE_NAMES)[number];
 
-export function buildParseJobId(
-  teamId: string,
-  datasetId: string,
-  collectionId: string,
-  version: number | string,
-): string {
-  return `${teamId}:${datasetId}:${collectionId}:parse:${version}`;
+export const QUEUE_NAMES = Object.freeze({
+  import: 'knowledge-import',
+  parse: 'knowledge-parse',
+  segment: 'knowledge-segment',
+  qa: 'knowledge-qa',
+  ocr: 'knowledge-ocr',
+  caption: 'knowledge-caption',
+  embed: 'knowledge-embed',
+  index: 'knowledge-index',
+  rebuild: 'knowledge-rebuild',
+  sync: 'knowledge-sync',
+  delete: 'knowledge-delete',
+  outbox: 'knowledge-outbox',
+  cleanup: 'knowledge-cleanup',
+} as const satisfies Record<string, KnowledgeQueueName>);
+
+export type QueueName = KnowledgeQueueName;
+export type JobMode = keyof typeof QUEUE_NAMES;
+
+export interface KnowledgeJobIdInput {
+  kind: string;
+  resourceId: string;
+  version: number | string;
+  inputHash: string;
 }
 
-export function buildChunkJobId(
-  teamId: string,
-  datasetId: string,
-  collectionId: string,
-  version: number | string,
-): string {
-  return `${teamId}:${datasetId}:${collectionId}:chunk:${version}`;
+export function buildKnowledgeJobId(input: KnowledgeJobIdInput): string {
+  const digest = createHash('sha256')
+    .update(`${input.kind}\u0000${input.resourceId}\u0000${input.version}\u0000${input.inputHash}`)
+    .digest('hex')
+    .slice(0, 40);
+  return `k_${digest}`;
 }
 
-export function buildQaJobId(teamId: string, dataId: string, version: number | string): string {
-  return `${teamId}:${dataId}:qa:${version}`;
-}
-
-export function buildVectorJobId(teamId: string, dataId: string, version: number | string): string {
-  return `${teamId}:${dataId}:vector:${version}`;
-}
-
-export function buildImageJobId(
-  teamId: string,
-  datasetId: string,
-  imageId: string,
-  mode: 'image' | 'imageParse',
-): string {
-  return `${teamId}:${datasetId}:${imageId}:${mode}`;
-}
-
-export function buildDeleteJobId(teamId: string, datasetId: string): string {
-  return `${teamId}:${datasetId}:delete`;
-}
-
-export function buildSyncJobId(teamId: string, datasetId: string): string {
-  return `${teamId}:${datasetId}:sync`;
-}
-
-export function buildReconcileJobId(windowStart: string, windowEnd: string, scope: string): string {
-  return `reconcile:${windowStart}:${windowEnd}:${scope}`;
-}
-
-export function buildMigrationJobId(teamId: string, migrationId: string, batchId: string): string {
-  return `${teamId}:${migrationId}:${batchId}`;
-}
-
-export const JOB_MODE_TO_QUEUE: Readonly<Record<string, QueueName>> = {
-  parse: QUEUE_NAMES.parse,
-  chunk: QUEUE_NAMES.chunk,
-  qa: QUEUE_NAMES.qa,
-  vector: QUEUE_NAMES.vector,
-  image: QUEUE_NAMES.image,
-  imageParse: QUEUE_NAMES.imageParse,
-  delete: QUEUE_NAMES.delete,
-  sync: QUEUE_NAMES.sync,
-  reconcile: QUEUE_NAMES.reconcile,
-  migration: QUEUE_NAMES.migration,
-};
+export const JOB_MODE_TO_QUEUE: Readonly<Record<JobMode, KnowledgeQueueName>> = QUEUE_NAMES;

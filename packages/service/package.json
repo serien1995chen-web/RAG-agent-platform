@@ -9,6 +9,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json --noEmit",
     "typecheck": "tsc -p tsconfig.json --noEmit",
+    "knowledge:typecheck": "tsc -p tsconfig.knowledge.json --noEmit",
     "test": "vitest run --passWithNoTests",
     "test:unit": "vitest run --passWithNoTests test/unit",
     "test:integration": "vitest run --passWithNoTests test/integration",

@@ -1,7 +1,7 @@
 import type { Redis } from 'ioredis';
 
 /**
- * 请求级幂等（设计文档 12.5）：scope = teamId + method + path + key，
+ * 请求级幂等：scope = workspaceId + method + path + key，
  * 首个结果缓存 24 小时；同键不同请求体返回 409。
  */
 export type IdempotencyState = 'processing' | 'completed' | 'conflict';
@@ -27,12 +27,12 @@ export interface IdempotencyStore {
 export const DEFAULT_IDEMPOTENCY_TTL_SECONDS = 24 * 60 * 60;
 
 export function buildIdempotencyScopeKey(
-  teamId: string,
+  workspaceId: string,
   method: string,
   path: string,
   key: string,
 ): string {
-  return `kb:idem:${teamId}:${method.toUpperCase()}:${path}:${key}`;
+  return `kb-idem:${workspaceId}:${method.toUpperCase()}:${path}:${key}`;
 }
 
 export class MemoryIdempotencyStore implements IdempotencyStore {
