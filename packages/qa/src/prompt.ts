@@ -1,6 +1,6 @@
 /**
  * @kb/qa 自研默认模板 qa.default@1（设计文档 9.9.1 FIX-04）。
- * 不得引用来源项目文案；内容与 contentHash 登记在 dataset_qa_templates。
+ * 不得引用来源项目文案；内容与 contentHash 登记在 knowledge_qa_templates。
  */
 import { createHash } from 'node:crypto';
 import type { QaRequest } from './parser';

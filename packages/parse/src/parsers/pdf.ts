@@ -1,6 +1,6 @@
 /**
  * @kb/parse PDF 文本层解析（设计 9.8.1）：无文本层时 scanRequired=true 走 Provider；
- * 解析异常按 501057 分类；图片以标记记录。
+ * 解析异常返回 KNOWLEDGE_UNSUPPORTED_CONTENT；图片以标记记录。
  */
 import { createRequire } from 'node:module';
 import * as pdfjs from 'pdfjs-dist/legacy/build/pdf.mjs';

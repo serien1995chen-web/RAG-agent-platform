@@ -1,0 +1,1120 @@
+{
+  "schemaVersion": 1,
+  "count": 46,
+  "operations": [
+    {
+      "operationId": "API-HEALTH-LIVE",
+      "method": "GET",
+      "path": "/healthz",
+      "group": "system",
+      "requestSchema": null,
+      "responseSchema": "HealthStatus",
+      "scopes": [
+        "knowledge:read"
+      ],
+      "idempotent": false,
+      "rateLimit": "none",
+      "timeoutMs": 1000,
+      "audit": false,
+      "downstreamAllowed": false,
+      "runtime": true,
+      "stage": "BASE",
+      "targetSection": "9.2",
+      "accId": "ACC-CAP-OPS-005",
+      "capabilityIds": [
+        "OPS-005"
+      ]
+    },
+    {
+      "operationId": "API-HEALTH-READY",
+      "method": "GET",
+      "path": "/readyz",
+      "group": "system",
+      "requestSchema": null,
+      "responseSchema": "HealthStatus",
+      "scopes": [
+        "knowledge:read"
+      ],
+      "idempotent": false,
+      "rateLimit": "none",
+      "timeoutMs": 3000,
+      "audit": false,
+      "downstreamAllowed": false,
+      "runtime": true,
+      "stage": "BASE",
+      "targetSection": "9.2",
+      "accId": "ACC-CAP-OPS-005",
+      "capabilityIds": [
+        "OPS-005"
+      ]
+    },
+    {
+      "operationId": "API-DIRECTORY-DELETE",
+      "method": "DELETE",
+      "path": "/v1/knowledge/directories/{directoryId}",
+      "group": "directory",
+      "requestSchema": null,
+      "responseSchema": "OperationResult",
+      "scopes": [
+        "knowledge:manage"
+      ],
+      "idempotent": true,
+      "rateLimit": "30 QPS/workspace",
+      "timeoutMs": 15000,
+      "audit": true,
+      "downstreamAllowed": false,
+      "runtime": true,
+      "stage": "BASE",
+      "targetSection": "9.2",
+      "accId": "ACC-CAP-COL-001",
+      "capabilityIds": [
+        "COL-001",
+        "COL-004"
+      ]
+    },
+    {
+      "operationId": "API-DIRECTORY-GET",
+      "method": "GET",
+      "path": "/v1/knowledge/directories/{directoryId}",
+      "group": "directory",
+      "requestSchema": null,
+      "responseSchema": "Directory",
+      "scopes": [
+        "knowledge:read"
+      ],
+      "idempotent": false,
+      "rateLimit": "100 QPS/workspace",
+      "timeoutMs": 5000,
+      "audit": false,
+      "downstreamAllowed": false,
+      "runtime": true,
+      "stage": "BASE",
+      "targetSection": "9.2",
+      "accId": "ACC-CAP-COL-001",
+      "capabilityIds": [
+        "COL-001",
+        "COL-004"
+      ]
+    },
+    {
+      "operationId": "API-DIRECTORY-UPDATE",
+      "method": "PATCH",
+      "path": "/v1/knowledge/directories/{directoryId}",
+      "group": "directory",
+      "requestSchema": "DirectoryUpdate",
+      "responseSchema": "Directory",
+      "scopes": [
+        "knowledge:write"
+      ],
+      "idempotent": true,
+      "rateLimit": "30 QPS/workspace",
+      "timeoutMs": 15000,
+      "audit": true,
+      "downstreamAllowed": false,
+      "runtime": true,
+      "stage": "BASE",
+      "targetSection": "9.2",
+      "accId": "ACC-CAP-COL-001",
+      "capabilityIds": [
+        "COL-001",
+        "COL-004"
+      ]
+    },
+    {
+      "operationId": "API-JOB-LIST",
+      "method": "GET",
+      "path": "/v1/knowledge/jobs",
+      "group": "job",
+      "requestSchema": null,
+      "responseSchema": "JobList",
+      "scopes": [
+        "knowledge:read"
+      ],
+      "idempotent": false,
+      "rateLimit": "100 QPS/workspace",
+      "timeoutMs": 5000,
+      "audit": false,
+      "downstreamAllowed": false,
+      "runtime": true,
+      "stage": "BASE",
+      "targetSection": "9.2",
+      "accId": "ACC-CAP-TRAIN-001",
+      "capabilityIds": [
+        "TRAIN-001",
+        "TRAIN-005",
+        "TRAIN-007"
+      ]
+    },
+    {
+      "operationId": "API-JOB-GET",
+      "method": "GET",
+      "path": "/v1/knowledge/jobs/{jobId}",
+      "group": "job",
+      "requestSchema": null,
+      "responseSchema": "Job",
+      "scopes": [
+        "knowledge:read"
+      ],
+      "idempotent": false,
+      "rateLimit": "100 QPS/workspace",
+      "timeoutMs": 5000,
+      "audit": false,
+      "downstreamAllowed": false,
+      "runtime": true,
+      "stage": "BASE",
+      "targetSection": "9.2",
+      "accId": "ACC-CAP-TRAIN-001",
+      "capabilityIds": [
+        "TRAIN-001",
+        "TRAIN-005",
+        "TRAIN-007"
+      ]
+    },
+    {
+      "operationId": "API-OPENAPI",
+      "method": "GET",
+      "path": "/v1/knowledge/openapi.json",
+      "group": "system",
+      "requestSchema": null,
+      "responseSchema": "OpenApiDocument",
+      "scopes": [
+        "knowledge:read"
+      ],
+      "idempotent": false,
+      "rateLimit": "20 QPS/IP",
+      "timeoutMs": 5000,
+      "audit": false,
+      "downstreamAllowed": false,
+      "runtime": true,
+      "stage": "BASE",
+      "targetSection": "9.2",
+      "accId": "ACC-CAP-API-001",
+      "capabilityIds": [
+        "API-001",
+        "API-003"
+      ]
+    },
+    {
+      "operationId": "API-OPS-STATUS",
+      "method": "GET",
+      "path": "/v1/knowledge/operations/status",
+      "group": "system",
+      "requestSchema": null,
+      "responseSchema": "OpsStatus",
+      "scopes": [
+        "knowledge:admin"
+      ],
+      "idempotent": false,
+      "rateLimit": "100 QPS/workspace",
+      "timeoutMs": 10000,
+      "audit": false,
+      "downstreamAllowed": false,
+      "runtime": true,
+      "stage": "BASE",
+      "targetSection": "9.2",
+      "accId": "ACC-CAP-OPS-005",
+      "capabilityIds": [
+        "OPS-005",
+        "OPS-001"
+      ]
+    },
+    {
+      "operationId": "API-ACL-GET",
+      "method": "GET",
+      "path": "/v1/knowledge/resources/{resourceType}/{resourceId}/acl",
+      "group": "access",
+      "requestSchema": null,
+      "responseSchema": "ACL",
+      "scopes": [
+        "knowledge:read"
+      ],
+      "idempotent": false,
+      "rateLimit": "100 QPS/workspace",
+      "timeoutMs": 5000,
+      "audit": false,
+      "downstreamAllowed": false,
+      "runtime": true,
+      "stage": "BASE",
+      "targetSection": "9.2",
+      "accId": "ACC-CAP-AUTH-001",
+      "capabilityIds": [
+        "AUTH-001",
+        "AUTH-002",
+        "AUTH-003",
+        "AUTH-004"
+      ]
+    },
+    {
+      "operationId": "API-ACL-UPDATE",
+      "method": "PUT",
+      "path": "/v1/knowledge/resources/{resourceType}/{resourceId}/acl",
+      "group": "access",
+      "requestSchema": "ACLUpdate",
+      "responseSchema": "ACL",
+      "scopes": [
+        "knowledge:manage"
+      ],
+      "idempotent": true,
+      "rateLimit": "30 QPS/workspace",
+      "timeoutMs": 15000,
+      "audit": true,
+      "downstreamAllowed": false,
+      "runtime": true,
+      "stage": "BASE",
+      "targetSection": "9.2",
+      "accId": "ACC-CAP-AUTH-001",
+      "capabilityIds": [
+        "AUTH-001",
+        "AUTH-002",
+        "AUTH-003",
+        "AUTH-004"
+      ]
+    },
+    {
+      "operationId": "API-RESOURCE-OWNERSHIP-TRANSFER",
+      "method": "POST",
+      "path": "/v1/knowledge/resources/{resourceType}/{resourceId}/ownership-transfer",
+      "group": "access",
+      "requestSchema": "OwnershipTransfer",
+      "responseSchema": "ACL",
+      "scopes": [
+        "knowledge:manage"
+      ],
+      "idempotent": true,
+      "rateLimit": "30 QPS/workspace",
+      "timeoutMs": 15000,
+      "audit": true,
+      "downstreamAllowed": false,
+      "runtime": true,
+      "stage": "BASE",
+      "targetSection": "9.2",
+      "accId": "ACC-CAP-AUTH-001",
+      "capabilityIds": [
+        "AUTH-001",
+        "AUTH-002",
+        "AUTH-003",
+        "AUTH-004"
+      ]
+    },
+    {
+      "operationId": "API-ACL-RESUME",
+      "method": "POST",
+      "path": "/v1/knowledge/resources/{resourceType}/{resourceId}/resume-inheritance",
+      "group": "access",
+      "requestSchema": "VersionedMutation",
+      "responseSchema": "ACL",
+      "scopes": [
+        "knowledge:manage"
+      ],
+      "idempotent": true,
+      "rateLimit": "30 QPS/workspace",
+      "timeoutMs": 15000,
+      "audit": true,
+      "downstreamAllowed": false,
+      "runtime": true,
+      "stage": "BASE",
+      "targetSection": "9.2",
+      "accId": "ACC-CAP-AUTH-001",
+      "capabilityIds": [
+        "AUTH-001",
+        "AUTH-002",
+        "AUTH-003",
+        "AUTH-004"
+      ]
+    },
+    {
+      "operationId": "API-SEGMENT-DELETE",
+      "method": "DELETE",
+      "path": "/v1/knowledge/segments/{segmentId}",
+      "group": "segment",
+      "requestSchema": null,
+      "responseSchema": "OperationResult",
+      "scopes": [
+        "knowledge:manage"
+      ],
+      "idempotent": true,
+      "rateLimit": "30 QPS/workspace",
+      "timeoutMs": 15000,
+      "audit": true,
+      "downstreamAllowed": false,
+      "runtime": true,
+      "stage": "BASE",
+      "targetSection": "9.2",
+      "accId": "ACC-CAP-DATA-001",
+      "capabilityIds": [
+        "DATA-001"
+      ]
+    },
+    {
+      "operationId": "API-SEGMENT-GET",
+      "method": "GET",
+      "path": "/v1/knowledge/segments/{segmentId}",
+      "group": "segment",
+      "requestSchema": null,
+      "responseSchema": "Segment",
+      "scopes": [
+        "knowledge:read"
+      ],
+      "idempotent": false,
+      "rateLimit": "100 QPS/workspace",
+      "timeoutMs": 5000,
+      "audit": false,
+      "downstreamAllowed": false,
+      "runtime": true,
+      "stage": "BASE",
+      "targetSection": "9.2",
+      "accId": "ACC-CAP-DATA-001",
+      "capabilityIds": [
+        "DATA-001"
+      ]
+    },
+    {
+      "operationId": "API-SEGMENT-UPDATE",
+      "method": "PATCH",
+      "path": "/v1/knowledge/segments/{segmentId}",
+      "group": "segment",
+      "requestSchema": "SegmentUpdate",
+      "responseSchema": "Segment",
+      "scopes": [
+        "knowledge:write"
+      ],
+      "idempotent": true,
+      "rateLimit": "30 QPS/workspace",
+      "timeoutMs": 15000,
+      "audit": true,
+      "downstreamAllowed": false,
+      "runtime": true,
+      "stage": "BASE",
+      "targetSection": "9.2",
+      "accId": "ACC-CAP-DATA-001",
+      "capabilityIds": [
+        "DATA-001"
+      ]
+    },
+    {
+      "operationId": "API-SOURCE-DELETE",
+      "method": "DELETE",
+      "path": "/v1/knowledge/sources/{sourceId}",
+      "group": "source",
+      "requestSchema": null,
+      "responseSchema": "OperationResult",
+      "scopes": [
+        "knowledge:manage"
+      ],
+      "idempotent": true,
+      "rateLimit": "30 QPS/workspace",
+      "timeoutMs": 15000,
+      "audit": true,
+      "downstreamAllowed": false,
+      "runtime": true,
+      "stage": "BASE",
+      "targetSection": "9.2",
+      "accId": "ACC-CAP-COL-001",
+      "capabilityIds": [
+        "COL-001",
+        "COL-004"
+      ]
+    },
+    {
+      "operationId": "API-SOURCE-GET",
+      "method": "GET",
+      "path": "/v1/knowledge/sources/{sourceId}",
+      "group": "source",
+      "requestSchema": null,
+      "responseSchema": "Source",
+      "scopes": [
+        "knowledge:read"
+      ],
+      "idempotent": false,
+      "rateLimit": "100 QPS/workspace",
+      "timeoutMs": 5000,
+      "audit": false,
+      "downstreamAllowed": false,
+      "runtime": true,
+      "stage": "BASE",
+      "targetSection": "9.2",
+      "accId": "ACC-CAP-COL-001",
+      "capabilityIds": [
+        "COL-001",
+        "COL-004"
+      ]
+    },
+    {
+      "operationId": "API-SOURCE-UPDATE",
+      "method": "PATCH",
+      "path": "/v1/knowledge/sources/{sourceId}",
+      "group": "source",
+      "requestSchema": "SourceUpdate",
+      "responseSchema": "Source",
+      "scopes": [
+        "knowledge:write"
+      ],
+      "idempotent": true,
+      "rateLimit": "30 QPS/workspace",
+      "timeoutMs": 15000,
+      "audit": true,
+      "downstreamAllowed": false,
+      "runtime": true,
+      "stage": "BASE",
+      "targetSection": "9.2",
+      "accId": "ACC-CAP-COL-001",
+      "capabilityIds": [
+        "COL-001",
+        "COL-004"
+      ]
+    },
+    {
+      "operationId": "API-PERMISSION-DETACH",
+      "method": "POST",
+      "path": "/v1/knowledge/sources/{sourceId}/permissions/detach",
+      "group": "access",
+      "requestSchema": "PermissionTransition",
+      "responseSchema": "ACL",
+      "scopes": [
+        "knowledge:manage"
+      ],
+      "idempotent": false,
+      "rateLimit": "30 QPS/workspace",
+      "timeoutMs": 15000,
+      "audit": true,
+      "downstreamAllowed": false,
+      "runtime": true,
+      "stage": "BASE",
+      "targetSection": "9.2",
+      "accId": "ACC-CAP-AUTH-001",
+      "capabilityIds": [
+        "AUTH-001",
+        "AUTH-002",
+        "AUTH-003",
+        "AUTH-004"
+      ]
+    },
+    {
+      "operationId": "API-PERMISSION-DISABLE",
+      "method": "POST",
+      "path": "/v1/knowledge/sources/{sourceId}/permissions/disable",
+      "group": "access",
+      "requestSchema": "PermissionTransition",
+      "responseSchema": "ACL",
+      "scopes": [
+        "knowledge:manage"
+      ],
+      "idempotent": false,
+      "rateLimit": "30 QPS/workspace",
+      "timeoutMs": 15000,
+      "audit": true,
+      "downstreamAllowed": false,
+      "runtime": true,
+      "stage": "BASE",
+      "targetSection": "9.2",
+      "accId": "ACC-CAP-AUTH-001",
+      "capabilityIds": [
+        "AUTH-001",
+        "AUTH-002",
+        "AUTH-003",
+        "AUTH-004"
+      ]
+    },
+    {
+      "operationId": "API-PERMISSION-ENABLE",
+      "method": "POST",
+      "path": "/v1/knowledge/sources/{sourceId}/permissions/enable",
+      "group": "access",
+      "requestSchema": "PermissionTransition",
+      "responseSchema": "ACL",
+      "scopes": [
+        "knowledge:manage"
+      ],
+      "idempotent": false,
+      "rateLimit": "30 QPS/workspace",
+      "timeoutMs": 15000,
+      "audit": true,
+      "downstreamAllowed": false,
+      "runtime": true,
+      "stage": "BASE",
+      "targetSection": "9.2",
+      "accId": "ACC-CAP-AUTH-001",
+      "capabilityIds": [
+        "AUTH-001",
+        "AUTH-002",
+        "AUTH-003",
+        "AUTH-004"
+      ]
+    },
+    {
+      "operationId": "API-PERMISSION-RESUME",
+      "method": "POST",
+      "path": "/v1/knowledge/sources/{sourceId}/permissions/resume-inherit",
+      "group": "access",
+      "requestSchema": "PermissionTransition",
+      "responseSchema": "ACL",
+      "scopes": [
+        "knowledge:manage"
+      ],
+      "idempotent": false,
+      "rateLimit": "30 QPS/workspace",
+      "timeoutMs": 15000,
+      "audit": true,
+      "downstreamAllowed": false,
+      "runtime": true,
+      "stage": "BASE",
+      "targetSection": "9.2",
+      "accId": "ACC-CAP-AUTH-001",
+      "capabilityIds": [
+        "AUTH-001",
+        "AUTH-002",
+        "AUTH-003",
+        "AUTH-004"
+      ]
+    },
+    {
+      "operationId": "API-SEGMENT-LIST",
+      "method": "GET",
+      "path": "/v1/knowledge/sources/{sourceId}/segments",
+      "group": "segment",
+      "requestSchema": null,
+      "responseSchema": "SegmentList",
+      "scopes": [
+        "knowledge:read"
+      ],
+      "idempotent": false,
+      "rateLimit": "100 QPS/workspace",
+      "timeoutMs": 5000,
+      "audit": false,
+      "downstreamAllowed": false,
+      "runtime": true,
+      "stage": "BASE",
+      "targetSection": "9.2",
+      "accId": "ACC-CAP-DATA-001",
+      "capabilityIds": [
+        "DATA-001"
+      ]
+    },
+    {
+      "operationId": "API-SEGMENT-CREATE",
+      "method": "POST",
+      "path": "/v1/knowledge/sources/{sourceId}/segments",
+      "group": "segment",
+      "requestSchema": "SegmentCreate",
+      "responseSchema": "Segment",
+      "scopes": [
+        "knowledge:write"
+      ],
+      "idempotent": true,
+      "rateLimit": "30 QPS/workspace",
+      "timeoutMs": 15000,
+      "audit": true,
+      "downstreamAllowed": false,
+      "runtime": true,
+      "stage": "BASE",
+      "targetSection": "9.2",
+      "accId": "ACC-CAP-DATA-001",
+      "capabilityIds": [
+        "DATA-001",
+        "DATA-004"
+      ]
+    },
+    {
+      "operationId": "API-TAG-APPLY",
+      "method": "POST",
+      "path": "/v1/knowledge/sources/tag-assignments",
+      "group": "tag",
+      "requestSchema": "TagAssignmentBatch",
+      "responseSchema": "BatchResult",
+      "scopes": [
+        "knowledge:write"
+      ],
+      "idempotent": true,
+      "rateLimit": "30 QPS/workspace",
+      "timeoutMs": 15000,
+      "audit": true,
+      "downstreamAllowed": false,
+      "runtime": true,
+      "stage": "BASE",
+      "targetSection": "9.2",
+      "accId": "ACC-CAP-COL-003",
+      "capabilityIds": [
+        "COL-003"
+      ]
+    },
+    {
+      "operationId": "API-SPACE-LIST",
+      "method": "GET",
+      "path": "/v1/knowledge/spaces",
+      "group": "space",
+      "requestSchema": null,
+      "responseSchema": "KnowledgeSpaceList",
+      "scopes": [
+        "knowledge:read"
+      ],
+      "idempotent": false,
+      "rateLimit": "100 QPS/workspace",
+      "timeoutMs": 5000,
+      "audit": false,
+      "downstreamAllowed": false,
+      "runtime": true,
+      "stage": "BASE",
+      "targetSection": "9.2",
+      "accId": "ACC-CAP-KB-001",
+      "capabilityIds": [
+        "KB-001"
+      ]
+    },
+    {
+      "operationId": "API-SPACE-CREATE",
+      "method": "POST",
+      "path": "/v1/knowledge/spaces",
+      "group": "space",
+      "requestSchema": "KnowledgeSpaceCreate",
+      "responseSchema": "KnowledgeSpace",
+      "scopes": [
+        "knowledge:write"
+      ],
+      "idempotent": true,
+      "rateLimit": "30 QPS/workspace",
+      "timeoutMs": 15000,
+      "audit": true,
+      "downstreamAllowed": false,
+      "runtime": true,
+      "stage": "BASE",
+      "targetSection": "9.2",
+      "accId": "ACC-CAP-KB-001",
+      "capabilityIds": [
+        "KB-001"
+      ]
+    },
+    {
+      "operationId": "API-SPACE-DELETE",
+      "method": "DELETE",
+      "path": "/v1/knowledge/spaces/{spaceId}",
+      "group": "space",
+      "requestSchema": "KnowledgeSpaceDeleteRequest",
+      "responseSchema": "OperationResult",
+      "scopes": [
+        "knowledge:manage"
+      ],
+      "idempotent": true,
+      "rateLimit": "30 QPS/workspace",
+      "timeoutMs": 15000,
+      "audit": true,
+      "downstreamAllowed": false,
+      "runtime": true,
+      "stage": "BASE",
+      "targetSection": "9.2",
+      "accId": "ACC-CAP-KB-001",
+      "capabilityIds": [
+        "KB-001"
+      ]
+    },
+    {
+      "operationId": "API-SPACE-GET",
+      "method": "GET",
+      "path": "/v1/knowledge/spaces/{spaceId}",
+      "group": "space",
+      "requestSchema": null,
+      "responseSchema": "KnowledgeSpace",
+      "scopes": [
+        "knowledge:read"
+      ],
+      "idempotent": false,
+      "rateLimit": "100 QPS/workspace",
+      "timeoutMs": 5000,
+      "audit": false,
+      "downstreamAllowed": false,
+      "runtime": true,
+      "stage": "BASE",
+      "targetSection": "9.2",
+      "accId": "ACC-CAP-KB-001",
+      "capabilityIds": [
+        "KB-001"
+      ]
+    },
+    {
+      "operationId": "API-SPACE-UPDATE",
+      "method": "PATCH",
+      "path": "/v1/knowledge/spaces/{spaceId}",
+      "group": "space",
+      "requestSchema": "KnowledgeSpaceUpdate",
+      "responseSchema": "KnowledgeSpace",
+      "scopes": [
+        "knowledge:write"
+      ],
+      "idempotent": true,
+      "rateLimit": "30 QPS/workspace",
+      "timeoutMs": 15000,
+      "audit": true,
+      "downstreamAllowed": false,
+      "runtime": true,
+      "stage": "BASE",
+      "targetSection": "9.2",
+      "accId": "ACC-CAP-KB-001",
+      "capabilityIds": [
+        "KB-001"
+      ]
+    },
+    {
+      "operationId": "API-COLLABORATOR-LIST",
+      "method": "GET",
+      "path": "/v1/knowledge/spaces/{spaceId}/collaborators",
+      "group": "access",
+      "requestSchema": null,
+      "responseSchema": "CollaboratorList",
+      "scopes": [
+        "knowledge:read"
+      ],
+      "idempotent": false,
+      "rateLimit": "100 QPS/workspace",
+      "timeoutMs": 5000,
+      "audit": false,
+      "downstreamAllowed": false,
+      "runtime": true,
+      "stage": "BASE",
+      "targetSection": "9.2",
+      "accId": "ACC-CAP-AUTH-001",
+      "capabilityIds": [
+        "AUTH-001",
+        "AUTH-002",
+        "AUTH-003",
+        "AUTH-004"
+      ]
+    },
+    {
+      "operationId": "API-COLLABORATOR-CREATE",
+      "method": "POST",
+      "path": "/v1/knowledge/spaces/{spaceId}/collaborators",
+      "group": "access",
+      "requestSchema": "CollaboratorCreate",
+      "responseSchema": "Collaborator",
+      "scopes": [
+        "knowledge:manage"
+      ],
+      "idempotent": true,
+      "rateLimit": "30 QPS/workspace",
+      "timeoutMs": 15000,
+      "audit": true,
+      "downstreamAllowed": false,
+      "runtime": true,
+      "stage": "BASE",
+      "targetSection": "9.2",
+      "accId": "ACC-CAP-AUTH-001",
+      "capabilityIds": [
+        "AUTH-001",
+        "AUTH-002",
+        "AUTH-003",
+        "AUTH-004"
+      ]
+    },
+    {
+      "operationId": "API-COLLABORATOR-DELETE",
+      "method": "DELETE",
+      "path": "/v1/knowledge/spaces/{spaceId}/collaborators/{memberId}",
+      "group": "access",
+      "requestSchema": null,
+      "responseSchema": null,
+      "scopes": [
+        "knowledge:manage"
+      ],
+      "idempotent": true,
+      "rateLimit": "30 QPS/workspace",
+      "timeoutMs": 15000,
+      "audit": true,
+      "downstreamAllowed": false,
+      "runtime": true,
+      "stage": "BASE",
+      "targetSection": "9.2",
+      "accId": "ACC-CAP-AUTH-001",
+      "capabilityIds": [
+        "AUTH-001",
+        "AUTH-002",
+        "AUTH-003",
+        "AUTH-004"
+      ]
+    },
+    {
+      "operationId": "API-COLLABORATOR-UPDATE",
+      "method": "PATCH",
+      "path": "/v1/knowledge/spaces/{spaceId}/collaborators/{memberId}",
+      "group": "access",
+      "requestSchema": "CollaboratorUpdate",
+      "responseSchema": "Collaborator",
+      "scopes": [
+        "knowledge:manage"
+      ],
+      "idempotent": true,
+      "rateLimit": "30 QPS/workspace",
+      "timeoutMs": 15000,
+      "audit": true,
+      "downstreamAllowed": false,
+      "runtime": true,
+      "stage": "BASE",
+      "targetSection": "9.2",
+      "accId": "ACC-CAP-AUTH-001",
+      "capabilityIds": [
+        "AUTH-001",
+        "AUTH-002",
+        "AUTH-003",
+        "AUTH-004"
+      ]
+    },
+    {
+      "operationId": "API-DIRECTORY-LIST",
+      "method": "GET",
+      "path": "/v1/knowledge/spaces/{spaceId}/directories",
+      "group": "directory",
+      "requestSchema": null,
+      "responseSchema": "DirectoryList",
+      "scopes": [
+        "knowledge:read"
+      ],
+      "idempotent": false,
+      "rateLimit": "100 QPS/workspace",
+      "timeoutMs": 5000,
+      "audit": false,
+      "downstreamAllowed": false,
+      "runtime": true,
+      "stage": "BASE",
+      "targetSection": "9.2",
+      "accId": "ACC-CAP-COL-001",
+      "capabilityIds": [
+        "COL-001",
+        "COL-004"
+      ]
+    },
+    {
+      "operationId": "API-DIRECTORY-CREATE",
+      "method": "POST",
+      "path": "/v1/knowledge/spaces/{spaceId}/directories",
+      "group": "directory",
+      "requestSchema": "DirectoryCreate",
+      "responseSchema": "Directory",
+      "scopes": [
+        "knowledge:write"
+      ],
+      "idempotent": true,
+      "rateLimit": "30 QPS/workspace",
+      "timeoutMs": 15000,
+      "audit": true,
+      "downstreamAllowed": false,
+      "runtime": true,
+      "stage": "BASE",
+      "targetSection": "9.2",
+      "accId": "ACC-CAP-COL-001",
+      "capabilityIds": [
+        "COL-001",
+        "COL-004"
+      ]
+    },
+    {
+      "operationId": "API-OWNERSHIP-TRANSFER",
+      "method": "POST",
+      "path": "/v1/knowledge/spaces/{spaceId}/ownership-transfer",
+      "group": "access",
+      "requestSchema": "OwnershipTransfer",
+      "responseSchema": "KnowledgeSpace",
+      "scopes": [
+        "knowledge:manage"
+      ],
+      "idempotent": true,
+      "rateLimit": "30 QPS/workspace",
+      "timeoutMs": 15000,
+      "audit": true,
+      "downstreamAllowed": false,
+      "runtime": true,
+      "stage": "BASE",
+      "targetSection": "9.2",
+      "accId": "ACC-CAP-AUTH-001",
+      "capabilityIds": [
+        "AUTH-001",
+        "AUTH-002",
+        "AUTH-003",
+        "AUTH-004"
+      ]
+    },
+    {
+      "operationId": "API-SOURCE-LIST",
+      "method": "GET",
+      "path": "/v1/knowledge/spaces/{spaceId}/sources",
+      "group": "source",
+      "requestSchema": null,
+      "responseSchema": "SourceList",
+      "scopes": [
+        "knowledge:read"
+      ],
+      "idempotent": false,
+      "rateLimit": "100 QPS/workspace",
+      "timeoutMs": 5000,
+      "audit": false,
+      "downstreamAllowed": false,
+      "runtime": true,
+      "stage": "BASE",
+      "targetSection": "9.2",
+      "accId": "ACC-CAP-COL-001",
+      "capabilityIds": [
+        "COL-001",
+        "COL-004"
+      ]
+    },
+    {
+      "operationId": "API-SOURCE-CREATE",
+      "method": "POST",
+      "path": "/v1/knowledge/spaces/{spaceId}/sources",
+      "group": "source",
+      "requestSchema": "SourceCreate",
+      "responseSchema": "Source",
+      "scopes": [
+        "knowledge:write"
+      ],
+      "idempotent": true,
+      "rateLimit": "30 QPS/workspace",
+      "timeoutMs": 15000,
+      "audit": true,
+      "downstreamAllowed": false,
+      "runtime": true,
+      "stage": "BASE",
+      "targetSection": "9.2",
+      "accId": "ACC-CAP-COL-001",
+      "capabilityIds": [
+        "COL-001",
+        "COL-004"
+      ]
+    },
+    {
+      "operationId": "API-TAG-LIST",
+      "method": "GET",
+      "path": "/v1/knowledge/spaces/{spaceId}/tags",
+      "group": "tag",
+      "requestSchema": null,
+      "responseSchema": "TagList",
+      "scopes": [
+        "knowledge:read"
+      ],
+      "idempotent": false,
+      "rateLimit": "100 QPS/workspace",
+      "timeoutMs": 5000,
+      "audit": false,
+      "downstreamAllowed": false,
+      "runtime": true,
+      "stage": "BASE",
+      "targetSection": "9.2",
+      "accId": "ACC-CAP-COL-003",
+      "capabilityIds": [
+        "COL-003"
+      ]
+    },
+    {
+      "operationId": "API-TAG-CREATE",
+      "method": "POST",
+      "path": "/v1/knowledge/spaces/{spaceId}/tags",
+      "group": "tag",
+      "requestSchema": "TagCreate",
+      "responseSchema": "Tag",
+      "scopes": [
+        "knowledge:write"
+      ],
+      "idempotent": true,
+      "rateLimit": "30 QPS/workspace",
+      "timeoutMs": 15000,
+      "audit": true,
+      "downstreamAllowed": false,
+      "runtime": true,
+      "stage": "BASE",
+      "targetSection": "9.2",
+      "accId": "ACC-CAP-COL-003",
+      "capabilityIds": [
+        "COL-003"
+      ]
+    },
+    {
+      "operationId": "API-TAG-DELETE",
+      "method": "DELETE",
+      "path": "/v1/knowledge/tags/{tagId}",
+      "group": "tag",
+      "requestSchema": null,
+      "responseSchema": null,
+      "scopes": [
+        "knowledge:manage"
+      ],
+      "idempotent": true,
+      "rateLimit": "30 QPS/workspace",
+      "timeoutMs": 15000,
+      "audit": true,
+      "downstreamAllowed": false,
+      "runtime": true,
+      "stage": "BASE",
+      "targetSection": "9.2",
+      "accId": "ACC-CAP-COL-003",
+      "capabilityIds": [
+        "COL-003"
+      ]
+    },
+    {
+      "operationId": "API-TAG-GET",
+      "method": "GET",
+      "path": "/v1/knowledge/tags/{tagId}",
+      "group": "tag",
+      "requestSchema": null,
+      "responseSchema": "Tag",
+      "scopes": [
+        "knowledge:read"
+      ],
+      "idempotent": false,
+      "rateLimit": "100 QPS/workspace",
+      "timeoutMs": 5000,
+      "audit": false,
+      "downstreamAllowed": false,
+      "runtime": true,
+      "stage": "BASE",
+      "targetSection": "9.2",
+      "accId": "ACC-CAP-COL-003",
+      "capabilityIds": [
+        "COL-003"
+      ]
+    },
+    {
+      "operationId": "API-TAG-UPDATE",
+      "method": "PATCH",
+      "path": "/v1/knowledge/tags/{tagId}",
+      "group": "tag",
+      "requestSchema": "TagUpdate",
+      "responseSchema": "Tag",
+      "scopes": [
+        "knowledge:write"
+      ],
+      "idempotent": true,
+      "rateLimit": "30 QPS/workspace",
+      "timeoutMs": 15000,
+      "audit": true,
+      "downstreamAllowed": false,
+      "runtime": true,
+      "stage": "BASE",
+      "targetSection": "9.2",
+      "accId": "ACC-CAP-COL-003",
+      "capabilityIds": [
+        "COL-003"
+      ]
+    },
+    {
+      "operationId": "API-TAG-VALUES",
+      "method": "PUT",
+      "path": "/v1/knowledge/tags/{tagId}/options",
+      "group": "tag",
+      "requestSchema": "TagValuesUpdate",
+      "responseSchema": "Tag",
+      "scopes": [
+        "knowledge:write"
+      ],
+      "idempotent": true,
+      "rateLimit": "30 QPS/workspace",
+      "timeoutMs": 15000,
+      "audit": true,
+      "downstreamAllowed": false,
+      "runtime": true,
+      "stage": "BASE",
+      "targetSection": "9.2",
+      "accId": "ACC-CAP-COL-003",
+      "capabilityIds": [
+        "COL-003"
+      ]
+    }
+  ]
+}

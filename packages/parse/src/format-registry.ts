@@ -3,14 +3,18 @@
  * 本文件是 @kb/parse 的唯一共享底层：冻结类型与 9 类格式矩阵、解析器注册表、
  * 编码探测/文本解码/Markdown 表格工具，以及最小 zip 读取器。作为叶子模块，
  * 它不 import 任何本地模块，避免 barrel 循环依赖。
- * 未登记格式返回 501056，解析失败返回 501057，不得静默降级为纯文本。
+ * 未登记格式 KNOWLEDGE_UNSUPPORTED_CONTENT，解析失败不得静默降级。
  * 无自带类型的解析依赖（papaparse/turndown/joplin-gfm/yauzl）在各使用点以带类型断言的
  * 动态 import 引入：TypeScript 禁止在模块文件内声明 ambient module（TS2665），
  * 且不新增 .d.ts 或运行时依赖。
  */
 import { createHash } from 'node:crypto';
 import { createRequire } from 'node:module';
-import { ApiErrorException, createApiError } from '@kb/contracts';
+import {
+  createKnowledgeError,
+  type KnowledgeApiError,
+  type KnowledgeErrorCode,
+} from '@kb/contracts';
 
 // ---------------------------------------------------------------------------
 // 冻结类型与 9 类格式矩阵（设计文档 9.8.1）
@@ -51,8 +55,9 @@ export const PARSE_FORMAT_MATRIX: readonly ParseFormatSpec[] = [
 ];
 
 export interface ParseRequest {
-  teamId: string;
-  datasetId: string;
+  workspaceId: string;
+  knowledgeSpaceId: string;
+  sourceId: string;
   fileRef: string;
   extension: string;
   mimeType?: string;
@@ -148,23 +153,33 @@ export function normalizeMimeType(mimeType: string | undefined): string | undefi
 }
 
 export function parseError(
-  code: number,
+  code: KnowledgeErrorCode,
   requestId: string,
   params: Record<string, unknown> = {},
-): ApiErrorException {
-  return new ApiErrorException(createApiError({ code, requestId, params }));
+): KnowledgeApiError {
+  return createKnowledgeError({
+    code,
+    requestId,
+    traceId: requestId,
+    details: params,
+  });
 }
 
-export function unsupportedFormatError(extension: string, requestId: string): ApiErrorException {
-  return parseError(501056, requestId, { extension: normalizeExtension(extension) || extension });
+export function unsupportedFormatError(extension: string, requestId: string): KnowledgeApiError {
+  return parseError('KNOWLEDGE_UNSUPPORTED_CONTENT', requestId, {
+    extension: normalizeExtension(extension) || extension,
+  });
 }
 
 export function parseFailedError(
   extension: string,
   reason: string,
   requestId: string,
-): ApiErrorException {
-  return parseError(501057, requestId, { extension: normalizeExtension(extension), reason });
+): KnowledgeApiError {
+  return parseError('KNOWLEDGE_UNSUPPORTED_CONTENT', requestId, {
+    extension: normalizeExtension(extension),
+    reason,
+  });
 }
 
 /** 注册表：以 format 为键，每个矩阵项必须恰好注册一个 handler。 */
@@ -176,10 +191,16 @@ export class ParseFormatRegistry {
   register(format: ParseFormat, handler: ParseHandler): void {
     const spec = PARSE_FORMAT_MATRIX.find((item) => item.format === format);
     if (!spec) {
-      throw parseError(501056, format, { extension: format, reason: 'format_not_in_matrix' });
+      throw parseError('KNOWLEDGE_VALIDATION_FAILED', format, {
+        extension: format,
+        reason: 'format_not_in_matrix',
+      });
     }
     if (this.byFormat.has(format)) {
-      throw parseError(501056, format, { extension: format, reason: 'format_already_registered' });
+      throw parseError('KNOWLEDGE_CONFLICT', format, {
+        extension: format,
+        reason: 'format_already_registered',
+      });
     }
     this.byFormat.set(format, { spec, handler });
     for (const extension of spec.extensions) {

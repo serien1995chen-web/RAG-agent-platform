@@ -1,39 +1,51 @@
-# API 契约（骨架版）
+# Knowledge API 合同
 
-> 权威依据：设计文档 12.3、12.4、12.4.1、12.4.2、12.8.1、12.8.2、12.9、12.10。
+## 固定规模
 
-## 1. 计数与产物
+| 项目                 | 数量 |
+| -------------------- | ---: |
+| paths                |   92 |
+| operations           |  120 |
+| component schemas    |  139 |
+| component parameters |    8 |
+| runtime operations   |   46 |
+| deferred operations  |   74 |
 
-| 项目         | 数量                                 | 产物                                                                    |
-| ------------ | ------------------------------------ | ----------------------------------------------------------------------- |
-| 路由         | 87                                   | `packages/contracts/src/openapi/route-registry.data.json`               |
-| DTO          | 199（198 + 派生 `ModelReference`）   | `packages/contracts/src/dataset/dto-registry.data.json` + Schema 编译器 |
-| 业务错误码   | 71（501001-501071）                  | `packages/contracts/src/errors/error-catalog.data.json`                 |
-| 骨架级错误码 | 501998（内部错误）、501999（未实现） | `error-catalog.ts`（不进业务矩阵，SKEL-ADR-007）                        |
-| OpenAPI 3.1  | 1 份                                 | `packages/contracts/openapi/openapi.json`、`client-types.d.ts`          |
+完整合同是唯一目标合同；运行时只注册 46 个已批准 operation。Deferred
+operation 不得用占位路由、骨架占位码、200 空对象或其他假成功实现。
 
-已实现的最小路由：`API-DS-001/002/003`、`API-SEARCH-001`；其余路由由分组 catch-all 返回 HTTP 501 + 501999（含匹配到的 Route ID），扩展 API 返回 501020。
+## 公共合同
 
-## 2. 统一响应
+| 项目      | 规则                                                                            |
+| --------- | ------------------------------------------------------------------------------- |
+| Base path | `/v1/knowledge`                                                                 |
+| 健康检查  | `/healthz`、`/readyz`                                                           |
+| 认证      | JWT 或 scoped API Key                                                           |
+| 租户      | `X-Workspace-Id` 必填                                                           |
+| trace     | `traceparent`、`traceId`、`X-Request-Id`                                        |
+| 幂等      | 写操作需要 `Idempotency-Key`                                                    |
+| 分页      | `cursor` + `limit`，1–200，默认 50                                              |
+| 成功响应  | `{ success, data, traceId, requestId }`                                         |
+| 错误响应  | `{ success:false, error:{code,message,retryable,details}, traceId, requestId }` |
+| 错误码    | 只允许 `KNOWLEDGE_*`                                                            |
 
-- `ApiResponse<T>`：`code/statusText/message/messageKey/params/data/errorType/retryable/severity/requestId`，成功时 `messageKey=common.success`。
-- `ApiError`：统一错误工厂生成；`statusText` 稳定等于 `messageKey`；`requestId` 同时写入 `x-request-id` 响应头。
-- Zod 入参错误按路由声明的业务码映射（list→501004、create→501001、detail→501070、searchTest→501050），未声明时返回 501998。
+## Runtime 46
 
-## 3. 生成与校验
+`4 + 5 + 5 + 5 + 5 + 7 + 13 + 2 = 46`
 
-```bash
-pnpm openapi:generate   # 生成 OpenAPI 3.1 + client-types.d.ts
-pnpm openapi:check      # 快照一致性 + DTO/错误码闭包
-pnpm test:contract      # DTO 编译、错误矩阵、路由闭包、扩展与路由匹配
-```
+| 分组      | Operation                                                              |
+| --------- | ---------------------------------------------------------------------- |
+| System    | `API-HEALTH-LIVE`、`API-HEALTH-READY`、`API-OPENAPI`、`API-OPS-STATUS` |
+| Space     | `LIST`、`CREATE`、`GET`、`UPDATE`、`DELETE`                            |
+| Directory | `LIST`、`CREATE`、`GET`、`UPDATE`、`DELETE`                            |
+| Source    | `LIST`、`CREATE`、`GET`、`UPDATE`、`DELETE`                            |
+| Segment   | `LIST`、`CREATE`、`GET`、`UPDATE`、`DELETE`                            |
+| Tag       | `LIST`、`CREATE`、`GET`、`UPDATE`、`DELETE`、`VALUES`、`APPLY`         |
+| ACL       | 3 ACL + 4 collaborator + 4 permission + 2 ownership                    |
+| Job       | `LIST`、`GET`                                                          |
 
-## 4. 分页、幂等与上限
+## Deferred
 
-- 分页：`page` 默认 1，`limit` 默认 20/范围 1-100；`page` 与 `cursor` 互斥。
-- 请求级幂等：`Idempotency-Key` 24 小时，scope 为 `teamId+method+path+key`（`@kb/dal`）。
-- 请求上限来自 `DatasetRuntimeConfigSchema`（配置注入，不在代码写死产品承诺）。
-
-## 5. 未实现语义
-
-未实现路由与 Port 默认实现统一返回 501999（HTTP 501）；501998 仅用于未映射内部错误。两者在 `docs/adr/README.md` SKEL-ADR-007 登记，业务矩阵保持 501001-501071 冻结。
+74 个 deferred operation 的唯一清单见
+`docs/contracts/deferred-operations.md`。runtime registry 与 deferred manifest
+必须无交集，并集恰为 120。

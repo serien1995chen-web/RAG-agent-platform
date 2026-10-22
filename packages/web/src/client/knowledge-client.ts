@@ -1,0 +1,129 @@
+'use client';
+
+import { useCallback, useEffect, useState } from 'react';
+import type { KnowledgeProblem } from '@kb/contracts';
+
+export interface ConsoleSession {
+  workspaceId: string;
+  memberId: string;
+  scopes: string[];
+  isWorkspaceOwner: boolean;
+  expiresIn: number;
+}
+
+export class KnowledgeRequestError extends Error {
+  constructor(
+    readonly status: number,
+    readonly problem: KnowledgeProblem,
+  ) {
+    super(problem.error.message);
+    this.name = 'KnowledgeRequestError';
+  }
+}
+
+export class ConsoleSessionError extends Error {
+  constructor() {
+    super('Console session is unavailable.');
+    this.name = 'ConsoleSessionError';
+  }
+}
+
+export class ConsoleRequestPathError extends Error {
+  constructor() {
+    super('Console requests must use /v1/knowledge/*.');
+    this.name = 'ConsoleRequestPathError';
+  }
+}
+
+let sessionPromise: Promise<ConsoleSession> | undefined;
+
+export function ensureConsoleSession(): Promise<ConsoleSession> {
+  sessionPromise ??= fetch('/api/console/session', {
+    method: 'POST',
+    credentials: 'same-origin',
+    headers: { accept: 'application/json' },
+  }).then(async (response) => {
+    if (!response.ok) {
+      throw new ConsoleSessionError();
+    }
+    return (await response.json()) as ConsoleSession;
+  });
+  return sessionPromise;
+}
+
+function idempotencyKey(): string {
+  return globalThis.crypto.randomUUID();
+}
+
+export async function knowledgeRequest<T>(
+  path: string,
+  options: {
+    method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+    body?: unknown;
+    headers?: Record<string, string>;
+  } = {},
+): Promise<T> {
+  if (!path.startsWith('/v1/knowledge/')) {
+    throw new ConsoleRequestPathError();
+  }
+  const session = await ensureConsoleSession();
+  const method = options.method ?? 'GET';
+  const response = await fetch(path, {
+    method,
+    credentials: 'same-origin',
+    headers: {
+      accept: 'application/json',
+      'X-Workspace-Id': session.workspaceId,
+      ...(options.body !== undefined ? { 'content-type': 'application/json' } : {}),
+      ...(method !== 'GET' ? { 'Idempotency-Key': idempotencyKey() } : {}),
+      ...(options.headers ?? {}),
+    },
+    ...(options.body !== undefined ? { body: JSON.stringify(options.body) } : {}),
+  });
+  const payload = (await response.json()) as
+    | { success: true; data: T; traceId: string; requestId: string }
+    | KnowledgeProblem;
+  if (!response.ok || !payload.success) {
+    const problem = payload as KnowledgeProblem;
+    throw new KnowledgeRequestError(response.status, problem);
+  }
+  return payload.data;
+}
+
+export function useKnowledgeRequest<T>(
+  path: string | null,
+  dependencies: readonly unknown[] = [],
+): {
+  data: T | null;
+  error: unknown;
+  loading: boolean;
+  reload: () => Promise<void>;
+} {
+  const [data, setData] = useState<T | null>(null);
+  const [error, setError] = useState<unknown>(null);
+  const [loading, setLoading] = useState(Boolean(path));
+
+  const reload = useCallback(async () => {
+    if (!path) {
+      setData(null);
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    try {
+      setData(await knowledgeRequest<T>(path));
+      setError(null);
+    } catch (caught) {
+      setError(caught);
+      setData(null);
+    } finally {
+      setLoading(false);
+    }
+  }, [path]);
+
+  useEffect(() => {
+    void reload();
+  }, [reload, ...dependencies]);
+
+  return { data, error, loading, reload };
+}

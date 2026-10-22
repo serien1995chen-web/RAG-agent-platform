@@ -1,10 +1,12 @@
-import { useRouter } from 'next/router';
-import { useEffect } from 'react';
+export async function getServerSideProps() {
+  return {
+    redirect: {
+      destination: '/spaces',
+      permanent: false,
+    },
+  };
+}
 
-export default function HomePage() {
-  const router = useRouter();
-  useEffect(() => {
-    void router.replace('/dataset/list');
-  }, [router]);
+export default function IndexPage() {
   return null;
 }

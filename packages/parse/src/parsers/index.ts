@@ -1,6 +1,6 @@
 /**
  * @kb/parse 解析器注册与分派（设计 9.8.1）。
- * 分派键与 PARSE_FORMAT_MATRIX 一致；未登记格式返回 501056。
+ * 分派键与 PARSE_FORMAT_MATRIX 一致；未登记格式返回 KNOWLEDGE_UNSUPPORTED_CONTENT。
  */
 import type { ParseFormat, ParseFormatRegistry } from '../format-registry';
 import { ParseFormatRegistry as Registry } from '../format-registry';

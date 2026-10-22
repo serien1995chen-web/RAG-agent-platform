@@ -46,11 +46,10 @@ describe('TEST-PARSE-FORMAT-001 parser format matrix', () => {
     expect(normalizeExtension('.DocX')).toBe('docx');
   });
 
-  it('rejects unknown formats with 501056 and never silently degrades', () => {
+  it('rejects unknown formats with KNOWLEDGE_UNSUPPORTED_CONTENT and never silently degrades', () => {
     const registry = createParserRegistry();
     expect(registry.resolveByExtension('rtf')).toBeNull();
     const error = unsupportedFormatError('rtf', 'req-1');
-    expect(error.error.code).toBe(501056);
-    expect(error.error.messageKey).toBe('dataset.parse.unsupported_format');
+    expect(error.problem.error.code).toBe('KNOWLEDGE_UNSUPPORTED_CONTENT');
   });
 });

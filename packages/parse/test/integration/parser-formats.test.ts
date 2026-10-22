@@ -152,8 +152,9 @@ function request(
   extra: Partial<DocumentParseContext> = {},
 ): DocumentParseContext {
   return {
-    teamId: 'team-1',
-    datasetId: 'ds-1',
+    workspaceId: 'ws-1',
+    knowledgeSpaceId: 'space-1',
+    sourceId: 'src-1',
     fileRef: `fixture.${extension}`,
     extension,
     timeoutMs: 30000,
@@ -194,11 +195,13 @@ describe('TEST-PARSE-FORMAT-001 nine-format parsing matrix', () => {
     expect(result.rawText).toContain('| 问题 | 答案 |');
   });
 
-  it('rejects csv with invalid headers as 501058', async () => {
+  it('rejects csv with invalid headers as a validation problem', async () => {
     const error = await parser
       .parse(request('csv', { bytes: Buffer.from('question,answer\n1,2\n') }))
       .catch((thrown: unknown) => thrown);
-    expect((error as { error: { code: number } }).error.code).toBe(501058);
+    expect((error as { problem: { error: { code: string } } }).problem.error.code).toBe(
+      'KNOWLEDGE_VALIDATION_FAILED',
+    );
   });
 
   it('parses xlsx into sheet-scoped markdown', async () => {
@@ -242,19 +245,25 @@ describe('TEST-PARSE-FORMAT-001 nine-format parsing matrix', () => {
     expect(result.scanRequired).toBe(true);
   });
 
-  it('rejects a damaged file as 501057', async () => {
+  it('rejects a damaged file as unsupported content', async () => {
     const error = await parser
       .parse(request('docx', { bytes: Buffer.from('not a zip') }))
       .catch((thrown: unknown) => thrown);
-    expect((error as { error: { code: number } }).error.code).toBe(501057);
+    expect((error as { problem: { error: { code: string } } }).problem.error.code).toBe(
+      'KNOWLEDGE_UNSUPPORTED_CONTENT',
+    );
   });
 
-  it('rejects an unregistered format as 501056', async () => {
+  it('rejects an unregistered format as unsupported content', async () => {
     const error = await parser
       .parse(request('rtf', { bytes: Buffer.from('{\\rtf1}') }))
       .catch((thrown: unknown) => thrown);
-    expect((error as { error: { code: number } }).error.code).toBe(501056);
-    expect(unsupportedFormatError('rtf', 'x').error.code).toBe(501056);
+    expect((error as { problem: { error: { code: string } } }).problem.error.code).toBe(
+      'KNOWLEDGE_UNSUPPORTED_CONTENT',
+    );
+    expect(unsupportedFormatError('rtf', 'x').problem.error.code).toBe(
+      'KNOWLEDGE_UNSUPPORTED_CONTENT',
+    );
   });
 
   it('is deterministic: same input yields the same content hash', async () => {

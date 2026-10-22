@@ -1,5 +1,6 @@
 import { Queue, type ConnectionOptions, type JobsOptions } from 'bullmq';
-import type { QueueName } from './job-contract';
+import { createKnowledgeError } from '@kb/contracts';
+import type { KnowledgeQueueName } from './job-contract';
 import type { EnqueueOptions, EnqueueResult, QueuePort } from './queue-port';
 
 export interface BullMqQueueConfig {
@@ -7,13 +8,17 @@ export interface BullMqQueueConfig {
   prefix?: string;
 }
 
-/** BullMQ 队列适配器：稳定 jobId 去重；成功任务删除，失败保留以支持人工恢复。 */
+const COMPLETE_RETENTION = Object.freeze({
+  count: 1000,
+  age: 7 * 24 * 60 * 60,
+});
+
 export class BullMqQueueAdapter implements QueuePort {
-  private readonly queues = new Map<QueueName, Queue>();
+  private readonly queues = new Map<KnowledgeQueueName, Queue>();
 
   constructor(private readonly config: BullMqQueueConfig) {}
 
-  private queue(name: QueueName): Queue {
+  private queue(name: KnowledgeQueueName): Queue {
     const existing = this.queues.get(name);
     if (existing) return existing;
     const created = new Queue(name, {
@@ -25,14 +30,22 @@ export class BullMqQueueAdapter implements QueuePort {
   }
 
   async enqueue(
-    queue: QueueName,
+    queue: KnowledgeQueueName,
     jobId: string,
     payload: unknown,
     options: EnqueueOptions = {},
   ): Promise<EnqueueResult> {
+    if (!jobId.startsWith('k_') || jobId.length !== 42) {
+      throw createKnowledgeError({
+        code: 'KNOWLEDGE_VALIDATION_FAILED',
+        requestId: 'queue-enqueue',
+        traceId: 'queue-enqueue',
+        details: { field: 'jobId', reason: 'stable_knowledge_job_id_required' },
+      });
+    }
     const jobOptions: JobsOptions = {
       jobId,
-      removeOnComplete: true,
+      removeOnComplete: COMPLETE_RETENTION,
       removeOnFail: false,
       ...(options.weight !== undefined ? { priority: options.weight } : {}),
       ...(options.delayMs !== undefined ? { delay: options.delayMs } : {}),
@@ -44,7 +57,7 @@ export class BullMqQueueAdapter implements QueuePort {
     return { jobId, enqueued: true };
   }
 
-  async remove(queue: QueueName, jobId: string): Promise<void> {
+  async remove(queue: KnowledgeQueueName, jobId: string): Promise<void> {
     const job = await this.queue(queue).getJob(jobId);
     if (job) await job.remove();
   }
@@ -54,3 +67,8 @@ export class BullMqQueueAdapter implements QueuePort {
     this.queues.clear();
   }
 }
+
+export const KNOWLEDGE_JOB_RETENTION = {
+  complete: COMPLETE_RETENTION,
+  fail: false,
+} as const;

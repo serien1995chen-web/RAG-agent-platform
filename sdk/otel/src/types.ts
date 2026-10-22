@@ -49,8 +49,8 @@ export interface MetricDefinition {
 /** 设计 15.3：结构化日志固定字段字典（13）。 */
 export type LogFieldName =
   | 'requestId'
-  | 'teamId'
-  | 'tmbId'
+  | 'workspaceId'
+  | 'knowledgeSpaceId'
   | 'route'
   | 'method'
   | 'resourceType'
@@ -72,7 +72,7 @@ export type AlertSignalKind =
   | 'tenant_anomaly'
   | 'dependency_unavailable';
 
-/** 设计 15.5：告警信号（仅低基数字段，不含 teamId / 密钥 / 正文）。 */
+/** 设计 15.5：告警信号（仅低基数字段，不含 workspaceId / 密钥 / 正文）。 */
 export interface AlertSignal {
   kind: AlertSignalKind;
   fields: Record<string, string | number | boolean>;

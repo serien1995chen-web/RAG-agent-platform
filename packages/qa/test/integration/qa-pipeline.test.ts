@@ -8,13 +8,13 @@ import {
 
 function request(overrides: Partial<QaRequest> = {}): QaRequest {
   return {
-    teamId: 'team-1',
-    datasetId: 'ds-1',
-    collectionId: 'col-1',
+    workspaceId: 'ws-1',
+    knowledgeSpaceId: 'space-1',
+    sourceId: 'src-1',
     chunkText: '知识库平台的导入链路包含解析、切分与质量校验。',
     qaTemplateId: 'qa.default',
     qaTemplateVersion: 1,
-    models: { llmModel: 'gpt-test', embeddingModel: 'emb', vectorModel: 'vec' },
+    models: { llmModel: 'gpt-test', embeddingModel: 'emb' },
     limits: { maxQaPerChunk: 5, maxChunkCount: 50000 },
     ...overrides,
   };
@@ -48,12 +48,14 @@ describe('TEST-QA-FALLBACK-001 QA pipeline', () => {
     expect(result.items).toHaveLength(1);
   });
 
-  it('rejects an unregistered template with 501037', async () => {
+  it('rejects an unregistered template with KNOWLEDGE_NOT_FOUND', async () => {
     const error = await generateQa(request({ qaTemplateId: 'qa.custom', qaTemplateVersion: 9 }), {
       templateRegistry: createDefaultTemplateRegistry(),
       model: modelReturning('Q1: q\nA1: a'),
     }).catch((thrown: unknown) => thrown);
-    expect((error as { error: { code: number } }).error.code).toBe(501037);
+    expect((error as { problem: { error: { code: string } } }).problem.error.code).toBe(
+      'KNOWLEDGE_NOT_FOUND',
+    );
   });
 
   it('marks fallback=chunk_split when the model output is unparseable', async () => {
@@ -67,7 +69,7 @@ describe('TEST-QA-FALLBACK-001 QA pipeline', () => {
     expect(result.fallback).toBe('chunk_split');
   });
 
-  it('classifies retryable model failures as 501054', async () => {
+  it('classifies retryable model failures as KNOWLEDGE_MODEL_FAILED', async () => {
     const model: QaModelPort = {
       generate: async () => {
         const error = new Error('rate limited') as Error & { status: number; retryable: string };
@@ -80,7 +82,11 @@ describe('TEST-QA-FALLBACK-001 QA pipeline', () => {
       templateRegistry: createDefaultTemplateRegistry(),
       model,
     }).catch((thrown: unknown) => thrown);
-    expect((error as { error: { code: number } }).error.code).toBe(501054);
-    expect((error as { error: { retryable: string } }).error.retryable).toBe('retryable');
+    expect((error as { problem: { error: { code: string } } }).problem.error.code).toBe(
+      'KNOWLEDGE_MODEL_FAILED',
+    );
+    expect((error as { problem: { error: { retryable: boolean } } }).problem.error.retryable).toBe(
+      true,
+    );
   });
 });

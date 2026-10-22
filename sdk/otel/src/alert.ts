@@ -13,11 +13,11 @@ export const ALERT_KINDS: readonly AlertSignalKind[] = [
   'dependency_unavailable',
 ];
 
-/** 设计 15.5：仅允许的低基数白名单字段（不含 teamId / tmbId / 密钥 / 正文）。 */
+/** 设计 15.5：仅允许的低基数白名单字段（不含 workspaceId / 密钥 / 正文）。 */
 const ALERT_ALLOWED_FIELDS: readonly string[] = ['count', 'dependency', 'stage', 'queue', 'reason'];
 
 /**
- * 设计 15.5：构造低基数告警信号；白名单外字段（含 teamId / 密钥类 / 正文类）整键丢弃。
+ * 设计 15.5：构造低基数告警信号；白名单外字段（含 workspaceId / 密钥类 / 正文类）整键丢弃。
  */
 export function createAlertSignal(
   kind: AlertSignalKind,

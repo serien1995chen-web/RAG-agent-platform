@@ -11,14 +11,14 @@ export interface QaLimits {
 }
 
 export interface QaRequest {
-  teamId: string;
-  datasetId: string;
-  collectionId: string;
+  workspaceId: string;
+  knowledgeSpaceId: string;
+  sourceId: string;
   chunkText: string;
   qaTemplateId: string;
   qaTemplateVersion: number;
   qaPrompt?: string;
-  models: { llmModel: string; embeddingModel: string; vectorModel: string };
+  models: { llmModel: string; embeddingModel: string };
   limits: QaLimits;
 }
 

@@ -1,0 +1,15 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "types": ["node"]
+  },
+  "include": [
+    "src/shared/persistence/knowledge/**/*.ts",
+    "src/shared/persistence/pgvector/**/*.ts",
+    "src/shared/persistence/schemas/knowledge-*.ts",
+    "src/shared/persistence/knowledge-define-index.ts",
+    "src/modules/knowledge/**/*.ts",
+    "src/index.ts",
+    "src/types/**/*.d.ts"
+  ]
+}

@@ -1,58 +1,49 @@
-# Backup And Restore Runbook
+# Knowledge Baseline Backup And Restore Runbook
 
 ## Scope
 
-- changeId: required for every restore or migration rehearsal.
-- runbookUri: `docs/runbooks/backup-restore.md`
-- runbookVersion: `v1`
-- approvalRole: private deployment operator plus data owner.
-- rollbackInfo: rollback point, before/after checks, commands, compared fields, and evidence.
-
-This runbook uses mock backup evidence until the private delivery tool and media are supplied. A mock run is not a real recovery, and it must not be recorded as a completed real drill.
+- changeId is required for every restore rehearsal.
+- This runbook exercises the current `knowledge_*` graph only.
+- Mock backup evidence is not a real recovery drill.
 
 ## Backup Inventory
 
-- MongoDB business database and `dataset_migrations` / `dataset_migration_logs`.
-- PostgreSQL/pgvector database and vector extension state.
-- S3 private and public buckets, object policies, and TTL metadata.
+- MongoDB: all 23 `knowledge_*` collections, including jobs, Outbox events,
+  permissions, object references and audit events.
+- PostgreSQL/pgvector: extension state, `knowledge_vector_profiles`, and the
+  four dimension tables.
+- MinIO/S3: object versions, bucket policy, lifecycle rules and metadata.
+- Redis: AOF snapshot for transient BullMQ and rate-limit state. Mongo remains
+  the source of durable Job and Outbox state.
 
 ## Restore Order
 
-1. Stop writes or switch the application to `readonly` / `block`.
-2. Restore MongoDB business data and migration logs.
-3. Restore PostgreSQL/pgvector.
-4. Restore S3 objects and bucket policies.
-5. Start services and run dependency checks.
-6. Validate the Migration Registry.
-7. Run reconcile dry-run.
-8. Apply reconcile or handle differences manually.
-9. Resume writes and record drill evidence.
+1. Stop API writes and stop workers.
+2. Restore MongoDB and verify workspace-scoped collection counts.
+3. Restore PostgreSQL/pgvector and verify four profiles and dimensions.
+4. Restore MinIO objects and bucket policy.
+5. Restore Redis/AOF only after durable stores are consistent.
+6. Start dependencies, then app and worker.
+7. Verify `/healthz` and `/readyz`.
+8. Run tenant, Outbox, job lease and object/vector reference reconciliation.
+9. Resume writes and record evidence.
 
 ## Pre And Post Checks
 
-- Pre-check: backup artifact checksum, changeId, source scope, storage capacity, and maintenance window.
-- Post-check: Mongo counts, pgvector counts and dimensions, S3 object counts, migration log counts, failed rows, reconcile report, and reference integrity.
+- Pre-check: artifact checksum, changeId, source scope, capacity and window.
+- Post-check: Mongo collection counts, workspace orphan scan, pgvector profile
+  dimensions and HNSW indexes, MinIO object refs, Outbox status, Job leases and
+  duplicate idempotency keys.
+- A failed check keeps the environment isolated; do not mark the drill PASS.
 
-## Rollback Commands
+## Rollback
 
-```bash
-# Restore the previous Mongo snapshot with the private tool.
-# Restore the previous pgvector snapshot with the private tool.
-# Restore the previous S3 bucket state with the private tool.
-```
+Use the private delivery tool to restore the previous Mongo, PostgreSQL and
+MinIO snapshots. Redis may be rebuilt from durable Mongo/BullMQ state after the
+other stores are consistent. Rollback commands must be supplied and approved by
+the private operator; this repository does not embed destructive commands.
 
-Commands must be supplied by the private delivery tool. Failed rollback keeps the environment isolated for manual handling. Repeated rollback must be safe.
-
-## Data Comparison
-
-| Area        | Before            | After         | Compared fields             |
-| ----------- | ----------------- | ------------- | --------------------------- |
-| Mongo       | Snapshot manifest | Live counts   | collection, count, checksum |
-| PG/pgvector | Snapshot manifest | Live counts   | table, count, dimension     |
-| S3          | Bucket manifest   | Live objects  | bucket, key, etag, policy   |
-| Migration   | Registry export   | Live registry | version, state, cursor      |
-
-## Drill Record
+## Evidence
 
 | Field            | Value |
 | ---------------- | ----- |
@@ -61,9 +52,8 @@ Commands must be supplied by the private delivery tool. Failed rollback keeps th
 | approvalRole     |       |
 | startedAt        |       |
 | completedAt      |       |
-| backupEvidence   |       |
+| checksums        |       |
 | beforeChecks     |       |
 | afterChecks      |       |
-| rollbackInfo     |       |
 | comparisonResult |       |
 | incidentNotes    |       |

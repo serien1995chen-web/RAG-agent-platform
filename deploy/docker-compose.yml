@@ -1,11 +1,34 @@
 name: rag-agent-platform
 
-# 镜像使用本地已 pull 的 CN registry 全名与 tag，禁止 latest；Compose 不做 pull。
+x-knowledge-environment: &knowledge-environment
+  KB_ENV: ${KB_ENV:-development}
+  KB_INSTANCE_ID: ${KB_INSTANCE_ID:-compose-1}
+  KB_PORT: '3010'
+  KB_MONGO_URI: mongodb://mongo:27017/${KB_MONGO_DATABASE:-rag_agent_platform}
+  KB_REDIS_URL: redis://redis:6379/${KB_REDIS_DATABASE:-0}
+  KB_PG_URL: postgresql://${POSTGRES_USER:-kb}:${POSTGRES_PASSWORD:-kb_dev_password}@pgvector:5432/${POSTGRES_DB:-kb}
+  KB_S3_ENDPOINT: http://minio:9000
+  KB_S3_REGION: ${KB_S3_REGION:-us-east-1}
+  KB_S3_BUCKET: ${KB_S3_BUCKET:-kb-local}
+  KB_S3_ACCESS_KEY_REF: env:MINIO_ROOT_USER
+  KB_S3_SECRET_KEY_REF: env:MINIO_ROOT_PASSWORD
+  KB_AUTH_MODE: ${KB_AUTH_MODE:-mock}
+  KB_MOCK_AUTH_TOKEN: ${KB_MOCK_AUTH_TOKEN:-kb-dev-console-token-0000000000}
+  KB_MOCK_WORKSPACE_ID: ${KB_MOCK_WORKSPACE_ID:-ws_compose_local}
+  KB_MOCK_MEMBER_ID: ${KB_MOCK_MEMBER_ID:-mem_compose_owner}
+  KB_MOCK_SCOPES: ${KB_MOCK_SCOPES:-knowledge:read,knowledge:write,knowledge:manage,knowledge:admin}
+  KB_MOCK_WORKSPACE_OWNER: ${KB_MOCK_WORKSPACE_OWNER:-true}
+  KB_EXTERNAL_MODEL_MODE: ${KB_EXTERNAL_MODEL_MODE:-mock}
+  KB_EXTERNAL_OCR_MODE: ${KB_EXTERNAL_OCR_MODE:-mock}
+  KB_EXTERNAL_CONNECTOR_MODE: ${KB_EXTERNAL_CONNECTOR_MODE:-mock}
+  KB_LOG_LEVEL: ${KB_LOG_LEVEL:-info}
+  MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+  MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+
 services:
   mongo:
     image: registry.cn-hangzhou.aliyuncs.com/fastgpt/mongo:5.0.32@sha256:ab12670508974afbdf3bdc7dd39a201d228a73c9c13c70a684b9eedfb063dc3e
     restart: unless-stopped
-    # ISSUE-003：删除编排依赖多文档事务，Mongo 必须是副本集（单节点即可）。
     command: ['--replSet', 'rs0', '--bind_ip_all']
     ports:
       - '27017:27017'
@@ -17,7 +40,6 @@ services:
       timeout: 5s
       retries: 10
 
-  # ISSUE-003：一次性初始化单节点副本集；PRIMARY 就绪后应用才启动。
   mongo-init:
     image: registry.cn-hangzhou.aliyuncs.com/fastgpt/mongo:5.0.32@sha256:ab12670508974afbdf3bdc7dd39a201d228a73c9c13c70a684b9eedfb063dc3e
     restart: 'no'
@@ -91,54 +113,60 @@ services:
       retries: 10
 
   app:
+    image: rag-agent-platform:kb-baseline
     build:
       context: ..
       dockerfile: deploy/Dockerfile
     restart: unless-stopped
+    command: ['pnpm', '--filter', '@kb/app', 'start']
+    environment:
+      <<: *knowledge-environment
+      KB_APP_WORKER_MODE: http
     depends_on:
       mongo:
         condition: service_healthy
+      mongo-init:
+        condition: service_completed_successfully
       redis:
         condition: service_healthy
       pgvector:
         condition: service_healthy
       minio:
         condition: service_healthy
-    environment:
-      NODE_ENV: production
-      APP_WORKER_MODE: ${APP_WORKER_MODE:-all}
-      KB_INSTANCE_ID: ${KB_INSTANCE_ID:-docker-1}
-      KB_DEPENDENCY_BASELINE_ID: ${KB_DEPENDENCY_BASELINE_ID:-kb-baseline-6.1}
-      KB_VERSION_CHECK_POLICY: ${KB_VERSION_CHECK_POLICY:-strict}
-      KB_CONNECT_TIMEOUT_MS: ${KB_CONNECT_TIMEOUT_MS:-5000}
-      KB_REQUEST_TIMEOUT_MS: ${KB_REQUEST_TIMEOUT_MS:-2000}
-      KB_MONGO_URI: mongodb://mongo:27017/rag_agent_platform
-      KB_REDIS_URL: redis://redis:6379
-      KB_PG_URL: postgresql://${POSTGRES_USER:-kb}:${POSTGRES_PASSWORD:-kb_dev_password}@pgvector:5432/${POSTGRES_DB:-kb}
-      KB_S3_ENDPOINT: http://minio:9000
-      KB_S3_REGION: ${KB_S3_REGION:-us-east-1}
-      KB_S3_BUCKET: ${KB_S3_BUCKET:-kb-local}
-      KB_S3_ACCESS_KEY_REF: env:MINIO_ROOT_USER
-      KB_S3_SECRET_KEY_REF: env:MINIO_ROOT_PASSWORD
-      KB_LOG_LEVEL: ${KB_LOG_LEVEL:-info}
-      KB_MONGO_POOL_SIZE: ${KB_MONGO_POOL_SIZE:-10}
-      KB_REDIS_CONNECTIONS: ${KB_REDIS_CONNECTIONS:-2}
-      KB_PG_POOL_SIZE: ${KB_PG_POOL_SIZE:-10}
-      KB_S3_CONCURRENCY: ${KB_S3_CONCURRENCY:-4}
-      KB_PROVIDER_CONCURRENCY: ${KB_PROVIDER_CONCURRENCY:-4}
-      KB_BATCH_SIZE: ${KB_BATCH_SIZE:-100}
-      KB_QUEUE_CONCURRENCY: ${KB_QUEUE_CONCURRENCY:-4}
-      KB_PROVIDER_TIMEOUT_MS: ${KB_PROVIDER_TIMEOUT_MS:-30000}
-      KB_PROVIDER_MAX_RETRIES: ${KB_PROVIDER_MAX_RETRIES:-3}
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
     ports:
-      - '3000:3000'
+      - '3010:3010'
     healthcheck:
-      test: ['CMD-SHELL', 'wget -q -O - http://127.0.0.1:3000/healthz/live >/dev/null || exit 1']
+      test: ['CMD-SHELL', 'wget -q -O - http://127.0.0.1:3010/healthz >/dev/null || exit 1']
       interval: 10s
       timeout: 5s
-      retries: 10
+      retries: 20
+
+  worker:
+    image: rag-agent-platform:kb-baseline
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    restart: unless-stopped
+    command: ['node', 'projects/app/dist/workers/worker.mjs']
+    environment:
+      <<: *knowledge-environment
+      KB_APP_WORKER_MODE: worker
+    depends_on:
+      mongo:
+        condition: service_healthy
+      mongo-init:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+      pgvector:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    healthcheck:
+      test: ['CMD-SHELL', 'test -f /tmp/knowledge-worker-ready']
+      interval: 10s
+      timeout: 5s
+      retries: 20
 
 volumes:
   mongo-data:

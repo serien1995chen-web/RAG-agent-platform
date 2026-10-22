@@ -65,7 +65,7 @@ export const SPAN_INSTRUMENTS: Record<SpanInstrumentName, SpanInstrumentDefiniti
   },
   sync: {
     name: 'sync',
-    allowedAttributes: ['datasetId', 'mode', 'result'],
+    allowedAttributes: ['knowledgeSpaceId', 'mode', 'result'],
     forbiddenAttributes: ['外部凭证'],
   },
   search: {

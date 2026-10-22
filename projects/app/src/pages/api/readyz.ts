@@ -1,23 +1,44 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { getRuntime, systemContext } from '../../runtime/health';
+import { createKnowledgeError } from '@kb/contracts';
+import { resolveRequestIdentity } from '../../shared/knowledge-api';
+import { getKnowledgeApiRuntime } from '../../runtime/knowledge-runtime';
 
-/** GET /readyz（rewrite 到本 API 路由）：必需依赖不可用时返回 503，不伪造成功。 */
 export default async function handler(
-  _request: NextApiRequest,
+  request: NextApiRequest,
   response: NextApiResponse,
 ): Promise<void> {
+  const { requestId, traceId } = resolveRequestIdentity(request);
+  response.setHeader('x-request-id', requestId);
+  response.setHeader('x-trace-id', traceId);
   try {
-    const runtime = await getRuntime();
-    const context = systemContext('readyz');
-    const required = await runtime.health.checkRequired(context);
-    const optional = await runtime.health.checkOptional(context);
-    const summary = runtime.health.summarize(required, optional);
-    response.status(summary.httpStatus).json(summary.response);
+    const result = await (await getKnowledgeApiRuntime()).readiness(requestId);
+    if (result.status === 200) {
+      response.status(200).json({
+        success: true,
+        data: result.body,
+        traceId,
+        requestId,
+      });
+      return;
+    }
+    response.status(result.status).json(
+      createKnowledgeError({
+        code: 'KNOWLEDGE_DEPENDENCY_UNAVAILABLE',
+        requestId,
+        traceId,
+        details: {
+          checks: result.body.checks.filter((check) => check.status === 'down'),
+        },
+      }).problem,
+    );
   } catch {
-    response.status(503).json({
-      status: 'failed',
-      checks: [{ name: 'bootstrap', status: 'failed', durationMs: 0 }],
-      durationMs: 0,
-    });
+    response.status(503).json(
+      createKnowledgeError({
+        code: 'KNOWLEDGE_DEPENDENCY_UNAVAILABLE',
+        requestId,
+        traceId,
+        details: { dependency: 'runtime' },
+      }).problem,
+    );
   }
 }

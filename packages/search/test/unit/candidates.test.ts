@@ -3,17 +3,26 @@ import { describe, expect, it } from 'vitest';
 import { DEFAULT_RRF_K, createSearchEngine, mergeReranked, rrfFuseWeighted } from '../../src/index';
 import type { Candidate, SearchEngineDeps } from '../../src/index';
 
-const context = { requestId: 'req-candidates', tenant: { teamId: 'team-a', tmbId: 'tmb-a' } };
+const context = { requestId: 'req-candidates', workspaceId: 'ws-a' };
 
 function candidate(docId: string, score: number): Candidate {
-  return { docId, itemId: docId, collectionId: 'c1', score, scores: [], text: docId };
+  return {
+    docId,
+    segmentId: docId,
+    sourceId: 'src-1',
+    knowledgeSpaceId: 'space-1',
+    score,
+    scores: [],
+    text: docId,
+  };
 }
 
 function request(overrides: Partial<SearchRequest> = {}): SearchRequest {
   return {
     requestId: 'req-candidates',
-    teamId: 'team-a',
-    datasetIds: ['ds1'],
+    workspaceId: 'ws-a',
+    memberId: 'mem-a',
+    knowledgeSpaceIds: ['space-1'],
     textQueries: ['alpha'],
     imageQueries: [],
     models: { embeddingModel: 'bge-m3' },
@@ -106,7 +115,9 @@ describe('P5-06 candidate counts / RRF / rerank merge', () => {
 
   it('defaults rerank r to 0.5 in the engine', async () => {
     const baselineDeps: SearchEngineDeps = {
-      vectors: { embRecall: async () => [{ dataId: 'd1', indexId: 'i1', score: 0.9 }] },
+      vectors: {
+        embRecall: async () => [{ segmentId: 'd1', sourceId: 'src-1', indexId: 'i1', score: 0.9 }],
+      },
       embedding: { embed: async ({ texts }) => texts.map(() => [0.1]) },
       resolveTexts: async (candidates) => new Map(candidates.map((item) => [item.docId, 'text'])),
     };

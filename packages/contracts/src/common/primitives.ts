@@ -38,14 +38,20 @@ export const ErrorParamsSchema = z.object({
   details: MetadataMapSchema.optional(),
 });
 
-/** 设计文档 7.3 / 6.1.10：在线模型维度固定为 1536。 */
+export const VECTOR_DIMENSIONS = [768, 1024, 1536, 3072] as const;
+export type VectorDimension = (typeof VECTOR_DIMENSIONS)[number];
+
+/** 知识库 embedding profile 只允许设计冻结的四维。 */
 export const ModelReferenceSchema = z.object({
   provider: z.string().min(1).max(64),
   model: z.string().min(1).max(128),
   dimension: z
     .number()
     .int()
-    .refine((value) => value === 1536, '在线模型维度必须为 1536'),
+    .refine(
+      (value): value is VectorDimension => (VECTOR_DIMENSIONS as readonly number[]).includes(value),
+      '模型维度必须为 768、1024、1536 或 3072',
+    ),
   capability: z.string().min(1).max(64).optional(),
 });
 

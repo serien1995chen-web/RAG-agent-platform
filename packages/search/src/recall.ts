@@ -1,21 +1,20 @@
-import { ApiErrorException, buildIndexVersion, createApiError } from '@kb/contracts';
+import { buildIndexVersion, createKnowledgeError, type KnowledgeApiError } from '@kb/contracts';
 import type { CitationScore, DegradedInfo, SearchRequest } from '@kb/contracts';
 import type { Candidate, RecallOutcome, SearchEngineDeps } from './types';
 
 type ParsedValue = string | null | ParsedValue[] | { [key: string]: ParsedValue };
 
-function invalidCollectionFilter(raw: string): ApiErrorException {
-  return new ApiErrorException(
-    createApiError({
-      code: 501050,
-      requestId: 'collection-filter',
-      params: {
-        field: 'collectionFilterMatch',
-        value: raw,
-        rangeOrVersion: 'tags.$and|tags.$or',
-      },
-    }),
-  );
+function invalidTagFilter(raw: string): KnowledgeApiError {
+  return createKnowledgeError({
+    code: 'KNOWLEDGE_VALIDATION_FAILED',
+    requestId: 'tag-filter',
+    traceId: 'tag-filter',
+    details: {
+      field: 'tagFilterMatch',
+      value: raw,
+      rangeOrVersion: 'tags.$and|tags.$or',
+    },
+  });
 }
 
 function isRecord(value: ParsedValue): value is { [key: string]: ParsedValue } {
@@ -30,7 +29,7 @@ class FrozenJson5Parser {
   parse(): ParsedValue {
     const value = this.parseValue();
     this.skipWhitespace();
-    if (this.index !== this.raw.length) throw invalidCollectionFilter(this.raw);
+    if (this.index !== this.raw.length) throw invalidTagFilter(this.raw);
     return value;
   }
 
@@ -52,7 +51,7 @@ class FrozenJson5Parser {
       this.index += 4;
       return null;
     }
-    throw invalidCollectionFilter(this.raw);
+    throw invalidTagFilter(this.raw);
   }
 
   private parseObject(): { [key: string]: ParsedValue } {
@@ -62,7 +61,7 @@ class FrozenJson5Parser {
     while (this.current() !== '}') {
       const key = this.parseKey();
       this.skipWhitespace();
-      if (this.current() !== ':') throw invalidCollectionFilter(this.raw);
+      if (this.current() !== ':') throw invalidTagFilter(this.raw);
       this.index += 1;
       output[key] = this.parseValue();
       this.skipWhitespace();
@@ -72,9 +71,9 @@ class FrozenJson5Parser {
         if (this.current() === '}') break;
         continue;
       }
-      if (this.current() !== '}') throw invalidCollectionFilter(this.raw);
+      if (this.current() !== '}') throw invalidTagFilter(this.raw);
     }
-    if (this.current() !== '}') throw invalidCollectionFilter(this.raw);
+    if (this.current() !== '}') throw invalidTagFilter(this.raw);
     this.index += 1;
     return output;
   }
@@ -85,7 +84,7 @@ class FrozenJson5Parser {
     if (current === "'" || current === '"') return this.parseString();
     const start = this.index;
     while (/[A-Za-z0-9_$]/.test(this.current() ?? '')) this.index += 1;
-    if (this.index === start) throw invalidCollectionFilter(this.raw);
+    if (this.index === start) throw invalidTagFilter(this.raw);
     return this.raw.slice(start, this.index);
   }
 
@@ -102,16 +101,16 @@ class FrozenJson5Parser {
         if (this.current() === ']') break;
         continue;
       }
-      if (this.current() !== ']') throw invalidCollectionFilter(this.raw);
+      if (this.current() !== ']') throw invalidTagFilter(this.raw);
     }
-    if (this.current() !== ']') throw invalidCollectionFilter(this.raw);
+    if (this.current() !== ']') throw invalidTagFilter(this.raw);
     this.index += 1;
     return output;
   }
 
   private parseString(): string {
     const quote = this.current();
-    if (quote !== "'" && quote !== '"') throw invalidCollectionFilter(this.raw);
+    if (quote !== "'" && quote !== '"') throw invalidTagFilter(this.raw);
     this.index += 1;
     let output = '';
     while (this.index < this.raw.length) {
@@ -122,7 +121,7 @@ class FrozenJson5Parser {
       }
       if (current === '\\') {
         const escaped = this.raw[this.index + 1];
-        if (escaped === undefined) throw invalidCollectionFilter(this.raw);
+        if (escaped === undefined) throw invalidTagFilter(this.raw);
         const mapped: Record<string, string> = {
           n: '\n',
           r: '\r',
@@ -138,35 +137,35 @@ class FrozenJson5Parser {
       output += current;
       this.index += 1;
     }
-    throw invalidCollectionFilter(this.raw);
+    throw invalidTagFilter(this.raw);
   }
 }
 
-export function parseCollectionFilterMatch(raw: string): {
+export function parseTagFilterMatch(raw: string): {
   matched: boolean;
   tagsAnd: string[];
   tagsOr: string[];
 } {
   const parsed = new FrozenJson5Parser(raw).parse();
-  if (!isRecord(parsed)) throw invalidCollectionFilter(raw);
+  if (!isRecord(parsed)) throw invalidTagFilter(raw);
   const keys = Object.keys(parsed);
-  if (keys.some((key) => key !== 'tags')) throw invalidCollectionFilter(raw);
+  if (keys.some((key) => key !== 'tags')) throw invalidTagFilter(raw);
   if (parsed.tags === undefined) return { matched: true, tagsAnd: [], tagsOr: [] };
-  if (!isRecord(parsed.tags)) throw invalidCollectionFilter(raw);
+  if (!isRecord(parsed.tags)) throw invalidTagFilter(raw);
 
   const tagKeys = Object.keys(parsed.tags);
-  if (tagKeys.some((key) => key !== '$and' && key !== '$or')) throw invalidCollectionFilter(raw);
+  if (tagKeys.some((key) => key !== '$and' && key !== '$or')) throw invalidTagFilter(raw);
 
   const readOperator = (value: ParsedValue | undefined, operator: '$and' | '$or'): string[] => {
     if (value === undefined) return [];
-    if (!Array.isArray(value)) throw invalidCollectionFilter(raw);
+    if (!Array.isArray(value)) throw invalidTagFilter(raw);
     const output: string[] = [];
     for (const item of value) {
       if (item === null) {
         if (operator === '$and') return [];
         continue;
       }
-      if (typeof item !== 'string') throw invalidCollectionFilter(raw);
+      if (typeof item !== 'string') throw invalidTagFilter(raw);
       output.push(item);
     }
     return output;
@@ -181,16 +180,16 @@ export function parseCollectionFilterMatch(raw: string): {
 }
 
 function vectorCandidate(
-  datasetId: string,
-  hit: { dataId: string; indexId: string; score: number },
+  knowledgeSpaceId: string,
+  hit: { segmentId: string; sourceId: string; indexId: string; score: number },
   index: number,
-  collectionId: string,
 ): Candidate {
   const score: CitationScore = { type: 'embedding', value: hit.score, index };
   return {
-    docId: `${datasetId}:${hit.dataId}`,
-    itemId: hit.dataId,
-    collectionId,
+    docId: `${knowledgeSpaceId}:${hit.segmentId}`,
+    segmentId: hit.segmentId,
+    sourceId: hit.sourceId,
+    knowledgeSpaceId,
     score: hit.score,
     scores: [score],
     text: '',
@@ -198,15 +197,16 @@ function vectorCandidate(
 }
 
 function fullTextCandidate(
-  datasetId: string,
-  hit: { dataId: string; collectionId: string; score: number },
+  knowledgeSpaceId: string,
+  hit: { segmentId: string; sourceId: string; score: number },
   index: number,
 ): Candidate {
   const score: CitationScore = { type: 'fullText', value: hit.score, index };
   return {
-    docId: `${datasetId}:${hit.dataId}`,
-    itemId: hit.dataId,
-    collectionId: hit.collectionId,
+    docId: `${knowledgeSpaceId}:${hit.segmentId}`,
+    segmentId: hit.segmentId,
+    sourceId: hit.sourceId,
+    knowledgeSpaceId,
     score: hit.score,
     scores: [score],
     text: '',
@@ -216,10 +216,10 @@ function fullTextCandidate(
 export async function recallCandidates(
   input: SearchRequest,
   deps: SearchEngineDeps,
-  context: { requestId: string; tenant: { teamId: string; tmbId: string } },
+  context: { requestId: string; workspaceId: string },
 ): Promise<RecallOutcome> {
-  const datasetId = input.datasetIds[0] ?? '';
-  if (datasetId.length === 0) return { items: [], degraded: [] };
+  const knowledgeSpaceId = input.knowledgeSpaceIds[0] ?? '';
+  if (knowledgeSpaceId.length === 0) return { items: [], degraded: [] };
 
   const options = { timeoutMs: input.budgets?.recallTimeoutMs ?? 5_000 };
   const indexVersion =
@@ -227,8 +227,6 @@ export async function recallCandidates(
   const degraded: DegradedInfo[] = [];
   const items: Candidate[] = [];
   const textQueries = input.textQueries.filter((query) => query.trim().length > 0);
-  const collectionId = input.collectionIds?.length === 1 ? (input.collectionIds[0] ?? '') : '';
-
   if (input.imageQueries.length > 0) {
     degraded.push({ stage: 'image', reason: 'image_path_not_configured' });
   }
@@ -247,10 +245,9 @@ export async function recallCandidates(
         if (!vector) continue;
         const hits = await deps.vectors.embRecall(
           {
-            teamId: context.tenant.teamId,
-            datasetId,
-            collectionId: input.collectionIds?.length === 1 ? input.collectionIds[0] : undefined,
-            collectionIds: input.collectionIds,
+            workspaceId: context.workspaceId,
+            knowledgeSpaceId,
+            sourceIds: input.sourceIds,
             vector,
             limit: vectorLimit,
             indexVersion,
@@ -259,7 +256,7 @@ export async function recallCandidates(
           context,
         );
         hits.forEach((hit, index) => {
-          items.push(vectorCandidate(datasetId, hit, index, collectionId));
+          items.push(vectorCandidate(knowledgeSpaceId, hit, index));
         });
       }
     } catch (error) {
@@ -278,8 +275,8 @@ export async function recallCandidates(
         for (const query of textQueries) {
           const hits = await deps.fullText.search(
             {
-              datasetId,
-              collectionIds: input.collectionIds,
+              knowledgeSpaceId,
+              sourceIds: input.sourceIds,
               text: query,
               limit: fullTextLimit,
               options,
@@ -287,7 +284,7 @@ export async function recallCandidates(
             context,
           );
           hits.forEach((hit, index) => {
-            items.push(fullTextCandidate(datasetId, hit, index));
+            items.push(fullTextCandidate(knowledgeSpaceId, hit, index));
           });
         }
       } catch (error) {

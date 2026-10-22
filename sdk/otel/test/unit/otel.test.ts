@@ -47,9 +47,9 @@ describe('otel three-entry safety (15.x)', () => {
     expect(isSensitiveLogFields({ requestId: 'r1', route: '/api/x' })).toBe(false);
 
     const logger = createSafeLogger({ name: 'test', level: 'info', enabled: true });
-    expect(() => logger.log('dataset.test.event', { password: 'x' })).not.toThrow();
+    expect(() => logger.log('knowledge.test.event', { password: 'x' })).not.toThrow();
     expect(() =>
-      logger.child({ module: 'test' }).log('dataset.test.event', { ok: true }),
+      logger.child({ module: 'test' }).log('knowledge.test.event', { ok: true }),
     ).not.toThrow();
   });
 });
@@ -117,9 +117,9 @@ describe('P7-03 OTel metrics / span / log / alert contracts (15.1-15.5)', () => 
   it('counts dropped log records and extends the sensitive field set', () => {
     const logger = createSafeLogger({ name: 'p7', level: 'info', enabled: true });
     const before = logger.droppedRecords();
-    logger.log('dataset.test.event', { rawResponse: 'x' });
+    logger.log('knowledge.test.event', { rawResponse: 'x' });
     expect(logger.droppedRecords()).toBe(before + 1);
-    logger.log('dataset.test.event', { route: '/api/x' });
+    logger.log('knowledge.test.event', { route: '/api/x' });
     expect(logger.droppedRecords()).toBe(before + 1);
     expect(LOG_FIELD_DICTIONARY).toHaveLength(13);
     expect(LOG_FIELD_DICTIONARY).toContain('retryCount');
@@ -131,7 +131,7 @@ describe('P7-03 OTel metrics / span / log / alert contracts (15.1-15.5)', () => 
     const signal = createAlertSignal('queue_backlog', {
       queue: 'training',
       count: 5,
-      teamId: 'team-x',
+      workspaceId: 'ws-x',
       rawResponse: 'x',
     });
     expect(signal.kind).toBe('queue_backlog');

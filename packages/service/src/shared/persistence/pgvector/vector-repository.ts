@@ -1,268 +1,317 @@
-import { ApiErrorException, createApiError } from '@kb/contracts';
+import { createHash, randomUUID } from 'node:crypto';
+import { createKnowledgeError } from '@kb/contracts';
 import type { Pool } from 'pg';
-import type { VectorController, VectorRecord, VectorSearchHit } from '../../../ports/capabilities';
-import type { RequestContext } from '../../../ports/types';
-import { validateTenantContext } from '../../../ports/types';
-import { PGVECTOR_DIMENSION } from './ddl';
+import type { TenantContext } from '../knowledge/tenant';
+import { KNOWLEDGE_VECTOR_PROFILES, vectorProfileOfDimension, type VectorProfile } from './ddl';
 
-interface VectorRow {
-  id: string;
-  score?: number | string;
-  team_id?: string;
-  dataset_id?: string;
-  collection_id?: string;
-  index_version?: string;
-  createtime?: Date;
-  vector?: string;
+export interface KnowledgeVectorRecordInput {
+  workspaceId: string;
+  knowledgeSpaceId: string;
+  sourceId: string;
+  segmentId: string;
+  indexId: string;
+  embeddingModelId: string;
+  dimension: number;
+  vector: readonly number[];
+  searchEnabled: boolean;
+  contentHash: string;
+  version: number;
 }
 
-/**
- * pgvector 适配仓储（设计文档 10.16 / 7.6）：
- * 所有 SQL 强制 team_id 谓词；pg id 使用 record.dataId；indexId 仅用于批内定位，不落库。
- */
-export class PgVectorRepository implements VectorController {
+export interface KnowledgeVectorSearchInput {
+  workspaceId: string;
+  knowledgeSpaceId: string;
+  sourceIds?: readonly string[];
+  dimension: number;
+  embeddingModelId: string;
+  vector: readonly number[];
+  limit: number;
+  version?: number;
+}
+
+export interface KnowledgeVectorHit {
+  vectorId: string;
+  workspaceId: string;
+  knowledgeSpaceId: string;
+  sourceId: string;
+  segmentId: string;
+  indexId: string;
+  version: number;
+  score: number;
+}
+
+const UUID_NAMESPACE_URL = Buffer.from('6ba7b8119dad11d180b400c04fd430c8', 'hex');
+
+function uuidV5(name: string): string {
+  const digest = createHash('sha1').update(UUID_NAMESPACE_URL).update(name).digest();
+  digest[6] = (digest[6]! & 0x0f) | 0x50;
+  digest[8] = (digest[8]! & 0x3f) | 0x80;
+  const hex = digest.subarray(0, 16).toString('hex');
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
+
+function normalizeVector(vector: readonly number[]): { vector: number[]; norm: number } {
+  if (vector.length === 0 || vector.some((value) => !Number.isFinite(value)))
+    return { vector: [], norm: 0 };
+  const squares = vector.reduce((total, value) => total + value * value, 0);
+  const norm = Math.sqrt(squares);
+  if (norm === 0) return { vector: [], norm: 0 };
+  return { vector: vector.map((value) => value / norm), norm };
+}
+
+function vectorLiteral(vector: readonly number[]): string {
+  return `[${vector.join(',')}]`;
+}
+
+function vectorIdentity(record: KnowledgeVectorRecordInput): string {
+  return uuidV5(
+    [
+      'kb-vector:v1',
+      record.workspaceId,
+      record.knowledgeSpaceId,
+      record.sourceId,
+      record.segmentId,
+      record.indexId,
+      record.embeddingModelId,
+      String(record.version),
+      record.contentHash,
+    ].join('|'),
+  );
+}
+
+function vectorError(
+  context: TenantContext,
+  code: 'KNOWLEDGE_VALIDATION_FAILED' | 'KNOWLEDGE_CONFLICT' | 'KNOWLEDGE_DEPENDENCY_UNAVAILABLE',
+  details: Record<string, unknown>,
+) {
+  return createKnowledgeError({
+    code,
+    requestId: context.requestId,
+    traceId: context.traceId,
+    details,
+  });
+}
+
+export class KnowledgeVectorRepository {
   constructor(private readonly pool: Pool) {}
 
-  private tenantError(context: RequestContext, missing: string[]): ApiErrorException {
-    return new ApiErrorException(
-      createApiError({
-        code: 501012,
-        requestId: context.requestId,
-        params: { missing },
-      }),
-    );
-  }
-
-  private requireTeam(context: RequestContext): string {
-    const result = validateTenantContext(context.tenant, context.requestId);
-    if (!result.ok) throw new ApiErrorException(result.error);
-    return context.tenant.teamId;
-  }
-
-  private assertScope(
-    context: RequestContext,
-    input: { teamId?: string; datasetId?: string; collectionId?: string },
-    requireCollection: boolean,
-  ): { teamId: string; datasetId: string } {
-    const tenantTeam = this.requireTeam(context);
-    const missing: string[] = [];
-    if (!input.teamId || input.teamId !== tenantTeam) missing.push('teamId');
-    if (!input.datasetId) missing.push('datasetId');
-    if (requireCollection && !input.collectionId) missing.push('collectionId');
-    if (missing.length > 0) throw this.tenantError(context, missing);
-    return { teamId: input.teamId as string, datasetId: input.datasetId as string };
-  }
-
-  private async run<T>(
-    operation: string,
-    context: RequestContext,
-    work: () => Promise<T>,
-  ): Promise<T> {
-    try {
-      return await work();
-    } catch (error) {
-      if (error instanceof ApiErrorException) throw error;
-      throw new ApiErrorException(
-        createApiError({
-          code: 501014,
-          requestId: context.requestId,
-          params: { operation, store: 'pgvector' },
-        }),
-      );
-    }
-  }
-
-  private toVectorLiteral(vector: readonly number[]): string {
-    return `[${vector.join(',')}]`;
-  }
-
-  private parseVector(raw: string): number[] {
-    return raw
-      .replace(/^\[|\]$/g, '')
-      .split(',')
-      .map((item) => Number(item));
+  async profile(dimension: number): Promise<VectorProfile | undefined> {
+    return vectorProfileOfDimension(dimension);
   }
 
   async insert(
-    input: { records: VectorRecord[]; options: { timeoutMs: number } },
-    context: RequestContext,
-  ): Promise<{ inserted: number }> {
-    return this.run('insert', context, async () => {
-      for (const record of input.records) {
-        this.assertScope(context, record, true);
-        if (record.vector.length !== PGVECTOR_DIMENSION) {
-          throw new ApiErrorException(
-            createApiError({
-              code: 501013,
-              requestId: context.requestId,
-              params: { expected: PGVECTOR_DIMENSION, actual: record.vector.length },
-            }),
-          );
-        }
+    records: readonly KnowledgeVectorRecordInput[],
+    context: TenantContext,
+  ): Promise<{ inserted: number; vectorIds: string[] }> {
+    const vectorIds: string[] = [];
+    for (const record of records) {
+      if (record.workspaceId !== context.workspaceId) {
+        throw vectorError(context, 'KNOWLEDGE_VALIDATION_FAILED', {
+          field: 'workspaceId',
+          reason: 'tenant_mismatch',
+        });
       }
-
-      for (const record of input.records) {
+      const profile = vectorProfileOfDimension(record.dimension);
+      if (!profile || record.vector.length !== profile.dimension) {
+        throw vectorError(context, 'KNOWLEDGE_VALIDATION_FAILED', {
+          field: 'dimension',
+          expected: profile?.dimension ?? null,
+          actual: record.vector.length,
+        });
+      }
+      const normalized = normalizeVector(record.vector);
+      if (normalized.vector.length === 0) {
+        throw vectorError(context, 'KNOWLEDGE_VALIDATION_FAILED', {
+          field: 'vector',
+          reason: 'zero_or_non_finite_norm',
+        });
+      }
+      const vectorId = vectorIdentity(record);
+      try {
         await this.pool.query(
-          `INSERT INTO modeldata (id, vector, team_id, dataset_id, collection_id, index_version)
-           VALUES ($1, $2::vector, $3, $4, $5, $6)
-           ON CONFLICT (id) DO UPDATE SET
-             vector = EXCLUDED.vector,
-             team_id = EXCLUDED.team_id,
-             dataset_id = EXCLUDED.dataset_id,
-             collection_id = EXCLUDED.collection_id,
-             index_version = EXCLUDED.index_version`,
+          `INSERT INTO ${profile.tableName} (
+            id, workspace_id, knowledge_space_id, source_id, segment_id, index_id,
+            embedding_model_id, embedding, norm, search_enabled, content_hash, version
+          ) VALUES (
+            $1, $2, $3, $4, $5, $6, $7, $8::${profile.storageType}, $9, $10, $11, $12
+          )
+          ON CONFLICT (id) DO UPDATE SET
+            embedding = EXCLUDED.embedding,
+            norm = EXCLUDED.norm,
+            search_enabled = EXCLUDED.search_enabled,
+            content_hash = EXCLUDED.content_hash,
+            updated_at = now()
+          WHERE ${profile.tableName}.content_hash = EXCLUDED.content_hash`,
           [
-            record.dataId,
-            this.toVectorLiteral(record.vector),
-            record.teamId,
-            record.datasetId,
-            record.collectionId,
-            record.indexVersion,
+            vectorId,
+            record.workspaceId,
+            record.knowledgeSpaceId,
+            record.sourceId,
+            record.segmentId,
+            record.indexId,
+            record.embeddingModelId,
+            vectorLiteral(normalized.vector),
+            normalized.norm,
+            record.searchEnabled,
+            record.contentHash,
+            record.version,
           ],
         );
+      } catch (error) {
+        if ((error as { code?: string }).code === '23505') {
+          throw vectorError(context, 'KNOWLEDGE_CONFLICT', { vectorId });
+        }
+        throw vectorError(context, 'KNOWLEDGE_DEPENDENCY_UNAVAILABLE', {
+          dependency: 'postgres',
+          operation: 'vector_insert',
+        });
       }
-
-      return { inserted: input.records.length };
-    });
+      vectorIds.push(vectorId);
+    }
+    return { inserted: records.length, vectorIds };
   }
 
-  async embRecall(
-    input: {
-      teamId: string;
-      datasetId: string;
-      collectionId?: string;
-      vector: number[];
-      limit: number;
-      indexVersion?: string;
-      options: { timeoutMs: number };
-    },
-    context: RequestContext,
-  ): Promise<VectorSearchHit[]> {
-    return this.run('embRecall', context, async () => {
-      this.assertScope(context, input, true);
-      const values: unknown[] = [
-        this.toVectorLiteral(input.vector),
-        input.teamId,
-        input.datasetId,
-        input.collectionId,
-      ];
-      let sql = `SELECT id, 1 - (vector <=> $1::vector) AS score
-        FROM modeldata
-        WHERE team_id = $2 AND dataset_id = $3 AND collection_id = $4`;
-      if (input.indexVersion !== undefined) {
-        values.push(input.indexVersion);
-        sql += ` AND index_version = $${values.length}`;
-      }
-      values.push(input.limit);
-      sql += ` ORDER BY vector <=> $1::vector LIMIT $${values.length}`;
-
-      const result = await this.pool.query<VectorRow>(sql, values);
-      return result.rows.map((row) => ({
-        dataId: String(row.id),
-        indexId: String(row.id),
-        score: Number(row.score),
-      }));
-    });
-  }
-
-  async delete(
-    input: {
-      dataIds?: string[];
-      datasetId?: string;
-      collectionId?: string;
-      options: { timeoutMs: number };
-    },
-    context: RequestContext,
-  ): Promise<{ deleted: number }> {
-    return this.run('delete', context, async () => {
-      const teamId = this.requireTeam(context);
-      const missing: string[] = [];
-      if (!input.datasetId) missing.push('datasetId');
-      if (missing.length > 0) throw this.tenantError(context, missing);
-
-      const values: unknown[] = [teamId, input.datasetId];
-      let sql = 'DELETE FROM modeldata WHERE team_id = $1 AND dataset_id = $2';
-      if (input.collectionId !== undefined) {
-        values.push(input.collectionId);
-        sql += ` AND collection_id = $${values.length}`;
-      }
-      if (input.dataIds !== undefined && input.dataIds.length > 0) {
-        values.push(input.dataIds);
-        sql += ` AND id = ANY($${values.length})`;
-      }
-
-      const result = await this.pool.query(sql, values);
-      return { deleted: result.rowCount ?? 0 };
-    });
-  }
-
-  async getVectorDataByTime(
-    input: {
-      teamId: string;
-      datasetId: string;
-      from: string;
-      to: string;
-      options: { timeoutMs: number };
-    },
-    context: RequestContext,
-  ): Promise<VectorRecord[]> {
-    return this.run('getVectorDataByTime', context, async () => {
-      this.assertScope(context, input, false);
-      const from = new Date(input.from);
-      const to = new Date(input.to);
-      if (
-        Number.isNaN(from.getTime()) ||
-        Number.isNaN(to.getTime()) ||
-        from.getTime() > to.getTime()
-      ) {
-        throw new ApiErrorException(
-          createApiError({
-            code: 501050,
-            requestId: context.requestId,
-            params: { field: 'createtime', value: input.from, rangeOrVersion: input.to },
-          }),
-        );
-      }
-
-      const result = await this.pool.query<VectorRow>(
-        `SELECT id, team_id, dataset_id, collection_id, index_version, createtime, vector::text AS vector
-         FROM modeldata
-         WHERE team_id = $1 AND dataset_id = $2 AND createtime >= $3 AND createtime <= $4
-         ORDER BY createtime ASC`,
-        [input.teamId, input.datasetId, from, to],
+  async recall(
+    input: KnowledgeVectorSearchInput,
+    context: TenantContext,
+  ): Promise<KnowledgeVectorHit[]> {
+    if (input.workspaceId !== context.workspaceId) {
+      throw vectorError(context, 'KNOWLEDGE_VALIDATION_FAILED', {
+        field: 'workspaceId',
+        reason: 'tenant_mismatch',
+      });
+    }
+    const profile = vectorProfileOfDimension(input.dimension);
+    if (!profile || input.vector.length !== profile.dimension) {
+      throw vectorError(context, 'KNOWLEDGE_VALIDATION_FAILED', {
+        field: 'dimension',
+        expected: profile?.dimension ?? null,
+        actual: input.vector.length,
+      });
+    }
+    const normalized = normalizeVector(input.vector);
+    if (normalized.vector.length === 0) {
+      throw vectorError(context, 'KNOWLEDGE_VALIDATION_FAILED', {
+        field: 'vector',
+        reason: 'zero_or_non_finite_norm',
+      });
+    }
+    const values: unknown[] = [
+      vectorLiteral(normalized.vector),
+      input.workspaceId,
+      input.knowledgeSpaceId,
+      input.embeddingModelId,
+    ];
+    let sourcePredicate = '';
+    if (input.sourceIds?.length) {
+      values.push(input.sourceIds);
+      sourcePredicate = ` AND source_id = ANY($${values.length}::text[])`;
+    }
+    let versionPredicate = '';
+    if (input.version !== undefined) {
+      values.push(input.version);
+      versionPredicate = ` AND version = $${values.length}::bigint`;
+    }
+    values.push(Math.max(1, Math.min(input.limit, 200)));
+    const limitParameter = values.length;
+    try {
+      const result = await this.pool.query<{
+        id: string;
+        workspace_id: string;
+        knowledge_space_id: string;
+        source_id: string;
+        segment_id: string;
+        index_id: string;
+        version: string;
+        score: number;
+      }>(
+        `SELECT
+          id, workspace_id, knowledge_space_id, source_id, segment_id, index_id,
+          version, 1 - (embedding <=> $1::${profile.storageType}) AS score
+        FROM ${profile.tableName}
+        WHERE workspace_id = $2
+          AND knowledge_space_id = $3
+          AND embedding_model_id = $4
+          AND search_enabled = true
+          AND deleted_at IS NULL
+          ${sourcePredicate}
+          ${versionPredicate}
+        ORDER BY embedding <=> $1::${profile.storageType}
+        LIMIT $${limitParameter}`,
+        values,
       );
       return result.rows.map((row) => ({
-        teamId: String(row.team_id),
-        datasetId: String(row.dataset_id),
-        collectionId: String(row.collection_id),
-        dataId: String(row.id),
-        indexId: String(row.id),
-        indexVersion: String(row.index_version),
-        vector: this.parseVector(String(row.vector)),
+        vectorId: row.id,
+        workspaceId: row.workspace_id,
+        knowledgeSpaceId: row.knowledge_space_id,
+        sourceId: row.source_id,
+        segmentId: row.segment_id,
+        indexId: row.index_id,
+        version: Number(row.version),
+        score: Number(row.score),
       }));
-    });
+    } catch {
+      throw vectorError(context, 'KNOWLEDGE_DEPENDENCY_UNAVAILABLE', {
+        dependency: 'postgres',
+        operation: 'vector_recall',
+      });
+    }
   }
 
-  async getVectorCount(
+  async deleteBySegment(
     input: {
-      teamId: string;
-      datasetId: string;
-      collectionId?: string;
-      options: { timeoutMs: number };
+      workspaceId: string;
+      knowledgeSpaceId: string;
+      segmentId: string;
+      dimension: number;
+      embeddingModelId: string;
+      indexId?: string;
     },
-    context: RequestContext,
-  ): Promise<number> {
-    return this.run('getVectorCount', context, async () => {
-      this.assertScope(context, input, false);
-      const values: unknown[] = [input.teamId, input.datasetId];
-      let sql =
-        'SELECT COUNT(*)::int AS count FROM modeldata WHERE team_id = $1 AND dataset_id = $2';
-      if (input.collectionId !== undefined) {
-        values.push(input.collectionId);
-        sql += ` AND collection_id = $${values.length}`;
-      }
-      const result = await this.pool.query<{ count: number }>(sql, values);
-      return Number(result.rows[0]?.count ?? 0);
-    });
+    context: TenantContext,
+  ): Promise<{ deleted: number }> {
+    if (input.workspaceId !== context.workspaceId) {
+      throw vectorError(context, 'KNOWLEDGE_VALIDATION_FAILED', {
+        field: 'workspaceId',
+        reason: 'tenant_mismatch',
+      });
+    }
+    const profile = vectorProfileOfDimension(input.dimension);
+    if (!profile) {
+      throw vectorError(context, 'KNOWLEDGE_VALIDATION_FAILED', {
+        field: 'dimension',
+        actual: input.dimension,
+      });
+    }
+    const values: unknown[] = [
+      input.workspaceId,
+      input.knowledgeSpaceId,
+      input.segmentId,
+      input.embeddingModelId,
+    ];
+    let indexPredicate = '';
+    if (input.indexId) {
+      values.push(input.indexId);
+      indexPredicate = ` AND index_id = $${values.length}`;
+    }
+    const result = await this.pool.query(
+      `DELETE FROM ${profile.tableName}
+       WHERE workspace_id = $1
+         AND knowledge_space_id = $2
+         AND segment_id = $3
+         AND embedding_model_id = $4
+         ${indexPredicate}`,
+      values,
+    );
+    return { deleted: result.rowCount ?? 0 };
+  }
+
+  listProfiles(): readonly VectorProfile[] {
+    return KNOWLEDGE_VECTOR_PROFILES;
+  }
+
+  stableVectorIdForTest(record: KnowledgeVectorRecordInput): string {
+    const profile = vectorProfileOfDimension(record.dimension);
+    if (!profile) return randomUUID();
+    return vectorIdentity(record);
   }
 }

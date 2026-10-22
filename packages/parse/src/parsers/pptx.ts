@@ -1,5 +1,5 @@
 /**
- * @kb/parse PPTX 解析（设计 9.8.1）：每页一段，备注并入正文；失败 501057。
+ * PPTX 解析：每页一段，备注并入正文；失败返回稳定业务错误。
  * 以最小 zip/XML 读取实现（不引入未登记依赖），避免与来源项目 anydoc 关联。
  */
 import {
@@ -68,7 +68,7 @@ export const parsePptx: ParseHandler = async (context) => {
     });
     return makeResult('pptx', normalizeRawText(sections.join('\n\n')), { imageRefs });
   } catch (error) {
-    if (error instanceof Error && error.name === 'ApiErrorException') throw error;
+    if (error instanceof Error && error.name === 'KnowledgeApiError') throw error;
     throw parseFailedError('pptx', 'pptx_parse_failed', requestId);
   }
 };

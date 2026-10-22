@@ -1,93 +1,513 @@
-// 由 pnpm openapi:generate 生成，请勿手工修改。
-export type RouteId = 'API-DS-001' | 'API-DS-002' | 'API-DS-003' | 'API-DS-004' | 'API-DS-005' | 'API-DS-006' | 'API-COL-001' | 'API-COL-002' | 'API-COL-003' | 'API-COL-004' | 'API-COL-005' | 'API-COL-006' | 'API-COL-007' | 'API-COL-008' | 'API-COL-009' | 'API-COL-010' | 'API-COL-011' | 'API-COL-012' | 'API-COL-013' | 'API-COL-014' | 'API-COL-015' | 'API-COL-016' | 'API-DATA-001' | 'API-DATA-002' | 'API-DATA-003' | 'API-DATA-004' | 'API-DATA-005' | 'API-DATA-006' | 'API-DATA-007' | 'API-IDX-001' | 'API-IDX-002' | 'API-IDX-003' | 'API-TASK-001' | 'API-TASK-002' | 'API-TASK-003' | 'API-DEL-001' | 'API-DEL-002' | 'API-DEL-003' | 'API-SEARCH-001' | 'API-FILE-001' | 'API-FILE-002' | 'API-FILE-003' | 'API-FILE-004' | 'API-ROOT-001' | 'API-ROOT-002' | 'API-ROOT-003' | 'API-ROOT-004' | 'API-FILE-005' | 'API-FILE-006' | 'API-HEALTH-001' | 'API-HEALTH-002' | 'API-HEALTH-003' | 'API-EXT-001' | 'API-TAG-001' | 'API-TAG-002' | 'API-TAG-003' | 'API-TAG-004' | 'API-TAG-005' | 'API-TAG-006' | 'API-PATH-001' | 'API-PATH-002' | 'API-PATH-003' | 'API-PATH-004' | 'API-ACL-001' | 'API-ACL-002' | 'API-ACL-003' | 'API-ACL-004' | 'API-ACL-005' | 'API-EXP-001' | 'API-EXP-002' | 'API-IMP-001' | 'API-APIDS-001' | 'API-APIDS-002' | 'API-APIDS-003' | 'API-APIDS-004' | 'API-TASK-004' | 'API-TASK-005' | 'API-TASK-006' | 'API-TASK-007' | 'API-TASK-008' | 'API-TASK-009' | 'API-AGG-001' | 'API-VIRT-001' | 'API-SEARCH-002' | 'API-COL-017' | 'API-FILE-007' | 'API-IMP-002';
-export type DtoName = 'ApiResponse<T>' | 'ApiError' | 'Pagination' | 'DatasetListQuery' | 'DatasetListResponse' | 'DatasetCreateBody' | 'DatasetCreateResponse' | 'DatasetDetailQuery' | 'DatasetDetailResponse' | 'DatasetUpdateBody' | 'DatasetDeleteBody' | 'DeleteJobResponse' | 'RebuildEmbeddingBody' | 'CollectionListQuery' | 'CollectionCreateFolderBody' | 'CollectionCreateFileBody' | 'CollectionCreateLinkBody' | 'CollectionCreateTextBody' | 'CollectionCreateEmptyBody' | 'CollectionCreateImagesBody' | 'CollectionUpdateBody' | 'CollectionRetrainBody' | 'CollectionSyncBody' | 'CollectionTrainingStatusQuery' | 'CollectionPathsQuery' | 'PathNode' | 'DataListQuery' | 'DataDetailQuery' | 'DataUpdateBody' | 'DataDeleteBody' | 'InsertDataBody' | 'InsertImagesBody' | 'PushDataBody' | 'IndexCreateBody' | 'IndexUpdateBody' | 'IndexDeleteBody' | 'TrainingDetailQuery' | 'TrainingErrorsQuery' | 'TrainingResumeBody' | 'TrainingUpdateBody' | 'TrainingDeleteBody' | 'TrainingQueueQuery' | 'DeleteJobQuery' | 'DeleteFailuresQuery' | 'DeleteRetryBody' | 'SearchTestBody' | 'DatasetSearchSubject' | 'ImageQuery' | 'Citation' | 'SearchResult' | 'PresignUploadBody' | 'PresignUploadResponse' | 'CompleteMultipartBody' | 'UploadPartForm' | 'UploadPartResponse' | 'AbortMultipartBody' | 'PreviewChunksBody' | 'PresignSearchTestImageBody' | 'PreviewUrlsBody' | 'TagListQuery' | 'TagCreateBody' | 'TagUpdateBody' | 'TagDeleteBody' | 'TagBindingBody' | 'DatasetMoveBody' | 'CollectionMoveBody' | 'DatasetImportForm' | 'MigrationDryRunBody' | 'MigrationApplyBody' | 'MigrationResumeBody' | 'ReconcileReportsQuery' | 'HealthResponse' | 'ChunkPolicy' | 'QARequest' | 'ApiDatasetCatalogBody' | 'ApiDatasetPathNamesBody' | 'ApiDatasetListBody' | 'ApiDatasetExistIdQuery' | 'CreateDatasetWithFilesBody' | 'VirtualCollectionQuery' | 'CollectionCreateExternalFileBody' | 'CollectionCreateApiFileBody' | 'CollectionCreateBackupForm' | 'CollectionCreateTemplateForm' | 'CollectionDeleteBody' | 'ExtensionEnvelope' | 'DatasetPathsQuery' | 'ResumeInheritPermissionBody' | 'DatasetExportQuery' | 'CollectionExportQuery' | 'QAResult' | 'DatasetSummary' | 'ModelSelection' | 'IndexInput' | 'IndexPatch' | 'ImportReport' | 'PermissionSnapshot' | 'ScopeSelector' | 'ApiDatasetConfig' | 'ImportMapping' | 'ExternalFileConfig' | 'PermissionCollaborator' | 'ImportError' | 'ImportColumnMapping' | 'ApiDatasetCapabilities' | 'ErrorParams' | 'MetadataMap' | 'JsonValue' | 'IndexMetadata' | 'SearchWeights' | 'SearchBudgets' | 'SearchVersionPolicy' | 'SearchStats' | 'DegradedInfo' | 'CitationScore' | 'QAResultItem' | 'TokenUsage' | 'QALimits' | 'MultipartPart' | 'ExtensionPayload' | 'HealthCheck' | 'DatasetStats' | 'NoRequestBody' | 'DatasetExportResponse' | 'CollectionExportResponse' | 'ApiACL004RequestData' | 'ApiACL005RequestData' | 'ApiDS004ResponseData' | 'ApiDS006ResponseData' | 'ApiCOL001ResponseData' | 'ApiCOL002ResponseData' | 'ApiCOL003ResponseData' | 'ApiCOL004ResponseData' | 'ApiCOL005ResponseData' | 'ApiCOL006ResponseData' | 'ApiCOL007ResponseData' | 'ApiCOL008ResponseData' | 'ApiCOL009ResponseData' | 'ApiCOL010ResponseData' | 'ApiCOL011ResponseData' | 'ApiCOL012ResponseData' | 'ApiCOL014ResponseData' | 'ApiCOL015ResponseData' | 'ApiCOL016ResponseData' | 'ApiDATA001ResponseData' | 'ApiDATA002ResponseData' | 'ApiDATA003ResponseData' | 'ApiDATA004ResponseData' | 'ApiDATA005ResponseData' | 'ApiDATA006ResponseData' | 'ApiDATA007ResponseData' | 'ApiIDX001ResponseData' | 'ApiIDX002ResponseData' | 'ApiIDX003ResponseData' | 'ApiTASK001ResponseData' | 'ApiTASK002ResponseData' | 'ApiTASK003ResponseData' | 'ApiDEL001ResponseData' | 'ApiDEL002ResponseData' | 'ApiDEL003ResponseData' | 'ApiSEARCH001ResponseData' | 'ApiFILE002ResponseData' | 'ApiFILE003ResponseData' | 'ApiFILE004ResponseData' | 'ApiROOT001ResponseData' | 'ApiROOT002ResponseData' | 'ApiROOT003ResponseData' | 'ApiROOT004ResponseData' | 'ApiFILE005ResponseData' | 'ApiFILE006ResponseData' | 'ApiTAG001ResponseData' | 'ApiTAG002ResponseData' | 'ApiTAG003ResponseData' | 'ApiTAG004ResponseData' | 'ApiTAG005ResponseData' | 'ApiTAG006ResponseData' | 'ApiPATH003ResponseData' | 'ApiPATH004ResponseData' | 'ApiACL001ResponseData' | 'ApiACL002ResponseData' | 'ApiACL003ResponseData' | 'ApiACL004ResponseData' | 'ApiACL005ResponseData' | 'ApiIMP001ResponseData' | 'ApiAPIDS001ResponseData' | 'ApiAPIDS002ResponseData' | 'ApiAPIDS003ResponseData' | 'ApiAPIDS004ResponseData' | 'ApiTASK004ResponseData' | 'ApiTASK005ResponseData' | 'ApiTASK006ResponseData' | 'ApiTASK007ResponseData' | 'ApiTASK008ResponseData' | 'ApiTASK009ResponseData' | 'ApiAGG001ResponseData' | 'ApiVIRT001ResponseData' | 'ApiCOL017ResponseData' | 'ApiIMP002ResponseData' | 'ModelReference';
-export type ErrorCode = 501001 | 501002 | 501003 | 501004 | 501005 | 501006 | 501007 | 501008 | 501009 | 501010 | 501011 | 501012 | 501013 | 501014 | 501015 | 501016 | 501017 | 501018 | 501019 | 501020 | 501021 | 501022 | 501023 | 501024 | 501025 | 501026 | 501027 | 501028 | 501029 | 501030 | 501031 | 501032 | 501033 | 501034 | 501035 | 501036 | 501037 | 501038 | 501039 | 501040 | 501041 | 501042 | 501043 | 501044 | 501045 | 501046 | 501047 | 501048 | 501049 | 501050 | 501051 | 501052 | 501053 | 501054 | 501055 | 501056 | 501057 | 501058 | 501059 | 501060 | 501061 | 501062 | 501063 | 501064 | 501065 | 501066 | 501067 | 501068 | 501069 | 501070 | 501071 | 501072 | 501999;
-export interface RouteMethodPathMap {
-  'API-DS-001': 'GET /api/core/dataset/list';
-  'API-DS-002': 'POST /api/core/dataset/create';
-  'API-DS-003': 'GET /api/core/dataset/detail';
-  'API-DS-004': 'POST /api/core/dataset/update';
-  'API-DS-005': 'POST /api/core/dataset/delete';
-  'API-DS-006': 'POST /api/core/dataset/rebuildEmbedding';
-  'API-COL-001': 'GET /api/core/dataset/collection/list';
-  'API-COL-002': 'POST /api/core/dataset/collection/create/folder';
-  'API-COL-003': 'POST /api/core/dataset/collection/create/file';
-  'API-COL-004': 'POST /api/core/dataset/collection/create/link';
-  'API-COL-005': 'POST /api/core/dataset/collection/create/text';
-  'API-COL-006': 'POST /api/core/dataset/collection/create/externalFile';
-  'API-COL-007': 'POST /api/core/dataset/collection/create/apiFile';
-  'API-COL-008': 'POST /api/core/dataset/collection/create/images';
-  'API-COL-009': 'POST /api/core/dataset/collection/create/backup';
-  'API-COL-010': 'POST /api/core/dataset/collection/create/template';
-  'API-COL-011': 'GET /api/core/dataset/collection/detail';
-  'API-COL-012': 'POST /api/core/dataset/collection/update';
-  'API-COL-013': 'POST /api/core/dataset/collection/delete';
-  'API-COL-014': 'POST /api/core/dataset/collection/retrain';
-  'API-COL-015': 'POST /api/core/dataset/collection/sync';
-  'API-COL-016': 'GET /api/core/dataset/collection/trainingStatus';
-  'API-DATA-001': 'GET /api/core/dataset/data/list';
-  'API-DATA-002': 'GET /api/core/dataset/data/detail';
-  'API-DATA-003': 'POST /api/core/dataset/data/update';
-  'API-DATA-004': 'POST /api/core/dataset/data/delete';
-  'API-DATA-005': 'POST /api/core/dataset/data/insertData';
-  'API-DATA-006': 'POST /api/core/dataset/data/insertImages';
-  'API-DATA-007': 'POST /api/core/dataset/data/pushData';
-  'API-IDX-001': 'POST /api/core/dataset/index/create';
-  'API-IDX-002': 'POST /api/core/dataset/index/update';
-  'API-IDX-003': 'POST /api/core/dataset/index/delete';
-  'API-TASK-001': 'GET /api/core/dataset/training/detail';
-  'API-TASK-002': 'GET /api/core/dataset/training/errors';
-  'API-TASK-003': 'POST /api/core/dataset/training/resume';
-  'API-DEL-001': 'GET /api/core/dataset/delete-jobs/{jobId}';
-  'API-DEL-002': 'GET /api/core/dataset/delete-jobs/{jobId}/failures';
-  'API-DEL-003': 'POST /api/core/dataset/delete-jobs/{jobId}/retry';
-  'API-SEARCH-001': 'POST /api/core/dataset/searchTest';
-  'API-FILE-001': 'POST /api/core/dataset/file/presignUpload';
-  'API-FILE-002': 'POST /api/core/dataset/file/completeMultipart';
-  'API-FILE-003': 'POST /api/core/dataset/file/abortMultipart';
-  'API-FILE-004': 'POST /api/core/dataset/file/previewChunks';
-  'API-ROOT-001': 'POST /api/admin/dataset/migrations/dry-run';
-  'API-ROOT-002': 'POST /api/admin/dataset/migrations/apply';
-  'API-ROOT-003': 'POST /api/admin/dataset/migrations/resume';
-  'API-ROOT-004': 'GET /api/admin/dataset/reconcile/reports';
-  'API-FILE-005': 'POST /api/core/dataset/file/presignSearchTestImage';
-  'API-FILE-006': 'POST /api/core/dataset/file/getSearchTestImagePreviewUrls';
-  'API-HEALTH-001': 'GET /healthz/live';
-  'API-HEALTH-002': 'GET /readyz';
-  'API-HEALTH-003': 'GET /startupz';
-  'API-EXT-001': 'GET/POST /proApi/core/dataset/**';
-  'API-TAG-001': 'GET /api/core/dataset/tag/list';
-  'API-TAG-002': 'POST /api/core/dataset/tag/create';
-  'API-TAG-003': 'POST /api/core/dataset/tag/update';
-  'API-TAG-004': 'POST /api/core/dataset/tag/delete';
-  'API-TAG-005': 'POST /api/core/dataset/tag/addToCollections';
-  'API-TAG-006': 'POST /api/core/dataset/tag/removeFromCollections';
-  'API-PATH-001': 'GET /api/core/dataset/paths';
-  'API-PATH-002': 'GET /api/core/dataset/collection/paths';
-  'API-PATH-003': 'POST /api/core/dataset/move';
-  'API-PATH-004': 'POST /api/core/dataset/collection/move';
-  'API-ACL-001': 'GET /api/core/dataset/getPermission';
-  'API-ACL-002': 'POST /api/core/dataset/resumeInheritPermission';
-  'API-ACL-003': 'GET /proApi/core/dataset/collaborator/list';
-  'API-ACL-004': 'POST /proApi/core/dataset/collaborator/update';
-  'API-ACL-005': 'POST /proApi/core/dataset/changeOwner';
-  'API-EXP-001': 'GET /api/core/dataset/exportAll';
-  'API-EXP-002': 'GET /api/core/dataset/collection/export';
-  'API-IMP-001': 'POST /api/core/dataset/collection/import';
-  'API-APIDS-001': 'POST /api/core/dataset/apiDataset/getCatalog';
-  'API-APIDS-002': 'POST /api/core/dataset/apiDataset/getPathNames';
-  'API-APIDS-003': 'POST /api/core/dataset/apiDataset/list';
-  'API-APIDS-004': 'GET /api/core/dataset/apiDataset/listExistId';
-  'API-TASK-004': 'PUT /api/core/dataset/training/updateTrainingData';
-  'API-TASK-005': 'POST /api/core/dataset/training/deleteTrainingData';
-  'API-TASK-006': 'GET /api/core/dataset/training/queue';
-  'API-TASK-007': 'POST /api/core/dataset/training/errors';
-  'API-TASK-008': 'POST /api/core/dataset/training/collectionErrors';
-  'API-TASK-009': 'GET /api/core/dataset/training/hasError';
-  'API-AGG-001': 'POST /api/core/dataset/createWithFiles';
-  'API-VIRT-001': 'GET /api/core/dataset/collection/virtual';
-  'API-SEARCH-002': 'POST /api/internal/dataset/search';
-  'API-COL-017': 'POST /api/core/dataset/collection/create/empty';
-  'API-FILE-007': 'POST /api/core/dataset/file/uploadPart';
-  'API-IMP-002': 'POST /api/core/dataset/import';
+// Generated by pnpm openapi:generate. Do not edit manually.
+export type OperationId =
+  | 'API-HEALTH-LIVE'
+  | 'API-HEALTH-READY'
+  | 'API-APIKEY-LIST'
+  | 'API-APIKEY-CREATE'
+  | 'API-APIKEY-DELETE'
+  | 'API-APIKEY-UPDATE'
+  | 'API-APIKEY-ROTATE'
+  | 'API-AUDIT-LIST'
+  | 'API-CITATION-GET'
+  | 'API-CONNECTOR-DELETE'
+  | 'API-CONNECTOR-GET'
+  | 'API-CONNECTOR-UPDATE'
+  | 'API-CONNECTOR-SYNC'
+  | 'API-DIRECTORY-DELETE'
+  | 'API-DIRECTORY-GET'
+  | 'API-DIRECTORY-UPDATE'
+  | 'API-DIRECTORY-MOVE'
+  | 'API-FILE-CONTENT'
+  | 'API-FILE-DOWNLOAD'
+  | 'API-FILE-PREVIEW'
+  | 'API-JOB-LIST'
+  | 'API-JOB-CREATE'
+  | 'API-JOB-GET'
+  | 'API-JOB-CANCEL'
+  | 'API-JOB-PAUSE'
+  | 'API-JOB-REPLAY'
+  | 'API-JOB-RESUME'
+  | 'API-JOB-RETRY'
+  | 'API-MODEL-BINDING-VALIDATE'
+  | 'API-MODEL-LIST'
+  | 'API-OPENAPI'
+  | 'API-OPS-CLEANUP'
+  | 'API-OPS-OUTBOX-REPLAY'
+  | 'API-OPS-RECONCILE'
+  | 'API-OPS-STATUS'
+  | 'API-ACL-GET'
+  | 'API-ACL-UPDATE'
+  | 'API-RESOURCE-OWNERSHIP-TRANSFER'
+  | 'API-ACL-RESUME'
+  | 'API-SEARCH-DEEP'
+  | 'API-SEARCH-FULLTEXT'
+  | 'API-SEARCH-HYBRID'
+  | 'API-SEARCH-IMAGE'
+  | 'API-SEARCH-MULTI'
+  | 'API-SEARCH-SEMANTIC'
+  | 'API-SEGMENT-DELETE'
+  | 'API-SEGMENT-GET'
+  | 'API-SEGMENT-UPDATE'
+  | 'API-SEGMENT-HISTORY'
+  | 'API-SEGMENT-INDEX-CREATE'
+  | 'API-SEGMENT-INDEX-DELETE'
+  | 'API-SEGMENT-INDEX-UPDATE'
+  | 'API-SEGMENT-REINDEX'
+  | 'API-SEGMENT-BATCH'
+  | 'API-SOURCE-DELETE'
+  | 'API-SOURCE-GET'
+  | 'API-SOURCE-UPDATE'
+  | 'API-SOURCE-DOWNLOAD'
+  | 'API-SOURCE-MOVE'
+  | 'API-PERMISSION-DETACH'
+  | 'API-PERMISSION-DISABLE'
+  | 'API-PERMISSION-ENABLE'
+  | 'API-PERMISSION-RESUME'
+  | 'API-SOURCE-PREVIEW'
+  | 'API-SEGMENT-LIST'
+  | 'API-SEGMENT-CREATE'
+  | 'API-SOURCE-BATCH'
+  | 'API-TAG-APPLY'
+  | 'API-SPACE-LIST'
+  | 'API-SPACE-CREATE'
+  | 'API-SPACE-DELETE'
+  | 'API-SPACE-GET'
+  | 'API-SPACE-UPDATE'
+  | 'API-COLLABORATOR-LIST'
+  | 'API-COLLABORATOR-CREATE'
+  | 'API-COLLABORATOR-DELETE'
+  | 'API-COLLABORATOR-UPDATE'
+  | 'API-CONNECTOR-CATALOG'
+  | 'API-CONNECTOR-CONNECT'
+  | 'API-CONNECTOR-IMPORT'
+  | 'API-DIRECTORY-LIST'
+  | 'API-DIRECTORY-CREATE'
+  | 'API-SPACE-EXPORT'
+  | 'API-IMPORT-API-LIBRARY'
+  | 'API-IMPORT-API-CATALOG'
+  | 'API-IMPORT-BACKUP'
+  | 'API-IMPORT-FILES'
+  | 'API-IMPORT-TEMPLATE'
+  | 'API-IMPORT-TEXT'
+  | 'API-IMPORT-URL'
+  | 'API-MODEL-BINDING-GET'
+  | 'API-MODEL-BINDING-UPDATE'
+  | 'API-SPACE-MOVE'
+  | 'API-OWNERSHIP-TRANSFER'
+  | 'API-SPACE-REFERENCES'
+  | 'API-SOURCE-ARCHIVE'
+  | 'API-SOURCE-LIST'
+  | 'API-SOURCE-CREATE'
+  | 'API-SYNONYM-DELETE'
+  | 'API-SYNONYM-GET'
+  | 'API-SYNONYM-ENABLE'
+  | 'API-SYNONYM-UPLOAD'
+  | 'API-SYNONYM-UPDATE'
+  | 'API-SYNONYM-DOWNLOAD'
+  | 'API-SYNONYM-MAPPINGS'
+  | 'API-SYNONYM-REBUILD'
+  | 'API-TAG-LIST'
+  | 'API-TAG-CREATE'
+  | 'API-SPACE-BATCH'
+  | 'API-TAG-DELETE'
+  | 'API-TAG-GET'
+  | 'API-TAG-UPDATE'
+  | 'API-TAG-VALUES'
+  | 'API-UPLOAD-INIT'
+  | 'API-UPLOAD-GET'
+  | 'API-UPLOAD-ABORT'
+  | 'API-UPLOAD-COMPLETE'
+  | 'API-UPLOAD-PART'
+  | 'API-UPLOAD-PRESIGN'
+  | 'API-USAGE-GET';
+
+export type RuntimeOperationId =
+  | 'API-HEALTH-LIVE'
+  | 'API-HEALTH-READY'
+  | 'API-DIRECTORY-DELETE'
+  | 'API-DIRECTORY-GET'
+  | 'API-DIRECTORY-UPDATE'
+  | 'API-JOB-LIST'
+  | 'API-JOB-GET'
+  | 'API-OPENAPI'
+  | 'API-OPS-STATUS'
+  | 'API-ACL-GET'
+  | 'API-ACL-UPDATE'
+  | 'API-RESOURCE-OWNERSHIP-TRANSFER'
+  | 'API-ACL-RESUME'
+  | 'API-SEGMENT-DELETE'
+  | 'API-SEGMENT-GET'
+  | 'API-SEGMENT-UPDATE'
+  | 'API-SOURCE-DELETE'
+  | 'API-SOURCE-GET'
+  | 'API-SOURCE-UPDATE'
+  | 'API-PERMISSION-DETACH'
+  | 'API-PERMISSION-DISABLE'
+  | 'API-PERMISSION-ENABLE'
+  | 'API-PERMISSION-RESUME'
+  | 'API-SEGMENT-LIST'
+  | 'API-SEGMENT-CREATE'
+  | 'API-TAG-APPLY'
+  | 'API-SPACE-LIST'
+  | 'API-SPACE-CREATE'
+  | 'API-SPACE-DELETE'
+  | 'API-SPACE-GET'
+  | 'API-SPACE-UPDATE'
+  | 'API-COLLABORATOR-LIST'
+  | 'API-COLLABORATOR-CREATE'
+  | 'API-COLLABORATOR-DELETE'
+  | 'API-COLLABORATOR-UPDATE'
+  | 'API-DIRECTORY-LIST'
+  | 'API-DIRECTORY-CREATE'
+  | 'API-OWNERSHIP-TRANSFER'
+  | 'API-SOURCE-LIST'
+  | 'API-SOURCE-CREATE'
+  | 'API-TAG-LIST'
+  | 'API-TAG-CREATE'
+  | 'API-TAG-DELETE'
+  | 'API-TAG-GET'
+  | 'API-TAG-UPDATE'
+  | 'API-TAG-VALUES';
+
+export type DeferredOperationId =
+  | 'API-APIKEY-LIST'
+  | 'API-APIKEY-CREATE'
+  | 'API-APIKEY-DELETE'
+  | 'API-APIKEY-UPDATE'
+  | 'API-APIKEY-ROTATE'
+  | 'API-AUDIT-LIST'
+  | 'API-CITATION-GET'
+  | 'API-CONNECTOR-DELETE'
+  | 'API-CONNECTOR-GET'
+  | 'API-CONNECTOR-UPDATE'
+  | 'API-CONNECTOR-SYNC'
+  | 'API-DIRECTORY-MOVE'
+  | 'API-FILE-CONTENT'
+  | 'API-FILE-DOWNLOAD'
+  | 'API-FILE-PREVIEW'
+  | 'API-JOB-CREATE'
+  | 'API-JOB-CANCEL'
+  | 'API-JOB-PAUSE'
+  | 'API-JOB-REPLAY'
+  | 'API-JOB-RESUME'
+  | 'API-JOB-RETRY'
+  | 'API-MODEL-BINDING-VALIDATE'
+  | 'API-MODEL-LIST'
+  | 'API-OPS-CLEANUP'
+  | 'API-OPS-OUTBOX-REPLAY'
+  | 'API-OPS-RECONCILE'
+  | 'API-SEARCH-DEEP'
+  | 'API-SEARCH-FULLTEXT'
+  | 'API-SEARCH-HYBRID'
+  | 'API-SEARCH-IMAGE'
+  | 'API-SEARCH-MULTI'
+  | 'API-SEARCH-SEMANTIC'
+  | 'API-SEGMENT-HISTORY'
+  | 'API-SEGMENT-INDEX-CREATE'
+  | 'API-SEGMENT-INDEX-DELETE'
+  | 'API-SEGMENT-INDEX-UPDATE'
+  | 'API-SEGMENT-REINDEX'
+  | 'API-SEGMENT-BATCH'
+  | 'API-SOURCE-DOWNLOAD'
+  | 'API-SOURCE-MOVE'
+  | 'API-SOURCE-PREVIEW'
+  | 'API-SOURCE-BATCH'
+  | 'API-CONNECTOR-CATALOG'
+  | 'API-CONNECTOR-CONNECT'
+  | 'API-CONNECTOR-IMPORT'
+  | 'API-SPACE-EXPORT'
+  | 'API-IMPORT-API-LIBRARY'
+  | 'API-IMPORT-API-CATALOG'
+  | 'API-IMPORT-BACKUP'
+  | 'API-IMPORT-FILES'
+  | 'API-IMPORT-TEMPLATE'
+  | 'API-IMPORT-TEXT'
+  | 'API-IMPORT-URL'
+  | 'API-MODEL-BINDING-GET'
+  | 'API-MODEL-BINDING-UPDATE'
+  | 'API-SPACE-MOVE'
+  | 'API-SPACE-REFERENCES'
+  | 'API-SOURCE-ARCHIVE'
+  | 'API-SYNONYM-DELETE'
+  | 'API-SYNONYM-GET'
+  | 'API-SYNONYM-ENABLE'
+  | 'API-SYNONYM-UPLOAD'
+  | 'API-SYNONYM-UPDATE'
+  | 'API-SYNONYM-DOWNLOAD'
+  | 'API-SYNONYM-MAPPINGS'
+  | 'API-SYNONYM-REBUILD'
+  | 'API-SPACE-BATCH'
+  | 'API-UPLOAD-INIT'
+  | 'API-UPLOAD-GET'
+  | 'API-UPLOAD-ABORT'
+  | 'API-UPLOAD-COMPLETE'
+  | 'API-UPLOAD-PART'
+  | 'API-UPLOAD-PRESIGN'
+  | 'API-USAGE-GET';
+
+export type SchemaName =
+  | 'ACL'
+  | 'ACLResourceType'
+  | 'ACLUpdate'
+  | 'APIKey'
+  | 'APIKeyCreate'
+  | 'APIKeyList'
+  | 'APIKeySecret'
+  | 'APIKeyUpdate'
+  | 'ApiLibraryCatalog'
+  | 'ApiLibraryCatalogRequest'
+  | 'ArchiveCreate'
+  | 'AuditEvent'
+  | 'AuditEventList'
+  | 'BatchResult'
+  | 'BinaryStream'
+  | 'ChunkingSettings'
+  | 'Citation'
+  | 'CleanupCreate'
+  | 'Collaborator'
+  | 'CollaboratorCreate'
+  | 'CollaboratorList'
+  | 'CollaboratorUpdate'
+  | 'Connector'
+  | 'ConnectorCatalog'
+  | 'ConnectorCatalogRequest'
+  | 'ConnectorConfig'
+  | 'ConnectorConnect'
+  | 'ConnectorCredentials'
+  | 'ConnectorImport'
+  | 'ConnectorSync'
+  | 'ConnectorUpdate'
+  | 'CustomApiConnectorConfig'
+  | 'CustomApiCredentials'
+  | 'DeepSearchRequest'
+  | 'DeepSearchResponse'
+  | 'DingtalkConnectorConfig'
+  | 'DingtalkCredentials'
+  | 'Directory'
+  | 'DirectoryCreate'
+  | 'DirectoryList'
+  | 'DirectoryUpdate'
+  | 'Doc2xParseConfig'
+  | 'DownloadRequest'
+  | 'ErrorBody'
+  | 'ExportCreate'
+  | 'ExternalReference'
+  | 'FeishuConnectorConfig'
+  | 'FeishuCredentials'
+  | 'FileTicket'
+  | 'FileTicketRequest'
+  | 'HealthStatus'
+  | 'ImageSearchRequest'
+  | 'ImportApiLibrary'
+  | 'ImportBackup'
+  | 'ImportFiles'
+  | 'ImportTemplate'
+  | 'ImportText'
+  | 'ImportUrl'
+  | 'Job'
+  | 'JobCreate'
+  | 'JobList'
+  | 'JobStatus'
+  | 'JobStep'
+  | 'KnowledgeSpace'
+  | 'KnowledgeSpaceBatchAction'
+  | 'KnowledgeSpaceCreate'
+  | 'KnowledgeSpaceDeleteRequest'
+  | 'KnowledgeSpaceList'
+  | 'KnowledgeSpaceReferences'
+  | 'KnowledgeSpaceUpdate'
+  | 'LiteParseConfig'
+  | 'Model'
+  | 'ModelBinding'
+  | 'ModelBindingList'
+  | 'ModelBindingUpdate'
+  | 'ModelBindingValidate'
+  | 'ModelList'
+  | 'ModelValidationResult'
+  | 'MoveResource'
+  | 'MultiSpaceSearchRequest'
+  | 'ObjectBlobReference'
+  | 'OpenApiDocument'
+  | 'OperationResult'
+  | 'OpsStatus'
+  | 'OwnershipTransfer'
+  | 'PageInfo'
+  | 'ParseProviderConfig'
+  | 'PermissionTransition'
+  | 'PresignUploadParts'
+  | 'PresignedUploadParts'
+  | 'PreviewResult'
+  | 'Problem'
+  | 'ReconcileCreate'
+  | 'ReindexRequest'
+  | 'SangforParseConfig'
+  | 'SearchFilter'
+  | 'SearchRequest'
+  | 'SearchResponse'
+  | 'Segment'
+  | 'SegmentBatchAction'
+  | 'SegmentCreate'
+  | 'SegmentHistory'
+  | 'SegmentHistoryList'
+  | 'SegmentIndex'
+  | 'SegmentIndexUpsert'
+  | 'SegmentList'
+  | 'SegmentUpdate'
+  | 'SomarkParseConfig'
+  | 'Source'
+  | 'SourceBatchAction'
+  | 'SourceCreate'
+  | 'SourceList'
+  | 'SourceUpdate'
+  | 'SynonymConfig'
+  | 'SynonymFileUpdate'
+  | 'SynonymFileUpload'
+  | 'SynonymMapping'
+  | 'SynonymMappingList'
+  | 'SynonymToggle'
+  | 'Tag'
+  | 'TagArrayFilterCondition'
+  | 'TagAssignmentBatch'
+  | 'TagCreate'
+  | 'TagDatetimeFilterCondition'
+  | 'TagList'
+  | 'TagNumberFilterCondition'
+  | 'TagStringFilterCondition'
+  | 'TagUpdate'
+  | 'TagValuesUpdate'
+  | 'TextinParseConfig'
+  | 'UploadComplete'
+  | 'UploadInit'
+  | 'UploadPart'
+  | 'UploadPartResult'
+  | 'UploadSession'
+  | 'UsageSummary'
+  | 'VersionedMutation'
+  | 'YuqueConnectorConfig'
+  | 'YuqueCredentials';
+
+export interface RuntimeRouteMethodPathMap {
+  'API-HEALTH-LIVE': 'GET /healthz';
+  'API-HEALTH-READY': 'GET /readyz';
+  'API-DIRECTORY-DELETE': 'DELETE /v1/knowledge/directories/{directoryId}';
+  'API-DIRECTORY-GET': 'GET /v1/knowledge/directories/{directoryId}';
+  'API-DIRECTORY-UPDATE': 'PATCH /v1/knowledge/directories/{directoryId}';
+  'API-JOB-LIST': 'GET /v1/knowledge/jobs';
+  'API-JOB-GET': 'GET /v1/knowledge/jobs/{jobId}';
+  'API-OPENAPI': 'GET /v1/knowledge/openapi.json';
+  'API-OPS-STATUS': 'GET /v1/knowledge/operations/status';
+  'API-ACL-GET': 'GET /v1/knowledge/resources/{resourceType}/{resourceId}/acl';
+  'API-ACL-UPDATE': 'PUT /v1/knowledge/resources/{resourceType}/{resourceId}/acl';
+  'API-RESOURCE-OWNERSHIP-TRANSFER': 'POST /v1/knowledge/resources/{resourceType}/{resourceId}/ownership-transfer';
+  'API-ACL-RESUME': 'POST /v1/knowledge/resources/{resourceType}/{resourceId}/resume-inheritance';
+  'API-SEGMENT-DELETE': 'DELETE /v1/knowledge/segments/{segmentId}';
+  'API-SEGMENT-GET': 'GET /v1/knowledge/segments/{segmentId}';
+  'API-SEGMENT-UPDATE': 'PATCH /v1/knowledge/segments/{segmentId}';
+  'API-SOURCE-DELETE': 'DELETE /v1/knowledge/sources/{sourceId}';
+  'API-SOURCE-GET': 'GET /v1/knowledge/sources/{sourceId}';
+  'API-SOURCE-UPDATE': 'PATCH /v1/knowledge/sources/{sourceId}';
+  'API-PERMISSION-DETACH': 'POST /v1/knowledge/sources/{sourceId}/permissions/detach';
+  'API-PERMISSION-DISABLE': 'POST /v1/knowledge/sources/{sourceId}/permissions/disable';
+  'API-PERMISSION-ENABLE': 'POST /v1/knowledge/sources/{sourceId}/permissions/enable';
+  'API-PERMISSION-RESUME': 'POST /v1/knowledge/sources/{sourceId}/permissions/resume-inherit';
+  'API-SEGMENT-LIST': 'GET /v1/knowledge/sources/{sourceId}/segments';
+  'API-SEGMENT-CREATE': 'POST /v1/knowledge/sources/{sourceId}/segments';
+  'API-TAG-APPLY': 'POST /v1/knowledge/sources/tag-assignments';
+  'API-SPACE-LIST': 'GET /v1/knowledge/spaces';
+  'API-SPACE-CREATE': 'POST /v1/knowledge/spaces';
+  'API-SPACE-DELETE': 'DELETE /v1/knowledge/spaces/{spaceId}';
+  'API-SPACE-GET': 'GET /v1/knowledge/spaces/{spaceId}';
+  'API-SPACE-UPDATE': 'PATCH /v1/knowledge/spaces/{spaceId}';
+  'API-COLLABORATOR-LIST': 'GET /v1/knowledge/spaces/{spaceId}/collaborators';
+  'API-COLLABORATOR-CREATE': 'POST /v1/knowledge/spaces/{spaceId}/collaborators';
+  'API-COLLABORATOR-DELETE': 'DELETE /v1/knowledge/spaces/{spaceId}/collaborators/{memberId}';
+  'API-COLLABORATOR-UPDATE': 'PATCH /v1/knowledge/spaces/{spaceId}/collaborators/{memberId}';
+  'API-DIRECTORY-LIST': 'GET /v1/knowledge/spaces/{spaceId}/directories';
+  'API-DIRECTORY-CREATE': 'POST /v1/knowledge/spaces/{spaceId}/directories';
+  'API-OWNERSHIP-TRANSFER': 'POST /v1/knowledge/spaces/{spaceId}/ownership-transfer';
+  'API-SOURCE-LIST': 'GET /v1/knowledge/spaces/{spaceId}/sources';
+  'API-SOURCE-CREATE': 'POST /v1/knowledge/spaces/{spaceId}/sources';
+  'API-TAG-LIST': 'GET /v1/knowledge/spaces/{spaceId}/tags';
+  'API-TAG-CREATE': 'POST /v1/knowledge/spaces/{spaceId}/tags';
+  'API-TAG-DELETE': 'DELETE /v1/knowledge/tags/{tagId}';
+  'API-TAG-GET': 'GET /v1/knowledge/tags/{tagId}';
+  'API-TAG-UPDATE': 'PATCH /v1/knowledge/tags/{tagId}';
+  'API-TAG-VALUES': 'PUT /v1/knowledge/tags/{tagId}/options';
+}
+
+export interface DeferredRouteMethodPathMap {
+  'API-APIKEY-LIST': 'GET /v1/knowledge/api-keys';
+  'API-APIKEY-CREATE': 'POST /v1/knowledge/api-keys';
+  'API-APIKEY-DELETE': 'DELETE /v1/knowledge/api-keys/{keyId}';
+  'API-APIKEY-UPDATE': 'PATCH /v1/knowledge/api-keys/{keyId}';
+  'API-APIKEY-ROTATE': 'POST /v1/knowledge/api-keys/{keyId}/rotate';
+  'API-AUDIT-LIST': 'GET /v1/knowledge/audit-events';
+  'API-CITATION-GET': 'GET /v1/knowledge/citations/{citationId}';
+  'API-CONNECTOR-DELETE': 'DELETE /v1/knowledge/connectors/{connectorId}';
+  'API-CONNECTOR-GET': 'GET /v1/knowledge/connectors/{connectorId}';
+  'API-CONNECTOR-UPDATE': 'PATCH /v1/knowledge/connectors/{connectorId}';
+  'API-CONNECTOR-SYNC': 'POST /v1/knowledge/connectors/{connectorId}/sync';
+  'API-DIRECTORY-MOVE': 'POST /v1/knowledge/directories/{directoryId}/move';
+  'API-FILE-CONTENT': 'GET /v1/knowledge/files/{blobId}/content';
+  'API-FILE-DOWNLOAD': 'POST /v1/knowledge/files/{blobId}/download';
+  'API-FILE-PREVIEW': 'POST /v1/knowledge/files/{blobId}/preview';
+  'API-JOB-CREATE': 'POST /v1/knowledge/jobs';
+  'API-JOB-CANCEL': 'POST /v1/knowledge/jobs/{jobId}/cancel';
+  'API-JOB-PAUSE': 'POST /v1/knowledge/jobs/{jobId}/pause';
+  'API-JOB-REPLAY': 'POST /v1/knowledge/jobs/{jobId}/replay';
+  'API-JOB-RESUME': 'POST /v1/knowledge/jobs/{jobId}/resume';
+  'API-JOB-RETRY': 'POST /v1/knowledge/jobs/{jobId}/retry';
+  'API-MODEL-BINDING-VALIDATE': 'POST /v1/knowledge/model-bindings/validate';
+  'API-MODEL-LIST': 'GET /v1/knowledge/models';
+  'API-OPS-CLEANUP': 'POST /v1/knowledge/operations/cleanup';
+  'API-OPS-OUTBOX-REPLAY': 'POST /v1/knowledge/operations/outbox/{eventId}/replay';
+  'API-OPS-RECONCILE': 'POST /v1/knowledge/operations/reconcile';
+  'API-SEARCH-DEEP': 'POST /v1/knowledge/search/deep';
+  'API-SEARCH-FULLTEXT': 'POST /v1/knowledge/search/full-text';
+  'API-SEARCH-HYBRID': 'POST /v1/knowledge/search/hybrid';
+  'API-SEARCH-IMAGE': 'POST /v1/knowledge/search/image';
+  'API-SEARCH-MULTI': 'POST /v1/knowledge/search/multi-space';
+  'API-SEARCH-SEMANTIC': 'POST /v1/knowledge/search/semantic';
+  'API-SEGMENT-HISTORY': 'GET /v1/knowledge/segments/{segmentId}/history';
+  'API-SEGMENT-INDEX-CREATE': 'POST /v1/knowledge/segments/{segmentId}/indexes';
+  'API-SEGMENT-INDEX-DELETE': 'DELETE /v1/knowledge/segments/{segmentId}/indexes/{indexId}';
+  'API-SEGMENT-INDEX-UPDATE': 'PATCH /v1/knowledge/segments/{segmentId}/indexes/{indexId}';
+  'API-SEGMENT-REINDEX': 'POST /v1/knowledge/segments/{segmentId}/reindex';
+  'API-SEGMENT-BATCH': 'POST /v1/knowledge/segments/batch-actions';
+  'API-SOURCE-DOWNLOAD': 'POST /v1/knowledge/sources/{sourceId}/download';
+  'API-SOURCE-MOVE': 'POST /v1/knowledge/sources/{sourceId}/move';
+  'API-SOURCE-PREVIEW': 'GET /v1/knowledge/sources/{sourceId}/preview';
+  'API-SOURCE-BATCH': 'POST /v1/knowledge/sources/batch-actions';
+  'API-CONNECTOR-CATALOG': 'POST /v1/knowledge/spaces/{spaceId}/connectors/{provider}/catalog';
+  'API-CONNECTOR-CONNECT': 'POST /v1/knowledge/spaces/{spaceId}/connectors/{provider}/connect';
+  'API-CONNECTOR-IMPORT': 'POST /v1/knowledge/spaces/{spaceId}/connectors/{provider}/import';
+  'API-SPACE-EXPORT': 'POST /v1/knowledge/spaces/{spaceId}/exports';
+  'API-IMPORT-API-LIBRARY': 'POST /v1/knowledge/spaces/{spaceId}/imports/api-library';
+  'API-IMPORT-API-CATALOG': 'POST /v1/knowledge/spaces/{spaceId}/imports/api-library/catalog';
+  'API-IMPORT-BACKUP': 'POST /v1/knowledge/spaces/{spaceId}/imports/backup';
+  'API-IMPORT-FILES': 'POST /v1/knowledge/spaces/{spaceId}/imports/files';
+  'API-IMPORT-TEMPLATE': 'POST /v1/knowledge/spaces/{spaceId}/imports/template';
+  'API-IMPORT-TEXT': 'POST /v1/knowledge/spaces/{spaceId}/imports/text';
+  'API-IMPORT-URL': 'POST /v1/knowledge/spaces/{spaceId}/imports/url';
+  'API-MODEL-BINDING-GET': 'GET /v1/knowledge/spaces/{spaceId}/model-bindings';
+  'API-MODEL-BINDING-UPDATE': 'PUT /v1/knowledge/spaces/{spaceId}/model-bindings';
+  'API-SPACE-MOVE': 'POST /v1/knowledge/spaces/{spaceId}/move';
+  'API-SPACE-REFERENCES': 'GET /v1/knowledge/spaces/{spaceId}/references';
+  'API-SOURCE-ARCHIVE': 'POST /v1/knowledge/spaces/{spaceId}/source-archives';
+  'API-SYNONYM-DELETE': 'DELETE /v1/knowledge/spaces/{spaceId}/synonyms';
+  'API-SYNONYM-GET': 'GET /v1/knowledge/spaces/{spaceId}/synonyms';
+  'API-SYNONYM-ENABLE': 'PATCH /v1/knowledge/spaces/{spaceId}/synonyms';
+  'API-SYNONYM-UPLOAD': 'POST /v1/knowledge/spaces/{spaceId}/synonyms/files';
+  'API-SYNONYM-UPDATE': 'PUT /v1/knowledge/spaces/{spaceId}/synonyms/files';
+  'API-SYNONYM-DOWNLOAD': 'GET /v1/knowledge/spaces/{spaceId}/synonyms/files/{fileVersion}';
+  'API-SYNONYM-MAPPINGS': 'GET /v1/knowledge/spaces/{spaceId}/synonyms/mappings';
+  'API-SYNONYM-REBUILD': 'POST /v1/knowledge/spaces/{spaceId}/synonyms/rebuild';
+  'API-SPACE-BATCH': 'POST /v1/knowledge/spaces/batch-actions';
+  'API-UPLOAD-INIT': 'POST /v1/knowledge/uploads';
+  'API-UPLOAD-GET': 'GET /v1/knowledge/uploads/{uploadId}';
+  'API-UPLOAD-ABORT': 'POST /v1/knowledge/uploads/{uploadId}/abort';
+  'API-UPLOAD-COMPLETE': 'POST /v1/knowledge/uploads/{uploadId}/complete';
+  'API-UPLOAD-PART': 'PUT /v1/knowledge/uploads/{uploadId}/parts/{partNumber}';
+  'API-UPLOAD-PRESIGN': 'POST /v1/knowledge/uploads/{uploadId}/presign';
+  'API-USAGE-GET': 'GET /v1/knowledge/usage';
 }

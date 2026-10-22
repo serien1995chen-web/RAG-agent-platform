@@ -1,6 +1,6 @@
 /**
  * @kb/parse XLSX 解析（设计 9.8.1）：yauzl 预检 + 工作表转 Markdown；
- * 多表按 Sheet 分隔，合并单元格展平；预检超限 501053。
+ * 多表按 Sheet 分隔，合并单元格展平；预检超限返回验证错误。
  */
 import * as XLSX from 'xlsx';
 import {
@@ -26,7 +26,7 @@ export const parseXlsx: ParseHandler = async (context) => {
     });
   } catch (error) {
     if (error instanceof ZipLimitError) {
-      throw parseError(501053, requestId, {
+      throw parseError('KNOWLEDGE_VALIDATION_FAILED', requestId, {
         maxChunks: MAX_SHEETS,
         actual: MAX_SHEETS + 1,
         chunkSize: MAX_SHEET_BYTES,
@@ -38,7 +38,7 @@ export const parseXlsx: ParseHandler = async (context) => {
   try {
     const workbook = XLSX.read(context.bytes, { type: 'array', cellDates: true });
     if (workbook.SheetNames.length > MAX_SHEETS) {
-      throw parseError(501053, requestId, {
+      throw parseError('KNOWLEDGE_VALIDATION_FAILED', requestId, {
         maxChunks: MAX_SHEETS,
         actual: workbook.SheetNames.length,
         chunkSize: MAX_SHEET_BYTES,
@@ -59,7 +59,7 @@ export const parseXlsx: ParseHandler = async (context) => {
     });
     return makeResult('xlsx', normalizeRawText(sections.join('\n\n')));
   } catch (error) {
-    if (error instanceof Error && error.name === 'ApiErrorException') throw error;
+    if (error instanceof Error && error.name === 'KnowledgeApiError') throw error;
     throw parseFailedError('xlsx', 'xlsx_parse_failed', requestId);
   }
 };

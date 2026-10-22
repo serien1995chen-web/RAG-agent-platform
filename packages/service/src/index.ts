@@ -1,316 +1,93 @@
 /**
- * @kb/service — 领域 / 应用 / 仓储 / 适配器 / 任务五层业务内核（CR-REF-02）。
- * 权威来源：设计文档 5.2、7.5、7.6、18.1、18.2。
- * 显式导出面，禁止 export *。
+ * @kb/service public surface for the knowledge architecture baseline.
+ * Only native knowledge modules and canonical persistence are exported here.
  */
 export const PACKAGE_NAME = '@kb/service' as const;
 
+export { loadKnowledgeRuntimeConfig } from './shared/config/knowledge-runtime-config';
+export type {
+  KnowledgeMockAuthConfig,
+  KnowledgeRuntimeConfig,
+} from './shared/config/knowledge-runtime-config';
+export { resolveSecretRef } from './shared/config/secret-ref';
 export {
-  ApiErrorException,
-  classifyRetryableError,
-  ConfigValidationException,
-  createApiError,
-  createInfrastructureClients,
-  createDegradedDatasetSearchPort,
-  createSkeletonError,
-  closeInfrastructureClients,
-  collectionNameOf,
-  DatasetAclSchema,
-  DatasetCollectionSchema,
-  DatasetDataSchema,
-  DatasetDataTextSchema,
-  DatasetRuntimeConfigSchema,
-  DatasetSchema,
-  DatasetTagSchema,
-  DatasetTrainingSchema,
-  DEFAULT_DATASET_RUNTIME_CONFIG,
-  defineIndex,
-  ENV_KEYS,
-  getDeclaredIndexes,
-  HealthProbeService,
-  ImageAssetSchema,
-  listDeclaredIndexes,
-  liveProbeResponse,
-  loadConfigFromEnv,
-  MONGO_SCHEMA_REGISTRY,
-  PlatformCapacityProfileSchema,
-  ProviderSelectionSchema,
-  registerMongoModels,
-  resolveRuntimeRole,
-  resolveSecretRef,
-  SystemConfigSchema,
-  toApiResponse,
-  validateTenantContext,
-  validateStartupConfig,
-  VersionCheckPolicySchema,
-  WorkerModeSchema,
-} from './shared/index';
-export type {
-  AppConfig,
-  ApiError,
-  ApiResponse,
-  AuthType,
-  CreateApiErrorInput,
-  DatasetAclDoc,
-  DatasetCollectionDoc,
-  DatasetDataDoc,
-  DatasetDataTextDoc,
-  DatasetDoc,
-  DatasetRuntimeConfig,
-  DatasetTagDoc,
-  DatasetTrainingDoc,
-  DependencyProbe,
-  EnvSource,
-  HealthSummary,
-  ImageAssetDoc,
-  IndexDeclaration,
-  InfrastructureClients,
-  PermissionContext,
-  PlatformCapacityProfile,
-  RegisteredModels,
-  RequestContext,
-  RuntimeRole,
-  SystemConfig,
-  TenantContext,
-  VersionCheckPolicy,
-  WorkerMode,
-} from './shared/index';
-
-export { DEFAULT_PORT_IDS, createDefaultPorts, createUnimplementedPort } from './ports/index';
-export { MONGO_TRANSACTION_PROBE_NAME, checkMongoTransactions } from './shared/index';
-export type {
-  AdminDatasetPort,
-  ApiDatasetCapability,
-  ApiDatasetCatalogRequest,
-  ApiDatasetConfig,
-  ApiDatasetListRequest,
-  ApiDatasetPathNamesRequest,
-  ArchiveStatusPort,
-  AuditPort,
-  AuditRecord,
-  AuthSubject,
-  AuthSubjectProvider,
-  BackupToolPort,
-  CallerPermissionContext,
-  CollectionRepository,
-  CollectionSnapshot,
-  CollaboratorPermission,
-  DatasetEvent,
-  DatasetEventPort,
-  DatasetMetricsPort,
-  DatasetNotificationPort,
-  DatasetPermissionPort,
-  DatasetSearchPort,
-  DatasetSourceProvider,
-  DatasetSyncPort,
-  DegradationMode,
-  DegradationPolicy,
-  DeleteJobRepository,
-  DeleteJobSnapshot,
-  DeleteJobState,
-  FailureQueryPort,
-  FailureRecord,
-  FeatureFlagProvider,
-  FullTextHit,
-  FullTextStore,
-  HealthProbePort,
-  ImageTaskResult,
-  ImageTrainingProcessorPort,
-  IndexDiff,
-  JobDefinition,
-  JobEnvelope,
-  JobHandler,
-  KnowledgeBaseRepository,
-  KnowledgeBaseSnapshot,
-  KnowledgeItemIndexValue,
-  KnowledgeItemRepository,
-  KnowledgeItemSnapshot,
-  LoggerPort,
-  MigrationRegistryPort,
-  ModelCapability,
-  ModelRegistryPort,
-  MongoIndexManagerPort,
-  MultipartPartReceipt,
-  MultipartPartUpload,
-  Notification,
-  NotificationEvent,
-  NotifyPort,
-  ObjectRef,
-  ObjectStorePort,
-  PageResult,
-  PdfEnhanceProviderPort,
-  PdfResult,
-  PermissionSnapshotValue,
-  PortCallOptions,
-  ProbeResult,
-  ProcessingJobRepository,
-  ProcessingJobSnapshot,
-  ProviderImageQuery,
-  ReconcileResultPort,
-  SBOMGeneratorPort,
-  ServicePorts,
-  SourceReadRequest,
-  SourceReadResult,
-  SyncResult,
-  TaskEnvelope,
-  TaskResult,
-  TenantContextProvider,
-  TenantQuotaProvider,
-  TrainingProcessorPort,
-  TransferDatasetOwnerPort,
-  UpdateDatasetCollaboratorsPort,
-  VectorController,
-  VectorRecord,
-  VectorSearchHit,
-} from './ports/index';
+  createKnowledgeConnections,
+  createKnowledgeMongoConnection,
+} from './shared/runtime/knowledge-connections';
+export type { KnowledgeConnections } from './shared/runtime/knowledge-connections';
 
 export {
-  KNOWLEDGE_BASE_INVARIANTS,
-  KnowledgeBaseApplicationService,
-  KNOWLEDGE_BASE_JOB_DEFINITIONS,
-  DatasetApiService,
-  MongoKnowledgeBaseRepository,
-  createKnowledgeBaseAdapter,
-  createKnowledgeBaseJobHandler,
-  createKnowledgeBaseRepository,
-  validateKnowledgeBase,
-} from './modules/knowledge-base';
+  KNOWLEDGE_SCHEMA_REGISTRY,
+  ensureKnowledgeCollections,
+  registerKnowledgeModels,
+} from './shared/persistence/schemas/knowledge-index';
 export type {
-  CreateDatasetInput,
-  DatasetApiServiceDeps,
-  DatasetDetailResult,
-  DatasetListQueryInput,
-  DatasetListResult,
-  DatasetSummaryValue,
-  KnowledgeBase,
-  KnowledgeBaseJobHandler,
-  KnowledgeBaseQueryRepository,
-  KnowledgeBaseServiceDeps,
-  ListDatasetsInput,
-} from './modules/knowledge-base';
+  KnowledgeRegisteredModels,
+  KnowledgeSchemaEntry,
+} from './shared/persistence/schemas/knowledge-index';
+export { workspaceCasUpdate } from './shared/persistence/knowledge/cas';
+export {
+  createKnowledgeOutboxEvent,
+  KnowledgeOutboxDispatcher,
+} from './shared/persistence/knowledge/outbox';
+export type { CreateKnowledgeOutboxEventInput } from './shared/persistence/knowledge/outbox';
+export {
+  objectIdOf,
+  requireWorkspaceId,
+  tenantError,
+  workspaceFilter,
+  workspaceScopedModel,
+} from './shared/persistence/knowledge/tenant';
+export type { TenantContext, WorkspaceFields } from './shared/persistence/knowledge/tenant';
+export {
+  KNOWLEDGE_VECTOR_PROFILES,
+  PGVECTOR_DDL_STATEMENTS,
+  KnowledgeVectorRepository,
+  ensurePgvectorDdl,
+  vectorProfileOfDimension,
+} from './shared/persistence/pgvector';
+export type {
+  KnowledgeVectorHit,
+  KnowledgeVectorRecordInput,
+  KnowledgeVectorSearchInput,
+  VectorDimension,
+  VectorProfile,
+  VectorStorageType,
+} from './shared/persistence/pgvector';
+export { withMongoTransaction } from './shared/persistence/with-mongo-transaction';
 
 export {
-  SOURCE_COLLECTION_INVARIANTS,
-  SourceCollectionApplicationService,
-  SourceProviderRegistry,
-  SOURCE_COLLECTION_JOB_DEFINITIONS,
-  ImportSourceService,
-  createSourceCollectionAdapter,
-  createSourceCollectionJobHandler,
-  createSourceCollectionRepository,
-  createSourceProviderRegistry,
-  validateSourceCollection,
-} from './modules/collection';
+  KnowledgeApplication,
+  KnowledgeAccessRepository,
+  KnowledgeCatalogRepository,
+  KnowledgeJobRepository,
+  KnowledgeTagRepository,
+} from './modules/knowledge';
 export type {
-  FileParserLike,
-  ImportSourceServiceDeps,
-  SourceCollection,
-  SourceCollectionJobHandler,
-  SourceCollectionServiceDeps,
-  SourceProviderRegistryDeps,
-} from './modules/collection';
-
+  AclResourceType,
+  CreateDirectoryInput,
+  CreateSegmentInput,
+  CreateSourceInput,
+  CreateSpaceInput,
+  JobState,
+  KnowledgeOperationInput,
+  KnowledgeOperationResult,
+  PermissionLevel,
+  SourcePermissionAction,
+  SourcePermissionState,
+} from './modules/knowledge';
 export {
-  KNOWLEDGE_ITEM_INVARIANTS,
-  KnowledgeItemApplicationService,
-  KNOWLEDGE_ITEM_JOB_DEFINITIONS,
-  InsertDataService,
-  createKnowledgeItemAdapter,
-  createKnowledgeItemJobHandler,
-  createKnowledgeItemRepository,
-  validateKnowledgeItem,
-} from './modules/item';
+  KnowledgeMockAuthProvider,
+  tenantContextOf,
+} from './modules/knowledge/adapter/auth.adapter';
 export type {
-  InsertDataServiceDeps,
-  KnowledgeItem,
-  KnowledgeItemJobHandler,
-  KnowledgeItemServiceDeps,
-} from './modules/item';
-
+  KnowledgeAuthInput,
+  KnowledgeSubject,
+} from './modules/knowledge/adapter/auth.adapter';
+export { RedisKnowledgeRateLimiter } from './modules/knowledge/adapter/rate-limit.adapter';
+export type { KnowledgeRateLimitDecision } from './modules/knowledge/adapter/rate-limit.adapter';
 export {
-  EMBEDDING_DIMENSION,
-  EmbeddingService,
-  KNOWLEDGE_ITEM_INDEX_INVARIANTS,
-  IndexApplicationService,
-  KNOWLEDGE_ITEM_INDEX_JOB_DEFINITIONS,
-  createKnowledgeItemIndexAdapter,
-  createKnowledgeItemIndexJobHandler,
-  createKnowledgeItemIndexRepository,
-  createUnimplementedEmbeddingGateway,
-  validateKnowledgeItemIndex,
-} from './modules/index';
-export type {
-  EmbeddingGateway,
-  EmbeddingRequest,
-  EmbeddingServiceDeps,
-  IndexServiceDeps,
-  KnowledgeItemIndex,
-  KnowledgeItemIndexJobHandler,
-} from './modules/index';
-
-export {
-  PROCESSING_JOB_INVARIANTS,
-  ProcessingApplicationService,
-  PROCESSING_JOB_JOB_DEFINITIONS,
-  PushDataService,
-  createProcessingJobAdapter,
-  createProcessingJobJobHandler,
-  createProcessingJobRepository,
-  validateProcessingJob,
-} from './modules/processing';
-export type {
-  ProcessingJob,
-  ProcessingJobJobHandler,
-  ProcessingServiceDeps,
-  PushDataServiceDeps,
-} from './modules/processing';
-
-export {
-  DATASET_ACL_INVARIANTS,
-  PermissionApplicationService,
-  DATASET_ACL_JOB_DEFINITIONS,
-  createDatasetAclAdapter,
-  createDatasetAclJobHandler,
-  createDatasetAclRepository,
-  validateDatasetAcl,
-} from './modules/permission';
-export type { DatasetAcl, DatasetAclJobHandler, PermissionServiceDeps } from './modules/permission';
-
-export {
-  DELETE_JOB_INVARIANTS,
-  DeleteApplicationService,
-  DELETE_JOB_JOB_DEFINITIONS,
-  createDeleteJobAdapter,
-  createDeleteJobJobHandler,
-  createDeleteJobRepository,
-  validateDeleteJob,
-} from './modules/delete';
-export type { DeleteJob, DeleteJobJobHandler, DeleteServiceDeps } from './modules/delete';
-
-export {
-  MIGRATION_RUN_INVARIANTS,
-  MigrationApplicationService,
-  MIGRATION_RUN_JOB_DEFINITIONS,
-  createMigrationRunAdapter,
-  createMigrationRunJobHandler,
-  createMigrationRunRepository,
-  validateMigrationRun,
-} from './modules/migration';
-export type {
-  MigrationRun,
-  MigrationRunJobHandler,
-  MigrationServiceDeps,
-} from './modules/migration';
-
-export { createAuditAdapter, createUsageAdapter, createTrackAdapter } from './shared/observability';
-export type { AuditAdapterDeps, UsageAdapterDeps, TrackAdapterDeps } from './shared/observability';
-
-export { CollaboratorService, OwnerTransferService } from './modules/permission';
-export type {
-  CollaboratorServiceDeps,
-  OwnerTransferServiceDeps,
-  OwnerTransferStore,
-} from './modules/permission';
-
-export { createArchiveStatusAdapter } from './shared/runtime/archive-status.adapter';
-export { createFailureQueryAdapter } from './shared/runtime/failure-query.adapter';
+  createConsoleSession,
+  verifyConsoleSession,
+} from './modules/knowledge/adapter/console-session';
+export type { ConsoleSessionPayload } from './modules/knowledge/adapter/console-session';

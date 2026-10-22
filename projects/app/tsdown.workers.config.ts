@@ -8,7 +8,7 @@ import { defineConfig } from 'tsdown';
  * - 不生成 dts、生成 sourcemap、构建前清理输出目录。
  */
 export default defineConfig({
-  entry: { worker: 'src/runtime/worker.ts' },
+  entry: { worker: 'src/runtime/knowledge-worker.ts' },
   outDir: 'dist/workers',
   format: 'esm',
   platform: 'node',

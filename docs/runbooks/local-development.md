@@ -1,56 +1,88 @@
-# 本地开发 Runbook
+# Local Development Runbook
 
-## 1. 前置
+## Prerequisites
 
-- WSL2 Ubuntu 22.04.5；Node 22.23.2、pnpm 10.33.4、Docker Engine（Docker Desktop WSL 集成）。
-- 依赖安装与升级命令只能由用户在 WSL 执行：`pnpm install`。
+- WSL2 Ubuntu 22.04 with Node 22.23.2, pnpm 10.33.4 and Docker access.
+- Dependency install/update commands are user-owned. Do not run
+  `pnpm install/add/update/remove` unless the user explicitly requests it.
 
-## 2. 启动依赖容器（镜像已本地存在，不触发 pull）
+## Dependencies
 
 ```bash
 cd ~/RAG-agent-platform
-docker compose -f deploy/docker-compose.yml up -d --pull never
+docker compose -f deploy/docker-compose.yml up -d mongo mongo-init redis pgvector minio
 docker compose -f deploy/docker-compose.yml ps
 ```
 
-服务：mongo:5.0.32、redis:7.2-alpine、pgvector:0.8.0-pg15、minio:RELEASE.2025-09-07T16-13-09Z（CN registry 全名，与本地镜像一致）。
+The dependency services expose Mongo replica set `rs0`, Redis AOF, PostgreSQL
+15 with pgvector, and MinIO. The app itself uses port `3010`.
 
-## 3. 配置
+## Configuration
 
-- 应用模板：`projects/app/.env.example`（本地 `.env.local` 为 gitignored 开发值）。
-- Compose 模板：`deploy/.env.example`。
-- 业务代码不得直接读取 `process.env`；统一由 `packages/service/src/shared/config` 解析。
+- App template: `projects/app/.env.example`
+- Compose template: `deploy/.env.example`
+- Local `.env.local` is gitignored.
+- Mock auth/external modes are development-only. Production rejects mock auth.
 
-## 4. 开发与探针
+## Development
 
 ```bash
 pnpm dev
-curl -s http://localhost:3000/healthz/live
-curl -s http://localhost:3000/readyz
-curl -s http://localhost:3000/startupz
+curl -fsS http://localhost:3010/healthz
+curl -fsS http://localhost:3010/readyz
 ```
 
-期望：live 200；readyz 在四个依赖健康时 200，必需依赖不可用时 503 且 `checks[].status=failed`；startupz 初始化完成 200，否则 503。
+Successful probes use the frozen envelope and return the `HealthStatus` object
+under `data`. A failed readiness dependency returns 503 with a
+`KNOWLEDGE_DEPENDENCY_UNAVAILABLE` Problem, never a fake 200.
 
-## 5. 页面
+## Base Pages
 
-- `/dataset/list`：知识库列表与创建。
-- `/dataset/detail/<datasetId>`：基础信息、集合/数据计数、搜索测试与降级阶段展示。
+```text
+/spaces
+/spaces/new
+/spaces/[spaceId]/overview
+/spaces/[spaceId]/sources
+/spaces/[spaceId]/segments
+/spaces/[spaceId]/tags
+/spaces/[spaceId]/access
+/spaces/[spaceId]/jobs
+/system/status
+```
 
-## 6. 门禁
+Deferred import, search, image, synonym, connector and API-key capabilities are
+not exposed as available console actions.
+
+## Gates
 
 ```bash
-pnpm lint && pnpm format:check && pnpm typecheck
-pnpm architecture:check && pnpm openapi:check && pnpm forbidden-files:check && pnpm license:check
-pnpm test:unit && pnpm test:contract
-pnpm test:integration   # 需要容器
-pnpm test && pnpm build
+pnpm lint
+pnpm format:check
+pnpm typecheck
+pnpm architecture:check
+pnpm forbidden-files:check
+pnpm license:check
+pnpm openapi:check
+pnpm knowledge:inventory
+pnpm knowledge:check-runtime
+pnpm test:unit
+pnpm test:contract
+pnpm test:integration
+pnpm test:tenant
+pnpm test:concurrency
+pnpm test:fault
+pnpm test:e2e
+pnpm build
+pnpm build:workers
 ```
 
-## 7. 停止
+Integration, tenant, concurrency, fault and E2E suites require the four real
+dependencies and the `KB_TEST_*` environment variables documented by CI.
+
+## Stop
 
 ```bash
 docker compose -f deploy/docker-compose.yml down
 ```
 
-如需删除数据卷：`docker compose -f deploy/docker-compose.yml down -v`（不可恢复，需确认）。
+Removing named volumes is destructive and requires explicit confirmation.
