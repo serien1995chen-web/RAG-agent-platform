@@ -1,66 +1,156 @@
-import rawRegistry from './route-registry.data.json';
-import { getErrorMeta } from '../errors/error-catalog';
-import { getDtoSchema, resolveDtoExpression } from '../dataset/registry';
+import deferredData from './deferred-manifest.data.json';
+import fullData from './route-registry.data.json';
+import runtimeData from './runtime-registry.data.json';
+
+export type OperationGroup =
+  | 'system'
+  | 'space'
+  | 'directory'
+  | 'source'
+  | 'segment'
+  | 'tag'
+  | 'access'
+  | 'job'
+  | 'import'
+  | 'connector'
+  | 'upload'
+  | 'file'
+  | 'search'
+  | 'citation'
+  | 'model'
+  | 'api-key'
+  | 'usage'
+  | 'audit'
+  | 'operations'
+  | 'synonym';
+
+export type PlannedStage = 'BASE' | 'F1' | 'F2' | 'F3' | 'F4' | 'F5';
 
 export interface RouteEntry {
-  routeId: string;
+  operationId: string;
   method: string;
   path: string;
-  group: 'core' | 'admin' | 'internal' | 'extension' | 'health';
-  requestDto: string;
-  responseDto: string;
-  errorCodes: number[];
-  implemented: boolean;
-  source: string;
+  group: OperationGroup;
+  requestSchema: string | null;
+  responseSchema: string | null;
+  scopes: string[];
+  idempotent: boolean;
+  rateLimit: string | null;
+  timeoutMs: number | null;
+  audit: boolean;
+  downstreamAllowed: boolean;
+  runtime: boolean;
+  stage: PlannedStage;
+  targetSection: string;
+  accId: string | null;
+  capabilityIds: string[];
 }
 
-/** 设计文档 12.9 共登记 87 条路由（53 + 31 + 3）。 */
-export const ROUTE_REGISTRY: readonly RouteEntry[] =
-  rawRegistry.routes as unknown as readonly RouteEntry[];
+export interface DeferredRouteEntry extends RouteEntry {
+  runtime: false;
+  reason: 'OUT_OF_ARCHITECTURE_BASELINE_RUNTIME_SCOPE';
+}
 
-export const ROUTE_REGISTRY_BY_ID: ReadonlyMap<string, RouteEntry> = new Map(
-  ROUTE_REGISTRY.map((route) => [route.routeId, route]),
+export interface RouteMatch {
+  route: RouteEntry;
+  params: Readonly<Record<string, string>>;
+}
+
+export const TARGET_CONTRACT_COUNTS = fullData.counts;
+export const FULL_ROUTE_REGISTRY = fullData.routes as unknown as readonly RouteEntry[];
+export const RUNTIME_ROUTE_REGISTRY = runtimeData.operations as unknown as readonly RouteEntry[];
+export const DEFERRED_OPERATION_MANIFEST =
+  deferredData.operations as unknown as readonly DeferredRouteEntry[];
+
+export const FULL_ROUTE_REGISTRY_BY_ID: ReadonlyMap<string, RouteEntry> = new Map(
+  FULL_ROUTE_REGISTRY.map((route) => [route.operationId, route]),
 );
 
-export function routeMethods(route: RouteEntry): string[] {
-  return route.method.split('/').map((method) => method.trim().toUpperCase());
+export const RUNTIME_ROUTE_REGISTRY_BY_ID: ReadonlyMap<string, RouteEntry> = new Map(
+  RUNTIME_ROUTE_REGISTRY.map((route) => [route.operationId, route]),
+);
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-/** 路由契约门禁：数量、唯一性、DTO 闭包、错误码登记、未实现语义。 */
+function compileRoutePath(path: string): RegExp {
+  let expression = '';
+  let cursor = 0;
+  for (const match of path.matchAll(/\{([^}]+)\}/g)) {
+    const index = match.index ?? 0;
+    expression += escapeRegExp(path.slice(cursor, index));
+    expression += '([^/]+)';
+    cursor = index + match[0].length;
+  }
+  expression += escapeRegExp(path.slice(cursor));
+  return new RegExp(`^${expression}$`);
+}
+
+const RUNTIME_MATCHERS = RUNTIME_ROUTE_REGISTRY.map((route) => ({
+  route,
+  matcher: compileRoutePath(route.path),
+  params: [...route.path.matchAll(/\{([^}]+)\}/g)].map((match) => match[1] as string),
+}));
+
+export function matchRuntimeRoute(
+  method: string | undefined,
+  rawPath: string,
+): RouteMatch | undefined {
+  const pathname = rawPath.split('?')[0] ?? rawPath;
+  const normalizedMethod = (method ?? 'GET').toUpperCase();
+  for (const candidate of RUNTIME_MATCHERS) {
+    if (candidate.route.method !== normalizedMethod) continue;
+    const match = candidate.matcher.exec(pathname);
+    if (!match) continue;
+    const params: Record<string, string> = {};
+    candidate.params.forEach((name, index) => {
+      params[name] = decodeURIComponent(match[index + 1] ?? '');
+    });
+    return { route: candidate.route, params };
+  }
+  return undefined;
+}
+
 export function validateRouteRegistry(): string[] {
-  const errors: string[] = [];
-  if (ROUTE_REGISTRY.length !== 87) {
-    errors.push(`路由数量应为 87，实际 ${ROUTE_REGISTRY.length}`);
+  const problems: string[] = [];
+  if (FULL_ROUTE_REGISTRY.length !== 120) {
+    problems.push(`完整 registry 应为 120，实际 ${FULL_ROUTE_REGISTRY.length}`);
+  }
+  if (RUNTIME_ROUTE_REGISTRY.length !== 46) {
+    problems.push(`runtime registry 应为 46，实际 ${RUNTIME_ROUTE_REGISTRY.length}`);
+  }
+  if (DEFERRED_OPERATION_MANIFEST.length !== 74) {
+    problems.push(`deferred manifest 应为 74，实际 ${DEFERRED_OPERATION_MANIFEST.length}`);
   }
 
-  const seenIds = new Set<string>();
-  const seenOperations = new Set<string>();
-  for (const route of ROUTE_REGISTRY) {
-    if (seenIds.has(route.routeId)) errors.push(`重复 Route ID: ${route.routeId}`);
-    seenIds.add(route.routeId);
-
-    for (const method of routeMethods(route)) {
-      const operation = `${method} ${route.path}`;
-      if (seenOperations.has(operation)) errors.push(`重复 method+path: ${operation}`);
-      seenOperations.add(operation);
-    }
-
-    for (const expression of [route.requestDto, route.responseDto]) {
-      for (const dtoName of resolveDtoExpression(expression)) {
-        if (!getDtoSchema(dtoName)) {
-          errors.push(`${route.routeId}: DTO 未登记 "${dtoName}"`);
-        }
-      }
-    }
-
-    for (const code of route.errorCodes) {
-      if (!getErrorMeta(code)) errors.push(`${route.routeId}: 错误码未登记 ${code}`);
-    }
-
-    if (!route.implemented && route.errorCodes.length === 0 && route.routeId !== 'API-HEALTH-001') {
-      errors.push(`${route.routeId}: 未实现路由必须声明稳定错误码`);
+  const fullIds = new Set(FULL_ROUTE_REGISTRY.map((route) => route.operationId));
+  const runtimeIds = new Set(RUNTIME_ROUTE_REGISTRY.map((route) => route.operationId));
+  const deferredIds = new Set(DEFERRED_OPERATION_MANIFEST.map((route) => route.operationId));
+  if (fullIds.size !== FULL_ROUTE_REGISTRY.length)
+    problems.push('完整 registry 存在重复 operationId');
+  if (runtimeIds.size !== RUNTIME_ROUTE_REGISTRY.length)
+    problems.push('runtime registry 存在重复 operationId');
+  if (deferredIds.size !== DEFERRED_OPERATION_MANIFEST.length) {
+    problems.push('deferred manifest 存在重复 operationId');
+  }
+  for (const operationId of runtimeIds) {
+    if (deferredIds.has(operationId)) problems.push(`runtime/deferred 交集: ${operationId}`);
+    if (!fullIds.has(operationId)) problems.push(`runtime 缺少完整合同 operation: ${operationId}`);
+  }
+  for (const operationId of deferredIds) {
+    if (!fullIds.has(operationId)) problems.push(`deferred 缺少完整合同 operation: ${operationId}`);
+  }
+  if (runtimeIds.size + deferredIds.size !== fullIds.size) {
+    problems.push('runtime 与 deferred 并未完整覆盖目标合同');
+  }
+  for (const route of DEFERRED_OPERATION_MANIFEST) {
+    if (route.runtime) problems.push(`deferred manifest 误标 runtime: ${route.operationId}`);
+    if (!route.stage) problems.push(`deferred 缺少计划阶段: ${route.operationId}`);
+    if (!route.accId) problems.push(`deferred 缺少 ACC ID: ${route.operationId}`);
+    if (route.targetSection !== '9.2') {
+      problems.push(`deferred 缺少目标设计章节: ${route.operationId}`);
     }
   }
-
-  return errors;
+  return problems;
 }

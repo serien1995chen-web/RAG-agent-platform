@@ -1,340 +1,427 @@
-/**
- * 纯 JS 的 OpenAPI 3.1 组装器（无运行时依赖），供 scripts/*.mjs 与 CI 共用。
- * 数据源：errors/error-catalog.data.json、dataset/dto-registry.data.json、openapi/route-registry.data.json。
- */
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-export function loadContractData(repoRoot) {
-  const base = join(repoRoot, 'packages', 'contracts', 'src');
-  const read = (relativePath) => JSON.parse(readFileSync(join(base, relativePath), 'utf8'));
-  return {
-    routes: read(join('openapi', 'route-registry.data.json')).routes,
-    dtos: read(join('dataset', 'dto-registry.data.json')).dtos,
-    errors: read(join('errors', 'error-catalog.data.json')).errors,
-  };
+export const TARGET_CONTRACT_COUNTS = Object.freeze({
+  paths: 92,
+  operations: 120,
+  schemas: 139,
+  parameters: 8,
+});
+
+/**
+ * The only operations allowed through the baseline runtime dispatcher.
+ * Keep this list human-readable and sorted by the design grouping.
+ */
+export const RUNTIME_OPERATION_IDS = Object.freeze([
+  'API-HEALTH-LIVE',
+  'API-HEALTH-READY',
+  'API-OPENAPI',
+  'API-OPS-STATUS',
+  'API-SPACE-LIST',
+  'API-SPACE-CREATE',
+  'API-SPACE-GET',
+  'API-SPACE-UPDATE',
+  'API-SPACE-DELETE',
+  'API-DIRECTORY-LIST',
+  'API-DIRECTORY-CREATE',
+  'API-DIRECTORY-GET',
+  'API-DIRECTORY-UPDATE',
+  'API-DIRECTORY-DELETE',
+  'API-SOURCE-LIST',
+  'API-SOURCE-CREATE',
+  'API-SOURCE-GET',
+  'API-SOURCE-UPDATE',
+  'API-SOURCE-DELETE',
+  'API-SEGMENT-LIST',
+  'API-SEGMENT-CREATE',
+  'API-SEGMENT-GET',
+  'API-SEGMENT-UPDATE',
+  'API-SEGMENT-DELETE',
+  'API-TAG-LIST',
+  'API-TAG-CREATE',
+  'API-TAG-GET',
+  'API-TAG-UPDATE',
+  'API-TAG-DELETE',
+  'API-TAG-VALUES',
+  'API-TAG-APPLY',
+  'API-ACL-GET',
+  'API-ACL-UPDATE',
+  'API-ACL-RESUME',
+  'API-COLLABORATOR-LIST',
+  'API-COLLABORATOR-CREATE',
+  'API-COLLABORATOR-UPDATE',
+  'API-COLLABORATOR-DELETE',
+  'API-PERMISSION-ENABLE',
+  'API-PERMISSION-DISABLE',
+  'API-PERMISSION-DETACH',
+  'API-PERMISSION-RESUME',
+  'API-OWNERSHIP-TRANSFER',
+  'API-RESOURCE-OWNERSHIP-TRANSFER',
+  'API-JOB-LIST',
+  'API-JOB-GET',
+]);
+
+const HTTP_METHODS = new Set(['get', 'post', 'put', 'patch', 'delete', 'options', 'head', 'trace']);
+const IDEMPOTENCY_HEADER = 'Idempotency-Key';
+
+function own(value, key) {
+  return value !== null && typeof value === 'object' && Object.hasOwn(value, key);
 }
 
-export const DERIVED_DTO_NAMES = ['ModelReference'];
-export const BUILTIN_DTO_NAMES = [
-  'ApiResponse<T>',
-  'JsonValue',
-  'MetadataMap',
-  'ErrorParams',
-  'ModelReference',
-];
-
-function normalizeFieldText(text) {
-  return text.replace(/（/g, '(').replace(/）/g, ')').replace(/，/g, ',').replace(/；/g, ';');
+function resolveSchemaName(schema) {
+  if (!schema || typeof schema !== 'object') return null;
+  if (typeof schema.$ref === 'string') return schema.$ref.split('/').at(-1) ?? null;
+  if (
+    schema.type === 'object' &&
+    own(schema.properties, 'data') &&
+    typeof schema.properties.data.$ref === 'string'
+  ) {
+    return schema.properties.data.$ref.split('/').at(-1) ?? null;
+  }
+  return null;
 }
 
-function splitTopLevel(text, separator) {
-  const parts = [];
-  let depth = 0;
-  let current = '';
-  for (const char of text) {
-    if (char === '(' || char === '[' || char === '{') depth += 1;
-    else if (char === ')' || char === ']' || char === '}') depth -= 1;
-    if (char === separator && depth === 0) {
-      parts.push(current);
-      current = '';
-    } else {
-      current += char;
+function requestSchemaOf(operation) {
+  const schema = operation.requestBody?.content?.['application/json']?.schema;
+  return resolveSchemaName(schema);
+}
+
+function responseSchemaOf(operation) {
+  const status = Object.keys(operation.responses ?? {}).find((code) => /^2\d\d$/.test(code));
+  const schema =
+    status === undefined
+      ? undefined
+      : operation.responses[status]?.content?.['application/json']?.schema;
+  return resolveSchemaName(schema);
+}
+
+function operationEntries(document) {
+  const entries = [];
+  for (const [path, pathItem] of Object.entries(document.paths ?? {})) {
+    for (const [method, operation] of Object.entries(pathItem ?? {})) {
+      if (!HTTP_METHODS.has(method)) continue;
+      entries.push({ path, method: method.toUpperCase(), operation });
     }
   }
-  parts.push(current);
-  return parts;
+  return entries.sort((left, right) => {
+    const byPath = left.path.localeCompare(right.path);
+    return byPath === 0 ? left.method.localeCompare(right.method) : byPath;
+  });
 }
 
-function parseFields(fieldsText) {
-  return splitTopLevel(normalizeFieldText(fieldsText), ';')
-    .map((rawField) => {
-      const trimmed = rawField.trim();
-      const colon = trimmed.indexOf(':');
-      if (colon === -1) return null;
-      let name = trimmed.slice(0, colon).trim();
-      let rest = trimmed.slice(colon + 1).trim();
-      const optional = name.endsWith('?');
-      if (optional) name = name.slice(0, -1).trim();
-      const defaultMatch = rest.match(/=([A-Za-z0-9_.-]+)/);
-      const defaultValue = defaultMatch?.[1];
-      if (defaultMatch) rest = rest.replace(defaultMatch[0], '');
-      let enumValues = null;
-      const enumMatch = rest.match(/enum\(([^)]*)\)/);
-      if (enumMatch?.[1] !== undefined) {
-        enumValues = enumMatch[1]
-          .split(',')
-          .map((value) => value.trim())
-          .filter(Boolean);
-        while (
-          enumValues.length > 0 &&
-          ['required', 'optional', 'null'].includes(enumValues[enumValues.length - 1])
-        ) {
-          enumValues.pop();
-        }
-        rest = rest.replace(enumMatch[0], '');
-      }
-      const typeMatch = rest.trim().match(/^([A-Za-z][A-Za-z0-9_.]*)(\[\])?/);
-      const constraints = [...rest.matchAll(/\(([^()]*)\)/g)].map((match) => match[1]).join(',');
-      return {
-        name,
-        type: typeMatch ? `${typeMatch[1]}${typeMatch[2] ?? ''}` : enumMatch ? 'enum' : rest.trim(),
-        required: !optional && !/optional/.test(constraints) && defaultValue === undefined,
-        nullable: /\|null\b/.test(rest) || /\bnull\b/.test(constraints),
-        defaultValue,
-        enumValues,
-        restrictions:
-          constraints.includes('≤') || constraints.includes('≥') || /\d-\d/.test(constraints)
-            ? constraints
-            : '',
-      };
-    })
-    .filter(Boolean);
-}
-
-function jsonSchemaType(type, dtoNames) {
-  if (type.endsWith('[]')) {
-    return { type: 'array', items: jsonSchemaType(type.slice(0, -2), dtoNames) };
+function groupOf(operationId) {
+  if (/^API-(HEALTH|OPENAPI|OPS-STATUS)/.test(operationId)) return 'system';
+  if (operationId.startsWith('API-SPACE-')) return 'space';
+  if (operationId.startsWith('API-DIRECTORY-')) return 'directory';
+  if (operationId.startsWith('API-SOURCE-')) return 'source';
+  if (operationId.startsWith('API-SEGMENT-')) return 'segment';
+  if (operationId.startsWith('API-TAG-')) return 'tag';
+  if (/^API-(ACL|COLLABORATOR|OWNERSHIP|PERMISSION|RESOURCE-OWNERSHIP)/.test(operationId)) {
+    return 'access';
   }
-  if (dtoNames.has(type)) return { $ref: `#/components/schemas/${type}` };
-  switch (type) {
-    case 'string':
-    case 'enum':
-      return { type: 'string' };
-    case 'int':
-      return { type: 'integer' };
-    case 'number':
-      return { type: 'number' };
-    case 'bool':
-    case 'boolean':
-      return { type: 'boolean' };
-    case 'binary':
-      return { type: 'string', format: 'binary' };
-    case 'date':
-    case 'Date':
-      return { type: 'string', format: 'date-time' };
-    case 'ObjectId':
-      return { type: 'string', pattern: '^[0-9a-fA-F]{24}$' };
-    case 'JsonValue':
-    case 'MetadataMap':
-    case 'ErrorParams':
-      return {};
-    default:
-      return {};
-  }
+  if (operationId.startsWith('API-JOB-')) return 'job';
+  if (operationId.startsWith('API-IMPORT-')) return 'import';
+  if (operationId.startsWith('API-CONNECTOR-')) return 'connector';
+  if (operationId.startsWith('API-UPLOAD-')) return 'upload';
+  if (operationId.startsWith('API-FILE-')) return 'file';
+  if (operationId.startsWith('API-SEARCH-')) return 'search';
+  if (operationId.startsWith('API-CITATION-')) return 'citation';
+  if (operationId.startsWith('API-MODEL-')) return 'model';
+  if (operationId.startsWith('API-APIKEY-')) return 'api-key';
+  if (operationId.startsWith('API-USAGE-')) return 'usage';
+  if (operationId.startsWith('API-AUDIT-')) return 'audit';
+  if (operationId.startsWith('API-OPS-')) return 'operations';
+  if (operationId.startsWith('API-SYNONYM-')) return 'synonym';
+  return 'unknown';
 }
 
-function dtoJsonSchema(dto, dtoNames) {
-  const properties = {};
-  const required = [];
-  for (const field of parseFields(dto.fields)) {
-    const schema = jsonSchemaType(field.type, dtoNames);
-    if (field.enumValues?.length) schema.enum = field.enumValues;
-    if (field.defaultValue !== undefined) {
-      schema.default =
-        field.defaultValue === 'true'
-          ? true
-          : field.defaultValue === 'false'
-            ? false
-            : Number.isNaN(Number(field.defaultValue))
-              ? field.defaultValue
-              : Number(field.defaultValue);
+function stageOf(operationId) {
+  if (
+    /^API-(IMPORT|CONNECTOR|UPLOAD|FILE)-/.test(operationId) ||
+    /^API-(SPACE-(REFERENCES|MOVE|BATCH|EXPORT)|DIRECTORY-MOVE|SOURCE-(MOVE|BATCH|PREVIEW|DOWNLOAD|ARCHIVE))$/.test(
+      operationId,
+    )
+  ) {
+    return 'F1';
+  }
+  if (
+    /^API-(SEGMENT-(BATCH|INDEX|HISTORY|REINDEX)|JOB-|MODEL-)/.test(operationId) ||
+    operationId === 'API-JOB-CREATE'
+  ) {
+    return 'F2';
+  }
+  if (/^API-(SEARCH|CITATION)-/.test(operationId)) return 'F3';
+  if (
+    /^API-(APIKEY|USAGE|AUDIT|SYNONYM)-/.test(operationId) ||
+    /^API-OPS-(CLEANUP|RECONCILE|OUTBOX-REPLAY)$/.test(operationId)
+  ) {
+    return 'F4';
+  }
+  return 'BASE';
+}
+
+function capabilityIdsOf(operationId) {
+  if (operationId === 'API-OPENAPI' || operationId.startsWith('API-APIKEY-')) {
+    return ['API-001', 'API-003'];
+  }
+  if (operationId === 'API-OPS-STATUS') return ['OPS-005', 'OPS-001'];
+  if (operationId.startsWith('API-HEALTH-')) return ['OPS-005'];
+  if (operationId.startsWith('API-SPACE-')) {
+    return [
+      'KB-001',
+      ...(/MOVE|BATCH|EXPORT/.test(operationId) ? ['KB-003'] : []),
+      ...(operationId.endsWith('REFERENCES') ? ['KB-002'] : []),
+    ];
+  }
+  if (operationId.startsWith('API-DIRECTORY-') || operationId.startsWith('API-SOURCE-')) {
+    return [
+      'COL-001',
+      ...(/MOVE|BATCH|SYNC|REBUILD|PREVIEW|DOWNLOAD|ARCHIVE/.test(operationId) ? ['COL-002'] : []),
+      'COL-004',
+    ];
+  }
+  if (operationId.startsWith('API-SEGMENT-')) {
+    return [
+      'DATA-001',
+      ...(/INDEX|HISTORY|REINDEX|BATCH/.test(operationId) ? ['DATA-002', 'DATA-003'] : []),
+      ...(/CREATE|BATCH/.test(operationId) ? ['DATA-004'] : []),
+      ...(/INDEX|REINDEX|HISTORY/.test(operationId) ? ['TRAIN-002', 'TRAIN-003', 'TRAIN-004'] : []),
+    ];
+  }
+  if (operationId.startsWith('API-TAG-')) return ['COL-003'];
+  if (/^API-(ACL|COLLABORATOR|OWNERSHIP|PERMISSION|RESOURCE-OWNERSHIP)/.test(operationId)) {
+    return ['AUTH-001', 'AUTH-002', 'AUTH-003', 'AUTH-004'];
+  }
+  if (operationId.startsWith('API-JOB-')) return ['TRAIN-001', 'TRAIN-005', 'TRAIN-007'];
+  if (operationId.startsWith('API-IMPORT-')) {
+    const parse = ['PARSE-001', 'PARSE-002', 'PARSE-003', 'PARSE-004', 'PARSE-005'];
+    if (operationId.endsWith('FILES')) return ['ING-001', 'FILE-001', ...parse];
+    if (operationId.endsWith('TEXT')) return ['ING-002', 'DOWN-004', ...parse];
+    if (operationId.endsWith('URL')) return ['ING-003', ...parse];
+    if (operationId.endsWith('TEMPLATE')) return ['ING-004', ...parse];
+    if (operationId.endsWith('BACKUP')) return ['ING-005', ...parse];
+    return ['ING-006', 'API-002', ...parse];
+  }
+  if (operationId.startsWith('API-CONNECTOR-')) {
+    if (operationId.includes('GET') || operationId.includes('CATALOG')) {
+      return ['ING-007', 'ING-008', 'ING-009', 'OPS-005'];
     }
-    if (field.nullable)
-      schema.type = Array.isArray(schema.type)
-        ? [...schema.type, 'null']
-        : [schema.type ?? 'object', 'null'];
-    if (field.restrictions) schema['x-kb-constraints'] = field.restrictions;
-    properties[field.name] = schema;
-    if (field.required) required.push(field.name);
+    return ['ING-007', 'ING-008', 'ING-009'];
   }
-  return {
-    type: 'object',
-    properties,
-    ...(required.length > 0 ? { required } : {}),
-    'x-kb-dto': dto.name,
-    'x-kb-field-spec': dto.fields,
-  };
+  if (operationId.startsWith('API-UPLOAD-')) return ['FILE-001', 'FILE-002'];
+  if (operationId.startsWith('API-FILE-')) return ['FILE-003', 'FILE-004'];
+  if (operationId.startsWith('API-SEARCH-')) {
+    if (operationId.endsWith('SEMANTIC')) return ['SEARCH-001', 'DOWN-002'];
+    if (operationId.endsWith('FULLTEXT')) return ['SEARCH-002', 'SEARCH-005'];
+    if (operationId.endsWith('HYBRID')) {
+      return ['SEARCH-002', 'SEARCH-005', 'SEARCH-004', 'DOWN-001', 'DOWN-003'];
+    }
+    if (operationId.endsWith('IMAGE')) return ['SEARCH-006', 'MULTI-001', 'DOWN-002'];
+    if (operationId.endsWith('MULTI')) return ['SEARCH-005', 'SEARCH-007', 'DOWN-001'];
+    return ['SEARCH-008'];
+  }
+  if (operationId.startsWith('API-CITATION-')) return ['SEARCH-009', 'DOWN-003'];
+  if (operationId.startsWith('API-MODEL-')) {
+    return ['MODEL-001', 'MODEL-002', 'MODEL-003', 'MODEL-004', 'MODEL-005', 'MODEL-006'];
+  }
+  if (operationId.startsWith('API-USAGE-')) return ['OPS-001', 'OPS-002'];
+  if (operationId.startsWith('API-AUDIT-')) return ['OPS-003'];
+  if (operationId.startsWith('API-OPS-')) return ['OPS-004', 'FILE-005'];
+  if (operationId.startsWith('API-SYNONYM-')) return ['SEARCH-003', 'TRAIN-006'];
+  return [];
 }
 
-function responseRef(expression) {
-  const unwrapped = expression
-    .replace(/^ApiResponse<(.+)>$/s, '$1')
-    .replace(/\[\]/g, '')
-    .trim();
-  return { $ref: `#/components/schemas/${unwrapped}` };
+function scopesOf(operation) {
+  const scope = operation['x-required-scope'];
+  return typeof scope === 'string' && scope.length > 0 ? [scope] : [];
 }
 
-export function buildOpenApiDocument(repoRoot) {
-  const { routes, dtos, errors } = loadContractData(repoRoot);
-  const errorByCode = new Map(errors.map((error) => [error.code, error]));
-  const dtoNames = new Set([...dtos.map((dto) => dto.name), ...DERIVED_DTO_NAMES, 'ApiError']);
+function idempotencyOf(operation) {
+  return (operation.parameters ?? []).some(
+    (parameter) => parameter?.name === IDEMPOTENCY_HEADER && parameter.required === true,
+  );
+}
 
-  const schemas = {
-    ApiError: {
-      type: 'object',
-      required: [
-        'code',
-        'statusText',
-        'messageKey',
-        'params',
-        'message',
-        'errorType',
-        'retryable',
-        'severity',
-        'requestId',
-      ],
-      properties: {
-        code: { type: 'integer', minimum: 501001, maximum: 501072 },
-        statusText: { type: 'string' },
-        messageKey: { type: 'string' },
-        params: { type: 'object', additionalProperties: true },
-        message: { type: 'string' },
-        errorType: { type: 'string' },
-        retryable: { type: 'string', enum: ['retryable', 'no-retry', 'manual'] },
-        severity: { type: 'string', enum: ['warning', 'error', 'fatal'] },
-        requestId: { type: 'string' },
-        zodError: {},
-      },
-      'x-kb-error-catalog-size': errors.length,
-    },
-    ModelReference: {
-      type: 'object',
-      required: ['provider', 'model', 'dimension'],
-      properties: {
-        provider: { type: 'string' },
-        model: { type: 'string' },
-        dimension: { type: 'integer', enum: [1536] },
-        capability: { type: 'string' },
-      },
-      'x-kb-derived-from': '7.3',
-    },
+export function buildKnowledgeContractArtifacts(repoRoot) {
+  const sourcePath = join(
+    repoRoot,
+    'packages',
+    'contracts',
+    'openapi',
+    'knowledge-target.openapi.json',
+  );
+  const document = JSON.parse(readFileSync(sourcePath, 'utf8'));
+  const entries = operationEntries(document);
+  const actualCounts = {
+    paths: Object.keys(document.paths ?? {}).length,
+    operations: entries.length,
+    schemas: Object.keys(document.components?.schemas ?? {}).length,
+    parameters: Object.keys(document.components?.parameters ?? {}).length,
   };
-
-  for (const dto of dtos) {
-    if (dto.name === 'ApiResponse<T>') continue;
-    schemas[dto.name] = dtoJsonSchema(dto, dtoNames);
+  const problems = [];
+  for (const [key, expected] of Object.entries(TARGET_CONTRACT_COUNTS)) {
+    if (actualCounts[key] !== expected) {
+      problems.push(`${key} 应为 ${expected}，实际 ${actualCounts[key]}`);
+    }
   }
 
-  const paths = {};
-  const tags = new Set();
+  const routes = entries.map(({ path, method, operation }) => {
+    const operationId = operation.operationId;
+    const runtime = RUNTIME_OPERATION_IDS.includes(operationId);
+    const stage = runtime ? 'BASE' : stageOf(operationId);
+    const capabilityIds = capabilityIdsOf(operationId);
+    return {
+      operationId,
+      method,
+      path,
+      group: groupOf(operationId),
+      requestSchema: requestSchemaOf(operation),
+      responseSchema: responseSchemaOf(operation),
+      scopes: scopesOf(operation),
+      idempotent: idempotencyOf(operation),
+      rateLimit: operation['x-rate-limit'] ?? null,
+      timeoutMs: operation['x-timeout-ms'] ?? null,
+      audit: operation['x-audit'] === true,
+      downstreamAllowed: operation['x-downstream-allowed'] === true,
+      runtime,
+      stage,
+      targetSection: '9.2',
+      accId: capabilityIds[0] === undefined ? null : `ACC-CAP-${capabilityIds[0]}`,
+      capabilityIds,
+    };
+  });
+
+  const seen = new Set();
+  const operationKeys = new Set();
   for (const route of routes) {
-    tags.add(route.group);
-    paths[route.path] ??= {};
-    for (const method of route.method.split('/')) {
-      const responses = {};
-      if (route.implemented) {
-        responses['200'] = {
-          description: '骨架期最小实现（真实业务语义在后续阶段实现）',
-          content: { 'application/json': { schema: responseRef(route.responseDto) } },
-        };
-      } else {
-        responses['501'] = {
-          description: '骨架期未实现（SKEL-ADR-007，code=501999）',
-          content: { 'application/json': { schema: { $ref: '#/components/schemas/ApiError' } } },
-        };
-      }
-      for (const code of route.errorCodes) {
-        const meta = errorByCode.get(code);
-        const status = String(meta?.httpStatus ?? 500);
-        responses[status] ??= {
-          description: `${code} ${meta?.messageKey ?? 'unregistered'}`,
-          content: { 'application/json': { schema: { $ref: '#/components/schemas/ApiError' } } },
-        };
-      }
-      paths[route.path][method.toLowerCase()] = {
-        operationId: route.routeId,
-        tags: [route.group],
-        summary: route.source,
-        'x-kb-route-id': route.routeId,
-        'x-kb-request-dto': route.requestDto,
-        'x-kb-response-dto': route.responseDto,
-        'x-kb-error-codes': route.errorCodes,
-        'x-kb-skeleton-implemented': route.implemented,
-        responses,
-      };
-    }
+    if (seen.has(route.operationId)) problems.push(`重复 operationId: ${route.operationId}`);
+    seen.add(route.operationId);
+    const key = `${route.method} ${route.path}`;
+    if (operationKeys.has(key)) problems.push(`重复 method+path: ${key}`);
+    operationKeys.add(key);
   }
 
-  return {
-    openapi: '3.1.0',
-    info: {
-      title: 'RAG-agent-platform Dataset API',
-      version: '0.1.0',
-      description:
-        '由 @kb/contracts 的 12.8.2 DTO 注册表与 12.9 路由注册表生成的骨架版 OpenAPI 3.1 文档。',
-    },
-    servers: [],
-    tags: [...tags].map((name) => ({ name })),
-    paths,
-    components: { schemas },
+  const runtimeRoutes = routes.filter((route) => route.runtime);
+  const runtimeIds = runtimeRoutes.map((route) => route.operationId).sort();
+  const expectedRuntimeIds = [...RUNTIME_OPERATION_IDS].sort();
+  if (runtimeIds.length !== 46) problems.push(`runtime 应为 46，实际 ${runtimeIds.length}`);
+  if (runtimeIds.join('\n') !== expectedRuntimeIds.join('\n')) {
+    problems.push('runtime allowlist 与目标合同 operationId 不一致');
+  }
+
+  const deferredRoutes = routes.filter((route) => !route.runtime);
+  if (deferredRoutes.length !== 74) {
+    problems.push(`deferred 应为 74，实际 ${deferredRoutes.length}`);
+  }
+  if (problems.length > 0) {
+    const error = new Error(problems.join('\n'));
+    error.problems = problems;
+    throw error;
+  }
+
+  const outputDocument = {
+    ...document,
     'x-kb-contract': {
-      generatedFrom: ['12.4', '12.4.1', '12.4.2', '12.8.2', '12.9'],
-      routeCount: routes.length,
-      dtoCount: dtos.length + DERIVED_DTO_NAMES.length,
-      errorCount: errors.length,
-      implementedRoutes: routes.filter((route) => route.implemented).map((route) => route.routeId),
-      unimplementedStatusCode: 501,
-      skeletonErrorCode: 501999,
+      version: '1.0.0',
+      source: document['x-contract-source'],
+      paths: actualCounts.paths,
+      operations: actualCounts.operations,
+      schemas: actualCounts.schemas,
+      parameters: actualCounts.parameters,
+      runtimeOperations: runtimeRoutes.length,
+      deferredOperations: deferredRoutes.length,
+      canonicalCollections: 23,
+      vectorProfiles: 4,
+      canonicalQueues: 13,
     },
   };
+
+  const fullRegistry = {
+    schemaVersion: 1,
+    counts: actualCounts,
+    routes,
+  };
+  const runtimeRegistry = {
+    schemaVersion: 1,
+    count: runtimeRoutes.length,
+    operations: runtimeRoutes,
+  };
+  const deferredManifest = {
+    schemaVersion: 1,
+    count: deferredRoutes.length,
+    status: 'DEFERRED',
+    operations: deferredRoutes.map((route) => ({
+      ...route,
+      runtime: false,
+      reason: 'OUT_OF_ARCHITECTURE_BASELINE_RUNTIME_SCOPE',
+      targetSection: '9.2',
+    })),
+  };
+
+  const schemaNames = Object.keys(document.components?.schemas ?? {}).sort();
+  const clientTypes = `// Generated by pnpm openapi:generate. Do not edit manually.
+export type OperationId =
+${routes.map((route) => `  | '${route.operationId}'`).join('\n')};
+
+export type RuntimeOperationId =
+${runtimeRoutes.map((route) => `  | '${route.operationId}'`).join('\n')};
+
+export type DeferredOperationId =
+${deferredRoutes.map((route) => `  | '${route.operationId}'`).join('\n')};
+
+export type SchemaName =
+${schemaNames.map((name) => `  | '${name}'`).join('\n')};
+
+export interface RuntimeRouteMethodPathMap {
+${runtimeRoutes
+  .map((route) => `  '${route.operationId}': '${route.method} ${route.path}';`)
+  .join('\n')}
 }
 
-export function buildClientTypes(repoRoot) {
-  const { routes, dtos, errors } = loadContractData(repoRoot);
-  const routeIds = routes.map((route) => `'${route.routeId}'`).join(' | ');
-  const dtoNames = [...dtos.map((dto) => dto.name), ...DERIVED_DTO_NAMES]
-    .map((name) => `'${name}'`)
-    .join(' | ');
-  const errorCodes = errors.map((error) => error.code).join(' | ');
-  const methodMap = routes
-    .map((route) => `  '${route.routeId}': '${route.method} ${route.path}';`)
-    .join('\n');
-  return `// 由 pnpm openapi:generate 生成，请勿手工修改。
-export type RouteId = ${routeIds};
-export type DtoName = ${dtoNames};
-export type ErrorCode = ${errorCodes} | 501999;
-export interface RouteMethodPathMap {
-${methodMap}
+export interface DeferredRouteMethodPathMap {
+${deferredRoutes
+  .map((route) => `  '${route.operationId}': '${route.method} ${route.path}';`)
+  .join('\n')}
 }
 `;
+
+  return {
+    actualCounts,
+    document: outputDocument,
+    fullRegistry,
+    runtimeRegistry,
+    deferredManifest,
+    clientTypes,
+  };
+}
+
+export function serializeArtifacts(artifacts) {
+  return {
+    'packages/contracts/openapi/openapi.json': `${JSON.stringify(artifacts.document, null, 2)}\n`,
+    'packages/contracts/openapi/client-types.d.ts': artifacts.clientTypes,
+    'packages/contracts/src/openapi/route-registry.data.json': `${JSON.stringify(
+      artifacts.fullRegistry,
+      null,
+      2,
+    )}\n`,
+    'packages/contracts/src/openapi/runtime-registry.data.json': `${JSON.stringify(
+      artifacts.runtimeRegistry,
+      null,
+      2,
+    )}\n`,
+    'packages/contracts/src/openapi/deferred-manifest.data.json': `${JSON.stringify(
+      artifacts.deferredManifest,
+      null,
+      2,
+    )}\n`,
+  };
 }
 
 export function validateContractClosure(repoRoot) {
-  const { routes, dtos, errors } = loadContractData(repoRoot);
-  const problems = [];
-  if (routes.length !== 87) problems.push(`路由数量应为 87，实际 ${routes.length}`);
-  if (dtos.length !== 198) problems.push(`DTO 表应为 198 行，实际 ${dtos.length}`);
-  if (errors.length !== 72) problems.push(`错误码应为 72 个，实际 ${errors.length}`);
-
-  const dtoNames = new Set([...dtos.map((dto) => dto.name), ...BUILTIN_DTO_NAMES, 'ApiError']);
-  const errorCodes = new Set(errors.map((error) => error.code));
-  const seenIds = new Set();
-  const seenOperations = new Set();
-  for (const route of routes) {
-    if (seenIds.has(route.routeId)) problems.push(`重复 Route ID ${route.routeId}`);
-    seenIds.add(route.routeId);
-    for (const dtoExpression of [route.requestDto, route.responseDto]) {
-      const unwrapped = dtoExpression
-        .replace(/^ApiResponse<(.+)>$/s, '$1')
-        .replace(/\[\]/g, '')
-        .trim();
-      if (!dtoNames.has(unwrapped)) problems.push(`${route.routeId}: DTO 未登记 ${unwrapped}`);
-    }
-    for (const code of route.errorCodes) {
-      if (!errorCodes.has(code)) problems.push(`${route.routeId}: 错误码未登记 ${code}`);
-    }
-    for (const method of route.method.split('/')) {
-      const operation = `${method} ${route.path}`;
-      if (seenOperations.has(operation)) problems.push(`重复 method+path ${operation}`);
-      seenOperations.add(operation);
-    }
-    if (!route.implemented && route.errorCodes.length === 0 && route.routeId !== 'API-HEALTH-001') {
-      problems.push(`${route.routeId}: 未实现路由必须声明错误码`);
-    }
+  try {
+    buildKnowledgeContractArtifacts(repoRoot);
+    return [];
+  } catch (error) {
+    return Array.isArray(error?.problems) ? error.problems : [String(error)];
   }
-  for (const error of errors) {
-    if (!error.paramsSchema) problems.push(`${error.code}: 缺少 params Schema`);
-  }
-  return problems;
 }

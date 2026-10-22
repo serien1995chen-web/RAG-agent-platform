@@ -13,15 +13,12 @@ const nextConfig: NextConfig = {
     '@kb/otel',
     '@kb/web',
   ],
-  // 探针对外路径固定为设计文档 12.9 的 /healthz/live、/readyz、/startupz。
+  // 公开路径与 Next.js pages/api 挂载点之间只保留这一层 rewrite。
   async rewrites() {
     return [
-      { source: '/healthz/live', destination: '/api/healthz/live' },
+      { source: '/healthz', destination: '/api/healthz' },
       { source: '/readyz', destination: '/api/readyz' },
-      { source: '/startupz', destination: '/api/startupz' },
-      // ISSUE-004：扩展 API 在设计文档与 ROUTE_REGISTRY 中写作 /proApi/**，
-      // 但 Next.js 只挂载 pages/api/**。补一层 rewrite 让文档路径可达。
-      { source: '/proApi/:path*', destination: '/api/proApi/:path*' },
+      { source: '/v1/knowledge/:path*', destination: '/api/v1/knowledge/:path*' },
     ];
   },
 };

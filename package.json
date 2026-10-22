@@ -26,6 +26,8 @@
     "test:fault": "vitest run --config test/fault/vitest.config.ts",
     "openapi:generate": "node scripts/generate-openapi.mjs",
     "openapi:check": "node scripts/check-openapi.mjs",
+    "knowledge:inventory": "node scripts/knowledge-inventory.mjs",
+    "knowledge:check-runtime": "node scripts/knowledge-check-runtime.mjs",
     "architecture:check": "node scripts/check-architecture.mjs",
     "forbidden-files:check": "node scripts/check-forbidden-files.mjs",
     "sbom:generate": "node scripts/generate-sbom.mjs",

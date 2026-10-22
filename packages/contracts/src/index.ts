@@ -1,6 +1,5 @@
 /**
- * @kb/contracts — 共享 DTO、Zod Schema、错误码、枚举与 OpenAPI 元数据（CR-REF-03）。
- * 权威来源：设计文档 12.3 / 12.4 / 12.8.2 / 12.9。
+ * @kb/contracts — Knowledge API 合同、运行时 registry 和共享错误。
  */
 export const PACKAGE_NAME = '@kb/contracts' as const;
 
@@ -11,29 +10,42 @@ export {
   MetadataMapSchema,
   ModelReferenceSchema,
   ObjectIdSchema,
+  VECTOR_DIMENSIONS,
 } from './common/primitives';
-export type { JsonValue, ModelReference } from './common/primitives';
+export type { JsonValue, ModelReference, VectorDimension } from './common/primitives';
 
 export {
-  ApiErrorSchema,
-  ErrorFamilySchema,
+  CursorPaginationSchema,
   HealthCheckSchema,
   HealthResponseSchema,
-  NoRequestBodySchema,
-  PaginationSchema,
-  RetryabilitySchema,
-  SeveritySchema,
-  apiResponseSchema,
+  KnowledgeErrorBodySchema,
+  KnowledgeErrorCodeSchema,
+  KnowledgeProblemSchema,
+  knowledgeSuccessSchema,
 } from './common/api-response';
 export type {
-  ApiError,
-  ApiResponse,
-  ErrorFamily,
+  CursorPagination,
   HealthResponse,
-  Pagination,
-  Retryability,
-  Severity,
+  ApiResponse,
+  KnowledgeErrorBody,
+  KnowledgeErrorCode,
+  KnowledgeProblem,
+  KnowledgeResponse,
+  KnowledgeSuccess,
 } from './common/api-response';
+
+export {
+  KNOWLEDGE_ERROR_CATALOG,
+  KNOWLEDGE_ERROR_CODES,
+  KnowledgeApiError,
+  createKnowledgeError,
+  isKnowledgeErrorCode,
+  knowledgeErrorDefinition,
+} from './errors/knowledge-errors';
+export type {
+  CreateKnowledgeErrorInput,
+  KnowledgeErrorDefinition,
+} from './errors/knowledge-errors';
 
 export {
   ERROR_CATALOG,
@@ -87,12 +99,23 @@ export {
 export type { DtoSpec } from './dataset/registry';
 
 export {
-  ROUTE_REGISTRY,
-  ROUTE_REGISTRY_BY_ID,
-  routeMethods,
+  DEFERRED_OPERATION_MANIFEST,
+  FULL_ROUTE_REGISTRY,
+  FULL_ROUTE_REGISTRY_BY_ID,
+  RUNTIME_ROUTE_REGISTRY,
+  RUNTIME_ROUTE_REGISTRY_BY_ID,
+  TARGET_CONTRACT_COUNTS,
+  matchRuntimeRoute,
   validateRouteRegistry,
 } from './openapi/route-registry';
-export type { RouteEntry } from './openapi/route-registry';
+export type {
+  DeferredRouteEntry,
+  OperationGroup,
+  PlannedStage,
+  RouteEntry,
+  RouteMatch,
+} from './openapi/route-registry';
+export { OPENAPI_DOCUMENT } from './openapi/document';
 
 export {
   CitationSchema,

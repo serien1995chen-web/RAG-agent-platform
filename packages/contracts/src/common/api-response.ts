@@ -1,5 +1,10 @@
 import { z } from 'zod';
 
+/** Transitional types for source files scheduled for deletion in the hard cut. */
+export const RetryabilitySchema = z.enum(['retryable', 'no-retry', 'manual']);
+export type Retryability = z.infer<typeof RetryabilitySchema>;
+export const SeveritySchema = z.enum(['warning', 'error', 'fatal']);
+export type Severity = z.infer<typeof SeveritySchema>;
 export const ErrorFamilySchema = z.enum([
   'auth',
   'permission',
@@ -14,14 +19,6 @@ export const ErrorFamilySchema = z.enum([
   'internal',
 ]);
 export type ErrorFamily = z.infer<typeof ErrorFamilySchema>;
-
-export const RetryabilitySchema = z.enum(['retryable', 'no-retry', 'manual']);
-export type Retryability = z.infer<typeof RetryabilitySchema>;
-
-export const SeveritySchema = z.enum(['warning', 'error', 'fatal']);
-export type Severity = z.infer<typeof SeveritySchema>;
-
-/** 设计文档 12.3：字段冻结，旧字段不得删除。 */
 export const ApiErrorSchema = z.object({
   code: z.number().int().positive(),
   statusText: z.string().min(1),
@@ -36,7 +33,7 @@ export const ApiErrorSchema = z.object({
 });
 export type ApiError = z.infer<typeof ApiErrorSchema>;
 
-export type ApiResponse<T> = {
+export interface LegacyApiResponse<T> {
   code: number;
   statusText: string;
   message: string;
@@ -48,46 +45,62 @@ export type ApiResponse<T> = {
   severity: Severity | null;
   requestId: string;
   zodError?: unknown;
-};
+}
 
-export function apiResponseSchema<T extends z.ZodTypeAny>(dataSchema: T) {
+export const KnowledgeErrorCodeSchema = z.string().regex(/^KNOWLEDGE_[A-Z0-9_]+$/);
+export type KnowledgeErrorCode = z.infer<typeof KnowledgeErrorCodeSchema>;
+
+export const KnowledgeErrorBodySchema = z.object({
+  code: KnowledgeErrorCodeSchema,
+  message: z.string().min(1),
+  retryable: z.boolean(),
+  details: z.record(z.string(), z.unknown()),
+});
+export type KnowledgeErrorBody = z.infer<typeof KnowledgeErrorBodySchema>;
+
+export const KnowledgeProblemSchema = z.object({
+  success: z.literal(false),
+  error: KnowledgeErrorBodySchema,
+  traceId: z.string().min(1),
+  requestId: z.string().min(1),
+});
+export type KnowledgeProblem = z.infer<typeof KnowledgeProblemSchema>;
+
+export function knowledgeSuccessSchema<T extends z.ZodTypeAny>(dataSchema: T) {
   return z.object({
-    code: z.number().int(),
-    statusText: z.string(),
-    message: z.string(),
-    messageKey: z.string(),
-    params: z.record(z.string(), z.unknown()),
-    data: dataSchema.nullable(),
-    errorType: ErrorFamilySchema.nullable(),
-    retryable: RetryabilitySchema.nullable(),
-    severity: SeveritySchema.nullable(),
-    requestId: z.string(),
-    zodError: z.unknown().optional(),
+    success: z.literal(true),
+    data: dataSchema,
+    traceId: z.string().min(1),
+    requestId: z.string().min(1),
   });
 }
 
-/** 分页规则（设计文档 12.8.1）：page 与 cursor 互斥，limit 1-100。 */
-export const PaginationSchema = z.object({
-  page: z.number().int().min(1).default(1),
-  cursor: z.string().max(64).optional(),
-  limit: z.number().int().min(1).max(100).default(20),
-  sortBy: z.enum(['updateTime', 'createTime', 'name']).optional(),
-  sortOrder: z.enum(['asc', 'desc']).default('desc'),
+export interface KnowledgeSuccess<T> {
+  success: true;
+  data: T;
+  traceId: string;
+  requestId: string;
+}
+
+export type KnowledgeResponse<T> = KnowledgeSuccess<T> | KnowledgeProblem;
+export type ApiResponse<T> = KnowledgeResponse<T>;
+
+export const CursorPaginationSchema = z.object({
+  cursor: z.string().max(512).optional(),
+  limit: z.number().int().min(1).max(200).default(50),
+  sort: z.string().max(80).optional(),
 });
-export type Pagination = z.infer<typeof PaginationSchema>;
+export type CursorPagination = z.infer<typeof CursorPaginationSchema>;
 
 export const HealthCheckSchema = z.object({
-  name: z.string().min(1).max(64),
-  status: z.enum(['ok', 'degraded', 'failed']),
-  durationMs: z.number().int().min(0),
+  name: z.enum(['mongo', 'redis', 'postgres', 's3', 'iam', 'telemetry']),
+  status: z.enum(['ok', 'degraded', 'down', 'noop']),
+  latencyMs: z.number().int().min(0),
 });
 
-/** 健康探针响应（设计文档 6.9 / 12.9）：不暴露版本、密钥、连接串与租户信息。 */
 export const HealthResponseSchema = z.object({
-  status: z.string().min(1),
+  status: z.enum(['ok', 'degraded', 'down']),
   checks: z.array(HealthCheckSchema),
-  durationMs: z.number().int().min(0),
+  timestamp: z.string().datetime({ offset: true }),
 });
 export type HealthResponse = z.infer<typeof HealthResponseSchema>;
-
-export const NoRequestBodySchema = z.object({});

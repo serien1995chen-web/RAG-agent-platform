@@ -2,8 +2,8 @@ import { z } from 'zod';
 import {
   ApiErrorSchema,
   type ApiError,
-  type ApiResponse,
   type ErrorFamily,
+  type LegacyApiResponse,
   type Retryability,
 } from '../common/api-response';
 import {
@@ -146,7 +146,7 @@ export function classifyRetryableError(error: unknown): Retryability {
   return 'manual';
 }
 
-export function toApiResponse<T>(error: ApiError, data: T | null = null): ApiResponse<T> {
+export function toApiResponse<T>(error: ApiError, data: T | null = null): LegacyApiResponse<T> {
   return {
     code: error.code,
     statusText: error.statusText,
