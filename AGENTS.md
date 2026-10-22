@@ -1,30 +1,68 @@
-# 仓库工作规范（自研）
+# 仓库工作规范（知识库架构基座）
 
-## 权威与边界
+## 权威顺序
 
-1. 权威顺序：设计文档 > 任务书 > 只读参照仓库。参照仓库不得复制源码、函数名、注释、Prompt、目录名、部署文件、环境变量或品牌素材。
-2. 禁止任何 `@fastgpt-*` / `@fastgpt-sdk/*` 运行时依赖（含 anydoc）。
-3. `domain` 不得导入 mongoose/pg/ioredis/bullmq/minio/next/云 SDK；`application` 不得直接拼装存储查询；模块间通过 Port 调用。
-4. Agent、登录、应用、发布渠道只做版本化扩展点，不实现业务逻辑。
-5. 禁止 `websiteDataset`、爬虫、独立 OCR、独立 Worker 容器入口、Outbox/Saga/事件总线、数据库外键与 PostgreSQL RLS。
+1. 用户在当前任务中的明确决策。
+2. `KnowledgeBase-System-Design.md` 1.0.0。
+3. 当前仓库源码、合同、Schema、DDL、队列和测试所反映的真实事实。
+4. 历史设计与 P0-P8 任务书，仅用于解释历史。
+5. FastGPT 只读参照，只用于行为消歧。
 
-## 代码规则
+不得让历史设计、历史任务书或只读参照覆盖当前目标设计。禁止复制 FastGPT
+源码、函数名、注释、Prompt、Schema 原文、目录、部署文件、页面或品牌素材。
+禁止任何 `@fastgpt-*`、`@fastgpt-sdk/*` 或 `@kb-sdk/*` 依赖。
 
-1. 业务代码不得直接读取 `process.env`；唯一入口是 `packages/service/src/shared/config`。
-2. 所有错误必须经统一错误工厂（`createApiError` / `createSkeletonError` / `createInternalError`），禁止 `throw new Error(...)`。
-3. 所有查询必须带 `teamId` 谓词；缺少时抛稳定错误而不是返回空数组。
-4. 版本更新使用 CAS；任务领取使用原子条件更新；异步 Job 先写 Mongo 事实再投递 BullMQ。
-5. 每个 Mongoose Schema 必须通过 `defineIndex(schema, { key, options, deprecated })` 声明索引；禁止字段级 `index/unique` 与直接 `schema.index()`。
-6. 新增字段必须同步 schema、DTO、迁移、索引、TTL、审计与测试。
-7. 前端错误展示只消费 `messageKey` + `params`，不得自行拼接文案。
+## 架构边界
 
-## 命令与门禁
+1. `domain` 不得导入 mongoose、pg、ioredis、bullmq、minio、Next.js 或云 SDK。
+2. `application` 通过 Port 编排用例，不得直接拼装存储查询。
+3. Repository 的所有 find、update、delete、count 和 aggregate 必须强制
+   `workspaceId`；缺少 TenantContext 时稳定拒绝，不得返回空结果。
+4. `knowledge_*` 是唯一 canonical Mongo 集合；`knowledge-*` 是唯一 canonical
+   BullMQ 队列；`/v1/knowledge/*` 与健康检查是唯一公开 API 前缀。
+5. 不保留旧 Dataset alias、双读、双写、旧集合反馈、旧队列或旧数据自动迁移。
+6. Agent、登录、应用和发布渠道只做版本化扩展点，不实现业务逻辑。
+
+## 正确性与一致性
+
+1. 业务代码不得直接读取 `process.env`；唯一入口是
+   `packages/service/src/shared/config`。
+2. 所有业务错误必须经统一错误工厂 `createKnowledgeError` 生成
+   `KNOWLEDGE_*` 合同；禁止数字业务码、`501999`、`not_implemented` 和临时错误码。
+3. 所有资源写入使用 `version` CAS。权限状态或 ACL 主体变化必须递增
+   `permissionRevision` 并写审计事实。
+4. Job 在 Mongo 中保存业务真相；领取、租约、心跳和提交使用
+   `attemptEpoch`/fencing token。BullMQ 只负责投递。
+5. 跨存储副作用的 Outbox 事件必须与业务文档、Job 在同一 Mongo 事务内创建。
+   Outbox dispatcher 负责幂等投递；禁止在事务外投递或生成重复副作用。
+6. 每个 Mongoose Schema 必须通过
+   `defineIndex(schema, { key, options, deprecated })` 声明索引；禁止字段级
+   `index/unique` 与直接调用 `schema.index()`。
+7. 外部 Provider 必须使用判别联合合同，包含 timeout、错误分类、脱敏和 mock。
+   真实凭证未验证时只能标记 `EXTERNAL_UNVERIFIED`，不得称为已联调。
+8. 新增字段必须同步 Schema、DTO、OpenAPI、索引、TTL、审计和测试。
+9. 前端错误展示只消费 `messageKey` + `params`，不得自行拼接后端错误文案。
+
+## 合同与运行时
+
+1. 完整目标合同固定为 92 paths、120 operations、139 schemas。
+2. runtime registry 只允许 46 个已批准 operation。
+3. 其余 74 个 operation 只存在于 deferred manifest；不得注册运行时路由、
+   不得用占位错误伪装、不得在 UI 显示为可用。
+4. 修改合同后必须执行 `pnpm openapi:generate`，再执行
+   `pnpm openapi:check`、`pnpm knowledge:inventory` 和
+   `pnpm knowledge:check-runtime`。
+
+## 依赖与命令
 
 - 依赖安装/升级（`pnpm install|add|update|remove`）只能由用户在 WSL 终端执行。
-- 合并前必须通过：`lint`、`format:check`、`typecheck`、`architecture:check`、`openapi:check`、`forbidden-files:check`、`license:check`、`test:unit`、`test:contract`、`test:integration`、`test`、`build`。
-- 修改契约后必须执行 `pnpm openapi:generate` 并评审快照差异。
+- 新增依赖时先完成 `package.json`/catalog 声明，再停止并给出准确安装命令、
+  预期 lockfile 和继续指令；不得伪造 lockfile。
+- 合并前必须通过验收标准中的静态门禁、真实基础设施测试、租户/并发/故障测试、
+  E2E、应用与 Worker 构建以及 Compose health。
 
 ## 提交纪律
 
-- 工作在 `feat/*` 分支；禁止直接提交 `main`、force push 或改写远端历史。
-- 未经用户明确授权，不得 push、创建 PR 或部署。
+- 架构基座只使用 `feat/kb-architecture-baseline` 单一分支。
+- 禁止直接提交 `main`、force push、reset 远端历史或改写历史。
+- 未经用户明确授权，不得 push、创建 PR、部署或 merge。
