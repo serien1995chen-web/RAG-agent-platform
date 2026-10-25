@@ -19,7 +19,10 @@
     "lint": "eslint src"
   },
   "dependencies": {
+    "@logtape/logtape": "catalog:",
+    "@logtape/pretty": "catalog:",
     "@opentelemetry/api": "catalog:",
+    "@opentelemetry/api-logs": "catalog:",
     "@opentelemetry/exporter-logs-otlp-http": "catalog:",
     "@opentelemetry/exporter-metrics-otlp-http": "catalog:",
     "@opentelemetry/exporter-trace-otlp-http": "catalog:",
@@ -28,7 +31,10 @@
     "@opentelemetry/sdk-metrics": "catalog:",
     "@opentelemetry/sdk-trace-base": "catalog:",
     "@opentelemetry/sdk-trace-node": "catalog:",
-    "pino": "catalog:"
+    "@opentelemetry/semantic-conventions": "catalog:",
+    "pino": "catalog:",
+    "pino-opentelemetry-transport": "catalog:",
+    "winston": "catalog:"
   },
   "devDependencies": {
     "@types/node": "catalog:",

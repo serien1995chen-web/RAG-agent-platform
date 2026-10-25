@@ -1,5 +1,11 @@
 import '@kb/web/styles/knowledge.css';
-import { KnowledgeAppShell, type ShellLocation } from '@kb/web';
+import {
+  KnowledgeAppShell,
+  KnowledgeI18nProvider,
+  KnowledgeQueryProvider,
+  KnowledgeUiProvider,
+  type ShellLocation,
+} from '@kb/web';
 import type { AppProps } from 'next/app';
 import { useRouter } from 'next/router';
 
@@ -10,8 +16,14 @@ export default function App({ Component, pageProps }: AppProps) {
     query: router.query,
   };
   return (
-    <KnowledgeAppShell location={location}>
-      <Component {...pageProps} />
-    </KnowledgeAppShell>
+    <KnowledgeI18nProvider>
+      <KnowledgeUiProvider>
+        <KnowledgeQueryProvider>
+          <KnowledgeAppShell location={location}>
+            <Component {...pageProps} />
+          </KnowledgeAppShell>
+        </KnowledgeQueryProvider>
+      </KnowledgeUiProvider>
+    </KnowledgeI18nProvider>
   );
 }

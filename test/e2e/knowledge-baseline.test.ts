@@ -3,9 +3,12 @@ import { randomUUID } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { join, resolve } from 'node:path';
+import AxeBuilder from '@axe-core/playwright';
+import { chromium } from '@playwright/test';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { registerKnowledgeModels } from '../../packages/service/src/shared/persistence/schemas/knowledge-index';
 import { createKnowledgeConnections } from '../../packages/service/src/shared/runtime/knowledge-connections';
+import { messages } from '../../packages/web/src/i18n/messages';
 
 type JsonObject = Record<string, unknown>;
 
@@ -61,6 +64,14 @@ const openApiDocument = JSON.parse(
 ) as OpenApiDocument;
 const runtimeById = new Map(
   runtimeRegistry.operations.map((operation) => [operation.operationId, operation]),
+);
+const rawMessageKeyPrefixes = [
+  ...new Set(Object.keys(messages['zh-CN']).map((key) => key.slice(0, key.indexOf('.')))),
+];
+const rawMessageKeyPattern = new RegExp(
+  `\\b(?:${rawMessageKeyPrefixes
+    .map((prefix) => prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+    .join('|')})\\.`,
 );
 
 const suffix = randomUUID().replaceAll('-', '').slice(0, 12);
@@ -377,6 +388,24 @@ async function waitForHealth(): Promise<void> {
     await new Promise((resolveWait) => setTimeout(resolveWait, 250));
   }
   throw new Error(`Next server did not become healthy\n${serverOutput}`);
+}
+
+async function consoleCookie(): Promise<string> {
+  const response = await fetch(`${baseUrl}/api/console/session`, {
+    method: 'POST',
+    headers: {
+      authorization: `Bearer ${authToken}`,
+      'x-workspace-id': workspaceId,
+      'content-type': 'application/json',
+    },
+    body: '{}',
+  });
+  expect(response.status).toBe(200);
+  const setCookie = response.headers.get('set-cookie') ?? '';
+  expect(setCookie).toContain('kb_console_session=');
+  expect(setCookie).toContain('HttpOnly');
+  expect(setCookie).toContain('SameSite=Strict');
+  return setCookie.split(';', 1)[0] ?? '';
 }
 
 function captureServerOutput(chunk: Buffer): void {
@@ -847,15 +876,15 @@ describe.sequential('knowledge architecture baseline E2E', () => {
     expect(cookieResponse.status).toBe(200);
 
     const pages: Array<[string, string]> = [
-      ['/spaces', 'Knowledge spaces'],
-      ['/spaces/new', 'New knowledge space'],
-      [`/spaces/${requiredId(scenario.spaceId, 'spaceId')}/overview`, 'Space overview'],
-      [`/spaces/${requiredId(scenario.spaceId, 'spaceId')}/sources`, 'Sources'],
-      [`/spaces/${requiredId(scenario.spaceId, 'spaceId')}/segments`, 'Segments'],
-      [`/spaces/${requiredId(scenario.spaceId, 'spaceId')}/tags`, 'Tags'],
-      [`/spaces/${requiredId(scenario.spaceId, 'spaceId')}/access`, 'Access'],
-      [`/spaces/${requiredId(scenario.spaceId, 'spaceId')}/jobs`, 'Jobs'],
-      ['/system/status', 'System status'],
+      ['/spaces', '知识空间'],
+      ['/spaces/new', '新建知识空间'],
+      [`/spaces/${requiredId(scenario.spaceId, 'spaceId')}/overview`, '空间概览'],
+      [`/spaces/${requiredId(scenario.spaceId, 'spaceId')}/sources`, '来源'],
+      [`/spaces/${requiredId(scenario.spaceId, 'spaceId')}/segments`, '分段'],
+      [`/spaces/${requiredId(scenario.spaceId, 'spaceId')}/tags`, '标签'],
+      [`/spaces/${requiredId(scenario.spaceId, 'spaceId')}/access`, '访问权限'],
+      [`/spaces/${requiredId(scenario.spaceId, 'spaceId')}/jobs`, '任务'],
+      ['/system/status', '系统状态'],
     ];
     for (const [path, title] of pages) {
       const response = await fetch(`${baseUrl}${path}`, {
@@ -865,8 +894,9 @@ describe.sequential('knowledge architecture baseline E2E', () => {
       expect(response.status, path).toBe(200);
       expect(response.headers.get('content-type'), path).toContain('text/html');
       const html = await response.text();
-      expect(html, path).toMatch(new RegExp(`<title[^>]*>${title}</title>`));
-      expect(html, path).toContain('<html lang="en">');
+      expect(html, path).toContain('<title');
+      expect(html, path).toContain(title);
+      expect(html, path).toContain('<html lang="zh-CN">');
       expect(html, path).toContain('href="#knowledge-main"');
       expect(html, path).toContain('id="knowledge-main"');
       expect((html.match(/<h1\b/g) ?? []).length, `${path} h1 count`).toBe(1);
@@ -874,6 +904,671 @@ describe.sequential('knowledge architecture baseline E2E', () => {
       expect(html, path).not.toContain('/api/core/dataset');
       expect(html, path).not.toContain('/api/internal/dataset');
       expect(html, path).not.toContain('/proApi/core/dataset');
+    }
+  });
+
+  it('renders nine pages at three viewports with accessible shell geometry and axe', async () => {
+    const cookie = await consoleCookie();
+    const separator = cookie.indexOf('=');
+    const cookieName = separator > 0 ? cookie.slice(0, separator) : '';
+    const cookieValue = separator > 0 ? cookie.slice(separator + 1) : '';
+    if (!cookieName || !cookieValue) throw new Error('console cookie was not initialized');
+    const browser = await chromium.launch({ headless: true });
+    const viewports = [
+      { name: 'mobile', width: 360, height: 800 },
+      { name: 'tablet', width: 768, height: 1024 },
+      { name: 'desktop', width: 1200, height: 900 },
+    ];
+    const pages = [
+      '/spaces',
+      '/spaces/new',
+      `/spaces/${requiredId(scenario.spaceId, 'spaceId')}/overview`,
+      `/spaces/${requiredId(scenario.spaceId, 'spaceId')}/sources`,
+      `/spaces/${requiredId(scenario.spaceId, 'spaceId')}/segments`,
+      `/spaces/${requiredId(scenario.spaceId, 'spaceId')}/tags`,
+      `/spaces/${requiredId(scenario.spaceId, 'spaceId')}/access`,
+      `/spaces/${requiredId(scenario.spaceId, 'spaceId')}/jobs`,
+      '/system/status',
+    ];
+
+    try {
+      for (const viewport of viewports) {
+        const context = await browser.newContext({
+          viewport: { width: viewport.width, height: viewport.height },
+        });
+        await context.addCookies([
+          {
+            name: cookieName,
+            value: cookieValue,
+            domain: '127.0.0.1',
+            path: '/',
+            sameSite: 'Strict',
+          },
+        ]);
+        for (const path of pages) {
+          const page = await context.newPage();
+          const consoleErrors: string[] = [];
+          const pageErrors: string[] = [];
+          const networkErrors: string[] = [];
+          page.on('console', (message) => {
+            if (message.type() === 'error') consoleErrors.push(message.text());
+          });
+          page.on('pageerror', (error) => pageErrors.push(error.message));
+          page.on('requestfailed', (request) => {
+            networkErrors.push(
+              `${request.method()} ${request.url()} ${request.failure()?.errorText ?? 'failed'}`,
+            );
+          });
+          page.on('response', (response) => {
+            if (response.status() >= 400) {
+              networkErrors.push(
+                `${response.request().method()} ${response.url()} ${response.status()}`,
+              );
+            }
+          });
+
+          const response = await page.goto(`${baseUrl}${path}`, {
+            waitUntil: 'networkidle',
+            timeout: 30_000,
+          });
+          expect(response?.status(), `${viewport.name} ${path} status`).toBe(200);
+          await page.locator('h1').waitFor({ state: 'visible' });
+          expect(await page.locator('h1').count(), `${viewport.name} ${path} h1`).toBe(1);
+          expect(
+            await page.locator('a[href="#knowledge-main"]').count(),
+            `${viewport.name} ${path} skip link`,
+          ).toBeGreaterThan(0);
+          expect(
+            await page.locator('#knowledge-main').count(),
+            `${viewport.name} ${path} main`,
+          ).toBe(1);
+
+          const geometry = await page.evaluate(() => {
+            const nav = document
+              .querySelector('aside[aria-label="Primary navigation"]')
+              ?.getBoundingClientRect();
+            const main = document.querySelector('#knowledge-main')?.getBoundingClientRect();
+            const heading = document.querySelector('h1')?.getBoundingClientRect();
+            const actions = document.querySelector('.page-actions')?.getBoundingClientRect();
+            const intersects = (left: DOMRect | undefined, right: DOMRect | undefined): boolean => {
+              if (!left || !right) return false;
+              return !(
+                left.right <= right.left ||
+                right.right <= left.left ||
+                left.bottom <= right.top ||
+                right.bottom <= left.top
+              );
+            };
+            return {
+              pageOverflow: document.documentElement.scrollWidth - window.innerWidth,
+              navMainOverlap: intersects(nav, main),
+              headingActionsOverlap: intersects(heading, actions),
+            };
+          });
+          expect(
+            geometry.pageOverflow,
+            `${viewport.name} ${path} horizontal overflow`,
+          ).toBeLessThanOrEqual(1);
+          expect(geometry.navMainOverlap, `${viewport.name} ${path} nav overlap`).toBe(false);
+          expect(
+            geometry.headingActionsOverlap,
+            `${viewport.name} ${path} heading/action overlap`,
+          ).toBe(false);
+
+          const accessibility = await new AxeBuilder({ page })
+            .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
+            .analyze();
+          const blockingViolations = accessibility.violations.filter(
+            (violation) => violation.impact === 'serious' || violation.impact === 'critical',
+          );
+          expect(blockingViolations, `${viewport.name} ${path} axe serious/critical`).toEqual([]);
+          expect(consoleErrors, `${viewport.name} ${path} console errors`).toEqual([]);
+          expect(pageErrors, `${viewport.name} ${path} page errors`).toEqual([]);
+          expect(networkErrors, `${viewport.name} ${path} network errors`).toEqual([]);
+          await page.close();
+        }
+        await context.close();
+      }
+    } finally {
+      await browser.close();
+    }
+  });
+
+  it('exercises table controls and preserves form input across one 409 mutation', async () => {
+    const cookie = await consoleCookie();
+    const separator = cookie.indexOf('=');
+    const cookieName = separator > 0 ? cookie.slice(0, separator) : '';
+    const cookieValue = separator > 0 ? cookie.slice(separator + 1) : '';
+    if (!cookieName || !cookieValue) throw new Error('console cookie was not initialized');
+    const spaceId = requiredId(scenario.spaceId, 'spaceId');
+    const browser = await chromium.launch({ headless: true });
+    const context = await browser.newContext({ viewport: { width: 360, height: 800 } });
+    await context.addCookies([
+      {
+        name: cookieName,
+        value: cookieValue,
+        domain: '127.0.0.1',
+        path: '/',
+        sameSite: 'Strict',
+      },
+    ]);
+
+    try {
+      const page = await context.newPage();
+      await page.goto(`${baseUrl}/spaces`, { waitUntil: 'networkidle' });
+      const tableCaption = page.locator('table caption');
+      await tableCaption.waitFor();
+      expect(await tableCaption.textContent()).toBe('空间清单');
+      expect(await page.locator('th[scope="col"]').count()).toBeGreaterThan(0);
+
+      await page.getByRole('button', { name: '列' }).click();
+      await page.getByRole('checkbox', { name: '名称' }).click();
+      expect(await page.locator('thead th').allTextContents()).not.toContain('名称');
+      await page.getByRole('button', { name: '紧凑' }).click();
+      expect(await page.getByRole('button', { name: '紧凑' }).getAttribute('aria-pressed')).toBe(
+        'true',
+      );
+      const tableGeometry = await page.evaluate(() => {
+        const container = document.querySelector('.table-scroll');
+        if (!container) return null;
+        return {
+          containerWidth: container.clientWidth,
+          tableWidth: container.scrollWidth,
+          pageOverflow: document.documentElement.scrollWidth - window.innerWidth,
+        };
+      });
+      expect(tableGeometry).not.toBeNull();
+      expect(tableGeometry!.containerWidth).toBeLessThanOrEqual(360);
+      expect(tableGeometry!.tableWidth).toBeGreaterThan(tableGeometry!.containerWidth);
+      expect(tableGeometry!.pageOverflow).toBeLessThanOrEqual(1);
+
+      let patchCount = 0;
+      let patchServed = false;
+      const detailPath = `/v1/knowledge/spaces/${spaceId}`;
+      await page.route(`**${detailPath}`, async (route) => {
+        if (route.request().method() !== 'PATCH') {
+          await route.continue();
+          return;
+        }
+        patchCount += 1;
+        if (!patchServed) {
+          patchServed = true;
+          await new Promise((resolveWait) => setTimeout(resolveWait, 250));
+          await route.fulfill({
+            status: 409,
+            contentType: 'application/json',
+            body: JSON.stringify({
+              success: false,
+              error: {
+                code: 'KNOWLEDGE_VALIDATION_FAILED',
+                message: 'backend text must not become local copy',
+                retryable: false,
+                details: { field: 'name' },
+              },
+              traceId: 'trace-ui-conflict',
+              requestId: 'request-ui-conflict',
+            }),
+          });
+          return;
+        }
+        await route.continue();
+      });
+
+      await page.goto(`${baseUrl}/spaces/${spaceId}/overview`, { waitUntil: 'networkidle' });
+      const nameInput = page.getByLabel('名称');
+      await nameInput.fill('Preserved draft');
+      const form = page.locator('form.form-band');
+      await form.evaluate((element) => {
+        const formElement = element as HTMLFormElement;
+        formElement.requestSubmit();
+        formElement.requestSubmit();
+      });
+      await page.locator('.problem-notice').waitFor();
+      expect(patchCount).toBe(1);
+      expect(await nameInput.inputValue()).toBe('Preserved draft');
+      expect(await page.getByText('KNOWLEDGE_VALIDATION_FAILED').count()).toBeGreaterThan(0);
+      expect(await page.getByText('请求校验失败').count()).toBeGreaterThan(0);
+      expect(await page.getByText('不可重试').count()).toBeGreaterThan(0);
+      expect(await page.getByText('追踪 trace-ui-conflict').count()).toBeGreaterThan(0);
+      expect(await page.getByText('请求 request-ui-conflict').count()).toBeGreaterThan(0);
+      expect(await page.locator('body').textContent()).not.toContain(
+        'backend text must not become local copy',
+      );
+
+      await page.unroute(`**${detailPath}`);
+      const requestCounts = new Map<string, number>();
+      page.on('request', (request) => {
+        if (request.method() !== 'GET') return;
+        const path = new URL(request.url()).pathname;
+        requestCounts.set(path, (requestCounts.get(path) ?? 0) + 1);
+      });
+      await nameInput.fill('Updated evidence name');
+      await page.getByRole('button', { name: '保存元数据' }).click();
+      await page.waitForFunction(
+        () =>
+          (document.querySelector('input[name="name"]') as HTMLInputElement | null)?.value === '',
+      );
+      await page.waitForLoadState('networkidle');
+      expect(requestCounts.get(detailPath) ?? 0).toBeGreaterThanOrEqual(1);
+      expect(requestCounts.get(`/v1/knowledge/spaces/${spaceId}/directories`) ?? 0).toBe(0);
+      expect(requestCounts.get(`/v1/knowledge/spaces/${spaceId}/sources`) ?? 0).toBe(0);
+      await page.close();
+    } finally {
+      await context.close();
+      await browser.close();
+    }
+  });
+
+  it('handles 204 deletes for an isolated tag and collaborator through the UI', async () => {
+    const cookie = await consoleCookie();
+    const separator = cookie.indexOf('=');
+    const cookieName = separator > 0 ? cookie.slice(0, separator) : '';
+    const cookieValue = separator > 0 ? cookie.slice(separator + 1) : '';
+    if (!cookieName || !cookieValue) throw new Error('console cookie was not initialized');
+    const spaceId = requiredId(scenario.spaceId, 'spaceId');
+    const tagLabel = `UI delete tag ${suffix}`;
+    const createdTag = asObject(
+      await callApi('API-TAG-CREATE', {
+        params: { spaceId },
+        body: {
+          key: `ui_delete_${suffix.slice(0, 8)}`,
+          label: tagLabel,
+          tagType: 'string',
+          required: false,
+          options: ['draft', 'approved'],
+        },
+      }),
+    );
+    const tagId = asString(createdTag.id, 'tagId');
+    const collaboratorMemberId = `mem_e2e_delete_${suffix}`;
+    await callApi('API-COLLABORATOR-CREATE', {
+      params: { spaceId },
+      body: { memberId: collaboratorMemberId, role: 'read' },
+    });
+
+    const browser = await chromium.launch({ headless: true });
+    const context = await browser.newContext({ viewport: { width: 1200, height: 900 } });
+    await context.addCookies([
+      {
+        name: cookieName,
+        value: cookieValue,
+        domain: '127.0.0.1',
+        path: '/',
+        sameSite: 'Strict',
+      },
+    ]);
+
+    try {
+      const page = await context.newPage();
+      const tagListPath = `/v1/knowledge/spaces/${spaceId}/tags`;
+      const collaboratorListPath = `/v1/knowledge/spaces/${spaceId}/collaborators`;
+      const spaceAclPath = `/v1/knowledge/resources/space/${spaceId}/acl`;
+      let tagGets = 0;
+      let collaboratorGets = 0;
+      let spaceAclGets = 0;
+      page.on('request', (request) => {
+        if (request.method() !== 'GET') return;
+        const path = new URL(request.url()).pathname;
+        if (path === tagListPath) tagGets += 1;
+        if (path === collaboratorListPath) collaboratorGets += 1;
+        if (path === spaceAclPath) spaceAclGets += 1;
+      });
+
+      await page.goto(`${baseUrl}/spaces/${spaceId}/tags`, { waitUntil: 'networkidle' });
+      const tagRow = page.locator('tbody tr').filter({ hasText: tagLabel });
+      await tagRow.waitFor();
+      const tagGetsBeforeDelete = tagGets;
+      page.once('dialog', (dialog) => dialog.accept());
+      const tagDelete = page.waitForResponse(
+        (response) =>
+          response.request().method() === 'DELETE' &&
+          new URL(response.url()).pathname === `/v1/knowledge/tags/${tagId}`,
+      );
+      await tagRow.getByRole('button', { name: '删除' }).click();
+      expect((await tagDelete).status()).toBe(204);
+      await tagRow.waitFor({ state: 'detached' });
+      await page.waitForLoadState('networkidle');
+      expect(tagGets).toBeGreaterThan(tagGetsBeforeDelete);
+      expect(await page.locator('.problem-notice').count()).toBe(0);
+
+      await page.goto(`${baseUrl}/spaces/${spaceId}/access`, { waitUntil: 'networkidle' });
+      const collaboratorSection = page.locator('section').filter({
+        has: page.getByRole('heading', { level: 2, name: '协作者', exact: true }),
+      });
+      const collaboratorRow = collaboratorSection
+        .locator('tbody tr')
+        .filter({ hasText: collaboratorMemberId });
+      await collaboratorRow.waitFor();
+      const collaboratorGetsBeforeDelete = collaboratorGets;
+      const spaceAclGetsBeforeDelete = spaceAclGets;
+      page.once('dialog', (dialog) => dialog.accept());
+      const collaboratorDelete = page.waitForResponse(
+        (response) =>
+          response.request().method() === 'DELETE' &&
+          new URL(response.url()).pathname ===
+            `/v1/knowledge/spaces/${spaceId}/collaborators/${collaboratorMemberId}`,
+      );
+      await collaboratorRow.getByRole('button', { name: '移除' }).click();
+      expect((await collaboratorDelete).status()).toBe(204);
+      await collaboratorRow.waitFor({ state: 'detached' });
+      await page.waitForLoadState('networkidle');
+      expect(collaboratorGets).toBeGreaterThan(collaboratorGetsBeforeDelete);
+      expect(spaceAclGets).toBeGreaterThan(spaceAclGetsBeforeDelete);
+      expect(await page.locator('.problem-notice').count()).toBe(0);
+      await page.close();
+    } finally {
+      await context.close();
+      await browser.close();
+    }
+  });
+
+  it('renders all nine routes in zh-CN and en with exact titles and form labels', async () => {
+    const spaceId = requiredId(scenario.spaceId, 'spaceId');
+    const sourceId = requiredId(scenario.sourceId, 'sourceId');
+    const space = asObject(await callApi('API-SPACE-GET', { params: { spaceId } }));
+    const spaceName = asString(space.name, 'space.name');
+    const routes = [
+      {
+        path: '/spaces',
+        zh: { title: '知识空间', h1: '知识空间' },
+        en: { title: 'Knowledge spaces', h1: 'Spaces' },
+      },
+      {
+        path: '/spaces/new',
+        zh: { title: '新建知识空间', h1: '新建空间' },
+        en: { title: 'New knowledge space', h1: 'New space' },
+        enForm: {
+          labels: ['Name', 'Description'],
+          button: 'Create space',
+        },
+      },
+      {
+        path: `/spaces/${spaceId}/overview`,
+        zh: { title: `${spaceName} · 空间概览`, h1: spaceName },
+        en: { title: `${spaceName} · Space overview`, h1: spaceName },
+      },
+      {
+        path: `/spaces/${spaceId}/sources`,
+        zh: { title: `${spaceName} · 来源`, h1: '来源' },
+        en: { title: `${spaceName} · Sources`, h1: 'Sources' },
+        enForm: {
+          labels: ['Name', 'Kind'],
+          button: 'Create Source',
+        },
+      },
+      {
+        path: `/spaces/${spaceId}/segments?sourceId=${sourceId}`,
+        zh: { title: `${spaceName} · 分段`, h1: '分段' },
+        en: { title: `${spaceName} · Segments`, h1: 'Segments' },
+        enForm: {
+          labels: ['Question', 'Answer'],
+          button: 'Create Segment',
+        },
+      },
+      {
+        path: `/spaces/${spaceId}/tags`,
+        zh: { title: `${spaceName} · 标签`, h1: '标签' },
+        en: { title: `${spaceName} · Tags`, h1: 'Tags' },
+        enForm: {
+          labels: ['Key', 'Label', 'Value type'],
+          button: 'Create Tag',
+        },
+      },
+      {
+        path: `/spaces/${spaceId}/access`,
+        zh: { title: `${spaceName} · 访问权限`, h1: '访问权限' },
+        en: { title: `${spaceName} · Access`, h1: 'Access' },
+        enForm: {
+          labels: ['Member ID', 'Role'],
+          button: 'Add collaborator',
+        },
+      },
+      {
+        path: `/spaces/${spaceId}/jobs`,
+        zh: { title: `${spaceName} · 任务`, h1: '任务' },
+        en: { title: `${spaceName} · Jobs`, h1: 'Jobs' },
+      },
+      {
+        path: '/system/status',
+        zh: { title: '系统状态', h1: '系统状态' },
+        en: { title: 'System status', h1: 'System status' },
+      },
+    ] as const;
+    const cookie = await consoleCookie();
+    const separator = cookie.indexOf('=');
+    const cookieName = separator > 0 ? cookie.slice(0, separator) : '';
+    const cookieValue = separator > 0 ? cookie.slice(separator + 1) : '';
+    if (!cookieName || !cookieValue) throw new Error('console cookie was not initialized');
+    const browser = await chromium.launch({ headless: true });
+
+    try {
+      for (const locale of ['zh-CN', 'en'] as const) {
+        const context = await browser.newContext({ viewport: { width: 1200, height: 900 } });
+        await context.addInitScript((value) => {
+          window.localStorage.setItem('kb.locale', value);
+        }, locale);
+        await context.addCookies([
+          {
+            name: cookieName,
+            value: cookieValue,
+            domain: '127.0.0.1',
+            path: '/',
+            sameSite: 'Strict',
+          },
+        ]);
+        try {
+          for (const route of routes) {
+            const page = await context.newPage();
+            const response = await page.goto(`${baseUrl}${route.path}`, {
+              waitUntil: 'networkidle',
+            });
+            expect(response?.status(), `${locale} ${route.path} status`).toBe(200);
+            await page.waitForFunction(
+              (expectedLocale) => document.documentElement.lang === expectedLocale,
+              locale,
+            );
+            const expected = route[locale === 'zh-CN' ? 'zh' : 'en'];
+            expect(await page.title(), `${locale} ${route.path} title`).toBe(expected.title);
+            const headings = page.getByRole('heading', { level: 1 });
+            expect(await headings.count(), `${locale} ${route.path} H1 count`).toBe(1);
+            expect(await headings.textContent(), `${locale} ${route.path} H1`).toBe(expected.h1);
+            expect(
+              await page
+                .getByRole('link', {
+                  name: locale === 'zh-CN' ? '跳到主要内容' : 'Skip to content',
+                })
+                .count(),
+            ).toBe(1);
+            const primaryNavigation = page.locator('aside.console-rail nav.rail-nav');
+            expect(await primaryNavigation.count()).toBe(1);
+            const hasSpaceNavigation = route.path.startsWith(`/spaces/${spaceId}/`);
+            const expectedNavigation =
+              locale === 'zh-CN'
+                ? [
+                    '知识空间',
+                    '系统状态',
+                    ...(hasSpaceNavigation
+                      ? ['概览', '来源', '分段', '标签', '访问权限', '任务']
+                      : []),
+                  ]
+                : [
+                    'Spaces',
+                    'System status',
+                    ...(hasSpaceNavigation
+                      ? ['Overview', 'Sources', 'Segments', 'Tags', 'Access', 'Jobs']
+                      : []),
+                  ];
+            const navigationLabels = await primaryNavigation.locator('a').evaluateAll((links) =>
+              links.map((link) => {
+                const labels = Array.from(link.querySelectorAll('span'))
+                  .map((span) => span.textContent?.trim() ?? '')
+                  .filter(Boolean);
+                return labels.at(-1) ?? link.textContent?.trim() ?? '';
+              }),
+            );
+            expect(navigationLabels.sort(), `${locale} ${route.path} navigation`).toEqual(
+              expectedNavigation.sort(),
+            );
+            expect(await page.locator('body').textContent()).not.toMatch(rawMessageKeyPattern);
+            if (locale === 'en' && 'enForm' in route && route.enForm) {
+              const form = page.locator('form.form-band').first();
+              await form.waitFor();
+              for (const label of route.enForm.labels) {
+                expect(
+                  await form.getByLabel(label, { exact: true }).count(),
+                  `${route.path} label ${label}`,
+                ).toBe(1);
+              }
+              expect(
+                await form.getByRole('button', { name: route.enForm.button }).count(),
+                `${route.path} button ${route.enForm.button}`,
+              ).toBe(1);
+            }
+            await page.close();
+          }
+        } finally {
+          await context.close();
+        }
+      }
+    } finally {
+      await browser.close();
+    }
+  });
+
+  it('renders the English empty state and a safe localized 409 Problem', async () => {
+    const cookie = await consoleCookie();
+    const separator = cookie.indexOf('=');
+    const cookieName = separator > 0 ? cookie.slice(0, separator) : '';
+    const cookieValue = separator > 0 ? cookie.slice(separator + 1) : '';
+    if (!cookieName || !cookieValue) throw new Error('console cookie was not initialized');
+    const spaceId = requiredId(scenario.spaceId, 'spaceId');
+    const browser = await chromium.launch({ headless: true });
+    const context = await browser.newContext({ viewport: { width: 1200, height: 900 } });
+    await context.addInitScript(() => {
+      window.localStorage.setItem('kb.locale', 'en');
+    });
+    await context.addCookies([
+      {
+        name: cookieName,
+        value: cookieValue,
+        domain: '127.0.0.1',
+        path: '/',
+        sameSite: 'Strict',
+      },
+    ]);
+
+    try {
+      const page = await context.newPage();
+      await page.route('**/v1/knowledge/spaces**', async (route) => {
+        const url = new URL(route.request().url());
+        if (
+          route.request().method() === 'GET' &&
+          url.pathname === '/v1/knowledge/spaces' &&
+          url.searchParams.get('limit') === '200'
+        ) {
+          await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({
+              success: true,
+              data: {
+                items: [],
+                pageInfo: { nextCursor: null, hasMore: false },
+              },
+              traceId: 'trace-empty',
+              requestId: 'request-empty',
+            }),
+          });
+          return;
+        }
+        await route.continue();
+      });
+      await page.goto(`${baseUrl}/spaces`, { waitUntil: 'networkidle' });
+      await page.waitForFunction(() => document.documentElement.lang === 'en');
+      await page.getByText('No knowledge spaces', { exact: true }).waitFor();
+      expect(await page.getByText(/Create the first space/).count()).toBeGreaterThan(0);
+      await page.unroute('**/v1/knowledge/spaces**');
+
+      const detailPath = `/v1/knowledge/spaces/${spaceId}`;
+      await page.route(`**${detailPath}`, async (route) => {
+        if (route.request().method() !== 'PATCH') {
+          await route.continue();
+          return;
+        }
+        await route.fulfill({
+          status: 409,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            success: false,
+            error: {
+              code: 'KNOWLEDGE_VALIDATION_FAILED',
+              message: 'UNIQUE_BACKEND_SECRET_9f217',
+              retryable: false,
+              details: { field: 'name' },
+            },
+            traceId: 'trace-i18n-secret',
+            requestId: 'request-i18n-secret',
+          }),
+        });
+      });
+      await page.goto(`${baseUrl}/spaces/${spaceId}/overview`, { waitUntil: 'networkidle' });
+      await page.waitForFunction(() => document.documentElement.lang === 'en');
+      const form = page.locator('form.form-band').first();
+      await form.getByLabel('Name', { exact: true }).fill('English safe draft');
+      await form.getByRole('button', { name: 'Save metadata' }).click();
+      await page.locator('.problem-notice').waitFor();
+      expect(await page.getByText('Request validation failed.', { exact: true }).count()).toBe(1);
+      expect(await page.getByText(/trace trace-i18n-secret/).count()).toBe(1);
+      expect(await page.getByText(/request request-i18n-secret/).count()).toBe(1);
+      expect(await page.getByText('Not retryable', { exact: true }).count()).toBe(1);
+      expect(await page.locator('body').textContent()).not.toContain('UNIQUE_BACKEND_SECRET_9f217');
+      await page.close();
+    } finally {
+      await context.close();
+      await browser.close();
+    }
+  });
+
+  it('switches locale without changing route or query and persists it', async () => {
+    const cookie = await consoleCookie();
+    const separator = cookie.indexOf('=');
+    const cookieName = separator > 0 ? cookie.slice(0, separator) : '';
+    const cookieValue = separator > 0 ? cookie.slice(separator + 1) : '';
+    if (!cookieName || !cookieValue) throw new Error('console cookie was not initialized');
+    const browser = await chromium.launch({ headless: true });
+    const context = await browser.newContext({ viewport: { width: 768, height: 1024 } });
+    await context.addCookies([
+      {
+        name: cookieName,
+        value: cookieValue,
+        domain: '127.0.0.1',
+        path: '/',
+        sameSite: 'Strict',
+      },
+    ]);
+
+    try {
+      const page = await context.newPage();
+      const path = `/spaces/${requiredId(scenario.spaceId, 'spaceId')}/segments?sourceId=${requiredId(scenario.sourceId, 'sourceId')}`;
+      await page.goto(`${baseUrl}${path}`, { waitUntil: 'networkidle' });
+      await page.getByRole('heading', { level: 1, name: '分段' }).waitFor();
+      expect(await page.locator('html').getAttribute('lang')).toBe('zh-CN');
+      const routeBefore = page.url();
+
+      await page.getByRole('button', { name: 'EN' }).click();
+      await page.waitForFunction(() => document.documentElement.lang === 'en');
+      await page.getByRole('heading', { level: 1, name: 'Segments' }).waitFor();
+      expect(page.url()).toBe(routeBefore);
+      expect(await page.evaluate(() => window.localStorage.getItem('kb.locale'))).toBe('en');
+
+      await page.reload({ waitUntil: 'networkidle' });
+      await page.getByRole('heading', { level: 1, name: 'Segments' }).waitFor();
+      expect(await page.locator('html').getAttribute('lang')).toBe('en');
+      expect(page.url()).toBe(routeBefore);
+      await page.close();
+    } finally {
+      await context.close();
+      await browser.close();
     }
   });
 

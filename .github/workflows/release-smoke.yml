@@ -35,15 +35,15 @@ jobs:
           cat > "$RUNNER_TEMP/ci-images.override.yml" <<'YAML'
           services:
             mongo:
-              image: mongo:5.0.32
+              image: registry.cn-hangzhou.aliyuncs.com/fastgpt/mongo:5.0.32@sha256:ab12670508974afbdf3bdc7dd39a201d228a73c9c13c70a684b9eedfb063dc3e
             mongo-init:
-              image: mongo:5.0.32
+              image: registry.cn-hangzhou.aliyuncs.com/fastgpt/mongo:5.0.32@sha256:ab12670508974afbdf3bdc7dd39a201d228a73c9c13c70a684b9eedfb063dc3e
             redis:
-              image: redis:7.2-alpine
+              image: registry.cn-hangzhou.aliyuncs.com/fastgpt/redis:7.2-alpine@sha256:2bf71743152d3ca631d358029d504fed349ea28179667acfa755dffb4b321e7c
             pgvector:
-              image: pgvector/pgvector:0.8.0-pg15
+              image: registry.cn-hangzhou.aliyuncs.com/fastgpt/pgvector:0.8.0-pg15@sha256:92be4ea0424cccf17003f5803d54448e2864ac27a70e6ac5d24b3d8b463c689c
             minio:
-              image: registry.cn-hangzhou.aliyuncs.com/fastgpt/minio@sha256:a63b19df59e6ec7c02ebba6e7a1097b7e032da7947b18db7ff67dae8e84fd44d
+              image: registry.cn-hangzhou.aliyuncs.com/fastgpt/minio:RELEASE.2025-09-07T16-13-09Z@sha256:a63b19df59e6ec7c02ebba6e7a1097b7e032da7947b18db7ff67dae8e84fd44d
           YAML
       - name: Validate Compose
         run: docker compose -f deploy/docker-compose.yml -f "$RUNNER_TEMP/ci-images.override.yml" config

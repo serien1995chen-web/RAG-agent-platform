@@ -1,5 +1,4 @@
 import {
-  ConsoleMetricExporter,
   MeterProvider,
   PeriodicExportingMetricReader,
   type MetricReader,
@@ -7,6 +6,22 @@ import {
 } from '@opentelemetry/sdk-metrics';
 import { OTLPMetricExporter } from '@opentelemetry/exporter-metrics-otlp-http';
 import type { OtelConfig, OtelInitStatus } from './types';
+
+export const METRIC_LABEL_ALLOWED_KEYS: ReadonlySet<string> = new Set([
+  'operation',
+  'route',
+  'method',
+  'resourceType',
+  'status',
+  'result',
+  'mode',
+  'provider',
+  'model',
+  'stage',
+  'dependency',
+  'queue',
+  'errorType',
+]);
 
 /**
  * metrics 独立入口（设计文档 15.2）。
@@ -22,7 +37,7 @@ export function initMetrics(
   try {
     const reader = readerFactory
       ? readerFactory()
-      : new PeriodicExportingMetricReader({ exporter: new ConsoleMetricExporter() });
+      : createOtlpMetricReader(config.exporterEndpointRef, 60_000);
     const provider = new MeterProvider({ readers: [reader] });
     provider.getMeter(config.serviceName);
     return { enabled: true, reason: 'registered' };

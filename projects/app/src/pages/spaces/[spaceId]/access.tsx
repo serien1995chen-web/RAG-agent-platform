@@ -1,7 +1,8 @@
 import {
   Button,
-  DataTable,
   Field,
+  FormField,
+  KnowledgeDataTable,
   LoadingState,
   PageHeader,
   ProblemNotice,
@@ -9,12 +10,20 @@ import {
   SelectInput,
   StatusTag,
   TextInput,
+  collaboratorFormSchema,
+  knowledgeQueryKeys,
   knowledgeRequest,
-  useKnowledgeRequest,
+  submitWithProblem,
+  useKnowledgeEnumLabel,
+  useKnowledgeForm,
+  useKnowledgeI18n,
+  useKnowledgeMutation,
+  useKnowledgeQuery,
+  type CollaboratorFormValues,
 } from '@kb/web';
 import Head from 'next/head';
 import { useRouter } from 'next/router';
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useState } from 'react';
 import type {
   AclRecord,
   CollaboratorRecord,
@@ -23,67 +32,57 @@ import type {
 } from '../../../lib/knowledge-types';
 import { listPath, statusTone } from '../../../lib/knowledge-types';
 
+type PermissionAction = 'enable' | 'disable' | 'detach' | 'resume';
+
 export default function AccessPage() {
   const router = useRouter();
+  const { t } = useKnowledgeI18n();
+  const enumLabel = useKnowledgeEnumLabel();
   const spaceId = typeof router.query.spaceId === 'string' ? router.query.spaceId : '';
-  const space = useKnowledgeRequest<SpaceRecord>(
-    spaceId ? `/v1/knowledge/spaces/${spaceId}` : null,
-    [spaceId],
-  );
-  const spaceAcl = useKnowledgeRequest<AclRecord>(
-    spaceId ? `/v1/knowledge/resources/space/${spaceId}/acl` : null,
-    [spaceId],
-  );
-  const collaborators = useKnowledgeRequest<{ items: CollaboratorRecord[] }>(
-    spaceId ? `/v1/knowledge/spaces/${spaceId}/collaborators?limit=200` : null,
-    [spaceId],
-  );
-  const sources = useKnowledgeRequest<{ items: SourceRecord[] }>(
-    spaceId ? listPath(spaceId, 'sources') : null,
-    [spaceId],
-  );
+  const [problem, setProblem] = useState<unknown>(null);
   const [selectedSourceId, setSelectedSourceId] = useState('');
-  const source = sources.data?.items.find((item) => item.id === selectedSourceId);
-  const sourceAcl = useKnowledgeRequest<AclRecord>(
-    selectedSourceId ? `/v1/knowledge/resources/source/${selectedSourceId}/acl` : null,
-    [selectedSourceId],
+  const space = useKnowledgeQuery<SpaceRecord>(
+    knowledgeQueryKeys.spaces.detail(spaceId),
+    spaceId ? `/v1/knowledge/spaces/${spaceId}` : null,
   );
-  const [memberId, setMemberId] = useState('');
-  const [role, setRole] = useState<'read' | 'write' | 'manage'>('read');
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<unknown>(null);
-
-  useEffect(() => {
-    if (!selectedSourceId && sources.data?.items[0]) {
-      setSelectedSourceId(sources.data.items[0].id);
-    }
-  }, [selectedSourceId, sources.data]);
-
-  async function addCollaborator(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!spaceId) return;
-    setBusy(true);
-    setError(null);
-    try {
-      await knowledgeRequest(`/v1/knowledge/spaces/${spaceId}/collaborators`, {
+  const spaceAcl = useKnowledgeQuery<AclRecord>(
+    knowledgeQueryKeys.acl('space', spaceId),
+    spaceId ? `/v1/knowledge/resources/space/${spaceId}/acl` : null,
+  );
+  const collaborators = useKnowledgeQuery<{ items: CollaboratorRecord[] }>(
+    knowledgeQueryKeys.collaborators.list(spaceId),
+    spaceId ? `/v1/knowledge/spaces/${spaceId}/collaborators?limit=200` : null,
+  );
+  const sources = useKnowledgeQuery<{ items: SourceRecord[] }>(
+    knowledgeQueryKeys.sources.list(spaceId),
+    spaceId ? listPath(spaceId, 'sources') : null,
+  );
+  const source = sources.data?.items.find((item) => item.id === selectedSourceId);
+  const sourceAcl = useKnowledgeQuery<AclRecord>(
+    knowledgeQueryKeys.acl('source', selectedSourceId),
+    selectedSourceId ? `/v1/knowledge/resources/source/${selectedSourceId}/acl` : null,
+  );
+  const collaboratorForm = useKnowledgeForm(collaboratorFormSchema, {
+    defaultValues: { memberId: '', role: 'read' },
+  });
+  const addCollaborator = useKnowledgeMutation<CollaboratorRecord, CollaboratorFormValues>({
+    mutationFn: (values) =>
+      knowledgeRequest<CollaboratorRecord>(`/v1/knowledge/spaces/${spaceId}/collaborators`, {
         method: 'POST',
-        body: { memberId, role },
-      });
-      setMemberId('');
-      await Promise.all([collaborators.reload(), spaceAcl.reload(), space.reload()]);
-    } catch (caught) {
-      setError(caught);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function updateCollaborator(collaborator: CollaboratorRecord) {
-    if (!spaceId) return;
-    setBusy(true);
-    setError(null);
-    try {
-      await knowledgeRequest(
+        body: values,
+      }),
+    invalidateKeys: [
+      knowledgeQueryKeys.collaborators.list(spaceId),
+      knowledgeQueryKeys.acl('space', spaceId),
+      knowledgeQueryKeys.spaces.detail(spaceId),
+    ],
+    onSuccess: () => {
+      collaboratorForm.reset();
+    },
+  });
+  const updateCollaborator = useKnowledgeMutation<CollaboratorRecord, CollaboratorRecord>({
+    mutationFn: (collaborator) =>
+      knowledgeRequest<CollaboratorRecord>(
         `/v1/knowledge/spaces/${spaceId}/collaborators/${collaborator.memberId}`,
         {
           method: 'PATCH',
@@ -92,62 +91,84 @@ export default function AccessPage() {
             role: collaborator.role === 'read' ? 'write' : 'read',
           },
         },
-      );
-      await Promise.all([collaborators.reload(), spaceAcl.reload()]);
-    } catch (caught) {
-      setError(caught);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function removeCollaborator(collaborator: CollaboratorRecord) {
-    if (!spaceId) return;
-    if (!window.confirm(`Remove ${collaborator.memberId} from this space?`)) return;
-    setBusy(true);
-    setError(null);
-    try {
-      await knowledgeRequest(
-        `/v1/knowledge/spaces/${spaceId}/collaborators/${collaborator.memberId}`,
-        { method: 'DELETE' },
-      );
-      await Promise.all([collaborators.reload(), spaceAcl.reload()]);
-    } catch (caught) {
-      setError(caught);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function transitionPermission(action: 'enable' | 'disable' | 'detach' | 'resume') {
-    if (!source) return;
-    setBusy(true);
-    setError(null);
-    try {
-      await knowledgeRequest(`/v1/knowledge/sources/${source.id}/permissions/${action}`, {
+      ),
+    invalidateKeys: [
+      knowledgeQueryKeys.collaborators.list(spaceId),
+      knowledgeQueryKeys.acl('space', spaceId),
+    ],
+  });
+  const removeCollaborator = useKnowledgeMutation<void, string>({
+    mutationFn: (memberId) =>
+      knowledgeRequest<void>(`/v1/knowledge/spaces/${spaceId}/collaborators/${memberId}`, {
+        method: 'DELETE',
+      }),
+    invalidateKeys: [
+      knowledgeQueryKeys.collaborators.list(spaceId),
+      knowledgeQueryKeys.acl('space', spaceId),
+    ],
+  });
+  const transitionPermission = useKnowledgeMutation<void, PermissionAction>({
+    mutationFn: (action) =>
+      knowledgeRequest<void>(`/v1/knowledge/sources/${source!.id}/permissions/${action}`, {
         method: 'POST',
         body: {
-          version: source.version,
-          expectedPermissionRevision: source.permissionRevision,
+          version: source!.version,
+          expectedPermissionRevision: source!.permissionRevision,
         },
-      });
-      await Promise.all([sources.reload(), sourceAcl.reload()]);
-    } catch (caught) {
-      setError(caught);
-    } finally {
-      setBusy(false);
+      }),
+    invalidateKeys: [
+      knowledgeQueryKeys.sources.list(spaceId),
+      knowledgeQueryKeys.acl('source', selectedSourceId),
+      knowledgeQueryKeys.jobs.list(),
+    ],
+  });
+
+  useEffect(() => {
+    if (!selectedSourceId && sources.data?.items[0]) {
+      setSelectedSourceId(sources.data.items[0].id);
     }
+  }, [selectedSourceId, sources.data]);
+
+  const submitCollaborator = collaboratorForm.handleSubmit(async (values) => {
+    await submitWithProblem(
+      async () => {
+        await addCollaborator.mutateAsync(values);
+      },
+      setProblem,
+      collaboratorForm,
+    );
+  });
+
+  async function changeCollaborator(collaborator: CollaboratorRecord) {
+    await submitWithProblem(async () => {
+      await updateCollaborator.mutateAsync(collaborator);
+    }, setProblem);
+  }
+
+  async function revokeCollaborator(collaborator: CollaboratorRecord) {
+    if (!window.confirm(t('access.confirmRemove', { memberId: collaborator.memberId }))) return;
+    await submitWithProblem(async () => {
+      await removeCollaborator.mutateAsync(collaborator.memberId);
+    }, setProblem);
+  }
+
+  async function changePermission(action: PermissionAction) {
+    await submitWithProblem(async () => {
+      await transitionPermission.mutateAsync(action);
+    }, setProblem);
   }
 
   return (
     <>
       <Head>
-        <title>{space.data ? `${space.data.name} access` : 'Access'}</title>
+        <title>
+          {space.data ? t('access.title', { name: space.data.name }) : t('access.fallbackTitle')}
+        </title>
       </Head>
       <PageHeader
-        eyebrow="Access governance"
-        title="Access"
-        description="Workspace membership, collaborators, ACL snapshots and Source permission state."
+        eyebrow={t('access.eyebrow')}
+        title={t('access.heading')}
+        description={t('access.description')}
       />
       <ProblemNotice
         error={
@@ -156,104 +177,144 @@ export default function AccessPage() {
           collaborators.error ??
           sources.error ??
           sourceAcl.error ??
-          error
+          problem ??
+          addCollaborator.error ??
+          updateCollaborator.error ??
+          removeCollaborator.error ??
+          transitionPermission.error
         }
+        onRetry={() => void collaborators.refetch()}
       />
       <Section
-        title="Space ACL"
-        meta={spaceAcl.data ? `revision ${spaceAcl.data.permissionRevision}` : undefined}
+        title={t('access.spaceAcl')}
+        meta={
+          spaceAcl.data
+            ? t('access.revision', { revision: spaceAcl.data.permissionRevision })
+            : undefined
+        }
       >
-        {spaceAcl.loading ? (
+        {spaceAcl.isLoading ? (
           <LoadingState />
         ) : (
-          <DataTable
+          <KnowledgeDataTable
             rows={spaceAcl.data?.entries ?? []}
             rowKey={(entry) => `${entry.principalType}:${entry.principalId}`}
-            empty="No ACL entries are visible."
+            empty={t('access.noAcl')}
+            caption={t('access.spaceAcl')}
             columns={[
-              { key: 'type', label: 'Principal type', render: (entry) => entry.principalType },
+              {
+                key: 'type',
+                label: t('access.columnPrincipalType'),
+                render: (entry) => enumLabel(entry.principalType),
+              },
               {
                 key: 'principal',
-                label: 'Principal',
+                label: t('access.columnPrincipal'),
                 render: (entry) => <span className="mono">{entry.principalId}</span>,
               },
-              { key: 'permission', label: 'Permission', render: (entry) => entry.permission },
+              {
+                key: 'permission',
+                label: t('access.columnPermission'),
+                render: (entry) => enumLabel(entry.permission),
+              },
             ]}
           />
         )}
       </Section>
 
       <Section
-        title="Collaborators"
-        meta={collaborators.data ? `${collaborators.data.items.length} active` : undefined}
+        title={t('access.collaborators')}
+        meta={
+          collaborators.data
+            ? t('access.activeCount', { count: collaborators.data.items.length })
+            : undefined
+        }
       >
-        <form className="form-band" onSubmit={addCollaborator}>
+        <form className="form-band" onSubmit={submitCollaborator}>
           <div className="form-intro">
-            <h2>Add collaborator</h2>
-            <p>Collaborator roles are scoped to this Knowledge Space.</p>
+            <h2>{t('access.addTitle')}</h2>
+            <p>{t('access.addDescription')}</p>
           </div>
           <div className="form-fields">
-            <Field label="Member ID">
-              <TextInput
-                required
-                value={memberId}
-                onChange={(event) => setMemberId(event.target.value)}
-              />
-            </Field>
-            <Field label="Role">
-              <SelectInput
-                value={role}
-                onChange={(event) => setRole(event.target.value as typeof role)}
-              >
-                <option value="read">Read</option>
-                <option value="write">Write</option>
-                <option value="manage">Manage</option>
-              </SelectInput>
-            </Field>
+            <FormField
+              control={collaboratorForm.control}
+              name="memberId"
+              label={t('access.memberId')}
+              render={(field) => (
+                <TextInput
+                  {...field}
+                  required
+                  value={String(field.value)}
+                  onChange={(event) => field.onChange(event.target.value)}
+                />
+              )}
+            />
+            <FormField
+              control={collaboratorForm.control}
+              name="role"
+              label={t('access.role')}
+              render={(field) => (
+                <SelectInput
+                  name={field.name}
+                  value={String(field.value)}
+                  onBlur={field.onBlur}
+                  onChange={(event) => field.onChange(event.target.value)}
+                >
+                  <option value="read">{t('enum.read')}</option>
+                  <option value="write">{t('enum.write')}</option>
+                  <option value="manage">{t('enum.manage')}</option>
+                </SelectInput>
+              )}
+            />
           </div>
           <div className="form-actions">
-            <Button type="submit" tone="primary" busy={busy}>
-              Add collaborator
+            <Button type="submit" tone="primary" busy={addCollaborator.isLoading}>
+              {t('access.add')}
             </Button>
           </div>
         </form>
-        <DataTable
+        <KnowledgeDataTable
           rows={collaborators.data?.items ?? []}
           rowKey={(collaborator) => collaborator.memberId}
-          empty="No collaborators."
+          empty={t('access.noCollaborators')}
+          caption={t('access.collaborators')}
           columns={[
             {
               key: 'member',
-              label: 'Member',
+              label: t('access.columnMember'),
               render: (collaborator) => <span className="mono">{collaborator.memberId}</span>,
             },
-            { key: 'role', label: 'Role', render: (collaborator) => collaborator.role },
+            {
+              key: 'role',
+              label: t('access.role'),
+              render: (collaborator) => enumLabel(collaborator.role),
+            },
             {
               key: 'status',
-              label: 'Status',
+              label: t('access.columnStatus'),
               render: (collaborator) => (
                 <StatusTag value={collaborator.status} tone={statusTone(collaborator.status)} />
               ),
             },
             {
               key: 'actions',
-              label: 'Actions',
+              label: t('access.columnActions'),
               render: (collaborator) => (
                 <div className="inline-actions">
                   <Button
-                    className="button-small"
-                    busy={busy}
-                    onClick={() => void updateCollaborator(collaborator)}
+                    size="sm"
+                    busy={updateCollaborator.isLoading}
+                    onClick={() => void changeCollaborator(collaborator)}
                   >
-                    Toggle role
+                    {t('access.toggleRole')}
                   </Button>
                   <Button
-                    className="button-small"
+                    size="sm"
                     tone="danger"
-                    busy={busy}
-                    onClick={() => void removeCollaborator(collaborator)}
+                    busy={removeCollaborator.isLoading}
+                    onClick={() => void revokeCollaborator(collaborator)}
                   >
-                    Remove
+                    {t('access.remove')}
                   </Button>
                 </div>
               ),
@@ -262,14 +323,14 @@ export default function AccessPage() {
         />
       </Section>
 
-      <Section title="Source permission state">
+      <Section title={t('access.sourcePermissionState')}>
         <div className="selector-row">
-          <Field label="Source">
+          <Field label={t('access.source')}>
             <SelectInput
               value={selectedSourceId}
               onChange={(event) => setSelectedSourceId(event.target.value)}
             >
-              <option value="">Select Source</option>
+              <option value="">{t('access.selectSource')}</option>
               {sources.data?.items.map((item) => (
                 <option key={item.id} value={item.id}>
                   {item.name}
@@ -285,52 +346,52 @@ export default function AccessPage() {
           <>
             <div className="inline-actions">
               <Button
-                busy={busy}
+                busy={transitionPermission.isLoading}
                 disabled={source.permissionState !== 'disabled'}
-                onClick={() => void transitionPermission('enable')}
+                onClick={() => void changePermission('enable')}
               >
-                Enable inheritance
+                {t('access.enableInheritance')}
               </Button>
               <Button
-                busy={busy}
+                busy={transitionPermission.isLoading}
                 disabled={source.permissionState !== 'inherited'}
-                onClick={() => void transitionPermission('detach')}
+                onClick={() => void changePermission('detach')}
               >
-                Detach
+                {t('access.detach')}
               </Button>
               <Button
-                busy={busy}
+                busy={transitionPermission.isLoading}
                 disabled={source.permissionState !== 'independent'}
-                onClick={() => void transitionPermission('resume')}
+                onClick={() => void changePermission('resume')}
               >
-                Resume inheritance
+                {t('access.resumeInheritance')}
               </Button>
               <Button
                 tone="danger"
-                busy={busy}
+                busy={transitionPermission.isLoading}
                 disabled={source.permissionState === 'disabled'}
-                onClick={() => void transitionPermission('disable')}
+                onClick={() => void changePermission('disable')}
               >
-                Disable
+                {t('access.disable')}
               </Button>
             </div>
-            <div className="detail-grid" style={{ marginTop: 18 }}>
+            <div className="detail-grid detail-grid-spaced">
               <div className="detail-cell">
-                <span>Permission revision</span>
+                <span>{t('access.permissionRevision')}</span>
                 <strong>{source.permissionRevision}</strong>
               </div>
               <div className="detail-cell">
-                <span>State</span>
-                <strong>{source.permissionState}</strong>
+                <span>{t('access.state')}</span>
+                <strong>{enumLabel(source.permissionState)}</strong>
               </div>
               <div className="detail-cell">
-                <span>Snapshot</span>
+                <span>{t('access.snapshot')}</span>
                 <strong>{sourceAcl.data?.snapshotVersion ?? '-'}</strong>
               </div>
             </div>
           </>
         ) : (
-          <p className="table-empty">Select a Source to inspect permission state.</p>
+          <p className="table-empty">{t('access.selectSourcePrompt')}</p>
         )}
       </Section>
     </>

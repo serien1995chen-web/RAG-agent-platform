@@ -1,4 +1,5 @@
 import { BullMqQueueAdapter } from '@kb/dal';
+import { configureTelemetry } from '@kb/otel';
 import { writeFileSync } from 'node:fs';
 import {
   KnowledgeOutboxDispatcher,
@@ -15,8 +16,13 @@ const BATCH_SIZE = 20;
 
 async function start(): Promise<void> {
   const config = loadKnowledgeRuntimeConfig();
+  const telemetry = configureTelemetry({
+    serviceName: 'knowledge-worker',
+    ...(config.otelEndpoint ? { endpoint: config.otelEndpoint } : {}),
+    logLevel: config.logLevel,
+  });
   if (config.workerMode === 'http') {
-    process.stdout.write('knowledge worker disabled by KB_APP_WORKER_MODE=http\n');
+    telemetry.log('knowledge.worker.disabled', { operation: 'bootstrap' });
     return;
   }
   const connections = await createKnowledgeConnections(config);
@@ -31,31 +37,34 @@ async function start(): Promise<void> {
   const tick = async (): Promise<void> => {
     if (stopping) return;
     try {
-      const workspaces = await models.KnowledgeOutboxEvent.distinct('workspaceId', {
-        status: { $in: ['pending', 'failed'] },
-      });
-      for (const workspaceId of workspaces) {
-        if (typeof workspaceId !== 'string') continue;
-        const context: TenantContext = {
-          workspaceId,
-          memberId: 'system:knowledge-worker',
-          requestId: `worker:${Date.now()}`,
-          traceId: `worker:${config.instanceId}`,
-          scopes: ['knowledge:admin'],
-          isWorkspaceOwner: false,
-        };
-        for (let index = 0; index < BATCH_SIZE; index += 1) {
-          const result = await dispatcher.dispatchOnce(context);
-          if (!result.dispatched) break;
-        }
-      }
-    } catch (error) {
-      process.stderr.write(
-        `${JSON.stringify({
-          event: 'knowledge.worker.cycle_failed',
-          errorName: error instanceof Error ? error.name : typeof error,
-        })}\n`,
+      await telemetry.withSpan(
+        'knowledge.worker.tick',
+        { operation: 'outbox.dispatch' },
+        async () => {
+          const workspaces = await models.KnowledgeOutboxEvent.distinct('workspaceId', {
+            status: { $in: ['pending', 'failed'] },
+          });
+          for (const workspaceId of workspaces) {
+            if (typeof workspaceId !== 'string') continue;
+            const context: TenantContext = {
+              workspaceId,
+              memberId: 'system:knowledge-worker',
+              requestId: `worker:${Date.now()}`,
+              traceId: `worker:${config.instanceId}`,
+              scopes: ['knowledge:admin'],
+              isWorkspaceOwner: false,
+            };
+            for (let index = 0; index < BATCH_SIZE; index += 1) {
+              const result = await dispatcher.dispatchOnce(context);
+              if (!result.dispatched) break;
+            }
+          }
+        },
       );
+    } catch (error) {
+      telemetry.log('knowledge.worker.cycle.failed', {
+        errorType: error instanceof Error ? error.name : typeof error,
+      });
     } finally {
       if (!stopping) timer = setTimeout(tick, POLL_INTERVAL_MS);
     }
@@ -67,23 +76,20 @@ async function start(): Promise<void> {
     if (timer) clearTimeout(timer);
     await queue.close();
     await connections.close();
+    telemetry.log('knowledge.worker.stopped', { operation: 'shutdown' });
+    await telemetry.dispose();
   };
 
   process.once('SIGINT', () => void stop());
   process.once('SIGTERM', () => void stop());
-  process.stdout.write(
-    `${JSON.stringify({ event: 'knowledge.worker.started', instanceId: config.instanceId })}\n`,
-  );
+  telemetry.log('knowledge.worker.started', { operation: 'bootstrap' });
   writeFileSync('/tmp/knowledge-worker-ready', 'ready\n');
   await tick();
 }
 
 start().catch((error) => {
-  process.stderr.write(
-    `${JSON.stringify({
-      event: 'knowledge.worker.bootstrap_failed',
-      errorName: error instanceof Error ? error.name : typeof error,
-    })}\n`,
-  );
+  configureTelemetry({ serviceName: 'knowledge-worker' }).log('knowledge.worker.bootstrap.failed', {
+    errorType: error instanceof Error ? error.name : typeof error,
+  });
   process.exitCode = 1;
 });

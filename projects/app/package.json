@@ -19,6 +19,7 @@
     "lint": "eslint src"
   },
   "dependencies": {
+    "@chakra-ui/next-js": "catalog:",
     "@kb/contracts": "workspace:*",
     "@kb/dal": "workspace:*",
     "@kb/otel": "workspace:*",
@@ -28,6 +29,7 @@
     "@kb/web": "workspace:*",
     "bullmq": "catalog:",
     "next": "catalog:",
+    "next-i18next": "catalog:",
     "react": "catalog:",
     "react-dom": "catalog:"
   },

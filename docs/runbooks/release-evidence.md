@@ -210,3 +210,13 @@ Compose 生命周期证据：
 
 - P8-05 的本地全量测试、Compose 生命周期、OpenAPI、许可证和运行环境证据已完成。
 - 本报告不等于对外发布批准；发布阻塞项必须持续由用户、法务或对应外部责任方处理。
+
+## 13. S1 知识库基座证据
+
+- S1 命令、测试和 Task 覆盖见
+  [`docs/acceptance/s1-stage-evidence.md`](../acceptance/s1-stage-evidence.md)。
+- S1 镜像、Digest、AIProxy `UNKNOWN/BLOCKED` 与 Compose 静态事实见
+  [`docs/acceptance/s1-deployment-evidence.md`](../acceptance/s1-deployment-evidence.md)。
+- S1 依赖账本与安装后审计见
+  [`docs/acceptance/s1-dependency-ledger.md`](../acceptance/s1-dependency-ledger.md)。
+- S1 未改变既有发布阻塞状态；上述文档不得解释为对外发布批准。
