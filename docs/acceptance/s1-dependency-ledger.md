@@ -67,13 +67,14 @@
 
 ## 命令证据
 
-| 命令                         | 退出码 | 关键输出                                                            |
-| ---------------------------- | -----: | ------------------------------------------------------------------- |
-| `pnpm format:check`          |      0 | All matched files use Prettier code style                           |
-| `pnpm test:contract`         |      0 | 2 个测试文件、12 个测试通过；dependency ledger 8 个正反向断言通过   |
-| `pnpm license:check`         |      0 | 12 个 workspace 包、95 个 catalog 项；实际安装版本与账本一致        |
-| `pnpm architecture:check`    |      0 | 扫描 39 个 service 源文件、12 个 workspace 包；无禁止依赖或循环依赖 |
-| `pnpm forbidden-files:check` |      0 | 扫描 216 个文件；`@fastgpt-*` 与来源素材命中 0                      |
+| 命令                                                | 退出码 | 关键输出                                                            |
+| --------------------------------------------------- | -----: | ------------------------------------------------------------------- |
+| `pnpm format:check`                                 |      0 | All matched files use Prettier code style                           |
+| `pnpm test:contract`                                |      0 | 3 个测试文件、23 个测试通过；dependency gate 6 个正反向断言通过     |
+| `pnpm license:check`                                |      0 | 12 个 workspace 包、95 个 catalog 项；实际安装版本与账本一致        |
+| `pnpm architecture:check`                           |      0 | 扫描 39 个 service 源文件、12 个 workspace 包；无禁止依赖或循环依赖 |
+| `pnpm forbidden-files:check`                        |      0 | 扫描 239 个文件；`@fastgpt-*` 与来源素材命中 0                      |
+| `node scripts/check-licenses.mjs --dependency-only` |      0 | 166 项 ledger、166 项 audit、95 项 catalog、12 个 workspace 包      |
 
 ## Release Blocker
 

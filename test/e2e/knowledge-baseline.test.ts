@@ -8,6 +8,7 @@ import { chromium } from '@playwright/test';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { registerKnowledgeModels } from '../../packages/service/src/shared/persistence/schemas/knowledge-index';
 import { createKnowledgeConnections } from '../../packages/service/src/shared/runtime/knowledge-connections';
+import { messages } from '../../packages/web/src/i18n/messages';
 
 type JsonObject = Record<string, unknown>;
 
@@ -63,6 +64,14 @@ const openApiDocument = JSON.parse(
 ) as OpenApiDocument;
 const runtimeById = new Map(
   runtimeRegistry.operations.map((operation) => [operation.operationId, operation]),
+);
+const rawMessageKeyPrefixes = [
+  ...new Set(Object.keys(messages['zh-CN']).map((key) => key.slice(0, key.indexOf('.')))),
+];
+const rawMessageKeyPattern = new RegExp(
+  `\\b(?:${rawMessageKeyPrefixes
+    .map((prefix) => prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+    .join('|')})\\.`,
 );
 
 const suffix = randomUUID().replaceAll('-', '').slice(0, 12);
@@ -1370,10 +1379,37 @@ describe.sequential('knowledge architecture baseline E2E', () => {
                 })
                 .count(),
             ).toBe(1);
-            expect(await page.locator('nav').count()).toBeGreaterThan(0);
-            expect(await page.locator('body').textContent()).not.toMatch(
-              /\b(?:nav|spaces|errors)\./,
+            const primaryNavigation = page.locator('aside.console-rail nav.rail-nav');
+            expect(await primaryNavigation.count()).toBe(1);
+            const hasSpaceNavigation = route.path.startsWith(`/spaces/${spaceId}/`);
+            const expectedNavigation =
+              locale === 'zh-CN'
+                ? [
+                    '知识空间',
+                    '系统状态',
+                    ...(hasSpaceNavigation
+                      ? ['概览', '来源', '分段', '标签', '访问权限', '任务']
+                      : []),
+                  ]
+                : [
+                    'Spaces',
+                    'System status',
+                    ...(hasSpaceNavigation
+                      ? ['Overview', 'Sources', 'Segments', 'Tags', 'Access', 'Jobs']
+                      : []),
+                  ];
+            const navigationLabels = await primaryNavigation.locator('a').evaluateAll((links) =>
+              links.map((link) => {
+                const labels = Array.from(link.querySelectorAll('span'))
+                  .map((span) => span.textContent?.trim() ?? '')
+                  .filter(Boolean);
+                return labels.at(-1) ?? link.textContent?.trim() ?? '';
+              }),
             );
+            expect(navigationLabels.sort(), `${locale} ${route.path} navigation`).toEqual(
+              expectedNavigation.sort(),
+            );
+            expect(await page.locator('body').textContent()).not.toMatch(rawMessageKeyPattern);
             if (locale === 'en' && 'enForm' in route && route.enForm) {
               const form = page.locator('form.form-band').first();
               await form.waitFor();

@@ -12,7 +12,7 @@
 | Coding 规则 SHA-256     | `D65CDF29C448634B32E78A720A85A69E1158001DB7C7E62067BFE0021565DE29` |
 | Node / pnpm             | `v22.23.2` / `10.33.4`                                             |
 | Docker / Compose        | `29.6.2` / `5.3.1`                                                 |
-| 证据采集时间            | `2026-10-25T13:38:15+08:00`                                        |
+| 证据采集时间            | `2026-10-25T17:12:02+08:00`                                        |
 
 依赖安装后的 lockfile SHA-256 为
 `5E2312C941C61E40D66AFAFAC5C92268AADE4DE13F3E69D2CEEC1CB6387EF91B`。
@@ -28,33 +28,37 @@ SBOM 与 NOTICE 的 SHA-256 分别为
 | `pnpm format:check`                                  |      0 | Prettier 全仓通过                                                  |
 | `pnpm typecheck`                                     |      0 | 12/12 workspace 通过                                               |
 | `pnpm architecture:check`                            |      0 | 39 个 service 源文件、12 个 workspace 通过                         |
-| `pnpm forbidden-files:check`                         |      0 | 扫描通过，禁止依赖和来源素材为 0                                   |
+| `pnpm forbidden-files:check`                         |      0 | 扫描 239 个文件，禁止依赖和来源素材为 0                            |
 | `pnpm openapi:check`                                 |      0 | 92 paths、120 operations、139 schemas、runtime 46/deferred 74      |
 | `pnpm knowledge:inventory`                           |      0 | 73 Capability、92/120/139/8、46/74、23 集合、4 profiles、13 queues |
 | `pnpm knowledge:check-runtime`                       |      0 | runtime 46、deferred 74、交集 0、并集 120、旧 page route 0         |
-| `pnpm test:unit`                                     |      0 | Turbo 20/20 tasks；OTel 12、web 18、service 7 等通过               |
-| `pnpm test:contract`                                 |      0 | 2 文件 / 12 用例通过                                               |
+| `pnpm test:unit`                                     |      0 | Turbo 20/20 tasks；OTel 18、web 19、service 7 等通过               |
+| `pnpm test:contract`                                 |      0 | 3 文件 / 23 用例通过；dependency gate 6/6                          |
 | `pnpm test:integration`                              |      0 | Turbo 20/20 tasks；service 10、parse 14、qa 5、dal 2 等通过        |
 | `pnpm test:tenant`                                   |      0 | 1 文件 / 2 用例通过                                                |
 | `pnpm test:concurrency`                              |      0 | 1 文件 / 1 用例通过                                                |
 | `pnpm test:fault`                                    |      0 | 2 文件 / 8 用例通过                                                |
-| `pnpm test:e2e`                                      |      0 | 1 文件 / 6 用例通过                                                |
+| `pnpm test:e2e`                                      |      0 | 1 文件 / 9 用例通过                                                |
 | `pnpm build`                                         |      0 | Turbo 12/12 tasks，Next.js 生产构建通过                            |
 | `pnpm build:workers`                                 |      0 | Worker 产物生成，Turbo 9/9 tasks 通过                              |
 | `pnpm license:check`                                 |      0 | 12 workspace、95 catalog、441 个生产闭包组件                       |
 | `pnpm sbom:generate`                                 |      0 | 93 direct、1231 transitive、12 workspace、4 image components       |
 | `docker compose -f deploy/docker-compose.yml config` |      0 | 7 个服务静态解析通过                                               |
 | 五镜像 `docker image inspect`                        |      0 | 5/5 存在，`linux/amd64`                                            |
+| `node scripts/check-licenses.mjs --dependency-only`  |      0 | 166 ledger、166 audit、95 catalog、12 workspace                    |
 
-E2E 六项分别覆盖：
+E2E 九项分别覆盖：
 
 1. 真实 Mongo/Redis/PostgreSQL/MinIO 下的 runtime catalog 与 access 路径。
 2. 9 页路由、console session 和 shell 可访问语义。
 3. 9 页 × 360/768/1200 viewport、横向溢出、console/page error 与 axe
    serious/critical。
 4. 表格列显隐、密度、移动端表格容器滚动，以及一次 409 后输入保留。
-5. 语言切换不改变 route/query，刷新后保持 `en`，`html lang` 同步。
-6. 删除路径、Jobs 读取和 46/46 runtime operation 覆盖。
+5. tag 与 collaborator 的 204 DELETE、缓存失效和无 Problem 提示。
+6. 9 路由 × zh-CN/en 的精确 title、H1、全量 raw-key 前缀和双语主导航。
+7. 英文空态与本地化安全 409，后端原始 message 不进入 DOM。
+8. 语言切换不改变 route/query，刷新后保持 `en`，`html lang` 同步。
+9. 删除路径、Jobs 读取和 46/46 runtime operation 覆盖。
 
 fixture 环境使用 CI 公布的
 `KB_TEST_MONGO_URI`、`KB_TEST_REDIS_URL`、`KB_TEST_PG_URL`、

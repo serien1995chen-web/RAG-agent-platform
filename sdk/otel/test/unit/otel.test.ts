@@ -434,6 +434,61 @@ describe('P7-03 OTel metrics / span / log / alert contracts (15.1-15.5)', () => 
     provider.register();
   });
 
+  it('does not export no-op or degraded spans through a registered global provider', async () => {
+    exporter.reset();
+    const noop = createNoopTelemetry();
+    await expect(
+      noop.withSpan('noop.global-provider', { requestId: 'noop-request' }, async (span) => {
+        span.addEvent('noop.must-not-export', { operation: 'noop' });
+        return 'ok';
+      }),
+    ).resolves.toBe('ok');
+    await noop.dispose();
+
+    const metricExporter = {
+      export(_metrics: unknown, callback: (result: { code: number }) => void) {
+        callback({ code: 0 });
+      },
+      forceFlush: async () => undefined,
+      shutdown: async () => undefined,
+    } as unknown as PushMetricExporter;
+    const logExporter = {
+      export(_records: unknown, callback: (result: { code: number }) => void) {
+        callback({ code: 0 });
+      },
+      forceFlush: async () => undefined,
+      shutdown: async () => undefined,
+    } as unknown as LogRecordExporter;
+    const degraded = createTelemetryRuntime(
+      {
+        serviceName: 'kb-noop-global-provider',
+        endpoint: 'http://127.0.0.1:4318',
+        exportIntervalMillis: 60_000,
+      },
+      {
+        traceExporterFactory: () => {
+          throw new Error('trace unavailable');
+        },
+        metricExporterFactory: () => metricExporter,
+        logExporterFactory: () => logExporter,
+      },
+    );
+    await expect(
+      degraded.withSpan('degraded.global-provider', { operation: 'safe' }, async (span) => {
+        span.addEvent('degraded.must-not-export', { operation: 'safe' });
+        return 'ok';
+      }),
+    ).resolves.toBe('ok');
+    await degraded.dispose();
+    await new Promise((resolveWait) => setImmediate(resolveWait));
+
+    const exportedSpans = exporter.getFinishedSpans();
+    console.log(`NOOP_MODE=${noop.state().mode} EXPORTED_SPANS=${exportedSpans.length}`);
+    expect(noop.state().mode).toBe('noop');
+    expect(degraded.state().mode).toBe('degraded');
+    expect(exportedSpans).toHaveLength(0);
+  });
+
   it('keeps the frozen 13-instrument dictionary', () => {
     expect(Object.keys(SPAN_INSTRUMENTS)).toHaveLength(13);
     expect(SPAN_INSTRUMENTS.http.allowedAttributes).toEqual([

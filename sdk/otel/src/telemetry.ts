@@ -1,4 +1,17 @@
-import { SpanStatusCode, trace, type Counter, type Span, type Tracer } from '@opentelemetry/api';
+import {
+  INVALID_SPAN_CONTEXT,
+  SpanStatusCode,
+  type Counter,
+  type Exception,
+  type Link,
+  type Span,
+  type SpanAttributeValue,
+  type SpanAttributes,
+  type SpanContext,
+  type SpanStatus,
+  type TimeInput,
+  type Tracer,
+} from '@opentelemetry/api';
 import { SeverityNumber, type Logger as OtelLogger } from '@opentelemetry/api-logs';
 import { resourceFromAttributes } from '@opentelemetry/resources';
 import {
@@ -77,6 +90,59 @@ function failureReason(error: unknown): string {
   return `degraded:${error instanceof Error ? error.name : 'unknown'}`;
 }
 
+class LocalNonRecordingSpan implements Span {
+  private readonly invalidContext: SpanContext = INVALID_SPAN_CONTEXT;
+
+  spanContext(): SpanContext {
+    return this.invalidContext;
+  }
+
+  setAttribute(_key: string, _value: SpanAttributeValue): this {
+    return this;
+  }
+
+  setAttributes(_attributes: SpanAttributes): this {
+    return this;
+  }
+
+  addEvent(_name: string, _attributes?: SpanAttributes): this {
+    return this;
+  }
+
+  addLink(_link: Link): this {
+    return this;
+  }
+
+  addLinks(_links: Link[]): this {
+    return this;
+  }
+
+  setStatus(_status: SpanStatus): this {
+    return this;
+  }
+
+  updateName(_name: string): this {
+    return this;
+  }
+
+  end(_endTime?: TimeInput): void {}
+
+  isRecording(): boolean {
+    return false;
+  }
+
+  recordException(_exception: Exception, _time?: TimeInput): void {}
+}
+
+async function runWithNonRecordingSpan<T>(fn: (span: Span) => Promise<T> | T): Promise<T> {
+  const span = new LocalNonRecordingSpan();
+  try {
+    return await fn(span);
+  } finally {
+    span.end();
+  }
+}
+
 export function createNoopTelemetry(): TelemetryRuntime {
   const state: TelemetryState = {
     mode: 'noop',
@@ -87,12 +153,7 @@ export function createNoopTelemetry(): TelemetryRuntime {
   let disposed = false;
   return {
     async withSpan(_name, _attributes, fn) {
-      const span = trace.getTracer('knowledge-noop').startSpan('knowledge.noop');
-      try {
-        return await fn(span);
-      } finally {
-        span.end();
-      }
+      return runWithNonRecordingSpan(fn);
     },
     recordUsage() {},
     log() {},
@@ -122,7 +183,7 @@ export function createTelemetryRuntime(
     level: config.logLevel ?? 'info',
     enabled: true,
   });
-  let tracer: Tracer = trace.getTracer('knowledge-noop');
+  let tracer: Tracer | undefined;
   let traceProvider: NodeTracerProvider | undefined;
   let meterProvider: MeterProvider | undefined;
   let loggerProvider: LoggerProvider | undefined;
@@ -343,6 +404,7 @@ export function createTelemetryRuntime(
       let callbackStarted = false;
       const sanitized = sanitizeTelemetryAttributes(attributes, SPAN_ALLOWED_ATTRIBUTE_KEYS);
       dropped += sanitized.dropped;
+      if (!tracer) return runWithNonRecordingSpan(fn);
       try {
         return await tracer.startActiveSpan(
           name,
@@ -371,12 +433,7 @@ export function createTelemetryRuntime(
       } catch (error) {
         if (!callbackStarted) {
           dropped += 1;
-          const fallbackSpan = trace.getTracer('knowledge-noop').startSpan('knowledge.noop');
-          try {
-            return await fn(fallbackSpan);
-          } finally {
-            fallbackSpan.end();
-          }
+          return runWithNonRecordingSpan(fn);
         }
         throw error;
       }
