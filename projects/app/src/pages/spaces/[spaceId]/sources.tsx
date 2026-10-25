@@ -1,7 +1,7 @@
 import {
   Button,
-  DataTable,
-  Field,
+  FormField,
+  KnowledgeDataTable,
   LoadingState,
   PageHeader,
   ProblemNotice,
@@ -9,151 +9,200 @@ import {
   SelectInput,
   StatusTag,
   TextInput,
+  knowledgeQueryKeys,
   knowledgeRequest,
-  useKnowledgeRequest,
+  sourceFormSchema,
+  submitWithProblem,
+  useKnowledgeEnumLabel,
+  useKnowledgeForm,
+  useKnowledgeI18n,
+  useKnowledgeMutation,
+  useKnowledgeQuery,
+  type SourceFormValues,
 } from '@kb/web';
 import Head from 'next/head';
 import { useRouter } from 'next/router';
-import { useState, type FormEvent } from 'react';
+import { useState } from 'react';
 import type { DirectoryRecord, SourceRecord, SpaceRecord } from '../../../lib/knowledge-types';
 import { listPath, statusTone } from '../../../lib/knowledge-types';
 
 export default function SourcesPage() {
   const router = useRouter();
+  const { t } = useKnowledgeI18n();
+  const enumLabel = useKnowledgeEnumLabel();
   const spaceId = typeof router.query.spaceId === 'string' ? router.query.spaceId : '';
-  const space = useKnowledgeRequest<SpaceRecord>(
+  const [problem, setProblem] = useState<unknown>(null);
+  const space = useKnowledgeQuery<SpaceRecord>(
+    knowledgeQueryKeys.spaces.detail(spaceId),
     spaceId ? `/v1/knowledge/spaces/${spaceId}` : null,
-    [spaceId],
   );
-  const directories = useKnowledgeRequest<{ items: DirectoryRecord[] }>(
+  const directories = useKnowledgeQuery<{ items: DirectoryRecord[] }>(
+    knowledgeQueryKeys.directories.list(spaceId),
     spaceId ? listPath(spaceId, 'directories') : null,
-    [spaceId],
   );
-  const sources = useKnowledgeRequest<{ items: SourceRecord[] }>(
+  const sources = useKnowledgeQuery<{ items: SourceRecord[] }>(
+    knowledgeQueryKeys.sources.list(spaceId),
     spaceId ? listPath(spaceId, 'sources') : null,
-    [spaceId],
   );
-  const [kind, setKind] = useState('text');
-  const [name, setName] = useState('');
-  const [directoryId, setDirectoryId] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<unknown>(null);
-
-  async function createSource(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!spaceId) return;
-    setBusy(true);
-    setError(null);
-    try {
-      await knowledgeRequest(`/v1/knowledge/spaces/${spaceId}/sources`, {
+  const form = useKnowledgeForm(sourceFormSchema, {
+    defaultValues: { kind: 'text', name: '', directoryId: '' },
+  });
+  const createSource = useKnowledgeMutation<SourceRecord, SourceFormValues>({
+    mutationFn: (values) =>
+      knowledgeRequest<SourceRecord>(`/v1/knowledge/spaces/${spaceId}/sources`, {
         method: 'POST',
         body: {
-          kind,
-          name,
-          ...(directoryId ? { directoryId } : {}),
+          kind: values.kind,
+          name: values.name,
+          ...(values.directoryId ? { directoryId: values.directoryId } : {}),
           searchEnabled: true,
           metadata: {},
         },
-      });
-      setName('');
-      await sources.reload();
-    } catch (caught) {
-      setError(caught);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function deleteSource(source: SourceRecord) {
-    if (!window.confirm(`Delete ${source.name}? A delete job will be created.`)) return;
-    setBusy(true);
-    setError(null);
-    try {
-      await knowledgeRequest(`/v1/knowledge/sources/${source.id}`, {
+      }),
+    invalidateKeys: [knowledgeQueryKeys.sources.list(spaceId), knowledgeQueryKeys.jobs.list()],
+    onSuccess: () => {
+      form.reset();
+    },
+  });
+  const deleteSource = useKnowledgeMutation<void, string>({
+    mutationFn: (sourceId) =>
+      knowledgeRequest<void>(`/v1/knowledge/sources/${sourceId}`, {
         method: 'DELETE',
         body: {},
-      });
-      await sources.reload();
-    } catch (caught) {
-      setError(caught);
-    } finally {
-      setBusy(false);
-    }
+      }),
+    invalidateKeys: [knowledgeQueryKeys.sources.list(spaceId), knowledgeQueryKeys.jobs.list()],
+  });
+
+  const submitSource = form.handleSubmit(async (values) => {
+    await submitWithProblem(
+      async () => {
+        await createSource.mutateAsync(values);
+      },
+      setProblem,
+      form,
+    );
+  });
+
+  async function removeSource(source: SourceRecord) {
+    if (!window.confirm(t('sources.confirmDelete', { name: source.name }))) return;
+    await submitWithProblem(async () => {
+      await deleteSource.mutateAsync(source.id);
+    }, setProblem);
   }
 
   return (
     <>
       <Head>
-        <title>{space.data ? `${space.data.name} sources` : 'Sources'}</title>
+        <title>
+          {space.data ? t('sources.title', { name: space.data.name }) : t('sources.fallbackTitle')}
+        </title>
       </Head>
       <PageHeader
-        eyebrow="Knowledge catalog"
-        title="Sources"
-        description="File, text, URL and external-source records. Content import remains deferred."
+        eyebrow={t('sources.eyebrow')}
+        title={t('sources.heading')}
+        description={t('sources.description')}
       />
-      <ProblemNotice error={space.error ?? directories.error ?? sources.error ?? error} />
-      <Section title="Create Source" meta="Synchronous metadata only">
-        <form className="form-band" onSubmit={createSource}>
+      <ProblemNotice
+        error={
+          space.error ??
+          directories.error ??
+          sources.error ??
+          problem ??
+          createSource.error ??
+          deleteSource.error
+        }
+        onRetry={() => void sources.refetch()}
+      />
+      <Section title={t('sources.createTitle')} meta={t('sources.createMeta')}>
+        <form className="form-band" onSubmit={submitSource}>
           <div className="form-intro">
-            <h2>Source record</h2>
-            <p>Creates an empty Source. It does not start a parsing pipeline.</p>
+            <h2>{t('sources.formTitle')}</h2>
+            <p>{t('sources.formDescription')}</p>
           </div>
           <div className="form-fields">
-            <Field label="Name">
-              <TextInput
-                required
-                maxLength={240}
-                value={name}
-                onChange={(event) => setName(event.target.value)}
-              />
-            </Field>
-            <Field label="Kind">
-              <SelectInput value={kind} onChange={(event) => setKind(event.target.value)}>
-                <option value="text">Text</option>
-                <option value="file">File</option>
-                <option value="url">URL</option>
-                <option value="template">Template</option>
-                <option value="image">Image</option>
-              </SelectInput>
-            </Field>
-            <Field label="Directory">
-              <SelectInput
-                value={directoryId}
-                onChange={(event) => setDirectoryId(event.target.value)}
-              >
-                <option value="">No directory</option>
-                {directories.data?.items.map((directory) => (
-                  <option key={directory.id} value={directory.id}>
-                    {directory.name}
-                  </option>
-                ))}
-              </SelectInput>
-            </Field>
+            <FormField
+              control={form.control}
+              name="name"
+              label={t('sources.name')}
+              render={(field) => (
+                <TextInput
+                  {...field}
+                  required
+                  maxLength={240}
+                  value={String(field.value)}
+                  onChange={(event) => field.onChange(event.target.value)}
+                />
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="kind"
+              label={t('sources.kind')}
+              render={(field) => (
+                <SelectInput
+                  name={field.name}
+                  value={String(field.value)}
+                  onBlur={field.onBlur}
+                  onChange={(event) => field.onChange(event.target.value)}
+                >
+                  <option value="text">{t('enum.text')}</option>
+                  <option value="file">{t('enum.file')}</option>
+                  <option value="url">{t('enum.url')}</option>
+                  <option value="template">{t('enum.template')}</option>
+                  <option value="image">{t('enum.image')}</option>
+                </SelectInput>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="directoryId"
+              label={t('sources.directory')}
+              render={(field) => (
+                <SelectInput
+                  name={field.name}
+                  value={String(field.value)}
+                  onBlur={field.onBlur}
+                  onChange={(event) => field.onChange(event.target.value)}
+                >
+                  <option value="">{t('sources.noDirectory')}</option>
+                  {directories.data?.items.map((directory) => (
+                    <option key={directory.id} value={directory.id}>
+                      {directory.name}
+                    </option>
+                  ))}
+                </SelectInput>
+              )}
+            />
           </div>
           <div className="form-actions">
-            <Button type="submit" tone="primary" busy={busy}>
-              Create Source
+            <Button type="submit" tone="primary" busy={createSource.isLoading}>
+              {t('sources.create')}
             </Button>
           </div>
         </form>
       </Section>
       <Section
-        title="Source register"
-        meta={sources.data ? `${sources.data.items.length} records` : undefined}
+        title={t('sources.register')}
+        meta={sources.data ? t('common.records', { count: sources.data.items.length }) : undefined}
       >
-        {sources.loading ? (
+        {sources.isLoading ? (
           <LoadingState />
         ) : (
-          <DataTable
+          <KnowledgeDataTable
             rows={sources.data?.items ?? []}
             rowKey={(source) => source.id}
-            empty="No Sources exist in this space."
+            empty={t('sources.empty')}
+            caption={t('sources.register')}
             columns={[
-              { key: 'name', label: 'Name', render: (source) => source.name },
-              { key: 'kind', label: 'Kind', render: (source) => source.kind },
+              { key: 'name', label: t('sources.columnName'), render: (source) => source.name },
+              {
+                key: 'kind',
+                label: t('sources.columnKind'),
+                render: (source) => enumLabel(source.kind),
+              },
               {
                 key: 'status',
-                label: 'Status',
+                label: t('sources.columnStatus'),
                 render: (source) => (
                   <StatusTag
                     value={source.processingStatus}
@@ -163,27 +212,25 @@ export default function SourcesPage() {
               },
               {
                 key: 'permission',
-                label: 'Permission',
-                render: (source) => `${source.permissionState} / r${source.permissionRevision}`,
+                label: t('sources.columnPermission'),
+                render: (source) =>
+                  `${enumLabel(source.permissionState)} / r${source.permissionRevision}`,
               },
               {
                 key: 'actions',
-                label: 'Actions',
+                label: t('sources.columnActions'),
                 render: (source) => (
                   <div className="inline-actions">
-                    <a
-                      className="button button-small"
-                      href={`/spaces/${spaceId}/segments?sourceId=${source.id}`}
-                    >
-                      Segments
-                    </a>
+                    <Button href={`/spaces/${spaceId}/segments?sourceId=${source.id}`} size="sm">
+                      {t('sources.actionSegments')}
+                    </Button>
                     <Button
-                      className="button-small"
+                      size="sm"
                       tone="danger"
-                      busy={busy}
-                      onClick={() => void deleteSource(source)}
+                      busy={deleteSource.isLoading}
+                      onClick={() => void removeSource(source)}
                     >
-                      Delete
+                      {t('sources.actionDelete')}
                     </Button>
                   </div>
                 ),

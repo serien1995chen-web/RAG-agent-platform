@@ -6,6 +6,7 @@ import {
   type RouteEntry,
 } from '@kb/contracts';
 import type { IdempotencyRecord } from '@kb/dal';
+import type { SafeAttributes, SafeLogFields } from '@kb/otel';
 import type { NextApiHandler, NextApiRequest, NextApiResponse } from 'next';
 import { bodyByteLength, requestHash } from './serialize';
 import { requestPathname, resolveRequestIdentity } from './request-meta';
@@ -14,6 +15,10 @@ import type { KnowledgeApiRuntime, KnowledgeAuthSubject, KnowledgeDispatchResult
 const PUBLIC_OPERATIONS = new Set(['API-OPENAPI']);
 const WRITE_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 const MAX_REQUEST_BODY_BYTES = 10 * 1024 * 1024;
+
+type TelemetryKnowledgeApiRuntime = KnowledgeApiRuntime & {
+  withSpan<T>(name: string, attributes: SafeAttributes, fn: () => Promise<T> | T): Promise<T>;
+};
 
 function header(request: NextApiRequest, name: string): string | undefined {
   const value = request.headers[name.toLowerCase()];
@@ -160,14 +165,14 @@ async function withIdempotency(
   }
 }
 
-async function loadRuntime(): Promise<KnowledgeApiRuntime> {
+async function loadRuntime(): Promise<TelemetryKnowledgeApiRuntime> {
   const runtime = await import('../../runtime/knowledge-runtime');
   return runtime.getKnowledgeApiRuntime();
 }
 
-function cleanDetails(value: unknown): Record<string, unknown> {
+function cleanDetails(value: unknown): SafeLogFields {
   if (value instanceof Error) {
-    return { errorName: value.name };
+    return { errorType: value.name };
   }
   return { errorType: typeof value };
 }
@@ -185,7 +190,7 @@ export function createKnowledgeApiHandler(): NextApiHandler {
       return;
     }
     const route = match.route;
-    let runtime: KnowledgeApiRuntime;
+    let runtime: TelemetryKnowledgeApiRuntime;
     try {
       runtime = await loadRuntime();
     } catch {
@@ -235,25 +240,35 @@ export function createKnowledgeApiHandler(): NextApiHandler {
       }
 
       const execute = () =>
-        route.operationId === 'API-OPENAPI'
-          ? import('@kb/contracts').then(({ OPENAPI_DOCUMENT }) => ({
-              status: 200,
-              data: OPENAPI_DOCUMENT,
-            }))
-          : runtime.dispatch({
-              route,
-              params: match.params,
-              query: request.query,
-              body: request.body,
-              context: {
-                subject,
-                workspaceId,
-                memberId: subject.memberId,
-                scopes: subject.scopes,
-                requestId,
-                traceId,
-              },
-            });
+        runtime.withSpan(
+          `knowledge.api.${route.operationId}`,
+          {
+            route: route.path,
+            method,
+            requestId,
+            operation: route.operationId,
+          },
+          () =>
+            route.operationId === 'API-OPENAPI'
+              ? import('@kb/contracts').then(({ OPENAPI_DOCUMENT }) => ({
+                  status: 200,
+                  data: OPENAPI_DOCUMENT,
+                }))
+              : runtime.dispatch({
+                  route,
+                  params: match.params,
+                  query: request.query,
+                  body: request.body,
+                  context: {
+                    subject,
+                    workspaceId,
+                    memberId: subject.memberId,
+                    scopes: subject.scopes,
+                    requestId,
+                    traceId,
+                  },
+                }),
+        );
 
       let result: KnowledgeDispatchResult;
       if (route.idempotent && WRITE_METHODS.has(method)) {
@@ -281,7 +296,7 @@ export function createKnowledgeApiHandler(): NextApiHandler {
           requestId,
           traceId,
           operationId: route.operationId,
-          details: { status: 204, workspaceId },
+          details: { httpStatus: 204, workspaceId },
         });
         return;
       }
@@ -296,7 +311,7 @@ export function createKnowledgeApiHandler(): NextApiHandler {
         requestId,
         traceId,
         operationId: route.operationId,
-        details: { status: result.status, workspaceId },
+        details: { httpStatus: result.status, workspaceId },
       });
     } catch (error) {
       if (error instanceof KnowledgeApiError) {

@@ -1,11 +1,7 @@
 import { SpanStatusCode, trace, type Span, type Tracer } from '@opentelemetry/api';
 import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http';
 import { resourceFromAttributes } from '@opentelemetry/resources';
-import {
-  BatchSpanProcessor,
-  ConsoleSpanExporter,
-  type SpanExporter,
-} from '@opentelemetry/sdk-trace-base';
+import { BatchSpanProcessor, type SpanExporter } from '@opentelemetry/sdk-trace-base';
 import { NodeTracerProvider } from '@opentelemetry/sdk-trace-node';
 import type {
   OtelConfig,
@@ -97,7 +93,9 @@ export function initTracing(
     return { enabled: false, reason: 'exporter_not_configured' };
   }
   try {
-    const exporter = exporterFactory ? exporterFactory() : new ConsoleSpanExporter();
+    const exporter = exporterFactory
+      ? exporterFactory()
+      : createOtlpTraceExporter(config.exporterEndpointRef);
     const provider = new NodeTracerProvider({
       resource: resourceFromAttributes({ 'service.name': config.serviceName }),
       spanProcessors: [new BatchSpanProcessor(exporter)],

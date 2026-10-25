@@ -1,13 +1,17 @@
 import {
-  DataTable,
+  Button,
   EmptyState,
+  KnowledgeDataTable,
   LoadingState,
   PageHeader,
   ProblemNotice,
   Section,
   StatusTag,
   formatDate,
-  useKnowledgeRequest,
+  knowledgeQueryKeys,
+  useKnowledgeEnumLabel,
+  useKnowledgeI18n,
+  useKnowledgeQuery,
 } from '@kb/web';
 import Head from 'next/head';
 import type { Column } from '@kb/web';
@@ -17,59 +21,81 @@ import { statusTone } from '../../lib/knowledge-types';
 type Response = { items: SpaceRecord[]; pageInfo: PageInfo };
 
 export default function SpacesPage() {
-  const { data, error, loading } = useKnowledgeRequest<Response>('/v1/knowledge/spaces?limit=200');
+  const { locale, t } = useKnowledgeI18n();
+  const enumLabel = useKnowledgeEnumLabel();
+  const spaces = useKnowledgeQuery<Response>(
+    knowledgeQueryKeys.spaces.list({ limit: 200 }),
+    '/v1/knowledge/spaces?limit=200',
+  );
+  const data = spaces.data;
   const columns: Column<SpaceRecord>[] = [
     {
       key: 'name',
-      label: 'Name',
+      label: t('spaces.columnName'),
       render: (space) => <a href={`/spaces/${space.id}/overview`}>{space.name}</a>,
     },
-    { key: 'kind', label: 'Type', render: (space) => space.kind },
+    { key: 'kind', label: t('spaces.columnType'), render: (space) => enumLabel(space.kind) },
     {
       key: 'status',
-      label: 'Status',
+      label: t('spaces.columnStatus'),
       render: (space) => <StatusTag value={space.status} tone={statusTone(space.status)} />,
     },
-    { key: 'access', label: 'Access', render: (space) => space.accessMode },
-    { key: 'revision', label: 'Reference revision', render: (space) => space.referenceRevision },
-    { key: 'updated', label: 'Updated', render: (space) => formatDate(space.updatedAt) },
+    {
+      key: 'access',
+      label: t('spaces.columnAccess'),
+      render: (space) => enumLabel(space.accessMode),
+    },
+    {
+      key: 'revision',
+      label: t('spaces.columnReferenceRevision'),
+      render: (space) => space.referenceRevision,
+    },
+    {
+      key: 'updated',
+      label: t('spaces.columnUpdated'),
+      render: (space) => formatDate(space.updatedAt, locale),
+    },
   ];
 
   return (
     <>
       <Head>
-        <title>Knowledge spaces</title>
+        <title>{t('spaces.title')}</title>
       </Head>
       <PageHeader
-        eyebrow="Knowledge catalog"
-        title="Spaces"
-        description="Spaces and organization folders visible to the active workspace."
+        eyebrow={t('spaces.eyebrow')}
+        title={t('spaces.heading')}
+        description={t('spaces.description')}
         actions={
-          <a className="button button-primary" href="/spaces/new">
-            New space
-          </a>
+          <Button href="/spaces/new" tone="primary">
+            {t('spaces.new')}
+          </Button>
         }
       />
-      <ProblemNotice error={error} />
-      {loading ? (
+      <ProblemNotice error={spaces.error} />
+      {spaces.isLoading ? (
         <LoadingState />
       ) : (
-        <Section title="Space register" meta={data ? `${data.items.length} records` : undefined}>
+        <Section
+          title={t('spaces.register')}
+          meta={data ? t('common.records', { count: data.items.length }) : undefined}
+        >
           {data && data.items.length > 0 ? (
-            <DataTable
+            <KnowledgeDataTable
               rows={data.items}
               columns={columns}
               rowKey={(space) => space.id}
-              empty="No spaces are visible."
+              empty={t('spaces.emptyDescription')}
+              caption={t('spaces.register')}
             />
           ) : (
             <EmptyState
-              title="No knowledge spaces"
-              description="Create the first space to start the architecture baseline."
+              title={t('spaces.emptyTitle')}
+              description={t('spaces.emptyDescription')}
               action={
-                <a className="button button-primary" href="/spaces/new">
-                  Create space
-                </a>
+                <Button href="/spaces/new" tone="primary">
+                  {t('spaces.create')}
+                </Button>
               }
             />
           )}

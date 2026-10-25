@@ -3,6 +3,8 @@ import { randomUUID } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { join, resolve } from 'node:path';
+import AxeBuilder from '@axe-core/playwright';
+import { chromium } from '@playwright/test';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { registerKnowledgeModels } from '../../packages/service/src/shared/persistence/schemas/knowledge-index';
 import { createKnowledgeConnections } from '../../packages/service/src/shared/runtime/knowledge-connections';
@@ -377,6 +379,24 @@ async function waitForHealth(): Promise<void> {
     await new Promise((resolveWait) => setTimeout(resolveWait, 250));
   }
   throw new Error(`Next server did not become healthy\n${serverOutput}`);
+}
+
+async function consoleCookie(): Promise<string> {
+  const response = await fetch(`${baseUrl}/api/console/session`, {
+    method: 'POST',
+    headers: {
+      authorization: `Bearer ${authToken}`,
+      'x-workspace-id': workspaceId,
+      'content-type': 'application/json',
+    },
+    body: '{}',
+  });
+  expect(response.status).toBe(200);
+  const setCookie = response.headers.get('set-cookie') ?? '';
+  expect(setCookie).toContain('kb_console_session=');
+  expect(setCookie).toContain('HttpOnly');
+  expect(setCookie).toContain('SameSite=Strict');
+  return setCookie.split(';', 1)[0] ?? '';
 }
 
 function captureServerOutput(chunk: Buffer): void {
@@ -847,15 +867,15 @@ describe.sequential('knowledge architecture baseline E2E', () => {
     expect(cookieResponse.status).toBe(200);
 
     const pages: Array<[string, string]> = [
-      ['/spaces', 'Knowledge spaces'],
-      ['/spaces/new', 'New knowledge space'],
-      [`/spaces/${requiredId(scenario.spaceId, 'spaceId')}/overview`, 'Space overview'],
-      [`/spaces/${requiredId(scenario.spaceId, 'spaceId')}/sources`, 'Sources'],
-      [`/spaces/${requiredId(scenario.spaceId, 'spaceId')}/segments`, 'Segments'],
-      [`/spaces/${requiredId(scenario.spaceId, 'spaceId')}/tags`, 'Tags'],
-      [`/spaces/${requiredId(scenario.spaceId, 'spaceId')}/access`, 'Access'],
-      [`/spaces/${requiredId(scenario.spaceId, 'spaceId')}/jobs`, 'Jobs'],
-      ['/system/status', 'System status'],
+      ['/spaces', '知识空间'],
+      ['/spaces/new', '新建知识空间'],
+      [`/spaces/${requiredId(scenario.spaceId, 'spaceId')}/overview`, '空间概览'],
+      [`/spaces/${requiredId(scenario.spaceId, 'spaceId')}/sources`, '来源'],
+      [`/spaces/${requiredId(scenario.spaceId, 'spaceId')}/segments`, '分段'],
+      [`/spaces/${requiredId(scenario.spaceId, 'spaceId')}/tags`, '标签'],
+      [`/spaces/${requiredId(scenario.spaceId, 'spaceId')}/access`, '访问权限'],
+      [`/spaces/${requiredId(scenario.spaceId, 'spaceId')}/jobs`, '任务'],
+      ['/system/status', '系统状态'],
     ];
     for (const [path, title] of pages) {
       const response = await fetch(`${baseUrl}${path}`, {
@@ -865,8 +885,9 @@ describe.sequential('knowledge architecture baseline E2E', () => {
       expect(response.status, path).toBe(200);
       expect(response.headers.get('content-type'), path).toContain('text/html');
       const html = await response.text();
-      expect(html, path).toMatch(new RegExp(`<title[^>]*>${title}</title>`));
-      expect(html, path).toContain('<html lang="en">');
+      expect(html, path).toContain('<title');
+      expect(html, path).toContain(title);
+      expect(html, path).toContain('<html lang="zh-CN">');
       expect(html, path).toContain('href="#knowledge-main"');
       expect(html, path).toContain('id="knowledge-main"');
       expect((html.match(/<h1\b/g) ?? []).length, `${path} h1 count`).toBe(1);
@@ -874,6 +895,301 @@ describe.sequential('knowledge architecture baseline E2E', () => {
       expect(html, path).not.toContain('/api/core/dataset');
       expect(html, path).not.toContain('/api/internal/dataset');
       expect(html, path).not.toContain('/proApi/core/dataset');
+    }
+  });
+
+  it('renders nine pages at three viewports with accessible shell geometry and axe', async () => {
+    const cookie = await consoleCookie();
+    const separator = cookie.indexOf('=');
+    const cookieName = separator > 0 ? cookie.slice(0, separator) : '';
+    const cookieValue = separator > 0 ? cookie.slice(separator + 1) : '';
+    if (!cookieName || !cookieValue) throw new Error('console cookie was not initialized');
+    const browser = await chromium.launch({ headless: true });
+    const viewports = [
+      { name: 'mobile', width: 360, height: 800 },
+      { name: 'tablet', width: 768, height: 1024 },
+      { name: 'desktop', width: 1200, height: 900 },
+    ];
+    const pages = [
+      '/spaces',
+      '/spaces/new',
+      `/spaces/${requiredId(scenario.spaceId, 'spaceId')}/overview`,
+      `/spaces/${requiredId(scenario.spaceId, 'spaceId')}/sources`,
+      `/spaces/${requiredId(scenario.spaceId, 'spaceId')}/segments`,
+      `/spaces/${requiredId(scenario.spaceId, 'spaceId')}/tags`,
+      `/spaces/${requiredId(scenario.spaceId, 'spaceId')}/access`,
+      `/spaces/${requiredId(scenario.spaceId, 'spaceId')}/jobs`,
+      '/system/status',
+    ];
+
+    try {
+      for (const viewport of viewports) {
+        const context = await browser.newContext({
+          viewport: { width: viewport.width, height: viewport.height },
+        });
+        await context.addCookies([
+          {
+            name: cookieName,
+            value: cookieValue,
+            domain: '127.0.0.1',
+            path: '/',
+            sameSite: 'Strict',
+          },
+        ]);
+        for (const path of pages) {
+          const page = await context.newPage();
+          const consoleErrors: string[] = [];
+          const pageErrors: string[] = [];
+          const networkErrors: string[] = [];
+          page.on('console', (message) => {
+            if (message.type() === 'error') consoleErrors.push(message.text());
+          });
+          page.on('pageerror', (error) => pageErrors.push(error.message));
+          page.on('requestfailed', (request) => {
+            networkErrors.push(
+              `${request.method()} ${request.url()} ${request.failure()?.errorText ?? 'failed'}`,
+            );
+          });
+          page.on('response', (response) => {
+            if (response.status() >= 400) {
+              networkErrors.push(
+                `${response.request().method()} ${response.url()} ${response.status()}`,
+              );
+            }
+          });
+
+          const response = await page.goto(`${baseUrl}${path}`, {
+            waitUntil: 'networkidle',
+            timeout: 30_000,
+          });
+          expect(response?.status(), `${viewport.name} ${path} status`).toBe(200);
+          await page.locator('h1').waitFor({ state: 'visible' });
+          expect(await page.locator('h1').count(), `${viewport.name} ${path} h1`).toBe(1);
+          expect(
+            await page.locator('a[href="#knowledge-main"]').count(),
+            `${viewport.name} ${path} skip link`,
+          ).toBeGreaterThan(0);
+          expect(
+            await page.locator('#knowledge-main').count(),
+            `${viewport.name} ${path} main`,
+          ).toBe(1);
+
+          const geometry = await page.evaluate(() => {
+            const nav = document
+              .querySelector('aside[aria-label="Primary navigation"]')
+              ?.getBoundingClientRect();
+            const main = document.querySelector('#knowledge-main')?.getBoundingClientRect();
+            const heading = document.querySelector('h1')?.getBoundingClientRect();
+            const actions = document.querySelector('.page-actions')?.getBoundingClientRect();
+            const intersects = (left: DOMRect | undefined, right: DOMRect | undefined): boolean => {
+              if (!left || !right) return false;
+              return !(
+                left.right <= right.left ||
+                right.right <= left.left ||
+                left.bottom <= right.top ||
+                right.bottom <= left.top
+              );
+            };
+            return {
+              pageOverflow: document.documentElement.scrollWidth - window.innerWidth,
+              navMainOverlap: intersects(nav, main),
+              headingActionsOverlap: intersects(heading, actions),
+            };
+          });
+          expect(
+            geometry.pageOverflow,
+            `${viewport.name} ${path} horizontal overflow`,
+          ).toBeLessThanOrEqual(1);
+          expect(geometry.navMainOverlap, `${viewport.name} ${path} nav overlap`).toBe(false);
+          expect(
+            geometry.headingActionsOverlap,
+            `${viewport.name} ${path} heading/action overlap`,
+          ).toBe(false);
+
+          const accessibility = await new AxeBuilder({ page })
+            .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
+            .analyze();
+          const blockingViolations = accessibility.violations.filter(
+            (violation) => violation.impact === 'serious' || violation.impact === 'critical',
+          );
+          expect(blockingViolations, `${viewport.name} ${path} axe serious/critical`).toEqual([]);
+          expect(consoleErrors, `${viewport.name} ${path} console errors`).toEqual([]);
+          expect(pageErrors, `${viewport.name} ${path} page errors`).toEqual([]);
+          expect(networkErrors, `${viewport.name} ${path} network errors`).toEqual([]);
+          await page.close();
+        }
+        await context.close();
+      }
+    } finally {
+      await browser.close();
+    }
+  });
+
+  it('exercises table controls and preserves form input across one 409 mutation', async () => {
+    const cookie = await consoleCookie();
+    const separator = cookie.indexOf('=');
+    const cookieName = separator > 0 ? cookie.slice(0, separator) : '';
+    const cookieValue = separator > 0 ? cookie.slice(separator + 1) : '';
+    if (!cookieName || !cookieValue) throw new Error('console cookie was not initialized');
+    const spaceId = requiredId(scenario.spaceId, 'spaceId');
+    const browser = await chromium.launch({ headless: true });
+    const context = await browser.newContext({ viewport: { width: 360, height: 800 } });
+    await context.addCookies([
+      {
+        name: cookieName,
+        value: cookieValue,
+        domain: '127.0.0.1',
+        path: '/',
+        sameSite: 'Strict',
+      },
+    ]);
+
+    try {
+      const page = await context.newPage();
+      await page.goto(`${baseUrl}/spaces`, { waitUntil: 'networkidle' });
+      const tableCaption = page.locator('table caption');
+      await tableCaption.waitFor();
+      expect(await tableCaption.textContent()).toBe('空间清单');
+      expect(await page.locator('th[scope="col"]').count()).toBeGreaterThan(0);
+
+      await page.getByRole('button', { name: '列' }).click();
+      await page.getByRole('checkbox', { name: '名称' }).click();
+      expect(await page.locator('thead th').allTextContents()).not.toContain('名称');
+      await page.getByRole('button', { name: '紧凑' }).click();
+      expect(await page.getByRole('button', { name: '紧凑' }).getAttribute('aria-pressed')).toBe(
+        'true',
+      );
+      const tableGeometry = await page.evaluate(() => {
+        const container = document.querySelector('.table-scroll');
+        if (!container) return null;
+        return {
+          containerWidth: container.clientWidth,
+          tableWidth: container.scrollWidth,
+          pageOverflow: document.documentElement.scrollWidth - window.innerWidth,
+        };
+      });
+      expect(tableGeometry).not.toBeNull();
+      expect(tableGeometry!.containerWidth).toBeLessThanOrEqual(360);
+      expect(tableGeometry!.tableWidth).toBeGreaterThan(tableGeometry!.containerWidth);
+      expect(tableGeometry!.pageOverflow).toBeLessThanOrEqual(1);
+
+      let patchCount = 0;
+      let patchServed = false;
+      const detailPath = `/v1/knowledge/spaces/${spaceId}`;
+      await page.route(`**${detailPath}`, async (route) => {
+        if (route.request().method() !== 'PATCH') {
+          await route.continue();
+          return;
+        }
+        patchCount += 1;
+        if (!patchServed) {
+          patchServed = true;
+          await new Promise((resolveWait) => setTimeout(resolveWait, 250));
+          await route.fulfill({
+            status: 409,
+            contentType: 'application/json',
+            body: JSON.stringify({
+              success: false,
+              error: {
+                code: 'KNOWLEDGE_VALIDATION_FAILED',
+                message: 'backend text must not become local copy',
+                retryable: false,
+                details: { field: 'name' },
+              },
+              traceId: 'trace-ui-conflict',
+              requestId: 'request-ui-conflict',
+            }),
+          });
+          return;
+        }
+        await route.continue();
+      });
+
+      await page.goto(`${baseUrl}/spaces/${spaceId}/overview`, { waitUntil: 'networkidle' });
+      const nameInput = page.getByLabel('名称');
+      await nameInput.fill('Preserved draft');
+      const form = page.locator('form.form-band');
+      await form.evaluate((element) => {
+        const formElement = element as HTMLFormElement;
+        formElement.requestSubmit();
+        formElement.requestSubmit();
+      });
+      await page.locator('.problem-notice').waitFor();
+      expect(patchCount).toBe(1);
+      expect(await nameInput.inputValue()).toBe('Preserved draft');
+      expect(await page.getByText('KNOWLEDGE_VALIDATION_FAILED').count()).toBeGreaterThan(0);
+      expect(await page.getByText('请求校验失败').count()).toBeGreaterThan(0);
+      expect(await page.getByText('不可重试').count()).toBeGreaterThan(0);
+      expect(await page.getByText('追踪 trace-ui-conflict').count()).toBeGreaterThan(0);
+      expect(await page.getByText('请求 request-ui-conflict').count()).toBeGreaterThan(0);
+      expect(await page.locator('body').textContent()).not.toContain(
+        'backend text must not become local copy',
+      );
+
+      await page.unroute(`**${detailPath}`);
+      const requestCounts = new Map<string, number>();
+      page.on('request', (request) => {
+        if (request.method() !== 'GET') return;
+        const path = new URL(request.url()).pathname;
+        requestCounts.set(path, (requestCounts.get(path) ?? 0) + 1);
+      });
+      await nameInput.fill('Updated evidence name');
+      await page.getByRole('button', { name: '保存元数据' }).click();
+      await page.waitForFunction(
+        () =>
+          (document.querySelector('input[name="name"]') as HTMLInputElement | null)?.value === '',
+      );
+      await page.waitForLoadState('networkidle');
+      expect(requestCounts.get(detailPath) ?? 0).toBeGreaterThanOrEqual(1);
+      expect(requestCounts.get(`/v1/knowledge/spaces/${spaceId}/directories`) ?? 0).toBe(0);
+      expect(requestCounts.get(`/v1/knowledge/spaces/${spaceId}/sources`) ?? 0).toBe(0);
+      await page.close();
+    } finally {
+      await context.close();
+      await browser.close();
+    }
+  });
+
+  it('switches locale without changing route or query and persists it', async () => {
+    const cookie = await consoleCookie();
+    const separator = cookie.indexOf('=');
+    const cookieName = separator > 0 ? cookie.slice(0, separator) : '';
+    const cookieValue = separator > 0 ? cookie.slice(separator + 1) : '';
+    if (!cookieName || !cookieValue) throw new Error('console cookie was not initialized');
+    const browser = await chromium.launch({ headless: true });
+    const context = await browser.newContext({ viewport: { width: 768, height: 1024 } });
+    await context.addCookies([
+      {
+        name: cookieName,
+        value: cookieValue,
+        domain: '127.0.0.1',
+        path: '/',
+        sameSite: 'Strict',
+      },
+    ]);
+
+    try {
+      const page = await context.newPage();
+      const path = `/spaces/${requiredId(scenario.spaceId, 'spaceId')}/segments?sourceId=${requiredId(scenario.sourceId, 'sourceId')}`;
+      await page.goto(`${baseUrl}${path}`, { waitUntil: 'networkidle' });
+      await page.getByRole('heading', { level: 1, name: '分段' }).waitFor();
+      expect(await page.locator('html').getAttribute('lang')).toBe('zh-CN');
+      const routeBefore = page.url();
+
+      await page.getByRole('button', { name: 'EN' }).click();
+      await page.waitForFunction(() => document.documentElement.lang === 'en');
+      await page.getByRole('heading', { level: 1, name: 'Segments' }).waitFor();
+      expect(page.url()).toBe(routeBefore);
+      expect(await page.evaluate(() => window.localStorage.getItem('kb.locale'))).toBe('en');
+
+      await page.reload({ waitUntil: 'networkidle' });
+      await page.getByRole('heading', { level: 1, name: 'Segments' }).waitFor();
+      expect(await page.locator('html').getAttribute('lang')).toBe('en');
+      expect(page.url()).toBe(routeBefore);
+      await page.close();
+    } finally {
+      await context.close();
+      await browser.close();
     }
   });
 

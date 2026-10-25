@@ -24,7 +24,10 @@ const EnvironmentSchema = z.object({
   KB_EXTERNAL_MODEL_MODE: z.enum(['mock', 'real']).default('mock'),
   KB_EXTERNAL_OCR_MODE: z.enum(['mock', 'real']).default('mock'),
   KB_EXTERNAL_CONNECTOR_MODE: z.enum(['mock', 'real']).default('mock'),
-  KB_OTEL_ENDPOINT_REF: z.string().optional(),
+  OTEL_EXPORTER_OTLP_ENDPOINT: z.preprocess(
+    (value) => (typeof value === 'string' && value.trim() === '' ? undefined : value),
+    z.string().trim().url().optional(),
+  ),
   KB_LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error']).default('info'),
 });
 
@@ -57,7 +60,7 @@ export interface KnowledgeRuntimeConfig {
     ocr: 'mock' | 'real';
     connector: 'mock' | 'real';
   };
-  otelEndpointRef?: string;
+  otelEndpoint?: string;
   logLevel: 'debug' | 'info' | 'warn' | 'error';
 }
 
@@ -124,7 +127,7 @@ export function loadKnowledgeRuntimeConfig(
       ocr: data.KB_EXTERNAL_OCR_MODE,
       connector: data.KB_EXTERNAL_CONNECTOR_MODE,
     },
-    ...(data.KB_OTEL_ENDPOINT_REF ? { otelEndpointRef: data.KB_OTEL_ENDPOINT_REF } : {}),
+    ...(data.OTEL_EXPORTER_OTLP_ENDPOINT ? { otelEndpoint: data.OTEL_EXPORTER_OTLP_ENDPOINT } : {}),
     logLevel: data.KB_LOG_LEVEL,
   };
 }

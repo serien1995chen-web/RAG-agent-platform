@@ -2,12 +2,10 @@ export {
   ensureConsoleSession,
   knowledgeRequest,
   KnowledgeRequestError,
-  useKnowledgeRequest,
 } from './client/knowledge-client';
 export type { ConsoleSession } from './client/knowledge-client';
 export {
   Button,
-  DataTable,
   EmptyState,
   Field,
   FormBand,
@@ -19,8 +17,55 @@ export {
   StatusTag,
   TextArea,
   TextInput,
-  formatDate,
 } from './components/knowledge-primitives';
-export type { Column } from './components/knowledge-primitives';
+export { KnowledgeDataTable } from './components/data-table';
+export type {
+  Column,
+  Density,
+  KnowledgeDataTableProps,
+  TablePagination,
+} from './components/data-table';
 export { KnowledgeAppShell } from './components/knowledge-shell';
 export type { ShellLocation } from './components/knowledge-shell';
+export {
+  collaboratorFormSchema,
+  fieldErrorsFromProblem,
+  FormField,
+  newSpaceFormSchema,
+  segmentFormSchema,
+  sourceFormSchema,
+  submitWithProblem,
+  tagAssignmentFormSchema,
+  tagFormSchema,
+  updateSpaceFormSchema,
+  useKnowledgeForm,
+} from './forms/knowledge-form';
+export type {
+  CollaboratorFormValues,
+  NewSpaceFormValues,
+  SegmentFormValues,
+  SourceFormValues,
+  TagAssignmentFormValues,
+  TagFormValues,
+  UpdateSpaceFormValues,
+} from './forms/knowledge-form';
+export {
+  enumMessageKey,
+  formatDate,
+  KnowledgeI18nProvider,
+  messages,
+  statusMessageKey,
+  toProblemView,
+  useKnowledgeEnumLabel,
+  useKnowledgeI18n,
+  type KnowledgeLocale,
+  type MessageKey,
+  type ProblemView,
+} from './i18n';
+export { createKnowledgeQueryClient, KnowledgeQueryProvider } from './query/knowledge-query-client';
+export { knowledgeQueryKeys } from './query/query-keys';
+export { useKnowledgeMutation } from './query/use-knowledge-mutation';
+export { useKnowledgeQuery } from './query/use-knowledge-query';
+export { knowledgeGlobalStyles, knowledgeTheme, KnowledgeUiProvider } from './theme';
+export { knowledgeThemeTokens } from './theme';
+export type { KnowledgeThemeTokens } from './theme';

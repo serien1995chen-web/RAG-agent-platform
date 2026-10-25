@@ -34,16 +34,29 @@
     "license:check": "node scripts/check-licenses.mjs"
   },
   "devDependencies": {
+    "@axe-core/playwright": "catalog:",
+    "@chakra-ui/cli": "catalog:",
     "@eslint/js": "catalog:",
+    "@playwright/test": "catalog:",
+    "@svgr/webpack": "catalog:",
+    "@types/jsdom": "catalog:",
     "@types/node": "catalog:",
     "@vitest/coverage-v8": "catalog:",
+    "esbuild": "catalog:",
     "eslint": "catalog:",
+    "eslint-config-next": "catalog:",
+    "husky": "catalog:",
+    "json5": "catalog:",
+    "lint-staged": "catalog:",
     "prettier": "catalog:",
+    "sass": "catalog:",
+    "tailwindcss": "catalog:",
     "tsdown": "catalog:",
     "tsx": "catalog:",
     "turbo": "catalog:",
     "typescript": "catalog:",
     "typescript-eslint": "catalog:",
+    "vite": "catalog:",
     "vitest": "catalog:"
   }
 }

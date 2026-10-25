@@ -15,7 +15,7 @@
  * 模块被 import 时不产生副作用（generate-sbom.mjs 复用同一份声明）。
  */
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
-import { join, relative, resolve } from 'node:path';
+import { dirname, join, relative, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 /** npm 白名单（ADR-019 代码）与字体白名单。 */
@@ -67,6 +67,29 @@ export const IMAGE_LICENSE_WHITELIST = [
   { service: 'minio', license: 'AGPL-3.0', confirmedBy: '设计 6.2' },
   { service: 'pgvector', license: 'PostgreSQL', confirmedBy: 'N2-A 用户确认' },
 ];
+
+const EXACT_DEPENDENCY_VERSION = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z][0-9A-Za-z.-]*)?$/;
+const FORBIDDEN_DEPENDENCY_NAMES = /^@fastgpt-|^@fastgpt-sdk\/|^@kb-sdk\//;
+const DESIGN_DEPENDENCY_SOURCES = new Set(['PROJECT_BASELINE', 'FASTGPT_SUPPLEMENT']);
+const TEST_ONLY_SOURCE = 'USER_APPROVED_S1_BROWSER_E2E';
+const EXPECTED_TEST_ONLY = new Map([
+  ['@playwright/test', '1.64.1'],
+  ['@axe-core/playwright', '4.14.0'],
+]);
+const EXPECTED_STAGE_COUNTS = new Map([
+  ['S1', 91],
+  ['S2', 13],
+  ['S3', 0],
+  ['S4', 24],
+  ['S5', 2],
+  ['S6', 6],
+  ['S7', 21],
+  ['S8', 1],
+  ['S9', 0],
+  ['S10', 6],
+  ['S11', 0],
+]);
+const CATALOG_ONLY_LATER_STAGE = new Set(['ajv', '@llamaindex/liteparse-wasm']);
 
 export function findPendingException(name, version) {
   return PENDING_LEGAL_REVIEW.find((entry) => entry.name === name && entry.version === version);
@@ -157,30 +180,46 @@ function parseCatalog(workspaceYaml) {
   return catalog;
 }
 
-/** 既有三项检查（不得削弱）：catalog 登记 / workspace 引用 / 禁止 latest、*。 */
-function checkRegistrations(repoRoot, catalog) {
-  const errors = [];
-  const workspaceNames = new Set();
-  const packages = [];
+function readJson(file) {
+  return JSON.parse(readFileSync(file, 'utf8'));
+}
+
+function collectPackageManifests(repoRoot) {
+  const manifests = [];
+  const rootPath = join(repoRoot, 'package.json');
+  manifests.push({ manifest: readJson(rootPath), manifestPath: rootPath, workspace: false });
 
   for (const dir of ['packages', 'projects', 'sdk']) {
     for (const entry of readdirSync(join(repoRoot, dir), { withFileTypes: true })) {
       if (!entry.isDirectory()) continue;
       const manifestPath = join(repoRoot, dir, entry.name, 'package.json');
-      try {
-        const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
-        packages.push({ manifest, manifestPath });
-        workspaceNames.add(manifest.name);
-      } catch {
-        // 忽略没有 package.json 的目录。
-      }
+      if (!existsSync(manifestPath)) continue;
+      manifests.push({
+        manifest: readJson(manifestPath),
+        manifestPath,
+        workspace: true,
+      });
     }
   }
+  return manifests;
+}
 
-  for (const { manifest, manifestPath } of packages) {
+/** 既有三项检查（不得削弱）：catalog 登记 / workspace 引用 / 禁止 latest、*。 */
+function checkRegistrations(repoRoot, catalog) {
+  const errors = [];
+  const workspaceNames = new Set();
+  const manifests = collectPackageManifests(repoRoot);
+  for (const { manifest, workspace } of manifests) {
+    if (workspace) workspaceNames.add(manifest.name);
+  }
+
+  for (const { manifest, manifestPath } of manifests) {
     const rel = relative(repoRoot, manifestPath);
     for (const section of ['dependencies', 'devDependencies', 'peerDependencies']) {
       for (const [name, spec] of Object.entries(manifest[section] ?? {})) {
+        if (FORBIDDEN_DEPENDENCY_NAMES.test(name)) {
+          errors.push(`${rel}: ${name} 是禁止依赖`);
+        }
         if (spec === 'catalog:') {
           if (!catalog.has(name)) errors.push(`${rel}: ${name} 使用 catalog: 但未登记`);
           continue;
@@ -191,12 +230,169 @@ function checkRegistrations(repoRoot, catalog) {
         }
         if (spec === 'latest' || spec === '*') {
           errors.push(`${rel}: ${name} 不得使用 ${spec}`);
+          continue;
+        }
+        errors.push(`${rel}: 外部依赖 ${name} 必须使用 catalog:`);
+      }
+    }
+  }
+
+  return {
+    errors,
+    workspaceCount: manifests.filter((item) => item.workspace).length,
+    manifests,
+  };
+}
+
+function checkDependencyBaseline(repoRoot, catalog, manifests) {
+  const errors = [];
+  const ledger = readJson(
+    join(
+      repoRoot,
+      'packages',
+      'contracts',
+      'src',
+      'dependencies',
+      'npm-dependency-baseline.data.json',
+    ),
+  );
+  if (!Array.isArray(ledger)) {
+    return ['dependency ledger 必须是数组'];
+  }
+  if (ledger.length !== 166) errors.push(`dependency ledger 应为 166 项，实际 ${ledger.length}`);
+
+  const names = new Set();
+  const byName = new Map();
+  for (const [index, entry] of ledger.entries()) {
+    if (typeof entry?.name !== 'string' || entry.name.length === 0) {
+      errors.push(`dependency ledger[${index}] 缺少 name`);
+      continue;
+    }
+    if (names.has(entry.name)) errors.push(`dependency ledger 名称重复: ${entry.name}`);
+    names.add(entry.name);
+    byName.set(entry.name, entry);
+    if (FORBIDDEN_DEPENDENCY_NAMES.test(entry.name)) {
+      errors.push(`dependency ledger 禁止依赖: ${entry.name}`);
+    }
+    if (!EXACT_DEPENDENCY_VERSION.test(entry.version)) {
+      errors.push(`${entry.name}: 版本必须精确，实际 ${entry.version}`);
+    }
+  }
+
+  const designEntries = ledger.filter((entry) => DESIGN_DEPENDENCY_SOURCES.has(entry.source));
+  if (designEntries.length !== 164) {
+    errors.push(`设计直接依赖应为 164 项，实际 ${designEntries.length}`);
+  }
+  const stageCounts = new Map();
+  for (const entry of designEntries) {
+    stageCounts.set(entry.ownerStage, (stageCounts.get(entry.ownerStage) ?? 0) + 1);
+  }
+  for (const [stage, expected] of EXPECTED_STAGE_COUNTS) {
+    const actual = stageCounts.get(stage) ?? 0;
+    if (actual !== expected) {
+      errors.push(`ownerStage ${stage} 应为 ${expected} 项，实际 ${actual}`);
+    }
+  }
+
+  for (const [name, version] of EXPECTED_TEST_ONLY) {
+    const entry = byName.get(name);
+    if (entry === undefined) {
+      errors.push(`缺少 test-only 授权项 ${name}@${version}`);
+      continue;
+    }
+    if (entry.version !== version) {
+      errors.push(`${name}: test-only 版本应为 ${version}，实际 ${entry.version}`);
+    }
+    if (
+      entry.source !== TEST_ONLY_SOURCE ||
+      entry.ownerStage !== 'S1' ||
+      entry.scope !== 'TEST_ONLY'
+    ) {
+      errors.push(`${name}: test-only source/stage/scope 不正确`);
+    }
+  }
+
+  const expectedCatalog = new Map(
+    ledger
+      .filter((entry) => entry.ownerStage === 'S1' || CATALOG_ONLY_LATER_STAGE.has(entry.name))
+      .map((entry) => [entry.name, entry.version]),
+  );
+  if (expectedCatalog.size !== 95) {
+    errors.push(`catalog 期望项应为 95，账本计算为 ${expectedCatalog.size}`);
+  }
+  if (catalog.size !== 95) errors.push(`catalog 应为 95 项，实际 ${catalog.size}`);
+  for (const [name, version] of expectedCatalog) {
+    const actual = catalog.get(name);
+    if (actual === undefined) errors.push(`catalog 缺少 ${name}@${version}`);
+    else if (actual !== version) {
+      errors.push(`${name}: catalog 版本漂移，期望 ${version}，实际 ${actual}`);
+    }
+  }
+  for (const [name, version] of catalog) {
+    if (!EXACT_DEPENDENCY_VERSION.test(version)) {
+      errors.push(`${name}: catalog 版本必须精确，实际 ${version}`);
+    }
+    if (!expectedCatalog.has(name)) errors.push(`catalog 出现未登记依赖 ${name}`);
+  }
+  for (const removed of ['@opentelemetry/instrumentation', 'js-yaml']) {
+    if (catalog.has(removed)) errors.push(`catalog 不得包含 ${removed}`);
+  }
+
+  const root = manifests.find(
+    ({ manifestPath }) => manifestPath === join(repoRoot, 'package.json'),
+  );
+  for (const name of EXPECTED_TEST_ONLY.keys()) {
+    if (!Object.hasOwn(root?.manifest.devDependencies ?? {}, name)) {
+      errors.push(`${name}: 必须只在根 devDependencies 登记`);
+    }
+    if (Object.hasOwn(root?.manifest.dependencies ?? {}, name)) {
+      errors.push(`${name}: 不得进入根 dependencies`);
+    }
+    for (const { manifest, manifestPath, workspace } of manifests) {
+      if (!workspace) continue;
+      if (
+        Object.hasOwn(manifest.dependencies ?? {}, name) ||
+        Object.hasOwn(manifest.devDependencies ?? {}, name)
+      ) {
+        errors.push(`${relative(repoRoot, manifestPath)}: test-only 依赖 ${name} 越界`);
+      }
+    }
+  }
+
+  for (const { manifest, manifestPath, workspace } of manifests) {
+    const rel = relative(repoRoot, manifestPath);
+    for (const section of ['dependencies', 'devDependencies']) {
+      for (const name of Object.keys(manifest[section] ?? {})) {
+        if (name.startsWith('@kb/')) continue;
+        const entry = byName.get(name);
+        if (entry === undefined) {
+          errors.push(`${rel}: 直接依赖 ${name} 未登记在 dependency ledger`);
+          continue;
+        }
+        if (workspace && entry.ownerStage !== 'S1') {
+          errors.push(`${rel}: 后续阶段依赖 ${name} 不得提前直接声明`);
+        }
+        const installedManifest = join(
+          dirname(manifestPath),
+          'node_modules',
+          ...name.split('/'),
+          'package.json',
+        );
+        try {
+          const installed = readJson(installedManifest);
+          if (installed.version !== entry.version) {
+            errors.push(
+              `${rel}: ${name} 实际安装 ${String(installed.version)}，期望 ${entry.version}`,
+            );
+          }
+        } catch {
+          errors.push(`${rel}: ${name} 未安装`);
         }
       }
     }
   }
 
-  return { errors, packageCount: packages.length };
+  return errors;
 }
 
 function auditLicenses(model) {
@@ -288,7 +484,8 @@ function computeSbomDiff(repoRoot, model) {
 export async function main() {
   const repoRoot = resolve(import.meta.dirname, '..');
   const catalog = parseCatalog(readFileSync(join(repoRoot, 'pnpm-workspace.yaml'), 'utf8'));
-  const { errors, packageCount } = checkRegistrations(repoRoot, catalog);
+  const { errors, workspaceCount, manifests } = checkRegistrations(repoRoot, catalog);
+  errors.push(...checkDependencyBaseline(repoRoot, catalog, manifests));
 
   const { collectSbomModel } = await import('./generate-sbom.mjs');
   const model = collectSbomModel(repoRoot);
@@ -318,7 +515,7 @@ export async function main() {
   }
 
   console.log(
-    `license:check 通过：${packageCount} 个 workspace 包，${catalog.size} 个 catalog 登记项；` +
+    `license:check 通过：${workspaceCount} 个 workspace 包，${catalog.size} 个 catalog 登记项；` +
       `生产闭包 ${productionCount} 个 npm 组件。`,
   );
   const normalizedText = normalized

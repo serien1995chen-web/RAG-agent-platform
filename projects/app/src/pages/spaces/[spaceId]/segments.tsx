@@ -1,7 +1,8 @@
 import {
   Button,
-  DataTable,
   Field,
+  FormField,
+  KnowledgeDataTable,
   LoadingState,
   PageHeader,
   ProblemNotice,
@@ -10,12 +11,19 @@ import {
   StatusTag,
   TextArea,
   TextInput,
+  knowledgeQueryKeys,
   knowledgeRequest,
-  useKnowledgeRequest,
+  segmentFormSchema,
+  submitWithProblem,
+  useKnowledgeForm,
+  useKnowledgeI18n,
+  useKnowledgeMutation,
+  useKnowledgeQuery,
+  type SegmentFormValues,
 } from '@kb/web';
 import Head from 'next/head';
 import { useRouter } from 'next/router';
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useState } from 'react';
 import type {
   PageInfo,
   SegmentRecord,
@@ -28,25 +36,45 @@ type SegmentResponse = { items: SegmentRecord[]; pageInfo: PageInfo };
 
 export default function SegmentsPage() {
   const router = useRouter();
+  const { t } = useKnowledgeI18n();
   const spaceId = typeof router.query.spaceId === 'string' ? router.query.spaceId : '';
   const sourceFromQuery = typeof router.query.sourceId === 'string' ? router.query.sourceId : '';
   const [sourceId, setSourceId] = useState(sourceFromQuery);
-  const [question, setQuestion] = useState('');
-  const [answer, setAnswer] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<unknown>(null);
-  const space = useKnowledgeRequest<SpaceRecord>(
+  const [problem, setProblem] = useState<unknown>(null);
+  const space = useKnowledgeQuery<SpaceRecord>(
+    knowledgeQueryKeys.spaces.detail(spaceId),
     spaceId ? `/v1/knowledge/spaces/${spaceId}` : null,
-    [spaceId],
   );
-  const sources = useKnowledgeRequest<{ items: SourceRecord[] }>(
+  const sources = useKnowledgeQuery<{ items: SourceRecord[] }>(
+    knowledgeQueryKeys.sources.list(spaceId),
     spaceId ? listPath(spaceId, 'sources') : null,
-    [spaceId],
   );
-  const segments = useKnowledgeRequest<SegmentResponse>(
+  const segments = useKnowledgeQuery<SegmentResponse>(
+    knowledgeQueryKeys.sources.segments(sourceId),
     sourceId ? `/v1/knowledge/sources/${sourceId}/segments?limit=200&sort=order` : null,
-    [sourceId],
   );
+  const form = useKnowledgeForm(segmentFormSchema, {
+    defaultValues: { question: '', answer: '' },
+  });
+  const createSegment = useKnowledgeMutation<SegmentRecord, SegmentFormValues>({
+    mutationFn: (values) =>
+      knowledgeRequest<SegmentRecord>(`/v1/knowledge/sources/${sourceId}/segments`, {
+        method: 'POST',
+        body: { ...values, searchEnabled: true, metadata: {} },
+      }),
+    invalidateKeys: [knowledgeQueryKeys.sources.segments(sourceId), knowledgeQueryKeys.jobs.list()],
+    onSuccess: () => {
+      form.reset();
+    },
+  });
+  const deleteSegment = useKnowledgeMutation<void, string>({
+    mutationFn: (segmentId) =>
+      knowledgeRequest<void>(`/v1/knowledge/segments/${segmentId}`, {
+        method: 'DELETE',
+        body: {},
+      }),
+    invalidateKeys: [knowledgeQueryKeys.sources.segments(sourceId), knowledgeQueryKeys.jobs.list()],
+  });
 
   useEffect(() => {
     if (!sourceId && sources.data?.items[0]) {
@@ -54,56 +82,50 @@ export default function SegmentsPage() {
     }
   }, [sourceId, sources.data]);
 
-  async function createSegment(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!sourceId) return;
-    setBusy(true);
-    setError(null);
-    try {
-      await knowledgeRequest(`/v1/knowledge/sources/${sourceId}/segments`, {
-        method: 'POST',
-        body: { question, answer, searchEnabled: true, metadata: {} },
-      });
-      setQuestion('');
-      setAnswer('');
-      await segments.reload();
-    } catch (caught) {
-      setError(caught);
-    } finally {
-      setBusy(false);
-    }
-  }
+  const submitSegment = form.handleSubmit(async (values) => {
+    await submitWithProblem(
+      async () => {
+        await createSegment.mutateAsync(values);
+      },
+      setProblem,
+      form,
+    );
+  });
 
-  async function deleteSegment(segment: SegmentRecord) {
-    if (!window.confirm(`Delete segment ${segment.order}? A delete job will be created.`)) return;
-    setBusy(true);
-    setError(null);
-    try {
-      await knowledgeRequest(`/v1/knowledge/segments/${segment.id}`, {
-        method: 'DELETE',
-        body: {},
-      });
-      await segments.reload();
-    } catch (caught) {
-      setError(caught);
-    } finally {
-      setBusy(false);
-    }
+  async function removeSegment(segment: SegmentRecord) {
+    if (!window.confirm(t('segments.confirmDelete', { order: segment.order }))) return;
+    await submitWithProblem(async () => {
+      await deleteSegment.mutateAsync(segment.id);
+    }, setProblem);
   }
 
   return (
     <>
       <Head>
-        <title>{space.data ? `${space.data.name} segments` : 'Segments'}</title>
+        <title>
+          {space.data
+            ? t('segments.title', { name: space.data.name })
+            : t('segments.fallbackTitle')}
+        </title>
       </Head>
       <PageHeader
-        eyebrow="Knowledge content"
-        title="Segments"
-        description="Editable retrieval units. Indexing pipelines remain deferred."
+        eyebrow={t('segments.eyebrow')}
+        title={t('segments.heading')}
+        description={t('segments.description')}
       />
-      <ProblemNotice error={space.error ?? sources.error ?? segments.error ?? error} />
+      <ProblemNotice
+        error={
+          space.error ??
+          sources.error ??
+          segments.error ??
+          problem ??
+          createSegment.error ??
+          deleteSegment.error
+        }
+        onRetry={() => void segments.refetch()}
+      />
       <div className="selector-row">
-        <Field label="Source">
+        <Field label={t('segments.source')}>
           <SelectInput
             value={sourceId}
             onChange={(event) => {
@@ -116,7 +138,7 @@ export default function SegmentsPage() {
               );
             }}
           >
-            <option value="">Select a Source</option>
+            <option value="">{t('segments.selectSource')}</option>
             {sources.data?.items.map((source) => (
               <option key={source.id} value={source.id}>
                 {source.name}
@@ -126,78 +148,109 @@ export default function SegmentsPage() {
         </Field>
       </div>
 
-      <Section title="Create Segment" meta="Source searchEnabled remains the upper bound">
-        <form className="form-band" onSubmit={createSegment}>
+      <Section title={t('segments.createTitle')} meta={t('segments.createMeta')}>
+        <form className="form-band" onSubmit={submitSegment}>
           <div className="form-intro">
-            <h2>Segment text</h2>
-            <p>Each Segment receives the next order value for its Source.</p>
+            <h2>{t('segments.formTitle')}</h2>
+            <p>{t('segments.formDescription')}</p>
           </div>
           <div className="form-fields">
-            <Field label="Question">
-              <TextInput
-                required
-                value={question}
-                onChange={(event) => setQuestion(event.target.value)}
-              />
-            </Field>
-            <Field label="Answer">
-              <TextArea
-                required
-                value={answer}
-                onChange={(event) => setAnswer(event.target.value)}
-              />
-            </Field>
+            <FormField
+              control={form.control}
+              name="question"
+              label={t('segments.question')}
+              render={(field) => (
+                <TextInput
+                  {...field}
+                  required
+                  maxLength={100000}
+                  value={String(field.value)}
+                  onChange={(event) => field.onChange(event.target.value)}
+                />
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="answer"
+              label={t('segments.answer')}
+              render={(field) => (
+                <TextArea
+                  {...field}
+                  required
+                  maxLength={100000}
+                  value={String(field.value)}
+                  onChange={(event) => field.onChange(event.target.value)}
+                />
+              )}
+            />
           </div>
           <div className="form-actions">
-            <Button type="submit" tone="primary" busy={busy} disabled={!sourceId}>
-              Create Segment
+            <Button
+              type="submit"
+              tone="primary"
+              busy={createSegment.isLoading}
+              disabled={!sourceId}
+            >
+              {t('segments.create')}
             </Button>
           </div>
         </form>
       </Section>
 
       <Section
-        title="Segment register"
-        meta={segments.data ? `${segments.data.items.length} records` : undefined}
+        title={t('segments.register')}
+        meta={
+          segments.data ? t('common.records', { count: segments.data.items.length }) : undefined
+        }
       >
-        {segments.loading ? (
+        {segments.isLoading ? (
           <LoadingState />
         ) : (
-          <DataTable
+          <KnowledgeDataTable
             rows={segments.data?.items ?? []}
             rowKey={(segment) => segment.id}
-            empty="Select a Source or create its first Segment."
+            empty={t('segments.empty')}
+            caption={t('segments.register')}
             columns={[
-              { key: 'order', label: 'Order', render: (segment) => segment.order },
-              { key: 'question', label: 'Question', render: (segment) => segment.question },
+              {
+                key: 'order',
+                label: t('segments.columnOrder'),
+                render: (segment) => segment.order,
+              },
+              {
+                key: 'question',
+                label: t('segments.columnQuestion'),
+                render: (segment) => segment.question,
+              },
               {
                 key: 'status',
-                label: 'Index status',
+                label: t('segments.columnIndexStatus'),
                 render: (segment) => (
                   <StatusTag value={segment.indexStatus} tone={statusTone(segment.indexStatus)} />
                 ),
               },
               {
                 key: 'search',
-                label: 'Search',
-                render: (segment) => (segment.searchEnabled ? 'enabled' : 'disabled'),
+                label: t('segments.columnSearch'),
+                render: (segment) =>
+                  segment.searchEnabled ? t('enum.enabled') : t('enum.disabled'),
               },
               {
                 key: 'version',
-                label: 'Version',
+                label: t('segments.columnVersion'),
                 render: (segment) => segment.version,
               },
               {
                 key: 'actions',
-                label: 'Actions',
+                label: t('segments.columnActions'),
                 render: (segment) => (
                   <Button
-                    className="button-small"
+                    size="sm"
                     tone="danger"
-                    busy={busy}
-                    onClick={() => void deleteSegment(segment)}
+                    busy={deleteSegment.isLoading}
+                    onClick={() => void removeSegment(segment)}
                   >
-                    Delete
+                    {t('segments.actionDelete')}
                   </Button>
                 ),
               },

@@ -5,10 +5,19 @@
 export const PACKAGE_NAME = '@kb/otel' as const;
 
 export { initMetrics } from './metrics';
-export { createSafeLogger, isSensitiveLogFields } from './logger';
+export { createSafeLogger, isSensitiveLogFields, sanitizeLogFields } from './logger';
 export type { SafeLogger } from './logger';
 export { getTracer, initTracing } from './tracing';
-export type { LogLevel, OtelConfig, OtelInitStatus } from './types';
+export type {
+  LogLevel,
+  OtelConfig,
+  OtelInitStatus,
+  SafeAttributes,
+  SafeLogFields,
+  SafeTelemetryValue,
+  TelemetryExportStatus,
+  TelemetryState,
+} from './types';
 
 export {
   SPAN_INSTRUMENTS,
@@ -21,3 +30,11 @@ export { createOtlpMetricExporter, createOtlpMetricReader } from './metrics';
 export { LOG_FIELD_DICTIONARY, createOtlpLogExporter } from './logger';
 export { ALERT_KINDS, createAlertSignal, emitAlert } from './alert';
 export type { AlertSignal, AlertSignalKind } from './alert';
+export { configureTelemetry, createNoopTelemetry, createTelemetryRuntime } from './telemetry';
+export type {
+  SafeUsageEvent,
+  TelemetryConfig,
+  TelemetryContext,
+  TelemetryDependencies,
+  TelemetryRuntime,
+} from './telemetry';

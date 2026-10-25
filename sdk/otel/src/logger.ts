@@ -1,7 +1,7 @@
 import pino from 'pino';
 import { OTLPLogExporter } from '@opentelemetry/exporter-logs-otlp-http';
 import type { LogRecordExporter } from '@opentelemetry/sdk-logs';
-import type { LogFieldName, LogLevel } from './types';
+import type { LogFieldName, LogLevel, SafeLogFields, SafeTelemetryValue } from './types';
 
 export interface SafeLogger {
   log(event: string, fields: Record<string, unknown>): void;
@@ -28,7 +28,28 @@ export const LOG_FIELD_DICTIONARY: readonly LogFieldName[] = [
 ];
 
 const SENSITIVE_KEY_PATTERN =
-  /(password|passwd|secret|token|authorization|cookie|credential|apikey|api_key|signedurl|signed_url|accesskey|providerresponse|rawresponse|filecontent|filebody|documentcontent|rawtext)/i;
+  /(password|passwd|secret|token|authorization|cookie|credential|apikey|api_key|signedurl|signed_url|accesskey|providerresponse|rawresponse|filecontent|filebody|documentcontent|rawtext|body|payload)/i;
+
+const SENSITIVE_VALUE_PATTERNS = [
+  /\bBearer\s+[A-Za-z0-9._~+/-]+=*/i,
+  /\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b/,
+  /(?:mongodb(?:\+srv)?|postgres(?:ql)?|redis|rediss|amqp|amqps):\/\//i,
+  /https?:\/\/[^/\s:@]+:[^/\s@]+@/i,
+  /[?&](?:x-amz-signature|x-amz-credential|signature|sig|token|access_token)=/i,
+  /\b(?:kb_console_session|session|authorization|cookie|token)=/i,
+];
+
+function isSafeTelemetryValue(value: unknown): value is SafeTelemetryValue {
+  return (
+    typeof value === 'string' ||
+    typeof value === 'boolean' ||
+    (typeof value === 'number' && Number.isFinite(value))
+  );
+}
+
+function isSensitiveValue(value: string): boolean {
+  return SENSITIVE_VALUE_PATTERNS.some((pattern) => pattern.test(value));
+}
 
 /** 脱敏失败时拒绝输出：字段名命中敏感模式即整条日志丢弃。 */
 export function isSensitiveLogFields(fields: Record<string, unknown>): boolean {
@@ -42,10 +63,35 @@ export function isSensitiveLogFields(fields: Record<string, unknown>): boolean {
     if (typeof current !== 'object' || current === null) continue;
     for (const [key, value] of Object.entries(current)) {
       if (SENSITIVE_KEY_PATTERN.test(key)) return true;
+      if (typeof value === 'string' && isSensitiveValue(value)) return true;
       if (typeof value === 'object' && value !== null) stack.push(value);
     }
   }
   return false;
+}
+
+export function sanitizeLogFields(fields: Record<string, unknown>): {
+  fields: SafeLogFields;
+  dropped: number;
+} {
+  const safeFields: SafeLogFields = {};
+  let dropped = 0;
+  for (const [key, value] of Object.entries(fields)) {
+    if (!(LOG_FIELD_DICTIONARY as readonly string[]).includes(key)) {
+      dropped += 1;
+      continue;
+    }
+    if (!isSafeTelemetryValue(value)) {
+      dropped += 1;
+      continue;
+    }
+    if (typeof value === 'string' && isSensitiveValue(value)) {
+      dropped += 1;
+      continue;
+    }
+    safeFields[key as LogFieldName] = value;
+  }
+  return { fields: safeFields, dropped };
 }
 
 const NOOP_LOGGER: SafeLogger = {
@@ -62,33 +108,43 @@ export function createSafeLogger(config: {
   name: string;
   level: LogLevel;
   enabled?: boolean;
+  destination?: pino.DestinationStream;
 }): SafeLogger {
   if (config.enabled === false) return NOOP_LOGGER;
   try {
-    const logger = pino({
-      name: config.name,
-      level: config.level,
-      base: undefined,
-      redact: {
-        paths: ['*.password', '*.secret', '*.token', '*.authorization'],
-        censor: '[redacted]',
+    const logger = pino(
+      {
+        name: config.name,
+        level: config.level,
+        base: undefined,
+        redact: {
+          paths: ['*.password', '*.secret', '*.token', '*.authorization'],
+          censor: '[redacted]',
+        },
       },
-    });
+      config.destination,
+    );
     const counter = { dropped: 0 };
     const wrap = (instance: pino.Logger): SafeLogger => ({
       log(event, fields) {
         try {
-          if (isSensitiveLogFields(fields)) {
+          if (fields === null || typeof fields !== 'object' || Array.isArray(fields)) {
             counter.dropped += 1;
             return;
           }
-          instance.info({ event, ...fields });
+          const sanitized = sanitizeLogFields(fields);
+          counter.dropped += sanitized.dropped;
+          instance.info({ event, ...sanitized.fields });
         } catch {
           // 序列化失败时拒绝输出，不阻塞业务。
           counter.dropped += 1;
         }
       },
-      child: (bindings) => wrap(instance.child(bindings)),
+      child(bindings) {
+        const sanitized = sanitizeLogFields(bindings);
+        counter.dropped += sanitized.dropped;
+        return wrap(instance.child(sanitized.fields));
+      },
       droppedRecords: () => counter.dropped,
     });
     return wrap(logger);

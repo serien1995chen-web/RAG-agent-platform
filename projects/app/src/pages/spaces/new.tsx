@@ -1,122 +1,175 @@
 import {
-  Field,
   FormBand,
+  FormField,
   PageHeader,
   ProblemNotice,
   SelectInput,
   TextArea,
   TextInput,
+  knowledgeQueryKeys,
   knowledgeRequest,
+  newSpaceFormSchema,
+  submitWithProblem,
+  useKnowledgeI18n,
+  useKnowledgeForm,
+  useKnowledgeMutation,
+  type NewSpaceFormValues,
 } from '@kb/web';
 import Head from 'next/head';
 import { useRouter } from 'next/router';
-import { useState, type FormEvent } from 'react';
+import { useState } from 'react';
 import type { SpaceRecord } from '../../lib/knowledge-types';
 
 export default function NewSpacePage() {
   const router = useRouter();
-  const [name, setName] = useState('');
-  const [description, setDescription] = useState('');
-  const [kind, setKind] = useState<'space' | 'folder'>('space');
-  const [accessMode, setAccessMode] = useState<'workspace' | 'restricted'>('workspace');
-  const [sourceAclMode, setSourceAclMode] = useState<'inherited' | 'enforced'>('enforced');
-  const [sourcePermissionEnabled, setSourcePermissionEnabled] = useState(true);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<unknown>(null);
-
-  async function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setBusy(true);
-    setError(null);
-    try {
-      const space = await knowledgeRequest<SpaceRecord>('/v1/knowledge/spaces', {
+  const { t } = useKnowledgeI18n();
+  const [problem, setProblem] = useState<unknown>(null);
+  const form = useKnowledgeForm(newSpaceFormSchema, {
+    defaultValues: {
+      kind: 'space',
+      name: '',
+      description: '',
+      accessMode: 'workspace',
+      sourceAclMode: 'enforced',
+      sourcePermissionEnabled: true,
+    },
+  });
+  const createSpace = useKnowledgeMutation<SpaceRecord, NewSpaceFormValues>({
+    mutationFn: (values) =>
+      knowledgeRequest<SpaceRecord>('/v1/knowledge/spaces', {
         method: 'POST',
         body: {
-          kind,
-          name,
-          description,
+          ...values,
           iconKey: 'book-open',
-          accessMode,
-          sourceAclMode,
-          sourcePermissionEnabled,
         },
-      });
+      }),
+    invalidateKeys: [knowledgeQueryKeys.spaces.list({ limit: 200 })],
+    onSuccess: async (space) => {
       await router.push(`/spaces/${space.id}/overview`);
-    } catch (caught) {
-      setError(caught);
-    } finally {
-      setBusy(false);
-    }
-  }
+    },
+  });
+
+  const submit = form.handleSubmit(async (values) => {
+    await submitWithProblem(
+      async () => {
+        await createSpace.mutateAsync(values);
+      },
+      setProblem,
+      form,
+    );
+  });
 
   return (
     <>
       <Head>
-        <title>New knowledge space</title>
+        <title>{t('newSpace.title')}</title>
       </Head>
       <PageHeader
-        eyebrow="Knowledge catalog"
-        title="New space"
-        description="Create a Knowledge Space or an organization folder."
+        eyebrow={t('newSpace.eyebrow')}
+        title={t('newSpace.heading')}
+        description={t('newSpace.description')}
       />
-      <ProblemNotice error={error} />
+      <ProblemNotice error={problem ?? createSpace.error} />
       <FormBand
-        title="Basics"
-        description="Names are unique among siblings. Access and Source policy are recorded at creation."
-        submitLabel="Create space"
-        busy={busy}
+        title={t('newSpace.formTitle')}
+        description={t('newSpace.formDescription')}
+        submitLabel={t('newSpace.submit')}
+        busy={createSpace.isLoading}
         onSubmit={submit}
       >
-        <Field label="Type">
-          <SelectInput
-            value={kind}
-            onChange={(event) => setKind(event.target.value as 'space' | 'folder')}
-          >
-            <option value="space">Knowledge Space</option>
-            <option value="folder">Organization folder</option>
-          </SelectInput>
-        </Field>
-        <Field label="Name">
-          <TextInput
-            required
-            maxLength={120}
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-          />
-        </Field>
-        <Field label="Description">
-          <TextArea
-            maxLength={2000}
-            value={description}
-            onChange={(event) => setDescription(event.target.value)}
-          />
-        </Field>
-        <Field label="Space access">
-          <SelectInput
-            value={accessMode}
-            onChange={(event) => setAccessMode(event.target.value as 'workspace' | 'restricted')}
-          >
-            <option value="workspace">Workspace members</option>
-            <option value="restricted">Restricted by ACL</option>
-          </SelectInput>
-        </Field>
-        <Field label="Source ACL policy">
-          <SelectInput
-            value={sourceAclMode}
-            onChange={(event) => setSourceAclMode(event.target.value as 'inherited' | 'enforced')}
-          >
-            <option value="enforced">Allow Source-level permissions</option>
-            <option value="inherited">Force inheritance</option>
-          </SelectInput>
-        </Field>
-        <label className="checkbox-row full">
-          <input
-            type="checkbox"
-            checked={sourcePermissionEnabled}
-            onChange={(event) => setSourcePermissionEnabled(event.target.checked)}
-          />
-          Source-level permissions enabled
-        </label>
+        <FormField
+          control={form.control}
+          name="kind"
+          label={t('newSpace.type')}
+          render={(field) => (
+            <SelectInput
+              name={field.name}
+              value={String(field.value)}
+              onBlur={field.onBlur}
+              onChange={(event) => field.onChange(event.target.value as 'space' | 'folder')}
+            >
+              <option value="space">{t('enum.space')}</option>
+              <option value="folder">{t('enum.folder')}</option>
+            </SelectInput>
+          )}
+        />
+        <FormField
+          control={form.control}
+          name="name"
+          label={t('newSpace.name')}
+          render={(field) => (
+            <TextInput
+              {...field}
+              required
+              maxLength={120}
+              value={String(field.value)}
+              onChange={(event) => field.onChange(event.target.value)}
+            />
+          )}
+        />
+        <FormField
+          control={form.control}
+          name="description"
+          label={t('newSpace.fieldDescription')}
+          render={(field) => (
+            <TextArea
+              {...field}
+              maxLength={2000}
+              value={String(field.value)}
+              onChange={(event) => field.onChange(event.target.value)}
+            />
+          )}
+        />
+        <FormField
+          control={form.control}
+          name="accessMode"
+          label={t('newSpace.access')}
+          render={(field) => (
+            <SelectInput
+              name={field.name}
+              value={String(field.value)}
+              onBlur={field.onBlur}
+              onChange={(event) => field.onChange(event.target.value as 'workspace' | 'restricted')}
+            >
+              <option value="workspace">{t('enum.workspace')}</option>
+              <option value="restricted">{t('enum.restricted')}</option>
+            </SelectInput>
+          )}
+        />
+        <FormField
+          control={form.control}
+          name="sourceAclMode"
+          label={t('newSpace.sourceAcl')}
+          render={(field) => (
+            <SelectInput
+              name={field.name}
+              value={String(field.value)}
+              onBlur={field.onBlur}
+              onChange={(event) => field.onChange(event.target.value as 'inherited' | 'enforced')}
+            >
+              <option value="enforced">{t('enum.enforced')}</option>
+              <option value="inherited">{t('enum.inherited')}</option>
+            </SelectInput>
+          )}
+        />
+        <FormField
+          control={form.control}
+          name="sourcePermissionEnabled"
+          label={t('newSpace.sourcePermissions')}
+          render={(field) => (
+            <label className="checkbox-row">
+              <input
+                ref={field.ref}
+                type="checkbox"
+                name={field.name}
+                checked={Boolean(field.value)}
+                onBlur={field.onBlur}
+                onChange={(event) => field.onChange(event.target.checked)}
+              />
+              {t('newSpace.sourcePermissionEnabled')}
+            </label>
+          )}
+        />
       </FormBand>
     </>
   );

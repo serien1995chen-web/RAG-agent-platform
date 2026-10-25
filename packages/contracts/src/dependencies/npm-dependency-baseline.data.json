@@ -1,0 +1,2296 @@
+[
+  {
+    "name": "@apidevtools/json-schema-ref-parser",
+    "version": "11.7.2",
+    "source": "FASTGPT_SUPPLEMENT",
+    "ownerStage": "S4",
+    "scope": "RUNTIME",
+    "environments": [
+      "APP_RUNTIME",
+      "WORKER_RUNTIME"
+    ],
+    "usage": [
+      "api-schema"
+    ]
+  },
+  {
+    "name": "@apidevtools/swagger-parser",
+    "version": "10.1.1",
+    "source": "FASTGPT_SUPPLEMENT",
+    "ownerStage": "S4",
+    "scope": "RUNTIME",
+    "environments": [
+      "APP_RUNTIME",
+      "WORKER_RUNTIME"
+    ],
+    "usage": [
+      "api-schema"
+    ]
+  },
+  {
+    "name": "@aws-sdk/client-s3",
+    "version": "3.1113.0",
+    "source": "FASTGPT_SUPPLEMENT",
+    "ownerStage": "S2",
+    "scope": "RUNTIME",
+    "environments": [
+      "APP_RUNTIME",
+      "WORKER_RUNTIME"
+    ],
+    "usage": [
+      "object-storage"
+    ]
+  },
+  {
+    "name": "@aws-sdk/lib-storage",
+    "version": "3.1113.0",
+    "source": "FASTGPT_SUPPLEMENT",
+    "ownerStage": "S2",
+    "scope": "RUNTIME",
+    "environments": [
+      "APP_RUNTIME",
+      "WORKER_RUNTIME"
+    ],
+    "usage": [
+      "object-storage"
+    ]
+  },
+  {
+    "name": "@aws-sdk/s3-request-presigner",
+    "version": "3.1113.0",
+    "source": "FASTGPT_SUPPLEMENT",
+    "ownerStage": "S2",
+    "scope": "RUNTIME",
+    "environments": [
+      "APP_RUNTIME",
+      "WORKER_RUNTIME"
+    ],
+    "usage": [
+      "object-storage"
+    ]
+  },
+  {
+    "name": "@chakra-ui/anatomy",
+    "version": "2.3.6",
+    "source": "FASTGPT_SUPPLEMENT",
+    "ownerStage": "S1",
+    "scope": "RUNTIME",
+    "environments": [
+      "BROWSER_RUNTIME"
+    ],
+    "usage": [
+      "web-ui"
+    ]
+  },
+  {
+    "name": "@chakra-ui/cli",
+    "version": "2.5.8",
+    "source": "FASTGPT_SUPPLEMENT",
+    "ownerStage": "S1",
+    "scope": "BUILD",
+    "environments": [
+      "BUILD"
+    ],
+    "usage": [
+      "build"
+    ]
+  },
+  {
+    "name": "@chakra-ui/icons",
+    "version": "2.1.1",
+    "source": "FASTGPT_SUPPLEMENT",
+    "ownerStage": "S1",
+    "scope": "RUNTIME",
+    "environments": [
+      "BROWSER_RUNTIME"
+    ],
+    "usage": [
+      "web-ui"
+    ]
+  },
+  {
+    "name": "@chakra-ui/next-js",
+    "version": "2.4.2",
+    "source": "FASTGPT_SUPPLEMENT",
+    "ownerStage": "S1",
+    "scope": "RUNTIME",
+    "environments": [
+      "BROWSER_RUNTIME"
+    ],
+    "usage": [
+      "web-ui"
+    ]
+  },
+  {
+    "name": "@chakra-ui/react",
+    "version": "2.10.7",
+    "source": "FASTGPT_SUPPLEMENT",
+    "ownerStage": "S1",
+    "scope": "RUNTIME",
+    "environments": [
+      "BROWSER_RUNTIME"
+    ],
+    "usage": [
+      "web-ui"
+    ]
+  },
+  {
+    "name": "@chakra-ui/styled-system",
+    "version": "2.12.2",
+    "source": "FASTGPT_SUPPLEMENT",
+    "ownerStage": "S1",
+    "scope": "RUNTIME",
+    "environments": [
+      "BROWSER_RUNTIME"
+    ],
+    "usage": [
+      "web-ui"
+    ]
+  },
+  {
+    "name": "@chakra-ui/system",
+    "version": "2.6.1",
+    "source": "FASTGPT_SUPPLEMENT",
+    "ownerStage": "S1",
+    "scope": "RUNTIME",
+    "environments": [
+      "BROWSER_RUNTIME"
+    ],
+    "usage": [
+      "web-ui"
+    ]
+  },
+  {
+    "name": "@emotion/react",
+    "version": "11.11.1",
+    "source": "FASTGPT_SUPPLEMENT",
+    "ownerStage": "S1",
+    "scope": "RUNTIME",
+    "environments": [
+      "BROWSER_RUNTIME"
+    ],
+    "usage": [
+      "web-ui"
+    ]
+  },
+  {
+    "name": "@emotion/styled",
+    "version": "11.11.0",
+    "source": "FASTGPT_SUPPLEMENT",
+    "ownerStage": "S1",
+    "scope": "RUNTIME",
+    "environments": [
+      "BROWSER_RUNTIME"
+    ],
+    "usage": [
+      "web-ui"
+    ]
+  },
+  {
+    "name": "@eslint/js",
+    "version": "9.39.5",
+    "source": "PROJECT_BASELINE",
+    "ownerStage": "S1",
+    "scope": "RUNTIME",
+    "environments": [
+      "APP_RUNTIME",
+      "WORKER_RUNTIME"
+    ],
+    "usage": [
+      "lint"
+    ]
+  },
+  {
+    "name": "@llamaindex/liteparse-wasm",
+    "version": "2.0.8",
+    "source": "FASTGPT_SUPPLEMENT",
+    "ownerStage": "S5",
+    "scope": "RUNTIME",
+    "environments": [
+      "APP_RUNTIME",
+      "WORKER_RUNTIME"
+    ],
+    "usage": [
+      "parse-file"
+    ]
+  },
+  {
+    "name": "@logtape/logtape",
+    "version": "2.0.2",
+    "source": "FASTGPT_SUPPLEMENT",
+    "ownerStage": "S1",
+    "scope": "RUNTIME",
+    "environments": [
+      "APP_RUNTIME",
+      "WORKER_RUNTIME"
+    ],
+    "usage": [
+      "telemetry"
+    ]
+  },
+  {
+    "name": "@logtape/pretty",
+    "version": "2.0.2",
+    "source": "FASTGPT_SUPPLEMENT",
+    "ownerStage": "S1",
+    "scope": "RUNTIME",
+    "environments": [
+      "APP_RUNTIME",
+      "WORKER_RUNTIME"
+    ],
+    "usage": [
+      "telemetry"
+    ]
+  },
+  {
+    "name": "@node-rs/jieba",
+    "version": "2.0.1",
+    "source": "PROJECT_BASELINE",
+    "ownerStage": "S1",
+    "scope": "RUNTIME",
+    "environments": [
+      "APP_RUNTIME",
+      "WORKER_RUNTIME"
+    ],
+    "usage": [
+      "model-gateway"
+    ]
+  },
+  {
+    "name": "@opentelemetry/api",
+    "version": "1.9.1",
+    "source": "PROJECT_BASELINE",
+    "ownerStage": "S1",
+    "scope": "RUNTIME",
+    "environments": [
+      "APP_RUNTIME",
+      "WORKER_RUNTIME"
+    ],
+    "usage": [
+      "telemetry"
+    ]
+  },
+  {
+    "name": "@opentelemetry/api-logs",
+    "version": "0.203.0",
+    "source": "FASTGPT_SUPPLEMENT",
+    "ownerStage": "S1",
+    "scope": "RUNTIME",
+    "environments": [
+      "APP_RUNTIME",
+      "WORKER_RUNTIME"
+    ],
+    "usage": [
+      "telemetry"
+    ]
+  },
+  {
+    "name": "@opentelemetry/exporter-logs-otlp-http",
+    "version": "0.203.0",
+    "source": "PROJECT_BASELINE",
+    "ownerStage": "S1",
+    "scope": "RUNTIME",
+    "environments": [
+      "APP_RUNTIME",
+      "WORKER_RUNTIME"
+    ],
+    "usage": [
+      "telemetry"
+    ]
+  },
+  {
+    "name": "@opentelemetry/exporter-metrics-otlp-http",
+    "version": "0.203.0",
+    "source": "PROJECT_BASELINE",
+    "ownerStage": "S1",
+    "scope": "RUNTIME",
+    "environments": [
+      "APP_RUNTIME",
+      "WORKER_RUNTIME"
+    ],
+    "usage": [
+      "telemetry"
+    ]
+  },
+  {
+    "name": "@opentelemetry/exporter-trace-otlp-http",
+    "version": "0.203.0",
+    "source": "PROJECT_BASELINE",
+    "ownerStage": "S1",
+    "scope": "RUNTIME",
+    "environments": [
+      "APP_RUNTIME",
+      "WORKER_RUNTIME"
+    ],
+    "usage": [
+      "telemetry"
+    ]
+  },
+  {
+    "name": "@opentelemetry/resources",
+    "version": "2.11.0",
+    "source": "PROJECT_BASELINE",
+    "ownerStage": "S1",
+    "scope": "RUNTIME",
+    "environments": [
+      "APP_RUNTIME",
+      "WORKER_RUNTIME"
+    ],
+    "usage": [
+      "telemetry"
+    ]
+  },
+  {
+    "name": "@opentelemetry/sdk-logs",
+    "version": "0.203.0",
+    "source": "PROJECT_BASELINE",
+    "ownerStage": "S1",
+    "scope": "RUNTIME",
+    "environments": [
+      "APP_RUNTIME",
+      "WORKER_RUNTIME"
+    ],
+    "usage": [
+      "telemetry"
+    ]
+  },
+  {
+    "name": "@opentelemetry/sdk-metrics",
+    "version": "2.0.1",
+    "source": "PROJECT_BASELINE",
+    "ownerStage": "S1",
+    "scope": "RUNTIME",
+    "environments": [
+      "APP_RUNTIME",
+      "WORKER_RUNTIME"
+    ],
+    "usage": [
+      "telemetry"
+    ]
+  },
+  {
+    "name": "@opentelemetry/sdk-trace-base",
+    "version": "2.11.0",
+    "source": "PROJECT_BASELINE",
+    "ownerStage": "S1",
+    "scope": "RUNTIME",
+    "environments": [
+      "APP_RUNTIME",
+      "WORKER_RUNTIME"
+    ],
+    "usage": [
+      "telemetry"
+    ]
+  },
+  {
+    "name": "@opentelemetry/sdk-trace-node",
+    "version": "2.11.0",
+    "source": "PROJECT_BASELINE",
+    "ownerStage": "S1",
+    "scope": "RUNTIME",
+    "environments": [
+      "APP_RUNTIME",
+      "WORKER_RUNTIME"
+    ],
+    "usage": [
+      "telemetry"
+    ]
+  },
+  {
+    "name": "@opentelemetry/semantic-conventions",
+    "version": "1.39.0",
+    "source": "FASTGPT_SUPPLEMENT",
+    "ownerStage": "S1",
+    "scope": "RUNTIME",
+    "environments": [
+      "APP_RUNTIME",
+      "WORKER_RUNTIME"
+    ],
+    "usage": [
+      "telemetry"
+    ]
+  },
+  {
+    "name": "@svgr/webpack",
+    "version": "6.5.1",
+    "source": "FASTGPT_SUPPLEMENT",
+    "ownerStage": "S1",
+    "scope": "BUILD",
+    "environments": [
+      "BUILD"
+    ],
+    "usage": [
+      "build"
+    ]
+  },
+  {
+    "name": "@t3-oss/env-core",
+    "version": "0.13.10",
+    "source": "FASTGPT_SUPPLEMENT",
+    "ownerStage": "S1",
+    "scope": "RUNTIME",
+    "environments": [
+      "APP_RUNTIME",
+      "WORKER_RUNTIME"
+    ],
+    "usage": [
+      "utility"
+    ]
+  },
+  {
+    "name": "@tanstack/react-query",
+    "version": "4.36.1",
+    "source": "FASTGPT_SUPPLEMENT",
+    "ownerStage": "S1",
+    "scope": "RUNTIME",
+    "environments": [
+      "BROWSER_RUNTIME"
+    ],
+    "usage": [
+      "web-ui",
+      "form-state"
+    ]
+  },
+  {
+    "name": "@tanstack/react-table",
+    "version": "8.21.3",
+    "source": "FASTGPT_SUPPLEMENT",
+    "ownerStage": "S1",
+    "scope": "RUNTIME",
+    "environments": [
+      "BROWSER_RUNTIME"
+    ],
+    "usage": [
+      "web-ui",
+      "form-state"
+    ]
+  },
+  {
+    "name": "@types/ali-oss",
+    "version": "6.23.3",
+    "source": "FASTGPT_SUPPLEMENT",
+    "ownerStage": "S2",
+    "scope": "TEST_ONLY",
+    "environments": [
+      "BUILD",
+      "TEST"
+    ],
+    "usage": [
+      "types"
+    ]
+  },
+  {
+    "name": "@types/archiver",
+    "version": "6.0.4",
+    "source": "FASTGPT_SUPPLEMENT",
+    "ownerStage": "S2",
+    "scope": "TEST_ONLY",
+    "environments": [
+      "BUILD",
+      "TEST"
+    ],
+    "usage": [
+      "types"
+    ]
+  },
+  {
+    "name": "@types/async-retry",
+    "version": "1.4.9",
+    "source": "FASTGPT_SUPPLEMENT",
+    "ownerStage": "S4",
+    "scope": "TEST_ONLY",
+    "environments": [
+      "BUILD",
+      "TEST"
+    ],
+    "usage": [
+      "types"
+    ]
+  },
+  {
+    "name": "@types/cookie",
+    "version": "0.5.4",
+    "source": "FASTGPT_SUPPLEMENT",
+    "ownerStage": "S10",
+    "scope": "TEST_ONLY",
+    "environments": [
+      "BUILD",
+      "TEST"
+    ],
+    "usage": [
+      "types"
+    ]
+  },
+  {
+    "name": "@types/js-yaml",
+    "version": "4.0.9",
+    "source": "FASTGPT_SUPPLEMENT",
+    "ownerStage": "S4",
+    "scope": "TEST_ONLY",
+    "environments": [
+      "BUILD",
+      "TEST"
+    ],
+    "usage": [
+      "types"
+    ]
+  },
+  {
+    "name": "@types/jsdom",
+    "version": "21.1.7",
+    "source": "FASTGPT_SUPPLEMENT",
+    "ownerStage": "S1",
+    "scope": "TEST_ONLY",
+    "environments": [
+      "BUILD",
+      "TEST"
+    ],
+    "usage": [
+      "types"
+    ]
+  },
+  {
+    "name": "@types/jsonwebtoken",
+    "version": "9.0.9",
+    "source": "FASTGPT_SUPPLEMENT",
+    "ownerStage": "S10",
+    "scope": "TEST_ONLY",
+    "environments": [
+      "BUILD",
+      "TEST"
+    ],
+    "usage": [
+      "types"
+    ]
+  },
+  {
+    "name": "@types/lodash-es",
+    "version": "4.17.12",
+    "source": "FASTGPT_SUPPLEMENT",
+    "ownerStage": "S7",
+    "scope": "TEST_ONLY",
+    "environments": [
+      "BUILD",
+      "TEST"
+    ],
+    "usage": [
+      "types"
+    ]
+  },
+  {
+    "name": "@types/mime-types",
+    "version": "3.0.1",
+    "source": "FASTGPT_SUPPLEMENT",
+    "ownerStage": "S2",
+    "scope": "TEST_ONLY",
+    "environments": [
+      "BUILD",
+      "TEST"
+    ],
+    "usage": [
+      "types"
+    ]
+  },
+  {
+    "name": "@types/multer",
+    "version": "1.4.12",
+    "source": "FASTGPT_SUPPLEMENT",
+    "ownerStage": "S4",
+    "scope": "TEST_ONLY",
+    "environments": [
+      "BUILD",
+      "TEST"
+    ],
+    "usage": [
+      "types"
+    ]
+  },
+  {
+    "name": "@types/node",
+    "version": "24.19.1",
+    "source": "PROJECT_BASELINE",
+    "ownerStage": "S1",
+    "scope": "TEST_ONLY",
+    "environments": [
+      "BUILD",
+      "TEST"
+    ],
+    "usage": [
+      "types"
+    ]
+  },
+  {
+    "name": "@types/node-cron",
+    "version": "3.0.11",
+    "source": "FASTGPT_SUPPLEMENT",
+    "ownerStage": "S6",
+    "scope": "TEST_ONLY",
+    "environments": [
+      "BUILD",
+      "TEST"
+    ],
+    "usage": [
+      "types"
+    ]
+  },
+  {
+    "name": "@types/papaparse",
+    "version": "5.3.7",
+    "source": "FASTGPT_SUPPLEMENT",
+    "ownerStage": "S4",
+    "scope": "TEST_ONLY",
+    "environments": [
+      "BUILD",
+      "TEST"
+    ],
+    "usage": [
+      "types"
+    ]
+  },
+  {
+    "name": "@types/pg",
+    "version": "8.11.11",
+    "source": "FASTGPT_SUPPLEMENT",
+    "ownerStage": "S6",
+    "scope": "TEST_ONLY",
+    "environments": [
+      "BUILD",
+      "TEST"
+    ],
+    "usage": [
+      "types"
+    ]
+  },
+  {
+    "name": "@types/proxy-from-env",
+    "version": "1.0.4",
+    "source": "FASTGPT_SUPPLEMENT",
+    "ownerStage": "S4",
+    "scope": "TEST_ONLY",
+    "environments": [
+      "BUILD",
+      "TEST"
+    ],
+    "usage": [
+      "types"
+    ]
+  },
+  {
+    "name": "@types/react",
+    "version": "18.3.31",
+    "source": "PROJECT_BASELINE",
+    "ownerStage": "S1",
+    "scope": "TEST_ONLY",
+    "environments": [
+      "BUILD",
+      "TEST"
+    ],
+    "usage": [
+      "types"
+    ]
+  },
+  {
+    "name": "@types/react-dom",
+    "version": "18.3.7",
+    "source": "PROJECT_BASELINE",
+    "ownerStage": "S1",
+    "scope": "TEST_ONLY",
+    "environments": [
+      "BUILD",
+      "TEST"
+    ],
+    "usage": [
+      "types"
+    ]
+  },
+  {
+    "name": "@types/tunnel",
+    "version": "0.0.4",
+    "source": "FASTGPT_SUPPLEMENT",
+    "ownerStage": "S4",
+    "scope": "TEST_ONLY",
+    "environments": [
+      "BUILD",
+      "TEST"
+    ],
+    "usage": [
+      "types"
+    ]
+  },
+  {
+    "name": "@types/turndown",
+    "version": "5.0.5",
+    "source": "FASTGPT_SUPPLEMENT",
+    "ownerStage": "S5",
+    "scope": "TEST_ONLY",
+    "environments": [
+      "BUILD",
+      "TEST"
+    ],
+    "usage": [
+      "types"
+    ]
+  },
+  {
+    "name": "@types/yauzl",
+    "version": "2.10.3",
+    "source": "FASTGPT_SUPPLEMENT",
+    "ownerStage": "S2",
+    "scope": "TEST_ONLY",
+    "environments": [
+      "BUILD",
+      "TEST"
+    ],
+    "usage": [
+      "types"
+    ]
+  },
+  {
+    "name": "@vitest/coverage-v8",
+    "version": "4.1.11",
+    "source": "PROJECT_BASELINE",
+    "ownerStage": "S1",
+    "scope": "TEST_ONLY",
+    "environments": [
+      "TEST"
+    ],
+    "usage": [
+      "test"
+    ]
+  },
+  {
+    "name": "@xmldom/xmldom",
+    "version": "0.8.15",
+    "source": "FASTGPT_SUPPLEMENT",
+    "ownerStage": "S4",
+    "scope": "RUNTIME",
+    "environments": [
+      "APP_RUNTIME",
+      "WORKER_RUNTIME"
+    ],
+    "usage": [
+      "parse-file"
+    ]
+  },
+  {
+    "name": "ahooks",
+    "version": "3.9.5",
+    "source": "FASTGPT_SUPPLEMENT",
+    "ownerStage": "S1",
+    "scope": "RUNTIME",
+    "environments": [
+      "BROWSER_RUNTIME"
+    ],
+    "usage": [
+      "web-ui",
+      "form-state"
+    ]
+  },
+  {
+    "name": "ajv",
+    "version": "8.17.1",
+    "source": "FASTGPT_SUPPLEMENT",
+    "ownerStage": "S4",
+    "scope": "RUNTIME",
+    "environments": [
+      "APP_RUNTIME",
+      "WORKER_RUNTIME"
+    ],
+    "usage": [
+      "api-schema"
+    ]
+  },
+  {
+    "name": "ali-oss",
+    "version": "6.23.0",
+    "source": "FASTGPT_SUPPLEMENT",
+    "ownerStage": "S2",
+    "scope": "RUNTIME",
+    "environments": [
+      "APP_RUNTIME",
+      "WORKER_RUNTIME"
+    ],
+    "usage": [
+      "object-storage"
+    ]
+  },
+  {
+    "name": "archiver",
+    "version": "7.0.1",
+    "source": "FASTGPT_SUPPLEMENT",
+    "ownerStage": "S2",
+    "scope": "RUNTIME",
+    "environments": [
+      "APP_RUNTIME",
+      "WORKER_RUNTIME"
+    ],
+    "usage": [
+      "archive",
+      "download"
+    ]
+  },
+  {
+    "name": "axios",
+    "version": "1.18.1",
+    "source": "PROJECT_BASELINE",
+    "ownerStage": "S1",
+    "scope": "RUNTIME",
+    "environments": [
+      "APP_RUNTIME",
+      "WORKER_RUNTIME"
+    ],
+    "usage": [
+      "http-provider"
+    ]
+  },
+  {
+    "name": "bullmq",
+    "version": "5.52.2",
+    "source": "PROJECT_BASELINE",
+    "ownerStage": "S1",
+    "scope": "RUNTIME",
+    "environments": [
+      "APP_RUNTIME",
+      "WORKER_RUNTIME"
+    ],
+    "usage": [
+      "redis-queue"
+    ]
+  },
+  {
+    "name": "cheerio",
+    "version": "1.0.0-rc.12",
+    "source": "PROJECT_BASELINE",
+    "ownerStage": "S1",
+    "scope": "RUNTIME",
+    "environments": [
+      "APP_RUNTIME",
+      "WORKER_RUNTIME"
+    ],
+    "usage": [
+      "parse-file"
+    ]
+  },
+  {
+    "name": "cookie",
+    "version": "0.7.2",
+    "source": "FASTGPT_SUPPLEMENT",
+    "ownerStage": "S10",
+    "scope": "RUNTIME",
+    "environments": [
+      "APP_RUNTIME",
+      "WORKER_RUNTIME"
+    ],
+    "usage": [
+      "auth"
+    ]
+  },
+  {
+    "name": "cos-nodejs-sdk-v5",
+    "version": "3.0.0",
+    "source": "FASTGPT_SUPPLEMENT",
+    "ownerStage": "S2",
+    "scope": "RUNTIME",
+    "environments": [
+      "APP_RUNTIME",
+      "WORKER_RUNTIME"
+    ],
+    "usage": [
+      "object-storage"
+    ]
+  },
+  {
+    "name": "cron-parser",
+    "version": "4.9.0",
+    "source": "FASTGPT_SUPPLEMENT",
+    "ownerStage": "S6",
+    "scope": "RUNTIME",
+    "environments": [
+      "APP_RUNTIME",
+      "WORKER_RUNTIME"
+    ],
+    "usage": [
+      "scheduler"
+    ]
+  },
+  {
+    "name": "date-fns",
+    "version": "3.6.0",
+    "source": "FASTGPT_SUPPLEMENT",
+    "ownerStage": "S1",
+    "scope": "RUNTIME",
+    "environments": [
+      "APP_RUNTIME",
+      "BROWSER_RUNTIME",
+      "WORKER_RUNTIME"
+    ],
+    "usage": [
+      "time"
+    ]
+  },
+  {
+    "name": "dayjs",
+    "version": "1.11.19",
+    "source": "FASTGPT_SUPPLEMENT",
+    "ownerStage": "S1",
+    "scope": "RUNTIME",
+    "environments": [
+      "APP_RUNTIME",
+      "BROWSER_RUNTIME",
+      "WORKER_RUNTIME"
+    ],
+    "usage": [
+      "time"
+    ]
+  },
+  {
+    "name": "domino-ext",
+    "version": "2.1.4",
+    "source": "FASTGPT_SUPPLEMENT",
+    "ownerStage": "S4",
+    "scope": "RUNTIME",
+    "environments": [
+      "APP_RUNTIME",
+      "WORKER_RUNTIME"
+    ],
+    "usage": [
+      "parse-file"
+    ]
+  },
+  {
+    "name": "echarts",
+    "version": "5.4.1",
+    "source": "FASTGPT_SUPPLEMENT",
+    "ownerStage": "S10",
+    "scope": "RUNTIME",
+    "environments": [
+      "BROWSER_RUNTIME"
+    ],
+    "usage": [
+      "usage-chart"
+    ]
+  },
+  {
+    "name": "echarts-gl",
+    "version": "2.0.9",
+    "source": "FASTGPT_SUPPLEMENT",
+    "ownerStage": "S10",
+    "scope": "RUNTIME",
+    "environments": [
+      "BROWSER_RUNTIME"
+    ],
+    "usage": [
+      "usage-chart"
+    ]
+  },
+  {
+    "name": "encoding",
+    "version": "0.1.13",
+    "source": "FASTGPT_SUPPLEMENT",
+    "ownerStage": "S4",
+    "scope": "RUNTIME",
+    "environments": [
+      "APP_RUNTIME",
+      "WORKER_RUNTIME"
+    ],
+    "usage": [
+      "parse-file"
+    ]
+  },
+  {
+    "name": "es-toolkit",
+    "version": "1.51.0",
+    "source": "FASTGPT_SUPPLEMENT",
+    "ownerStage": "S2",
+    "scope": "RUNTIME",
+    "environments": [
+      "APP_RUNTIME",
+      "WORKER_RUNTIME"
+    ],
+    "usage": [
+      "object-storage"
+    ]
+  },
+  {
+    "name": "esbuild",
+    "version": "0.25.11",
+    "source": "FASTGPT_SUPPLEMENT",
+    "ownerStage": "S1",
+    "scope": "BUILD",
+    "environments": [
+      "BUILD"
+    ],
+    "usage": [
+      "build"
+    ]
+  },
+  {
+    "name": "eslint",
+    "version": "9.39.4",
+    "source": "PROJECT_BASELINE",
+    "ownerStage": "S1",
+    "scope": "BUILD",
+    "environments": [
+      "BUILD"
+    ],
+    "usage": [
+      "lint"
+    ]
+  },
+  {
+    "name": "eslint-config-next",
+    "version": "16.3.6",
+    "source": "FASTGPT_SUPPLEMENT",
+    "ownerStage": "S1",
+    "scope": "BUILD",
+    "environments": [
+      "BUILD"
+    ],
+    "usage": [
+      "lint"
+    ]
+  },
+  {
+    "name": "file-type",
+    "version": "21.3.0",
+    "source": "PROJECT_BASELINE",
+    "ownerStage": "S1",
+    "scope": "RUNTIME",
+    "environments": [
+      "APP_RUNTIME",
+      "WORKER_RUNTIME"
+    ],
+    "usage": [
+      "upload-validation"
+    ]
+  },
+  {
+    "name": "form-data",
+    "version": "4.0.4",
+    "source": "FASTGPT_SUPPLEMENT",
+    "ownerStage": "S4",
+    "scope": "RUNTIME",
+    "environments": [
+      "APP_RUNTIME",
+      "WORKER_RUNTIME"
+    ],
+    "usage": [
+      "http-provider"
+    ]
+  },
+  {
+    "name": "framer-motion",
+    "version": "9.1.7",
+    "source": "FASTGPT_SUPPLEMENT",
+    "ownerStage": "S1",
+    "scope": "RUNTIME",
+    "environments": [
+      "BROWSER_RUNTIME"
+    ],
+    "usage": [
+      "web-ui"
+    ]
+  },
+  {
+    "name": "gpt-tokenizer",
+    "version": "3.4.0",
+    "source": "PROJECT_BASELINE",
+    "ownerStage": "S1",
+    "scope": "RUNTIME",
+    "environments": [
+      "APP_RUNTIME",
+      "WORKER_RUNTIME"
+    ],
+    "usage": [
+      "model-gateway"
+    ]
+  },
+  {
+    "name": "hast-util-to-jsx-runtime",
+    "version": "2.3.6",
+    "source": "FASTGPT_SUPPLEMENT",
+    "ownerStage": "S7",
+    "scope": "RUNTIME",
+    "environments": [
+      "BROWSER_RUNTIME"
+    ],
+    "usage": [
+      "citation-ui",
+      "markdown"
+    ]
+  },
+  {
+    "name": "http-proxy-agent",
+    "version": "7.0.2",
+    "source": "FASTGPT_SUPPLEMENT",
+    "ownerStage": "S4",
+    "scope": "RUNTIME",
+    "environments": [
+      "APP_RUNTIME",
+      "WORKER_RUNTIME"
+    ],
+    "usage": [
+      "http-provider"
+    ]
+  },
+  {
+    "name": "https-proxy-agent",
+    "version": "7.0.6",
+    "source": "FASTGPT_SUPPLEMENT",
+    "ownerStage": "S4",
+    "scope": "RUNTIME",
+    "environments": [
+      "APP_RUNTIME",
+      "WORKER_RUNTIME"
+    ],
+    "usage": [
+      "http-provider"
+    ]
+  },
+  {
+    "name": "husky",
+    "version": "8.0.3",
+    "source": "FASTGPT_SUPPLEMENT",
+    "ownerStage": "S1",
+    "scope": "BUILD",
+    "environments": [
+      "BUILD"
+    ],
+    "usage": [
+      "lint"
+    ]
+  },
+  {
+    "name": "i18next",
+    "version": "23.16.8",
+    "source": "FASTGPT_SUPPLEMENT",
+    "ownerStage": "S1",
+    "scope": "RUNTIME",
+    "environments": [
+      "BROWSER_RUNTIME"
+    ],
+    "usage": [
+      "web-ui"
+    ]
+  },
+  {
+    "name": "iconv-lite",
+    "version": "0.6.3",
+    "source": "FASTGPT_SUPPLEMENT",
+    "ownerStage": "S4",
+    "scope": "RUNTIME",
+    "environments": [
+      "APP_RUNTIME",
+      "WORKER_RUNTIME"
+    ],
+    "usage": [
+      "parse-file"
+    ]
+  },
+  {
+    "name": "ioredis",
+    "version": "5.11.1",
+    "source": "PROJECT_BASELINE",
+    "ownerStage": "S1",
+    "scope": "RUNTIME",
+    "environments": [
+      "APP_RUNTIME",
+      "WORKER_RUNTIME"
+    ],
+    "usage": [
+      "redis-queue"
+    ]
+  },
+  {
+    "name": "ipaddr.js",
+    "version": "2.4.0",
+    "source": "FASTGPT_SUPPLEMENT",
+    "ownerStage": "S4",
+    "scope": "RUNTIME",
+    "environments": [
+      "APP_RUNTIME",
+      "WORKER_RUNTIME"
+    ],
+    "usage": [
+      "http-provider"
+    ]
+  },
+  {
+    "name": "joplin-turndown-plugin-gfm",
+    "version": "1.0.12",
+    "source": "PROJECT_BASELINE",
+    "ownerStage": "S1",
+    "scope": "RUNTIME",
+    "environments": [
+      "APP_RUNTIME",
+      "WORKER_RUNTIME"
+    ],
+    "usage": [
+      "parse-file"
+    ]
+  },
+  {
+    "name": "jschardet",
+    "version": "3.1.1",
+    "source": "FASTGPT_SUPPLEMENT",
+    "ownerStage": "S4",
+    "scope": "RUNTIME",
+    "environments": [
+      "APP_RUNTIME",
+      "WORKER_RUNTIME"
+    ],
+    "usage": [
+      "parse-file"
+    ]
+  },
+  {
+    "name": "jsdom",
+    "version": "26.1.0",
+    "source": "PROJECT_BASELINE",
+    "ownerStage": "S1",
+    "scope": "TEST_ONLY",
+    "environments": [
+      "TEST"
+    ],
+    "usage": [
+      "test"
+    ]
+  },
+  {
+    "name": "json5",
+    "version": "2.2.3",
+    "source": "FASTGPT_SUPPLEMENT",
+    "ownerStage": "S1",
+    "scope": "RUNTIME",
+    "environments": [
+      "APP_RUNTIME",
+      "BROWSER_RUNTIME",
+      "WORKER_RUNTIME"
+    ],
+    "usage": [
+      "structured-data"
+    ]
+  },
+  {
+    "name": "jsonpath-plus",
+    "version": "10.3.0",
+    "source": "FASTGPT_SUPPLEMENT",
+    "ownerStage": "S4",
+    "scope": "RUNTIME",
+    "environments": [
+      "APP_RUNTIME",
+      "WORKER_RUNTIME"
+    ],
+    "usage": [
+      "structured-data"
+    ]
+  },
+  {
+    "name": "jsonrepair",
+    "version": "3.13.2",
+    "source": "PROJECT_BASELINE",
+    "ownerStage": "S1",
+    "scope": "RUNTIME",
+    "environments": [
+      "APP_RUNTIME",
+      "WORKER_RUNTIME"
+    ],
+    "usage": [
+      "structured-data"
+    ]
+  },
+  {
+    "name": "jsonwebtoken",
+    "version": "9.0.3",
+    "source": "FASTGPT_SUPPLEMENT",
+    "ownerStage": "S10",
+    "scope": "RUNTIME",
+    "environments": [
+      "APP_RUNTIME",
+      "WORKER_RUNTIME"
+    ],
+    "usage": [
+      "auth"
+    ]
+  },
+  {
+    "name": "jszip",
+    "version": "3.10.1",
+    "source": "FASTGPT_SUPPLEMENT",
+    "ownerStage": "S2",
+    "scope": "RUNTIME",
+    "environments": [
+      "APP_RUNTIME",
+      "WORKER_RUNTIME"
+    ],
+    "usage": [
+      "archive",
+      "download"
+    ]
+  },
+  {
+    "name": "katex",
+    "version": "0.18.2",
+    "source": "FASTGPT_SUPPLEMENT",
+    "ownerStage": "S7",
+    "scope": "RUNTIME",
+    "environments": [
+      "BROWSER_RUNTIME"
+    ],
+    "usage": [
+      "citation-ui",
+      "markdown"
+    ]
+  },
+  {
+    "name": "lint-staged",
+    "version": "16.4.0",
+    "source": "FASTGPT_SUPPLEMENT",
+    "ownerStage": "S1",
+    "scope": "BUILD",
+    "environments": [
+      "BUILD"
+    ],
+    "usage": [
+      "lint"
+    ]
+  },
+  {
+    "name": "lodash-es",
+    "version": "4.18.1",
+    "source": "FASTGPT_SUPPLEMENT",
+    "ownerStage": "S7",
+    "scope": "RUNTIME",
+    "environments": [
+      "APP_RUNTIME",
+      "BROWSER_RUNTIME",
+      "WORKER_RUNTIME"
+    ],
+    "usage": [
+      "data-utils"
+    ]
+  },
+  {
+    "name": "mammoth",
+    "version": "1.11.0",
+    "source": "PROJECT_BASELINE",
+    "ownerStage": "S1",
+    "scope": "RUNTIME",
+    "environments": [
+      "APP_RUNTIME",
+      "WORKER_RUNTIME"
+    ],
+    "usage": [
+      "parse-file"
+    ]
+  },
+  {
+    "name": "marked",
+    "version": "18.0.9",
+    "source": "FASTGPT_SUPPLEMENT",
+    "ownerStage": "S7",
+    "scope": "RUNTIME",
+    "environments": [
+      "BROWSER_RUNTIME"
+    ],
+    "usage": [
+      "citation-ui",
+      "markdown"
+    ]
+  },
+  {
+    "name": "mermaid",
+    "version": "11.16.1",
+    "source": "FASTGPT_SUPPLEMENT",
+    "ownerStage": "S7",
+    "scope": "RUNTIME",
+    "environments": [
+      "BROWSER_RUNTIME"
+    ],
+    "usage": [
+      "citation-ui",
+      "markdown"
+    ]
+  },
+  {
+    "name": "mime",
+    "version": "4.1.0",
+    "source": "FASTGPT_SUPPLEMENT",
+    "ownerStage": "S2",
+    "scope": "RUNTIME",
+    "environments": [
+      "APP_RUNTIME",
+      "WORKER_RUNTIME"
+    ],
+    "usage": [
+      "mime"
+    ]
+  },
+  {
+    "name": "mime-types",
+    "version": "3.0.2",
+    "source": "PROJECT_BASELINE",
+    "ownerStage": "S1",
+    "scope": "RUNTIME",
+    "environments": [
+      "APP_RUNTIME",
+      "WORKER_RUNTIME"
+    ],
+    "usage": [
+      "mime"
+    ]
+  },
+  {
+    "name": "minio",
+    "version": "8.0.7",
+    "source": "PROJECT_BASELINE",
+    "ownerStage": "S1",
+    "scope": "RUNTIME",
+    "environments": [
+      "APP_RUNTIME",
+      "WORKER_RUNTIME"
+    ],
+    "usage": [
+      "object-storage"
+    ]
+  },
+  {
+    "name": "mongodb-memory-server",
+    "version": "10.4.3",
+    "source": "PROJECT_BASELINE",
+    "ownerStage": "S1",
+    "scope": "TEST_ONLY",
+    "environments": [
+      "TEST"
+    ],
+    "usage": [
+      "test"
+    ]
+  },
+  {
+    "name": "mongoose",
+    "version": "8.24.5",
+    "source": "PROJECT_BASELINE",
+    "ownerStage": "S1",
+    "scope": "RUNTIME",
+    "environments": [
+      "APP_RUNTIME",
+      "WORKER_RUNTIME"
+    ],
+    "usage": [
+      "mongo"
+    ]
+  },
+  {
+    "name": "multer",
+    "version": "2.4.0",
+    "source": "FASTGPT_SUPPLEMENT",
+    "ownerStage": "S4",
+    "scope": "RUNTIME",
+    "environments": [
+      "APP_RUNTIME",
+      "WORKER_RUNTIME"
+    ],
+    "usage": [
+      "utility"
+    ]
+  },
+  {
+    "name": "nanoid",
+    "version": "5.1.5",
+    "source": "FASTGPT_SUPPLEMENT",
+    "ownerStage": "S6",
+    "scope": "RUNTIME",
+    "environments": [
+      "APP_RUNTIME",
+      "BROWSER_RUNTIME",
+      "WORKER_RUNTIME"
+    ],
+    "usage": [
+      "data-utils"
+    ]
+  },
+  {
+    "name": "next",
+    "version": "16.3.0",
+    "source": "PROJECT_BASELINE",
+    "ownerStage": "S1",
+    "scope": "RUNTIME",
+    "environments": [
+      "APP_RUNTIME",
+      "BROWSER_RUNTIME",
+      "BUILD"
+    ],
+    "usage": [
+      "web-ui"
+    ]
+  },
+  {
+    "name": "next-i18next",
+    "version": "15.4.2",
+    "source": "FASTGPT_SUPPLEMENT",
+    "ownerStage": "S1",
+    "scope": "RUNTIME",
+    "environments": [
+      "BROWSER_RUNTIME"
+    ],
+    "usage": [
+      "web-ui"
+    ]
+  },
+  {
+    "name": "node-cron",
+    "version": "3.0.3",
+    "source": "FASTGPT_SUPPLEMENT",
+    "ownerStage": "S6",
+    "scope": "RUNTIME",
+    "environments": [
+      "APP_RUNTIME",
+      "WORKER_RUNTIME"
+    ],
+    "usage": [
+      "scheduler"
+    ]
+  },
+  {
+    "name": "openai",
+    "version": "6.34.0",
+    "source": "PROJECT_BASELINE",
+    "ownerStage": "S1",
+    "scope": "RUNTIME",
+    "environments": [
+      "APP_RUNTIME",
+      "WORKER_RUNTIME"
+    ],
+    "usage": [
+      "model-gateway"
+    ]
+  },
+  {
+    "name": "openapi-types",
+    "version": "12.1.3",
+    "source": "FASTGPT_SUPPLEMENT",
+    "ownerStage": "S4",
+    "scope": "RUNTIME",
+    "environments": [
+      "APP_RUNTIME",
+      "WORKER_RUNTIME"
+    ],
+    "usage": [
+      "api-schema"
+    ]
+  },
+  {
+    "name": "p-limit",
+    "version": "7.2.0",
+    "source": "FASTGPT_SUPPLEMENT",
+    "ownerStage": "S6",
+    "scope": "RUNTIME",
+    "environments": [
+      "APP_RUNTIME",
+      "WORKER_RUNTIME"
+    ],
+    "usage": [
+      "data-utils"
+    ]
+  },
+  {
+    "name": "papaparse",
+    "version": "5.4.1",
+    "source": "PROJECT_BASELINE",
+    "ownerStage": "S1",
+    "scope": "RUNTIME",
+    "environments": [
+      "APP_RUNTIME",
+      "WORKER_RUNTIME"
+    ],
+    "usage": [
+      "parse-file",
+      "template-import",
+      "backup"
+    ]
+  },
+  {
+    "name": "pdfjs-dist",
+    "version": "4.10.38",
+    "source": "PROJECT_BASELINE",
+    "ownerStage": "S1",
+    "scope": "RUNTIME",
+    "environments": [
+      "APP_RUNTIME",
+      "WORKER_RUNTIME"
+    ],
+    "usage": [
+      "parse-file"
+    ]
+  },
+  {
+    "name": "pg",
+    "version": "8.23.1",
+    "source": "PROJECT_BASELINE",
+    "ownerStage": "S1",
+    "scope": "RUNTIME",
+    "environments": [
+      "APP_RUNTIME",
+      "WORKER_RUNTIME"
+    ],
+    "usage": [
+      "pgvector"
+    ]
+  },
+  {
+    "name": "pino",
+    "version": "9.14.0",
+    "source": "PROJECT_BASELINE",
+    "ownerStage": "S1",
+    "scope": "RUNTIME",
+    "environments": [
+      "APP_RUNTIME",
+      "WORKER_RUNTIME"
+    ],
+    "usage": [
+      "telemetry"
+    ]
+  },
+  {
+    "name": "pino-opentelemetry-transport",
+    "version": "1.0.1",
+    "source": "FASTGPT_SUPPLEMENT",
+    "ownerStage": "S1",
+    "scope": "RUNTIME",
+    "environments": [
+      "APP_RUNTIME",
+      "WORKER_RUNTIME"
+    ],
+    "usage": [
+      "telemetry"
+    ]
+  },
+  {
+    "name": "prettier",
+    "version": "3.8.3",
+    "source": "PROJECT_BASELINE",
+    "ownerStage": "S1",
+    "scope": "BUILD",
+    "environments": [
+      "BUILD"
+    ],
+    "usage": [
+      "lint"
+    ]
+  },
+  {
+    "name": "proxy-addr",
+    "version": "2.0.7",
+    "source": "FASTGPT_SUPPLEMENT",
+    "ownerStage": "S4",
+    "scope": "RUNTIME",
+    "environments": [
+      "APP_RUNTIME",
+      "WORKER_RUNTIME"
+    ],
+    "usage": [
+      "http-provider"
+    ]
+  },
+  {
+    "name": "proxy-agent",
+    "version": "6.5.0",
+    "source": "FASTGPT_SUPPLEMENT",
+    "ownerStage": "S4",
+    "scope": "RUNTIME",
+    "environments": [
+      "APP_RUNTIME",
+      "WORKER_RUNTIME"
+    ],
+    "usage": [
+      "http-provider"
+    ]
+  },
+  {
+    "name": "proxy-from-env",
+    "version": "1.1.0",
+    "source": "FASTGPT_SUPPLEMENT",
+    "ownerStage": "S4",
+    "scope": "RUNTIME",
+    "environments": [
+      "APP_RUNTIME",
+      "WORKER_RUNTIME"
+    ],
+    "usage": [
+      "http-provider"
+    ]
+  },
+  {
+    "name": "react",
+    "version": "18.3.1",
+    "source": "PROJECT_BASELINE",
+    "ownerStage": "S1",
+    "scope": "RUNTIME",
+    "environments": [
+      "BROWSER_RUNTIME"
+    ],
+    "usage": [
+      "web-ui"
+    ]
+  },
+  {
+    "name": "react-day-picker",
+    "version": "9.14.0",
+    "source": "FASTGPT_SUPPLEMENT",
+    "ownerStage": "S1",
+    "scope": "RUNTIME",
+    "environments": [
+      "BROWSER_RUNTIME"
+    ],
+    "usage": [
+      "web-ui"
+    ]
+  },
+  {
+    "name": "react-dom",
+    "version": "18.3.1",
+    "source": "PROJECT_BASELINE",
+    "ownerStage": "S1",
+    "scope": "RUNTIME",
+    "environments": [
+      "BROWSER_RUNTIME"
+    ],
+    "usage": [
+      "web-ui"
+    ]
+  },
+  {
+    "name": "react-hook-form",
+    "version": "7.43.1",
+    "source": "FASTGPT_SUPPLEMENT",
+    "ownerStage": "S1",
+    "scope": "RUNTIME",
+    "environments": [
+      "BROWSER_RUNTIME"
+    ],
+    "usage": [
+      "web-ui",
+      "form-state"
+    ]
+  },
+  {
+    "name": "react-i18next",
+    "version": "14.1.2",
+    "source": "FASTGPT_SUPPLEMENT",
+    "ownerStage": "S1",
+    "scope": "RUNTIME",
+    "environments": [
+      "BROWSER_RUNTIME"
+    ],
+    "usage": [
+      "web-ui"
+    ]
+  },
+  {
+    "name": "react-markdown",
+    "version": "9.1.0",
+    "source": "FASTGPT_SUPPLEMENT",
+    "ownerStage": "S7",
+    "scope": "RUNTIME",
+    "environments": [
+      "BROWSER_RUNTIME"
+    ],
+    "usage": [
+      "citation-ui",
+      "markdown"
+    ]
+  },
+  {
+    "name": "react-photo-view",
+    "version": "1.2.7",
+    "source": "FASTGPT_SUPPLEMENT",
+    "ownerStage": "S8",
+    "scope": "RUNTIME",
+    "environments": [
+      "BROWSER_RUNTIME"
+    ],
+    "usage": [
+      "web-ui"
+    ]
+  },
+  {
+    "name": "react-syntax-highlighter",
+    "version": "15.6.1",
+    "source": "FASTGPT_SUPPLEMENT",
+    "ownerStage": "S7",
+    "scope": "RUNTIME",
+    "environments": [
+      "BROWSER_RUNTIME"
+    ],
+    "usage": [
+      "citation-ui",
+      "markdown"
+    ]
+  },
+  {
+    "name": "react-textarea-autosize",
+    "version": "8.5.8",
+    "source": "FASTGPT_SUPPLEMENT",
+    "ownerStage": "S1",
+    "scope": "RUNTIME",
+    "environments": [
+      "BROWSER_RUNTIME"
+    ],
+    "usage": [
+      "web-ui"
+    ]
+  },
+  {
+    "name": "rehype-external-links",
+    "version": "3.0.0",
+    "source": "FASTGPT_SUPPLEMENT",
+    "ownerStage": "S7",
+    "scope": "RUNTIME",
+    "environments": [
+      "BROWSER_RUNTIME"
+    ],
+    "usage": [
+      "citation-ui",
+      "markdown"
+    ]
+  },
+  {
+    "name": "rehype-katex",
+    "version": "7.0.1",
+    "source": "FASTGPT_SUPPLEMENT",
+    "ownerStage": "S7",
+    "scope": "RUNTIME",
+    "environments": [
+      "BROWSER_RUNTIME"
+    ],
+    "usage": [
+      "citation-ui",
+      "markdown"
+    ]
+  },
+  {
+    "name": "rehype-raw",
+    "version": "7.0.0",
+    "source": "FASTGPT_SUPPLEMENT",
+    "ownerStage": "S7",
+    "scope": "RUNTIME",
+    "environments": [
+      "BROWSER_RUNTIME"
+    ],
+    "usage": [
+      "citation-ui",
+      "markdown"
+    ]
+  },
+  {
+    "name": "rehype-sanitize",
+    "version": "6.0.0",
+    "source": "FASTGPT_SUPPLEMENT",
+    "ownerStage": "S7",
+    "scope": "RUNTIME",
+    "environments": [
+      "BROWSER_RUNTIME"
+    ],
+    "usage": [
+      "citation-ui",
+      "markdown"
+    ]
+  },
+  {
+    "name": "remark-breaks",
+    "version": "4.0.0",
+    "source": "FASTGPT_SUPPLEMENT",
+    "ownerStage": "S7",
+    "scope": "RUNTIME",
+    "environments": [
+      "BROWSER_RUNTIME"
+    ],
+    "usage": [
+      "citation-ui",
+      "markdown"
+    ]
+  },
+  {
+    "name": "remark-gfm",
+    "version": "4.0.1",
+    "source": "FASTGPT_SUPPLEMENT",
+    "ownerStage": "S7",
+    "scope": "RUNTIME",
+    "environments": [
+      "BROWSER_RUNTIME"
+    ],
+    "usage": [
+      "citation-ui",
+      "markdown"
+    ]
+  },
+  {
+    "name": "remark-math",
+    "version": "6.0.0",
+    "source": "FASTGPT_SUPPLEMENT",
+    "ownerStage": "S7",
+    "scope": "RUNTIME",
+    "environments": [
+      "BROWSER_RUNTIME"
+    ],
+    "usage": [
+      "citation-ui",
+      "markdown"
+    ]
+  },
+  {
+    "name": "remark-parse",
+    "version": "11.0.0",
+    "source": "FASTGPT_SUPPLEMENT",
+    "ownerStage": "S7",
+    "scope": "RUNTIME",
+    "environments": [
+      "BROWSER_RUNTIME"
+    ],
+    "usage": [
+      "citation-ui",
+      "markdown"
+    ]
+  },
+  {
+    "name": "remark-rehype",
+    "version": "11.1.1",
+    "source": "FASTGPT_SUPPLEMENT",
+    "ownerStage": "S7",
+    "scope": "RUNTIME",
+    "environments": [
+      "BROWSER_RUNTIME"
+    ],
+    "usage": [
+      "citation-ui",
+      "markdown"
+    ]
+  },
+  {
+    "name": "remend",
+    "version": "1.3.0",
+    "source": "FASTGPT_SUPPLEMENT",
+    "ownerStage": "S7",
+    "scope": "RUNTIME",
+    "environments": [
+      "BROWSER_RUNTIME"
+    ],
+    "usage": [
+      "citation-ui",
+      "markdown"
+    ]
+  },
+  {
+    "name": "safe-regex",
+    "version": "2.1.1",
+    "source": "FASTGPT_SUPPLEMENT",
+    "ownerStage": "S7",
+    "scope": "RUNTIME",
+    "environments": [
+      "APP_RUNTIME",
+      "WORKER_RUNTIME"
+    ],
+    "usage": [
+      "data-utils"
+    ]
+  },
+  {
+    "name": "sass",
+    "version": "1.85.1",
+    "source": "FASTGPT_SUPPLEMENT",
+    "ownerStage": "S1",
+    "scope": "BUILD",
+    "environments": [
+      "BUILD"
+    ],
+    "usage": [
+      "build"
+    ]
+  },
+  {
+    "name": "tailwindcss",
+    "version": "3.4.18",
+    "source": "FASTGPT_SUPPLEMENT",
+    "ownerStage": "S1",
+    "scope": "BUILD",
+    "environments": [
+      "BUILD"
+    ],
+    "usage": [
+      "build"
+    ]
+  },
+  {
+    "name": "tsdown",
+    "version": "0.21.10",
+    "source": "PROJECT_BASELINE",
+    "ownerStage": "S1",
+    "scope": "BUILD",
+    "environments": [
+      "BUILD"
+    ],
+    "usage": [
+      "build"
+    ]
+  },
+  {
+    "name": "tsx",
+    "version": "4.23.15",
+    "source": "PROJECT_BASELINE",
+    "ownerStage": "S1",
+    "scope": "BUILD",
+    "environments": [
+      "BUILD"
+    ],
+    "usage": [
+      "build"
+    ]
+  },
+  {
+    "name": "turbo",
+    "version": "2.10.8",
+    "source": "PROJECT_BASELINE",
+    "ownerStage": "S1",
+    "scope": "BUILD",
+    "environments": [
+      "BUILD"
+    ],
+    "usage": [
+      "build"
+    ]
+  },
+  {
+    "name": "turndown",
+    "version": "7.2.0",
+    "source": "PROJECT_BASELINE",
+    "ownerStage": "S1",
+    "scope": "RUNTIME",
+    "environments": [
+      "APP_RUNTIME",
+      "WORKER_RUNTIME"
+    ],
+    "usage": [
+      "parse-file"
+    ]
+  },
+  {
+    "name": "typescript",
+    "version": "6.0.3",
+    "source": "PROJECT_BASELINE",
+    "ownerStage": "S1",
+    "scope": "BUILD",
+    "environments": [
+      "BUILD"
+    ],
+    "usage": [
+      "build"
+    ]
+  },
+  {
+    "name": "typescript-eslint",
+    "version": "8.71.0",
+    "source": "PROJECT_BASELINE",
+    "ownerStage": "S1",
+    "scope": "BUILD",
+    "environments": [
+      "BUILD"
+    ],
+    "usage": [
+      "lint"
+    ]
+  },
+  {
+    "name": "undici",
+    "version": "7.29.0",
+    "source": "PROJECT_BASELINE",
+    "ownerStage": "S1",
+    "scope": "RUNTIME",
+    "environments": [
+      "APP_RUNTIME",
+      "WORKER_RUNTIME"
+    ],
+    "usage": [
+      "http-provider"
+    ]
+  },
+  {
+    "name": "unified",
+    "version": "11.0.5",
+    "source": "FASTGPT_SUPPLEMENT",
+    "ownerStage": "S7",
+    "scope": "RUNTIME",
+    "environments": [
+      "BROWSER_RUNTIME"
+    ],
+    "usage": [
+      "citation-ui",
+      "markdown"
+    ]
+  },
+  {
+    "name": "use-context-selector",
+    "version": "1.4.4",
+    "source": "FASTGPT_SUPPLEMENT",
+    "ownerStage": "S1",
+    "scope": "RUNTIME",
+    "environments": [
+      "BROWSER_RUNTIME"
+    ],
+    "usage": [
+      "web-ui"
+    ]
+  },
+  {
+    "name": "vfile",
+    "version": "6.0.3",
+    "source": "FASTGPT_SUPPLEMENT",
+    "ownerStage": "S7",
+    "scope": "RUNTIME",
+    "environments": [
+      "BROWSER_RUNTIME"
+    ],
+    "usage": [
+      "citation-ui",
+      "markdown"
+    ]
+  },
+  {
+    "name": "vite",
+    "version": "6.4.3",
+    "source": "FASTGPT_SUPPLEMENT",
+    "ownerStage": "S1",
+    "scope": "BUILD",
+    "environments": [
+      "BUILD"
+    ],
+    "usage": [
+      "build"
+    ]
+  },
+  {
+    "name": "vitest",
+    "version": "4.1.11",
+    "source": "PROJECT_BASELINE",
+    "ownerStage": "S1",
+    "scope": "TEST_ONLY",
+    "environments": [
+      "TEST"
+    ],
+    "usage": [
+      "test"
+    ]
+  },
+  {
+    "name": "winston",
+    "version": "3.17.0",
+    "source": "FASTGPT_SUPPLEMENT",
+    "ownerStage": "S1",
+    "scope": "RUNTIME",
+    "environments": [
+      "APP_RUNTIME",
+      "WORKER_RUNTIME"
+    ],
+    "usage": [
+      "telemetry"
+    ]
+  },
+  {
+    "name": "xlsx",
+    "version": "0.18.5",
+    "source": "PROJECT_BASELINE",
+    "ownerStage": "S1",
+    "scope": "RUNTIME",
+    "environments": [
+      "APP_RUNTIME",
+      "WORKER_RUNTIME"
+    ],
+    "usage": [
+      "parse-file",
+      "template-import",
+      "backup"
+    ]
+  },
+  {
+    "name": "yauzl",
+    "version": "3.4.0",
+    "source": "PROJECT_BASELINE",
+    "ownerStage": "S1",
+    "scope": "RUNTIME",
+    "environments": [
+      "APP_RUNTIME",
+      "WORKER_RUNTIME"
+    ],
+    "usage": [
+      "parse-file"
+    ]
+  },
+  {
+    "name": "zod",
+    "version": "4.1.12",
+    "source": "PROJECT_BASELINE",
+    "ownerStage": "S1",
+    "scope": "RUNTIME",
+    "environments": [
+      "APP_RUNTIME",
+      "BROWSER_RUNTIME",
+      "WORKER_RUNTIME"
+    ],
+    "usage": [
+      "validation"
+    ]
+  },
+  {
+    "name": "zod-openapi",
+    "version": "5.4.6",
+    "source": "PROJECT_BASELINE",
+    "ownerStage": "S1",
+    "scope": "RUNTIME",
+    "environments": [
+      "APP_RUNTIME",
+      "WORKER_RUNTIME"
+    ],
+    "usage": [
+      "api-schema"
+    ]
+  },
+  {
+    "name": "zustand",
+    "version": "4.5.6",
+    "source": "FASTGPT_SUPPLEMENT",
+    "ownerStage": "S1",
+    "scope": "RUNTIME",
+    "environments": [
+      "BROWSER_RUNTIME"
+    ],
+    "usage": [
+      "web-ui"
+    ]
+  },
+  {
+    "name": "@playwright/test",
+    "version": "1.64.1",
+    "source": "USER_APPROVED_S1_BROWSER_E2E",
+    "ownerStage": "S1",
+    "scope": "TEST_ONLY",
+    "environments": [
+      "TEST"
+    ],
+    "usage": [
+      "browser-e2e"
+    ]
+  },
+  {
+    "name": "@axe-core/playwright",
+    "version": "4.14.0",
+    "source": "USER_APPROVED_S1_BROWSER_E2E",
+    "ownerStage": "S1",
+    "scope": "TEST_ONLY",
+    "environments": [
+      "TEST"
+    ],
+    "usage": [
+      "accessibility-e2e"
+    ]
+  }
+]

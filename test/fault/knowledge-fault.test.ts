@@ -15,6 +15,7 @@ import {
   classifyExternalFailure,
   redactExternalValue,
 } from '../../packages/service/src/modules/knowledge/adapter/external-providers';
+import { createTelemetryRuntime } from '../../sdk/otel/src';
 
 function requiredEnv(name: string): string {
   const value = process.env[name]?.trim();
@@ -47,6 +48,38 @@ afterAll(async () => {
 });
 
 describe('knowledge fault contracts', () => {
+  it('degrades telemetry exporter failures without affecting business work', async () => {
+    const telemetry = createTelemetryRuntime(
+      {
+        serviceName: 'knowledge-fault-test',
+        endpoint: 'http://127.0.0.1:4318',
+        exportIntervalMillis: 60_000,
+      },
+      {
+        traceExporterFactory: () => {
+          throw new Error('trace down');
+        },
+        metricExporterFactory: () => {
+          throw new Error('metrics down');
+        },
+        logExporterFactory: () => {
+          throw new Error('logs down');
+        },
+      },
+    );
+    expect(telemetry.state().mode).toBe('degraded');
+    await expect(
+      telemetry.withSpan('knowledge.fault.test', { operation: 'test' }, async () => 'ok'),
+    ).resolves.toBe('ok');
+    expect(() =>
+      telemetry.log('knowledge.fault.test', {
+        requestId: 'request-safe',
+        route: 'postgres://user:password@db/knowledge',
+      }),
+    ).not.toThrow();
+    await expect(telemetry.dispose()).resolves.toBeUndefined();
+  });
+
   it('classifies provider timeout/auth/rate failures and redacts secrets', () => {
     expect(classifyExternalFailure({ timeout: true })).toMatchObject({
       kind: 'timeout',

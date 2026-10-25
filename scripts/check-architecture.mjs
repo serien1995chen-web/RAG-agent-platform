@@ -145,6 +145,75 @@ for (const file of files) {
   visit(file, []);
 }
 
+const workspacePackages = [];
+for (const dir of ['packages', 'projects', 'sdk']) {
+  for (const entry of readdirSync(join(root, dir), { withFileTypes: true })) {
+    if (!entry.isDirectory()) continue;
+    const manifestPath = join(root, dir, entry.name, 'package.json');
+    try {
+      workspacePackages.push({
+        manifest: JSON.parse(readFileSync(manifestPath, 'utf8')),
+        manifestPath,
+      });
+    } catch {
+      // 没有 package.json 的目录不是 workspace。
+    }
+  }
+}
+
+if (workspacePackages.length !== 12) {
+  errors.push(`workspace 包应为 12 个，实际 ${workspacePackages.length} 个`);
+}
+
+const workspaceNames = new Set(workspacePackages.map(({ manifest }) => manifest.name));
+const workspaceGraph = new Map();
+for (const { manifest, manifestPath } of workspacePackages) {
+  const rel = relative(root, manifestPath);
+  if (!String(manifest.name).startsWith('@kb/')) {
+    errors.push(`${rel}: workspace 包名必须使用 @kb/ 前缀`);
+  }
+  if (manifest.version !== '0.1.0') {
+    errors.push(`${rel}: workspace 版本必须为 0.1.0，实际 ${String(manifest.version)}`);
+  }
+  if (manifest.private !== true) {
+    errors.push(`${rel}: workspace 包必须为 private`);
+  }
+
+  const dependencies = Object.keys(manifest.dependencies ?? {});
+  workspaceGraph.set(
+    manifest.name,
+    dependencies.filter((name) => name.startsWith('@kb/')),
+  );
+  for (const section of ['dependencies', 'devDependencies', 'peerDependencies']) {
+    for (const [name, spec] of Object.entries(manifest[section] ?? {})) {
+      if (!name.startsWith('@kb/')) continue;
+      if (!workspaceNames.has(name)) {
+        errors.push(`${rel}: 引用不存在的 workspace 包 ${name}`);
+      }
+      if (spec !== 'workspace:*') {
+        errors.push(`${rel}: workspace 包 ${name} 必须使用 workspace:*，实际 ${String(spec)}`);
+      }
+    }
+  }
+}
+
+const workspaceState = new Map();
+function visitWorkspace(name, trail) {
+  const status = workspaceState.get(name);
+  if (status === 'done') return;
+  if (status === 'visiting') {
+    errors.push(`workspace 依赖成环: ${[...trail.slice(trail.indexOf(name)), name].join(' -> ')}`);
+    return;
+  }
+  workspaceState.set(name, 'visiting');
+  for (const dependency of workspaceGraph.get(name) ?? []) {
+    if (workspaceNames.has(dependency)) visitWorkspace(dependency, [...trail, name]);
+  }
+  workspaceState.set(name, 'done');
+}
+
+for (const name of workspaceNames) visitWorkspace(name, []);
+
 if (errors.length > 0) {
   console.error(`architecture:check 失败，共 ${errors.length} 项：`);
   for (const error of errors) console.error(`  - ${error}`);
@@ -152,5 +221,6 @@ if (errors.length > 0) {
 }
 
 console.log(
-  `architecture:check 通过：扫描 ${files.length} 个 service 源文件，未发现禁止依赖或循环依赖。`,
+  `architecture:check 通过：扫描 ${files.length} 个 service 源文件、` +
+    `${workspacePackages.length} 个 workspace 包；版本均为 0.1.0，未发现禁止依赖或循环依赖。`,
 );

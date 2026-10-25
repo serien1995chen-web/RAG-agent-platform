@@ -21,6 +21,7 @@
     "@kb/contracts": "workspace:*",
     "@kb/dal": "workspace:*",
     "@node-rs/jieba": "catalog:",
+    "@t3-oss/env-core": "catalog:",
     "axios": "catalog:",
     "bullmq": "catalog:",
     "ioredis": "catalog:",

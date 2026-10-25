@@ -62,3 +62,12 @@ docker compose -f deploy/docker-compose.yml ps
 AIProxy, OCR, Feishu, Yuque and DingTalk stay in mock mode by default and remain
 `EXTERNAL_UNVERIFIED` until real credentials, timeout/failure evidence and
 provider-specific integration tests exist.
+
+## S1 Evidence
+
+- Compose services, image digests and AIProxy `UNKNOWN/BLOCKED`:
+  `docs/acceptance/s1-deployment-evidence.md`.
+- S1 command, test and Task evidence:
+  `docs/acceptance/s1-stage-evidence.md`.
+- `OTEL_EXPORTER_OTLP_ENDPOINT` is optional. An empty value selects explicit
+  no-op telemetry and must not affect readiness.

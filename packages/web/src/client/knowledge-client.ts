@@ -1,6 +1,5 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
 import type { KnowledgeProblem } from '@kb/contracts';
 
 export interface ConsoleSession {
@@ -61,6 +60,7 @@ export async function knowledgeRequest<T>(
     method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
     body?: unknown;
     headers?: Record<string, string>;
+    idempotencyKey?: string;
   } = {},
 ): Promise<T> {
   if (!path.startsWith('/v1/knowledge/')) {
@@ -68,6 +68,7 @@ export async function knowledgeRequest<T>(
   }
   const session = await ensureConsoleSession();
   const method = options.method ?? 'GET';
+  const mutationKey = method === 'GET' ? undefined : (options.idempotencyKey ?? idempotencyKey());
   const response = await fetch(path, {
     method,
     credentials: 'same-origin',
@@ -75,7 +76,7 @@ export async function knowledgeRequest<T>(
       accept: 'application/json',
       'X-Workspace-Id': session.workspaceId,
       ...(options.body !== undefined ? { 'content-type': 'application/json' } : {}),
-      ...(method !== 'GET' ? { 'Idempotency-Key': idempotencyKey() } : {}),
+      ...(mutationKey !== undefined ? { 'Idempotency-Key': mutationKey } : {}),
       ...(options.headers ?? {}),
     },
     ...(options.body !== undefined ? { body: JSON.stringify(options.body) } : {}),
@@ -88,42 +89,4 @@ export async function knowledgeRequest<T>(
     throw new KnowledgeRequestError(response.status, problem);
   }
   return payload.data;
-}
-
-export function useKnowledgeRequest<T>(
-  path: string | null,
-  dependencies: readonly unknown[] = [],
-): {
-  data: T | null;
-  error: unknown;
-  loading: boolean;
-  reload: () => Promise<void>;
-} {
-  const [data, setData] = useState<T | null>(null);
-  const [error, setError] = useState<unknown>(null);
-  const [loading, setLoading] = useState(Boolean(path));
-
-  const reload = useCallback(async () => {
-    if (!path) {
-      setData(null);
-      setLoading(false);
-      return;
-    }
-    setLoading(true);
-    try {
-      setData(await knowledgeRequest<T>(path));
-      setError(null);
-    } catch (caught) {
-      setError(caught);
-      setData(null);
-    } finally {
-      setLoading(false);
-    }
-  }, [path]);
-
-  useEffect(() => {
-    void reload();
-  }, [reload, ...dependencies]);
-
-  return { data, error, loading, reload };
 }

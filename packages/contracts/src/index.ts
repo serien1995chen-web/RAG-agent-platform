@@ -35,6 +35,24 @@ export type {
 } from './common/api-response';
 
 export {
+  APPROVED_TEST_ONLY_DEPENDENCIES,
+  DEPENDENCY_LEDGER_TOTALS,
+  DEPENDENCY_OWNER_STAGE_COUNTS,
+  DEPENDENCY_SCOPES,
+  DEPENDENCY_SOURCES,
+  DEPENDENCY_STAGES,
+  NPM_DEPENDENCY_BASELINE,
+  validateDependencyCatalog,
+  validateDependencyLedger,
+} from './dependencies/dependency-ledger';
+export type {
+  DependencyLedgerEntry,
+  DependencyScope,
+  DependencySource,
+  DependencyStage,
+} from './dependencies/dependency-ledger';
+
+export {
   KNOWLEDGE_ERROR_CATALOG,
   KNOWLEDGE_ERROR_CODES,
   KnowledgeApiError,

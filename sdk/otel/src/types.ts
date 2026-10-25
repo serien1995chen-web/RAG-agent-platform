@@ -62,6 +62,10 @@ export type LogFieldName =
   | 'errorType'
   | 'retryCount';
 
+export type SafeTelemetryValue = string | number | boolean;
+export type SafeAttributes = Record<string, SafeTelemetryValue>;
+export type SafeLogFields = Partial<Record<LogFieldName, SafeTelemetryValue>>;
+
 /** 设计 15.5：低基数告警信号类别（7）。 */
 export type AlertSignalKind =
   | 'queue_backlog'
@@ -81,3 +85,15 @@ export interface AlertSignal {
 
 /** exporter 落地状态（registered = 已装配；degraded = 降级；disabled = 未启用）。 */
 export type OtelExportState = 'registered' | 'degraded' | 'disabled';
+
+export interface TelemetryExportStatus {
+  state: OtelExportState;
+  reason?: string;
+}
+
+export interface TelemetryState {
+  mode: 'noop' | 'otlp' | 'degraded';
+  trace: TelemetryExportStatus;
+  metrics: TelemetryExportStatus;
+  logs: TelemetryExportStatus;
+}

@@ -1,5 +1,4 @@
 import {
-  ConsoleMetricExporter,
   MeterProvider,
   PeriodicExportingMetricReader,
   type MetricReader,
@@ -22,7 +21,7 @@ export function initMetrics(
   try {
     const reader = readerFactory
       ? readerFactory()
-      : new PeriodicExportingMetricReader({ exporter: new ConsoleMetricExporter() });
+      : createOtlpMetricReader(config.exporterEndpointRef, 60_000);
     const provider = new MeterProvider({ readers: [reader] });
     provider.getMeter(config.serviceName);
     return { enabled: true, reason: 'registered' };

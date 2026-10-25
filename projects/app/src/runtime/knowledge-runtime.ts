@@ -6,6 +6,12 @@ import {
 } from '@kb/dal';
 import { createKnowledgeError, type HealthResponse, type RouteEntry } from '@kb/contracts';
 import {
+  configureTelemetry,
+  type SafeAttributes,
+  type TelemetryRuntime,
+  type TelemetryState,
+} from '@kb/otel';
+import {
   KnowledgeAccessRepository,
   KnowledgeApplication,
   KnowledgeCatalogRepository,
@@ -42,9 +48,15 @@ interface RuntimeState {
   authProvider: KnowledgeMockAuthProvider;
   rateLimiter: RedisKnowledgeRateLimiter;
   application: KnowledgeApplication;
+  telemetry: TelemetryRuntime;
 }
 
-let runtimePromise: Promise<KnowledgeApiRuntime> | undefined;
+interface TelemetryKnowledgeApiRuntime extends KnowledgeApiRuntime {
+  withSpan<T>(name: string, attributes: SafeAttributes, fn: () => Promise<T> | T): Promise<T>;
+  telemetryState(): TelemetryState;
+}
+
+let runtimePromise: Promise<TelemetryKnowledgeApiRuntime> | undefined;
 
 function timeout<T>(promise: Promise<T>, timeoutMs: number, name: string): Promise<T> {
   let timer: NodeJS.Timeout | undefined;
@@ -137,8 +149,13 @@ async function measureReconciliation(state: RuntimeState, workspaceId: string) {
   };
 }
 
-async function bootstrapRuntime(): Promise<KnowledgeApiRuntime> {
+async function bootstrapRuntime(): Promise<TelemetryKnowledgeApiRuntime> {
   const config = loadKnowledgeRuntimeConfig();
+  const telemetry = configureTelemetry({
+    serviceName: 'knowledge-app',
+    ...(config.otelEndpoint ? { endpoint: config.otelEndpoint } : {}),
+    logLevel: config.logLevel,
+  });
   const connections = await createKnowledgeConnections(config);
   const { mongo, redis, pg: pool } = connections;
   await ensureKnowledgeCollections(mongo);
@@ -186,11 +203,13 @@ async function bootstrapRuntime(): Promise<KnowledgeApiRuntime> {
     authProvider: new KnowledgeMockAuthProvider(config.auth, config.environment),
     rateLimiter: new RedisKnowledgeRateLimiter(redis),
     application,
+    telemetry,
   };
 
   const readiness = async (
     requestId: string,
   ): Promise<{ status: number; body: HealthResponse }> => {
+    const telemetryState = state.telemetry.state();
     const checks = await Promise.all([
       probe('mongo', async () => {
         const db = state.mongo.db;
@@ -245,7 +264,16 @@ async function bootstrapRuntime(): Promise<KnowledgeApiRuntime> {
           });
         }
       }),
-      probe('telemetry', async () => undefined),
+      Promise.resolve({
+        name: 'telemetry' as const,
+        status:
+          telemetryState.mode === 'noop'
+            ? ('noop' as const)
+            : telemetryState.mode === 'degraded'
+              ? ('degraded' as const)
+              : ('ok' as const),
+        latencyMs: 0,
+      }),
     ]);
     const down = checks.some((check) => check.status === 'down');
     return {
@@ -258,7 +286,7 @@ async function bootstrapRuntime(): Promise<KnowledgeApiRuntime> {
     };
   };
 
-  const runtime: KnowledgeApiRuntime = {
+  const runtime: TelemetryKnowledgeApiRuntime = {
     async authenticate(request, input): Promise<KnowledgeAuthSubject> {
       const authorization = request.headers.authorization;
       const headerValue = Array.isArray(authorization) ? authorization[0] : authorization;
@@ -284,6 +312,12 @@ async function bootstrapRuntime(): Promise<KnowledgeApiRuntime> {
       return state.rateLimiter.consume(input);
     },
     readiness,
+    withSpan(name, attributes, fn) {
+      return state.telemetry.withSpan(name, attributes, () => fn());
+    },
+    telemetryState() {
+      return state.telemetry.state();
+    },
     async operationsStatus(input) {
       const health = await readiness(input.requestId);
       const queueDepth: Record<string, number> = {};
@@ -348,21 +382,17 @@ async function bootstrapRuntime(): Promise<KnowledgeApiRuntime> {
       });
     },
     log(input) {
-      process.stdout.write(
-        `${JSON.stringify({
-          event: input.event,
-          requestId: input.requestId,
-          traceId: input.traceId,
-          operationId: input.operationId,
-          details: input.details ?? {},
-        })}\n`,
-      );
+      state.telemetry.log(input.event, {
+        requestId: input.requestId,
+        operation: input.operationId,
+        ...input.details,
+      });
     },
   };
   return runtime;
 }
 
-export function getKnowledgeApiRuntime(): Promise<KnowledgeApiRuntime> {
+export function getKnowledgeApiRuntime(): Promise<TelemetryKnowledgeApiRuntime> {
   runtimePromise ??= bootstrapRuntime();
   return runtimePromise;
 }

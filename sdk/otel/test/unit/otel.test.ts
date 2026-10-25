@@ -1,9 +1,12 @@
 import { SpanStatusCode } from '@opentelemetry/api';
+import type { LogRecordExporter } from '@opentelemetry/sdk-logs';
+import type { PushMetricExporter } from '@opentelemetry/sdk-metrics';
 import {
   InMemorySpanExporter,
   NodeTracerProvider,
   SimpleSpanProcessor,
 } from '@opentelemetry/sdk-trace-node';
+import { Writable } from 'node:stream';
 import { beforeAll, describe, expect, it } from 'vitest';
 import {
   ALERT_KINDS,
@@ -14,11 +17,14 @@ import {
   createOtlpMetricExporter,
   createOtlpMetricReader,
   createOtlpTraceExporter,
+  createNoopTelemetry,
   createSafeLogger,
+  createTelemetryRuntime,
   emitAlert,
   initMetrics,
   initTracing,
   isSensitiveLogFields,
+  sanitizeLogFields,
   setSpanStatusFromHttp,
   startInstrumentSpan,
 } from '../../src/index';
@@ -51,6 +57,135 @@ describe('otel three-entry safety (15.x)', () => {
     expect(() =>
       logger.child({ module: 'test' }).log('knowledge.test.event', { ok: true }),
     ).not.toThrow();
+  });
+
+  it('drops unknown fields and value-level secrets while preserving safe fields', async () => {
+    let output = '';
+    const destination = new Writable({
+      write(chunk, _encoding, callback) {
+        output += chunk.toString();
+        callback();
+      },
+    });
+    const logger = createSafeLogger({
+      name: 'test-capture',
+      level: 'info',
+      enabled: true,
+      destination,
+    });
+    logger.log('knowledge.test.event', {
+      requestId: 'request-safe',
+      route: '/v1/knowledge/spaces',
+      workspaceId: 'workspace-safe',
+      body: 'must-not-leak',
+      unknownField: 'must-not-leak-either',
+    });
+    logger.log('knowledge.test.event', {
+      requestId: 'Bearer secret-value',
+    });
+    await new Promise((resolveWait) => setImmediate(resolveWait));
+
+    expect(output).toContain('request-safe');
+    expect(output).toContain('/v1/knowledge/spaces');
+    expect(output).toContain('workspace-safe');
+    expect(output).not.toContain('must-not-leak');
+    expect(output).not.toContain('unknownField');
+    expect(logger.droppedRecords()).toBe(3);
+    expect(sanitizeLogFields({ requestId: 'r1', payload: 'x', route: '/ok' })).toEqual({
+      fields: { requestId: 'r1', route: '/ok' },
+      dropped: 1,
+    });
+  });
+
+  it('creates no-op telemetry without endpoint and disposes idempotently', async () => {
+    const telemetry = createNoopTelemetry();
+    expect(telemetry.state().mode).toBe('noop');
+    await expect(
+      telemetry.withSpan('noop.span', { requestId: 'r1' }, async () => 'ok'),
+    ).resolves.toBe('ok');
+    await telemetry.dispose();
+    await telemetry.dispose();
+    expect(telemetry.droppedRecords()).toBe(0);
+  });
+
+  it('registers three OTLP entries and degrades each failed exporter independently', async () => {
+    const endpoints: string[] = [];
+    const traceExporter = new InMemorySpanExporter();
+    const metricExporter = {
+      export(_metrics: unknown, callback: (result: { code: number }) => void) {
+        callback({ code: 0 });
+      },
+      forceFlush: async () => undefined,
+      shutdown: async () => undefined,
+    } as unknown as PushMetricExporter;
+    const logExporter = {
+      export(_records: unknown, callback: (result: { code: number }) => void) {
+        callback({ code: 0 });
+      },
+      forceFlush: async () => undefined,
+      shutdown: async () => undefined,
+    } as unknown as LogRecordExporter;
+    const telemetry = createTelemetryRuntime(
+      {
+        serviceName: 'kb-test',
+        endpoint: 'http://127.0.0.1:4318',
+        exportIntervalMillis: 60_000,
+        logLevel: 'info',
+      },
+      {
+        traceExporterFactory: (endpoint) => {
+          endpoints.push(endpoint);
+          return traceExporter;
+        },
+        metricExporterFactory: (endpoint) => {
+          endpoints.push(endpoint);
+          return metricExporter;
+        },
+        logExporterFactory: (endpoint) => {
+          endpoints.push(endpoint);
+          return logExporter;
+        },
+      },
+    );
+    expect(telemetry.state()).toMatchObject({
+      mode: 'otlp',
+      trace: { state: 'registered' },
+      metrics: { state: 'registered' },
+      logs: { state: 'registered' },
+    });
+    expect(endpoints.sort()).toEqual([
+      'http://127.0.0.1:4318/v1/logs',
+      'http://127.0.0.1:4318/v1/metrics',
+      'http://127.0.0.1:4318/v1/traces',
+    ]);
+    telemetry.log('knowledge.test.safe', { requestId: 'request-safe' });
+    await expect(
+      telemetry.withSpan('test.span', { operation: 'test' }, async () => 'result'),
+    ).resolves.toBe('result');
+    await telemetry.dispose();
+    await telemetry.dispose();
+
+    const degraded = createTelemetryRuntime(
+      {
+        serviceName: 'kb-test',
+        endpoint: 'http://127.0.0.1:4318',
+        exportIntervalMillis: 60_000,
+      },
+      {
+        traceExporterFactory: () => {
+          throw new Error('trace exporter failed');
+        },
+        metricExporterFactory: () => metricExporter,
+        logExporterFactory: () => logExporter,
+      },
+    );
+    expect(degraded.state()).toMatchObject({
+      mode: 'degraded',
+      trace: { state: 'degraded' },
+      metrics: { state: 'registered' },
+      logs: { state: 'registered' },
+    });
+    await degraded.dispose();
   });
 });
 

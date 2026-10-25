@@ -17,8 +17,29 @@
     "lint": "eslint src"
   },
   "dependencies": {
+    "@chakra-ui/anatomy": "catalog:",
+    "@chakra-ui/icons": "catalog:",
+    "@chakra-ui/react": "catalog:",
+    "@chakra-ui/styled-system": "catalog:",
+    "@chakra-ui/system": "catalog:",
+    "@emotion/react": "catalog:",
+    "@emotion/styled": "catalog:",
     "@kb/contracts": "workspace:*",
-    "react": "catalog:"
+    "@tanstack/react-query": "catalog:",
+    "@tanstack/react-table": "catalog:",
+    "ahooks": "catalog:",
+    "date-fns": "catalog:",
+    "dayjs": "catalog:",
+    "framer-motion": "catalog:",
+    "i18next": "catalog:",
+    "react": "catalog:",
+    "react-day-picker": "catalog:",
+    "react-hook-form": "catalog:",
+    "react-i18next": "catalog:",
+    "react-textarea-autosize": "catalog:",
+    "use-context-selector": "catalog:",
+    "zod": "catalog:",
+    "zustand": "catalog:"
   },
   "devDependencies": {
     "@types/node": "catalog:",

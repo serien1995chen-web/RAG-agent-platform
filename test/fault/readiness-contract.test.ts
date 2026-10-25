@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { loadKnowledgeRuntimeConfig } from '../../packages/service/src/shared/config/knowledge-runtime-config';
 
 const readiness = vi.hoisted(() => vi.fn());
 
@@ -51,6 +52,61 @@ beforeEach(() => {
 });
 
 describe('readiness failure contract', () => {
+  const runtimeEnv = {
+    KB_MONGO_URI: 'mongodb://127.0.0.1:27017/knowledge',
+    KB_REDIS_URL: 'redis://127.0.0.1:6379',
+    KB_PG_URL: 'postgresql://knowledge:knowledge@127.0.0.1:5432/knowledge',
+    KB_S3_ENDPOINT: 'http://127.0.0.1:9000',
+    KB_S3_BUCKET: 'knowledge',
+    KB_S3_ACCESS_KEY_REF: 'knowledge-access',
+    KB_S3_SECRET_KEY_REF: 'knowledge-secret',
+  };
+
+  it('treats an absent or empty OTLP endpoint as disabled', () => {
+    expect(loadKnowledgeRuntimeConfig(runtimeEnv).otelEndpoint).toBeUndefined();
+    expect(
+      loadKnowledgeRuntimeConfig({
+        ...runtimeEnv,
+        OTEL_EXPORTER_OTLP_ENDPOINT: '',
+      }).otelEndpoint,
+    ).toBeUndefined();
+  });
+
+  it('accepts and normalizes a configured OTLP endpoint', () => {
+    expect(
+      loadKnowledgeRuntimeConfig({
+        ...runtimeEnv,
+        OTEL_EXPORTER_OTLP_ENDPOINT: '  http://collector:4318  ',
+      }).otelEndpoint,
+    ).toBe('http://collector:4318');
+  });
+
+  it('keeps readiness 200 when telemetry alone is degraded', async () => {
+    readiness.mockResolvedValue({
+      status: 200,
+      body: {
+        status: 'ok',
+        checks: [
+          { name: 'mongo', status: 'ok', latencyMs: 1 },
+          { name: 'telemetry', status: 'degraded', latencyMs: 0 },
+        ],
+        timestamp: new Date().toISOString(),
+      },
+    });
+    const recorder = responseRecorder();
+    await readyHandler(request(), recorder.response);
+    expect(recorder.statusCode()).toBe(200);
+    expect(recorder.body()).toMatchObject({
+      success: true,
+      data: {
+        checks: [
+          expect.objectContaining({ name: 'mongo', status: 'ok' }),
+          expect.objectContaining({ name: 'telemetry', status: 'degraded' }),
+        ],
+      },
+    });
+  });
+
   it('returns a 503 Problem when a real dependency probe is down', async () => {
     readiness.mockResolvedValue({
       status: 503,
