@@ -35,8 +35,18 @@ function firstWorkspaceId(subject: KnowledgeAuthSubject): string | null {
   return subject.workspaceIds[0] ?? null;
 }
 
-export function ticketRateLimitScope(ticket: string): string {
-  return `ticket:${createHash('sha256').update(ticket).digest('hex').slice(0, 24)}`;
+export function ticketClientRateLimitScope(
+  request: Pick<NextApiRequest, 'headers' | 'socket'>,
+): string {
+  const forwarded = header(request as NextApiRequest, 'x-forwarded-for')
+    ?.split(',')[0]
+    ?.trim();
+  const address =
+    request.socket?.remoteAddress ||
+    forwarded ||
+    header(request as NextApiRequest, 'x-real-ip')?.trim() ||
+    'unknown';
+  return `ticket-client:${createHash('sha256').update(address).digest('hex').slice(0, 24)}`;
 }
 
 function publicErrorStatus(error: KnowledgeApiError): number {
@@ -309,8 +319,22 @@ export function createKnowledgeApiHandler(): NextApiHandler {
         : resolveWorkspace(request, subject, requestId, traceId);
       if (!isTicketAuth) assertScopes(route, subject, requestId, traceId);
 
+      let ticketVerificationError: unknown = null;
+      let ticketWorkspaceId: string | null = null;
+      if (isTicketAuth && ticketValue) {
+        try {
+          ticketWorkspaceId = runtime.ticketWorkspaceId(ticketValue, requestId, traceId);
+        } catch (error) {
+          ticketVerificationError = error;
+        }
+      }
+      const rateLimitScope = isTicketAuth
+        ? ticketVerificationError
+          ? ticketClientRateLimitScope(request)
+          : (ticketWorkspaceId ?? workspaceId)
+        : workspaceId;
       const rateLimit = await runtime.rateLimit({
-        workspaceId: isTicketAuth && ticketValue ? ticketRateLimitScope(ticketValue) : workspaceId,
+        workspaceId: rateLimitScope,
         route,
         requestId,
       });
@@ -327,6 +351,7 @@ export function createKnowledgeApiHandler(): NextApiHandler {
           });
         }
       }
+      if (ticketVerificationError) throw ticketVerificationError;
 
       const execute = () =>
         runtime.withSpan(

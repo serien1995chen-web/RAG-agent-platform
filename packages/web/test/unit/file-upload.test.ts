@@ -333,6 +333,84 @@ describe('knowledge file upload client', () => {
     expect(fetchCount).toBeGreaterThanOrEqual(1);
   });
 
+  it('retries a completing session without re-uploading its parts', async () => {
+    vi.resetModules();
+    const { fileFingerprint, knowledgeMultipartUpload } =
+      await import('../../src/client/file-upload');
+    const uploadId = '65f1e5b2a1c9d4b7e8f09abc';
+    const file = new File(['hello'], 'completing.txt', {
+      type: 'text/plain',
+      lastModified: 42,
+    });
+    const fingerprint = await fileFingerprint(file);
+    if (!fingerprint) throw new Error('fingerprint unavailable');
+    const storage = new Map<string, string>([
+      [
+        `kb-upload:ws_upload:${file.name}:${file.size}:${fingerprint}`,
+        JSON.stringify({
+          uploadId,
+          phase: 'completing',
+          progress: 100,
+          fingerprint,
+          parts: [{ partNumber: 1, etag: 'etag-1' }],
+        }),
+      ],
+    ]);
+    let presignCount = 0;
+    let completeCount = 0;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string | URL | Request) => {
+        const url = String(input);
+        if (url === '/api/console/session') return sessionResponse();
+        if (url === `/v1/knowledge/uploads/${uploadId}`) {
+          return jsonResponse({
+            uploadId,
+            mode: 'single',
+            status: 'completing',
+            partSizeBytes: 8 * 1024 * 1024,
+            partCount: 1,
+            originalName: file.name,
+            expiresAt: new Date(Date.now() + 3_600_000).toISOString(),
+            version: 2,
+            parts: [{ partNumber: 1, etag: 'etag-1' }],
+          });
+        }
+        if (url.endsWith('/presign')) {
+          presignCount += 1;
+          throw new Error('complete retry must not request a presigned upload');
+        }
+        if (url.endsWith('/complete')) {
+          completeCount += 1;
+          return jsonResponse({
+            blobId: uploadId,
+            workspaceId: 'ws_upload',
+            bucket: 'kb-test',
+            objectKey: 'ws/ws_upload/space/space/source/unbound/source/blob/file.txt',
+            state: 'active',
+            sizeBytes: 5,
+            etag: 'etag-1',
+          });
+        }
+        throw new Error(`unexpected request: ${url}`);
+      }),
+    );
+    vi.stubGlobal('localStorage', {
+      getItem: (key: string) => storage.get(key) ?? null,
+      setItem: (key: string, value: string) => storage.set(key, value),
+      removeItem: (key: string) => storage.delete(key),
+      clear: () => storage.clear(),
+      get length() {
+        return storage.size;
+      },
+      key: (index: number) => [...storage.keys()][index] ?? null,
+    });
+
+    await knowledgeMultipartUpload(file, { knowledgeSpaceId: 'space' });
+    expect(presignCount).toBe(0);
+    expect(completeCount).toBe(1);
+  });
+
   it('aborts an already-cancelled upload and clears persisted state', async () => {
     vi.resetModules();
     const { knowledgeMultipartUpload } = await import('../../src/client/file-upload');

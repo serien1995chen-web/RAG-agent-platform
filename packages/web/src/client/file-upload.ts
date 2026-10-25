@@ -202,7 +202,10 @@ export async function knowledgeMultipartUpload(
     : null;
   const resumable =
     restored &&
-    ['pending', 'uploading'].includes(restored.status) &&
+    ['pending', 'uploading', 'completing'].includes(restored.status) &&
+    (restored.status !== 'completing' ||
+      restored.mode === 'single' ||
+      restored.parts.length === restored.partCount) &&
     Date.parse(restored.expiresAt) > Date.now();
   if (resumable) {
     session = normalizeSession(restored);
@@ -232,40 +235,42 @@ export async function knowledgeMultipartUpload(
       session.mode === 'single'
         ? [1]
         : Array.from({ length: session.partCount }, (_, index) => index + 1);
-    const uploaded = new Set(completedParts.map((part) => part.partNumber));
-    for (const partNumber of partNumbers) {
-      if (uploaded.has(partNumber)) continue;
-      if (options.signal?.aborted) throw new DOMException('Upload aborted', 'AbortError');
-      const start = (partNumber - 1) * PART_SIZE;
-      const blob = file.slice(start, Math.min(start + PART_SIZE, file.size));
-      const keyForPart = partKey(key, partNumber);
-      let etag: string;
-      try {
-        const presigned = await knowledgeRequest<{ uploads: PresignedPart[] }>(
-          `/v1/knowledge/uploads/${session.uploadId}/presign`,
-          {
-            method: 'POST',
-            idempotencyKey: keyForPart,
-            body: { partNumbers: [partNumber] },
-          },
+    if (session.status !== 'completing') {
+      const uploaded = new Set(completedParts.map((part) => part.partNumber));
+      for (const partNumber of partNumbers) {
+        if (uploaded.has(partNumber)) continue;
+        if (options.signal?.aborted) throw new DOMException('Upload aborted', 'AbortError');
+        const start = (partNumber - 1) * PART_SIZE;
+        const blob = file.slice(start, Math.min(start + PART_SIZE, file.size));
+        const keyForPart = partKey(key, partNumber);
+        let etag: string;
+        try {
+          const presigned = await knowledgeRequest<{ uploads: PresignedPart[] }>(
+            `/v1/knowledge/uploads/${session.uploadId}/presign`,
+            {
+              method: 'POST',
+              idempotencyKey: keyForPart,
+              body: { partNumbers: [partNumber] },
+            },
+          );
+          etag = await directPut(presigned.uploads[0]!, blob);
+        } catch {
+          const result = await knowledgeBinaryUpload(
+            `/v1/knowledge/uploads/${session.uploadId}/parts/${partNumber}`,
+            blob,
+            keyForPart,
+          );
+          etag = result.etag;
+        }
+        completedParts = [
+          ...completedParts.filter((part) => part.partNumber !== partNumber),
+          { partNumber, etag },
+        ].sort((left, right) => left.partNumber - right.partNumber);
+        const progress = Math.round((completedParts.length / partNumbers.length) * 100);
+        publish(
+          state('uploading', session.uploadId, progress, completedParts.length, partNumbers.length),
         );
-        etag = await directPut(presigned.uploads[0]!, blob);
-      } catch {
-        const result = await knowledgeBinaryUpload(
-          `/v1/knowledge/uploads/${session.uploadId}/parts/${partNumber}`,
-          blob,
-          keyForPart,
-        );
-        etag = result.etag;
       }
-      completedParts = [
-        ...completedParts.filter((part) => part.partNumber !== partNumber),
-        { partNumber, etag },
-      ].sort((left, right) => left.partNumber - right.partNumber);
-      const progress = Math.round((completedParts.length / partNumbers.length) * 100);
-      publish(
-        state('uploading', session.uploadId, progress, completedParts.length, partNumbers.length),
-      );
     }
     publish(state('completing', session.uploadId, 100, completedParts.length, partNumbers.length));
     const result = await knowledgeRequest<ObjectBlobReference>(
@@ -341,7 +346,7 @@ async function restoreUploadWithFingerprint(
       await knowledgeRequest<UploadSession>(`/v1/knowledge/uploads/${parsed.uploadId}`),
     );
     if (
-      !['pending', 'uploading'].includes(session.status) ||
+      !['pending', 'uploading', 'completing'].includes(session.status) ||
       Date.parse(session.expiresAt) <= Date.now()
     ) {
       globalThis.localStorage?.removeItem(key);

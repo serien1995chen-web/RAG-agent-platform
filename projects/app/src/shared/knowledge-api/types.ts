@@ -48,6 +48,7 @@ export interface KnowledgeApiRuntime {
     request: NextApiRequest,
     input: { workspaceId: string | null; requestId: string; traceId: string },
   ): Promise<KnowledgeAuthSubject>;
+  ticketWorkspaceId(ticket: string, requestId: string, traceId: string): string;
   idempotencyStore(): Promise<IdempotencyStore>;
   rateLimit(input: {
     workspaceId: string;

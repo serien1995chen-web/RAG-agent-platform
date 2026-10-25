@@ -12,7 +12,7 @@ import type {
   ObjectRefView,
 } from '../../packages/service/src/modules/knowledge/application/ports';
 import type { TenantContext } from '../../packages/service/src/shared/persistence/knowledge/tenant';
-import { ticketRateLimitScope } from '../../projects/app/src/shared/knowledge-api/handler';
+import { ticketClientRateLimitScope } from '../../projects/app/src/shared/knowledge-api/handler';
 
 const context: TenantContext = {
   workspaceId: 'ws_fault',
@@ -143,7 +143,7 @@ describe('TEST-FILE-005-BLOCK lifecycle fault', () => {
 });
 
 describe('TEST-FILE-003-BLOCK ticket rate limit isolation', () => {
-  it('TEST-FILE-003-F06 isolates invalid tickets from workspace and ticket buckets', async () => {
+  it('TEST-FILE-003-F06 isolates ticket clients instead of hashing each invalid ticket', async () => {
     const counts = new Map<string, number>();
     const redis = {
       async eval(_script: string, _keys: number, key: string) {
@@ -157,10 +157,24 @@ describe('TEST-FILE-003-BLOCK ticket rate limit isolation', () => {
       operationId: 'API-FILE-CONTENT',
       rateLimit: '2 QPS/IP',
     } as RouteEntry;
-    const first = ticketRateLimitScope('invalid-ticket-a');
-    const second = ticketRateLimitScope('invalid-ticket-b');
-    expect(first).not.toContain('invalid-ticket-a');
+    const firstClient = {
+      headers: { 'x-forwarded-for': '203.0.113.10, 10.0.0.2' },
+      socket: { remoteAddress: '127.0.0.1' },
+    } as never;
+    const sameClientWithSpoofedHeader = {
+      headers: { 'x-forwarded-for': '198.51.100.99' },
+      socket: { remoteAddress: '127.0.0.1' },
+    } as never;
+    const secondClient = {
+      headers: {},
+      socket: { remoteAddress: '192.0.2.44' },
+    } as never;
+    const first = ticketClientRateLimitScope(firstClient);
+    const sameClient = ticketClientRateLimitScope(sameClientWithSpoofedHeader);
+    const second = ticketClientRateLimitScope(secondClient);
+    expect(first).toBe(sameClient);
     expect(first).not.toBe(second);
+    expect(first).not.toContain('203.0.113.10');
 
     await limiter.consume({ workspaceId: first, route });
     await limiter.consume({ workspaceId: first, route });

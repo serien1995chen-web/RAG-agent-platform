@@ -337,6 +337,9 @@ async function bootstrapRuntime(): Promise<TelemetryKnowledgeApiRuntime> {
         ...(consoleSession ? { consoleSession } : {}),
       });
     },
+    ticketWorkspaceId(ticket, requestId, traceId) {
+      return fileTickets.verify(ticket, requestId, traceId).workspaceId;
+    },
     async idempotencyStore() {
       return state.idempotencyStore;
     },
