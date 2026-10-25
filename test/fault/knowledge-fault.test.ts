@@ -1,6 +1,9 @@
 import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { QueuePort } from '../../packages/dal/src/index';
+import type { LogRecordExporter } from '@opentelemetry/sdk-logs';
+import type { PushMetricExporter } from '@opentelemetry/sdk-metrics';
+import type { SpanExporter } from '@opentelemetry/sdk-trace-base';
 import { createKnowledgeMongoConnection } from '../../packages/service/src/shared/runtime/knowledge-connections';
 import {
   KnowledgeOutboxDispatcher,
@@ -16,6 +19,7 @@ import {
   redactExternalValue,
 } from '../../packages/service/src/modules/knowledge/adapter/external-providers';
 import { createTelemetryRuntime } from '../../sdk/otel/src';
+import { safeErrorAttributes } from '../../sdk/otel/src/redaction';
 
 function requiredEnv(name: string): string {
   const value = process.env[name]?.trim();
@@ -49,6 +53,36 @@ afterAll(async () => {
 
 describe('knowledge fault contracts', () => {
   it('degrades telemetry exporter failures without affecting business work', async () => {
+    const failedSpanExporter = {
+      export(_spans: unknown, callback: (result: { code: number }) => void) {
+        callback({ code: 1 });
+      },
+      forceFlush: async () => {
+        throw new Error('trace flush failed');
+      },
+      shutdown: async () => {
+        throw new Error('trace shutdown failed');
+      },
+    } as unknown as SpanExporter;
+    const failedMetricExporter = {
+      export(_metrics: unknown, callback: (result: { code: number }) => void) {
+        callback({ code: 1 });
+      },
+      forceFlush: async () => {
+        throw new Error('metric flush failed');
+      },
+      shutdown: async () => {
+        throw new Error('metric shutdown failed');
+      },
+    } as unknown as PushMetricExporter;
+    const failedLogExporter = {
+      export(_records: unknown, callback: (result: { code: number }) => void) {
+        callback({ code: 1 });
+      },
+      shutdown: async () => {
+        throw new Error('log shutdown failed');
+      },
+    } as unknown as LogRecordExporter;
     const telemetry = createTelemetryRuntime(
       {
         serviceName: 'knowledge-fault-test',
@@ -56,21 +90,26 @@ describe('knowledge fault contracts', () => {
         exportIntervalMillis: 60_000,
       },
       {
-        traceExporterFactory: () => {
-          throw new Error('trace down');
-        },
-        metricExporterFactory: () => {
-          throw new Error('metrics down');
-        },
-        logExporterFactory: () => {
-          throw new Error('logs down');
-        },
+        traceExporterFactory: () => failedSpanExporter,
+        metricExporterFactory: () => failedMetricExporter,
+        logExporterFactory: () => failedLogExporter,
       },
     );
-    expect(telemetry.state().mode).toBe('degraded');
     await expect(
       telemetry.withSpan('knowledge.fault.test', { operation: 'test' }, async () => 'ok'),
     ).resolves.toBe('ok');
+    const exception = Object.assign(new Error('Authorization: Bearer stack-secret'), {
+      code: 'KNOWLEDGE_INTERNAL_ERROR',
+    });
+    await expect(
+      telemetry.withSpan('knowledge.fault.exception', { operation: 'test' }, async () => {
+        throw exception;
+      }),
+    ).rejects.toThrow('Authorization');
+    telemetry.recordUsage({
+      name: 'knowledge.fault.metric',
+      attributes: { operation: 'test', requestId: 'metric-identifier' },
+    });
     expect(() =>
       telemetry.log('knowledge.fault.test', {
         requestId: 'request-safe',
@@ -78,6 +117,14 @@ describe('knowledge fault contracts', () => {
       }),
     ).not.toThrow();
     await expect(telemetry.dispose()).resolves.toBeUndefined();
+    const safeException = JSON.stringify(safeErrorAttributes(exception));
+    const exceptionHasSecret =
+      safeException.includes('stack-secret') || safeException.includes('Authorization');
+    console.log(`EXCEPTION_HAS_SECRET=${exceptionHasSecret}`);
+    console.log(`mode=${telemetry.state().mode} DROPPED=${telemetry.droppedRecords()}`);
+    expect(telemetry.state().mode).toBe('degraded');
+    expect(telemetry.droppedRecords()).toBeGreaterThan(0);
+    expect(exceptionHasSecret).toBe(false);
   });
 
   it('classifies provider timeout/auth/rate failures and redacts secrets', () => {

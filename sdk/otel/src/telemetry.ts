@@ -14,8 +14,13 @@ import {
 import { BatchSpanProcessor, type SpanExporter } from '@opentelemetry/sdk-trace-base';
 import { NodeTracerProvider } from '@opentelemetry/sdk-trace-node';
 import { createOtlpLogExporter, createSafeLogger, sanitizeLogFields } from './logger';
-import { createOtlpMetricExporter } from './metrics';
-import { createOtlpTraceExporter } from './tracing';
+import { createOtlpMetricExporter, METRIC_LABEL_ALLOWED_KEYS } from './metrics';
+import { createOtlpTraceExporter, SPAN_ALLOWED_ATTRIBUTE_KEYS } from './tracing';
+import {
+  safeErrorAttributes,
+  sanitizeTelemetryAttributes,
+  sanitizeTelemetryEvent,
+} from './redaction';
 import type { LogLevel, SafeAttributes, SafeLogFields, TelemetryState } from './types';
 
 export interface TelemetryContext {
@@ -126,9 +131,155 @@ export function createTelemetryRuntime(
   let dropped = 0;
   let disposePromise: Promise<void> | undefined;
 
+  const degrade = (signal: 'trace' | 'metrics' | 'logs', error: unknown): void => {
+    state[signal] = { state: 'degraded', reason: failureReason(error) };
+    state.mode = 'degraded';
+    dropped += 1;
+  };
+
+  const failedResult = () => ({ code: 1 }) as never;
+  const isFailedResult = (result: unknown): boolean =>
+    typeof result !== 'object' || result === null || !('code' in result) || result.code !== 0;
+
+  const wrapSpanExporter = (exporter: SpanExporter): SpanExporter => {
+    const wrapped = Object.create(exporter) as SpanExporter;
+    wrapped.export = (spans, resultCallback) => {
+      let settled = false;
+      const finish = (result: Parameters<Parameters<SpanExporter['export']>[1]>[0]) => {
+        if (settled) return;
+        settled = true;
+        if (isFailedResult(result)) degrade('trace', result);
+        try {
+          resultCallback(result);
+        } catch (error) {
+          degrade('trace', error);
+        }
+      };
+      try {
+        exporter.export(spans, finish);
+      } catch (error) {
+        degrade('trace', error);
+        if (!settled) {
+          settled = true;
+          resultCallback(failedResult());
+        }
+      }
+    };
+    wrapped.forceFlush = async () => {
+      try {
+        await exporter.forceFlush?.();
+      } catch (error) {
+        degrade('trace', error);
+        throw error;
+      }
+    };
+    wrapped.shutdown = async () => {
+      try {
+        await exporter.shutdown();
+      } catch (error) {
+        degrade('trace', error);
+        throw error;
+      }
+    };
+    return wrapped;
+  };
+
+  const wrapMetricExporter = (exporter: PushMetricExporter): PushMetricExporter => {
+    const wrapped = Object.create(exporter) as PushMetricExporter;
+    wrapped.export = (metrics, resultCallback) => {
+      let settled = false;
+      const finish = (result: Parameters<Parameters<PushMetricExporter['export']>[1]>[0]) => {
+        if (settled) return;
+        settled = true;
+        if (isFailedResult(result)) degrade('metrics', result);
+        try {
+          resultCallback(result);
+        } catch (error) {
+          degrade('metrics', error);
+        }
+      };
+      try {
+        exporter.export(metrics, finish);
+      } catch (error) {
+        degrade('metrics', error);
+        if (!settled) {
+          settled = true;
+          resultCallback(failedResult());
+        }
+      }
+    };
+    wrapped.forceFlush = async () => {
+      try {
+        await exporter.forceFlush?.();
+      } catch (error) {
+        degrade('metrics', error);
+        throw error;
+      }
+    };
+    wrapped.shutdown = async () => {
+      try {
+        await exporter.shutdown();
+      } catch (error) {
+        degrade('metrics', error);
+        throw error;
+      }
+    };
+    return wrapped;
+  };
+
+  const wrapLogExporter = (exporter: LogRecordExporter): LogRecordExporter => {
+    type MaybeFlushLogExporter = LogRecordExporter & {
+      forceFlush?: () => Promise<void>;
+    };
+    const wrapped = Object.create(exporter) as MaybeFlushLogExporter;
+    wrapped.export = (records, resultCallback) => {
+      let settled = false;
+      const finish = (result: Parameters<Parameters<LogRecordExporter['export']>[1]>[0]) => {
+        if (settled) return;
+        settled = true;
+        if (isFailedResult(result)) degrade('logs', result);
+        try {
+          resultCallback(result);
+        } catch (error) {
+          degrade('logs', error);
+        }
+      };
+      try {
+        exporter.export(records, finish);
+      } catch (error) {
+        degrade('logs', error);
+        if (!settled) {
+          settled = true;
+          resultCallback(failedResult());
+        }
+      }
+    };
+    if (typeof (exporter as MaybeFlushLogExporter).forceFlush === 'function') {
+      wrapped.forceFlush = async () => {
+        try {
+          await (exporter as MaybeFlushLogExporter).forceFlush?.();
+        } catch (error) {
+          degrade('logs', error);
+          throw error;
+        }
+      };
+    }
+    wrapped.shutdown = async () => {
+      try {
+        await exporter.shutdown();
+      } catch (error) {
+        degrade('logs', error);
+        throw error;
+      }
+    };
+    return wrapped;
+  };
+
   try {
-    const traceExporter = (dependencies.traceExporterFactory ?? createOtlpTraceExporter)(
-      signalEndpoint(config.endpoint, 'traces'),
+    const traceExporter = wrapSpanExporter(
+      (dependencies.traceExporterFactory ?? createOtlpTraceExporter)(
+        signalEndpoint(config.endpoint, 'traces'),
+      ),
     );
     traceProvider = new NodeTracerProvider({
       resource,
@@ -137,12 +288,14 @@ export function createTelemetryRuntime(
     tracer = traceProvider.getTracer(config.serviceName);
     state.trace = { state: 'registered', reason: 'registered' };
   } catch (error) {
-    state.trace = { state: 'degraded', reason: failureReason(error) };
+    degrade('trace', error);
   }
 
   try {
-    const metricExporter = (dependencies.metricExporterFactory ?? createOtlpMetricExporter)(
-      signalEndpoint(config.endpoint, 'metrics'),
+    const metricExporter = wrapMetricExporter(
+      (dependencies.metricExporterFactory ?? createOtlpMetricExporter)(
+        signalEndpoint(config.endpoint, 'metrics'),
+      ),
     );
     const exportIntervalMillis = Math.max(
       1_000,
@@ -158,12 +311,14 @@ export function createTelemetryRuntime(
       .createCounter('knowledge.usage.events');
     state.metrics = { state: 'registered', reason: 'registered' };
   } catch (error) {
-    state.metrics = { state: 'degraded', reason: failureReason(error) };
+    degrade('metrics', error);
   }
 
   try {
-    const logExporter = (dependencies.logExporterFactory ?? createOtlpLogExporter)(
-      signalEndpoint(config.endpoint, 'logs'),
+    const logExporter = wrapLogExporter(
+      (dependencies.logExporterFactory ?? createOtlpLogExporter)(
+        signalEndpoint(config.endpoint, 'logs'),
+      ),
     );
     loggerProvider = new LoggerProvider({
       resource,
@@ -172,40 +327,47 @@ export function createTelemetryRuntime(
     otelLogger = loggerProvider.getLogger(config.serviceName);
     state.logs = { state: 'registered', reason: 'registered' };
   } catch (error) {
-    state.logs = { state: 'degraded', reason: failureReason(error) };
+    degrade('logs', error);
   }
 
-  state.mode =
+  if (
     state.trace.state === 'registered' &&
     state.metrics.state === 'registered' &&
     state.logs.state === 'registered'
-      ? 'otlp'
-      : 'degraded';
+  ) {
+    state.mode = 'otlp';
+  }
 
   return {
     async withSpan(name, attributes, fn) {
       let callbackStarted = false;
+      const sanitized = sanitizeTelemetryAttributes(attributes, SPAN_ALLOWED_ATTRIBUTE_KEYS);
+      dropped += sanitized.dropped;
       try {
-        return await tracer.startActiveSpan(name, { attributes }, async (span) => {
-          callbackStarted = true;
-          try {
-            return await fn(span);
-          } catch (error) {
+        return await tracer.startActiveSpan(
+          name,
+          { attributes: sanitized.attributes },
+          async (span) => {
+            callbackStarted = true;
             try {
-              span.recordException(error instanceof Error ? error : String(error));
-              span.setStatus({ code: SpanStatusCode.ERROR });
-            } catch {
-              dropped += 1;
+              return await fn(span);
+            } catch (error) {
+              try {
+                span.addEvent('exception', safeErrorAttributes(error));
+                span.setStatus({ code: SpanStatusCode.ERROR });
+              } catch {
+                dropped += 1;
+              }
+              throw error;
+            } finally {
+              try {
+                span.end();
+              } catch {
+                dropped += 1;
+              }
             }
-            throw error;
-          } finally {
-            try {
-              span.end();
-            } catch {
-              dropped += 1;
-            }
-          }
-        });
+          },
+        );
       } catch (error) {
         if (!callbackStarted) {
           dropped += 1;
@@ -221,33 +383,70 @@ export function createTelemetryRuntime(
     },
     recordUsage(event) {
       try {
-        usageCounter?.add(Math.max(0, event.value ?? 1), event.attributes);
-      } catch {
-        // Metrics must never affect business behavior.
+        const sanitized = sanitizeTelemetryAttributes(event.attributes, METRIC_LABEL_ALLOWED_KEYS);
+        dropped += sanitized.dropped;
+        usageCounter?.add(Math.max(0, event.value ?? 1), sanitized.attributes);
+      } catch (error) {
+        degrade('metrics', error);
       }
     },
     log(event, fields) {
       try {
         const sanitized = sanitizeLogFields(fields);
         dropped += sanitized.dropped;
-        safeLogger.log(event, sanitized.fields);
+        const sanitizedEvent = sanitizeTelemetryEvent(event);
+        dropped += sanitizedEvent.dropped;
+        safeLogger.log(sanitizedEvent.event, sanitized.fields);
         otelLogger?.emit({
           severityNumber: SeverityNumber.INFO,
           severityText: 'INFO',
-          body: event,
+          body: sanitizedEvent.event,
           attributes: sanitized.fields,
         });
-      } catch {
-        dropped += 1;
+      } catch (error) {
+        degrade('logs', error);
       }
     },
     droppedRecords: () => dropped + safeLogger.droppedRecords(),
     async dispose() {
       disposePromise ??= (async () => {
         await Promise.allSettled([
-          traceProvider?.shutdown() ?? Promise.resolve(),
-          meterProvider?.shutdown() ?? Promise.resolve(),
-          loggerProvider?.shutdown() ?? Promise.resolve(),
+          (async () => {
+            try {
+              await traceProvider?.forceFlush();
+            } catch (error) {
+              if (state.trace.state !== 'degraded') degrade('trace', error);
+            }
+            try {
+              await traceProvider?.shutdown();
+            } catch (error) {
+              if (state.trace.state !== 'degraded') degrade('trace', error);
+            }
+          })(),
+          (async () => {
+            try {
+              await meterProvider?.forceFlush();
+            } catch (error) {
+              if (state.metrics.state !== 'degraded') degrade('metrics', error);
+            }
+            try {
+              await meterProvider?.shutdown();
+            } catch (error) {
+              if (state.metrics.state !== 'degraded') degrade('metrics', error);
+            }
+          })(),
+          (async () => {
+            try {
+              await loggerProvider?.forceFlush();
+            } catch (error) {
+              if (state.logs.state !== 'degraded') degrade('logs', error);
+            }
+            try {
+              await loggerProvider?.shutdown();
+            } catch (error) {
+              if (state.logs.state !== 'degraded') degrade('logs', error);
+            }
+          })(),
         ]);
       })();
       await disposePromise;

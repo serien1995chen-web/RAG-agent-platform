@@ -12,6 +12,7 @@
 | Plan Revision 2 SHA-256 | `EF7BD14DE15325DD9294488D79246C2C31DD571A29FD875F4F781A161D0C40DF` |
 | Coding 规则 SHA-256     | `D65CDF29C448634B32E78A720A85A69E1158001DB7C7E62067BFE0021565DE29` |
 | 账本 SHA-256            | `0778F106D3851FBAA84AEC31B520E66FD27E384F2B4EA9B3ACB988888FB2CAE5` |
+| 基线审计 SHA-256        | `C33F5131AFC3A81D0A92EB70FBD47D658954EC12838F65DEDDCB7A237DD41AE5` |
 | Catalog SHA-256         | `018D215A37D37496F883B1DC085A242F5CF42EBE610BBE64F20B2E243159BE75` |
 | Node / pnpm             | `v22.23.2` / `10.33.4`                                             |
 
@@ -25,6 +26,31 @@
 - Scope：`RUNTIME` 124、`BUILD` 16、`TEST_ONLY` 26。
 - Catalog-only 后续阶段例外：`ajv@8.17.1` 归 S4，`@llamaindex/liteparse-wasm@2.0.8` 归 S5。
 - 授权 test-only：`@playwright/test@1.64.1`、`@axe-core/playwright@4.14.0`，仅位于根 devDependencies。
+
+## 基线安装状态审计
+
+审计数据来自 `6032ac3` 的 lockfile、catalog 和 12 个 manifest，不使用安装后的
+`node_modules` 反推历史状态。
+
+| 状态                       | 设计 164 项 |
+| -------------------------- | ----------: |
+| `DECLARED_INSTALLED`       |          52 |
+| `DECLARED_NOT_INSTALLED`   |           5 |
+| `UNDECLARED_INSTALLED`     |          15 |
+| `UNDECLARED_NOT_INSTALLED` |          92 |
+
+- 2 个 test-only 补充项初始状态均为 `UNDECLARED_NOT_INSTALLED`。
+- 当前设计声明 57 项；基线已安装 67 项；仅传递依赖 15 项。
+- catalog spec 与设计精确版本不一致 26 项。
+- 已安装但未包含设计目标版本 10 项。
+- 15 个仅传递依赖与 Plan 2.1 名单完全一致。
+
+| 数据来源                                 | SHA-256                                                            |
+| ---------------------------------------- | ------------------------------------------------------------------ |
+| `6032ac3:pnpm-lock.yaml`                 | `9A41880597EDECC7AB574C9354B669DC182EC21E7359AFCB7ABD50D982751A40` |
+| `6032ac3:pnpm-workspace.yaml`            | `9568FB9428E7B16003ECB7D75157E26296478DB26609378D4FFFCA7A9D596AB9` |
+| 12 个基线 manifest 的 `git ls-tree` 快照 | `2292725B51644B7171D1CB7116C0917D2F982A4CE3B2ED91740E60D8F80C3DB6` |
+| `npm-dependency-audit.data.json`         | `C33F5131AFC3A81D0A92EB70FBD47D658954EC12838F65DEDDCB7A237DD41AE5` |
 
 ## 安装暂停与恢复
 

@@ -81,6 +81,9 @@ export async function knowledgeRequest<T>(
     },
     ...(options.body !== undefined ? { body: JSON.stringify(options.body) } : {}),
   });
+  if (response.status === 204) {
+    return undefined as T;
+  }
   const payload = (await response.json()) as
     | { success: true; data: T; traceId: string; requestId: string }
     | KnowledgeProblem;

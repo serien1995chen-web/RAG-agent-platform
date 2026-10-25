@@ -55,6 +55,9 @@ describe('knowledge query infrastructure', () => {
             { status: 200, headers: { 'content-type': 'application/json' } },
           );
         }
+        if (init?.method === 'DELETE') {
+          return new Response(null, { status: 204 });
+        }
         return new Response(
           JSON.stringify({
             success: true,
@@ -74,11 +77,20 @@ describe('knowledge query infrastructure', () => {
       body: { name: 'Space' },
       idempotencyKey: 'idem-fixed',
     });
+    await expect(
+      knowledgeRequest('/v1/knowledge/tags/tag-a', {
+        method: 'DELETE',
+        body: {},
+        idempotencyKey: 'idem-delete',
+      }),
+    ).resolves.toBeUndefined();
 
     const getHeaders = new Headers(requests[1]?.init?.headers);
     const writeHeaders = new Headers(requests[2]?.init?.headers);
+    const deleteHeaders = new Headers(requests[3]?.init?.headers);
     expect(getHeaders.get('Idempotency-Key')).toBeNull();
     expect(writeHeaders.get('Idempotency-Key')).toBe('idem-fixed');
+    expect(deleteHeaders.get('Idempotency-Key')).toBe('idem-delete');
     vi.unstubAllGlobals();
   });
 

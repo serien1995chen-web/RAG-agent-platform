@@ -90,6 +90,43 @@ const EXPECTED_STAGE_COUNTS = new Map([
   ['S11', 0],
 ]);
 const CATALOG_ONLY_LATER_STAGE = new Set(['ajv', '@llamaindex/liteparse-wasm']);
+const DEPENDENCY_STAGES = new Set([
+  'S1',
+  'S2',
+  'S3',
+  'S4',
+  'S5',
+  'S6',
+  'S7',
+  'S8',
+  'S9',
+  'S10',
+  'S11',
+]);
+const DEPENDENCY_SOURCES = new Set(['PROJECT_BASELINE', 'FASTGPT_SUPPLEMENT', TEST_ONLY_SOURCE]);
+const AUDIT_CATEGORIES = new Map([
+  ['DECLARED_INSTALLED', 52],
+  ['DECLARED_NOT_INSTALLED', 5],
+  ['UNDECLARED_INSTALLED', 15],
+  ['UNDECLARED_NOT_INSTALLED', 92],
+]);
+const BASELINE_TRANSITIVE_ONLY = new Set([
+  '@opentelemetry/api-logs',
+  '@opentelemetry/semantic-conventions',
+  '@xmldom/xmldom',
+  'cron-parser',
+  'esbuild',
+  'form-data',
+  'http-proxy-agent',
+  'https-proxy-agent',
+  'iconv-lite',
+  'ipaddr.js',
+  'jszip',
+  'nanoid',
+  'p-limit',
+  'proxy-from-env',
+  'vite',
+]);
 
 export function findPendingException(name, version) {
   return PENDING_LEGAL_REVIEW.find((entry) => entry.name === name && entry.version === version);
@@ -244,7 +281,8 @@ function checkRegistrations(repoRoot, catalog) {
   };
 }
 
-function checkDependencyBaseline(repoRoot, catalog, manifests) {
+function checkDependencyBaseline(repoRoot, catalog, manifests, options = {}) {
+  const { skipInstallationChecks = false } = options;
   const errors = [];
   const ledger = readJson(
     join(
@@ -276,6 +314,12 @@ function checkDependencyBaseline(repoRoot, catalog, manifests) {
     }
     if (!EXACT_DEPENDENCY_VERSION.test(entry.version)) {
       errors.push(`${entry.name}: 版本必须精确，实际 ${entry.version}`);
+    }
+    if (!DEPENDENCY_STAGES.has(entry.ownerStage)) {
+      errors.push(`${entry.name}: 未知 ownerStage ${String(entry.ownerStage)}`);
+    }
+    if (!DEPENDENCY_SOURCES.has(entry.source)) {
+      errors.push(`${entry.name}: 未知 source ${String(entry.source)}`);
     }
   }
 
@@ -372,26 +416,204 @@ function checkDependencyBaseline(repoRoot, catalog, manifests) {
         if (workspace && entry.ownerStage !== 'S1') {
           errors.push(`${rel}: 后续阶段依赖 ${name} 不得提前直接声明`);
         }
-        const installedManifest = join(
-          dirname(manifestPath),
-          'node_modules',
-          ...name.split('/'),
-          'package.json',
-        );
-        try {
-          const installed = readJson(installedManifest);
-          if (installed.version !== entry.version) {
-            errors.push(
-              `${rel}: ${name} 实际安装 ${String(installed.version)}，期望 ${entry.version}`,
-            );
+        if (!skipInstallationChecks) {
+          const installedManifest = join(
+            dirname(manifestPath),
+            'node_modules',
+            ...name.split('/'),
+            'package.json',
+          );
+          try {
+            const installed = readJson(installedManifest);
+            if (installed.version !== entry.version) {
+              errors.push(
+                `${rel}: ${name} 实际安装 ${String(installed.version)}，期望 ${entry.version}`,
+              );
+            }
+          } catch {
+            errors.push(`${rel}: ${name} 未安装`);
           }
-        } catch {
-          errors.push(`${rel}: ${name} 未安装`);
         }
       }
     }
   }
 
+  return errors;
+}
+
+function checkDependencyAudit(repoRoot) {
+  const errors = [];
+  const ledger = readJson(
+    join(
+      repoRoot,
+      'packages',
+      'contracts',
+      'src',
+      'dependencies',
+      'npm-dependency-baseline.data.json',
+    ),
+  );
+  const audit = readJson(
+    join(
+      repoRoot,
+      'packages',
+      'contracts',
+      'src',
+      'dependencies',
+      'npm-dependency-audit.data.json',
+    ),
+  );
+  if (!Array.isArray(audit)) return ['dependency audit 必须是数组'];
+  if (audit.length !== 166) errors.push(`dependency audit 应为 166 项，实际 ${audit.length}`);
+
+  const ledgerByName = new Map(ledger.map((entry) => [entry.name, entry]));
+  const auditNames = new Set();
+  for (const [index, entry] of audit.entries()) {
+    if (typeof entry?.name !== 'string' || entry.name.length === 0) {
+      errors.push(`dependency audit[${index}] 缺少 name`);
+      continue;
+    }
+    if (auditNames.has(entry.name)) errors.push(`dependency audit 名称重复: ${entry.name}`);
+    auditNames.add(entry.name);
+    const ledgerEntry = ledgerByName.get(entry.name);
+    if (ledgerEntry === undefined) {
+      errors.push(`${entry.name}: dependency audit 不在 ledger 中`);
+    } else {
+      if (entry.designVersion !== ledgerEntry.version) {
+        errors.push(`${entry.name}: audit designVersion 与 ledger 不一致`);
+      }
+      if (entry.ownerStage !== ledgerEntry.ownerStage) {
+        errors.push(`${entry.name}: audit ownerStage 与 ledger 不一致`);
+      }
+      if (entry.source !== ledgerEntry.source) {
+        errors.push(`${entry.name}: audit source 与 ledger 不一致`);
+      }
+    }
+
+    for (const field of [
+      'baselineDeclaration',
+      'baselineInstallation',
+      'baselineTransitiveOnly',
+      'baselineVersionMatchesDesign',
+      'baselineTargetVersionInstalled',
+    ]) {
+      if (typeof entry[field] !== 'boolean') {
+        errors.push(`${entry.name}: ${field} 必须为 boolean`);
+      }
+    }
+    if (!AUDIT_CATEGORIES.has(entry.baselineCategory)) {
+      errors.push(`${entry.name}: 未知 baselineCategory ${String(entry.baselineCategory)}`);
+    }
+    if (
+      entry.baselineCatalogSpec !== null &&
+      (typeof entry.baselineCatalogSpec !== 'string' || entry.baselineCatalogSpec.length === 0)
+    ) {
+      errors.push(`${entry.name}: baselineCatalogSpec 必须为非空字符串或 null`);
+    }
+    if (
+      !Array.isArray(entry.baselineLockVersions) ||
+      !entry.baselineLockVersions.every((version) => typeof version === 'string')
+    ) {
+      errors.push(`${entry.name}: baselineLockVersions 必须为字符串数组`);
+      continue;
+    }
+    if (new Set(entry.baselineLockVersions).size !== entry.baselineLockVersions.length) {
+      errors.push(`${entry.name}: baselineLockVersions 不得重复`);
+    }
+    if (entry.baselineInstallation !== entry.baselineLockVersions.length > 0) {
+      errors.push(`${entry.name}: baselineInstallation 与 lock versions 不一致`);
+    }
+    const expectedCategory = entry.baselineDeclaration
+      ? entry.baselineInstallation
+        ? 'DECLARED_INSTALLED'
+        : 'DECLARED_NOT_INSTALLED'
+      : entry.baselineInstallation
+        ? 'UNDECLARED_INSTALLED'
+        : 'UNDECLARED_NOT_INSTALLED';
+    if (entry.baselineCategory !== expectedCategory) {
+      errors.push(`${entry.name}: baselineCategory 与 declaration/installation 不一致`);
+    }
+    if (
+      entry.baselineTransitiveOnly !== (!entry.baselineDeclaration && entry.baselineInstallation)
+    ) {
+      errors.push(`${entry.name}: baselineTransitiveOnly 与声明/安装状态不一致`);
+    }
+    if (
+      entry.baselineTargetVersionInstalled !==
+      entry.baselineLockVersions.includes(entry.designVersion)
+    ) {
+      errors.push(`${entry.name}: baselineTargetVersionInstalled 与 lock versions 不一致`);
+    }
+    if (
+      entry.baselineVersionMatchesDesign !==
+      (entry.baselineLockVersions.length > 0 &&
+        entry.baselineLockVersions.every((version) => version === entry.designVersion))
+    ) {
+      errors.push(`${entry.name}: baselineVersionMatchesDesign 与 lock versions 不一致`);
+    }
+  }
+
+  for (const name of ledgerByName.keys()) {
+    if (!auditNames.has(name)) errors.push(`dependency audit 缺少 ${name}`);
+  }
+  for (const name of auditNames) {
+    if (!ledgerByName.has(name)) errors.push(`dependency audit 出现账本外依赖 ${name}`);
+  }
+
+  const designAudit = audit.filter((entry) => DESIGN_DEPENDENCY_SOURCES.has(entry.source));
+  for (const [category, expected] of AUDIT_CATEGORIES) {
+    const actual = designAudit.filter((entry) => entry.baselineCategory === category).length;
+    if (actual !== expected) {
+      errors.push(`baselineCategory ${category} 应为 ${expected} 项，实际 ${actual}`);
+    }
+  }
+  const declared = audit.filter((entry) => entry.baselineDeclaration);
+  const installed = audit.filter((entry) => entry.baselineInstallation);
+  const transitiveOnly = audit.filter((entry) => entry.baselineTransitiveOnly);
+  if (declared.length !== 57) errors.push(`baseline 已声明应为 57 项，实际 ${declared.length}`);
+  if (installed.length !== 67) errors.push(`baseline 已安装应为 67 项，实际 ${installed.length}`);
+  if (transitiveOnly.length !== 15) {
+    errors.push(`baseline 仅传递依赖应为 15 项，实际 ${transitiveOnly.length}`);
+  }
+  const transitiveNames = new Set(transitiveOnly.map((entry) => entry.name));
+  for (const name of BASELINE_TRANSITIVE_ONLY) {
+    if (!transitiveNames.has(name)) errors.push(`baseline 仅传递依赖缺少 ${name}`);
+  }
+  for (const name of transitiveNames) {
+    if (!BASELINE_TRANSITIVE_ONLY.has(name)) errors.push(`${name}: 不在仅传递依赖白名单`);
+  }
+  const nonExactCatalogSpec = audit.filter(
+    (entry) =>
+      entry.baselineCatalogSpec !== null && entry.baselineCatalogSpec !== entry.designVersion,
+  );
+  if (nonExactCatalogSpec.length !== 26) {
+    errors.push(`非设计精确 catalog spec 应为 26 项，实际 ${nonExactCatalogSpec.length}`);
+  }
+  const missingInstalledTarget = designAudit.filter(
+    (entry) => entry.baselineInstallation && !entry.baselineTargetVersionInstalled,
+  );
+  if (missingInstalledTarget.length !== 10) {
+    errors.push(`已安装但缺失设计目标版本应为 10 项，实际 ${missingInstalledTarget.length}`);
+  }
+  for (const name of EXPECTED_TEST_ONLY.keys()) {
+    const entry = audit.find((candidate) => candidate.name === name);
+    if (entry === undefined) {
+      errors.push(`dependency audit 缺少 test-only 项 ${name}`);
+      continue;
+    }
+    if (
+      entry.baselineDeclaration ||
+      entry.baselineInstallation ||
+      entry.baselineTransitiveOnly ||
+      entry.baselineCatalogSpec !== null ||
+      entry.baselineLockVersions.length > 0 ||
+      entry.baselineVersionMatchesDesign ||
+      entry.baselineTargetVersionInstalled ||
+      entry.baselineCategory !== 'UNDECLARED_NOT_INSTALLED'
+    ) {
+      errors.push(`${name}: test-only 基线状态必须为未声明且未安装`);
+    }
+  }
   return errors;
 }
 
@@ -481,11 +703,50 @@ function computeSbomDiff(repoRoot, model) {
   };
 }
 
-export async function main() {
-  const repoRoot = resolve(import.meta.dirname, '..');
+export function parseDependencyCheckArgs(argv) {
+  const options = { dependencyOnly: false, root: null };
+  for (let index = 0; index < argv.length; index += 1) {
+    const arg = argv[index];
+    if (arg === '--dependency-only') {
+      options.dependencyOnly = true;
+      continue;
+    }
+    if (arg === '--root') {
+      const value = argv[index + 1];
+      if (!value) throw new Error('--root 需要目录参数');
+      options.root = value;
+      index += 1;
+      continue;
+    }
+    throw new Error(`未知参数: ${arg}`);
+  }
+  return options;
+}
+
+export async function main(argv = process.argv.slice(2)) {
+  const options = parseDependencyCheckArgs(argv);
+  const repoRoot = options.root ? resolve(options.root) : resolve(import.meta.dirname, '..');
   const catalog = parseCatalog(readFileSync(join(repoRoot, 'pnpm-workspace.yaml'), 'utf8'));
   const { errors, workspaceCount, manifests } = checkRegistrations(repoRoot, catalog);
-  errors.push(...checkDependencyBaseline(repoRoot, catalog, manifests));
+  errors.push(
+    ...checkDependencyBaseline(repoRoot, catalog, manifests, {
+      skipInstallationChecks: options.dependencyOnly,
+    }),
+  );
+  errors.push(...checkDependencyAudit(repoRoot));
+
+  if (options.dependencyOnly) {
+    if (errors.length > 0) {
+      console.error(`dependency gate 失败，共 ${errors.length} 项：`);
+      for (const error of errors) console.error(`  - ${error}`);
+      process.exit(1);
+    }
+    console.log(
+      `dependency gate 通过：166 项 ledger、166 项 audit、95 项 catalog、` +
+        `${workspaceCount} 个 workspace 包。`,
+    );
+    return;
+  }
 
   const { collectSbomModel } = await import('./generate-sbom.mjs');
   const model = collectSbomModel(repoRoot);

@@ -1150,6 +1150,349 @@ describe.sequential('knowledge architecture baseline E2E', () => {
     }
   });
 
+  it('handles 204 deletes for an isolated tag and collaborator through the UI', async () => {
+    const cookie = await consoleCookie();
+    const separator = cookie.indexOf('=');
+    const cookieName = separator > 0 ? cookie.slice(0, separator) : '';
+    const cookieValue = separator > 0 ? cookie.slice(separator + 1) : '';
+    if (!cookieName || !cookieValue) throw new Error('console cookie was not initialized');
+    const spaceId = requiredId(scenario.spaceId, 'spaceId');
+    const tagLabel = `UI delete tag ${suffix}`;
+    const createdTag = asObject(
+      await callApi('API-TAG-CREATE', {
+        params: { spaceId },
+        body: {
+          key: `ui_delete_${suffix.slice(0, 8)}`,
+          label: tagLabel,
+          tagType: 'string',
+          required: false,
+          options: ['draft', 'approved'],
+        },
+      }),
+    );
+    const tagId = asString(createdTag.id, 'tagId');
+    const collaboratorMemberId = `mem_e2e_delete_${suffix}`;
+    await callApi('API-COLLABORATOR-CREATE', {
+      params: { spaceId },
+      body: { memberId: collaboratorMemberId, role: 'read' },
+    });
+
+    const browser = await chromium.launch({ headless: true });
+    const context = await browser.newContext({ viewport: { width: 1200, height: 900 } });
+    await context.addCookies([
+      {
+        name: cookieName,
+        value: cookieValue,
+        domain: '127.0.0.1',
+        path: '/',
+        sameSite: 'Strict',
+      },
+    ]);
+
+    try {
+      const page = await context.newPage();
+      const tagListPath = `/v1/knowledge/spaces/${spaceId}/tags`;
+      const collaboratorListPath = `/v1/knowledge/spaces/${spaceId}/collaborators`;
+      const spaceAclPath = `/v1/knowledge/resources/space/${spaceId}/acl`;
+      let tagGets = 0;
+      let collaboratorGets = 0;
+      let spaceAclGets = 0;
+      page.on('request', (request) => {
+        if (request.method() !== 'GET') return;
+        const path = new URL(request.url()).pathname;
+        if (path === tagListPath) tagGets += 1;
+        if (path === collaboratorListPath) collaboratorGets += 1;
+        if (path === spaceAclPath) spaceAclGets += 1;
+      });
+
+      await page.goto(`${baseUrl}/spaces/${spaceId}/tags`, { waitUntil: 'networkidle' });
+      const tagRow = page.locator('tbody tr').filter({ hasText: tagLabel });
+      await tagRow.waitFor();
+      const tagGetsBeforeDelete = tagGets;
+      page.once('dialog', (dialog) => dialog.accept());
+      const tagDelete = page.waitForResponse(
+        (response) =>
+          response.request().method() === 'DELETE' &&
+          new URL(response.url()).pathname === `/v1/knowledge/tags/${tagId}`,
+      );
+      await tagRow.getByRole('button', { name: '删除' }).click();
+      expect((await tagDelete).status()).toBe(204);
+      await tagRow.waitFor({ state: 'detached' });
+      await page.waitForLoadState('networkidle');
+      expect(tagGets).toBeGreaterThan(tagGetsBeforeDelete);
+      expect(await page.locator('.problem-notice').count()).toBe(0);
+
+      await page.goto(`${baseUrl}/spaces/${spaceId}/access`, { waitUntil: 'networkidle' });
+      const collaboratorSection = page.locator('section').filter({
+        has: page.getByRole('heading', { level: 2, name: '协作者', exact: true }),
+      });
+      const collaboratorRow = collaboratorSection
+        .locator('tbody tr')
+        .filter({ hasText: collaboratorMemberId });
+      await collaboratorRow.waitFor();
+      const collaboratorGetsBeforeDelete = collaboratorGets;
+      const spaceAclGetsBeforeDelete = spaceAclGets;
+      page.once('dialog', (dialog) => dialog.accept());
+      const collaboratorDelete = page.waitForResponse(
+        (response) =>
+          response.request().method() === 'DELETE' &&
+          new URL(response.url()).pathname ===
+            `/v1/knowledge/spaces/${spaceId}/collaborators/${collaboratorMemberId}`,
+      );
+      await collaboratorRow.getByRole('button', { name: '移除' }).click();
+      expect((await collaboratorDelete).status()).toBe(204);
+      await collaboratorRow.waitFor({ state: 'detached' });
+      await page.waitForLoadState('networkidle');
+      expect(collaboratorGets).toBeGreaterThan(collaboratorGetsBeforeDelete);
+      expect(spaceAclGets).toBeGreaterThan(spaceAclGetsBeforeDelete);
+      expect(await page.locator('.problem-notice').count()).toBe(0);
+      await page.close();
+    } finally {
+      await context.close();
+      await browser.close();
+    }
+  });
+
+  it('renders all nine routes in zh-CN and en with exact titles and form labels', async () => {
+    const spaceId = requiredId(scenario.spaceId, 'spaceId');
+    const sourceId = requiredId(scenario.sourceId, 'sourceId');
+    const space = asObject(await callApi('API-SPACE-GET', { params: { spaceId } }));
+    const spaceName = asString(space.name, 'space.name');
+    const routes = [
+      {
+        path: '/spaces',
+        zh: { title: '知识空间', h1: '知识空间' },
+        en: { title: 'Knowledge spaces', h1: 'Spaces' },
+      },
+      {
+        path: '/spaces/new',
+        zh: { title: '新建知识空间', h1: '新建空间' },
+        en: { title: 'New knowledge space', h1: 'New space' },
+        enForm: {
+          labels: ['Name', 'Description'],
+          button: 'Create space',
+        },
+      },
+      {
+        path: `/spaces/${spaceId}/overview`,
+        zh: { title: `${spaceName} · 空间概览`, h1: spaceName },
+        en: { title: `${spaceName} · Space overview`, h1: spaceName },
+      },
+      {
+        path: `/spaces/${spaceId}/sources`,
+        zh: { title: `${spaceName} · 来源`, h1: '来源' },
+        en: { title: `${spaceName} · Sources`, h1: 'Sources' },
+        enForm: {
+          labels: ['Name', 'Kind'],
+          button: 'Create Source',
+        },
+      },
+      {
+        path: `/spaces/${spaceId}/segments?sourceId=${sourceId}`,
+        zh: { title: `${spaceName} · 分段`, h1: '分段' },
+        en: { title: `${spaceName} · Segments`, h1: 'Segments' },
+        enForm: {
+          labels: ['Question', 'Answer'],
+          button: 'Create Segment',
+        },
+      },
+      {
+        path: `/spaces/${spaceId}/tags`,
+        zh: { title: `${spaceName} · 标签`, h1: '标签' },
+        en: { title: `${spaceName} · Tags`, h1: 'Tags' },
+        enForm: {
+          labels: ['Key', 'Label', 'Value type'],
+          button: 'Create Tag',
+        },
+      },
+      {
+        path: `/spaces/${spaceId}/access`,
+        zh: { title: `${spaceName} · 访问权限`, h1: '访问权限' },
+        en: { title: `${spaceName} · Access`, h1: 'Access' },
+        enForm: {
+          labels: ['Member ID', 'Role'],
+          button: 'Add collaborator',
+        },
+      },
+      {
+        path: `/spaces/${spaceId}/jobs`,
+        zh: { title: `${spaceName} · 任务`, h1: '任务' },
+        en: { title: `${spaceName} · Jobs`, h1: 'Jobs' },
+      },
+      {
+        path: '/system/status',
+        zh: { title: '系统状态', h1: '系统状态' },
+        en: { title: 'System status', h1: 'System status' },
+      },
+    ] as const;
+    const cookie = await consoleCookie();
+    const separator = cookie.indexOf('=');
+    const cookieName = separator > 0 ? cookie.slice(0, separator) : '';
+    const cookieValue = separator > 0 ? cookie.slice(separator + 1) : '';
+    if (!cookieName || !cookieValue) throw new Error('console cookie was not initialized');
+    const browser = await chromium.launch({ headless: true });
+
+    try {
+      for (const locale of ['zh-CN', 'en'] as const) {
+        const context = await browser.newContext({ viewport: { width: 1200, height: 900 } });
+        await context.addInitScript((value) => {
+          window.localStorage.setItem('kb.locale', value);
+        }, locale);
+        await context.addCookies([
+          {
+            name: cookieName,
+            value: cookieValue,
+            domain: '127.0.0.1',
+            path: '/',
+            sameSite: 'Strict',
+          },
+        ]);
+        try {
+          for (const route of routes) {
+            const page = await context.newPage();
+            const response = await page.goto(`${baseUrl}${route.path}`, {
+              waitUntil: 'networkidle',
+            });
+            expect(response?.status(), `${locale} ${route.path} status`).toBe(200);
+            await page.waitForFunction(
+              (expectedLocale) => document.documentElement.lang === expectedLocale,
+              locale,
+            );
+            const expected = route[locale === 'zh-CN' ? 'zh' : 'en'];
+            expect(await page.title(), `${locale} ${route.path} title`).toBe(expected.title);
+            const headings = page.getByRole('heading', { level: 1 });
+            expect(await headings.count(), `${locale} ${route.path} H1 count`).toBe(1);
+            expect(await headings.textContent(), `${locale} ${route.path} H1`).toBe(expected.h1);
+            expect(
+              await page
+                .getByRole('link', {
+                  name: locale === 'zh-CN' ? '跳到主要内容' : 'Skip to content',
+                })
+                .count(),
+            ).toBe(1);
+            expect(await page.locator('nav').count()).toBeGreaterThan(0);
+            expect(await page.locator('body').textContent()).not.toMatch(
+              /\b(?:nav|spaces|errors)\./,
+            );
+            if (locale === 'en' && 'enForm' in route && route.enForm) {
+              const form = page.locator('form.form-band').first();
+              await form.waitFor();
+              for (const label of route.enForm.labels) {
+                expect(
+                  await form.getByLabel(label, { exact: true }).count(),
+                  `${route.path} label ${label}`,
+                ).toBe(1);
+              }
+              expect(
+                await form.getByRole('button', { name: route.enForm.button }).count(),
+                `${route.path} button ${route.enForm.button}`,
+              ).toBe(1);
+            }
+            await page.close();
+          }
+        } finally {
+          await context.close();
+        }
+      }
+    } finally {
+      await browser.close();
+    }
+  });
+
+  it('renders the English empty state and a safe localized 409 Problem', async () => {
+    const cookie = await consoleCookie();
+    const separator = cookie.indexOf('=');
+    const cookieName = separator > 0 ? cookie.slice(0, separator) : '';
+    const cookieValue = separator > 0 ? cookie.slice(separator + 1) : '';
+    if (!cookieName || !cookieValue) throw new Error('console cookie was not initialized');
+    const spaceId = requiredId(scenario.spaceId, 'spaceId');
+    const browser = await chromium.launch({ headless: true });
+    const context = await browser.newContext({ viewport: { width: 1200, height: 900 } });
+    await context.addInitScript(() => {
+      window.localStorage.setItem('kb.locale', 'en');
+    });
+    await context.addCookies([
+      {
+        name: cookieName,
+        value: cookieValue,
+        domain: '127.0.0.1',
+        path: '/',
+        sameSite: 'Strict',
+      },
+    ]);
+
+    try {
+      const page = await context.newPage();
+      await page.route('**/v1/knowledge/spaces**', async (route) => {
+        const url = new URL(route.request().url());
+        if (
+          route.request().method() === 'GET' &&
+          url.pathname === '/v1/knowledge/spaces' &&
+          url.searchParams.get('limit') === '200'
+        ) {
+          await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({
+              success: true,
+              data: {
+                items: [],
+                pageInfo: { nextCursor: null, hasMore: false },
+              },
+              traceId: 'trace-empty',
+              requestId: 'request-empty',
+            }),
+          });
+          return;
+        }
+        await route.continue();
+      });
+      await page.goto(`${baseUrl}/spaces`, { waitUntil: 'networkidle' });
+      await page.waitForFunction(() => document.documentElement.lang === 'en');
+      await page.getByText('No knowledge spaces', { exact: true }).waitFor();
+      expect(await page.getByText(/Create the first space/).count()).toBeGreaterThan(0);
+      await page.unroute('**/v1/knowledge/spaces**');
+
+      const detailPath = `/v1/knowledge/spaces/${spaceId}`;
+      await page.route(`**${detailPath}`, async (route) => {
+        if (route.request().method() !== 'PATCH') {
+          await route.continue();
+          return;
+        }
+        await route.fulfill({
+          status: 409,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            success: false,
+            error: {
+              code: 'KNOWLEDGE_VALIDATION_FAILED',
+              message: 'UNIQUE_BACKEND_SECRET_9f217',
+              retryable: false,
+              details: { field: 'name' },
+            },
+            traceId: 'trace-i18n-secret',
+            requestId: 'request-i18n-secret',
+          }),
+        });
+      });
+      await page.goto(`${baseUrl}/spaces/${spaceId}/overview`, { waitUntil: 'networkidle' });
+      await page.waitForFunction(() => document.documentElement.lang === 'en');
+      const form = page.locator('form.form-band').first();
+      await form.getByLabel('Name', { exact: true }).fill('English safe draft');
+      await form.getByRole('button', { name: 'Save metadata' }).click();
+      await page.locator('.problem-notice').waitFor();
+      expect(await page.getByText('Request validation failed.', { exact: true }).count()).toBe(1);
+      expect(await page.getByText(/trace trace-i18n-secret/).count()).toBe(1);
+      expect(await page.getByText(/request request-i18n-secret/).count()).toBe(1);
+      expect(await page.getByText('Not retryable', { exact: true }).count()).toBe(1);
+      expect(await page.locator('body').textContent()).not.toContain('UNIQUE_BACKEND_SECRET_9f217');
+      await page.close();
+    } finally {
+      await context.close();
+      await browser.close();
+    }
+  });
+
   it('switches locale without changing route or query and persists it', async () => {
     const cookie = await consoleCookie();
     const separator = cookie.indexOf('=');

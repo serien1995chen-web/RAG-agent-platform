@@ -7,6 +7,22 @@ import {
 import { OTLPMetricExporter } from '@opentelemetry/exporter-metrics-otlp-http';
 import type { OtelConfig, OtelInitStatus } from './types';
 
+export const METRIC_LABEL_ALLOWED_KEYS: ReadonlySet<string> = new Set([
+  'operation',
+  'route',
+  'method',
+  'resourceType',
+  'status',
+  'result',
+  'mode',
+  'provider',
+  'model',
+  'stage',
+  'dependency',
+  'queue',
+  'errorType',
+]);
+
 /**
  * metrics 独立入口（设计文档 15.2）。
  * 业务只允许低基数标签；导出失败不得回滚业务。

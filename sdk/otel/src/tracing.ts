@@ -9,6 +9,7 @@ import type {
   SpanInstrumentDefinition,
   SpanInstrumentName,
 } from './types';
+import { safeErrorAttributes, sanitizeTelemetryAttributes } from './redaction';
 
 export type { SpanInstrumentDefinition, SpanInstrumentName } from './types';
 
@@ -81,6 +82,18 @@ export const SPAN_INSTRUMENTS: Record<SpanInstrumentName, SpanInstrumentDefiniti
   },
 };
 
+export const SPAN_CONTEXT_ATTRIBUTE_KEYS = [
+  'requestId',
+  'workspaceId',
+  'knowledgeSpaceId',
+  'operation',
+] as const;
+
+export const SPAN_ALLOWED_ATTRIBUTE_KEYS: ReadonlySet<string> = new Set([
+  ...Object.values(SPAN_INSTRUMENTS).flatMap((definition) => definition.allowedAttributes),
+  ...SPAN_CONTEXT_ATTRIBUTE_KEYS,
+]);
+
 /**
  * trace 独立入口（设计文档 15.1 / 6.1.6）。
  * exporter 初始化失败不得影响业务：所有异常在入口内捕获并降级为 disabled。
@@ -124,7 +137,7 @@ export function createOtlpTraceExporter(endpointUrl: string): SpanExporter {
  */
 export function setSpanStatusFromHttp(span: Span, httpStatus: number): void {
   if (httpStatus >= 500) {
-    span.recordException(`http_status_${httpStatus}`);
+    span.addEvent('http.status', { httpStatus });
     span.setStatus({ code: SpanStatusCode.ERROR });
   }
 }
@@ -136,17 +149,17 @@ export function setSpanStatusFromHttp(span: Span, httpStatus: number): void {
 export async function startInstrumentSpan<T>(
   instrument: SpanInstrumentName,
   name: string,
-  attributes: Record<string, string | number | boolean>,
+  attributes: Record<string, unknown>,
   fn: (span: Span) => Promise<T> | T,
   options: { httpStatus?: number } = {},
 ): Promise<T> {
   const tracer = trace.getTracer('kb');
-  const allowed = SPAN_INSTRUMENTS[instrument].allowedAttributes;
-  const filtered: Record<string, string | number | boolean> = {};
-  for (const [key, value] of Object.entries(attributes)) {
-    if (allowed.includes(key)) filtered[key] = value;
-  }
-  return tracer.startActiveSpan(name, { attributes: filtered }, async (span) => {
+  const allowed = new Set([
+    ...SPAN_INSTRUMENTS[instrument].allowedAttributes,
+    ...SPAN_CONTEXT_ATTRIBUTE_KEYS,
+  ]);
+  const sanitized = sanitizeTelemetryAttributes(attributes, allowed);
+  return tracer.startActiveSpan(name, { attributes: sanitized.attributes }, async (span) => {
     try {
       const result = await fn(span);
       if (options.httpStatus !== undefined) {
@@ -154,7 +167,7 @@ export async function startInstrumentSpan<T>(
       }
       return result;
     } catch (error) {
-      span.recordException(error instanceof Error ? error : String(error));
+      span.addEvent('exception', safeErrorAttributes(error));
       span.setStatus({ code: SpanStatusCode.ERROR });
       throw error;
     } finally {
