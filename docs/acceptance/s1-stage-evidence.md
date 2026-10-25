@@ -63,15 +63,15 @@ fixture 环境使用 CI 公布的
 
 ## 3. Task 覆盖
 
-| Task     | 原子步骤   | 状态 | 主要证据                                                                       |
-| -------- | ---------- | ---- | ------------------------------------------------------------------------------ |
-| `S1-T01` | `S01..S06` | PASS | 166 项账本、95 项 catalog、lockfile 安装确认、合同/许可证/架构/禁止项门禁      |
-| `S1-T02` | `S01..S04` | PASS | 37 Token、单一 Provider、共享 shell/primitives、9 页三 viewport + axe          |
-| `S1-T03` | `S01..S05` | PASS | QueryClient/keys/query/mutation、TanStack Table、RHF/Zod、9 页迁移、单飞提交   |
-| `S1-T04` | `S01..S04` | PASS | 完整 zh-CN/en、22 个错误映射、ProblemView、locale 持久化与 html lang           |
-| `S1-T05` | `S01..S05` | PASS | no-op/OTLP telemetry、安全日志、runtime/worker/handler/health 接线、故障降级   |
-| `S1-T06` | `S01..S04` | PASS | Node/pnpm/Chromium CI、五镜像 Digest、SBOM/NOTICE、应用与 worker 构建          |
-| `S1-T07` | `S01..S04` | PASS | 五镜像只读证据、Compose static config、AIProxy `UNKNOWN/BLOCKED`、runbook 引用 |
+| Task     | 原子步骤   | 状态 | 主要证据                                                                               |
+| -------- | ---------- | ---- | -------------------------------------------------------------------------------------- |
+| `S1-T01` | `S01..S06` | PASS | 166 项账本、95 项 catalog、lockfile 安装确认、合同/许可证/架构/禁止项门禁              |
+| `S1-T02` | `S01..S04` | PASS | 37 Token、单一 Provider、共享 shell/primitives、9 页三 viewport + axe                  |
+| `S1-T03` | `S01..S05` | PASS | QueryClient/keys/query/mutation、TanStack Table、RHF/Zod、9 页迁移、单飞提交           |
+| `S1-T04` | `S01..S04` | PASS | 完整 zh-CN/en、22 个错误映射、ProblemView、locale 持久化与 html lang                   |
+| `S1-T05` | `S01..S05` | PASS | no-op/OTLP telemetry、安全日志、runtime/worker/handler/health 接线、故障降级           |
+| `S1-T06` | `S01..S04` | PASS | Node/pnpm/Chromium CI、CI 上游镜像、部署五镜像 Digest、SBOM/NOTICE、应用与 worker 构建 |
+| `S1-T07` | `S01..S04` | PASS | 五镜像只读证据、Compose static config、AIProxy `UNKNOWN/BLOCKED`、runbook 引用         |
 
 ## 4. 自动补跑与缺陷收敛
 
@@ -93,4 +93,18 @@ fixture 环境使用 CI 公布的
 - 未执行 `pnpm openapi:generate`：S1 未修改 OpenAPI、DTO、错误、route 或
   deferred/canonical manifest；`pnpm openapi:check` 证明快照未漂移。
 - 未执行聚合命令 `pnpm test`：其组成项已分别以真实环境执行并通过。
-- 未执行任何 pull、push、retag、镜像 push、PR、merge 或历史改写。
+- 本地证据采集未执行 pull、push、retag、镜像 push、PR、merge 或历史改写；
+  CI 运行时由 GitHub runner 拉取上述上游测试镜像。
+
+## 7. CI Runner 延迟修正
+
+PR #25 的首次 GitHub Actions 运行 `40167884714` 显示，`Initialize
+containers` 耗时约 22.2 分钟，随后 Mongo 拉取步骤超过 9 分钟仍无进展。原因是
+GitHub 托管 runner 从阿里云杭州 Registry 拉取测试依赖镜像；这不是代码编译或
+测试耗时。
+
+CI 已调整为三个并行 job：`quality`、`integration`、`e2e`，并保留最终
+`verify` 聚合检查。Mongo、Redis、pgvector 使用 Docker Hub 固定版本 tag；
+MinIO 因国内网络条件单独使用设计要求的阿里云 CN 镜像与固定 Digest。发布
+Compose 和 release-smoke 继续使用设计要求的阿里云 Repository + Digest。Mongo
+拉取增加 180 秒硬超时，所有 job 均设置总超时，避免网络异常长期占用 runner。
