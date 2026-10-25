@@ -17,8 +17,8 @@ const fullIds = new Set(fullRegistry.routes.map((operation) => operation.operati
 const runtimeSet = new Set(runtimeIds);
 const deferredSet = new Set(deferredIds);
 
-if (runtimeIds.length !== 46) problems.push(`runtime 应为 46，实际 ${runtimeIds.length}`);
-if (deferredIds.length !== 74) problems.push(`deferred 应为 74，实际 ${deferredIds.length}`);
+if (runtimeIds.length !== 58) problems.push(`runtime 应为 58，实际 ${runtimeIds.length}`);
+if (deferredIds.length !== 62) problems.push(`deferred 应为 62，实际 ${deferredIds.length}`);
 if (runtimeSet.size !== runtimeIds.length) problems.push('runtime operationId 存在重复');
 if (deferredSet.size !== deferredIds.length) problems.push('deferred operationId 存在重复');
 for (const operationId of runtimeIds) {

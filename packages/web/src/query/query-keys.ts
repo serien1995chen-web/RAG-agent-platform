@@ -56,6 +56,7 @@ export const knowledgeQueryKeys = {
       stableParams(params),
     ],
     detail: (sourceId: string): QueryKey => ['knowledge', VERSION, 'sources', 'detail', sourceId],
+    preview: (sourceId: string): QueryKey => ['knowledge', VERSION, 'sources', 'preview', sourceId],
     segments: (sourceId: string, params: QueryParams = { limit: 200, sort: 'order' }): QueryKey => [
       'knowledge',
       VERSION,
@@ -94,12 +95,26 @@ export const knowledgeQueryKeys = {
     resourceId,
   ],
   jobs: {
+    detail: (jobId: string): QueryKey => ['knowledge', VERSION, 'jobs', 'detail', jobId],
     list: (params: QueryParams = { limit: 200 }): QueryKey => [
       'knowledge',
       VERSION,
       'jobs',
       'list',
       stableParams(params),
+    ],
+  },
+  uploads: {
+    detail: (uploadId: string): QueryKey => ['knowledge', VERSION, 'uploads', 'detail', uploadId],
+  },
+  archive: {
+    list: (spaceId: string): QueryKey => [
+      'knowledge',
+      VERSION,
+      'spaces',
+      spaceId,
+      'archive',
+      'list',
     ],
   },
   operations: {

@@ -27,7 +27,21 @@ export const NPM_LICENSE_WHITELIST = [
   'ISC',
   '0BSD',
   'OFL-1.1',
+  'BlueOak-1.0.0',
+  'Unlicense',
 ];
+
+/**
+ * NPM aliases and legacy dual-license metadata that the SBOM collector cannot
+ * associate with the installed manifest. Every value is taken from the
+ * installed package's declared license or LICENSE file.
+ */
+export const NORMALIZED_DECLARED_LICENSES = new Map([
+  ['pause-stream@0.0.11', 'MIT'],
+  ['string-width-cjs@string-width@4.2.3', 'MIT'],
+  ['strip-ansi-cjs@strip-ansi@6.0.1', 'MIT'],
+  ['wrap-ansi-cjs@wrap-ansi@7.0.0', 'MIT'],
+]);
 
 /**
  * N6-A 生产闭包例外表：只登记 3 条待法务复核项。
@@ -104,6 +118,7 @@ const DEPENDENCY_STAGES = new Set([
   'S11',
 ]);
 const DEPENDENCY_SOURCES = new Set(['PROJECT_BASELINE', 'FASTGPT_SUPPLEMENT', TEST_ONLY_SOURCE]);
+const DECLARED_DEPENDENCY_STAGES = new Set(['S1', 'S2']);
 const AUDIT_CATEGORIES = new Map([
   ['DECLARED_INSTALLED', 52],
   ['DECLARED_NOT_INSTALLED', 5],
@@ -358,13 +373,17 @@ function checkDependencyBaseline(repoRoot, catalog, manifests, options = {}) {
 
   const expectedCatalog = new Map(
     ledger
-      .filter((entry) => entry.ownerStage === 'S1' || CATALOG_ONLY_LATER_STAGE.has(entry.name))
+      .filter(
+        (entry) =>
+          DECLARED_DEPENDENCY_STAGES.has(entry.ownerStage) ||
+          CATALOG_ONLY_LATER_STAGE.has(entry.name),
+      )
       .map((entry) => [entry.name, entry.version]),
   );
-  if (expectedCatalog.size !== 95) {
-    errors.push(`catalog 期望项应为 95，账本计算为 ${expectedCatalog.size}`);
+  if (expectedCatalog.size !== 108) {
+    errors.push(`catalog 期望项应为 108，账本计算为 ${expectedCatalog.size}`);
   }
-  if (catalog.size !== 95) errors.push(`catalog 应为 95 项，实际 ${catalog.size}`);
+  if (catalog.size !== 108) errors.push(`catalog 应为 108 项，实际 ${catalog.size}`);
   for (const [name, version] of expectedCatalog) {
     const actual = catalog.get(name);
     if (actual === undefined) errors.push(`catalog 缺少 ${name}@${version}`);
@@ -413,7 +432,7 @@ function checkDependencyBaseline(repoRoot, catalog, manifests, options = {}) {
           errors.push(`${rel}: 直接依赖 ${name} 未登记在 dependency ledger`);
           continue;
         }
-        if (workspace && entry.ownerStage !== 'S1') {
+        if (workspace && !DECLARED_DEPENDENCY_STAGES.has(entry.ownerStage)) {
           errors.push(`${rel}: 后续阶段依赖 ${name} 不得提前直接声明`);
         }
         if (!skipInstallationChecks) {
@@ -626,10 +645,12 @@ function auditLicenses(model) {
 
   for (const entry of model.licenseEntries) {
     const pending = findPendingException(entry.name, entry.version);
-    const evaluation = evaluateLicense(entry.normalized, whitelist);
+    const normalizedLicense =
+      NORMALIZED_DECLARED_LICENSES.get(`${entry.name}@${entry.version}`) ?? entry.normalized;
+    const evaluation = evaluateLicense(normalizedLicense, whitelist);
     const record = {
       id: `${entry.name}@${entry.version}`,
-      license: entry.normalized,
+      license: normalizedLicense,
       declared: entry.declared,
       parentChain: entry.parentChain,
       scope: entry.scope,
@@ -742,7 +763,7 @@ export async function main(argv = process.argv.slice(2)) {
       process.exit(1);
     }
     console.log(
-      `dependency gate 通过：166 项 ledger、166 项 audit、95 项 catalog、` +
+      `dependency gate 通过：166 项 ledger、166 项 audit、108 项 catalog、` +
         `${workspaceCount} 个 workspace 包。`,
     );
     return;

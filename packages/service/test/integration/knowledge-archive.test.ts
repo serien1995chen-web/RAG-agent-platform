@@ -1,0 +1,169 @@
+import { randomUUID } from 'node:crypto';
+import mongoose from 'mongoose';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { FileTicketService, MinioKnowledgeObjectStore } from '../../../../sdk/storage/src/index';
+import { KnowledgeArchiveWorker } from '../../../../projects/app/src/runtime/archive-worker';
+import { FileApplication } from '../../src/modules/knowledge/application/file.application';
+import type { AccessPort, CatalogPort } from '../../src/modules/knowledge/application/ports';
+import { KnowledgeArchiveRepository } from '../../src/modules/knowledge/repository/archive.repository';
+import { KnowledgeObjectRefRepository } from '../../src/modules/knowledge/repository/object-ref.repository';
+import {
+  KNOWLEDGE_SCHEMA_REGISTRY,
+  ensureKnowledgeCollections,
+} from '../../src/shared/persistence/schemas/knowledge-index';
+import type { TenantContext } from '../../src/shared/persistence/knowledge/tenant';
+import type { KnowledgeRuntimeConfig } from '../../src/shared/config/knowledge-runtime-config';
+
+const suffix = randomUUID().replaceAll('-', '').slice(0, 12);
+const workspaceId = `ws_archive_${suffix}`;
+const knowledgeSpaceId = new mongoose.Types.ObjectId().toString();
+const context: TenantContext = {
+  workspaceId,
+  memberId: `mem_archive_${suffix}`,
+  requestId: `req_archive_${suffix}`,
+  traceId: suffix.padEnd(32, '0').slice(0, 32),
+  scopes: ['knowledge:read', 'knowledge:write', 'knowledge:manage', 'knowledge:admin'],
+};
+
+let connection: mongoose.Connection;
+let objectStore: MinioKnowledgeObjectStore;
+let objectRefs: KnowledgeObjectRefRepository;
+let files: FileApplication;
+let jobs: KnowledgeArchiveRepository;
+let sourceId: string;
+
+const catalog = {
+  async getSpace(id: string) {
+    return { id };
+  },
+} as unknown as CatalogPort;
+const access = {
+  async assertPermission() {
+    return { allowed: true };
+  },
+} as unknown as AccessPort;
+
+beforeAll(async () => {
+  const mongoUri = new URL(
+    process.env.KB_TEST_MONGO_URI ??
+      `mongodb://127.0.0.1:27017/kb_s2_archive_${suffix}?directConnection=true`,
+  );
+  mongoUri.searchParams.set('directConnection', 'true');
+  connection = mongoose.createConnection(mongoUri.toString(), {
+    serverSelectionTimeoutMS: 5_000,
+  });
+  await connection.asPromise();
+  await ensureKnowledgeCollections(connection);
+  const endpoint = new URL(process.env.KB_TEST_S3_ENDPOINT ?? 'http://127.0.0.1:9000');
+  objectStore = new MinioKnowledgeObjectStore({
+    provider: 'minio',
+    endPoint: endpoint.hostname,
+    port: Number(endpoint.port || (endpoint.protocol === 'https:' ? 443 : 80)),
+    useSSL: endpoint.protocol === 'https:',
+    accessKey: process.env.KB_TEST_S3_ACCESS_KEY ?? 'minioadmin',
+    secretKey: process.env.KB_TEST_S3_SECRET_KEY ?? 'minioadmin',
+    region: process.env.KB_TEST_S3_REGION ?? 'us-east-1',
+    bucket: process.env.KB_TEST_S3_BUCKET ?? 'kb-test',
+  });
+  objectRefs = new KnowledgeObjectRefRepository(connection);
+  jobs = new KnowledgeArchiveRepository(connection);
+  files = new FileApplication(
+    objectRefs,
+    objectStore,
+    catalog,
+    access,
+    new FileTicketService('archive-file-ticket-secret-at-least-32-bytes', 'http://127.0.0.1:3010'),
+  );
+}, 60_000);
+
+afterAll(async () => {
+  if (connection) {
+    for (const entry of KNOWLEDGE_SCHEMA_REGISTRY) {
+      const model = connection.models[entry.modelName];
+      if (model) await model.deleteMany({ workspaceId });
+    }
+    await connection.close();
+  }
+});
+
+describe('TEST-FILE-004-BLOCK source archive worker', () => {
+  it('builds a real ZIP ObjectRef and records the export result', async () => {
+    const body = Buffer.from('archive source content');
+    const session = await files.init(
+      {
+        knowledgeSpaceId,
+        name: 'archive.txt',
+        mimeType: 'text/plain',
+        sizeBytes: body.byteLength,
+      },
+      context,
+    );
+    const refBefore = await objectRefs.findObjectRef(session.uploadId, context);
+    if (!refBefore) throw new Error('upload object ref missing');
+    const presigned = await files.presign(session.uploadId, { partNumbers: [1] }, context);
+    const uploadResponse = await fetch(presigned.uploads[0]!.url, {
+      method: 'PUT',
+      headers: presigned.uploads[0]!.headers,
+      body,
+    });
+    expect(uploadResponse.status).toBe(200);
+    const completed = await files.complete({ uploadId: session.uploadId, parts: [] }, context);
+    const source = await connection.models.KnowledgeSource.create({
+      workspaceId,
+      knowledgeSpaceId: new mongoose.Types.ObjectId(knowledgeSpaceId),
+      version: 1,
+      deletedAt: null,
+      createdByMemberId: context.memberId,
+      updatedByMemberId: context.memberId,
+      kind: 'file',
+      name: 'archive.txt',
+      blobRefId: new mongoose.Types.ObjectId(completed.blobId),
+      mimeType: 'text/plain',
+      sizeBytes: body.byteLength,
+      ownershipMemberId: context.memberId,
+    });
+    sourceId = String(source._id);
+    await connection.models.KnowledgeObjectRef.updateOne(
+      { workspaceId, _id: new mongoose.Types.ObjectId(completed.blobId) },
+      { $set: { sourceId: source._id } },
+    );
+    const job = await jobs.createExportJob(
+      {
+        spaceId: knowledgeSpaceId,
+        sourceIds: [sourceId],
+        idempotencyKey: `archive-${suffix}`,
+      },
+      context,
+    );
+    const config = {
+      s3: {
+        endpoint: process.env.KB_TEST_S3_ENDPOINT ?? 'http://127.0.0.1:9000',
+        bucket: objectStore.bucket,
+        region: process.env.KB_TEST_S3_REGION ?? 'us-east-1',
+        accessKeyRef: 'env:KB_TEST_S3_ACCESS_KEY',
+        secretKeyRef: 'env:KB_TEST_S3_SECRET_KEY',
+        credentialRefs: ['env:KB_TEST_S3_ACCESS_KEY', 'env:KB_TEST_S3_SECRET_KEY'],
+      },
+    } as unknown as KnowledgeRuntimeConfig;
+    const worker = new KnowledgeArchiveWorker(connection, config, `archive-worker-${suffix}`);
+    await worker.runOnce();
+    const succeeded = await jobs.get(String(job.jobId), context);
+    expect(succeeded.status).toBe('succeeded');
+    const result = succeeded.result as Record<string, unknown>;
+    expect(typeof result.objectBlobRefId).toBe('string');
+    const artifact = await objectRefs.findObjectRef(String(result.objectBlobRefId), context);
+    expect(artifact?.purpose).toBe('export');
+    expect(artifact?.state).toBe('active');
+    if (!artifact) throw new Error('archive artifact missing');
+    const object = await objectStore.getObject(artifact.bucket, artifact.objectKey, null, {
+      ...context,
+      knowledgeSpaceId,
+    });
+    const chunks: Buffer[] = [];
+    for await (const chunk of object.body) chunks.push(Buffer.from(chunk));
+    const zip = Buffer.concat(chunks);
+    expect(zip.subarray(0, 2).toString('ascii')).toBe('PK');
+    expect(zip.byteLength).toBeGreaterThan(body.byteLength);
+    await objectStore.deleteObject(artifact.objectKey, { ...context, knowledgeSpaceId });
+  });
+});

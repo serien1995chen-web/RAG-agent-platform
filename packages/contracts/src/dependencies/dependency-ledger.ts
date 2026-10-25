@@ -63,7 +63,7 @@ export const DEPENDENCY_LEDGER_TOTALS = {
   total: 166,
   design: 164,
   testOnlySupplements: 2,
-  catalog: 95,
+  catalog: 108,
 } as const;
 
 export const DEPENDENCY_OWNER_STAGE_COUNTS: Readonly<Record<DependencyStage, number>> = {
@@ -119,6 +119,7 @@ const BASELINE_DESIGN_CATEGORY_COUNTS: Readonly<Record<DependencyAuditCategory, 
 };
 
 const CATALOG_ONLY_LATER_STAGE_DEPENDENCIES = new Set(['ajv', '@llamaindex/liteparse-wasm']);
+const CATALOG_DECLARED_STAGES = new Set<DependencyStage>(['S1', 'S2']);
 
 const ALLOWED_ENVIRONMENTS = new Set([
   'APP_RUNTIME',
@@ -453,7 +454,8 @@ export function validateDependencyCatalog(
     entries
       .filter(
         (entry) =>
-          entry.ownerStage === 'S1' || CATALOG_ONLY_LATER_STAGE_DEPENDENCIES.has(entry.name),
+          CATALOG_DECLARED_STAGES.has(entry.ownerStage) ||
+          CATALOG_ONLY_LATER_STAGE_DEPENDENCIES.has(entry.name),
       )
       .map((entry) => [entry.name, entry.version]),
   );

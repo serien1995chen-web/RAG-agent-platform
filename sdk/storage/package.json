@@ -4,7 +4,9 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./object-store-contract": "./src/object-store-contract.ts",
+    "./providers/minio": "./src/providers/minio.ts"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json --noEmit",
@@ -16,10 +18,18 @@
     "lint": "eslint src"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "catalog:",
+    "@aws-sdk/lib-storage": "catalog:",
+    "@aws-sdk/s3-request-presigner": "catalog:",
     "@kb/contracts": "workspace:*",
+    "ali-oss": "catalog:",
+    "cos-nodejs-sdk-v5": "catalog:",
+    "es-toolkit": "catalog:",
+    "mime": "catalog:",
     "minio": "catalog:"
   },
   "devDependencies": {
+    "@types/ali-oss": "catalog:",
     "@types/node": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"

@@ -10,6 +10,8 @@ import {
   registerKnowledgeModels,
   type TenantContext,
 } from '@kb/service';
+import { createFileCleanupCycle } from './file-worker';
+import { KnowledgeArchiveWorker } from './archive-worker';
 
 const POLL_INTERVAL_MS = 1_000;
 const BATCH_SIZE = 20;
@@ -31,6 +33,12 @@ async function start(): Promise<void> {
   await ensurePgvectorDdl(connections.pg);
   const queue = new BullMqQueueAdapter({ connection: connections.redis });
   const dispatcher = new KnowledgeOutboxDispatcher(connections.mongo, queue);
+  const fileCleanup = createFileCleanupCycle({
+    connection: connections.mongo,
+    config,
+    instanceId: config.instanceId,
+  });
+  const archiveWorker = new KnowledgeArchiveWorker(connections.mongo, config, config.instanceId);
   let stopping = false;
   let timer: NodeJS.Timeout | undefined;
 
@@ -61,6 +69,11 @@ async function start(): Promise<void> {
           }
         },
       );
+      await fileCleanup.runOnce();
+      await archiveWorker.runOnce();
+      telemetry.log('knowledge.worker.object_cleanup', {
+        operation: 'object.cleanup',
+      });
     } catch (error) {
       telemetry.log('knowledge.worker.cycle.failed', {
         errorType: error instanceof Error ? error.name : typeof error,

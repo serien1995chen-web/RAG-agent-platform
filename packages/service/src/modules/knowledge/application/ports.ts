@@ -262,6 +262,15 @@ export interface JobPort {
     context: TenantContext,
   ): Promise<OperationPage<Record<string, unknown>>>;
   get(jobId: string, context: TenantContext): Promise<Record<string, unknown>>;
+  findLatestSucceeded(
+    kind: 'parse',
+    resourceId: string,
+    context: TenantContext,
+  ): Promise<Record<string, unknown> | null>;
+  createExportJob(
+    input: { spaceId: string; sourceIds: string[]; idempotencyKey: string },
+    context: TenantContext,
+  ): Promise<Record<string, unknown>>;
   transition(
     input: {
       jobId: string;
@@ -270,4 +279,251 @@ export interface JobPort {
     },
     context: TenantContext,
   ): Promise<Record<string, unknown>>;
+}
+
+export type KnowledgeObjectProvider = 'minio' | 'aws-s3' | 'r2' | 'cos' | 'oss';
+export type KnowledgeObjectPurpose = 'source' | 'image' | 'export' | 'preview' | 'avatar';
+export type UploadMode = 'single' | 'multipart';
+export type UploadStatus =
+  | 'pending'
+  | 'uploading'
+  | 'completing'
+  | 'completed'
+  | 'aborted'
+  | 'expired';
+
+export interface UploadPartView {
+  partNumber: number;
+  etag: string;
+  sizeBytes: number;
+}
+
+export interface UploadSessionView {
+  uploadId: string;
+  mode: UploadMode;
+  status: UploadStatus;
+  partSizeBytes: number;
+  partCount: number;
+  originalName: string;
+  expiresAt: string;
+  version: number;
+  parts: UploadPartView[];
+}
+
+export interface ObjectRefView {
+  blobId: string;
+  workspaceId: string;
+  knowledgeSpaceId: string;
+  provider: KnowledgeObjectProvider;
+  bucket: string;
+  objectKey: string;
+  providerUploadId: string | null;
+  originalName: string;
+  purpose: KnowledgeObjectPurpose;
+  sourceId: string | null;
+  mimeType: string;
+  sizeBytes: number;
+  etag: string;
+  sha256: string;
+  state: 'pending' | 'active' | 'deleting' | 'deleted';
+  expiresAt: string | null;
+  version: number;
+  createdAt: string;
+  updatedAt: string;
+  deletedAt: string | null;
+}
+
+export interface CreateUploadSessionInput {
+  uploadId: string;
+  workspaceId: string;
+  knowledgeSpaceId: string;
+  provider: KnowledgeObjectProvider;
+  bucket: string;
+  objectKey: string;
+  mimeType: string;
+  sizeBytes: number;
+  originalName: string;
+  mode: UploadMode;
+  partSizeBytes: number;
+  partCount: number;
+  providerUploadId: string | null;
+  expiresAt: Date;
+}
+
+export interface CompleteUploadInput {
+  uploadId: string;
+  expectedVersion: number;
+  etag: string;
+  sha256: string;
+  sizeBytes: number;
+  parts: readonly UploadPartView[];
+}
+
+export interface ObjectStorageContext {
+  workspaceId: string;
+  knowledgeSpaceId: string;
+  requestId: string;
+  traceId: string;
+}
+
+export interface ObjectStoreApplicationPort {
+  readonly provider: KnowledgeObjectProvider;
+  readonly bucket: string;
+  ensureBucket(bucket: string, context: ObjectStorageContext): Promise<void>;
+  headObject(
+    bucket: string,
+    key: string,
+    context: ObjectStorageContext,
+  ): Promise<{
+    size: number;
+    etag: string;
+    contentType: string | null;
+    metadata: Record<string, string>;
+  }>;
+  getObject(
+    bucket: string,
+    key: string,
+    range: string | null,
+    context: ObjectStorageContext,
+  ): Promise<{
+    body: AsyncIterable<Uint8Array>;
+    size: number;
+    etag: string;
+    contentType: string | null;
+    contentRange: string | null;
+  }>;
+  presignPut(
+    key: string,
+    contentType: string,
+    expiresSeconds: number,
+    context: ObjectStorageContext,
+    multipart?: { providerUploadId: string; partNumber: number },
+  ): Promise<{
+    url: string;
+    method: 'PUT';
+    headers: Record<string, string>;
+    expiresAt: string;
+  }>;
+  createMultipartUpload(
+    key: string,
+    contentType: string,
+    metadata: Record<string, string>,
+    context: ObjectStorageContext,
+  ): Promise<string>;
+  uploadPart(
+    key: string,
+    providerUploadId: string,
+    partNumber: number,
+    body: Uint8Array,
+    context: ObjectStorageContext,
+  ): Promise<UploadPartView>;
+  listParts(
+    key: string,
+    providerUploadId: string,
+    context: ObjectStorageContext,
+  ): Promise<UploadPartView[]>;
+  completeMultipartUpload(
+    key: string,
+    providerUploadId: string,
+    parts: readonly UploadPartView[],
+    context: ObjectStorageContext,
+  ): Promise<{ etag: string; sizeBytes: number }>;
+  abortMultipartUpload(
+    key: string,
+    providerUploadId: string,
+    context: ObjectStorageContext,
+  ): Promise<{ aborted: boolean }>;
+  deleteObject(key: string, context: ObjectStorageContext): Promise<{ deleted: boolean }>;
+}
+
+export type FileTicketDisposition = 'inline' | 'attachment';
+
+export interface FileTicketClaims {
+  workspaceId: string;
+  blobId: string;
+  sourceId: string | null;
+  knowledgeSpaceId: string | null;
+  disposition: FileTicketDisposition;
+  expiresAt: string;
+  nonce: string;
+}
+
+export interface FileTicketPort {
+  issue(
+    input: {
+      workspaceId: string;
+      blobId: string;
+      sourceId: string | null;
+      knowledgeSpaceId: string | null;
+      disposition: FileTicketDisposition;
+      ttlSeconds: number;
+    },
+    requestId: string,
+    traceId: string,
+  ): { url: string; ticket: string; expiresAt: string };
+  verify(ticket: string, requestId: string, traceId: string): FileTicketClaims;
+}
+
+export interface FileBinaryResult {
+  body: AsyncIterable<Uint8Array>;
+  size: number;
+  etag: string;
+  contentType: string | null;
+  contentRange: string | null;
+  disposition: FileTicketDisposition;
+  filename: string;
+}
+
+export interface ObjectRefRepositoryPort {
+  createUploadSession(
+    input: CreateUploadSessionInput,
+    context: TenantContext,
+  ): Promise<UploadSessionView>;
+  findUploadSession(uploadId: string, context: TenantContext): Promise<UploadSessionView | null>;
+  recordUploadPart(
+    uploadId: string,
+    expectedVersion: number,
+    part: UploadPartView,
+    context: TenantContext,
+  ): Promise<UploadSessionView>;
+  markUploadCompleting(
+    uploadId: string,
+    expectedVersion: number,
+    context: TenantContext,
+  ): Promise<UploadSessionView>;
+  completeUpload(input: CompleteUploadInput, context: TenantContext): Promise<ObjectRefView>;
+  markUploadAborted(
+    uploadId: string,
+    expectedVersion: number,
+    context: TenantContext,
+  ): Promise<UploadSessionView>;
+  markUploadExpired(uploadId: string, context: TenantContext): Promise<UploadSessionView>;
+  findObjectRef(blobId: string, context: TenantContext): Promise<ObjectRefView | null>;
+  findCleanupCandidates(limit: number, now: Date, context: TenantContext): Promise<ObjectRefView[]>;
+  markDeleting(
+    blobId: string,
+    expectedVersion: number,
+    context: TenantContext,
+  ): Promise<ObjectRefView>;
+  confirmDeleted(
+    blobId: string,
+    expectedVersion: number,
+    context: TenantContext,
+  ): Promise<ObjectRefView>;
+  hasActiveSourceReference(blobId: string, context: TenantContext): Promise<boolean>;
+  createArchiveArtifact(
+    input: {
+      blobId: string;
+      knowledgeSpaceId: string;
+      provider: KnowledgeObjectProvider;
+      bucket: string;
+      objectKey: string;
+      mimeType: string;
+      sizeBytes: number;
+      etag: string;
+      sha256: string;
+      expiresAt: Date;
+    },
+    context: TenantContext,
+  ): Promise<ObjectRefView>;
 }

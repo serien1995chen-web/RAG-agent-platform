@@ -1,8 +1,20 @@
 export {
   ensureConsoleSession,
+  knowledgeBinaryRequest,
   knowledgeRequest,
   KnowledgeRequestError,
 } from './client/knowledge-client';
+export {
+  clearKnowledgeUpload,
+  knowledgeBinaryUpload,
+  knowledgeMultipartUpload,
+  restoreKnowledgeUpload,
+} from './client/file-upload';
+export type {
+  KnowledgeFileUploadState,
+  ObjectBlobReference,
+  UploadSession,
+} from './client/file-upload';
 export type { ConsoleSession } from './client/knowledge-client';
 export {
   Button,
@@ -19,6 +31,9 @@ export {
   TextInput,
 } from './components/knowledge-primitives';
 export { KnowledgeDataTable } from './components/data-table';
+export { ArchiveAction } from './components/archive-action';
+export { FilePreviewPanel } from './components/file-preview';
+export { FileUploadPanel } from './components/file-upload';
 export type {
   Column,
   Density,

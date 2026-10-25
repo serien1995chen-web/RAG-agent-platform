@@ -19,6 +19,7 @@ for (const [relativePath, content] of Object.entries(outputs)) {
 console.log(
   `openapi:generate 完成：${artifacts.actualCounts.paths} paths、` +
     `${artifacts.actualCounts.operations} operations、` +
-    `${artifacts.actualCounts.schemas} schemas；runtime 46、deferred 74`,
+    `${artifacts.actualCounts.schemas} schemas；` +
+    `runtime ${artifacts.runtimeRegistry.count}、deferred ${artifacts.deferredManifest.count}`,
 );
 for (const relativePath of Object.keys(outputs)) console.log(`  - ${relativePath}`);

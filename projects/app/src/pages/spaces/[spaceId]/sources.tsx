@@ -1,5 +1,7 @@
 import {
+  ArchiveAction,
   Button,
+  FilePreviewPanel,
   FormField,
   KnowledgeDataTable,
   LoadingState,
@@ -26,12 +28,42 @@ import { useState } from 'react';
 import type { DirectoryRecord, SourceRecord, SpaceRecord } from '../../../lib/knowledge-types';
 import { listPath, statusTone } from '../../../lib/knowledge-types';
 
+function SourceDownloadButton({ sourceId }: { sourceId: string }) {
+  const { t } = useKnowledgeI18n();
+  const [busy, setBusy] = useState(false);
+  const [problem, setProblem] = useState<unknown>(null);
+
+  return (
+    <>
+      <Button
+        size="sm"
+        busy={busy}
+        onClick={() => {
+          setBusy(true);
+          setProblem(null);
+          void knowledgeRequest<{ url: string }>(`/v1/knowledge/sources/${sourceId}/download`, {
+            method: 'POST',
+            body: { disposition: 'attachment' },
+          })
+            .then((ticket) => window.open(ticket.url, '_blank', 'noopener,noreferrer'))
+            .catch(setProblem)
+            .finally(() => setBusy(false));
+        }}
+      >
+        {t('sources.download')}
+      </Button>
+      {problem ? <ProblemNotice error={problem} /> : null}
+    </>
+  );
+}
+
 export default function SourcesPage() {
   const router = useRouter();
   const { t } = useKnowledgeI18n();
   const enumLabel = useKnowledgeEnumLabel();
   const spaceId = typeof router.query.spaceId === 'string' ? router.query.spaceId : '';
   const [problem, setProblem] = useState<unknown>(null);
+  const [selectedSourceIds, setSelectedSourceIds] = useState<string[]>([]);
   const space = useKnowledgeQuery<SpaceRecord>(
     knowledgeQueryKeys.spaces.detail(spaceId),
     spaceId ? `/v1/knowledge/spaces/${spaceId}` : null,
@@ -185,6 +217,13 @@ export default function SourcesPage() {
         title={t('sources.register')}
         meta={sources.data ? t('common.records', { count: sources.data.items.length }) : undefined}
       >
+        <div className="inline-actions">
+          <Button href={`/spaces/${spaceId}/import`} size="sm" tone="primary">
+            {t('sources.selectFile')}
+          </Button>
+          <ArchiveAction spaceId={spaceId} sourceIds={selectedSourceIds} />
+          <span>{t('sources.selectedCount', { count: selectedSourceIds.length })}</span>
+        </div>
         {sources.isLoading ? (
           <LoadingState />
         ) : (
@@ -194,6 +233,24 @@ export default function SourcesPage() {
             empty={t('sources.empty')}
             caption={t('sources.register')}
             columns={[
+              {
+                key: 'select',
+                label: t('sources.selectFile'),
+                render: (source) => (
+                  <input
+                    type="checkbox"
+                    aria-label={`${t('sources.selectFile')} ${source.name}`}
+                    checked={selectedSourceIds.includes(source.id)}
+                    onChange={(event) =>
+                      setSelectedSourceIds((current) =>
+                        event.target.checked
+                          ? [...current, source.id]
+                          : current.filter((id) => id !== source.id),
+                      )
+                    }
+                  />
+                ),
+              },
               { key: 'name', label: t('sources.columnName'), render: (source) => source.name },
               {
                 key: 'kind',
@@ -221,6 +278,8 @@ export default function SourcesPage() {
                 label: t('sources.columnActions'),
                 render: (source) => (
                   <div className="inline-actions">
+                    <FilePreviewPanel sourceId={source.id} />
+                    <SourceDownloadButton sourceId={source.id} />
                     <Button href={`/spaces/${spaceId}/segments?sourceId=${source.id}`} size="sm">
                       {t('sources.actionSegments')}
                     </Button>

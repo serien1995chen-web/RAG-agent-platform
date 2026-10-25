@@ -93,6 +93,8 @@ const scenario: {
   segmentId?: string;
   tagId?: string;
   sourceDeleteJobId?: string;
+  blobId?: string;
+  archiveJobId?: string;
 } = {};
 
 function requiredEnv(name: string): string {
@@ -352,6 +354,35 @@ async function callApi(operationId: string, options: ApiCallOptions = {}): Promi
   return envelope.data;
 }
 
+async function callBinaryApi(
+  operationId: string,
+  options: ApiCallOptions & { binary: Uint8Array },
+): Promise<unknown> {
+  const operation = runtimeById.get(operationId);
+  if (!operation) throw new Error(`operation is not in runtime registry: ${operationId}`);
+  const path = concretePath(operation.path, options.params ?? {});
+  requestSequence += 1;
+  const response = await fetch(`${baseUrl}${path}`, {
+    method: operation.method,
+    headers: {
+      authorization: `Bearer ${authToken}`,
+      'x-workspace-id': workspaceId,
+      'x-request-id': `req_e2e_${suffix}_${requestSequence}`,
+      'content-type': 'application/octet-stream',
+      'idempotency-key': `idem-e2e-${suffix}-${String(requestSequence).padStart(4, '0')}`,
+    },
+    body: options.binary,
+  });
+  const text = await response.text();
+  expect(response.status, `${operationId}: ${text}`).toBe(200);
+  const payload = JSON.parse(text) as {
+    success: true;
+    data: unknown;
+  };
+  covered.add(operationId);
+  return payload.data;
+}
+
 async function availablePort(): Promise<number> {
   return await new Promise<number>((resolvePort, reject) => {
     const server = createServer();
@@ -479,6 +510,9 @@ beforeAll(async () => {
     KB_S3_SECRET_KEY_REF: 'env:KB_E2E_S3_SECRET_KEY',
     KB_E2E_S3_ACCESS_KEY: accessKey,
     KB_E2E_S3_SECRET_KEY: secretKey,
+    KB_FILE_PUBLIC_BASE_URL: baseUrl,
+    KB_FILE_TICKET_SECRET_REF: 'env:KB_E2E_FILE_TICKET_SECRET',
+    KB_E2E_FILE_TICKET_SECRET: `file-ticket-${suffix}-fixed-secret-value`,
     KB_AUTH_MODE: 'mock',
     KB_MOCK_AUTH_TOKEN: authToken,
     KB_MOCK_WORKSPACE_ID: workspaceId,
@@ -535,6 +569,7 @@ beforeAll(async () => {
     },
     logLevel: 'error',
   });
+  registerKnowledgeModels(connections.mongo);
 }, 180_000);
 
 afterAll(async () => {
@@ -907,7 +942,7 @@ describe.sequential('knowledge architecture baseline E2E', () => {
     }
   });
 
-  it('renders nine pages at three viewports with accessible shell geometry and axe', async () => {
+  it('renders ten pages at three viewports with accessible shell geometry and axe', async () => {
     const cookie = await consoleCookie();
     const separator = cookie.indexOf('=');
     const cookieName = separator > 0 ? cookie.slice(0, separator) : '';
@@ -924,6 +959,7 @@ describe.sequential('knowledge architecture baseline E2E', () => {
       '/spaces/new',
       `/spaces/${requiredId(scenario.spaceId, 'spaceId')}/overview`,
       `/spaces/${requiredId(scenario.spaceId, 'spaceId')}/sources`,
+      `/spaces/${requiredId(scenario.spaceId, 'spaceId')}/import`,
       `/spaces/${requiredId(scenario.spaceId, 'spaceId')}/segments`,
       `/spaces/${requiredId(scenario.spaceId, 'spaceId')}/tags`,
       `/spaces/${requiredId(scenario.spaceId, 'spaceId')}/access`,
@@ -1262,7 +1298,7 @@ describe.sequential('knowledge architecture baseline E2E', () => {
     }
   });
 
-  it('renders all nine routes in zh-CN and en with exact titles and form labels', async () => {
+  it('renders all ten routes in zh-CN and en with exact titles and form labels', async () => {
     const spaceId = requiredId(scenario.spaceId, 'spaceId');
     const sourceId = requiredId(scenario.sourceId, 'sourceId');
     const space = asObject(await callApi('API-SPACE-GET', { params: { spaceId } }));
@@ -1295,6 +1331,11 @@ describe.sequential('knowledge architecture baseline E2E', () => {
           labels: ['Name', 'Kind'],
           button: 'Create Source',
         },
+      },
+      {
+        path: `/spaces/${spaceId}/import`,
+        zh: { title: `${spaceName} · 文件上传`, h1: '文件上传' },
+        en: { title: `${spaceName} · File upload`, h1: 'File upload' },
       },
       {
         path: `/spaces/${spaceId}/segments?sourceId=${sourceId}`,
@@ -1388,14 +1429,14 @@ describe.sequential('knowledge architecture baseline E2E', () => {
                     '知识空间',
                     '系统状态',
                     ...(hasSpaceNavigation
-                      ? ['概览', '来源', '分段', '标签', '访问权限', '任务']
+                      ? ['概览', '来源', '导入', '分段', '标签', '访问权限', '任务']
                       : []),
                   ]
                 : [
                     'Spaces',
                     'System status',
                     ...(hasSpaceNavigation
-                      ? ['Overview', 'Sources', 'Segments', 'Tags', 'Access', 'Jobs']
+                      ? ['Overview', 'Sources', 'Import', 'Segments', 'Tags', 'Access', 'Jobs']
                       : []),
                   ];
             const navigationLabels = await primaryNavigation.locator('a').evaluateAll((links) =>
@@ -1572,7 +1613,133 @@ describe.sequential('knowledge architecture baseline E2E', () => {
     }
   });
 
-  it('finishes the delete paths, reads Jobs and proves all 46 operations ran', async () => {
+  it('executes the 12 S2 file operations through HTTP and ticket auth', async () => {
+    const spaceId = requiredId(scenario.spaceId, 'spaceId');
+    const sourceId = requiredId(scenario.sourceId, 'sourceId');
+    const partSize = 8 * 1024 * 1024;
+    const first = Buffer.alloc(partSize, 'a');
+    const second = Buffer.from('b');
+    const session = asObject(
+      await callApi('API-UPLOAD-INIT', {
+        body: {
+          knowledgeSpaceId: spaceId,
+          name: 'runtime-file.txt',
+          mimeType: 'text/plain',
+          sizeBytes: first.byteLength + second.byteLength,
+        },
+      }),
+    );
+    const uploadId = asString(session.uploadId, 'uploadId');
+    await callApi('API-UPLOAD-GET', { params: { uploadId } });
+    const presigned = asObject(
+      await callApi('API-UPLOAD-PRESIGN', {
+        params: { uploadId },
+        body: { partNumbers: [1, 2] },
+      }),
+    );
+    expect(Array.isArray(presigned.uploads)).toBe(true);
+    const partOne = asObject(
+      await callBinaryApi('API-UPLOAD-PART', {
+        params: { uploadId, partNumber: '1' },
+        binary: first,
+      }),
+    );
+    const partTwo = asObject(
+      await callBinaryApi('API-UPLOAD-PART', {
+        params: { uploadId, partNumber: '2' },
+        binary: second,
+      }),
+    );
+    const completed = asObject(
+      await callApi('API-UPLOAD-COMPLETE', {
+        params: { uploadId },
+        body: {
+          parts: [
+            { partNumber: 1, etag: asString(partOne.etag, 'partOne.etag') },
+            { partNumber: 2, etag: asString(partTwo.etag, 'partTwo.etag') },
+          ],
+        },
+      }),
+    );
+    scenario.blobId = asString(completed.blobId, 'blobId');
+    const source = await connections!.mongo.model('KnowledgeSource').findOneAndUpdate(
+      { workspaceId, _id: sourceId, deletedAt: null },
+      {
+        $set: {
+          blobRefId: scenario.blobId,
+          mimeType: 'text/plain',
+          sizeBytes: first.byteLength + second.byteLength,
+        },
+      },
+      { new: true },
+    );
+    expect(source).not.toBeNull();
+    await connections!.mongo
+      .model('KnowledgeObjectRef')
+      .updateOne({ workspaceId, _id: scenario.blobId }, { $set: { sourceId } });
+
+    const filePreview = asObject(
+      await callApi('API-FILE-PREVIEW', {
+        params: { blobId: scenario.blobId },
+        body: { disposition: 'inline' },
+      }),
+    );
+    const fileDownload = asObject(
+      await callApi('API-FILE-DOWNLOAD', {
+        params: { blobId: scenario.blobId },
+        body: { disposition: 'attachment' },
+      }),
+    );
+    const normalContent = await fetch(`${baseUrl}/v1/knowledge/files/${scenario.blobId}/content`, {
+      headers: {
+        authorization: `Bearer ${authToken}`,
+        'x-workspace-id': workspaceId,
+        range: 'bytes=0-9',
+      },
+    });
+    expect(normalContent.status).toBe(206);
+    expect((await normalContent.arrayBuffer()).byteLength).toBe(10);
+    covered.add('API-FILE-CONTENT');
+    const ticketUrl = asString(filePreview.url, 'filePreview.url');
+    const ticketContent = await fetch(ticketUrl, {
+      headers: { range: 'bytes=0-9' },
+    });
+    expect(ticketContent.status).toBe(206);
+    expect((await ticketContent.arrayBuffer()).byteLength).toBe(10);
+    expect(asString(fileDownload.url, 'fileDownload.url')).toContain('ticket=');
+
+    const sourcePreview = asObject(await callApi('API-SOURCE-PREVIEW', { params: { sourceId } }));
+    expect(Array.isArray(sourcePreview.sections)).toBe(true);
+    expect(asString(asObject(sourcePreview.sections[0]).text, 'preview.text')).toContain('a');
+    await callApi('API-SOURCE-DOWNLOAD', {
+      params: { sourceId },
+      body: { disposition: 'attachment' },
+    });
+    const archive = asObject(
+      await callApi('API-SOURCE-ARCHIVE', {
+        params: { spaceId },
+        body: { sourceIds: [sourceId] },
+      }),
+    );
+    scenario.archiveJobId = asString(archive.jobId, 'archiveJobId');
+
+    const abortSession = asObject(
+      await callApi('API-UPLOAD-INIT', {
+        body: {
+          knowledgeSpaceId: spaceId,
+          name: 'abort.txt',
+          mimeType: 'text/plain',
+          sizeBytes: 1,
+        },
+      }),
+    );
+    await callApi('API-UPLOAD-ABORT', {
+      params: { uploadId: asString(abortSession.uploadId, 'abort.uploadId') },
+      body: { version: asNumber(abortSession.version, 'abort.version') },
+    });
+  });
+
+  it('finishes the delete paths, reads Jobs and proves all 58 operations ran', async () => {
     await callApi('API-SEGMENT-DELETE', {
       params: { segmentId: requiredId(scenario.segmentId, 'segmentId') },
     });
@@ -1616,10 +1783,10 @@ describe.sequential('knowledge architecture baseline E2E', () => {
       },
     });
 
-    expect(runtimeRegistry.count).toBe(46);
+    expect(runtimeRegistry.count).toBe(58);
     expect([...covered].sort()).toEqual(
       runtimeRegistry.operations.map((operation) => operation.operationId).sort(),
     );
-    expect(covered.size).toBe(46);
+    expect(covered.size).toBe(58);
   });
 });

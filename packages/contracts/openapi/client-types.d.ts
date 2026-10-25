@@ -127,6 +127,9 @@ export type RuntimeOperationId =
   | 'API-DIRECTORY-DELETE'
   | 'API-DIRECTORY-GET'
   | 'API-DIRECTORY-UPDATE'
+  | 'API-FILE-CONTENT'
+  | 'API-FILE-DOWNLOAD'
+  | 'API-FILE-PREVIEW'
   | 'API-JOB-LIST'
   | 'API-JOB-GET'
   | 'API-OPENAPI'
@@ -141,10 +144,12 @@ export type RuntimeOperationId =
   | 'API-SOURCE-DELETE'
   | 'API-SOURCE-GET'
   | 'API-SOURCE-UPDATE'
+  | 'API-SOURCE-DOWNLOAD'
   | 'API-PERMISSION-DETACH'
   | 'API-PERMISSION-DISABLE'
   | 'API-PERMISSION-ENABLE'
   | 'API-PERMISSION-RESUME'
+  | 'API-SOURCE-PREVIEW'
   | 'API-SEGMENT-LIST'
   | 'API-SEGMENT-CREATE'
   | 'API-TAG-APPLY'
@@ -160,6 +165,7 @@ export type RuntimeOperationId =
   | 'API-DIRECTORY-LIST'
   | 'API-DIRECTORY-CREATE'
   | 'API-OWNERSHIP-TRANSFER'
+  | 'API-SOURCE-ARCHIVE'
   | 'API-SOURCE-LIST'
   | 'API-SOURCE-CREATE'
   | 'API-TAG-LIST'
@@ -167,7 +173,13 @@ export type RuntimeOperationId =
   | 'API-TAG-DELETE'
   | 'API-TAG-GET'
   | 'API-TAG-UPDATE'
-  | 'API-TAG-VALUES';
+  | 'API-TAG-VALUES'
+  | 'API-UPLOAD-INIT'
+  | 'API-UPLOAD-GET'
+  | 'API-UPLOAD-ABORT'
+  | 'API-UPLOAD-COMPLETE'
+  | 'API-UPLOAD-PART'
+  | 'API-UPLOAD-PRESIGN';
 
 export type DeferredOperationId =
   | 'API-APIKEY-LIST'
@@ -182,9 +194,6 @@ export type DeferredOperationId =
   | 'API-CONNECTOR-UPDATE'
   | 'API-CONNECTOR-SYNC'
   | 'API-DIRECTORY-MOVE'
-  | 'API-FILE-CONTENT'
-  | 'API-FILE-DOWNLOAD'
-  | 'API-FILE-PREVIEW'
   | 'API-JOB-CREATE'
   | 'API-JOB-CANCEL'
   | 'API-JOB-PAUSE'
@@ -208,9 +217,7 @@ export type DeferredOperationId =
   | 'API-SEGMENT-INDEX-UPDATE'
   | 'API-SEGMENT-REINDEX'
   | 'API-SEGMENT-BATCH'
-  | 'API-SOURCE-DOWNLOAD'
   | 'API-SOURCE-MOVE'
-  | 'API-SOURCE-PREVIEW'
   | 'API-SOURCE-BATCH'
   | 'API-CONNECTOR-CATALOG'
   | 'API-CONNECTOR-CONNECT'
@@ -227,7 +234,6 @@ export type DeferredOperationId =
   | 'API-MODEL-BINDING-UPDATE'
   | 'API-SPACE-MOVE'
   | 'API-SPACE-REFERENCES'
-  | 'API-SOURCE-ARCHIVE'
   | 'API-SYNONYM-DELETE'
   | 'API-SYNONYM-GET'
   | 'API-SYNONYM-ENABLE'
@@ -237,12 +243,6 @@ export type DeferredOperationId =
   | 'API-SYNONYM-MAPPINGS'
   | 'API-SYNONYM-REBUILD'
   | 'API-SPACE-BATCH'
-  | 'API-UPLOAD-INIT'
-  | 'API-UPLOAD-GET'
-  | 'API-UPLOAD-ABORT'
-  | 'API-UPLOAD-COMPLETE'
-  | 'API-UPLOAD-PART'
-  | 'API-UPLOAD-PRESIGN'
   | 'API-USAGE-GET';
 
 export type SchemaName =
@@ -392,6 +392,9 @@ export interface RuntimeRouteMethodPathMap {
   'API-DIRECTORY-DELETE': 'DELETE /v1/knowledge/directories/{directoryId}';
   'API-DIRECTORY-GET': 'GET /v1/knowledge/directories/{directoryId}';
   'API-DIRECTORY-UPDATE': 'PATCH /v1/knowledge/directories/{directoryId}';
+  'API-FILE-CONTENT': 'GET /v1/knowledge/files/{blobId}/content';
+  'API-FILE-DOWNLOAD': 'POST /v1/knowledge/files/{blobId}/download';
+  'API-FILE-PREVIEW': 'POST /v1/knowledge/files/{blobId}/preview';
   'API-JOB-LIST': 'GET /v1/knowledge/jobs';
   'API-JOB-GET': 'GET /v1/knowledge/jobs/{jobId}';
   'API-OPENAPI': 'GET /v1/knowledge/openapi.json';
@@ -406,10 +409,12 @@ export interface RuntimeRouteMethodPathMap {
   'API-SOURCE-DELETE': 'DELETE /v1/knowledge/sources/{sourceId}';
   'API-SOURCE-GET': 'GET /v1/knowledge/sources/{sourceId}';
   'API-SOURCE-UPDATE': 'PATCH /v1/knowledge/sources/{sourceId}';
+  'API-SOURCE-DOWNLOAD': 'POST /v1/knowledge/sources/{sourceId}/download';
   'API-PERMISSION-DETACH': 'POST /v1/knowledge/sources/{sourceId}/permissions/detach';
   'API-PERMISSION-DISABLE': 'POST /v1/knowledge/sources/{sourceId}/permissions/disable';
   'API-PERMISSION-ENABLE': 'POST /v1/knowledge/sources/{sourceId}/permissions/enable';
   'API-PERMISSION-RESUME': 'POST /v1/knowledge/sources/{sourceId}/permissions/resume-inherit';
+  'API-SOURCE-PREVIEW': 'GET /v1/knowledge/sources/{sourceId}/preview';
   'API-SEGMENT-LIST': 'GET /v1/knowledge/sources/{sourceId}/segments';
   'API-SEGMENT-CREATE': 'POST /v1/knowledge/sources/{sourceId}/segments';
   'API-TAG-APPLY': 'POST /v1/knowledge/sources/tag-assignments';
@@ -425,6 +430,7 @@ export interface RuntimeRouteMethodPathMap {
   'API-DIRECTORY-LIST': 'GET /v1/knowledge/spaces/{spaceId}/directories';
   'API-DIRECTORY-CREATE': 'POST /v1/knowledge/spaces/{spaceId}/directories';
   'API-OWNERSHIP-TRANSFER': 'POST /v1/knowledge/spaces/{spaceId}/ownership-transfer';
+  'API-SOURCE-ARCHIVE': 'POST /v1/knowledge/spaces/{spaceId}/source-archives';
   'API-SOURCE-LIST': 'GET /v1/knowledge/spaces/{spaceId}/sources';
   'API-SOURCE-CREATE': 'POST /v1/knowledge/spaces/{spaceId}/sources';
   'API-TAG-LIST': 'GET /v1/knowledge/spaces/{spaceId}/tags';
@@ -433,6 +439,12 @@ export interface RuntimeRouteMethodPathMap {
   'API-TAG-GET': 'GET /v1/knowledge/tags/{tagId}';
   'API-TAG-UPDATE': 'PATCH /v1/knowledge/tags/{tagId}';
   'API-TAG-VALUES': 'PUT /v1/knowledge/tags/{tagId}/options';
+  'API-UPLOAD-INIT': 'POST /v1/knowledge/uploads';
+  'API-UPLOAD-GET': 'GET /v1/knowledge/uploads/{uploadId}';
+  'API-UPLOAD-ABORT': 'POST /v1/knowledge/uploads/{uploadId}/abort';
+  'API-UPLOAD-COMPLETE': 'POST /v1/knowledge/uploads/{uploadId}/complete';
+  'API-UPLOAD-PART': 'PUT /v1/knowledge/uploads/{uploadId}/parts/{partNumber}';
+  'API-UPLOAD-PRESIGN': 'POST /v1/knowledge/uploads/{uploadId}/presign';
 }
 
 export interface DeferredRouteMethodPathMap {
@@ -448,9 +460,6 @@ export interface DeferredRouteMethodPathMap {
   'API-CONNECTOR-UPDATE': 'PATCH /v1/knowledge/connectors/{connectorId}';
   'API-CONNECTOR-SYNC': 'POST /v1/knowledge/connectors/{connectorId}/sync';
   'API-DIRECTORY-MOVE': 'POST /v1/knowledge/directories/{directoryId}/move';
-  'API-FILE-CONTENT': 'GET /v1/knowledge/files/{blobId}/content';
-  'API-FILE-DOWNLOAD': 'POST /v1/knowledge/files/{blobId}/download';
-  'API-FILE-PREVIEW': 'POST /v1/knowledge/files/{blobId}/preview';
   'API-JOB-CREATE': 'POST /v1/knowledge/jobs';
   'API-JOB-CANCEL': 'POST /v1/knowledge/jobs/{jobId}/cancel';
   'API-JOB-PAUSE': 'POST /v1/knowledge/jobs/{jobId}/pause';
@@ -474,9 +483,7 @@ export interface DeferredRouteMethodPathMap {
   'API-SEGMENT-INDEX-UPDATE': 'PATCH /v1/knowledge/segments/{segmentId}/indexes/{indexId}';
   'API-SEGMENT-REINDEX': 'POST /v1/knowledge/segments/{segmentId}/reindex';
   'API-SEGMENT-BATCH': 'POST /v1/knowledge/segments/batch-actions';
-  'API-SOURCE-DOWNLOAD': 'POST /v1/knowledge/sources/{sourceId}/download';
   'API-SOURCE-MOVE': 'POST /v1/knowledge/sources/{sourceId}/move';
-  'API-SOURCE-PREVIEW': 'GET /v1/knowledge/sources/{sourceId}/preview';
   'API-SOURCE-BATCH': 'POST /v1/knowledge/sources/batch-actions';
   'API-CONNECTOR-CATALOG': 'POST /v1/knowledge/spaces/{spaceId}/connectors/{provider}/catalog';
   'API-CONNECTOR-CONNECT': 'POST /v1/knowledge/spaces/{spaceId}/connectors/{provider}/connect';
@@ -493,7 +500,6 @@ export interface DeferredRouteMethodPathMap {
   'API-MODEL-BINDING-UPDATE': 'PUT /v1/knowledge/spaces/{spaceId}/model-bindings';
   'API-SPACE-MOVE': 'POST /v1/knowledge/spaces/{spaceId}/move';
   'API-SPACE-REFERENCES': 'GET /v1/knowledge/spaces/{spaceId}/references';
-  'API-SOURCE-ARCHIVE': 'POST /v1/knowledge/spaces/{spaceId}/source-archives';
   'API-SYNONYM-DELETE': 'DELETE /v1/knowledge/spaces/{spaceId}/synonyms';
   'API-SYNONYM-GET': 'GET /v1/knowledge/spaces/{spaceId}/synonyms';
   'API-SYNONYM-ENABLE': 'PATCH /v1/knowledge/spaces/{spaceId}/synonyms';
@@ -503,11 +509,5 @@ export interface DeferredRouteMethodPathMap {
   'API-SYNONYM-MAPPINGS': 'GET /v1/knowledge/spaces/{spaceId}/synonyms/mappings';
   'API-SYNONYM-REBUILD': 'POST /v1/knowledge/spaces/{spaceId}/synonyms/rebuild';
   'API-SPACE-BATCH': 'POST /v1/knowledge/spaces/batch-actions';
-  'API-UPLOAD-INIT': 'POST /v1/knowledge/uploads';
-  'API-UPLOAD-GET': 'GET /v1/knowledge/uploads/{uploadId}';
-  'API-UPLOAD-ABORT': 'POST /v1/knowledge/uploads/{uploadId}/abort';
-  'API-UPLOAD-COMPLETE': 'POST /v1/knowledge/uploads/{uploadId}/complete';
-  'API-UPLOAD-PART': 'PUT /v1/knowledge/uploads/{uploadId}/parts/{partNumber}';
-  'API-UPLOAD-PRESIGN': 'POST /v1/knowledge/uploads/{uploadId}/presign';
   'API-USAGE-GET': 'GET /v1/knowledge/usage';
 }

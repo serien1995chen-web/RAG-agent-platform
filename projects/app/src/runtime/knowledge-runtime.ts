@@ -14,10 +14,13 @@ import {
 import {
   KnowledgeAccessRepository,
   KnowledgeApplication,
+  KnowledgeArchiveRepository,
   KnowledgeCatalogRepository,
-  KnowledgeJobRepository,
+  FileApplication,
+  KnowledgeObjectRefRepository,
   KnowledgeMockAuthProvider,
   KnowledgeTagRepository,
+  SourceFileApplication,
   RedisKnowledgeRateLimiter,
   createKnowledgeConnections,
   ensureKnowledgeCollections,
@@ -27,7 +30,7 @@ import {
   tenantContextOf,
   type KnowledgeRuntimeConfig,
 } from '@kb/service';
-import { MinioKnowledgeObjectStore } from '@kb/storage';
+import { FileTicketService, MinioKnowledgeObjectStore } from '@kb/storage';
 import { Queue } from 'bullmq';
 import type {
   KnowledgeApiRuntime,
@@ -181,11 +184,30 @@ async function bootstrapRuntime(): Promise<TelemetryKnowledgeApiRuntime> {
     traceId: 'bootstrap',
   });
 
+  const catalog = new KnowledgeCatalogRepository(mongo);
+  const access = new KnowledgeAccessRepository(mongo);
+  const objectRefs = new KnowledgeObjectRefRepository(mongo);
+  const fileTickets = new FileTicketService(
+    resolveSecretRef(config.fileTicketSecretRef),
+    config.filePublicBaseUrl,
+  );
+  const files = new FileApplication(objectRefs, objectStore, catalog, access, fileTickets);
+  const jobs = new KnowledgeArchiveRepository(mongo);
+  const sourceFiles = new SourceFileApplication(
+    catalog,
+    jobs,
+    access,
+    objectRefs,
+    objectStore,
+    fileTickets,
+  );
   const application = new KnowledgeApplication(
-    new KnowledgeCatalogRepository(mongo),
+    catalog,
     new KnowledgeTagRepository(mongo),
-    new KnowledgeAccessRepository(mongo),
-    new KnowledgeJobRepository(mongo),
+    access,
+    jobs,
+    files,
+    sourceFiles,
   );
   const queueAdapter = new BullMqQueueAdapter({ connection: redis });
   const queues = new Map(
@@ -377,6 +399,7 @@ async function bootstrapRuntime(): Promise<TelemetryKnowledgeApiRuntime> {
         operationId: input.route.operationId,
         params: input.params,
         query: input.query,
+        headers: input.headers,
         body: input.body,
         context: tenant,
       });

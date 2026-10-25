@@ -1,12 +1,15 @@
 import { createKnowledgeError } from '@kb/contracts';
 import type { TenantContext } from '../../../shared/persistence/knowledge/tenant';
 import type { AclResourceType } from '../domain';
-import type { AccessPort, CatalogPort, JobPort, TagPort } from './ports';
+import type { AccessPort, CatalogPort, FileBinaryResult, JobPort, TagPort } from './ports';
+import type { FileApplication } from './file.application';
+import type { SourceFileApplication } from './source-preview';
 
 export interface KnowledgeOperationInput {
   operationId: string;
   params: Readonly<Record<string, string>>;
   query: Readonly<Record<string, string | string[] | undefined>>;
+  headers?: Readonly<Record<string, string | string[] | undefined>>;
   body: unknown;
   context: TenantContext;
 }
@@ -15,6 +18,7 @@ export interface KnowledgeOperationResult {
   status: number;
   data: unknown;
   headers?: Readonly<Record<string, string>>;
+  binary?: FileBinaryResult;
 }
 
 function objectBody(value: unknown, context: TenantContext): Record<string, unknown> {
@@ -62,11 +66,13 @@ export class KnowledgeApplication {
     private readonly tags: TagPort,
     private readonly access: AccessPort,
     private readonly jobs: JobPort,
+    private readonly files?: FileApplication,
+    private readonly sources?: SourceFileApplication,
   ) {}
 
   async dispatch(input: KnowledgeOperationInput): Promise<KnowledgeOperationResult> {
     const { context, params } = input;
-    const body = objectBody(input.body, context);
+    const body = input.operationId === 'API-UPLOAD-PART' ? {} : objectBody(input.body, context);
     switch (input.operationId) {
       case 'API-SPACE-LIST': {
         const page = await this.catalog.listSpaces(pageQuery(input.query), context);
@@ -461,6 +467,168 @@ export class KnowledgeApplication {
         return {
           status: 200,
           data: await this.jobs.get(params.jobId ?? '', context),
+        };
+      case 'API-UPLOAD-INIT':
+        return {
+          status: 201,
+          data: await this.files!.init(
+            {
+              knowledgeSpaceId: String(body.knowledgeSpaceId ?? ''),
+              name: String(body.name ?? ''),
+              mimeType: String(body.mimeType ?? ''),
+              sizeBytes: Number(body.sizeBytes),
+            },
+            context,
+          ),
+        };
+      case 'API-UPLOAD-PRESIGN':
+        return {
+          status: 200,
+          data: await this.files!.presign(
+            params.uploadId ?? '',
+            {
+              partNumbers: Array.isArray(body.partNumbers)
+                ? body.partNumbers.map((value) => Number(value))
+                : [],
+            },
+            context,
+          ),
+        };
+      case 'API-UPLOAD-PART': {
+        if (!(input.body instanceof Uint8Array)) {
+          throw createKnowledgeError({
+            code: 'KNOWLEDGE_VALIDATION_FAILED',
+            requestId: context.requestId,
+            traceId: context.traceId,
+            details: { field: 'body', reason: 'binary_required' },
+          });
+        }
+        return {
+          status: 200,
+          data: await this.files!.uploadPart(
+            params.uploadId ?? '',
+            Number(params.partNumber),
+            input.body,
+            context,
+          ),
+        };
+      }
+      case 'API-UPLOAD-COMPLETE': {
+        const completed = await this.files!.complete(
+          {
+            uploadId: params.uploadId ?? '',
+            parts: Array.isArray(body.parts)
+              ? body.parts.map((raw) => {
+                  const part = raw as Record<string, unknown>;
+                  return {
+                    partNumber: Number(part.partNumber),
+                    etag: String(part.etag ?? ''),
+                  };
+                })
+              : [],
+          },
+          context,
+        );
+        return {
+          status: 200,
+          data: {
+            blobId: completed.blobId,
+            workspaceId: completed.workspaceId,
+            bucket: completed.bucket,
+            objectKey: completed.objectKey,
+            state: completed.state,
+            sizeBytes: completed.sizeBytes,
+            etag: completed.etag,
+          },
+        };
+      }
+      case 'API-UPLOAD-ABORT':
+        return {
+          status: 200,
+          data: await this.files!.abort(params.uploadId ?? '', Number(body.version), context),
+        };
+      case 'API-UPLOAD-GET':
+        return {
+          status: 200,
+          data: await this.files!.get(params.uploadId ?? '', context),
+        };
+      case 'API-FILE-PREVIEW':
+        return {
+          status: 200,
+          data: await this.files!.preview(
+            params.blobId ?? '',
+            {
+              ttlSeconds:
+                typeof body.ttlSeconds === 'number'
+                  ? body.ttlSeconds
+                  : typeof body.expiresInSeconds === 'number'
+                    ? body.expiresInSeconds
+                    : undefined,
+            },
+            context,
+          ),
+        };
+      case 'API-FILE-DOWNLOAD':
+        return {
+          status: 200,
+          data: await this.files!.download(
+            params.blobId ?? '',
+            {
+              ttlSeconds:
+                typeof body.ttlSeconds === 'number'
+                  ? body.ttlSeconds
+                  : typeof body.expiresInSeconds === 'number'
+                    ? body.expiresInSeconds
+                    : undefined,
+            },
+            context,
+          ),
+        };
+      case 'API-FILE-CONTENT': {
+        const ticket = firstQuery(input.query, 'ticket') ?? null;
+        const rangeValue = input.headers?.range ?? input.headers?.Range;
+        const range = Array.isArray(rangeValue) ? rangeValue[0] : rangeValue;
+        const binary = await this.files!.content(
+          params.blobId ?? '',
+          range ?? null,
+          ticket,
+          context,
+        );
+        return {
+          status: binary.contentRange ? 206 : 200,
+          data: null,
+          binary,
+          headers: {
+            'Content-Type': binary.contentType ?? 'application/octet-stream',
+            'Content-Length': String(binary.size),
+            'Accept-Ranges': 'bytes',
+            ETag: `"${binary.etag}"`,
+            'Content-Disposition': `${binary.disposition}; filename="${binary.filename.replaceAll(
+              '"',
+              '',
+            )}"`,
+            ...(binary.contentRange ? { 'Content-Range': binary.contentRange } : {}),
+          },
+        };
+      }
+      case 'API-SOURCE-PREVIEW':
+        return {
+          status: 200,
+          data: await this.sources!.preview(params.sourceId ?? '', context),
+        };
+      case 'API-SOURCE-DOWNLOAD':
+        return {
+          status: 200,
+          data: await this.sources!.download(params.sourceId ?? '', context),
+        };
+      case 'API-SOURCE-ARCHIVE':
+        return {
+          status: 202,
+          data: await this.sources!.archive(
+            params.spaceId ?? '',
+            Array.isArray(body.sourceIds) ? body.sourceIds.map((sourceId) => String(sourceId)) : [],
+            context,
+          ),
         };
       default:
         throw createKnowledgeError({

@@ -1,5 +1,6 @@
 import type { HealthResponse, RouteEntry } from '@kb/contracts';
 import type { IdempotencyStore } from '@kb/dal';
+import type { FileBinaryResult } from '@kb/service';
 import type { NextApiRequest } from 'next';
 
 export interface KnowledgeAuthSubject {
@@ -23,6 +24,7 @@ export interface KnowledgeDispatchInput {
   route: RouteEntry;
   params: Readonly<Record<string, string>>;
   query: Readonly<Record<string, string | string[] | undefined>>;
+  headers: Readonly<Record<string, string | string[] | undefined>>;
   body: unknown;
   context: KnowledgeRequestContext;
 }
@@ -31,6 +33,7 @@ export interface KnowledgeDispatchResult {
   status: number;
   data: unknown;
   headers?: Readonly<Record<string, string>>;
+  binary?: FileBinaryResult;
 }
 
 export interface RateLimitDecision {
