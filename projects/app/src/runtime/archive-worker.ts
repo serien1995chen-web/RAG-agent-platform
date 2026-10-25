@@ -7,15 +7,25 @@ import {
   KnowledgeArchiveRepository,
   KnowledgeObjectRefRepository,
   resolveSecretRef,
+  type ArchiveSafetyPort,
+  type ArchiveSafetyResult,
   type KnowledgeRuntimeConfig,
   type TenantContext,
 } from '@kb/service';
 import { knowledgeObjectKey, type KnowledgeObjectContext } from '@kb/storage/object-store-contract';
 import { MinioKnowledgeObjectStore } from '@kb/storage/providers/minio';
+import { ObjectStoreArchiveSafetyAdapter } from './archive-safety.adapter';
 
 const EXPORT_TTL_MS = 3 * 60 * 60 * 1000;
 const MAX_SOURCES = 2000;
 const MAX_SOURCE_BYTES = 2048 * 1024 * 1024;
+
+class ArchiveSafetyJobError extends Error {
+  constructor(readonly inspection: ArchiveSafetyResult) {
+    super(inspection.reason ?? inspection.status);
+    this.name = 'ArchiveSafetyJobError';
+  }
+}
 
 async function buildZip(
   entries: Array<{ path: string; bytes: Buffer }>,
@@ -49,9 +59,15 @@ export class KnowledgeArchiveWorker {
   private readonly archive: KnowledgeArchiveRepository;
   private readonly objectRefs: KnowledgeObjectRefRepository;
   private readonly objectStore: MinioKnowledgeObjectStore;
+  private readonly archiveSafety: ArchiveSafetyPort;
   private readonly workerId: string;
 
-  constructor(connection: Connection, config: KnowledgeRuntimeConfig, workerId: string) {
+  constructor(
+    connection: Connection,
+    config: KnowledgeRuntimeConfig,
+    workerId: string,
+    archiveSafety?: ArchiveSafetyPort,
+  ) {
     const endpoint = new URL(config.s3.endpoint);
     this.archive = new KnowledgeArchiveRepository(connection);
     this.objectRefs = new KnowledgeObjectRefRepository(connection);
@@ -66,6 +82,7 @@ export class KnowledgeArchiveWorker {
       bucket: config.s3.bucket,
       credentialRefs: config.s3.credentialRefs,
     });
+    this.archiveSafety = archiveSafety ?? new ObjectStoreArchiveSafetyAdapter(this.objectStore);
     this.workerId = workerId;
   }
 
@@ -96,7 +113,12 @@ export class KnowledgeArchiveWorker {
         try {
           await this.processJob(started, context);
           processed += 1;
-        } catch {
+        } catch (error) {
+          const safetyError = error instanceof ArchiveSafetyJobError ? error.inspection : null;
+          const retryable =
+            safetyError?.status === 'dependency_unavailable' ||
+            safetyError?.status === 'dependency_timeout' ||
+            safetyError === null;
           await this.archive.fail(
             {
               jobId,
@@ -104,10 +126,19 @@ export class KnowledgeArchiveWorker {
               attemptEpoch: Number(started.attemptEpoch),
               fencingToken: String(started.fencingToken),
               expectedVersion: Number(started.version),
-              retryable: true,
+              retryable,
             },
             context,
           );
+          if (safetyError && !retryable) {
+            await this.archive.markFailureCode(
+              jobId,
+              safetyError.status === 'too_large'
+                ? 'KNOWLEDGE_PAYLOAD_TOO_LARGE'
+                : 'KNOWLEDGE_UNSUPPORTED_CONTENT',
+              context,
+            );
+          }
         }
       }
     }
@@ -221,6 +252,28 @@ export class KnowledgeArchiveWorker {
       },
       storage,
     );
+    const inspected = await this.archiveSafety.inspect({
+      kind: 'archive',
+      bucket: stored.bucket,
+      objectKey: stored.key,
+      sizeBytes: stored.size,
+      mimeType: 'application/zip',
+      originalName: 'sources.zip',
+      storage,
+    });
+    if (!inspected.archive || !inspected.safe) {
+      await this.objectStore.deleteObject(stored.key, storage).catch(() => undefined);
+      throw new ArchiveSafetyJobError(
+        inspected.archive
+          ? inspected
+          : {
+              archive: true,
+              safe: false,
+              status: 'unsupported',
+              reason: 'archive_not_recognized',
+            },
+      );
+    }
     const artifact = await this.objectRefs.createArchiveArtifact(
       {
         blobId,

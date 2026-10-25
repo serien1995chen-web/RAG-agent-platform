@@ -3,6 +3,8 @@ import { KnowledgeApiError, createKnowledgeError } from '@kb/contracts';
 import type { TenantContext } from '../../../shared/persistence/knowledge/tenant';
 import type {
   AccessPort,
+  ArchiveSafetyPort,
+  ArchiveSafetyResult,
   CatalogPort,
   FileBinaryResult,
   FileTicketDisposition,
@@ -40,6 +42,7 @@ const MIME_BY_EXTENSION: Record<string, readonly string[]> = {
   xlsx: ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'],
   csv: ['text/csv', 'application/csv'],
   epub: ['application/epub+zip'],
+  zip: ['application/zip'],
   png: ['image/png'],
   jpg: ['image/jpeg'],
   jpeg: ['image/jpeg'],
@@ -165,6 +168,10 @@ function validateNameAndMime(name: string, mimeType: string, context: TenantCont
 
 function magicMatches(mimeType: string, bytes: Uint8Array): boolean {
   const buffer = Buffer.from(bytes);
+  const zipMagic =
+    buffer.subarray(0, 4).equals(Buffer.from([0x50, 0x4b, 0x03, 0x04])) ||
+    buffer.subarray(0, 4).equals(Buffer.from([0x50, 0x4b, 0x05, 0x06])) ||
+    buffer.subarray(0, 4).equals(Buffer.from([0x50, 0x4b, 0x07, 0x08]));
   switch (mimeType) {
     case 'application/pdf':
       return buffer.subarray(0, 5).toString('ascii') === '%PDF-';
@@ -183,25 +190,50 @@ function magicMatches(mimeType: string, bytes: Uint8Array): boolean {
         buffer.subarray(8, 12).toString('ascii') === 'WEBP'
       );
     case 'application/vnd.openxmlformats-officedocument.wordprocessingml.document':
-      return (
-        buffer.subarray(0, 4).equals(Buffer.from([0x50, 0x4b, 0x03, 0x04])) &&
-        buffer.includes(Buffer.from('word/'))
-      );
+      return zipMagic;
     case 'application/vnd.openxmlformats-officedocument.presentationml.presentation':
-      return (
-        buffer.subarray(0, 4).equals(Buffer.from([0x50, 0x4b, 0x03, 0x04])) &&
-        buffer.includes(Buffer.from('ppt/'))
-      );
+      return zipMagic;
     case 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet':
-      return (
-        buffer.subarray(0, 4).equals(Buffer.from([0x50, 0x4b, 0x03, 0x04])) &&
-        buffer.includes(Buffer.from('xl/'))
-      );
+      return zipMagic;
     case 'application/epub+zip':
-      return buffer.subarray(0, 4).equals(Buffer.from([0x50, 0x4b, 0x03, 0x04]));
+    case 'application/zip':
+      return zipMagic;
     default:
       return true;
   }
+}
+
+function isZipContainer(mimeType: string): boolean {
+  return (
+    mimeType === 'application/zip' ||
+    mimeType === 'application/epub+zip' ||
+    mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
+    mimeType === 'application/vnd.openxmlformats-officedocument.presentationml.presentation' ||
+    mimeType === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+  );
+}
+
+function archiveSafetyProblem(result: ArchiveSafetyResult, context: TenantContext) {
+  if (result.status === 'too_large') {
+    return payloadError(context, result.reason ?? 'archive limits exceeded');
+  }
+  if (result.status === 'dependency_timeout') {
+    return createKnowledgeError({
+      code: 'KNOWLEDGE_DEPENDENCY_TIMEOUT',
+      requestId: context.requestId,
+      traceId: context.traceId,
+      details: { operation: 'archiveSafety' },
+    });
+  }
+  if (result.status === 'dependency_unavailable') {
+    return createKnowledgeError({
+      code: 'KNOWLEDGE_DEPENDENCY_UNAVAILABLE',
+      requestId: context.requestId,
+      traceId: context.traceId,
+      details: { operation: 'archiveSafety' },
+    });
+  }
+  return unsupported(context, { reason: result.reason ?? 'archive_safety_rejected' });
 }
 
 async function hashObject(
@@ -229,6 +261,7 @@ export class FileApplication {
     private readonly catalog: CatalogPort,
     private readonly access: AccessPort,
     private readonly tickets?: FileTicketPort,
+    private readonly archiveSafety?: ArchiveSafetyPort,
   ) {}
 
   private async session(uploadId: string, context: TenantContext): Promise<UploadSessionView> {
@@ -519,6 +552,36 @@ export class FileApplication {
       if (!magicMatches(ref.mimeType, hashed.prefix)) {
         await this.objectStore.deleteObject(ref.objectKey, storage);
         throw unsupported(context, { reason: 'magic_mime_mismatch' });
+      }
+      if (isZipContainer(ref.mimeType)) {
+        if (!this.archiveSafety) {
+          await this.objectStore.deleteObject(ref.objectKey, storage).catch(() => undefined);
+          await this.objectRefs
+            .markUploadAborted(input.uploadId, session.version, context)
+            .catch(() => undefined);
+          throw createKnowledgeError({
+            code: 'KNOWLEDGE_DEPENDENCY_UNAVAILABLE',
+            requestId: context.requestId,
+            traceId: context.traceId,
+            details: { reason: 'archive_safety_missing' },
+          });
+        }
+        const inspected = await this.archiveSafety.inspect({
+          kind: 'upload',
+          bucket: this.objectStore.bucket,
+          objectKey: ref.objectKey,
+          sizeBytes: head.size,
+          mimeType: ref.mimeType,
+          originalName: ref.originalName,
+          storage,
+        });
+        if (!inspected.archive || !inspected.safe) {
+          await this.objectStore.deleteObject(ref.objectKey, storage).catch(() => undefined);
+          await this.objectRefs
+            .markUploadAborted(input.uploadId, session.version, context)
+            .catch(() => undefined);
+          throw archiveSafetyProblem(inspected, context);
+        }
       }
       return await this.objectRefs.completeUpload(
         {

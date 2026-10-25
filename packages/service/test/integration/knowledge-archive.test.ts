@@ -1,10 +1,14 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import mongoose from 'mongoose';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { FileTicketService, MinioKnowledgeObjectStore } from '../../../../sdk/storage/src/index';
 import { KnowledgeArchiveWorker } from '../../../../projects/app/src/runtime/archive-worker';
 import { FileApplication } from '../../src/modules/knowledge/application/file.application';
-import type { AccessPort, CatalogPort } from '../../src/modules/knowledge/application/ports';
+import type {
+  AccessPort,
+  ArchiveSafetyPort,
+  CatalogPort,
+} from '../../src/modules/knowledge/application/ports';
 import { KnowledgeArchiveRepository } from '../../src/modules/knowledge/repository/archive.repository';
 import { KnowledgeObjectRefRepository } from '../../src/modules/knowledge/repository/object-ref.repository';
 import {
@@ -13,6 +17,7 @@ import {
 } from '../../src/shared/persistence/schemas/knowledge-index';
 import type { TenantContext } from '../../src/shared/persistence/knowledge/tenant';
 import type { KnowledgeRuntimeConfig } from '../../src/shared/config/knowledge-runtime-config';
+import { knowledgeObjectKey } from '../../../../sdk/storage/src/object-store-contract';
 
 const suffix = randomUUID().replaceAll('-', '').slice(0, 12);
 const workspaceId = `ws_archive_${suffix}`;
@@ -165,5 +170,75 @@ describe('TEST-FILE-004-BLOCK source archive worker', () => {
     expect(zip.subarray(0, 2).toString('ascii')).toBe('PK');
     expect(zip.byteLength).toBeGreaterThan(body.byteLength);
     await objectStore.deleteObject(artifact.objectKey, { ...context, knowledgeSpaceId });
+  });
+
+  it('TEST-FILE-004-A16 rejects unsafe archive output before active ObjectRef creation', async () => {
+    const job = await jobs.createExportJob(
+      {
+        spaceId: knowledgeSpaceId,
+        sourceIds: [sourceId],
+        idempotencyKey: `archive-unsafe-${suffix}`,
+      },
+      context,
+    );
+    const config = {
+      s3: {
+        endpoint: process.env.KB_TEST_S3_ENDPOINT ?? 'http://127.0.0.1:9000',
+        bucket: objectStore.bucket,
+        region: process.env.KB_TEST_S3_REGION ?? 'us-east-1',
+        accessKeyRef: 'env:KB_TEST_S3_ACCESS_KEY',
+        secretKeyRef: 'env:KB_TEST_S3_SECRET_KEY',
+        credentialRefs: ['env:KB_TEST_S3_ACCESS_KEY', 'env:KB_TEST_S3_SECRET_KEY'],
+      },
+    } as unknown as KnowledgeRuntimeConfig;
+    const unsafeInspector: ArchiveSafetyPort = {
+      validateEntryPath() {
+        return { safe: true };
+      },
+      async inspect() {
+        return {
+          archive: true,
+          safe: false,
+          status: 'unsupported',
+          reason: 'zip_slip',
+        };
+      },
+    };
+    const worker = new KnowledgeArchiveWorker(
+      connection,
+      config,
+      `archive-unsafe-worker-${suffix}`,
+      unsafeInspector,
+    );
+    await worker.runOnce();
+
+    const failed = await jobs.get(String(job.jobId), context);
+    expect(failed.status).toBe('failed');
+    expect(failed.result).toBeNull();
+    expect((failed.error as { code?: string }).code).toBe('KNOWLEDGE_UNSUPPORTED_CONTENT');
+
+    const blobId = createHash('sha1')
+      .update(`archive:${String(job.jobId)}`)
+      .digest('hex')
+      .slice(0, 24);
+    const key = knowledgeObjectKey({
+      workspaceId: context.workspaceId,
+      knowledgeSpaceId,
+      sourceId: 'unbound',
+      purpose: 'export',
+      blobId,
+      safeName: 'sources.zip',
+    });
+    const pendingObject = await objectStore
+      .headObject(objectStore.bucket, key, {
+        workspaceId: context.workspaceId,
+        knowledgeSpaceId,
+        requestId: context.requestId,
+        traceId: context.traceId,
+      })
+      .catch((error: unknown) => error);
+    expect(
+      (pendingObject as { problem?: { error?: { code?: string } } }).problem?.error?.code,
+    ).toBe('KNOWLEDGE_NOT_FOUND');
   });
 });

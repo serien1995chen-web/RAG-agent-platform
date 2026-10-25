@@ -32,6 +32,7 @@ import {
 } from '@kb/service';
 import { FileTicketService, MinioKnowledgeObjectStore } from '@kb/storage';
 import { Queue } from 'bullmq';
+import { ObjectStoreArchiveSafetyAdapter } from './archive-safety.adapter';
 import type {
   KnowledgeApiRuntime,
   KnowledgeAuthSubject,
@@ -191,7 +192,15 @@ async function bootstrapRuntime(): Promise<TelemetryKnowledgeApiRuntime> {
     resolveSecretRef(config.fileTicketSecretRef),
     config.filePublicBaseUrl,
   );
-  const files = new FileApplication(objectRefs, objectStore, catalog, access, fileTickets);
+  const archiveSafety = new ObjectStoreArchiveSafetyAdapter(objectStore);
+  const files = new FileApplication(
+    objectRefs,
+    objectStore,
+    catalog,
+    access,
+    fileTickets,
+    archiveSafety,
+  );
   const jobs = new KnowledgeArchiveRepository(mongo);
   const sourceFiles = new SourceFileApplication(
     catalog,
@@ -200,6 +209,7 @@ async function bootstrapRuntime(): Promise<TelemetryKnowledgeApiRuntime> {
     objectRefs,
     objectStore,
     fileTickets,
+    archiveSafety,
   );
   const application = new KnowledgeApplication(
     catalog,

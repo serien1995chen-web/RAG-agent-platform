@@ -1,8 +1,10 @@
 import { randomUUID } from 'node:crypto';
+import { deflateRawSync, crc32 } from 'node:zlib';
 import mongoose from 'mongoose';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { KnowledgeApiError } from '@kb/contracts';
 import { FileTicketService, MinioKnowledgeObjectStore } from '../../../../sdk/storage/src/index';
+import { ObjectStoreArchiveSafetyAdapter } from '../../../../projects/app/src/runtime/archive-safety.adapter';
 import { FileApplication } from '../../src/modules/knowledge/application/file.application';
 import { SourceFileApplication } from '../../src/modules/knowledge/application/source-preview';
 import {
@@ -34,6 +36,55 @@ let objectStore: MinioKnowledgeObjectStore;
 let repository: KnowledgeObjectRefRepository;
 let files: FileApplication;
 let fileTickets: FileTicketService;
+
+interface TestZipEntry {
+  name: string;
+  data: Buffer;
+}
+
+function buildZip(entries: TestZipEntry[]): Buffer {
+  const localParts: Buffer[] = [];
+  const centralParts: Buffer[] = [];
+  let offset = 0;
+  for (const entry of entries) {
+    const nameBytes = Buffer.from(entry.name, 'utf8');
+    const compressed = deflateRawSync(entry.data);
+    const checksum = crc32(entry.data);
+    const localHeader = Buffer.alloc(30);
+    localHeader.writeUInt32LE(0x04034b50, 0);
+    localHeader.writeUInt16LE(20, 4);
+    localHeader.writeUInt16LE(0x0800, 6);
+    localHeader.writeUInt16LE(8, 8);
+    localHeader.writeUInt32LE(checksum, 14);
+    localHeader.writeUInt32LE(compressed.length, 18);
+    localHeader.writeUInt32LE(entry.data.length, 22);
+    localHeader.writeUInt16LE(nameBytes.length, 26);
+    localParts.push(localHeader, nameBytes, compressed);
+
+    const centralHeader = Buffer.alloc(46);
+    centralHeader.writeUInt32LE(0x02014b50, 0);
+    centralHeader.writeUInt16LE(20, 4);
+    centralHeader.writeUInt16LE(20, 6);
+    centralHeader.writeUInt16LE(0x0800, 8);
+    centralHeader.writeUInt16LE(8, 10);
+    centralHeader.writeUInt32LE(checksum, 16);
+    centralHeader.writeUInt32LE(compressed.length, 20);
+    centralHeader.writeUInt32LE(entry.data.length, 24);
+    centralHeader.writeUInt16LE(nameBytes.length, 28);
+    centralHeader.writeUInt32LE(offset, 42);
+    centralParts.push(centralHeader, nameBytes);
+    offset += localHeader.length + nameBytes.length + compressed.length;
+  }
+  const local = Buffer.concat(localParts);
+  const central = Buffer.concat(centralParts);
+  const end = Buffer.alloc(22);
+  end.writeUInt32LE(0x06054b50, 0);
+  end.writeUInt16LE(entries.length, 8);
+  end.writeUInt16LE(entries.length, 10);
+  end.writeUInt32LE(central.length, 12);
+  end.writeUInt32LE(local.length, 16);
+  return Buffer.concat([local, central, end]);
+}
 
 const catalog = {
   async getSpace(id: string) {
@@ -108,7 +159,14 @@ beforeAll(async () => {
     'integration-file-ticket-secret-at-least-32-bytes',
     'http://127.0.0.1:3010',
   );
-  files = new FileApplication(repository, objectStore, catalog, access, fileTickets);
+  files = new FileApplication(
+    repository,
+    objectStore,
+    catalog,
+    access,
+    fileTickets,
+    new ObjectStoreArchiveSafetyAdapter(objectStore),
+  );
 }, 60_000);
 
 afterAll(async () => {
@@ -283,6 +341,157 @@ describe('TEST-FILE-001-BLOCK upload session', () => {
     expect(errorCode(error)).toBe('KNOWLEDGE_NOT_FOUND');
   });
 
+  it('TEST-FILE-001-U13 accepts a valid ZIP container through real MinIO inspection', async () => {
+    const body = buildZip([{ name: 'hello.txt', data: Buffer.from('hello') }]);
+    const session = await files.init(
+      {
+        knowledgeSpaceId,
+        name: 'valid.zip',
+        mimeType: 'application/zip',
+        sizeBytes: body.byteLength,
+      },
+      context,
+    );
+    const ref = await repository.findObjectRef(session.uploadId, context);
+    if (!ref) throw new Error('upload object ref missing');
+    createdObjects.add(ref.objectKey);
+    const presigned = await files.presign(session.uploadId, { partNumbers: [1] }, context);
+    const response = await fetch(presigned.uploads[0]!.url, {
+      method: 'PUT',
+      headers: presigned.uploads[0]!.headers,
+      body,
+    });
+    expect(response.status).toBe(200);
+
+    const completed = await files.complete({ uploadId: session.uploadId, parts: [] }, context);
+    expect(completed.state).toBe('active');
+    expect(completed.mimeType).toBe('application/zip');
+  });
+
+  it('TEST-FILE-001-U14 rejects a ratio bomb, deletes the object and never marks it active', async () => {
+    const body = buildZip([{ name: 'bomb.txt', data: Buffer.alloc(17 * 1024 * 1024) }]);
+    const session = await files.init(
+      {
+        knowledgeSpaceId,
+        name: 'bomb.zip',
+        mimeType: 'application/zip',
+        sizeBytes: body.byteLength,
+      },
+      context,
+    );
+    const ref = await repository.findObjectRef(session.uploadId, context);
+    if (!ref) throw new Error('upload object ref missing');
+    createdObjects.add(ref.objectKey);
+    const presigned = await files.presign(session.uploadId, { partNumbers: [1] }, context);
+    const response = await fetch(presigned.uploads[0]!.url, {
+      method: 'PUT',
+      headers: presigned.uploads[0]!.headers,
+      body,
+    });
+    expect(response.status).toBe(200);
+
+    const error = await files
+      .complete({ uploadId: session.uploadId, parts: [] }, context)
+      .catch((caught: unknown) => caught);
+    expect(errorCode(error)).toBe('KNOWLEDGE_UNSUPPORTED_CONTENT');
+
+    const after = await repository.findObjectRef(session.uploadId, context);
+    expect(after?.state).not.toBe('active');
+    expect((await files.get(session.uploadId, context)).status).toBe('aborted');
+    const headError = await objectStore
+      .headObject(objectStore.bucket, ref.objectKey, {
+        workspaceId: context.workspaceId,
+        knowledgeSpaceId,
+        requestId: context.requestId,
+        traceId: context.traceId,
+      })
+      .catch((caught: unknown) => caught);
+    expect(errorCode(headError)).toBe('KNOWLEDGE_NOT_FOUND');
+  });
+
+  it('TEST-FILE-001-U17 maps archive entry limits to 413 and cleans the upload', async () => {
+    const body = buildZip(
+      Array.from({ length: 2001 }, (_, index) => ({
+        name: `entry-${index}.txt`,
+        data: Buffer.alloc(0),
+      })),
+    );
+    const session = await files.init(
+      {
+        knowledgeSpaceId,
+        name: 'too-many-entries.zip',
+        mimeType: 'application/zip',
+        sizeBytes: body.byteLength,
+      },
+      context,
+    );
+    const ref = await repository.findObjectRef(session.uploadId, context);
+    if (!ref) throw new Error('upload object ref missing');
+    createdObjects.add(ref.objectKey);
+    const presigned = await files.presign(session.uploadId, { partNumbers: [1] }, context);
+    const response = await fetch(presigned.uploads[0]!.url, {
+      method: 'PUT',
+      headers: presigned.uploads[0]!.headers,
+      body,
+    });
+    expect(response.status).toBe(200);
+
+    const error = await files
+      .complete({ uploadId: session.uploadId, parts: [] }, context)
+      .catch((caught: unknown) => caught);
+    expect(errorCode(error)).toBe('KNOWLEDGE_PAYLOAD_TOO_LARGE');
+    expect((await files.get(session.uploadId, context)).status).toBe('aborted');
+  });
+
+  it('TEST-FILE-001-U19 fails closed when ZIP safety inspection is unavailable', async () => {
+    const body = buildZip([{ name: 'hello.txt', data: Buffer.from('hello') }]);
+    const withoutInspector = new FileApplication(
+      repository,
+      objectStore,
+      catalog,
+      access,
+      fileTickets,
+    );
+    const session = await withoutInspector.init(
+      {
+        knowledgeSpaceId,
+        name: 'missing-inspector.zip',
+        mimeType: 'application/zip',
+        sizeBytes: body.byteLength,
+      },
+      context,
+    );
+    const ref = await repository.findObjectRef(session.uploadId, context);
+    if (!ref) throw new Error('upload object ref missing');
+    createdObjects.add(ref.objectKey);
+    const presigned = await withoutInspector.presign(
+      session.uploadId,
+      { partNumbers: [1] },
+      context,
+    );
+    const response = await fetch(presigned.uploads[0]!.url, {
+      method: 'PUT',
+      headers: presigned.uploads[0]!.headers,
+      body,
+    });
+    expect(response.status).toBe(200);
+
+    const error = await withoutInspector
+      .complete({ uploadId: session.uploadId, parts: [] }, context)
+      .catch((caught: unknown) => caught);
+    expect(errorCode(error)).toBe('KNOWLEDGE_DEPENDENCY_UNAVAILABLE');
+    expect((await withoutInspector.get(session.uploadId, context)).status).toBe('aborted');
+    const headError = await objectStore
+      .headObject(objectStore.bucket, ref.objectKey, {
+        workspaceId: context.workspaceId,
+        knowledgeSpaceId,
+        requestId: context.requestId,
+        traceId: context.traceId,
+      })
+      .catch((caught: unknown) => caught);
+    expect(errorCode(headError)).toBe('KNOWLEDGE_NOT_FOUND');
+  });
+
   it('TEST-FILE-003-BLOCK issues tickets and enforces content ACL and Range', async () => {
     const body = Buffer.from('0123456789');
     const { session } = await putSingle(body.byteLength, 'access.txt', body);
@@ -350,6 +559,7 @@ describe('TEST-FILE-001-BLOCK upload session', () => {
       repository,
       objectStore,
       fileTickets,
+      new ObjectStoreArchiveSafetyAdapter(objectStore),
     );
     const sourcePreview = await sourceFiles.preview(String(source._id), context);
     expect(sourcePreview.sections[0]?.text).toBe(body.toString());
@@ -358,5 +568,24 @@ describe('TEST-FILE-001-BLOCK upload session', () => {
     const archive = await sourceFiles.archive(knowledgeSpaceId, [String(source._id)], context);
     expect(archive.kind).toBe('export');
     expect(archive.status).toBe('queued');
+
+    await connection.models.KnowledgeSource.updateOne(
+      { workspaceId: context.workspaceId, _id: source._id },
+      { $set: { name: '../escape.txt' } },
+    );
+    const jobsBefore = await connection.models.KnowledgeJob.countDocuments({
+      workspaceId: context.workspaceId,
+      kind: 'export',
+    });
+    const unsafeArchive = await sourceFiles
+      .archive(knowledgeSpaceId, [String(source._id)], context)
+      .catch((caught: unknown) => caught);
+    expect(errorCode(unsafeArchive)).toBe('KNOWLEDGE_UNSUPPORTED_CONTENT');
+    expect(
+      await connection.models.KnowledgeJob.countDocuments({
+        workspaceId: context.workspaceId,
+        kind: 'export',
+      }),
+    ).toBe(jobsBefore);
   });
 });

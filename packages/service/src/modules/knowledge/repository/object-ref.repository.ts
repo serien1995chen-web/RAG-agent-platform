@@ -307,7 +307,7 @@ export class KnowledgeObjectRefRepository implements ObjectRefRepositoryPort {
         this.tenantFilter(context, {
           _id: id,
           version: expectedVersion,
-          'upload.status': { $in: ['uploading', 'expired'] },
+          'upload.status': { $in: ['uploading', 'expired', 'completing'] },
         }),
         {
           $set: {

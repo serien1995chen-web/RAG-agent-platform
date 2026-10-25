@@ -366,6 +366,37 @@ export interface ObjectStorageContext {
   traceId: string;
 }
 
+export interface ArchiveSafetyInput {
+  kind: 'upload' | 'archive';
+  bucket: string;
+  objectKey: string;
+  sizeBytes: number;
+  mimeType: string;
+  originalName: string;
+  storage: ObjectStorageContext;
+}
+
+export interface ArchiveSafetyResult {
+  archive: boolean;
+  safe: boolean;
+  status:
+    | 'not_archive'
+    | 'safe'
+    | 'too_large'
+    | 'unsupported'
+    | 'dependency_unavailable'
+    | 'dependency_timeout';
+  reason?: string;
+  entryCount?: number;
+  actualUncompressedBytes?: number;
+  declaredUncompressedBytes?: number;
+}
+
+export interface ArchiveSafetyPort {
+  inspect(input: ArchiveSafetyInput): Promise<ArchiveSafetyResult>;
+  validateEntryPath(value: string): { safe: true } | { safe: false; reason: string };
+}
+
 export interface ObjectStoreApplicationPort {
   readonly provider: KnowledgeObjectProvider;
   readonly bucket: string;

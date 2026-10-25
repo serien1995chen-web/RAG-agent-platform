@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createKnowledgeError } from '../../packages/contracts/src';
+import {
+  ArchiveSafetyInspector,
+  ArchiveSafetySourceError,
+} from '../../packages/parse/src/archive-safety';
 import { ObjectLifecycleService } from '../../packages/service/src/modules/knowledge/application/object-lifecycle';
 import type {
   ObjectRefRepositoryPort,
@@ -60,5 +64,24 @@ describe('TEST-FILE-005-BLOCK lifecycle fault', () => {
     const result = await service.cleanup(context);
     expect(result.retryable).toBe(1);
     expect(repository.confirmDeleted).not.toHaveBeenCalled();
+  });
+});
+
+describe('TEST-FILE-004-A16 archive safety fault', () => {
+  it('fails closed for provider range failures without returning safe', async () => {
+    for (const category of ['dependency_unavailable', 'dependency_timeout'] as const) {
+      const result = await new ArchiveSafetyInspector().inspect({
+        originalName: 'archive.zip',
+        container: 'zip',
+        source: {
+          size: 1024,
+          async readRange() {
+            throw new ArchiveSafetySourceError(category);
+          },
+        },
+      });
+      expect(result.safe).toBe(false);
+      expect(result.status).toBe(category);
+    }
   });
 });

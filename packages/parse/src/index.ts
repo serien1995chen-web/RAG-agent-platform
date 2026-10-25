@@ -27,6 +27,22 @@ export type {
   ParseHandlerContext,
   objectStoreLike,
 } from './format-registry';
+export {
+  ArchiveSafetyError,
+  ArchiveSafetyInspector,
+  ArchiveSafetySourceError,
+  DEFAULT_ARCHIVE_LIMITS,
+  inspectArchiveBuffer,
+  validateArchiveEntryPath,
+} from './archive-safety';
+export type {
+  ArchiveContainer,
+  ArchiveInspectionInput,
+  ArchiveInspectionLimits,
+  ArchiveInspectionResult,
+  ArchiveRangeSource,
+  ArchiveSafetyReason,
+} from './archive-safety';
 export { ConcurrencyLimiterError, createLimiter, mapWithConcurrency } from './concurrency';
 export type { ConcurrencyLimiter, ConcurrencyLimiterOptions } from './concurrency';
 

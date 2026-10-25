@@ -41,6 +41,7 @@ export class KnowledgeArchiveRepository {
       resourceId: document.resourceId,
       inputSnapshot: document.inputSnapshot,
       result: document.result,
+      error: document.error,
       expiresAt:
         document.expiresAt instanceof Date ? document.expiresAt.toISOString() : document.expiresAt,
       version: document.version,
@@ -189,6 +190,24 @@ export class KnowledgeArchiveRepository {
 
   async fail(input: Parameters<KnowledgeJobRepository['fail']>[0], context: TenantContext) {
     return this.enrichedJob(await this.jobs.fail(input, context), context);
+  }
+
+  async markFailureCode(jobId: string, code: string, context: TenantContext) {
+    requireWorkspaceId(context);
+    await this.jobModel.updateOne(
+      {
+        _id: objectIdOf(jobId, context, 'jobId'),
+        workspaceId: context.workspaceId,
+        deletedAt: null,
+      },
+      {
+        $set: {
+          'error.code': code,
+          'error.retryable': false,
+        },
+      },
+    );
+    return this.enrichedJob(await this.jobs.get(jobId, context), context);
   }
 
   async sources(

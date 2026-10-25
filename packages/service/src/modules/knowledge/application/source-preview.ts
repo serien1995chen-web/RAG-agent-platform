@@ -3,6 +3,7 @@ import { createKnowledgeError } from '@kb/contracts';
 import type { TenantContext } from '../../../shared/persistence/knowledge/tenant';
 import type {
   AccessPort,
+  ArchiveSafetyPort,
   CatalogPort,
   FileTicketPort,
   JobPort,
@@ -61,6 +62,7 @@ export class SourceFileApplication {
     private readonly objectRefs: ObjectRefRepositoryPort,
     private readonly objectStore: ObjectStoreApplicationPort,
     private readonly tickets: FileTicketPort,
+    private readonly archiveSafety?: ArchiveSafetyPort,
   ) {}
 
   private async source(sourceId: string, context: TenantContext): Promise<SourceView> {
@@ -207,6 +209,19 @@ export class SourceFileApplication {
     let totalBytes = 0;
     for (const sourceId of normalizedIds) {
       const source = await this.source(sourceId, context);
+      if (this.archiveSafety) {
+        const validation = this.archiveSafety.validateEntryPath(
+          `sources/${sourceId}/${String(source.name ?? 'source')}`,
+        );
+        if (!validation.safe) {
+          throw createKnowledgeError({
+            code: 'KNOWLEDGE_UNSUPPORTED_CONTENT',
+            requestId: context.requestId,
+            traceId: context.traceId,
+            details: { sourceId, reason: validation.reason },
+          });
+        }
+      }
       if (source.knowledgeSpaceId !== spaceId) {
         throw createKnowledgeError({
           code: 'KNOWLEDGE_NOT_FOUND',

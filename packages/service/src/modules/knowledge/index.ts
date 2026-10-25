@@ -8,6 +8,9 @@ export type {
   KnowledgeOperationResult,
 } from './application/knowledge.application';
 export type {
+  ArchiveSafetyInput,
+  ArchiveSafetyPort,
+  ArchiveSafetyResult,
   ObjectRefRepositoryPort,
   ObjectRefView,
   ObjectStoreApplicationPort,
