@@ -30,6 +30,7 @@ import {
   useState,
   type ComponentType,
   type FormEvent,
+  type Ref,
   type ReactNode,
 } from 'react';
 import { KnowledgeRequestError } from '../client/knowledge-client';
@@ -129,53 +130,60 @@ type KnowledgeButtonProps = Omit<ButtonProps, 'colorScheme'> & {
   tone?: 'primary' | 'secondary' | 'danger';
   busy?: boolean;
   href?: string;
+  target?: string;
+  rel?: string;
 };
 
-const PolymorphicButton = ChakraButton as unknown as ComponentType<KnowledgeButtonProps>;
+const PolymorphicButton = ChakraButton as unknown as ComponentType<
+  KnowledgeButtonProps & { ref?: Ref<HTMLButtonElement> }
+>;
 
-export function Button(props: KnowledgeButtonProps) {
-  const { tone = 'secondary', busy = false, children, href, ...rest } = props;
-  const { t } = useKnowledgeI18n();
-  const toneProps =
-    tone === 'primary'
-      ? {
-          bg: 'kn.primary',
-          color: 'kn.surface',
-          borderColor: 'kn.primary',
-          _hover: { bg: 'kn.primaryHover', borderColor: 'kn.primaryHover' },
-        }
-      : tone === 'danger'
+export const Button = forwardRef<HTMLButtonElement, KnowledgeButtonProps>(
+  function Button(props, ref) {
+    const { tone = 'secondary', busy = false, children, href, ...rest } = props;
+    const { t } = useKnowledgeI18n();
+    const toneProps =
+      tone === 'primary'
         ? {
-            variant: 'outline' as const,
-            borderColor: 'kn.danger',
-            color: 'kn.danger',
-            _hover: { bg: 'color-mix(in srgb, var(--kn-danger) 8%, var(--kn-surface))' },
+            bg: 'kn.primary',
+            color: 'kn.surface',
+            borderColor: 'kn.primary',
+            _hover: { bg: 'kn.primaryHover', borderColor: 'kn.primaryHover' },
           }
-        : {
-            variant: 'outline' as const,
-            borderColor: 'kn.line',
-            color: 'kn.ink',
-            _hover: { borderColor: 'kn.primary', color: 'kn.primary' },
-          };
+        : tone === 'danger'
+          ? {
+              variant: 'outline' as const,
+              borderColor: 'kn.danger',
+              color: 'kn.danger',
+              _hover: { bg: 'color-mix(in srgb, var(--kn-danger) 8%, var(--kn-surface))' },
+            }
+          : {
+              variant: 'outline' as const,
+              borderColor: 'kn.line',
+              color: 'kn.ink',
+              _hover: { borderColor: 'kn.primary', color: 'kn.primary' },
+            };
 
-  return (
-    <PolymorphicButton
-      {...toneProps}
-      {...rest}
-      as={href ? 'a' : undefined}
-      href={href}
-      minH="36px"
-      px="13px"
-      py={2}
-      borderRadius="sm"
-      isLoading={busy}
-      loadingText={t('common.working')}
-      aria-busy={busy}
-    >
-      {children}
-    </PolymorphicButton>
-  );
-}
+    return (
+      <PolymorphicButton
+        {...toneProps}
+        {...rest}
+        ref={ref}
+        as={href ? 'a' : undefined}
+        href={href}
+        minH="36px"
+        px="13px"
+        py={2}
+        borderRadius="sm"
+        isLoading={busy}
+        loadingText={t('common.working')}
+        aria-busy={busy}
+      >
+        {children}
+      </PolymorphicButton>
+    );
+  },
+);
 
 export function Field(props: { label: string; hint?: string; children: ReactNode }) {
   return (

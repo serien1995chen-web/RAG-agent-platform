@@ -5,7 +5,9 @@
 - Branch: `feat/kb-s02-file-object`
 - Stage base commit: `52ccea4d3212cebd05b0a99c84af0301e6605aff`
 - Review-fix base commit: `37fcc06cffffa71b482a5570c6600cc506072f9e`
+- Supplemental review base commit: `fa4ea69c234dee42fccb945553b19a6fd1ba5509`
 - Plan version: `2.1.0 / S2-REV-01A…07`
+- Supplemental review: `S2-RV-08…13`
 - Plan SHA-256: `058EB67274C38EDC87758CB3D7E87A86A980123F9D4E3E45FF3EB08B7A56AD0A`
 - Design SHA-256: `8E5E7300C651C4FE0478B87FC3572ADD52F95C3E49C8F15700B45BB8C690A26D`
 - Task decomposition SHA-256: `BEC0B58D2CC5C1B3434D5B7D54E5C0BA2F9B16354F8FD773F4A8EAA226D1DBE9`
@@ -101,6 +103,12 @@ API-SOURCE-ARCHIVE
 | S2-REV-05  | All five providers enforce the dual key guard; AWS/R2 use bounded `maxSockets: 50`; COS/OSS/MinIO copy conditions and P10-P12 provider contracts pass.                                                                                                                                 |
 | S2-REV-06  | Archive generation streams Source data into the ZIP, persists a pending ObjectRef before upload, inspects before activation, and retains retryable cleanup state on failure; A13-A15 integration/fault evidence passes.                                                                |
 | S2-REV-07  | Presigned writes target `pendingKey`; complete conditionally copies to an immutable `finalKey`, rechecks size/ETag/sha256, and activates only the final key. A replayed presigned PUT changes only `pendingKey`; U13/U19 prove the active final object and ticket bytes are unchanged. |
+| S2-RV-08   | Added executable F08, A06/A07, T05/T06/T07 and individual ACC-UI-01…07 cases. The E2E suite now exercises single upload, multipart resume, preview focus return, ticketed download, archive states, localized error/retry and Import/Sources at 360/768/1200.                          |
+| S2-RV-09   | Upload recovery identity now includes `lastModified + size + first-64-KiB SHA-256`. Different same-name/same-size content starts a new session, retry reuses the current fingerprinted session, and unavailable fingerprints skip restore.                                             |
+| S2-RV-10   | Lifecycle deletion treats 404 per object key as success and continues through pendingKey/finalKey. Active pending cleanup clears temporary fields on 404; T10 covers missing pending plus existing final.                                                                              |
+| S2-RV-11   | Source and archive downloads no longer call `window.open` after async work. Ticket responses render explicit links, and upload errors expose Problem code, traceId, requestId and retry action.                                                                                        |
+| S2-RV-12   | Ticket Content rate limiting uses a hash-derived ticket scope instead of the shared `ticket` workspace bucket. Fault coverage proves separate ticket scopes retain independent quota and raw tickets are absent from the scope.                                                        |
+| S2-RV-13   | TIFF magic validation accepts only `II*\0` or `MM\0*`; disguised TIFF bytes return unsupported content, delete the object and leave no active ObjectRef.                                                                                                                               |
 
 ## Blocking Evidence
 
@@ -113,13 +121,13 @@ API-SOURCE-ARCHIVE
 - `pnpm openapi:check`: PASS
 - `pnpm knowledge:inventory`: PASS, 23 collections / 4 vector profiles / 13 queues
 - `pnpm knowledge:check-runtime`: PASS, intersection 0, old page routes 0
-- `pnpm test:unit`: PASS, 20/20 tasks; parse 18/18 and web 24/24
+- `pnpm test:unit`: PASS, 20/20 tasks; parse 18/18 and web 26/26
 - `pnpm test:contract`: PASS, 38/38
-- `pnpm test:integration`: PASS, 20/20 tasks; service 40/40 and MinIO 4/4
-- `pnpm test:tenant`: PASS, 3/3
-- `pnpm test:concurrency`: PASS, 2/2
-- `pnpm test:fault`: PASS, 11/11
-- `pnpm test:e2e`: PASS, 12/12 across 360/768/1200 viewports
+- `pnpm test:integration`: PASS, 20/20 tasks; service 46/46 and MinIO 4/4; upload 22, archive 6, lifecycle 8
+- `pnpm test:tenant`: PASS, 4/4
+- `pnpm test:concurrency`: PASS, 3/3
+- `pnpm test:fault`: PASS, 13/13
+- `pnpm test:e2e`: PASS, 17/17 across baseline and seven ACC-UI cases; 360/768/1200 viewports
 - `pnpm build`: PASS, 12/12 tasks
 - `pnpm build:workers`: PASS, 9/9 tasks
 - `pnpm license:check`: PASS, with three pre-existing `pending-legal-review` release blockers; no CI blocker
@@ -153,4 +161,4 @@ sha256:a63b19df59e6ec7c02ebba6e7a1097b7e032da7947b18db7ff67dae8e84fd44d
 - No fake success or deferred placeholder is used for the 12 S2 operations.
 - Cross-workspace upload, Source binding and ticket replay return safe not-found/forbidden responses.
 - Cloud provider mock results are not represented as real cloud integration.
-- No push, PR mutation, merge, history rewrite, dependency installation or Docker pull was performed during review remediation.
+- No PR mutation, merge, history rewrite, dependency installation or Docker pull was performed during review remediation.

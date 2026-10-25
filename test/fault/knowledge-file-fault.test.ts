@@ -1,15 +1,18 @@
 import { describe, expect, it, vi } from 'vitest';
+import type { RouteEntry } from '../../packages/contracts/src';
 import { createKnowledgeError } from '../../packages/contracts/src';
 import {
   ArchiveSafetyInspector,
   ArchiveSafetySourceError,
 } from '../../packages/parse/src/archive-safety';
 import { ObjectLifecycleService } from '../../packages/service/src/modules/knowledge/application/object-lifecycle';
+import { RedisKnowledgeRateLimiter } from '../../packages/service/src/modules/knowledge/adapter/rate-limit.adapter';
 import type {
   ObjectRefRepositoryPort,
   ObjectRefView,
 } from '../../packages/service/src/modules/knowledge/application/ports';
 import type { TenantContext } from '../../packages/service/src/shared/persistence/knowledge/tenant';
+import { ticketRateLimitScope } from '../../projects/app/src/shared/knowledge-api/handler';
 
 const context: TenantContext = {
   workspaceId: 'ws_fault',
@@ -105,6 +108,66 @@ describe('TEST-FILE-005-BLOCK lifecycle fault', () => {
     expect(abortMultipartUpload.mock.invocationCallOrder[0]).toBeLessThan(
       deleteObject.mock.invocationCallOrder[0]!,
     );
+  });
+
+  it('TEST-FILE-005-T10 continues to finalKey when pendingKey deletion returns 404', async () => {
+    const pendingObjectKey = ref.pendingObjectKey!;
+    const finalObjectKey = ref.finalObjectKey!;
+    const deleting = {
+      ...ref,
+      objectKey: pendingObjectKey,
+      state: 'deleting' as const,
+      version: 2,
+    };
+    const repository = {
+      findCleanupCandidates: vi.fn().mockResolvedValue([deleting]),
+      hasActiveSourceReference: vi.fn().mockResolvedValue(false),
+      confirmDeleted: vi.fn().mockResolvedValue({ ...deleting, state: 'deleted' }),
+    } as unknown as ObjectRefRepositoryPort;
+    const deleteObject = vi.fn(async (key: string) => {
+      if (key === pendingObjectKey) {
+        throw createKnowledgeError({
+          code: 'KNOWLEDGE_NOT_FOUND',
+          requestId: 'request',
+          traceId: 'trace',
+        });
+      }
+      return { deleted: true };
+    });
+    const service = new ObjectLifecycleService(repository, { deleteObject } as never, 500);
+    const result = await service.cleanup(context);
+    expect(result.deleted).toBe(1);
+    expect(deleteObject.mock.calls.map(([key]) => key)).toEqual([pendingObjectKey, finalObjectKey]);
+    expect(repository.confirmDeleted).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('TEST-FILE-003-BLOCK ticket rate limit isolation', () => {
+  it('TEST-FILE-003-F06 isolates invalid tickets from workspace and ticket buckets', async () => {
+    const counts = new Map<string, number>();
+    const redis = {
+      async eval(_script: string, _keys: number, key: string) {
+        const used = (counts.get(key) ?? 0) + 1;
+        counts.set(key, used);
+        return [used, 1000];
+      },
+    };
+    const limiter = new RedisKnowledgeRateLimiter(redis as never);
+    const route = {
+      operationId: 'API-FILE-CONTENT',
+      rateLimit: '2 QPS/IP',
+    } as RouteEntry;
+    const first = ticketRateLimitScope('invalid-ticket-a');
+    const second = ticketRateLimitScope('invalid-ticket-b');
+    expect(first).not.toContain('invalid-ticket-a');
+    expect(first).not.toBe(second);
+
+    await limiter.consume({ workspaceId: first, route });
+    await limiter.consume({ workspaceId: first, route });
+    const exhausted = await limiter.consume({ workspaceId: first, route });
+    const independent = await limiter.consume({ workspaceId: second, route });
+    expect(exhausted?.allowed).toBe(false);
+    expect(independent?.allowed).toBe(true);
   });
 });
 

@@ -18,6 +18,7 @@ export function ArchiveAction({ spaceId, sourceIds }: { spaceId: string; sourceI
     'idle',
   );
   const [busy, setBusy] = useState(false);
+  const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
 
   const waitForArchive = async (jobId: string): Promise<JobResult> => {
     for (let attempt = 0; attempt < 120; attempt += 1) {
@@ -36,6 +37,7 @@ export function ArchiveAction({ spaceId, sourceIds }: { spaceId: string; sourceI
     if (sourceIds.length === 0) return;
     setBusy(true);
     setStatus('queued');
+    setDownloadUrl(null);
     try {
       const job = await knowledgeRequest<JobResult>(
         `/v1/knowledge/spaces/${spaceId}/source-archives`,
@@ -49,7 +51,7 @@ export function ArchiveAction({ spaceId, sourceIds }: { spaceId: string; sourceI
         `/v1/knowledge/files/${blobId}/download`,
         { method: 'POST', body: {} },
       );
-      window.open(ticket.url, '_blank', 'noopener,noreferrer');
+      setDownloadUrl(ticket.url);
       setStatus('completed');
     } catch {
       setStatus('failed');
@@ -78,6 +80,17 @@ export function ArchiveAction({ spaceId, sourceIds }: { spaceId: string; sourceI
                 ? t('files.archiveCompleted')
                 : t('files.archiveFailed')}
         </Text>
+      ) : null}
+      {downloadUrl ? (
+        <Button
+          href={downloadUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          size="sm"
+          tone="primary"
+        >
+          {t('files.archiveDownload')}
+        </Button>
       ) : null}
     </>
   );

@@ -3,6 +3,7 @@ import mongoose from 'mongoose';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { MinioKnowledgeObjectStore, knowledgeObjectKey } from '../../../../sdk/storage/src/index';
 import { ObjectLifecycleService } from '../../src/modules/knowledge/application/object-lifecycle';
+import { KnowledgeArchiveRepository } from '../../src/modules/knowledge/repository/archive.repository';
 import { KnowledgeObjectRefRepository } from '../../src/modules/knowledge/repository/object-ref.repository';
 import {
   KNOWLEDGE_SCHEMA_REGISTRY,
@@ -25,6 +26,7 @@ let connection: mongoose.Connection;
 let repository: KnowledgeObjectRefRepository;
 let objectStore: MinioKnowledgeObjectStore;
 let lifecycle: ObjectLifecycleService;
+let archiveJobs: KnowledgeArchiveRepository;
 
 async function createPending(expired: boolean): Promise<string> {
   const uploadId = new mongoose.Types.ObjectId().toString();
@@ -136,6 +138,7 @@ beforeAll(async () => {
   });
   repository = new KnowledgeObjectRefRepository(connection);
   lifecycle = new ObjectLifecycleService(repository, objectStore, 500);
+  archiveJobs = new KnowledgeArchiveRepository(connection);
 }, 60_000);
 
 afterAll(async () => {
@@ -255,6 +258,36 @@ describe('TEST-FILE-005-BLOCK object lifecycle', () => {
     });
   });
 
+  it('TEST-FILE-005-T09 clears an active upload when the expired pending key is already absent', async () => {
+    const uploadId = await createPending(false);
+    const ref = await repository.findObjectRef(uploadId, context);
+    if (!ref?.pendingObjectKey || !ref.finalObjectKey) {
+      throw new Error('upload temporary keys missing');
+    }
+    await connection.models.KnowledgeObjectRef.updateOne(
+      { workspaceId, _id: new mongoose.Types.ObjectId(uploadId) },
+      {
+        $set: {
+          state: 'active',
+          objectKey: ref.finalObjectKey,
+          'upload.status': 'completed',
+          'upload.finalizedAt': new Date(),
+          'upload.pendingUrlExpiresAt': new Date(Date.now() - 1),
+        },
+      },
+    );
+
+    const result = await lifecycle.cleanup(context, new Date());
+    expect(result.retryable).toBe(0);
+    const cleaned = await repository.findObjectRef(uploadId, context);
+    expect(cleaned).toMatchObject({
+      state: 'active',
+      objectKey: ref.finalObjectKey,
+      pendingObjectKey: null,
+      pendingUrlExpiresAt: null,
+    });
+  });
+
   it('TEST-FILE-005-T10 removes both pending and final keys after failed activation', async () => {
     const uploadId = await createPending(true);
     const ref = await repository.findObjectRef(uploadId, context);
@@ -267,18 +300,16 @@ describe('TEST-FILE-005-BLOCK object lifecycle', () => {
       requestId: context.requestId,
       traceId: context.traceId,
     };
-    for (const key of [ref.pendingObjectKey, ref.finalObjectKey]) {
-      await objectStore.putObject(
-        {
-          key,
-          body: Buffer.from('leftover'),
-          contentType: 'text/plain',
-          workspaceId,
-          knowledgeSpaceId,
-        },
-        storage,
-      );
-    }
+    await objectStore.putObject(
+      {
+        key: ref.finalObjectKey,
+        body: Buffer.from('leftover-final'),
+        contentType: 'text/plain',
+        workspaceId,
+        knowledgeSpaceId,
+      },
+      storage,
+    );
 
     const result = await lifecycle.cleanup(context, new Date());
     expect(result.deleted).toBeGreaterThanOrEqual(1);
@@ -291,5 +322,89 @@ describe('TEST-FILE-005-BLOCK object lifecycle', () => {
         problem: { error: { code: 'KNOWLEDGE_NOT_FOUND' } },
       });
     }
+  });
+
+  it('TEST-FILE-005-T07 deletes an expired export object and preserves its Job evidence', async () => {
+    const blobId = new mongoose.Types.ObjectId().toString();
+    const objectKey = knowledgeObjectKey({
+      workspaceId,
+      knowledgeSpaceId,
+      sourceId: 'unbound',
+      purpose: 'export',
+      blobId,
+      safeName: 'sources.zip',
+    });
+    const storage = {
+      workspaceId,
+      knowledgeSpaceId,
+      requestId: context.requestId,
+      traceId: context.traceId,
+    };
+    await objectStore.putObject(
+      {
+        key: objectKey,
+        body: Buffer.from('expired-export'),
+        contentType: 'application/zip',
+        workspaceId,
+        knowledgeSpaceId,
+      },
+      storage,
+    );
+    const job = await archiveJobs.createExportJob(
+      {
+        spaceId: knowledgeSpaceId,
+        sourceIds: [new mongoose.Types.ObjectId().toString()],
+        idempotencyKey: `expired-export-${suffix}`,
+      },
+      context,
+    );
+    await connection.models.KnowledgeObjectRef.create({
+      _id: new mongoose.Types.ObjectId(blobId),
+      workspaceId,
+      knowledgeSpaceId: new mongoose.Types.ObjectId(knowledgeSpaceId),
+      version: 1,
+      deletedAt: null,
+      createdByMemberId: context.memberId,
+      updatedByMemberId: context.memberId,
+      provider: 'minio',
+      bucket: objectStore.bucket,
+      objectKey,
+      purpose: 'export',
+      sourceId: null,
+      mimeType: 'application/zip',
+      sizeBytes: 14,
+      etag: 'expired-export-etag',
+      sha256: 'expired-export-sha',
+      state: 'active',
+      expiresAt: new Date(Date.now() - 1000),
+      upload: {
+        mode: null,
+        status: null,
+        providerUploadId: null,
+        pendingObjectKey: null,
+        finalObjectKey: objectKey,
+        finalizedAt: new Date(),
+        pendingUrlExpiresAt: null,
+        partSizeBytes: 8388608,
+        partCount: 0,
+        parts: [],
+        originalName: 'sources.zip',
+        completedAt: new Date(),
+        abortedAt: null,
+      },
+    });
+
+    const result = await lifecycle.cleanup(context, new Date());
+    expect(result.deleted).toBeGreaterThanOrEqual(1);
+    expect((await repository.findObjectRef(blobId, context))?.state).toBe('deleted');
+    const retained = await archiveJobs.get(String(job.jobId), context);
+    expect(retained.kind).toBe('export');
+    expect(retained.status).toBe('queued');
+    const objectError = await objectStore
+      .headObject(objectStore.bucket, objectKey, storage)
+      .catch((error: unknown) => error);
+    expect(objectError).toMatchObject({
+      problem: { error: { code: 'KNOWLEDGE_NOT_FOUND' } },
+    });
   });
 });

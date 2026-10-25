@@ -203,6 +203,11 @@ function magicMatches(mimeType: string, bytes: Uint8Array): boolean {
         buffer.subarray(0, 4).toString('ascii') === 'RIFF' &&
         buffer.subarray(8, 12).toString('ascii') === 'WEBP'
       );
+    case 'image/tiff':
+      return (
+        buffer.subarray(0, 4).equals(Buffer.from([0x49, 0x49, 0x2a, 0x00])) ||
+        buffer.subarray(0, 4).equals(Buffer.from([0x4d, 0x4d, 0x00, 0x2a]))
+      );
     case 'application/vnd.openxmlformats-officedocument.wordprocessingml.document':
       return zipMagic;
     case 'application/vnd.openxmlformats-officedocument.presentationml.presentation':
@@ -567,6 +572,9 @@ export class FileApplication {
       const hashed = await hashObject(object.body);
       if (!magicMatches(ref.mimeType, hashed.prefix)) {
         await this.objectStore.deleteObject(ref.objectKey, storage);
+        await this.objectRefs
+          .markUploadAborted(input.uploadId, session.version, context)
+          .catch(() => undefined);
         throw unsupported(context, { reason: 'magic_mime_mismatch' });
       }
       if (isZipContainer(ref.mimeType)) {

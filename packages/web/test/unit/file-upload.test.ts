@@ -183,7 +183,7 @@ describe('knowledge file upload client', () => {
 
   it('isolates idempotency keys per part and resumes only missing multipart parts', async () => {
     vi.resetModules();
-    const { knowledgeMultipartUpload, restoreKnowledgeUpload } =
+    const { fileFingerprint, knowledgeMultipartUpload, restoreKnowledgeUpload } =
       await import('../../src/client/file-upload');
     const fetchMock = createMultipartFetchMock();
     const storage = new Map<string, string>();
@@ -200,9 +200,11 @@ describe('knowledge file upload client', () => {
     });
     const size = 2 * 8 * 1024 * 1024 + 1;
     const file = new File([new Uint8Array(size)], 'large.txt', { type: 'text/plain' });
+    const fingerprint = await fileFingerprint(file);
+    expect(fingerprint).not.toBeNull();
 
     await knowledgeMultipartUpload(file, { knowledgeSpaceId: 'space' });
-    expect(writtenKeys).toContain(`kb-upload:ws_upload:${file.name}:${file.size}`);
+    expect(writtenKeys).toContain(`kb-upload:ws_upload:${file.name}:${file.size}:${fingerprint}`);
     expect(writtenKeys).not.toContain(`kb-upload:space:${file.name}:${file.size}`);
     const firstKeys = fetchMock.mock.calls
       .filter(([url]) => String(url).endsWith('/presign'))
@@ -212,29 +214,123 @@ describe('knowledge file upload client', () => {
 
     fetchMock.mockClear();
     globalThis.localStorage.setItem(
-      `kb-upload:ws_upload:${file.name}:${file.size}`,
+      `kb-upload:ws_upload:${file.name}:${file.size}:${fingerprint}`,
       JSON.stringify({
         uploadId: '65f1e5b2a1c9d4b7e8f09abc',
         phase: 'uploading',
         progress: 66,
+        fingerprint,
         parts: [
           { partNumber: 1, etag: 'etag-1' },
           { partNumber: 2, etag: 'etag-2' },
         ],
       }),
     );
-    const restored = await restoreKnowledgeUpload('ws_upload', file.name, file.size);
+    const restored = await restoreKnowledgeUpload('ws_upload', file);
     expect(restored?.parts.map((part) => part.partNumber)).toEqual([1, 2]);
-    await knowledgeMultipartUpload(file, {
-      knowledgeSpaceId: 'space',
-      ...(restored ? { resumeSession: restored } : {}),
-    });
+    await knowledgeMultipartUpload(file, { knowledgeSpaceId: 'space' });
     const resumedParts = fetchMock.mock.calls
       .filter(([url]) => String(url).endsWith('/presign'))
       .map(([url]) => String(url));
     expect(resumedParts).toHaveLength(1);
     expect(fetchMock.mock.calls.some(([url]) => String(url).endsWith('/parts/1'))).toBe(false);
     expect(fetchMock.mock.calls.some(([url]) => String(url).endsWith('/parts/2'))).toBe(false);
+  });
+
+  it('does not resume same-name, same-size files with a different fingerprint', async () => {
+    vi.resetModules();
+    const { fileFingerprint, knowledgeMultipartUpload, restoreKnowledgeUpload } =
+      await import('../../src/client/file-upload');
+    const fetchMock = createMultipartFetchMock();
+    const storage = new Map<string, string>();
+    vi.stubGlobal('fetch', fetchMock);
+    vi.stubGlobal('localStorage', {
+      getItem: (key: string) => storage.get(key) ?? null,
+      setItem: (key: string, value: string) => storage.set(key, value),
+      removeItem: (key: string) => storage.delete(key),
+      clear: () => storage.clear(),
+      get length() {
+        return storage.size;
+      },
+      key: (index: number) => [...storage.keys()][index] ?? null,
+    });
+    const size = 2 * 8 * 1024 * 1024 + 1;
+    const oldFile = new File([new Uint8Array(size).fill(1)], 'same.txt', {
+      type: 'text/plain',
+      lastModified: 1,
+    });
+    const newFile = new File([new Uint8Array(size).fill(2)], 'same.txt', {
+      type: 'text/plain',
+      lastModified: 1,
+    });
+    const oldFingerprint = await fileFingerprint(oldFile);
+    expect(oldFingerprint).not.toBeNull();
+    storage.set(
+      `kb-upload:ws_upload:${oldFile.name}:${oldFile.size}:${oldFingerprint}`,
+      JSON.stringify({
+        uploadId: '65f1e5b2a1c9d4b7e8f09abc',
+        phase: 'uploading',
+        progress: 100,
+        fingerprint: oldFingerprint,
+        parts: [{ partNumber: 1, etag: 'old-etag' }],
+      }),
+    );
+
+    expect(await restoreKnowledgeUpload('ws_upload', newFile)).toBeNull();
+    fetchMock.mockClear();
+    await knowledgeMultipartUpload(newFile, { knowledgeSpaceId: 'space' });
+    expect(fetchMock.mock.calls.some(([url]) => String(url) === '/v1/knowledge/uploads')).toBe(
+      true,
+    );
+    expect(
+      fetchMock.mock.calls.filter(([url]) => String(url).startsWith('https://uploads.')),
+    ).toHaveLength(3);
+  });
+
+  it('reuses the current fingerprinted session after a failed upload attempt', async () => {
+    vi.resetModules();
+    const { fileFingerprint, knowledgeMultipartUpload } =
+      await import('../../src/client/file-upload');
+    const source = createMultipartFetchMock();
+    const storage = new Map<string, string>();
+    let failPartOne = true;
+    let initCount = 0;
+    let fetchCount = 0;
+    const fetchMock = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+      const url = String(input);
+      if (url === '/v1/knowledge/uploads') initCount += 1;
+      if (url === `/v1/knowledge/uploads/65f1e5b2a1c9d4b7e8f09abc`) fetchCount += 1;
+      if (url === 'https://uploads.example.invalid/part-1' && failPartOne) {
+        failPartOne = false;
+        return new Response(null, { status: 500 });
+      }
+      if (url.endsWith('/parts/1') && fetchCount <= 1) {
+        return new Response(null, { status: 503 });
+      }
+      return source(input, init);
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    vi.stubGlobal('localStorage', {
+      getItem: (key: string) => storage.get(key) ?? null,
+      setItem: (key: string, value: string) => storage.set(key, value),
+      removeItem: (key: string) => storage.delete(key),
+      clear: () => storage.clear(),
+      get length() {
+        return storage.size;
+      },
+      key: (index: number) => [...storage.keys()][index] ?? null,
+    });
+    const file = new File([new Uint8Array(2 * 8 * 1024 * 1024 + 1)], 'retry.txt', {
+      type: 'text/plain',
+    });
+    const fingerprint = await fileFingerprint(file);
+    expect(fingerprint).not.toBeNull();
+
+    await expect(knowledgeMultipartUpload(file, { knowledgeSpaceId: 'space' })).rejects.toThrow();
+    expect(storage.has(`kb-upload:ws_upload:${file.name}:${file.size}:${fingerprint}`)).toBe(true);
+    await knowledgeMultipartUpload(file, { knowledgeSpaceId: 'space' });
+    expect(initCount).toBe(1);
+    expect(fetchCount).toBeGreaterThanOrEqual(1);
   });
 
   it('aborts an already-cancelled upload and clears persisted state', async () => {

@@ -1,14 +1,16 @@
 import { createHash, randomUUID } from 'node:crypto';
 import mongoose from 'mongoose';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { createKnowledgeError } from '@kb/contracts';
 import { FileTicketService, MinioKnowledgeObjectStore } from '../../../../sdk/storage/src/index';
 import { KnowledgeArchiveWorker } from '../../../../projects/app/src/runtime/archive-worker';
 import { FileApplication } from '../../src/modules/knowledge/application/file.application';
+import { SourceFileApplication } from '../../src/modules/knowledge/application/source-preview';
 import type {
   AccessPort,
   ArchiveSafetyPort,
   CatalogPort,
+  JobPort,
 } from '../../src/modules/knowledge/application/ports';
 import { KnowledgeArchiveRepository } from '../../src/modules/knowledge/repository/archive.repository';
 import { KnowledgeObjectRefRepository } from '../../src/modules/knowledge/repository/object-ref.repository';
@@ -455,5 +457,82 @@ describe('TEST-FILE-004-BLOCK source archive worker', () => {
     expect(
       (pendingObject as { problem?: { error?: { code?: string } } }).problem?.error?.code,
     ).toBe('KNOWLEDGE_NOT_FOUND');
+  });
+});
+
+describe('TEST-FILE-004-BLOCK source archive admission', () => {
+  it('TEST-FILE-004-A06 queues exactly 2000 Sources without creating a second Job', async () => {
+    const sourceIds = Array.from({ length: 2000 }, (_, index) => `source-${index}`);
+    const createExportJob = vi.fn(async (input: { sourceIds: string[] }) => ({
+      kind: 'export',
+      status: 'queued',
+      sourceCount: input.sourceIds.length,
+    }));
+    const sources = {
+      async getSource(id: string) {
+        return {
+          id,
+          knowledgeSpaceId,
+          searchEnabled: true,
+          name: `${id}.txt`,
+          sizeBytes: 1,
+          mimeType: 'text/plain',
+        };
+      },
+    } as unknown as CatalogPort;
+    const jobs = { createExportJob } as unknown as JobPort;
+    const permits = { async assertPermission() {} } as unknown as AccessPort;
+    const application = new SourceFileApplication(
+      sources,
+      jobs,
+      permits,
+      {} as never,
+      {} as never,
+      {} as never,
+    );
+
+    const result = await application.archive(knowledgeSpaceId, sourceIds, context);
+    expect(result).toMatchObject({ kind: 'export', status: 'queued', sourceCount: 2000 });
+    expect(createExportJob).toHaveBeenCalledTimes(1);
+    expect(createExportJob.mock.calls[0]?.[0].sourceIds).toHaveLength(2000);
+  });
+
+  it('TEST-FILE-004-A07 rejects 2001 Sources or more than 2048 MiB total', async () => {
+    const tooManyIds = Array.from({ length: 2001 }, (_, index) => `source-${index}`);
+    const makeApplication = (sizes: Map<string, number>) => {
+      const sources = {
+        async getSource(id: string) {
+          return {
+            id,
+            knowledgeSpaceId,
+            searchEnabled: true,
+            name: `${id}.txt`,
+            sizeBytes: sizes.get(id) ?? 1,
+            mimeType: 'text/plain',
+          };
+        },
+      } as unknown as CatalogPort;
+      return new SourceFileApplication(
+        sources,
+        { createExportJob: vi.fn() } as unknown as JobPort,
+        { async assertPermission() {} } as unknown as AccessPort,
+        {} as never,
+        {} as never,
+        {} as never,
+      );
+    };
+
+    await expect(
+      makeApplication(new Map()).archive(knowledgeSpaceId, tooManyIds, context),
+    ).rejects.toMatchObject({
+      problem: { error: { code: 'KNOWLEDGE_PAYLOAD_TOO_LARGE' } },
+    });
+    const oversizedIds = ['large-a', 'large-b'];
+    const oversized = new Map(oversizedIds.map((id) => [id, 1024 * 1024 * 1024 + 1]));
+    await expect(
+      makeApplication(oversized).archive(knowledgeSpaceId, oversizedIds, context),
+    ).rejects.toMatchObject({
+      problem: { error: { code: 'KNOWLEDGE_PAYLOAD_TOO_LARGE' } },
+    });
   });
 });

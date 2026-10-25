@@ -3,6 +3,7 @@
 import { ensureConsoleSession, knowledgeBinaryRequest, knowledgeRequest } from './knowledge-client';
 
 const PART_SIZE = 8 * 1024 * 1024;
+const FINGERPRINT_PREFIX_BYTES = 64 * 1024;
 
 export interface UploadSession {
   uploadId: string;
@@ -68,13 +69,21 @@ export interface UploadOptions {
   knowledgeSpaceId: string;
   signal?: AbortSignal;
   onState?: (state: KnowledgeFileUploadState) => void;
-  resumeSession?: UploadSession;
 }
 
 const STORAGE_PREFIX = 'kb-upload:';
 
-function storageKey(workspaceId: string, fileName: string, size: number): string {
-  return `${STORAGE_PREFIX}${workspaceId}:${fileName}:${size}`;
+function storageIdentity(workspaceId: string, fileName: string, size: number): string {
+  return `${STORAGE_PREFIX}${workspaceId}:${fileName}:${size}:`;
+}
+
+function storageKey(
+  workspaceId: string,
+  fileName: string,
+  size: number,
+  fingerprint: string,
+): string {
+  return `${storageIdentity(workspaceId, fileName, size)}${fingerprint}`;
 }
 
 function requestKey(): string {
@@ -83,6 +92,21 @@ function requestKey(): string {
 
 function partKey(baseKey: string, partNumber: number): string {
   return `${baseKey}:p:${partNumber}`;
+}
+
+export async function fileFingerprint(file: File): Promise<string | null> {
+  try {
+    const digest = await globalThis.crypto.subtle.digest(
+      'SHA-256',
+      await file.slice(0, Math.min(file.size, FINGERPRINT_PREFIX_BYTES)).arrayBuffer(),
+    );
+    const prefixHash = [...new Uint8Array(digest)]
+      .map((byte) => byte.toString(16).padStart(2, '0'))
+      .join('');
+    return `${file.lastModified}:${file.size}:${prefixHash}`;
+  } catch {
+    return null;
+  }
 }
 
 function normalizeSession(session: UploadSession): UploadSession {
@@ -152,31 +176,36 @@ export async function knowledgeMultipartUpload(
   options: UploadOptions,
 ): Promise<ObjectBlobReference> {
   const workspaceId = (await ensureConsoleSession()).workspaceId;
+  const fingerprint = await fileFingerprint(file);
   const key = requestKey();
   let completedParts: UploadedPart[] = [];
   let session: UploadSession | undefined;
   const publish = (next: KnowledgeFileUploadState) => {
     options.onState?.(next);
-    if (next.uploadId) {
+    if (next.uploadId && fingerprint) {
       globalThis.localStorage?.setItem(
-        storageKey(workspaceId, file.name, file.size),
+        storageKey(workspaceId, file.name, file.size, fingerprint),
         JSON.stringify({
           uploadId: next.uploadId,
           phase: next.phase,
           progress: next.progress,
           parts: completedParts,
+          fingerprint,
           updatedAt: new Date().toISOString(),
         }),
       );
     }
   };
   publish(state('initializing', null, 0, 0, Math.ceil(file.size / PART_SIZE)));
+  const restored = fingerprint
+    ? await restoreUploadWithFingerprint(workspaceId, file, fingerprint)
+    : null;
   const resumable =
-    options.resumeSession &&
-    ['pending', 'uploading'].includes(options.resumeSession.status) &&
-    Date.parse(options.resumeSession.expiresAt) > Date.now();
+    restored &&
+    ['pending', 'uploading'].includes(restored.status) &&
+    Date.parse(restored.expiresAt) > Date.now();
   if (resumable) {
-    session = normalizeSession(options.resumeSession!);
+    session = normalizeSession(restored);
     completedParts = [...session.parts];
   } else {
     session = normalizeSession(
@@ -194,7 +223,7 @@ export async function knowledgeMultipartUpload(
   }
   if (options.signal?.aborted) {
     await abortLatestSession(session, key).catch(() => undefined);
-    clearKnowledgeUpload(workspaceId, file.name, file.size);
+    clearKnowledgeUpload(workspaceId, file.name, file.size, fingerprint ?? undefined);
     throw new DOMException('Upload aborted', 'AbortError');
   }
 
@@ -250,12 +279,12 @@ export async function knowledgeMultipartUpload(
     publish(
       state('completed', session.uploadId, 100, completedParts.length, partNumbers.length, result),
     );
-    clearKnowledgeUpload(workspaceId, file.name, file.size);
+    clearKnowledgeUpload(workspaceId, file.name, file.size, fingerprint ?? undefined);
     return result;
   } catch (error) {
     if (error instanceof DOMException && error.name === 'AbortError') {
       await abortLatestSession(session, key).catch(() => undefined);
-      clearKnowledgeUpload(workspaceId, file.name, file.size);
+      clearKnowledgeUpload(workspaceId, file.name, file.size, fingerprint ?? undefined);
       publish(
         state(
           'aborted',
@@ -278,18 +307,34 @@ export async function knowledgeMultipartUpload(
 
 export async function restoreKnowledgeUpload(
   workspaceId: string,
-  fileName: string,
-  size: number,
+  file: File,
 ): Promise<UploadSession | null> {
-  const stored = globalThis.localStorage?.getItem(storageKey(workspaceId, fileName, size));
+  const fingerprint = await fileFingerprint(file);
+  return fingerprint ? restoreUploadWithFingerprint(workspaceId, file, fingerprint) : null;
+}
+
+async function restoreUploadWithFingerprint(
+  workspaceId: string,
+  file: File,
+  fingerprint: string,
+): Promise<UploadSession | null> {
+  const key = storageKey(workspaceId, file.name, file.size, fingerprint);
+  const stored = globalThis.localStorage?.getItem(key);
   if (!stored) return null;
   try {
     const parsed = JSON.parse(stored) as {
       uploadId?: string;
       phase?: string;
       parts?: UploadedPart[];
+      fingerprint?: string;
     };
-    if (!parsed.uploadId || parsed.phase === 'completed' || parsed.phase === 'aborted') {
+    if (
+      parsed.fingerprint !== fingerprint ||
+      !parsed.uploadId ||
+      parsed.phase === 'completed' ||
+      parsed.phase === 'aborted'
+    ) {
+      globalThis.localStorage?.removeItem(key);
       return null;
     }
     const session = normalizeSession(
@@ -299,7 +344,7 @@ export async function restoreKnowledgeUpload(
       !['pending', 'uploading'].includes(session.status) ||
       Date.parse(session.expiresAt) <= Date.now()
     ) {
-      clearKnowledgeUpload(workspaceId, fileName, size);
+      globalThis.localStorage?.removeItem(key);
       return null;
     }
     const byPart = new Map<number, UploadedPart>();
@@ -322,6 +367,21 @@ export async function restoreKnowledgeUpload(
   }
 }
 
-export function clearKnowledgeUpload(workspaceId: string, fileName: string, size: number): void {
-  globalThis.localStorage?.removeItem(storageKey(workspaceId, fileName, size));
+export function clearKnowledgeUpload(
+  workspaceId: string,
+  fileName: string,
+  size: number,
+  fingerprint?: string,
+): void {
+  const storage = globalThis.localStorage;
+  if (!storage) return;
+  if (fingerprint) {
+    storage.removeItem(storageKey(workspaceId, fileName, size, fingerprint));
+    return;
+  }
+  const prefix = storageIdentity(workspaceId, fileName, size);
+  for (let index = storage.length - 1; index >= 0; index -= 1) {
+    const key = storage.key(index);
+    if (key?.startsWith(prefix)) storage.removeItem(key);
+  }
 }

@@ -2,15 +2,9 @@
 
 import { Box, Progress, Text } from '@chakra-ui/react';
 import { useRef, useState } from 'react';
-import {
-  knowledgeMultipartUpload,
-  restoreKnowledgeUpload,
-  type KnowledgeFileUploadState,
-  type UploadSession,
-} from '../client/file-upload';
-import { ensureConsoleSession, KnowledgeRequestError } from '../client/knowledge-client';
-import { toProblemView, useKnowledgeI18n } from '../i18n';
-import { Button } from './knowledge-primitives';
+import { knowledgeMultipartUpload, type KnowledgeFileUploadState } from '../client/file-upload';
+import { useKnowledgeI18n } from '../i18n';
+import { Button, ProblemNotice } from './knowledge-primitives';
 
 export interface FileUploadPanelProps {
   knowledgeSpaceId: string;
@@ -22,24 +16,28 @@ export function FileUploadPanel({ knowledgeSpaceId, onComplete }: FileUploadPane
   const inputRef = useRef<HTMLInputElement>(null);
   const abortRef = useRef<AbortController | null>(null);
   const [file, setFile] = useState<File | null>(null);
-  const [resumeSession, setResumeSession] = useState<UploadSession | null>(null);
-  const [restoring, setRestoring] = useState(false);
   const [state, setState] = useState<KnowledgeFileUploadState | null>(null);
 
   const upload = async () => {
-    if (!file || !knowledgeSpaceId || restoring) return;
+    if (!file || !knowledgeSpaceId) return;
     abortRef.current = new AbortController();
     try {
       const result = await knowledgeMultipartUpload(file, {
         knowledgeSpaceId,
         signal: abortRef.current.signal,
         onState: setState,
-        ...(resumeSession ? { resumeSession } : {}),
       });
-      setResumeSession(null);
       onComplete?.(result.blobId);
-    } catch {
-      // State carries a localized messageKey from the request layer.
+    } catch (error) {
+      setState((current) => ({
+        phase: error instanceof DOMException && error.name === 'AbortError' ? 'aborted' : 'error',
+        uploadId: current?.uploadId ?? null,
+        progress: current?.progress ?? 0,
+        completedParts: current?.completedParts ?? 0,
+        totalParts: current?.totalParts ?? Math.ceil(file.size / (8 * 1024 * 1024)),
+        result: null,
+        error,
+      }));
     } finally {
       abortRef.current = null;
     }
@@ -56,21 +54,6 @@ export function FileUploadPanel({ knowledgeSpaceId, onComplete }: FileUploadPane
           const selected = event.target.files?.[0] ?? null;
           setFile(selected);
           setState(null);
-          setResumeSession(null);
-          if (selected && knowledgeSpaceId) {
-            setRestoring(true);
-            void ensureConsoleSession()
-              .then((session) =>
-                restoreKnowledgeUpload(session.workspaceId, selected.name, selected.size),
-              )
-              .then((session) => {
-                if (!session) return;
-                setResumeSession(session);
-              })
-              .finally(() => setRestoring(false));
-          } else {
-            setRestoring(false);
-          }
         }}
       />
       <Box className="inline-actions">
@@ -80,7 +63,7 @@ export function FileUploadPanel({ knowledgeSpaceId, onComplete }: FileUploadPane
         <Button
           size="sm"
           tone="primary"
-          isDisabled={!file || !knowledgeSpaceId || restoring}
+          isDisabled={!file || !knowledgeSpaceId}
           busy={state?.phase === 'uploading' || state?.phase === 'completing'}
           onClick={() => void upload()}
         >
@@ -119,15 +102,7 @@ export function FileUploadPanel({ knowledgeSpaceId, onComplete }: FileUploadPane
           </Text>
         </Box>
       ) : null}
-      {state?.error ? (
-        <Text role="alert" mt={2} fontSize="sm" color="kn.danger">
-          {t(
-            state.error instanceof KnowledgeRequestError
-              ? toProblemView(state.error.problem).messageKey
-              : 'errors.unknown',
-          )}
-        </Text>
-      ) : null}
+      {state?.error ? <ProblemNotice error={state.error} onRetry={() => void upload()} /> : null}
     </Box>
   );
 }

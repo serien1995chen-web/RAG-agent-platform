@@ -344,6 +344,36 @@ describe('TEST-FILE-001-BLOCK upload session', () => {
     expect(errorCode(error)).toBe('KNOWLEDGE_UNSUPPORTED_CONTENT');
   });
 
+  it('TEST-FILE-001-U05 rejects bytes that only claim to be TIFF', async () => {
+    const body = Buffer.from('not-a-tiff');
+    const session = await files.init(
+      {
+        knowledgeSpaceId,
+        name: 'disguised.tiff',
+        mimeType: 'image/tiff',
+        sizeBytes: body.byteLength,
+      },
+      context,
+    );
+    const ref = await repository.findObjectRef(session.uploadId, context);
+    if (!ref) throw new Error('upload object ref missing');
+    createdObjects.add(ref.objectKey);
+    const presigned = await files.presign(session.uploadId, { partNumbers: [1] }, context);
+    const upload = await fetch(presigned.uploads[0]!.url, {
+      method: 'PUT',
+      headers: presigned.uploads[0]!.headers,
+      body,
+    });
+    expect(upload.status).toBe(200);
+
+    const error = await files
+      .complete({ uploadId: session.uploadId, parts: [] }, context)
+      .catch((caught: unknown) => caught);
+    expect(errorCode(error)).toBe('KNOWLEDGE_UNSUPPORTED_CONTENT');
+    expect((await files.get(session.uploadId, context)).status).toBe('aborted');
+    expect((await repository.findObjectRef(session.uploadId, context))?.state).not.toBe('active');
+  });
+
   it('TEST-FILE-001-U11 maps uploaded size mismatch to 413 and cleans the object', async () => {
     const declaredSize = 5;
     const body = Buffer.from('too-large');
@@ -970,5 +1000,74 @@ describe('TEST-FILE-001-BLOCK upload session', () => {
         kind: 'export',
       }),
     ).toBe(jobsBefore);
+  });
+
+  it('TEST-FILE-003-F08 returns 403 when Source ACL denies the same workspace member', async () => {
+    const body = Buffer.from('denied source content');
+    const { session } = await putSingle(body.byteLength, 'denied.txt', body);
+    const completed = await files.complete({ uploadId: session.uploadId, parts: [] }, context);
+    const source = await connection.models.KnowledgeSource.create({
+      workspaceId: context.workspaceId,
+      knowledgeSpaceId: new mongoose.Types.ObjectId(knowledgeSpaceId),
+      version: 1,
+      deletedAt: null,
+      createdByMemberId: context.memberId,
+      updatedByMemberId: context.memberId,
+      kind: 'file',
+      name: 'denied.txt',
+      blobRefId: new mongoose.Types.ObjectId(completed.blobId),
+      mimeType: 'text/plain',
+      sizeBytes: body.byteLength,
+      ownershipMemberId: context.memberId,
+    });
+    await connection.models.KnowledgeObjectRef.updateOne(
+      { workspaceId: context.workspaceId, _id: new mongoose.Types.ObjectId(completed.blobId) },
+      { $set: { sourceId: source._id } },
+    );
+    const sourceCatalog = {
+      async getSource(id: string) {
+        const document = await connection.models.KnowledgeSource.findById(id).lean();
+        if (!document) throw new Error('source missing');
+        return {
+          ...(document as unknown as Record<string, unknown>),
+          id: String(document._id),
+          knowledgeSpaceId: String(document.knowledgeSpaceId),
+          blobRefId: String(document.blobRefId),
+        };
+      },
+      async listSegments() {
+        return { items: [], pageInfo: { nextCursor: null, hasMore: false } };
+      },
+    } as unknown as CatalogPort;
+    const deniedAccess = {
+      async assertPermission(resourceType: string) {
+        if (resourceType === 'source') {
+          throw createKnowledgeError({
+            code: 'KNOWLEDGE_FORBIDDEN',
+            requestId: context.requestId,
+            traceId: context.traceId,
+          });
+        }
+        return { allowed: true };
+      },
+    } as unknown as AccessPort;
+    const deniedSources = new SourceFileApplication(
+      sourceCatalog,
+      new KnowledgeArchiveRepository(connection),
+      deniedAccess,
+      repository,
+      objectStore,
+      fileTickets,
+      new ObjectStoreArchiveSafetyAdapter(objectStore),
+    );
+
+    const previewError = await deniedSources
+      .preview(String(source._id), context)
+      .catch((caught: unknown) => caught);
+    expect(errorCode(previewError)).toBe('KNOWLEDGE_FORBIDDEN');
+    const downloadError = await deniedSources
+      .download(String(source._id), context)
+      .catch((caught: unknown) => caught);
+    expect(errorCode(downloadError)).toBe('KNOWLEDGE_FORBIDDEN');
   });
 });

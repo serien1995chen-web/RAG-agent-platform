@@ -10,7 +10,7 @@ import {
   Text,
   useDisclosure,
 } from '@chakra-ui/react';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { knowledgeRequest } from '../client/knowledge-client';
 import { useKnowledgeI18n } from '../i18n';
 import { Button, ProblemNotice } from './knowledge-primitives';
@@ -26,6 +26,7 @@ export function FilePreviewPanel({ sourceId }: { sourceId: string }) {
   const [sections, setSections] = useState<PreviewSection[]>([]);
   const [problem, setProblem] = useState<unknown>(null);
   const [loading, setLoading] = useState(false);
+  const triggerRef = useRef<HTMLButtonElement>(null);
 
   const openPreview = async () => {
     setLoading(true);
@@ -46,10 +47,16 @@ export function FilePreviewPanel({ sourceId }: { sourceId: string }) {
 
   return (
     <>
-      <Button size="sm" busy={loading} onClick={() => void openPreview()}>
+      <Button ref={triggerRef} size="sm" busy={loading} onClick={() => void openPreview()}>
         {t('sources.preview')}
       </Button>
-      <Modal isOpen={isOpen} onClose={onClose} size="xl" returnFocusOnClose>
+      <Modal
+        isOpen={isOpen}
+        onClose={onClose}
+        finalFocusRef={triggerRef}
+        size="xl"
+        returnFocusOnClose
+      >
         <ModalOverlay />
         <ModalContent>
           <ModalHeader>{t('files.previewTitle')}</ModalHeader>

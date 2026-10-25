@@ -24,6 +24,21 @@ function storageContext(ref: ObjectRefView, context: TenantContext): ObjectStora
   };
 }
 
+async function deleteObjectIdempotently(
+  objectStore: ObjectStoreApplicationPort,
+  objectKey: string,
+  context: ObjectStorageContext,
+): Promise<void> {
+  try {
+    await objectStore.deleteObject(objectKey, context);
+  } catch (error) {
+    if (error instanceof KnowledgeApiError && error.problem.error.code === 'KNOWLEDGE_NOT_FOUND') {
+      return;
+    }
+    throw error;
+  }
+}
+
 export class ObjectLifecycleService {
   constructor(
     private readonly objectRefs: ObjectRefRepositoryPort,
@@ -53,7 +68,8 @@ export class ObjectLifecycleService {
       ) {
         result.eligible += 1;
         try {
-          await this.objectStore.deleteObject(
+          await deleteObjectIdempotently(
+            this.objectStore,
             candidate.pendingObjectKey,
             storageContext(candidate, context),
           );
@@ -66,8 +82,7 @@ export class ObjectLifecycleService {
         } catch (error) {
           if (
             error instanceof KnowledgeApiError &&
-            (error.problem.error.code === 'KNOWLEDGE_NOT_FOUND' ||
-              error.problem.error.code === 'KNOWLEDGE_CONFLICT' ||
+            (error.problem.error.code === 'KNOWLEDGE_CONFLICT' ||
               error.problem.error.code === 'KNOWLEDGE_DEPENDENCY_UNAVAILABLE' ||
               error.problem.error.code === 'KNOWLEDGE_DEPENDENCY_TIMEOUT')
           ) {
@@ -124,31 +139,15 @@ export class ObjectLifecycleService {
           ),
         );
         for (const objectKey of objectKeys) {
-          await this.objectStore.deleteObject(objectKey, storageContext(deleting, context));
+          await deleteObjectIdempotently(
+            this.objectStore,
+            objectKey,
+            storageContext(deleting, context),
+          );
         }
         await this.objectRefs.confirmDeleted(deleting.blobId, deleting.version, context);
         result.deleted += 1;
       } catch (error) {
-        if (
-          error instanceof KnowledgeApiError &&
-          error.problem.error.code === 'KNOWLEDGE_NOT_FOUND'
-        ) {
-          try {
-            const current = await this.objectRefs.findObjectRef(deleting.blobId, context);
-            if (current?.state === 'deleted') {
-              result.deleted += 1;
-              continue;
-            }
-            if (current) {
-              await this.objectRefs.confirmDeleted(current.blobId, current.version, context);
-              result.deleted += 1;
-              continue;
-            }
-          } catch {
-            result.retryable += 1;
-            continue;
-          }
-        }
         if (
           error instanceof KnowledgeApiError &&
           (error.problem.error.code === 'KNOWLEDGE_CONFLICT' ||

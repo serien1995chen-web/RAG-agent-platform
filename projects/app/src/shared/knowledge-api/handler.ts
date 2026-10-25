@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import {
   KnowledgeApiError,
   createKnowledgeError,
@@ -32,6 +33,10 @@ function normalizeScopes(subject: KnowledgeAuthSubject): Set<string> {
 
 function firstWorkspaceId(subject: KnowledgeAuthSubject): string | null {
   return subject.workspaceIds[0] ?? null;
+}
+
+export function ticketRateLimitScope(ticket: string): string {
+  return `ticket:${createHash('sha256').update(ticket).digest('hex').slice(0, 24)}`;
 }
 
 function publicErrorStatus(error: KnowledgeApiError): number {
@@ -304,7 +309,11 @@ export function createKnowledgeApiHandler(): NextApiHandler {
         : resolveWorkspace(request, subject, requestId, traceId);
       if (!isTicketAuth) assertScopes(route, subject, requestId, traceId);
 
-      const rateLimit = await runtime.rateLimit({ workspaceId, route, requestId });
+      const rateLimit = await runtime.rateLimit({
+        workspaceId: isTicketAuth && ticketValue ? ticketRateLimitScope(ticketValue) : workspaceId,
+        route,
+        requestId,
+      });
       if (rateLimit) {
         response.setHeader('RateLimit-Limit', String(rateLimit.limit));
         response.setHeader('RateLimit-Remaining', String(Math.max(0, rateLimit.remaining)));

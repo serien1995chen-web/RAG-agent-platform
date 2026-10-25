@@ -32,26 +32,39 @@ function SourceDownloadButton({ sourceId }: { sourceId: string }) {
   const { t } = useKnowledgeI18n();
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<unknown>(null);
+  const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
 
   return (
     <>
-      <Button
-        size="sm"
-        busy={busy}
-        onClick={() => {
-          setBusy(true);
-          setProblem(null);
-          void knowledgeRequest<{ url: string }>(`/v1/knowledge/sources/${sourceId}/download`, {
-            method: 'POST',
-            body: { disposition: 'attachment' },
-          })
-            .then((ticket) => window.open(ticket.url, '_blank', 'noopener,noreferrer'))
-            .catch(setProblem)
-            .finally(() => setBusy(false));
-        }}
-      >
-        {t('sources.download')}
-      </Button>
+      {downloadUrl ? (
+        <Button
+          href={downloadUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          size="sm"
+          tone="primary"
+        >
+          {t('sources.download')}
+        </Button>
+      ) : (
+        <Button
+          size="sm"
+          busy={busy}
+          onClick={() => {
+            setBusy(true);
+            setProblem(null);
+            void knowledgeRequest<{ url: string }>(`/v1/knowledge/sources/${sourceId}/download`, {
+              method: 'POST',
+              body: { disposition: 'attachment' },
+            })
+              .then((ticket) => setDownloadUrl(ticket.url))
+              .catch(setProblem)
+              .finally(() => setBusy(false));
+          }}
+        >
+          {t('sources.download')}
+        </Button>
+      )}
       {problem ? <ProblemNotice error={problem} /> : null}
     </>
   );
