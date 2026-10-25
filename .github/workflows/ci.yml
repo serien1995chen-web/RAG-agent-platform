@@ -25,7 +25,7 @@ env:
   KB_TEST_S3_ACCESS_KEY: minioadmin
   KB_TEST_S3_SECRET_KEY: minioadmin
   CI_MONGO_IMAGE: mongo:5.0.32
-  CI_MINIO_IMAGE: registry.cn-hangzhou.aliyuncs.com/fastgpt/minio:RELEASE.2025-09-07T16-13-09Z@sha256:a63b19df59e6ec7c02ebba6e7a1097b7e032da7947b18db7ff67dae8e84fd44d
+  CI_MINIO_IMAGE: minio/minio:RELEASE.2025-09-07T16-13-09Z
   NEXT_TELEMETRY_DISABLED: '1'
   TURBO_TELEMETRY_DISABLED: '1'
 
@@ -163,7 +163,7 @@ jobs:
           exit 1
       - name: Start MinIO
         run: |
-          timeout 300 docker pull "$CI_MINIO_IMAGE"
+          timeout 180 docker pull "$CI_MINIO_IMAGE"
           docker run --detach --name kb-ci-minio \
             --publish 9000:9000 \
             --env MINIO_ROOT_USER=minioadmin \
@@ -275,7 +275,7 @@ jobs:
           exit 1
       - name: Start MinIO
         run: |
-          timeout 300 docker pull "$CI_MINIO_IMAGE"
+          timeout 180 docker pull "$CI_MINIO_IMAGE"
           docker run --detach --name kb-ci-minio \
             --publish 9000:9000 \
             --env MINIO_ROOT_USER=minioadmin \

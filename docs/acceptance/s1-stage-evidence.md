@@ -104,8 +104,7 @@ GitHub 托管 runner 从阿里云杭州 Registry 拉取测试依赖镜像；这�
 测试耗时。
 
 CI 已调整为三个并行 job：`quality`、`integration`、`e2e`，并保留最终
-`verify` 聚合检查。Mongo、Redis、pgvector 使用 Docker Hub 固定版本 tag；
-MinIO 因国内网络条件单独使用设计要求的阿里云 CN 镜像与固定 Digest。发布
-Compose 和 release-smoke 继续使用设计要求的阿里云 Repository + Digest。Mongo
-拉取增加 180 秒硬超时，MinIO 拉取增加 300 秒硬超时，所有 job 均设置总超时，
+`verify` 聚合检查。Mongo、Redis、pgvector、MinIO 均使用 Docker Hub 固定版本
+tag；发布 Compose 和 release-smoke 继续使用设计要求的阿里云 Repository +
+Digest。Mongo 与 MinIO 拉取分别增加 180 秒硬超时，所有 job 均设置总超时，
 避免网络异常长期占用 runner。
