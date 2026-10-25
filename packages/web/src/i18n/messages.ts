@@ -775,6 +775,14 @@ export const messages = {
 
 export type MessageKey = keyof typeof zhCN;
 
+type AssertTrue<T extends true> = T;
+type AssertFalse<T extends false> = T;
+
+export type MessageKeyContract = [
+  AssertTrue<'spaces.title' extends MessageKey ? true : false>,
+  AssertFalse<'spaces.notARealKey' extends MessageKey ? true : false>,
+];
+
 export const ENUM_MESSAGE_KEYS: Readonly<Record<string, MessageKey>> = {
   space: 'enum.space',
   folder: 'enum.folder',
