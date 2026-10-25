@@ -5,7 +5,7 @@ import {
   matchRuntimeRoute,
   type RouteEntry,
 } from '@kb/contracts';
-import type { IdempotencyRecord } from '@kb/dal';
+import { buildIdempotencyScopeKey, type IdempotencyRecord } from '@kb/dal';
 import type { SafeAttributes, SafeLogFields } from '@kb/otel';
 import type { NextApiHandler, NextApiRequest, NextApiResponse } from 'next';
 import { bodyByteLength, requestHash } from './serialize';
@@ -357,7 +357,7 @@ export function createKnowledgeApiHandler(): NextApiHandler {
         const store = await runtime.idempotencyStore();
         result = await withIdempotency(
           store,
-          `kb-idem:${workspaceId}:${route.operationId}:${key}`,
+          buildIdempotencyScopeKey(workspaceId, method, path, key),
           requestHash({ path, method, body: requestBody ?? null }),
           execute,
           requestId,

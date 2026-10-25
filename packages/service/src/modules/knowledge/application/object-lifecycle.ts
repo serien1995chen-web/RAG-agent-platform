@@ -43,6 +43,41 @@ export class ObjectLifecycleService {
     result.scanned = candidates.length;
 
     for (const candidate of candidates) {
+      if (
+        candidate.state === 'active' &&
+        candidate.purpose === 'source' &&
+        candidate.uploadStatus === 'completed' &&
+        candidate.pendingObjectKey !== null &&
+        candidate.pendingUrlExpiresAt !== null &&
+        Date.parse(candidate.pendingUrlExpiresAt) <= now.getTime()
+      ) {
+        result.eligible += 1;
+        try {
+          await this.objectStore.deleteObject(
+            candidate.pendingObjectKey,
+            storageContext(candidate, context),
+          );
+          await this.objectRefs.clearUploadTemporaryObject(
+            candidate.blobId,
+            candidate.version,
+            context,
+          );
+          result.deleted += 1;
+        } catch (error) {
+          if (
+            error instanceof KnowledgeApiError &&
+            (error.problem.error.code === 'KNOWLEDGE_NOT_FOUND' ||
+              error.problem.error.code === 'KNOWLEDGE_CONFLICT' ||
+              error.problem.error.code === 'KNOWLEDGE_DEPENDENCY_UNAVAILABLE' ||
+              error.problem.error.code === 'KNOWLEDGE_DEPENDENCY_TIMEOUT')
+          ) {
+            result.retryable += 1;
+            continue;
+          }
+          result.failed += 1;
+        }
+        continue;
+      }
       if (await this.objectRefs.hasActiveSourceReference(candidate.blobId, context)) {
         continue;
       }
@@ -72,7 +107,25 @@ export class ObjectLifecycleService {
             context,
           );
         }
-        await this.objectStore.deleteObject(deleting.objectKey, storageContext(deleting, context));
+        if (
+          deleting.uploadMode === 'multipart' &&
+          deleting.providerUploadId !== null &&
+          candidate.state !== 'active'
+        ) {
+          await this.objectStore.abortMultipartUpload(
+            deleting.objectKey,
+            deleting.providerUploadId,
+            storageContext(deleting, context),
+          );
+        }
+        const objectKeys = new Set(
+          [deleting.objectKey, deleting.finalObjectKey].filter(
+            (key): key is string => typeof key === 'string' && key.length > 0,
+          ),
+        );
+        for (const objectKey of objectKeys) {
+          await this.objectStore.deleteObject(objectKey, storageContext(deleting, context));
+        }
         await this.objectRefs.confirmDeleted(deleting.blobId, deleting.version, context);
         result.deleted += 1;
       } catch (error) {

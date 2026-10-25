@@ -29,6 +29,14 @@ let lifecycle: ObjectLifecycleService;
 async function createPending(expired: boolean): Promise<string> {
   const uploadId = new mongoose.Types.ObjectId().toString();
   const safeName = `${uploadId}.txt`;
+  const finalObjectKey = knowledgeObjectKey({
+    workspaceId,
+    knowledgeSpaceId,
+    sourceId: 'unbound',
+    purpose: 'source',
+    blobId: uploadId,
+    safeName,
+  });
   await repository.createUploadSession(
     {
       uploadId,
@@ -36,14 +44,8 @@ async function createPending(expired: boolean): Promise<string> {
       knowledgeSpaceId,
       provider: 'minio',
       bucket: objectStore.bucket,
-      objectKey: knowledgeObjectKey({
-        workspaceId,
-        knowledgeSpaceId,
-        sourceId: 'unbound',
-        purpose: 'source',
-        blobId: uploadId,
-        safeName,
-      }),
+      objectKey: finalObjectKey.replace('/source/unbound/source/', '/source/unbound/pending/'),
+      finalObjectKey,
       mimeType: 'text/plain',
       sizeBytes: 5,
       originalName: safeName,
@@ -56,6 +58,58 @@ async function createPending(expired: boolean): Promise<string> {
     context,
   );
   return uploadId;
+}
+
+async function createExpiredMultipart(): Promise<{
+  uploadId: string;
+  objectKey: string;
+  providerUploadId: string;
+}> {
+  const uploadId = new mongoose.Types.ObjectId().toString();
+  const safeName = `${uploadId}.txt`;
+  const finalObjectKey = knowledgeObjectKey({
+    workspaceId,
+    knowledgeSpaceId,
+    sourceId: 'unbound',
+    purpose: 'source',
+    blobId: uploadId,
+    safeName,
+  });
+  const objectKey = finalObjectKey.replace('/source/unbound/source/', '/source/unbound/pending/');
+  const storage = {
+    workspaceId,
+    knowledgeSpaceId,
+    requestId: context.requestId,
+    traceId: context.traceId,
+  };
+  const providerUploadId = await objectStore.createMultipartUpload(
+    objectKey,
+    'text/plain',
+    {},
+    storage,
+  );
+  await objectStore.uploadPart(objectKey, providerUploadId, 1, Buffer.from('hello'), storage);
+  await repository.createUploadSession(
+    {
+      uploadId,
+      workspaceId,
+      knowledgeSpaceId,
+      provider: 'minio',
+      bucket: objectStore.bucket,
+      objectKey,
+      finalObjectKey,
+      mimeType: 'text/plain',
+      sizeBytes: 5,
+      originalName: safeName,
+      mode: 'multipart',
+      partSizeBytes: 8388608,
+      partCount: 1,
+      providerUploadId,
+      expiresAt: new Date(Date.now() - 1000),
+    },
+    context,
+  );
+  return { uploadId, objectKey, providerUploadId };
 }
 
 beforeAll(async () => {
@@ -129,5 +183,113 @@ describe('TEST-FILE-005-BLOCK object lifecycle', () => {
     await lifecycle.cleanup(context);
     await lifecycle.cleanup(context);
     expect((await repository.findObjectRef(uploadId, context))?.state).toBe('deleted');
+  });
+
+  it('TEST-FILE-005-T08 aborts an expired multipart upload before deletion', async () => {
+    const multipart = await createExpiredMultipart();
+    const result = await lifecycle.cleanup(context);
+    expect(result.deleted).toBeGreaterThanOrEqual(1);
+    expect((await repository.findObjectRef(multipart.uploadId, context))?.state).toBe('deleted');
+    const listError = await objectStore
+      .listParts(multipart.objectKey, multipart.providerUploadId, {
+        workspaceId,
+        knowledgeSpaceId,
+        requestId: context.requestId,
+        traceId: context.traceId,
+      })
+      .catch((error: unknown) => error);
+    expect(listError).toMatchObject({
+      problem: { error: { code: 'KNOWLEDGE_NOT_FOUND' } },
+    });
+  });
+
+  it('TEST-FILE-005-T09 removes only an expired pending key from an active upload', async () => {
+    const uploadId = await createPending(false);
+    const ref = await repository.findObjectRef(uploadId, context);
+    if (!ref?.pendingObjectKey || !ref.finalObjectKey) {
+      throw new Error('upload temporary keys missing');
+    }
+    const storage = {
+      workspaceId,
+      knowledgeSpaceId,
+      requestId: context.requestId,
+      traceId: context.traceId,
+    };
+    await objectStore.putObject(
+      {
+        key: ref.pendingObjectKey,
+        body: Buffer.from('old-url-recreated'),
+        contentType: 'text/plain',
+        workspaceId,
+        knowledgeSpaceId,
+      },
+      storage,
+    );
+    await connection.models.KnowledgeObjectRef.updateOne(
+      { workspaceId, _id: new mongoose.Types.ObjectId(uploadId) },
+      {
+        $set: {
+          state: 'active',
+          objectKey: ref.finalObjectKey,
+          'upload.status': 'completed',
+          'upload.finalizedAt': new Date(),
+          'upload.pendingUrlExpiresAt': new Date(Date.now() - 1),
+        },
+      },
+    );
+
+    const result = await lifecycle.cleanup(context, new Date());
+    expect(result.deleted).toBeGreaterThanOrEqual(1);
+    const cleaned = await repository.findObjectRef(uploadId, context);
+    expect(cleaned).toMatchObject({
+      state: 'active',
+      objectKey: ref.finalObjectKey,
+      pendingObjectKey: null,
+      pendingUrlExpiresAt: null,
+    });
+    const pendingError = await objectStore
+      .headObject(objectStore.bucket, ref.pendingObjectKey, storage)
+      .catch((error: unknown) => error);
+    expect(pendingError).toMatchObject({
+      problem: { error: { code: 'KNOWLEDGE_NOT_FOUND' } },
+    });
+  });
+
+  it('TEST-FILE-005-T10 removes both pending and final keys after failed activation', async () => {
+    const uploadId = await createPending(true);
+    const ref = await repository.findObjectRef(uploadId, context);
+    if (!ref?.pendingObjectKey || !ref.finalObjectKey) {
+      throw new Error('upload temporary keys missing');
+    }
+    const storage = {
+      workspaceId,
+      knowledgeSpaceId,
+      requestId: context.requestId,
+      traceId: context.traceId,
+    };
+    for (const key of [ref.pendingObjectKey, ref.finalObjectKey]) {
+      await objectStore.putObject(
+        {
+          key,
+          body: Buffer.from('leftover'),
+          contentType: 'text/plain',
+          workspaceId,
+          knowledgeSpaceId,
+        },
+        storage,
+      );
+    }
+
+    const result = await lifecycle.cleanup(context, new Date());
+    expect(result.deleted).toBeGreaterThanOrEqual(1);
+    expect((await repository.findObjectRef(uploadId, context))?.state).toBe('deleted');
+    for (const key of [ref.pendingObjectKey, ref.finalObjectKey]) {
+      const error = await objectStore
+        .headObject(objectStore.bucket, key, storage)
+        .catch((caught: unknown) => caught);
+      expect(error).toMatchObject({
+        problem: { error: { code: 'KNOWLEDGE_NOT_FOUND' } },
+      });
+    }
   });
 });

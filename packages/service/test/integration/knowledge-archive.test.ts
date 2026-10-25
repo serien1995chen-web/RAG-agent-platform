@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import mongoose from 'mongoose';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { createKnowledgeError } from '@kb/contracts';
 import { FileTicketService, MinioKnowledgeObjectStore } from '../../../../sdk/storage/src/index';
 import { KnowledgeArchiveWorker } from '../../../../projects/app/src/runtime/archive-worker';
 import { FileApplication } from '../../src/modules/knowledge/application/file.application';
@@ -36,6 +37,7 @@ let objectRefs: KnowledgeObjectRefRepository;
 let files: FileApplication;
 let jobs: KnowledgeArchiveRepository;
 let sourceId: string;
+const createdObjects = new Set<string>();
 
 const catalog = {
   async getSpace(id: string) {
@@ -47,6 +49,86 @@ const access = {
     return { allowed: true };
   },
 } as unknown as AccessPort;
+
+function runtimeConfig(): KnowledgeRuntimeConfig {
+  return {
+    s3: {
+      endpoint: process.env.KB_TEST_S3_ENDPOINT ?? 'http://127.0.0.1:9000',
+      bucket: objectStore.bucket,
+      region: process.env.KB_TEST_S3_REGION ?? 'us-east-1',
+      accessKeyRef: 'env:KB_TEST_S3_ACCESS_KEY',
+      secretKeyRef: 'env:KB_TEST_S3_SECRET_KEY',
+      credentialRefs: ['env:KB_TEST_S3_ACCESS_KEY', 'env:KB_TEST_S3_SECRET_KEY'],
+    },
+  } as unknown as KnowledgeRuntimeConfig;
+}
+
+async function createSource(body: Buffer, name: string) {
+  const session = await files.init(
+    {
+      knowledgeSpaceId,
+      name,
+      mimeType: 'text/plain',
+      sizeBytes: body.byteLength,
+    },
+    context,
+  );
+  const ref = await objectRefs.findObjectRef(session.uploadId, context);
+  if (!ref) throw new Error('upload object ref missing');
+  createdObjects.add(ref.objectKey);
+  const parts: Array<{ partNumber: number; etag: string }> = [];
+  if (session.mode === 'single') {
+    const presigned = await files.presign(session.uploadId, { partNumbers: [1] }, context);
+    const upload = await fetch(presigned.uploads[0]!.url, {
+      method: 'PUT',
+      headers: presigned.uploads[0]!.headers,
+      body,
+    });
+    expect(upload.status).toBe(200);
+  } else {
+    for (let partNumber = 1; partNumber <= session.partCount; partNumber += 1) {
+      const start = (partNumber - 1) * session.partSizeBytes;
+      const part = await files.uploadPart(
+        session.uploadId,
+        partNumber,
+        body.subarray(start, Math.min(start + session.partSizeBytes, body.byteLength)),
+        context,
+      );
+      parts.push(part);
+    }
+  }
+  const completed = await files.complete({ uploadId: session.uploadId, parts }, context);
+  const source = await connection.models.KnowledgeSource.create({
+    workspaceId,
+    knowledgeSpaceId: new mongoose.Types.ObjectId(knowledgeSpaceId),
+    version: 1,
+    deletedAt: null,
+    createdByMemberId: context.memberId,
+    updatedByMemberId: context.memberId,
+    kind: 'file',
+    name,
+    blobRefId: new mongoose.Types.ObjectId(completed.blobId),
+    mimeType: 'text/plain',
+    sizeBytes: body.byteLength,
+    ownershipMemberId: context.memberId,
+  });
+  await connection.models.KnowledgeObjectRef.updateOne(
+    { workspaceId, _id: new mongoose.Types.ObjectId(completed.blobId) },
+    { $set: { sourceId: source._id } },
+  );
+  return { sourceId: String(source._id), blobId: completed.blobId };
+}
+
+class FailingDeleteStore extends MinioKnowledgeObjectStore {
+  override async deleteObject(): Promise<{ deleted: boolean }> {
+    throw createKnowledgeError({
+      code: 'KNOWLEDGE_DEPENDENCY_UNAVAILABLE',
+      requestId: context.requestId,
+      traceId: context.traceId,
+      details: { reason: 'injected_delete_failure' },
+    });
+  }
+}
 
 beforeAll(async () => {
   const mongoUri = new URL(
@@ -82,6 +164,16 @@ beforeAll(async () => {
 }, 60_000);
 
 afterAll(async () => {
+  for (const key of createdObjects) {
+    await objectStore
+      .deleteObject(key, {
+        workspaceId: context.workspaceId,
+        knowledgeSpaceId,
+        requestId: context.requestId,
+        traceId: context.traceId,
+      })
+      .catch(() => undefined);
+  }
   if (connection) {
     for (const entry of KNOWLEDGE_SCHEMA_REGISTRY) {
       const model = connection.models[entry.modelName];
@@ -105,6 +197,7 @@ describe('TEST-FILE-004-BLOCK source archive worker', () => {
     );
     const refBefore = await objectRefs.findObjectRef(session.uploadId, context);
     if (!refBefore) throw new Error('upload object ref missing');
+    createdObjects.add(refBefore.objectKey);
     const presigned = await files.presign(session.uploadId, { partNumbers: [1] }, context);
     const uploadResponse = await fetch(presigned.uploads[0]!.url, {
       method: 'PUT',
@@ -150,7 +243,13 @@ describe('TEST-FILE-004-BLOCK source archive worker', () => {
         credentialRefs: ['env:KB_TEST_S3_ACCESS_KEY', 'env:KB_TEST_S3_SECRET_KEY'],
       },
     } as unknown as KnowledgeRuntimeConfig;
-    const worker = new KnowledgeArchiveWorker(connection, config, `archive-worker-${suffix}`);
+    const worker = new KnowledgeArchiveWorker(
+      connection,
+      config,
+      `archive-worker-${suffix}`,
+      undefined,
+      objectStore,
+    );
     await worker.runOnce();
     const succeeded = await jobs.get(String(job.jobId), context);
     expect(succeeded.status).toBe('succeeded');
@@ -170,6 +269,121 @@ describe('TEST-FILE-004-BLOCK source archive worker', () => {
     expect(zip.subarray(0, 2).toString('ascii')).toBe('PK');
     expect(zip.byteLength).toBeGreaterThan(body.byteLength);
     await objectStore.deleteObject(artifact.objectKey, { ...context, knowledgeSpaceId });
+  });
+
+  it('TEST-FILE-004-A13/A14 fails a real compression bomb and leaves no active artifact', async () => {
+    const source = await createSource(Buffer.alloc(17 * 1024 * 1024), 'compression-bomb.txt');
+    const job = await jobs.createExportJob(
+      {
+        spaceId: knowledgeSpaceId,
+        sourceIds: [source.sourceId],
+        idempotencyKey: `archive-bomb-${suffix}`,
+      },
+      context,
+    );
+    const worker = new KnowledgeArchiveWorker(
+      connection,
+      runtimeConfig(),
+      `archive-bomb-worker-${suffix}`,
+      undefined,
+      objectStore,
+    );
+    await worker.runOnce();
+
+    const failed = await jobs.get(String(job.jobId), context);
+    expect(failed.status).toBe('failed');
+    expect((failed.error as { code?: string }).code).toBe('KNOWLEDGE_UNSUPPORTED_CONTENT');
+    const blobId = createHash('sha1')
+      .update(`archive:${String(job.jobId)}`)
+      .digest('hex')
+      .slice(0, 24);
+    expect((await objectRefs.findObjectRef(blobId, context))?.state).toBe('deleted');
+    expect(
+      await connection.models.KnowledgeObjectRef.countDocuments({
+        workspaceId,
+        purpose: 'export',
+        state: 'active',
+        _id: new mongoose.Types.ObjectId(blobId),
+      }),
+    ).toBe(0);
+  });
+
+  it('TEST-FILE-004-A15 keeps a deleting ref when unsafe artifact cleanup fails', async () => {
+    const job = await jobs.createExportJob(
+      {
+        spaceId: knowledgeSpaceId,
+        sourceIds: [sourceId],
+        idempotencyKey: `archive-cleanup-failure-${suffix}`,
+      },
+      context,
+    );
+    const unsafeInspector: ArchiveSafetyPort = {
+      validateEntryPath() {
+        return { safe: true };
+      },
+      async inspect() {
+        return {
+          archive: true,
+          safe: false,
+          status: 'unsupported',
+          reason: 'archive_structure_invalid',
+        };
+      },
+    };
+    const endpoint = new URL(process.env.KB_TEST_S3_ENDPOINT ?? 'http://127.0.0.1:9000');
+    const failingStore = new FailingDeleteStore({
+      provider: 'minio',
+      endPoint: endpoint.hostname,
+      port: Number(endpoint.port || (endpoint.protocol === 'https:' ? 443 : 80)),
+      useSSL: endpoint.protocol === 'https:',
+      accessKey: process.env.KB_TEST_S3_ACCESS_KEY ?? 'minioadmin',
+      secretKey: process.env.KB_TEST_S3_SECRET_KEY ?? 'minioadmin',
+      region: process.env.KB_TEST_S3_REGION ?? 'us-east-1',
+      bucket: objectStore.bucket,
+    });
+    const worker = new KnowledgeArchiveWorker(
+      connection,
+      runtimeConfig(),
+      `archive-cleanup-worker-${suffix}`,
+      unsafeInspector,
+      failingStore,
+    );
+    await worker.runOnce();
+
+    const retry = await jobs.get(String(job.jobId), context);
+    expect(retry.status).toBe('retry_wait');
+    expect((retry.error as { retryable?: boolean }).retryable).toBe(true);
+    const blobId = createHash('sha1')
+      .update(`archive:${String(job.jobId)}`)
+      .digest('hex')
+      .slice(0, 24);
+    const pending = await objectRefs.findObjectRef(blobId, context);
+    expect(pending?.state).toBe('deleting');
+
+    await connection.models.KnowledgeJob.updateOne(
+      {
+        workspaceId: context.workspaceId,
+        _id: new mongoose.Types.ObjectId(String(job.jobId)),
+      },
+      {
+        $set: {
+          status: 'queued',
+          availableAt: new Date(0),
+          leaseOwner: null,
+          leaseExpiresAt: null,
+        },
+      },
+    );
+    const retryWorker = new KnowledgeArchiveWorker(
+      connection,
+      runtimeConfig(),
+      `archive-cleanup-retry-worker-${suffix}`,
+      unsafeInspector,
+      objectStore,
+    );
+    await retryWorker.runOnce();
+    const converged = await objectRefs.findObjectRef(blobId, context);
+    expect(converged?.state).toBe('deleted');
   });
 
   it('TEST-FILE-004-A16 rejects unsafe archive output before active ObjectRef creation', async () => {
@@ -209,6 +423,7 @@ describe('TEST-FILE-004-BLOCK source archive worker', () => {
       config,
       `archive-unsafe-worker-${suffix}`,
       unsafeInspector,
+      objectStore,
     );
     await worker.runOnce();
 

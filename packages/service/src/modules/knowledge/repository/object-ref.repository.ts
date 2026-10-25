@@ -82,6 +82,12 @@ function objectRefDto(document: PlainObjectRef): ObjectRefView {
     bucket: document.bucket,
     objectKey: document.objectKey,
     providerUploadId: document.upload?.providerUploadId ?? null,
+    uploadMode: document.upload?.mode ?? null,
+    uploadStatus: document.upload?.status ?? null,
+    pendingObjectKey: document.upload?.pendingObjectKey ?? null,
+    finalObjectKey: document.upload?.finalObjectKey ?? null,
+    finalizedAt: document.upload?.finalizedAt?.toISOString() ?? null,
+    pendingUrlExpiresAt: document.upload?.pendingUrlExpiresAt?.toISOString() ?? null,
     originalName: document.upload?.originalName ?? 'file',
     purpose: document.purpose,
     sourceId: document.sourceId ? String(document.sourceId) : null,
@@ -160,6 +166,10 @@ export class KnowledgeObjectRefRepository implements ObjectRefRepositoryPort {
         mode: input.mode,
         status: 'uploading',
         providerUploadId: input.providerUploadId,
+        pendingObjectKey: input.objectKey,
+        finalObjectKey: input.finalObjectKey,
+        finalizedAt: null,
+        pendingUrlExpiresAt: input.expiresAt,
         partSizeBytes: input.partSizeBytes,
         partCount: input.partCount,
         parts: [],
@@ -271,12 +281,15 @@ export class KnowledgeObjectRefRepository implements ObjectRefRepositoryPort {
         {
           $set: {
             state: 'active',
+            objectKey: input.objectKey,
             sizeBytes: input.sizeBytes,
             etag: input.etag,
             sha256: input.sha256,
             expiresAt: null,
             'upload.status': 'completed',
             'upload.parts': input.parts,
+            'upload.finalObjectKey': input.objectKey,
+            'upload.finalizedAt': new Date(),
             'upload.completedAt': new Date(),
             updatedByMemberId: context.memberId,
           },
@@ -384,6 +397,13 @@ export class KnowledgeObjectRefRepository implements ObjectRefRepositoryPort {
               purpose: 'export',
               expiresAt: { $ne: null, $lte: now },
             },
+            {
+              state: 'active',
+              purpose: 'source',
+              'upload.status': 'completed',
+              'upload.pendingObjectKey': { $ne: null },
+              'upload.pendingUrlExpiresAt': { $ne: null, $lte: now },
+            },
           ],
         }),
       )
@@ -452,6 +472,40 @@ export class KnowledgeObjectRefRepository implements ObjectRefRepositoryPort {
     return objectRefDto(updated);
   }
 
+  async clearUploadTemporaryObject(
+    blobId: string,
+    expectedVersion: number,
+    context: TenantContext,
+  ): Promise<ObjectRefView> {
+    const id = objectIdOrNotFound(blobId, context, 'blobId');
+    const updated = await this.objects
+      .findOneAndUpdate(
+        this.tenantFilter(context, {
+          _id: id,
+          version: expectedVersion,
+          state: 'active',
+          purpose: 'source',
+          'upload.status': 'completed',
+          'upload.pendingObjectKey': { $ne: null },
+        }),
+        {
+          $set: {
+            'upload.pendingObjectKey': null,
+            'upload.pendingUrlExpiresAt': null,
+            updatedByMemberId: context.memberId,
+          },
+          $inc: { version: 1 },
+        },
+        { new: true },
+      )
+      .lean<PlainObjectRef>()
+      .exec();
+    if (!updated) {
+      throw tenantError(context, 'KNOWLEDGE_CONFLICT', { blobId, expectedVersion });
+    }
+    return objectRefDto(updated);
+  }
+
   async hasActiveSourceReference(blobId: string, context: TenantContext): Promise<boolean> {
     if (!Types.ObjectId.isValid(blobId)) return false;
     const count = await this.sources.countDocuments({
@@ -462,7 +516,7 @@ export class KnowledgeObjectRefRepository implements ObjectRefRepositoryPort {
     return count > 0;
   }
 
-  async createArchiveArtifact(
+  async createPendingArchiveArtifact(
     input: {
       blobId: string;
       knowledgeSpaceId: string;
@@ -471,14 +525,65 @@ export class KnowledgeObjectRefRepository implements ObjectRefRepositoryPort {
       objectKey: string;
       mimeType: string;
       sizeBytes: number;
-      etag: string;
-      sha256: string;
       expiresAt: Date;
     },
     context: TenantContext,
   ): Promise<ObjectRefView> {
     const existing = await this.findObjectRef(input.blobId, context);
-    if (existing) return existing;
+    if (existing?.state === 'active') return existing;
+    if (existing) {
+      const reset = await this.objects
+        .findOneAndUpdate(
+          this.tenantFilter(context, {
+            _id: objectIdOf(input.blobId, context, 'blobId'),
+            version: existing.version,
+          }),
+          {
+            $set: {
+              knowledgeSpaceId: objectIdOf(input.knowledgeSpaceId, context, 'knowledgeSpaceId'),
+              deletedAt: null,
+              updatedByMemberId: context.memberId,
+              provider: input.provider,
+              bucket: input.bucket,
+              objectKey: input.objectKey,
+              purpose: 'export',
+              sourceId: null,
+              mimeType: input.mimeType,
+              sizeBytes: input.sizeBytes,
+              etag: '',
+              sha256: '',
+              state: 'pending',
+              expiresAt: input.expiresAt,
+              upload: {
+                mode: null,
+                status: null,
+                providerUploadId: null,
+                pendingObjectKey: null,
+                finalObjectKey: input.objectKey,
+                finalizedAt: null,
+                pendingUrlExpiresAt: null,
+                partSizeBytes: 8388608,
+                partCount: 0,
+                parts: [],
+                originalName: 'sources.zip',
+                completedAt: null,
+                abortedAt: null,
+              },
+            },
+            $inc: { version: 1 },
+          },
+          { new: true },
+        )
+        .lean<PlainObjectRef>()
+        .exec();
+      if (!reset) {
+        throw tenantError(context, 'KNOWLEDGE_CONFLICT', {
+          blobId: input.blobId,
+          expectedVersion: existing.version,
+        });
+      }
+      return objectRefDto(reset);
+    }
     const document = new this.objects({
       _id: objectIdOf(input.blobId, context, 'blobId'),
       workspaceId: requireWorkspaceId(context),
@@ -494,23 +599,71 @@ export class KnowledgeObjectRefRepository implements ObjectRefRepositoryPort {
       sourceId: null,
       mimeType: input.mimeType,
       sizeBytes: input.sizeBytes,
-      etag: input.etag,
-      sha256: input.sha256,
-      state: 'active',
+      etag: '',
+      sha256: '',
+      state: 'pending',
       expiresAt: input.expiresAt,
       upload: {
         mode: null,
         status: null,
         providerUploadId: null,
+        pendingObjectKey: null,
+        finalObjectKey: input.objectKey,
+        finalizedAt: null,
+        pendingUrlExpiresAt: null,
         partSizeBytes: 8388608,
         partCount: 0,
         parts: [],
         originalName: 'sources.zip',
-        completedAt: new Date(),
+        completedAt: null,
         abortedAt: null,
       },
     });
     await document.save();
     return objectRefDto(document.toObject<PlainObjectRef>());
+  }
+
+  async activateArchiveArtifact(
+    input: {
+      blobId: string;
+      expectedVersion: number;
+      sizeBytes: number;
+      etag: string;
+      sha256: string;
+      expiresAt: Date;
+    },
+    context: TenantContext,
+  ): Promise<ObjectRefView> {
+    const updated = await this.objects
+      .findOneAndUpdate(
+        this.tenantFilter(context, {
+          _id: objectIdOrNotFound(input.blobId, context, 'blobId'),
+          version: input.expectedVersion,
+          purpose: 'export',
+          state: 'pending',
+        }),
+        {
+          $set: {
+            state: 'active',
+            sizeBytes: input.sizeBytes,
+            etag: input.etag,
+            sha256: input.sha256,
+            expiresAt: input.expiresAt,
+            'upload.completedAt': new Date(),
+            updatedByMemberId: context.memberId,
+          },
+          $inc: { version: 1 },
+        },
+        { new: true },
+      )
+      .lean<PlainObjectRef>()
+      .exec();
+    if (!updated) {
+      throw tenantError(context, 'KNOWLEDGE_CONFLICT', {
+        blobId: input.blobId,
+        expectedVersion: input.expectedVersion,
+      });
+    }
+    return objectRefDto(updated);
   }
 }

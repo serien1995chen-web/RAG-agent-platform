@@ -27,6 +27,13 @@ const ref: ObjectRefView = {
   bucket: 'kb-test',
   objectKey: 'ws/ws_fault/space/65f1e5b2a1c9d4b7e8f01234/source/unbound/source/blob/file.txt',
   providerUploadId: null,
+  uploadMode: 'single',
+  uploadStatus: 'uploading',
+  pendingObjectKey:
+    'ws/ws_fault/space/65f1e5b2a1c9d4b7e8f01234/source/unbound/pending/blob/file.txt',
+  finalObjectKey: 'ws/ws_fault/space/65f1e5b2a1c9d4b7e8f01234/source/unbound/final/blob/file.txt',
+  finalizedAt: null,
+  pendingUrlExpiresAt: new Date(0).toISOString(),
   originalName: 'file.txt',
   purpose: 'source',
   sourceId: null,
@@ -64,6 +71,40 @@ describe('TEST-FILE-005-BLOCK lifecycle fault', () => {
     const result = await service.cleanup(context);
     expect(result.retryable).toBe(1);
     expect(repository.confirmDeleted).not.toHaveBeenCalled();
+  });
+
+  it('TEST-FILE-005-T08 aborts expired multipart state before deleting the object', async () => {
+    const expired: ObjectRefView = {
+      ...ref,
+      providerUploadId: 'provider-upload-1',
+      uploadMode: 'multipart',
+      uploadStatus: 'uploading',
+    };
+    const deleting = { ...expired, state: 'deleting' as const, version: 2 };
+    const repository = {
+      findCleanupCandidates: vi.fn().mockResolvedValue([expired]),
+      hasActiveSourceReference: vi.fn().mockResolvedValue(false),
+      markDeleting: vi.fn().mockResolvedValue(deleting),
+      confirmDeleted: vi.fn().mockResolvedValue({ ...deleting, state: 'deleted' }),
+    } as unknown as ObjectRefRepositoryPort;
+    const abortMultipartUpload = vi.fn().mockResolvedValue({ aborted: true });
+    const deleteObject = vi.fn().mockResolvedValue({ deleted: true });
+    const service = new ObjectLifecycleService(
+      repository,
+      { abortMultipartUpload, deleteObject } as never,
+      500,
+    );
+    const result = await service.cleanup(context);
+    expect(result.deleted).toBe(1);
+    expect(abortMultipartUpload).toHaveBeenCalledWith(
+      expired.objectKey,
+      'provider-upload-1',
+      expect.any(Object),
+    );
+    expect(deleteObject).toHaveBeenCalled();
+    expect(abortMultipartUpload.mock.invocationCallOrder[0]).toBeLessThan(
+      deleteObject.mock.invocationCallOrder[0]!,
+    );
   });
 });
 

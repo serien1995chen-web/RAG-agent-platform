@@ -6,6 +6,8 @@ import type {
   KnowledgeObjectRef,
   MultipartCompleteResult,
   MultipartPart,
+  ObjectCopyInput,
+  ObjectCopyResult,
   ObjectHeadResult,
   ObjectPutInput,
   ObjectStorePort,
@@ -14,8 +16,10 @@ import type {
   PresignedUploadResult,
 } from '../object-store-contract';
 import {
+  assertKnowledgeObjectKey,
   expectedExpiry,
   isNotFoundProviderError,
+  mapObjectCopyError,
   mapObjectStoreError,
   normalizeEtag,
   parseSingleRange,
@@ -31,6 +35,7 @@ import {
 
 interface CosResult {
   ETag?: string;
+  ContentLength?: number;
   UploadId?: string;
   Url?: string;
   Body?: unknown;
@@ -44,6 +49,7 @@ interface CosClientLike {
   headBucket(params: Record<string, unknown>): Promise<unknown>;
   putBucket(params: Record<string, unknown>): Promise<unknown>;
   putObject(params: Record<string, unknown>): Promise<CosResult>;
+  putObjectCopy(params: Record<string, unknown>): Promise<CosResult>;
   headObject(params: Record<string, unknown>): Promise<CosResult>;
   getObject(params: Record<string, unknown>): Promise<CosResult>;
   deleteObject(params: Record<string, unknown>): Promise<unknown>;
@@ -73,18 +79,23 @@ export class CosKnowledgeObjectStore implements ObjectStorePort {
   readonly verificationStatus = 'EXTERNAL_UNVERIFIED' as const;
   private readonly client: CosClientLike;
 
-  constructor(private readonly config: CloudKnowledgeObjectStoreConfig) {
+  constructor(
+    private readonly config: CloudKnowledgeObjectStoreConfig,
+    injectedClient?: CosClientLike,
+  ) {
     this.bucket = config.bucket;
-    this.client = new COS({
-      SecretId: config.credentials.accessKeyId,
-      SecretKey: config.credentials.secretAccessKey,
-      ...(config.credentials.sessionToken
-        ? { SecurityToken: config.credentials.sessionToken }
-        : {}),
-      Domain: endpointDomain(config.endpoint),
-      Protocol: endpointProtocol(config.endpoint),
-      Timeout: 120_000,
-    }) as unknown as CosClientLike;
+    this.client =
+      injectedClient ??
+      (new COS({
+        SecretId: config.credentials.accessKeyId,
+        SecretKey: config.credentials.secretAccessKey,
+        ...(config.credentials.sessionToken
+          ? { SecurityToken: config.credentials.sessionToken }
+          : {}),
+        Domain: endpointDomain(config.endpoint),
+        Protocol: endpointProtocol(config.endpoint),
+        Timeout: 120_000,
+      }) as unknown as CosClientLike);
   }
 
   private params(key?: string): Record<string, unknown> {
@@ -117,6 +128,7 @@ export class CosKnowledgeObjectStore implements ObjectStorePort {
     input: ObjectPutInput,
     context: KnowledgeObjectContext,
   ): Promise<KnowledgeObjectRef> {
+    assertKnowledgeObjectKey(input.key, context);
     const materialized = await materializeBody(input.body, input.sizeBytes, context);
     try {
       await this.client.putObject({
@@ -145,11 +157,51 @@ export class CosKnowledgeObjectStore implements ObjectStorePort {
     }
   }
 
+  async copyObjectImmutable(
+    input: ObjectCopyInput,
+    context: KnowledgeObjectContext,
+  ): Promise<ObjectCopyResult> {
+    assertKnowledgeObjectKey(input.sourceKey, context);
+    assertKnowledgeObjectKey(input.targetKey, context);
+    if (input.sourceKey === input.targetKey || input.expectedSourceEtag.length === 0) {
+      throw providerContractError(this.provider, 'copyObjectImmutable', context);
+    }
+    const encodedSource = input.sourceKey
+      .split('/')
+      .map((segment) => encodeURIComponent(segment))
+      .join('/');
+    try {
+      const copied = await this.client.putObjectCopy({
+        ...this.params(input.targetKey),
+        CopySource: `${this.bucket}.cos.${this.config.region}.myqcloud.com/${encodedSource}`,
+        CopySourceIfMatch: input.expectedSourceEtag,
+        MetadataDirective: 'Replaced',
+        ContentType: input.contentType,
+        Headers: Object.fromEntries(
+          Object.entries(input.metadata ?? {}).map(([key, value]) => [`x-cos-meta-${key}`, value]),
+        ),
+      });
+      const head = await this.headObject(this.bucket, input.targetKey, context);
+      const etag = normalizeEtag(copied.ETag) || head.etag;
+      if (head.size !== input.expectedSize || etag.length === 0) {
+        throw providerContractError(this.provider, 'copyObjectImmutable', context);
+      }
+      return {
+        sourceEtag: input.expectedSourceEtag,
+        etag,
+        sizeBytes: head.size,
+      };
+    } catch (error) {
+      mapObjectCopyError(error, this.provider, context, [input.sourceKey, input.targetKey]);
+    }
+  }
+
   async headObject(
     bucket: string,
     key: string,
     context: KnowledgeObjectContext,
   ): Promise<ObjectHeadResult> {
+    assertKnowledgeObjectKey(key, context);
     if (bucket !== this.bucket) {
       throw providerContractError(this.provider, 'headObject', context);
     }
@@ -178,6 +230,7 @@ export class CosKnowledgeObjectStore implements ObjectStorePort {
     range: string | null,
     context: KnowledgeObjectContext,
   ): Promise<ObjectStreamResult> {
+    assertKnowledgeObjectKey(key, context);
     const head = await this.headObject(bucket, key, context);
     const parsedRange = parseSingleRange(range, head.size, context);
     try {
@@ -206,6 +259,7 @@ export class CosKnowledgeObjectStore implements ObjectStorePort {
     context: KnowledgeObjectContext,
     multipart?: { providerUploadId: string; partNumber: number },
   ): Promise<PresignedUploadResult> {
+    assertKnowledgeObjectKey(key, context);
     try {
       const result = await this.client.getObjectUrl({
         ...this.params(key),
@@ -241,6 +295,7 @@ export class CosKnowledgeObjectStore implements ObjectStorePort {
     expiresSeconds: number,
     context: KnowledgeObjectContext,
   ): Promise<PresignedGetResult> {
+    assertKnowledgeObjectKey(key, context);
     try {
       const result = await this.client.getObjectUrl({
         ...this.params(key),
@@ -264,6 +319,7 @@ export class CosKnowledgeObjectStore implements ObjectStorePort {
     metadata: Record<string, string>,
     context: KnowledgeObjectContext,
   ): Promise<string> {
+    assertKnowledgeObjectKey(key, context);
     try {
       const result = await this.client.multipartInit({
         ...this.params(key),
@@ -288,6 +344,7 @@ export class CosKnowledgeObjectStore implements ObjectStorePort {
     body: Uint8Array | Readable,
     context: KnowledgeObjectContext,
   ): Promise<MultipartPart> {
+    assertKnowledgeObjectKey(key, context);
     const materialized = await materializeBody(body, undefined, context);
     try {
       const result = await this.client.multipartUpload({
@@ -315,6 +372,7 @@ export class CosKnowledgeObjectStore implements ObjectStorePort {
     providerUploadId: string,
     context: KnowledgeObjectContext,
   ): Promise<MultipartPart[]> {
+    assertKnowledgeObjectKey(key, context);
     const parts: MultipartPart[] = [];
     let marker: number | undefined;
     try {
@@ -348,6 +406,7 @@ export class CosKnowledgeObjectStore implements ObjectStorePort {
     parts: readonly MultipartPart[],
     context: KnowledgeObjectContext,
   ): Promise<MultipartCompleteResult> {
+    assertKnowledgeObjectKey(key, context);
     try {
       const result = await this.client.multipartComplete({
         ...this.params(key),
@@ -372,6 +431,7 @@ export class CosKnowledgeObjectStore implements ObjectStorePort {
     providerUploadId: string,
     context: KnowledgeObjectContext,
   ): Promise<{ aborted: boolean }> {
+    assertKnowledgeObjectKey(key, context);
     try {
       await this.client.multipartAbort({
         ...this.params(key),
@@ -385,6 +445,7 @@ export class CosKnowledgeObjectStore implements ObjectStorePort {
   }
 
   async deleteObject(key: string, context: KnowledgeObjectContext): Promise<{ deleted: boolean }> {
+    assertKnowledgeObjectKey(key, context);
     try {
       await this.client.deleteObject(this.params(key));
       return { deleted: true };

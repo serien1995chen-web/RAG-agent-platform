@@ -45,6 +45,21 @@ export interface ObjectPutInput {
   ttlExpireAt?: Date | null;
 }
 
+export interface ObjectCopyInput {
+  sourceKey: string;
+  targetKey: string;
+  expectedSourceEtag: string;
+  expectedSize: number;
+  contentType: string;
+  metadata?: Record<string, string>;
+}
+
+export interface ObjectCopyResult {
+  sourceEtag: string;
+  etag: string;
+  sizeBytes: number;
+}
+
 export interface ObjectHeadResult {
   size: number;
   etag: string;
@@ -119,6 +134,10 @@ export interface ObjectStorePort {
   readonly verificationStatus: ProviderVerificationStatus;
   ensureBucket(bucket: string, context: KnowledgeObjectContext): Promise<void>;
   putObject(input: ObjectPutInput, context: KnowledgeObjectContext): Promise<KnowledgeObjectRef>;
+  copyObjectImmutable(
+    input: ObjectCopyInput,
+    context: KnowledgeObjectContext,
+  ): Promise<ObjectCopyResult>;
   headObject(
     bucket: string,
     key: string,
@@ -267,6 +286,17 @@ export function isTimeoutProviderError(error: unknown): boolean {
   );
 }
 
+export function isPreconditionProviderError(error: unknown): boolean {
+  const status = providerStatus(error);
+  const code = providerCode(error);
+  return (
+    status === 412 ||
+    code === 'PreconditionFailed' ||
+    code === 'PreconditionFailedError' ||
+    code === 'ConditionalRequestConflict'
+  );
+}
+
 function statusCode(error: unknown): number | null {
   return providerStatus(error);
 }
@@ -293,6 +323,25 @@ export function mapObjectStoreError(
     throw objectStoreError('KNOWLEDGE_DEPENDENCY_TIMEOUT', context, details);
   }
   throw objectStoreError('KNOWLEDGE_DEPENDENCY_UNAVAILABLE', context, details);
+}
+
+export function mapObjectCopyError(
+  error: unknown,
+  provider: KnowledgeObjectProvider,
+  context: KnowledgeObjectContext,
+  keys: readonly string[],
+): never {
+  if (error instanceof KnowledgeApiError) throw error;
+  if (isPreconditionProviderError(error)) {
+    throw objectStoreError('KNOWLEDGE_CONFLICT', context, {
+      provider,
+      operation: 'copyObjectImmutable',
+      reason: 'source_etag_changed',
+      objectKeyHashes: keys.map(objectKeyHash),
+    });
+  }
+  const key = keys[0];
+  mapObjectStoreError(error, provider, 'copyObjectImmutable', context, key);
 }
 
 export function providerContractError(

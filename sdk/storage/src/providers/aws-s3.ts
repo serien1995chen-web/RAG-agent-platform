@@ -1,7 +1,10 @@
+import { Agent as HttpAgent } from 'node:http';
+import { Agent as HttpsAgent } from 'node:https';
 import type { Readable } from 'node:stream';
 import {
   AbortMultipartUploadCommand,
   CompleteMultipartUploadCommand,
+  CopyObjectCommand,
   CreateBucketCommand,
   CreateMultipartUploadCommand,
   DeleteObjectCommand,
@@ -20,6 +23,8 @@ import type {
   KnowledgeObjectRef,
   MultipartCompleteResult,
   MultipartPart,
+  ObjectCopyInput,
+  ObjectCopyResult,
   ObjectHeadResult,
   ObjectPutInput,
   ObjectStorePort,
@@ -28,8 +33,10 @@ import type {
   PresignedUploadResult,
 } from '../object-store-contract';
 import {
+  assertKnowledgeObjectKey,
   expectedExpiry,
   isNotFoundProviderError,
+  mapObjectCopyError,
   mapObjectStoreError,
   normalizeEtag,
   parseSingleRange,
@@ -37,13 +44,18 @@ import {
 } from '../object-store-contract';
 import { materializeBody, normalizedMetadata, readableFrom } from './shared';
 
+export const AWS_S3_MAX_SOCKETS = 50;
+
 export class AwsS3KnowledgeObjectStore implements ObjectStorePort {
   readonly provider: 'aws-s3' | 'r2';
   readonly bucket: string;
   readonly verificationStatus = 'EXTERNAL_UNVERIFIED' as const;
   private readonly client: S3Client;
 
-  constructor(private readonly config: CloudKnowledgeObjectStoreConfig) {
+  constructor(
+    private readonly config: CloudKnowledgeObjectStoreConfig,
+    injectedClient?: S3Client,
+  ) {
     if (config.provider === 'cos' || config.provider === 'oss') {
       throw providerContractError(config.provider, 'createAwsS3Store', {
         requestId: 'config',
@@ -54,18 +66,33 @@ export class AwsS3KnowledgeObjectStore implements ObjectStorePort {
     }
     this.provider = config.provider;
     this.bucket = config.bucket;
-    this.client = new S3Client({
-      region: config.region,
-      endpoint: config.endpoint,
-      forcePathStyle: config.provider === 'r2',
-      credentials: {
-        accessKeyId: config.credentials.accessKeyId,
-        secretAccessKey: config.credentials.secretAccessKey,
-        ...(config.credentials.sessionToken
-          ? { sessionToken: config.credentials.sessionToken }
-          : {}),
-      },
-    });
+    this.client =
+      injectedClient ??
+      new S3Client({
+        region: config.region,
+        endpoint: config.endpoint,
+        forcePathStyle: config.provider === 'r2',
+        credentials: {
+          accessKeyId: config.credentials.accessKeyId,
+          secretAccessKey: config.credentials.secretAccessKey,
+          ...(config.credentials.sessionToken
+            ? { sessionToken: config.credentials.sessionToken }
+            : {}),
+        },
+        requestHandler: {
+          connectionTimeout: 5_000,
+          requestTimeout: 30_000,
+          throwOnRequestTimeout: true,
+          httpAgent: new HttpAgent({
+            keepAlive: true,
+            maxSockets: AWS_S3_MAX_SOCKETS,
+          }),
+          httpsAgent: new HttpsAgent({
+            keepAlive: true,
+            maxSockets: AWS_S3_MAX_SOCKETS,
+          }),
+        },
+      });
   }
 
   async ensureBucket(bucket: string, context: KnowledgeObjectContext): Promise<void> {
@@ -90,6 +117,7 @@ export class AwsS3KnowledgeObjectStore implements ObjectStorePort {
     input: ObjectPutInput,
     context: KnowledgeObjectContext,
   ): Promise<KnowledgeObjectRef> {
+    assertKnowledgeObjectKey(input.key, context);
     const materialized = await materializeBody(input.body, input.sizeBytes, context);
     try {
       await this.client.send(
@@ -119,11 +147,51 @@ export class AwsS3KnowledgeObjectStore implements ObjectStorePort {
     }
   }
 
+  async copyObjectImmutable(
+    input: ObjectCopyInput,
+    context: KnowledgeObjectContext,
+  ): Promise<ObjectCopyResult> {
+    assertKnowledgeObjectKey(input.sourceKey, context);
+    assertKnowledgeObjectKey(input.targetKey, context);
+    if (input.sourceKey === input.targetKey || input.expectedSourceEtag.length === 0) {
+      throw providerContractError(this.provider, 'copyObjectImmutable', context);
+    }
+    try {
+      const copied = await this.client.send(
+        new CopyObjectCommand({
+          Bucket: this.bucket,
+          Key: input.targetKey,
+          CopySource: `${this.bucket}/${input.sourceKey
+            .split('/')
+            .map((segment) => encodeURIComponent(segment))
+            .join('/')}`,
+          CopySourceIfMatch: input.expectedSourceEtag,
+          ContentType: input.contentType,
+          Metadata: input.metadata,
+          MetadataDirective: 'REPLACE',
+        }),
+      );
+      const head = await this.headObject(this.bucket, input.targetKey, context);
+      const etag = normalizeEtag(copied.CopyObjectResult?.ETag) || head.etag;
+      if (head.size !== input.expectedSize || etag.length === 0) {
+        throw providerContractError(this.provider, 'copyObjectImmutable', context);
+      }
+      return {
+        sourceEtag: input.expectedSourceEtag,
+        etag,
+        sizeBytes: head.size,
+      };
+    } catch (error) {
+      mapObjectCopyError(error, this.provider, context, [input.sourceKey, input.targetKey]);
+    }
+  }
+
   async headObject(
     bucket: string,
     key: string,
     context: KnowledgeObjectContext,
   ): Promise<ObjectHeadResult> {
+    assertKnowledgeObjectKey(key, context);
     if (bucket !== this.bucket) {
       throw providerContractError(this.provider, 'headObject', context);
     }
@@ -151,6 +219,7 @@ export class AwsS3KnowledgeObjectStore implements ObjectStorePort {
     range: string | null,
     context: KnowledgeObjectContext,
   ): Promise<ObjectStreamResult> {
+    assertKnowledgeObjectKey(key, context);
     const head = await this.headObject(bucket, key, context);
     const parsedRange = parseSingleRange(range, head.size, context);
     try {
@@ -180,6 +249,7 @@ export class AwsS3KnowledgeObjectStore implements ObjectStorePort {
     context: KnowledgeObjectContext,
     multipart?: { providerUploadId: string; partNumber: number },
   ): Promise<PresignedUploadResult> {
+    assertKnowledgeObjectKey(key, context);
     try {
       const url = multipart
         ? await getSignedUrl(
@@ -218,6 +288,7 @@ export class AwsS3KnowledgeObjectStore implements ObjectStorePort {
     expiresSeconds: number,
     context: KnowledgeObjectContext,
   ): Promise<PresignedGetResult> {
+    assertKnowledgeObjectKey(key, context);
     try {
       const url = await getSignedUrl(
         this.client,
@@ -240,6 +311,7 @@ export class AwsS3KnowledgeObjectStore implements ObjectStorePort {
     metadata: Record<string, string>,
     context: KnowledgeObjectContext,
   ): Promise<string> {
+    assertKnowledgeObjectKey(key, context);
     try {
       const result = await this.client.send(
         new CreateMultipartUploadCommand({
@@ -265,6 +337,7 @@ export class AwsS3KnowledgeObjectStore implements ObjectStorePort {
     body: Uint8Array | Readable,
     context: KnowledgeObjectContext,
   ): Promise<MultipartPart> {
+    assertKnowledgeObjectKey(key, context);
     const materialized = await materializeBody(body, undefined, context);
     try {
       const result = await this.client.send(
@@ -295,6 +368,7 @@ export class AwsS3KnowledgeObjectStore implements ObjectStorePort {
     providerUploadId: string,
     context: KnowledgeObjectContext,
   ): Promise<MultipartPart[]> {
+    assertKnowledgeObjectKey(key, context);
     const parts: MultipartPart[] = [];
     let marker: string | undefined;
     try {
@@ -335,6 +409,7 @@ export class AwsS3KnowledgeObjectStore implements ObjectStorePort {
     parts: readonly MultipartPart[],
     context: KnowledgeObjectContext,
   ): Promise<MultipartCompleteResult> {
+    assertKnowledgeObjectKey(key, context);
     try {
       const result = await this.client.send(
         new CompleteMultipartUploadCommand({
@@ -364,6 +439,7 @@ export class AwsS3KnowledgeObjectStore implements ObjectStorePort {
     providerUploadId: string,
     context: KnowledgeObjectContext,
   ): Promise<{ aborted: boolean }> {
+    assertKnowledgeObjectKey(key, context);
     try {
       await this.client.send(
         new AbortMultipartUploadCommand({
@@ -380,6 +456,7 @@ export class AwsS3KnowledgeObjectStore implements ObjectStorePort {
   }
 
   async deleteObject(key: string, context: KnowledgeObjectContext): Promise<{ deleted: boolean }> {
+    assertKnowledgeObjectKey(key, context);
     try {
       await this.client.send(new DeleteObjectCommand({ Bucket: this.bucket, Key: key }));
       return { deleted: true };

@@ -111,8 +111,32 @@ function patchSecondLocalOffset(zip: Buffer): void {
   zip.writeUInt32LE(zip.readUInt32LE(first + 42), second + 42);
 }
 
+function withSingleDataDescriptor(data: Buffer, name = 'descriptor.txt'): Buffer {
+  const compressed = deflateRawSync(data);
+  const zip = buildZip([{ name, data, compressedSize: compressed.length }]);
+  const central = centralSignatureOffset(zip);
+  zip.writeUInt16LE(0x0808, 6);
+  zip.writeUInt32LE(0, 14);
+  zip.writeUInt32LE(0, 18);
+  zip.writeUInt32LE(0, 22);
+  zip.writeUInt16LE(0x0808, central + 8);
+  const descriptor = Buffer.alloc(16);
+  descriptor.writeUInt32LE(0x08074b50, 0);
+  descriptor.writeUInt32LE(crc32(data) >>> 0, 4);
+  descriptor.writeUInt32LE(compressed.length, 8);
+  descriptor.writeUInt32LE(data.length, 12);
+  const withDescriptor = Buffer.concat([
+    zip.subarray(0, central),
+    descriptor,
+    zip.subarray(central),
+  ]);
+  const eocd = withDescriptor.length - 22;
+  withDescriptor.writeUInt32LE(central + descriptor.length, eocd + 16);
+  return withDescriptor;
+}
+
 describe('TEST-X-SECURITY-UPLOAD archive safety inspector', () => {
-  it('TEST-FILE-001-U13 accepts valid ZIP, DOCX, PPTX, XLSX and EPUB containers', async () => {
+  it('TEST-FILE-001-U21 accepts valid ZIP, DOCX, PPTX, XLSX and EPUB containers', async () => {
     const cases = [
       ['fixture.zip', 'zip', buildZip([{ name: 'hello.txt', data: Buffer.from('hello') }])],
       ['fixture.docx', 'docx', docxZip()],
@@ -143,6 +167,23 @@ describe('TEST-X-SECURITY-UPLOAD archive safety inspector', () => {
         limits: { entryRatioMinimumBytes: 128 * 1024 * 1024 },
       }),
     ).toMatchObject({ safe: false, status: 'unsupported', reason: 'compression_ratio_exceeded' });
+
+    const content = Buffer.alloc(17 * 1024 * 1024);
+    const deflated = deflateRawSync(content);
+    const padded = buildZip([
+      {
+        name: 'padded-bomb.txt',
+        data: content,
+        compressedSize: deflated.length + 300 * 1024,
+      },
+    ]);
+    expect(
+      await inspectArchiveBuffer(padded, { originalName: 'padded.zip', container: 'zip' }),
+    ).toMatchObject({
+      safe: false,
+      status: 'unsupported',
+      reason: 'compression_ratio_exceeded',
+    });
   });
 
   it('TEST-FILE-001-U15 and TEST-FILE-004-A08 reject traversal, absolute, UNC, drive and NUL paths', async () => {
@@ -298,9 +339,38 @@ describe('TEST-X-SECURITY-UPLOAD archive safety inspector', () => {
         container: 'docx',
       }),
     ).toMatchObject({ safe: false, reason: 'archive_structure_invalid' });
+
+    const localMismatch = buildZip([{ name: 'local.txt', data: Buffer.from('local'), method: 0 }]);
+    localMismatch.writeUInt32LE(999, 18);
+    localMismatch.writeUInt32LE(888, 22);
+    expect(
+      await inspectArchiveBuffer(localMismatch, {
+        originalName: 'local-mismatch.zip',
+        container: 'zip',
+      }),
+    ).toMatchObject({ safe: false, reason: 'archive_structure_invalid' });
+
+    const descriptorData = Buffer.from('descriptor content');
+    const descriptor = withSingleDataDescriptor(descriptorData);
+    expect(
+      await inspectArchiveBuffer(descriptor, {
+        originalName: 'descriptor.zip',
+        container: 'zip',
+      }),
+    ).toMatchObject({ safe: true, status: 'safe' });
+
+    const badDescriptor = withSingleDataDescriptor(descriptorData, 'bad-descriptor.txt');
+    const descriptorCentral = centralSignatureOffset(badDescriptor);
+    badDescriptor.writeUInt32LE(999, descriptorCentral - 8);
+    expect(
+      await inspectArchiveBuffer(badDescriptor, {
+        originalName: 'bad-descriptor.zip',
+        container: 'zip',
+      }),
+    ).toMatchObject({ safe: false, reason: 'archive_structure_invalid' });
   });
 
-  it('TEST-FILE-001-U19 and TEST-FILE-004-A16 fail closed on deadline and source failures', async () => {
+  it('TEST-FILE-001-U23 and TEST-FILE-004-A16 fail closed on deadline and source failures', async () => {
     const bytes = docxZip();
     const timed = await new ArchiveSafetyInspector().inspect({
       originalName: 'slow.docx',

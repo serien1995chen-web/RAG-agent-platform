@@ -8,6 +8,7 @@ import type {
   FileTicketPort,
   JobPort,
   ObjectRefRepositoryPort,
+  ObjectRefView,
   ObjectStorageContext,
   ObjectStoreApplicationPort,
   SourceView,
@@ -33,6 +34,32 @@ function conflict(context: TenantContext, details: Record<string, unknown>) {
     traceId: context.traceId,
     details,
   });
+}
+
+function notFound(context: TenantContext) {
+  return createKnowledgeError({
+    code: 'KNOWLEDGE_NOT_FOUND',
+    requestId: context.requestId,
+    traceId: context.traceId,
+  });
+}
+
+function assertSourceBinding(
+  ref: ObjectRefView | null,
+  source: SourceView,
+  context: TenantContext,
+): ObjectRefView {
+  if (
+    !ref ||
+    ref.state !== 'active' ||
+    ref.workspaceId !== context.workspaceId ||
+    ref.knowledgeSpaceId !== source.knowledgeSpaceId ||
+    ref.sourceId === null ||
+    ref.sourceId !== source.id
+  ) {
+    throw notFound(context);
+  }
+  return ref;
 }
 
 function previewTooLarge(context: TenantContext) {
@@ -76,8 +103,11 @@ export class SourceFileApplication {
     source: SourceView,
     context: TenantContext,
   ): Promise<string | null> {
-    const ref = await this.objectRefs.findObjectRef(blobId, context);
-    if (!ref || ref.state !== 'active') return null;
+    const ref = assertSourceBinding(
+      await this.objectRefs.findObjectRef(blobId, context),
+      source,
+      context,
+    );
     const object = await this.objectStore.getObject(
       this.objectStore.bucket,
       ref.objectKey,
@@ -168,9 +198,11 @@ export class SourceFileApplication {
     const source = await this.source(sourceId, context);
     const blobId = typeof source.blobRefId === 'string' ? source.blobRefId : null;
     if (!blobId) throw conflict(context, { reason: 'source_object_missing' });
-    const ref = await this.objectRefs.findObjectRef(blobId, context);
-    if (!ref || ref.state !== 'active')
-      throw conflict(context, { reason: 'source_object_missing' });
+    const ref = assertSourceBinding(
+      await this.objectRefs.findObjectRef(blobId, context),
+      source,
+      context,
+    );
     const issued = this.tickets.issue(
       {
         workspaceId: ref.workspaceId,

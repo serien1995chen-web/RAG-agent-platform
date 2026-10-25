@@ -318,6 +318,12 @@ export interface ObjectRefView {
   bucket: string;
   objectKey: string;
   providerUploadId: string | null;
+  uploadMode: 'single' | 'multipart' | null;
+  uploadStatus: UploadStatus | null;
+  pendingObjectKey: string | null;
+  finalObjectKey: string | null;
+  finalizedAt: string | null;
+  pendingUrlExpiresAt: string | null;
   originalName: string;
   purpose: KnowledgeObjectPurpose;
   sourceId: string | null;
@@ -340,6 +346,7 @@ export interface CreateUploadSessionInput {
   provider: KnowledgeObjectProvider;
   bucket: string;
   objectKey: string;
+  finalObjectKey: string;
   mimeType: string;
   sizeBytes: number;
   originalName: string;
@@ -350,9 +357,16 @@ export interface CreateUploadSessionInput {
   expiresAt: Date;
 }
 
+export interface ObjectCopyResult {
+  sourceEtag: string;
+  etag: string;
+  sizeBytes: number;
+}
+
 export interface CompleteUploadInput {
   uploadId: string;
   expectedVersion: number;
+  objectKey: string;
   etag: string;
   sha256: string;
   sizeBytes: number;
@@ -401,6 +415,17 @@ export interface ObjectStoreApplicationPort {
   readonly provider: KnowledgeObjectProvider;
   readonly bucket: string;
   ensureBucket(bucket: string, context: ObjectStorageContext): Promise<void>;
+  copyObjectImmutable(
+    input: {
+      sourceKey: string;
+      targetKey: string;
+      expectedSourceEtag: string;
+      expectedSize: number;
+      contentType: string;
+      metadata?: Record<string, string>;
+    },
+    context: ObjectStorageContext,
+  ): Promise<ObjectCopyResult>;
   headObject(
     bucket: string,
     key: string,
@@ -541,8 +566,13 @@ export interface ObjectRefRepositoryPort {
     expectedVersion: number,
     context: TenantContext,
   ): Promise<ObjectRefView>;
+  clearUploadTemporaryObject(
+    blobId: string,
+    expectedVersion: number,
+    context: TenantContext,
+  ): Promise<ObjectRefView>;
   hasActiveSourceReference(blobId: string, context: TenantContext): Promise<boolean>;
-  createArchiveArtifact(
+  createPendingArchiveArtifact(
     input: {
       blobId: string;
       knowledgeSpaceId: string;
@@ -550,6 +580,15 @@ export interface ObjectRefRepositoryPort {
       bucket: string;
       objectKey: string;
       mimeType: string;
+      sizeBytes: number;
+      expiresAt: Date;
+    },
+    context: TenantContext,
+  ): Promise<ObjectRefView>;
+  activateArchiveArtifact(
+    input: {
+      blobId: string;
+      expectedVersion: number;
       sizeBytes: number;
       etag: string;
       sha256: string;

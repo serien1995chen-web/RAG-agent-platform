@@ -6,8 +6,9 @@ import {
   knowledgeMultipartUpload,
   restoreKnowledgeUpload,
   type KnowledgeFileUploadState,
+  type UploadSession,
 } from '../client/file-upload';
-import { KnowledgeRequestError } from '../client/knowledge-client';
+import { ensureConsoleSession, KnowledgeRequestError } from '../client/knowledge-client';
 import { toProblemView, useKnowledgeI18n } from '../i18n';
 import { Button } from './knowledge-primitives';
 
@@ -21,17 +22,21 @@ export function FileUploadPanel({ knowledgeSpaceId, onComplete }: FileUploadPane
   const inputRef = useRef<HTMLInputElement>(null);
   const abortRef = useRef<AbortController | null>(null);
   const [file, setFile] = useState<File | null>(null);
+  const [resumeSession, setResumeSession] = useState<UploadSession | null>(null);
+  const [restoring, setRestoring] = useState(false);
   const [state, setState] = useState<KnowledgeFileUploadState | null>(null);
 
   const upload = async () => {
-    if (!file || !knowledgeSpaceId) return;
+    if (!file || !knowledgeSpaceId || restoring) return;
     abortRef.current = new AbortController();
     try {
       const result = await knowledgeMultipartUpload(file, {
         knowledgeSpaceId,
         signal: abortRef.current.signal,
         onState: setState,
+        ...(resumeSession ? { resumeSession } : {}),
       });
+      setResumeSession(null);
       onComplete?.(result.blobId);
     } catch {
       // State carries a localized messageKey from the request layer.
@@ -51,21 +56,20 @@ export function FileUploadPanel({ knowledgeSpaceId, onComplete }: FileUploadPane
           const selected = event.target.files?.[0] ?? null;
           setFile(selected);
           setState(null);
+          setResumeSession(null);
           if (selected && knowledgeSpaceId) {
-            void restoreKnowledgeUpload(knowledgeSpaceId, selected.name, selected.size).then(
-              (session) => {
+            setRestoring(true);
+            void ensureConsoleSession()
+              .then((session) =>
+                restoreKnowledgeUpload(session.workspaceId, selected.name, selected.size),
+              )
+              .then((session) => {
                 if (!session) return;
-                setState({
-                  phase: 'uploading',
-                  uploadId: session.uploadId,
-                  progress: 0,
-                  completedParts: 0,
-                  totalParts: session.partCount,
-                  result: null,
-                  error: null,
-                });
-              },
-            );
+                setResumeSession(session);
+              })
+              .finally(() => setRestoring(false));
+          } else {
+            setRestoring(false);
           }
         }}
       />
@@ -76,7 +80,7 @@ export function FileUploadPanel({ knowledgeSpaceId, onComplete }: FileUploadPane
         <Button
           size="sm"
           tone="primary"
-          isDisabled={!file || !knowledgeSpaceId}
+          isDisabled={!file || !knowledgeSpaceId || restoring}
           busy={state?.phase === 'uploading' || state?.phase === 'completing'}
           onClick={() => void upload()}
         >

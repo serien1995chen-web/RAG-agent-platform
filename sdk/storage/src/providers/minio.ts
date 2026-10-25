@@ -1,11 +1,14 @@
-import { Readable } from 'node:stream';
-import { Client } from 'minio';
+import { createHash } from 'node:crypto';
+import { Readable, Transform } from 'node:stream';
+import { Client, CopyConditions } from 'minio';
 import type {
   KnowledgeObjectContext,
   KnowledgeObjectRef,
   MinioKnowledgeObjectStoreConfig,
   MultipartCompleteResult,
   MultipartPart,
+  ObjectCopyInput,
+  ObjectCopyResult,
   ObjectHeadResult,
   ObjectPutInput,
   ObjectStorePort,
@@ -17,6 +20,7 @@ import {
   assertConfiguredBucket,
   assertKnowledgeObjectKey,
   expectedExpiry,
+  mapObjectCopyError,
   mapObjectStoreError,
   normalizeEtag,
   objectStoreError,
@@ -42,16 +46,21 @@ export class MinioKnowledgeObjectStore implements ObjectStorePort {
   private readonly client: Client;
   private bucketReady = false;
 
-  constructor(private readonly config: MinioKnowledgeObjectStoreConfig) {
+  constructor(
+    private readonly config: MinioKnowledgeObjectStoreConfig,
+    injectedClient?: Client,
+  ) {
     this.bucket = config.bucket;
-    this.client = new Client({
-      endPoint: config.endPoint,
-      port: config.port,
-      useSSL: config.useSSL,
-      accessKey: config.accessKey,
-      secretKey: config.secretKey,
-      region: config.region,
-    });
+    this.client =
+      injectedClient ??
+      new Client({
+        endPoint: config.endPoint,
+        port: config.port,
+        useSSL: config.useSSL,
+        accessKey: config.accessKey,
+        secretKey: config.secretKey,
+        region: config.region,
+      });
   }
 
   async ensureBucket(context: KnowledgeObjectContext): Promise<void>;
@@ -85,19 +94,52 @@ export class MinioKnowledgeObjectStore implements ObjectStorePort {
     context: KnowledgeObjectContext,
   ): Promise<KnowledgeObjectRef> {
     assertKnowledgeObjectKey(input.key, context);
-    const materialized = await materializeBody(input.body, input.sizeBytes, context);
+    let body: Buffer | Readable;
+    let sizeBytes: number;
+    let sha256: string;
+    let streamHash: ReturnType<typeof createHash> | null = null;
+    let actualStreamBytes = 0;
+    if (input.body instanceof Readable) {
+      if (
+        input.sizeBytes === undefined ||
+        !Number.isSafeInteger(input.sizeBytes) ||
+        input.sizeBytes < 0
+      ) {
+        throw objectStoreError('KNOWLEDGE_VALIDATION_FAILED', context, {
+          reason: 'known_stream_size_required',
+        });
+      }
+      sizeBytes = input.sizeBytes;
+      sha256 = '';
+      streamHash = createHash('sha256');
+      body = input.body.pipe(
+        new Transform({
+          transform(chunk, _encoding, callback) {
+            const buffer = Buffer.from(chunk);
+            actualStreamBytes += buffer.byteLength;
+            streamHash!.update(buffer);
+            callback(null, buffer);
+          },
+        }),
+      );
+    } else {
+      const materialized = await materializeBody(input.body, input.sizeBytes, context);
+      body = materialized.body;
+      sizeBytes = materialized.sizeBytes;
+      sha256 = materialized.sha256;
+    }
     try {
       await this.ensureBucket(this.bucket, context);
-      const result = await this.client.putObject(
-        this.bucket,
-        input.key,
-        materialized.body,
-        materialized.sizeBytes,
-        {
-          'Content-Type': input.contentType,
-          ...input.metadata,
-        },
-      );
+      const result = await this.client.putObject(this.bucket, input.key, body, sizeBytes, {
+        'Content-Type': input.contentType,
+        ...input.metadata,
+      });
+      if (streamHash) {
+        if (actualStreamBytes !== sizeBytes) {
+          throw providerContractError(this.provider, 'putObject', context);
+        }
+        sha256 = streamHash.digest('hex');
+      }
       const head = await this.headObject(this.bucket, input.key, context);
       return {
         provider: this.provider,
@@ -107,11 +149,46 @@ export class MinioKnowledgeObjectStore implements ObjectStorePort {
         knowledgeSpaceId: input.knowledgeSpaceId,
         size: head.size,
         etag: normalizeEtag(result.etag) || head.etag,
-        sha256: materialized.sha256,
+        sha256,
         ttlExpireAt: input.ttlExpireAt?.toISOString() ?? null,
       };
     } catch (error) {
       mapObjectStoreError(error, this.provider, 'putObject', context, input.key);
+    }
+  }
+
+  async copyObjectImmutable(
+    input: ObjectCopyInput,
+    context: KnowledgeObjectContext,
+  ): Promise<ObjectCopyResult> {
+    assertKnowledgeObjectKey(input.sourceKey, context);
+    assertKnowledgeObjectKey(input.targetKey, context);
+    if (input.sourceKey === input.targetKey || input.expectedSourceEtag.length === 0) {
+      throw objectStoreError('KNOWLEDGE_VALIDATION_FAILED', context, {
+        reason: 'invalid_copy_input',
+      });
+    }
+    const conditions = new CopyConditions();
+    conditions.setMatchETag(input.expectedSourceEtag);
+    try {
+      const copied = await this.client.copyObject(
+        this.bucket,
+        input.targetKey,
+        `${this.bucket}/${input.sourceKey}`,
+        conditions,
+      );
+      const head = await this.headObject(this.bucket, input.targetKey, context);
+      const etag = normalizeEtag('etag' in copied ? copied.etag : copied.Etag) || head.etag;
+      if (head.size !== input.expectedSize || etag.length === 0) {
+        throw providerContractError(this.provider, 'copyObjectImmutable', context);
+      }
+      return {
+        sourceEtag: input.expectedSourceEtag,
+        etag,
+        sizeBytes: head.size,
+      };
+    } catch (error) {
+      mapObjectCopyError(error, this.provider, context, [input.sourceKey, input.targetKey]);
     }
   }
 

@@ -1,8 +1,9 @@
 import { EventEmitter } from 'node:events';
 import { createRequire } from 'node:module';
 import { extname } from 'node:path';
-import { Readable } from 'node:stream';
-import { crc32 } from 'node:zlib';
+import { Readable, Writable } from 'node:stream';
+import { pipeline } from 'node:stream/promises';
+import { crc32, createInflateRaw } from 'node:zlib';
 import type { Entry, RandomAccessReader } from 'yauzl';
 
 /**
@@ -77,6 +78,7 @@ export interface ArchiveInspectionResult {
   reason?: ArchiveSafetyReason | string;
   entryCount?: number;
   actualUncompressedBytes?: number;
+  actualCompressedBytes?: number;
   declaredUncompressedBytes?: number;
 }
 
@@ -102,7 +104,10 @@ export class ArchiveSafetyError extends Error {
     readonly category: 'too_large' | 'unsupported' = 'unsupported',
     readonly metrics: Pick<
       ArchiveInspectionResult,
-      'entryCount' | 'actualUncompressedBytes' | 'declaredUncompressedBytes'
+      | 'entryCount'
+      | 'actualUncompressedBytes'
+      | 'actualCompressedBytes'
+      | 'declaredUncompressedBytes'
     > = {},
   ) {
     super(reason);
@@ -132,6 +137,7 @@ interface EntryPlan {
   directory: boolean;
   dataStart: number;
   dataEnd: number;
+  entryEnd: number;
 }
 
 interface YauzlModule {
@@ -452,25 +458,41 @@ function validateDeclaredMetadata(
     if (entry.compressedSize === 0 && entry.uncompressedSize > 0) {
       throw new ArchiveSafetyError('archive_structure_invalid');
     }
-    if (
-      entry.uncompressedSize >= limits.entryRatioMinimumBytes &&
-      entry.uncompressedSize / Math.max(entry.compressedSize, 1) > limits.maxCompressionRatio
-    ) {
-      throw new ArchiveSafetyError('compression_ratio_exceeded');
-    }
     totalDeclared += entry.uncompressedSize;
     totalCompressed += entry.compressedSize;
     if (totalDeclared > limits.maxTotalUncompressedBytes) {
       throw new ArchiveSafetyError('total_uncompressed_too_large', 'too_large');
     }
   }
-  if (
-    totalDeclared >= limits.totalRatioMinimumBytes &&
-    totalDeclared / Math.max(totalCompressed, 1) > limits.maxCompressionRatio
-  ) {
-    throw new ArchiveSafetyError('compression_ratio_exceeded');
-  }
   return { totalDeclared, totalCompressed };
+}
+
+async function validateDataDescriptor(
+  source: ArchiveRangeSource,
+  dataEnd: number,
+  centralDirectoryOffset: number,
+  entry: Entry,
+): Promise<number> {
+  const available = centralDirectoryOffset - dataEnd;
+  if (available < 12) throw new ArchiveSafetyError('archive_structure_invalid');
+  const length = Math.min(16, available);
+  const descriptor = Buffer.from(await source.readRange(dataEnd, dataEnd + length));
+  const hasSignature = descriptor.length >= 16 && descriptor.readUInt32LE(0) === 0x08074b50;
+  const offset = hasSignature ? 4 : 0;
+  if (descriptor.length < offset + 12) {
+    throw new ArchiveSafetyError('archive_structure_invalid');
+  }
+  const descriptorCrc = descriptor.readUInt32LE(offset);
+  const descriptorCompressed = descriptor.readUInt32LE(offset + 4);
+  const descriptorUncompressed = descriptor.readUInt32LE(offset + 8);
+  if (
+    descriptorCrc >>> 0 !== entry.crc32 >>> 0 ||
+    descriptorCompressed !== entry.compressedSize ||
+    descriptorUncompressed !== entry.uncompressedSize
+  ) {
+    throw new ArchiveSafetyError('archive_structure_invalid');
+  }
+  return dataEnd + offset + 12;
 }
 
 async function buildEntryPlans(
@@ -531,10 +553,12 @@ async function buildEntryPlans(
     if (uint32(localHeader, 0) !== 0x04034b50) {
       throw new ArchiveSafetyError('archive_structure_invalid');
     }
-    if (
-      uint16(localHeader, 6) !== entry.generalPurposeBitFlag ||
-      uint16(localHeader, 8) !== entry.compressionMethod
-    ) {
+    const localFlags = uint16(localHeader, 6);
+    const localMethod = uint16(localHeader, 8);
+    const localCrc = uint32(localHeader, 14);
+    const localCompressedSize = uint32(localHeader, 18);
+    const localUncompressedSize = uint32(localHeader, 22);
+    if (localFlags !== entry.generalPurposeBitFlag || localMethod !== entry.compressionMethod) {
       throw new ArchiveSafetyError('archive_structure_invalid');
     }
     const localNameLength = uint16(localHeader, 26);
@@ -548,20 +572,50 @@ async function buildEntryPlans(
     if (!localName.equals(rawName)) throw new ArchiveSafetyError('archive_structure_invalid');
     const dataStart = entry.relativeOffsetOfLocalHeader + 30 + localNameLength + localExtraLength;
     const dataEnd = dataStart + entry.compressedSize;
+    const hasDataDescriptor = (localFlags & 0x0008) !== 0;
+    let entryEnd = dataEnd;
+    if (hasDataDescriptor) {
+      const localValues = [localCrc, localCompressedSize, localUncompressedSize];
+      const localValuesAreZero = localValues.every((value) => value === 0);
+      const localValuesMatch =
+        localCrc >>> 0 === entry.crc32 >>> 0 &&
+        localCompressedSize === entry.compressedSize &&
+        localUncompressedSize === entry.uncompressedSize;
+      if (!localValuesAreZero && !localValuesMatch) {
+        throw new ArchiveSafetyError('archive_structure_invalid');
+      }
+      entryEnd = await validateDataDescriptor(source, dataEnd, centralDirectoryOffset, entry);
+    } else if (
+      localCrc >>> 0 !== entry.crc32 >>> 0 ||
+      localCompressedSize !== entry.compressedSize ||
+      localUncompressedSize !== entry.uncompressedSize
+    ) {
+      throw new ArchiveSafetyError('archive_structure_invalid');
+    }
     if (
       dataStart < 30 ||
       dataEnd < dataStart ||
       dataEnd > centralDirectoryOffset ||
-      dataEnd > source.size
+      entryEnd > centralDirectoryOffset ||
+      entryEnd > source.size
     ) {
       throw new ArchiveSafetyError('archive_structure_invalid');
     }
-    plans.push({ entry, rawName, name, normalizedName, directory, dataStart, dataEnd });
+    plans.push({
+      entry,
+      rawName,
+      name,
+      normalizedName,
+      directory,
+      dataStart,
+      dataEnd,
+      entryEnd,
+    });
   }
   const ranges = plans
     .map((plan) => ({
       start: plan.entry.relativeOffsetOfLocalHeader,
-      end: plan.dataEnd,
+      end: plan.entryEnd,
     }))
     .sort((left, right) => left.start - right.start);
   for (let index = 1; index < ranges.length; index += 1) {
@@ -609,13 +663,108 @@ async function validateContainerMarkers(
   }
 }
 
-function openEntryStream(zip: ZipFile, entry: Entry): Promise<Readable> {
-  return new Promise((resolve, reject) => {
-    zip.openReadStream(entry, (error, stream) => {
-      if (error || !stream) reject(error ?? new Error('archive_entry_open_failed'));
-      else resolve(stream);
-    });
+interface EntryDataInspection {
+  actualUncompressedBytes: number;
+  actualCompressedBytes: number;
+  trailingCompressedBytes: number;
+  crc: number;
+  capturedPrefix: Buffer;
+}
+
+async function inspectEntryData(
+  source: ArchiveRangeSource,
+  plan: EntryPlan,
+  limits: ArchiveInspectionLimits,
+  ensureAlive: () => void,
+  capturePrefix: boolean,
+  onOutput: (bytes: number) => void,
+): Promise<EntryDataInspection> {
+  const compressedChunks = async function* compressedChunks() {
+    let position = plan.dataStart;
+    while (position < plan.dataEnd) {
+      ensureAlive();
+      const end = Math.min(
+        plan.dataEnd,
+        position + Math.min(limits.maxRangeReadBytes, limits.decompressionChunkBytes),
+      );
+      const chunk = await source.readRange(position, end);
+      if (chunk.byteLength !== end - position) {
+        throw new ArchiveSafetyError('archive_structure_invalid');
+      }
+      yield Buffer.from(chunk);
+      position = end;
+    }
+  };
+
+  let actualUncompressedBytes = 0;
+  let crc = 0;
+  const captured: Buffer[] = [];
+  let capturedBytes = 0;
+  const sink = new Writable({
+    write(chunk: Buffer, _encoding, callback) {
+      try {
+        ensureAlive();
+        const buffer = Buffer.from(chunk);
+        actualUncompressedBytes += buffer.byteLength;
+        if (actualUncompressedBytes > limits.maxEntryBytes) {
+          throw new ArchiveSafetyError('entry_too_large', 'too_large');
+        }
+        crc = crc32(buffer, crc);
+        onOutput(buffer.byteLength);
+        if (capturePrefix) {
+          const remaining = Math.max(0, 64 - capturedBytes);
+          if (remaining > 0) {
+            const part = buffer.subarray(0, Math.min(remaining, buffer.byteLength));
+            captured.push(part);
+            capturedBytes += part.byteLength;
+          }
+          if (actualUncompressedBytes > 64) {
+            throw new ArchiveSafetyError('epub_mimetype_invalid');
+          }
+        }
+        callback();
+      } catch (error) {
+        callback(
+          error instanceof Error ? error : new ArchiveSafetyError('archive_structure_invalid'),
+        );
+      }
+    },
   });
+
+  try {
+    if (plan.entry.compressionMethod === 0) {
+      if (plan.entry.compressedSize !== plan.entry.uncompressedSize) {
+        throw new ArchiveSafetyError('archive_structure_invalid');
+      }
+      await pipeline(Readable.from(compressedChunks()), sink);
+      return {
+        actualUncompressedBytes,
+        actualCompressedBytes: plan.entry.compressedSize,
+        trailingCompressedBytes: 0,
+        crc,
+        capturedPrefix: Buffer.concat(captured),
+      };
+    }
+    if (plan.entry.compressionMethod !== 8) {
+      throw new ArchiveSafetyError('unsupported_compression_method');
+    }
+    const inflate = createInflateRaw({ chunkSize: limits.decompressionChunkBytes });
+    await pipeline(Readable.from(compressedChunks()), inflate, sink);
+    const consumed = Number((inflate as unknown as { bytesWritten?: number }).bytesWritten);
+    if (!Number.isSafeInteger(consumed) || consumed < 0) {
+      throw new ArchiveSafetyError('archive_structure_invalid');
+    }
+    return {
+      actualUncompressedBytes,
+      actualCompressedBytes: consumed,
+      trailingCompressedBytes: plan.entry.compressedSize - consumed,
+      crc,
+      capturedPrefix: Buffer.concat(captured),
+    };
+  } catch (error) {
+    if (error instanceof ArchiveSafetyError) throw error;
+    throw new ArchiveSafetyError('archive_structure_invalid');
+  }
 }
 
 async function inspectArchive(
@@ -624,7 +773,7 @@ async function inspectArchive(
   deadline: number,
   metrics: Pick<
     ArchiveInspectionResult,
-    'entryCount' | 'actualUncompressedBytes' | 'declaredUncompressedBytes'
+    'entryCount' | 'actualUncompressedBytes' | 'actualCompressedBytes' | 'declaredUncompressedBytes'
   >,
 ): Promise<ArchiveInspectionResult> {
   const ensureAlive = () => {
@@ -673,59 +822,50 @@ async function inspectArchive(
       container,
     );
     let actualTotal = 0;
+    let actualCompressedTotal = 0;
     let mimetype: string | null = null;
     for (const [entryIndex, plan] of plans.entries()) {
       if (plan.directory) continue;
-      const stream = await openEntryStream(zip, plan.entry);
-      let actualEntry = 0;
-      let entryCrc = 0;
-      const captured: Buffer[] = [];
-      for await (const rawChunk of stream) {
-        ensureAlive();
-        const chunk = Buffer.from(rawChunk);
-        entryCrc = crc32(chunk, entryCrc);
-        for (let offset = 0; offset < chunk.length; offset += limits.decompressionChunkBytes) {
-          const part = chunk.subarray(
-            offset,
-            Math.min(offset + limits.decompressionChunkBytes, chunk.length),
-          );
-          actualEntry += part.byteLength;
-          actualTotal += part.byteLength;
+      const inspected = await inspectEntryData(
+        source,
+        plan,
+        limits,
+        ensureAlive,
+        container === 'epub' && entryIndex === 0,
+        (bytes) => {
+          actualTotal += bytes;
           metrics.actualUncompressedBytes = actualTotal;
-          if (actualEntry > limits.maxEntryBytes) {
-            throw new ArchiveSafetyError('entry_too_large', 'too_large', metrics);
-          }
           if (actualTotal > limits.maxTotalUncompressedBytes) {
             throw new ArchiveSafetyError('total_uncompressed_too_large', 'too_large', metrics);
           }
-          if (
-            actualEntry >= limits.entryRatioMinimumBytes &&
-            actualEntry / Math.max(plan.entry.compressedSize, 1) > limits.maxCompressionRatio
-          ) {
-            throw new ArchiveSafetyError('compression_ratio_exceeded', 'unsupported', metrics);
-          }
-          if (
-            actualTotal >= limits.totalRatioMinimumBytes &&
-            actualTotal / Math.max(declared.totalCompressed, 1) > limits.maxCompressionRatio
-          ) {
-            throw new ArchiveSafetyError('compression_ratio_exceeded', 'unsupported', metrics);
-          }
-          if (container === 'epub' && entryIndex === 0) {
-            captured.push(part);
-            if (Buffer.concat(captured).byteLength > 64) {
-              throw new ArchiveSafetyError('epub_mimetype_invalid');
-            }
-          }
-        }
-      }
+        },
+      );
+      const actualEntry = inspected.actualUncompressedBytes;
+      actualCompressedTotal += inspected.actualCompressedBytes;
+      metrics.actualCompressedBytes = actualCompressedTotal;
       if (actualEntry !== plan.entry.uncompressedSize) {
         throw new ArchiveSafetyError('archive_structure_invalid', 'unsupported', metrics);
       }
-      if (entryCrc >>> 0 !== plan.entry.crc32 >>> 0) {
+      if (
+        actualEntry >= limits.entryRatioMinimumBytes &&
+        actualEntry / Math.max(inspected.actualCompressedBytes, 1) > limits.maxCompressionRatio
+      ) {
+        throw new ArchiveSafetyError('compression_ratio_exceeded', 'unsupported', metrics);
+      }
+      if (
+        actualTotal >= limits.totalRatioMinimumBytes &&
+        actualTotal / Math.max(actualCompressedTotal, 1) > limits.maxCompressionRatio
+      ) {
+        throw new ArchiveSafetyError('compression_ratio_exceeded', 'unsupported', metrics);
+      }
+      if (inspected.trailingCompressedBytes !== 0) {
+        throw new ArchiveSafetyError('archive_structure_invalid', 'unsupported', metrics);
+      }
+      if (inspected.crc >>> 0 !== plan.entry.crc32 >>> 0) {
         throw new ArchiveSafetyError('archive_structure_invalid', 'unsupported', metrics);
       }
       if (container === 'epub' && entryIndex === 0) {
-        mimetype = Buffer.concat(captured).toString('utf8');
+        mimetype = inspected.capturedPrefix.toString('utf8');
       }
     }
     await validateContainerMarkers(plans, container, mimetype);
@@ -736,6 +876,7 @@ async function inspectArchive(
       entryCount: eocd.entryCount,
       declaredUncompressedBytes: declared.totalDeclared,
       actualUncompressedBytes: actualTotal,
+      actualCompressedBytes: actualCompressedTotal,
     };
   } finally {
     zip.close();
@@ -747,7 +888,10 @@ export class ArchiveSafetyInspector {
     const limits = { ...DEFAULT_ARCHIVE_LIMITS, ...input.limits };
     const metrics: Pick<
       ArchiveInspectionResult,
-      'entryCount' | 'actualUncompressedBytes' | 'declaredUncompressedBytes'
+      | 'entryCount'
+      | 'actualUncompressedBytes'
+      | 'actualCompressedBytes'
+      | 'declaredUncompressedBytes'
     > = {};
     let timer: NodeJS.Timeout | undefined;
     try {

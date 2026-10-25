@@ -24,6 +24,8 @@ export type {
 export type {
   MultipartCompleteResult,
   MultipartPart,
+  ObjectCopyInput,
+  ObjectCopyResult,
   ObjectHeadResult,
   ObjectPutInput,
   ObjectStoreCredentials,

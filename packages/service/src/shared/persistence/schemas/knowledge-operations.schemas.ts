@@ -178,6 +178,10 @@ export interface KnowledgeObjectRefDoc extends WorkspaceFields {
     mode: 'single' | 'multipart' | null;
     status: 'pending' | 'uploading' | 'completing' | 'completed' | 'aborted' | 'expired' | null;
     providerUploadId: string | null;
+    pendingObjectKey: string | null;
+    finalObjectKey: string | null;
+    finalizedAt: Date | null;
+    pendingUrlExpiresAt: Date | null;
     partSizeBytes: number;
     partCount: number;
     parts: Array<{ partNumber: number; etag: string; sizeBytes: number }>;
@@ -228,6 +232,10 @@ export const KnowledgeObjectRefSchema = new Schema(
         default: null,
       },
       providerUploadId: { type: String, default: null },
+      pendingObjectKey: { type: String, default: null },
+      finalObjectKey: { type: String, default: null },
+      finalizedAt: { type: Date, default: null },
+      pendingUrlExpiresAt: { type: Date, default: null },
       partSizeBytes: { type: Number, required: true, default: 8388608, min: 1 },
       partCount: { type: Number, required: true, default: 0, min: 0 },
       parts: {

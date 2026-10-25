@@ -22,14 +22,6 @@ export const UPLOAD_MAX_PARTS = 10_000;
 export const UPLOAD_MAX_BYTES = 1_000 * 1024 * 1024;
 export const UPLOAD_SESSION_TTL_MS = 3 * 60 * 60 * 1000;
 
-const IMAGE_MIME_TYPES = new Set([
-  'image/png',
-  'image/jpeg',
-  'image/webp',
-  'image/gif',
-  'image/tiff',
-]);
-
 const MIME_BY_EXTENSION: Record<string, readonly string[]> = {
   txt: ['text/plain'],
   md: ['text/markdown', 'text/x-markdown'],
@@ -118,6 +110,15 @@ function unsupported(context: TenantContext, details: Record<string, unknown>) {
   });
 }
 
+function providerContractFailure(context: TenantContext, operation: string) {
+  return createKnowledgeError({
+    code: 'KNOWLEDGE_PROVIDER_CONTRACT_INVALID',
+    requestId: context.requestId,
+    traceId: context.traceId,
+    details: { operation },
+  });
+}
+
 function normalizeMime(value: string): string {
   return value.split(';')[0]?.trim().toLowerCase() ?? '';
 }
@@ -138,6 +139,26 @@ function storageContext(context: TenantContext, knowledgeSpaceId: string): Objec
   };
 }
 
+function uploadObjectKeys(
+  context: TenantContext,
+  knowledgeSpaceId: string,
+  uploadId: string,
+  name: string,
+): { pendingKey: string; finalKey: string } {
+  const prefix = [
+    'ws',
+    safeName(context.workspaceId),
+    'space',
+    safeName(knowledgeSpaceId),
+    'source',
+    'unbound',
+  ];
+  return {
+    pendingKey: [...prefix, 'pending', uploadId, name].join('/'),
+    finalKey: [...prefix, 'source', uploadId, name].join('/'),
+  };
+}
+
 function extensionOf(name: string): string {
   const leaf = name.toLowerCase();
   const index = leaf.lastIndexOf('.');
@@ -147,17 +168,10 @@ function extensionOf(name: string): string {
 function validateNameAndMime(name: string, mimeType: string, context: TenantContext): void {
   const extension = extensionOf(name);
   const allowedMimes = MIME_BY_EXTENSION[extension];
-  const isSupported =
-    (allowedMimes?.includes(mimeType) ?? false) ||
-    (IMAGE_MIME_TYPES.has(mimeType) && allowedMimes !== undefined);
-  if (!isSupported) {
+  if (!allowedMimes) {
     throw unsupported(context, { name, mimeType, reason: 'unsupported_mime_or_extension' });
   }
-  if (
-    allowedMimes !== undefined &&
-    !allowedMimes.includes(mimeType) &&
-    !IMAGE_MIME_TYPES.has(mimeType)
-  ) {
+  if (!allowedMimes.includes(mimeType)) {
     throw unsupported(context, {
       name,
       mimeType,
@@ -296,17 +310,12 @@ export class FileApplication {
 
     const uploadId = randomBytes(12).toString('hex');
     const mode = input.sizeBytes <= UPLOAD_PART_SIZE_BYTES ? 'single' : 'multipart';
-    const key = [
-      'ws',
-      safeName(context.workspaceId),
-      'space',
-      safeName(input.knowledgeSpaceId),
-      'source',
-      'unbound',
-      'source',
+    const { pendingKey: key, finalKey } = uploadObjectKeys(
+      context,
+      input.knowledgeSpaceId,
       uploadId,
       name,
-    ].join('/');
+    );
     const storage = storageContext(context, input.knowledgeSpaceId);
     await this.objectStore.ensureBucket(this.objectStore.bucket, storage);
     const providerUploadId =
@@ -321,6 +330,7 @@ export class FileApplication {
         provider: this.objectStore.provider,
         bucket: this.objectStore.bucket,
         objectKey: key,
+        finalObjectKey: finalKey,
         mimeType,
         sizeBytes: input.sizeBytes,
         originalName: name,
@@ -379,7 +389,7 @@ export class FileApplication {
       }
       const signed = await this.objectStore.presignPut(
         ref.objectKey,
-        'application/octet-stream',
+        ref.mimeType,
         expiresSeconds,
         storage,
         session.mode === 'multipart'
@@ -535,11 +545,17 @@ export class FileApplication {
         storage,
       );
       if (head.size !== ref.sizeBytes) {
-        throw createKnowledgeError({
-          code: 'KNOWLEDGE_PROVIDER_CONTRACT_INVALID',
-          requestId: context.requestId,
-          traceId: context.traceId,
-          details: { reason: 'size_mismatch' },
+        await this.objectStore.deleteObject(ref.objectKey, storage);
+        await this.objectRefs
+          .markUploadAborted(input.uploadId, session.version, context)
+          .catch(() => undefined);
+        if (head.size > ref.sizeBytes) {
+          throw payloadError(context, 'declared sizeBytes');
+        }
+        throw unsupported(context, {
+          reason: 'size_mismatch',
+          declaredSizeBytes: ref.sizeBytes,
+          actualSizeBytes: head.size,
         });
       }
       const object = await this.objectStore.getObject(
@@ -583,20 +599,93 @@ export class FileApplication {
           throw archiveSafetyProblem(inspected, context);
         }
       }
+      const stableHead = await this.objectStore.headObject(
+        this.objectStore.bucket,
+        ref.objectKey,
+        storage,
+      );
+      if (stableHead.size !== head.size || stableHead.etag !== head.etag) {
+        throw conflict(context, {
+          uploadId: input.uploadId,
+          reason: 'source_changed_during_validation',
+        });
+      }
+      const finalKey = ref.finalObjectKey;
+      if (!finalKey || finalKey === ref.objectKey) {
+        throw conflict(context, {
+          uploadId: input.uploadId,
+          reason: 'immutable_target_unavailable',
+        });
+      }
+      let finalHead: { size: number; etag: string } | null = null;
+      try {
+        finalHead = await this.objectStore.headObject(this.objectStore.bucket, finalKey, storage);
+      } catch (error) {
+        if (
+          !(error instanceof KnowledgeApiError) ||
+          error.problem.error.code !== 'KNOWLEDGE_NOT_FOUND'
+        ) {
+          throw error;
+        }
+      }
+      const finalHeadPreExisted = finalHead !== null;
+      if (finalHead) {
+        if (finalHead.size !== head.size) {
+          throw conflict(context, {
+            uploadId: input.uploadId,
+            reason: 'immutable_target_conflict',
+          });
+        }
+      } else {
+        const copied = await this.objectStore.copyObjectImmutable(
+          {
+            sourceKey: ref.objectKey,
+            targetKey: finalKey,
+            expectedSourceEtag: stableHead.etag,
+            expectedSize: stableHead.size,
+            contentType: ref.mimeType,
+            metadata: { sha256: hashed.sha256 },
+          },
+          storage,
+        );
+        finalHead = await this.objectStore.headObject(this.objectStore.bucket, finalKey, storage);
+        if (finalHead.size !== copied.sizeBytes || finalHead.etag !== copied.etag) {
+          throw providerContractFailure(context, 'copyObjectImmutable');
+        }
+      }
+      const finalObject = await this.objectStore.getObject(
+        this.objectStore.bucket,
+        finalKey,
+        null,
+        storage,
+      );
+      const finalHashed = await hashObject(finalObject.body);
+      if (finalObject.size !== finalHead.size) {
+        throw providerContractFailure(context, 'immutableFinalVerification');
+      }
+      if (finalHashed.sha256 !== hashed.sha256) {
+        if (finalHeadPreExisted) {
+          throw conflict(context, {
+            uploadId: input.uploadId,
+            reason: 'immutable_target_digest_conflict',
+          });
+        }
+        throw providerContractFailure(context, 'immutableFinalVerification');
+      }
       return await this.objectRefs.completeUpload(
         {
           uploadId: input.uploadId,
           expectedVersion: session.version,
-          etag: head.etag,
-          sha256: hashed.sha256,
-          sizeBytes: head.size,
+          objectKey: finalKey,
+          etag: finalHead.etag,
+          sha256: finalHashed.sha256,
+          sizeBytes: finalObject.size,
           parts: providerParts,
         },
         context,
       );
     } catch (error) {
       if (error instanceof KnowledgeApiError) throw error;
-      await this.objectStore.deleteObject(ref.objectKey, storage).catch(() => undefined);
       throw createKnowledgeError({
         code: 'KNOWLEDGE_DEPENDENCY_UNAVAILABLE',
         requestId: context.requestId,
@@ -732,6 +821,7 @@ export class FileApplication {
   ): Promise<FileBinaryResult> {
     let effectiveContext = context;
     let disposition: FileTicketDisposition = 'inline';
+    let claims: ReturnType<FileTicketPort['verify']> | null = null;
     if (ticket) {
       if (!this.tickets) {
         throw createKnowledgeError({
@@ -741,7 +831,7 @@ export class FileApplication {
           details: { reason: 'file_ticket_service_missing' },
         });
       }
-      const claims = this.tickets.verify(ticket, context.requestId, context.traceId);
+      claims = this.tickets.verify(ticket, context.requestId, context.traceId);
       if (
         claims.blobId !== blobId ||
         (context.workspaceId !== 'ticket' && claims.workspaceId !== context.workspaceId)
@@ -762,6 +852,26 @@ export class FileApplication {
     }
     const ref = await this.objectRefs.findObjectRef(blobId, effectiveContext);
     if (!ref) throw notFound(effectiveContext);
+    if (ticket) {
+      if (!claims) throw notFound(effectiveContext);
+      if (claims.workspaceId !== ref.workspaceId) throw notFound(effectiveContext);
+      if (claims.sourceId !== ref.sourceId) {
+        throw createKnowledgeError({
+          code: 'KNOWLEDGE_FORBIDDEN',
+          requestId: context.requestId,
+          traceId: context.traceId,
+          details: { reason: 'ticket_source_binding_mismatch' },
+        });
+      }
+      if (claims.knowledgeSpaceId !== null && claims.knowledgeSpaceId !== ref.knowledgeSpaceId) {
+        throw createKnowledgeError({
+          code: 'KNOWLEDGE_FORBIDDEN',
+          requestId: context.requestId,
+          traceId: context.traceId,
+          details: { reason: 'ticket_space_binding_mismatch' },
+        });
+      }
+    }
     if (!ticket) {
       await this.assertFileReadable(ref, effectiveContext);
     } else if (ref.state !== 'active') {

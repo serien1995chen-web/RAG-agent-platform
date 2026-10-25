@@ -216,4 +216,104 @@ describe('ACC-UI-01…07 file surfaces', () => {
       await browser.close();
     }
   });
+
+  it('TEST-FILE-001-U22 resumes a three-part upload after refresh', async () => {
+    const sessionResponse = await fetch(`${baseUrl}/api/console/session`, {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${authToken}`,
+        'x-workspace-id': workspaceId,
+        'content-type': 'application/json',
+      },
+      body: '{}',
+    });
+    const rawCookie = sessionResponse.headers.get('set-cookie') ?? '';
+    const pair = rawCookie.split(';', 1)[0] ?? '';
+    const separator = pair.indexOf('=');
+    const cookie = {
+      name: pair.slice(0, separator),
+      value: pair.slice(separator + 1),
+      domain: '127.0.0.1',
+      path: '/',
+      sameSite: 'Strict' as const,
+    };
+    const size = 2 * 8 * 1024 * 1024 + 1024;
+    const bytes = Buffer.alloc(size, 'a');
+    const initResponse = await fetch(`${baseUrl}/v1/knowledge/uploads`, {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${authToken}`,
+        'x-workspace-id': workspaceId,
+        'content-type': 'application/json',
+        'idempotency-key': `large-init-${suffix}`,
+      },
+      body: JSON.stringify({
+        knowledgeSpaceId: spaceId,
+        name: 'large.txt',
+        mimeType: 'text/plain',
+        sizeBytes: size,
+      }),
+    });
+    const initPayload = (await initResponse.json()) as {
+      data: { uploadId: string; partSizeBytes: number };
+    };
+    const uploadId = initPayload.data.uploadId;
+    const firstPart = await fetch(`${baseUrl}/v1/knowledge/uploads/${uploadId}/parts/1`, {
+      method: 'PUT',
+      headers: {
+        authorization: `Bearer ${authToken}`,
+        'x-workspace-id': workspaceId,
+        'content-type': 'application/octet-stream',
+        'idempotency-key': `large-part-1-${suffix}`,
+      },
+      body: bytes.subarray(0, initPayload.data.partSizeBytes),
+    });
+    expect(firstPart.status).toBe(200);
+    const firstPartPayload = (await firstPart.json()) as { data: { etag: string } };
+
+    const browser = await chromium.launch({ headless: true });
+    try {
+      const context = await browser.newContext({ viewport: { width: 1200, height: 900 } });
+      await context.addCookies([cookie]);
+      const page = await context.newPage();
+      await page.goto(`${baseUrl}/spaces/${spaceId}/import`, { waitUntil: 'networkidle' });
+      await page.evaluate(
+        ({ storageKey, id, etag }) => {
+          window.localStorage.setItem(
+            storageKey,
+            JSON.stringify({
+              uploadId: id,
+              phase: 'uploading',
+              progress: 33,
+              parts: [{ partNumber: 1, etag: etag }],
+            }),
+          );
+        },
+        {
+          storageKey: `kb-upload:${workspaceId}:large.txt:${size}`,
+          id: uploadId,
+          etag: firstPartPayload.data.etag,
+        },
+      );
+      await page.reload({ waitUntil: 'networkidle' });
+      await page.setInputFiles('input[type=file]', {
+        name: 'large.txt',
+        mimeType: 'text/plain',
+        buffer: bytes,
+      });
+      await page.getByRole('button', { name: '上传', exact: true }).click();
+      await page.getByText('上传完成', { exact: true }).waitFor({ timeout: 120_000 });
+      const job = await fetch(`${baseUrl}/v1/knowledge/uploads/${uploadId}`, {
+        headers: {
+          authorization: `Bearer ${authToken}`,
+          'x-workspace-id': workspaceId,
+        },
+      });
+      const body = (await job.json()) as { data: { status: string } };
+      expect(body.data.status).toBe('completed');
+      await context.close();
+    } finally {
+      await browser.close();
+    }
+  }, 120_000);
 });
