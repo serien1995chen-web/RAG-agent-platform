@@ -10,11 +10,14 @@ const EnvironmentSchema = z.object({
   KB_MONGO_URI: z.string().min(1),
   KB_REDIS_URL: z.string().min(1),
   KB_PG_URL: z.string().min(1),
+  KB_S3_VENDOR: z.enum(['minio', 'aws-s3', 'r2', 'cos', 'oss']).default('minio'),
   KB_S3_ENDPOINT: z.string().url(),
   KB_S3_REGION: z.string().min(1).default('us-east-1'),
   KB_S3_BUCKET: z.string().min(1),
   KB_S3_ACCESS_KEY_REF: z.string().min(1),
   KB_S3_SECRET_KEY_REF: z.string().min(1),
+  KB_FILE_PUBLIC_BASE_URL: z.string().url().default('http://localhost:3010'),
+  KB_FILE_TICKET_SECRET_REF: z.string().min(1).default('env:KB_FILE_TICKET_SECRET'),
   KB_AUTH_MODE: z.enum(['mock', 'iam']).default('mock'),
   KB_MOCK_AUTH_TOKEN: z.string().min(16).optional(),
   KB_MOCK_WORKSPACE_ID: z.string().min(1).max(64).optional(),
@@ -48,12 +51,16 @@ export interface KnowledgeRuntimeConfig {
   redisUrl: string;
   pgUrl: string;
   s3: {
+    provider: 'minio' | 'aws-s3' | 'r2' | 'cos' | 'oss';
     endpoint: string;
     region: string;
     bucket: string;
     accessKeyRef: string;
     secretKeyRef: string;
+    credentialRefs: string[];
   };
+  filePublicBaseUrl: string;
+  fileTicketSecretRef: string;
   auth: { mode: 'mock'; fixture: KnowledgeMockAuthConfig } | { mode: 'iam' } | { mode: 'disabled' };
   externalModes: {
     model: 'mock' | 'real';
@@ -115,12 +122,16 @@ export function loadKnowledgeRuntimeConfig(
     redisUrl: data.KB_REDIS_URL,
     pgUrl: data.KB_PG_URL,
     s3: {
+      provider: data.KB_S3_VENDOR,
       endpoint: data.KB_S3_ENDPOINT,
       region: data.KB_S3_REGION,
       bucket: data.KB_S3_BUCKET,
       accessKeyRef: data.KB_S3_ACCESS_KEY_REF,
       secretKeyRef: data.KB_S3_SECRET_KEY_REF,
+      credentialRefs: [data.KB_S3_ACCESS_KEY_REF, data.KB_S3_SECRET_KEY_REF],
     },
+    filePublicBaseUrl: data.KB_FILE_PUBLIC_BASE_URL,
+    fileTicketSecretRef: data.KB_FILE_TICKET_SECRET_REF,
     auth,
     externalModes: {
       model: data.KB_EXTERNAL_MODEL_MODE,

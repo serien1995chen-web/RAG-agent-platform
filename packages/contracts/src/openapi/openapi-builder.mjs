@@ -32,6 +32,18 @@ export const RUNTIME_OPERATION_IDS = Object.freeze([
   'API-SOURCE-GET',
   'API-SOURCE-UPDATE',
   'API-SOURCE-DELETE',
+  'API-SOURCE-PREVIEW',
+  'API-SOURCE-DOWNLOAD',
+  'API-SOURCE-ARCHIVE',
+  'API-UPLOAD-INIT',
+  'API-UPLOAD-PRESIGN',
+  'API-UPLOAD-PART',
+  'API-UPLOAD-COMPLETE',
+  'API-UPLOAD-ABORT',
+  'API-UPLOAD-GET',
+  'API-FILE-PREVIEW',
+  'API-FILE-CONTENT',
+  'API-FILE-DOWNLOAD',
   'API-SEGMENT-LIST',
   'API-SEGMENT-CREATE',
   'API-SEGMENT-GET',
@@ -304,14 +316,14 @@ export function buildKnowledgeContractArtifacts(repoRoot) {
   const runtimeRoutes = routes.filter((route) => route.runtime);
   const runtimeIds = runtimeRoutes.map((route) => route.operationId).sort();
   const expectedRuntimeIds = [...RUNTIME_OPERATION_IDS].sort();
-  if (runtimeIds.length !== 46) problems.push(`runtime 应为 46，实际 ${runtimeIds.length}`);
+  if (runtimeIds.length !== 58) problems.push(`runtime 应为 58，实际 ${runtimeIds.length}`);
   if (runtimeIds.join('\n') !== expectedRuntimeIds.join('\n')) {
     problems.push('runtime allowlist 与目标合同 operationId 不一致');
   }
 
   const deferredRoutes = routes.filter((route) => !route.runtime);
-  if (deferredRoutes.length !== 74) {
-    problems.push(`deferred 应为 74，实际 ${deferredRoutes.length}`);
+  if (deferredRoutes.length !== 62) {
+    problems.push(`deferred 应为 62，实际 ${deferredRoutes.length}`);
   }
   if (problems.length > 0) {
     const error = new Error(problems.join('\n'));

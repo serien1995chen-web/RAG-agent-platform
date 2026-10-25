@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  DEPENDENCY_LEDGER_TOTALS,
   DEPENDENCY_OWNER_STAGE_COUNTS,
   NPM_DEPENDENCY_AUDIT,
   NPM_DEPENDENCY_BASELINE,
@@ -19,6 +20,7 @@ function realCatalog(): Map<string, string> {
     NPM_DEPENDENCY_BASELINE.filter(
       (entry) =>
         entry.ownerStage === 'S1' ||
+        entry.ownerStage === 'S2' ||
         entry.name === 'ajv' ||
         entry.name === '@llamaindex/liteparse-wasm',
     ).map((entry) => [entry.name, entry.version]),
@@ -50,10 +52,16 @@ describe('npm dependency ledger', () => {
     );
     expect(counts).toEqual(DEPENDENCY_OWNER_STAGE_COUNTS);
     expect(NPM_DEPENDENCY_BASELINE.find((entry) => entry.name === 'ajv')?.ownerStage).toBe('S4');
+    expect(DEPENDENCY_LEDGER_TOTALS.catalog).toBe(108);
+    expect(NPM_DEPENDENCY_BASELINE.filter((entry) => entry.ownerStage === 'S2')).toHaveLength(13);
     expect(
       NPM_DEPENDENCY_BASELINE.find((entry) => entry.name === '@llamaindex/liteparse-wasm')
         ?.ownerStage,
     ).toBe('S5');
+  });
+
+  it('matches all S1, S2 and catalog-only entries in the catalog', () => {
+    expect(validateDependencyCatalog(NPM_DEPENDENCY_BASELINE, realCatalog())).toEqual([]);
   });
 
   it('rejects duplicate names', () => {

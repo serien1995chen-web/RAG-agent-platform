@@ -13,13 +13,18 @@ function sorted(value: unknown): unknown {
 }
 
 export function requestHash(value: unknown): string {
-  return createHash('sha256')
-    .update(JSON.stringify(sorted(value)) ?? 'null')
-    .digest('hex');
+  const hash = createHash('sha256');
+  if (value instanceof Uint8Array) {
+    hash.update(value);
+  } else {
+    hash.update(JSON.stringify(sorted(value)) ?? 'null');
+  }
+  return hash.digest('hex');
 }
 
 export function bodyByteLength(value: unknown): number {
   if (value === undefined || value === null) return 0;
+  if (value instanceof Uint8Array) return value.byteLength;
   if (typeof value === 'string') return Buffer.byteLength(value);
   try {
     return Buffer.byteLength(JSON.stringify(value));

@@ -1,8 +1,25 @@
 export { KnowledgeApplication } from './application/knowledge.application';
+export { FileApplication } from './application/file.application';
+export { ObjectLifecycleService } from './application/object-lifecycle';
+export { SourceFileApplication } from './application/source-preview';
+export type { ObjectCleanupResult } from './application/object-lifecycle';
 export type {
   KnowledgeOperationInput,
   KnowledgeOperationResult,
 } from './application/knowledge.application';
+export type {
+  ArchiveSafetyInput,
+  ArchiveSafetyPort,
+  ArchiveSafetyResult,
+  ObjectRefRepositoryPort,
+  ObjectRefView,
+  ObjectStoreApplicationPort,
+  FileBinaryResult,
+  FileTicketClaims,
+  FileTicketDisposition,
+  FileTicketPort,
+  UploadSessionView,
+} from './application/ports';
 export {
   JOB_STATES,
   MAX_DIRECTORY_DEPTH,
@@ -32,6 +49,8 @@ export type {
   CreateSpaceInput,
 } from './repository/catalog.repository';
 export { KnowledgeJobRepository } from './repository/job.repository';
+export { KnowledgeObjectRefRepository } from './repository/object-ref.repository';
+export { KnowledgeArchiveRepository } from './repository/archive.repository';
 export { KnowledgeTagRepository } from './repository/tag.repository';
 export {
   AiproxyMockAdapter,

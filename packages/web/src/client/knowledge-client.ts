@@ -93,3 +93,40 @@ export async function knowledgeRequest<T>(
   }
   return payload.data;
 }
+
+export async function knowledgeBinaryRequest<T>(
+  path: string,
+  body: Blob | ArrayBuffer | Uint8Array,
+  options: {
+    method?: 'PUT' | 'POST';
+    idempotencyKey?: string;
+  } = {},
+): Promise<T> {
+  if (!path.startsWith('/v1/knowledge/')) {
+    throw new ConsoleRequestPathError();
+  }
+  const session = await ensureConsoleSession();
+  const method = options.method ?? 'PUT';
+  const requestBody =
+    body instanceof Blob
+      ? body
+      : new Blob([body instanceof Uint8Array ? new Uint8Array(body).buffer : body]);
+  const response = await fetch(path, {
+    method,
+    credentials: 'same-origin',
+    headers: {
+      accept: 'application/json',
+      'content-type': 'application/octet-stream',
+      'X-Workspace-Id': session.workspaceId,
+      'Idempotency-Key': options.idempotencyKey ?? idempotencyKey(),
+    },
+    body: requestBody,
+  });
+  const payload = (await response.json()) as
+    | { success: true; data: T; traceId: string; requestId: string }
+    | KnowledgeProblem;
+  if (!response.ok || !payload.success) {
+    throw new KnowledgeRequestError(response.status, payload as KnowledgeProblem);
+  }
+  return payload.data;
+}

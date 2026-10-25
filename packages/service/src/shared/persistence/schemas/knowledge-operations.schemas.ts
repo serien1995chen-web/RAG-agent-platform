@@ -174,6 +174,21 @@ export interface KnowledgeObjectRefDoc extends WorkspaceFields {
   sha256: string;
   state: 'pending' | 'active' | 'deleting' | 'deleted';
   expiresAt: Date | null;
+  upload: {
+    mode: 'single' | 'multipart' | null;
+    status: 'pending' | 'uploading' | 'completing' | 'completed' | 'aborted' | 'expired' | null;
+    providerUploadId: string | null;
+    pendingObjectKey: string | null;
+    finalObjectKey: string | null;
+    finalizedAt: Date | null;
+    pendingUrlExpiresAt: Date | null;
+    partSizeBytes: number;
+    partCount: number;
+    parts: Array<{ partNumber: number; etag: string; sizeBytes: number }>;
+    originalName: string;
+    completedAt: Date | null;
+    abortedAt: Date | null;
+  };
   createdAt: Date;
   updatedAt: Date;
 }
@@ -196,8 +211,8 @@ export const KnowledgeObjectRefSchema = new Schema(
     sourceId: { type: Schema.Types.ObjectId, default: null },
     mimeType: { type: String, required: true },
     sizeBytes: { type: Number, required: true, min: 0 },
-    etag: { type: String, required: true },
-    sha256: { type: String, required: true },
+    etag: { type: String, required: false, default: '' },
+    sha256: { type: String, required: false, default: '' },
     state: {
       type: String,
       enum: ['pending', 'active', 'deleting', 'deleted'],
@@ -205,6 +220,41 @@ export const KnowledgeObjectRefSchema = new Schema(
       default: 'pending',
     },
     expiresAt: { type: Date, default: null },
+    upload: {
+      mode: {
+        type: String,
+        enum: ['single', 'multipart'],
+        default: null,
+      },
+      status: {
+        type: String,
+        enum: ['pending', 'uploading', 'completing', 'completed', 'aborted', 'expired'],
+        default: null,
+      },
+      providerUploadId: { type: String, default: null },
+      pendingObjectKey: { type: String, default: null },
+      finalObjectKey: { type: String, default: null },
+      finalizedAt: { type: Date, default: null },
+      pendingUrlExpiresAt: { type: Date, default: null },
+      partSizeBytes: { type: Number, required: true, default: 8388608, min: 1 },
+      partCount: { type: Number, required: true, default: 0, min: 0 },
+      parts: {
+        type: [
+          new Schema(
+            {
+              partNumber: { type: Number, required: true, min: 1, max: 10000 },
+              etag: { type: String, required: true },
+              sizeBytes: { type: Number, required: true, min: 1 },
+            },
+            { _id: false },
+          ),
+        ],
+        default: [],
+      },
+      originalName: { type: String, required: true, maxlength: 180 },
+      completedAt: { type: Date, default: null },
+      abortedAt: { type: Date, default: null },
+    },
   },
   knowledgeSchemaOptions('knowledge_object_refs'),
 );
@@ -221,6 +271,10 @@ defineKnowledgeIndex(KnowledgeObjectRefSchema, {
 defineKnowledgeIndex(KnowledgeObjectRefSchema, {
   name: 'ix_object_ttl',
   key: { state: 1, expiresAt: 1 },
+});
+defineKnowledgeIndex(KnowledgeObjectRefSchema, {
+  name: 'ix_object_upload_status',
+  key: { workspaceId: 1, state: 1, 'upload.status': 1, expiresAt: 1 },
 });
 
 export interface KnowledgeCitationDoc extends WorkspaceFields {

@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import {
   KnowledgeApiError,
   createKnowledgeError,
@@ -5,7 +6,7 @@ import {
   matchRuntimeRoute,
   type RouteEntry,
 } from '@kb/contracts';
-import type { IdempotencyRecord } from '@kb/dal';
+import { buildIdempotencyScopeKey, type IdempotencyRecord } from '@kb/dal';
 import type { SafeAttributes, SafeLogFields } from '@kb/otel';
 import type { NextApiHandler, NextApiRequest, NextApiResponse } from 'next';
 import { bodyByteLength, requestHash } from './serialize';
@@ -15,6 +16,7 @@ import type { KnowledgeApiRuntime, KnowledgeAuthSubject, KnowledgeDispatchResult
 const PUBLIC_OPERATIONS = new Set(['API-OPENAPI']);
 const WRITE_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 const MAX_REQUEST_BODY_BYTES = 10 * 1024 * 1024;
+const MAX_UPLOAD_PART_BYTES = 8 * 1024 * 1024;
 
 type TelemetryKnowledgeApiRuntime = KnowledgeApiRuntime & {
   withSpan<T>(name: string, attributes: SafeAttributes, fn: () => Promise<T> | T): Promise<T>;
@@ -31,6 +33,20 @@ function normalizeScopes(subject: KnowledgeAuthSubject): Set<string> {
 
 function firstWorkspaceId(subject: KnowledgeAuthSubject): string | null {
   return subject.workspaceIds[0] ?? null;
+}
+
+export function ticketClientRateLimitScope(
+  request: Pick<NextApiRequest, 'headers' | 'socket'>,
+): string {
+  const forwarded = header(request as NextApiRequest, 'x-forwarded-for')
+    ?.split(',')[0]
+    ?.trim();
+  const address =
+    request.socket?.remoteAddress ||
+    forwarded ||
+    header(request as NextApiRequest, 'x-real-ip')?.trim() ||
+    'unknown';
+  return `ticket-client:${createHash('sha256').update(address).digest('hex').slice(0, 24)}`;
 }
 
 function publicErrorStatus(error: KnowledgeApiError): number {
@@ -82,6 +98,65 @@ function validation(requestId: string, traceId: string, details: Record<string, 
     traceId,
     details,
   });
+}
+
+async function readStreamBody(
+  request: NextApiRequest,
+  maxBytes: number,
+  requestId: string,
+  traceId: string,
+): Promise<Buffer | undefined> {
+  if (request.body !== undefined) {
+    if (request.body instanceof Uint8Array) return Buffer.from(request.body);
+    if (typeof request.body === 'string') return Buffer.from(request.body);
+    return undefined;
+  }
+  const chunks: Buffer[] = [];
+  let size = 0;
+  for await (const chunk of request) {
+    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk as Uint8Array);
+    size += buffer.byteLength;
+    if (size > maxBytes) {
+      throw createKnowledgeError({
+        code: 'KNOWLEDGE_PAYLOAD_TOO_LARGE',
+        requestId,
+        traceId,
+        details: { limitBytes: maxBytes },
+      });
+    }
+    chunks.push(buffer);
+  }
+  return chunks.length === 0 ? undefined : Buffer.concat(chunks);
+}
+
+async function resolveRequestBody(
+  request: NextApiRequest,
+  rawBinary: boolean,
+  requestId: string,
+  traceId: string,
+): Promise<unknown> {
+  if (request.body !== undefined && !(request.body instanceof Uint8Array)) {
+    return request.body;
+  }
+  if (request.body !== undefined && typeof request.body === 'string') {
+    if (!rawBinary) return request.body;
+  }
+  const maxBytes = rawBinary ? MAX_UPLOAD_PART_BYTES : MAX_REQUEST_BODY_BYTES;
+  const buffer = await readStreamBody(request, maxBytes, requestId, traceId);
+  if (buffer === undefined) return undefined;
+  if (rawBinary) return buffer;
+  const contentType = header(request, 'content-type') ?? '';
+  if (!contentType.toLowerCase().includes('json')) {
+    throw validation(requestId, traceId, {
+      header: 'Content-Type',
+      reason: 'application_json_required',
+    });
+  }
+  try {
+    return JSON.parse(buffer.toString('utf8')) as unknown;
+  } catch {
+    throw validation(requestId, traceId, { field: 'body', reason: 'invalid_json' });
+  }
 }
 
 function conflict(requestId: string, traceId: string, details: Record<string, unknown>) {
@@ -199,7 +274,15 @@ export function createKnowledgeApiHandler(): NextApiHandler {
     }
 
     try {
-      if (bodyByteLength(request.body) > MAX_REQUEST_BODY_BYTES) {
+      const requestBody = await resolveRequestBody(
+        request,
+        route.operationId === 'API-UPLOAD-PART',
+        requestId,
+        traceId,
+      );
+      const maxBodyBytes =
+        route.operationId === 'API-UPLOAD-PART' ? MAX_UPLOAD_PART_BYTES : MAX_REQUEST_BODY_BYTES;
+      if (bodyByteLength(requestBody) > maxBodyBytes) {
         throw createKnowledgeError({
           code: 'KNOWLEDGE_PAYLOAD_TOO_LARGE',
           requestId,
@@ -207,11 +290,21 @@ export function createKnowledgeApiHandler(): NextApiHandler {
         });
       }
       const isPublic = PUBLIC_OPERATIONS.has(route.operationId);
-      const subject = isPublic
+      const ticketValue =
+        route.operationId === 'API-FILE-CONTENT'
+          ? Array.isArray(request.query.ticket)
+            ? request.query.ticket[0]
+            : request.query.ticket
+          : undefined;
+      const isTicketAuth = route.operationId === 'API-FILE-CONTENT' && Boolean(ticketValue);
+      const skipAuthentication = isPublic || isTicketAuth;
+      const subject = skipAuthentication
         ? {
             authType: 'jwt' as const,
-            memberId: 'public',
-            workspaceIds: [header(request, 'x-workspace-id') ?? 'public'],
+            memberId: isTicketAuth ? 'file-ticket' : 'public',
+            workspaceIds: [
+              isTicketAuth ? 'ticket' : (header(request, 'x-workspace-id') ?? 'public'),
+            ],
             scopes: ['knowledge:read'],
           }
         : await runtime.authenticate(request, {
@@ -219,12 +312,32 @@ export function createKnowledgeApiHandler(): NextApiHandler {
             requestId,
             traceId,
           });
-      const workspaceId = isPublic
-        ? (header(request, 'x-workspace-id') ?? firstWorkspaceId(subject) ?? 'public')
+      const workspaceId = skipAuthentication
+        ? isTicketAuth
+          ? 'ticket'
+          : (header(request, 'x-workspace-id') ?? firstWorkspaceId(subject) ?? 'public')
         : resolveWorkspace(request, subject, requestId, traceId);
-      assertScopes(route, subject, requestId, traceId);
+      if (!isTicketAuth) assertScopes(route, subject, requestId, traceId);
 
-      const rateLimit = await runtime.rateLimit({ workspaceId, route, requestId });
+      let ticketVerificationError: unknown = null;
+      let ticketWorkspaceId: string | null = null;
+      if (isTicketAuth && ticketValue) {
+        try {
+          ticketWorkspaceId = runtime.ticketWorkspaceId(ticketValue, requestId, traceId);
+        } catch (error) {
+          ticketVerificationError = error;
+        }
+      }
+      const rateLimitScope = isTicketAuth
+        ? ticketVerificationError
+          ? ticketClientRateLimitScope(request)
+          : (ticketWorkspaceId ?? workspaceId)
+        : workspaceId;
+      const rateLimit = await runtime.rateLimit({
+        workspaceId: rateLimitScope,
+        route,
+        requestId,
+      });
       if (rateLimit) {
         response.setHeader('RateLimit-Limit', String(rateLimit.limit));
         response.setHeader('RateLimit-Remaining', String(Math.max(0, rateLimit.remaining)));
@@ -238,6 +351,7 @@ export function createKnowledgeApiHandler(): NextApiHandler {
           });
         }
       }
+      if (ticketVerificationError) throw ticketVerificationError;
 
       const execute = () =>
         runtime.withSpan(
@@ -258,7 +372,8 @@ export function createKnowledgeApiHandler(): NextApiHandler {
                   route,
                   params: match.params,
                   query: request.query,
-                  body: request.body,
+                  headers: request.headers as Record<string, string | string[] | undefined>,
+                  body: requestBody,
                   context: {
                     subject,
                     workspaceId,
@@ -276,8 +391,8 @@ export function createKnowledgeApiHandler(): NextApiHandler {
         const store = await runtime.idempotencyStore();
         result = await withIdempotency(
           store,
-          `kb-idem:${workspaceId}:${route.operationId}:${key}`,
-          requestHash({ path, method, body: request.body ?? null }),
+          buildIdempotencyScopeKey(workspaceId, method, path, key),
+          requestHash({ path, method, body: requestBody ?? null }),
           execute,
           requestId,
           traceId,
@@ -297,6 +412,21 @@ export function createKnowledgeApiHandler(): NextApiHandler {
           traceId,
           operationId: route.operationId,
           details: { httpStatus: 204, workspaceId },
+        });
+        return;
+      }
+      if (result.binary) {
+        response.status(result.status);
+        for await (const chunk of result.binary.body) {
+          response.write(chunk);
+        }
+        response.end();
+        runtime.log({
+          event: 'knowledge.api.request.completed',
+          requestId,
+          traceId,
+          operationId: route.operationId,
+          details: { httpStatus: result.status, workspaceId },
         });
         return;
       }

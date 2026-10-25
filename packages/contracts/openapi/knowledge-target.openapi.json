@@ -11710,11 +11710,28 @@
           {
             "name": "X-Workspace-Id",
             "in": "header",
-            "required": true,
+            "required": false,
             "schema": {
               "type": "string"
             },
             "example": "ws_acme_cn"
+          },
+          {
+            "name": "ticket",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Range",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "example": "bytes=0-9"
           },
           {
             "name": "X-Request-Id",
@@ -11778,14 +11795,24 @@
           "416": {
             "$ref": "#/components/responses/Problem416"
           },
+          "422": {
+            "$ref": "#/components/responses/Problem422"
+          },
           "429": {
             "$ref": "#/components/responses/Problem429"
           },
           "500": {
             "$ref": "#/components/responses/Problem500"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem503"
+          },
+          "504": {
+            "$ref": "#/components/responses/Problem504"
           }
         },
         "security": [
+          {},
           {
             "JWTAuth": []
           },
@@ -23731,6 +23758,7 @@
       "ImportText": {
         "type": "object",
         "required": [
+          "knowledgeSpaceId",
           "name",
           "text",
           "chunking"
@@ -24325,6 +24353,7 @@
       "UploadInit": {
         "type": "object",
         "required": [
+          "knowledgeSpaceId",
           "name",
           "mimeType",
           "sizeBytes"
@@ -24339,14 +24368,15 @@
           },
           "name": {
             "type": "string",
-            "maxLength": 255
+            "maxLength": 180
           },
           "mimeType": {
             "type": "string"
           },
           "sizeBytes": {
             "type": "integer",
-            "minimum": 1
+            "minimum": 1,
+            "maximum": 1048576000
           }
         }
       },
@@ -24363,7 +24393,8 @@
             "uniqueItems": true,
             "items": {
               "type": "integer",
-              "minimum": 1
+              "minimum": 1,
+              "maximum": 10000
             }
           }
         }

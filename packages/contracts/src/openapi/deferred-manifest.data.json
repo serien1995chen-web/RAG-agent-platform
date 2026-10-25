@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "count": 74,
+  "count": 62,
   "status": "DEFERRED",
   "operations": [
     {
@@ -305,81 +305,6 @@
         "COL-001",
         "COL-002",
         "COL-004"
-      ],
-      "reason": "OUT_OF_ARCHITECTURE_BASELINE_RUNTIME_SCOPE"
-    },
-    {
-      "operationId": "API-FILE-CONTENT",
-      "method": "GET",
-      "path": "/v1/knowledge/files/{blobId}/content",
-      "group": "file",
-      "requestSchema": null,
-      "responseSchema": null,
-      "scopes": [
-        "knowledge:read"
-      ],
-      "idempotent": false,
-      "rateLimit": "100 QPS/workspace",
-      "timeoutMs": 120000,
-      "audit": false,
-      "downstreamAllowed": false,
-      "runtime": false,
-      "stage": "F1",
-      "targetSection": "9.2",
-      "accId": "ACC-CAP-FILE-003",
-      "capabilityIds": [
-        "FILE-003",
-        "FILE-004"
-      ],
-      "reason": "OUT_OF_ARCHITECTURE_BASELINE_RUNTIME_SCOPE"
-    },
-    {
-      "operationId": "API-FILE-DOWNLOAD",
-      "method": "POST",
-      "path": "/v1/knowledge/files/{blobId}/download",
-      "group": "file",
-      "requestSchema": "FileTicketRequest",
-      "responseSchema": "FileTicket",
-      "scopes": [
-        "knowledge:write"
-      ],
-      "idempotent": true,
-      "rateLimit": "30 QPS/workspace",
-      "timeoutMs": 15000,
-      "audit": true,
-      "downstreamAllowed": false,
-      "runtime": false,
-      "stage": "F1",
-      "targetSection": "9.2",
-      "accId": "ACC-CAP-FILE-003",
-      "capabilityIds": [
-        "FILE-003",
-        "FILE-004"
-      ],
-      "reason": "OUT_OF_ARCHITECTURE_BASELINE_RUNTIME_SCOPE"
-    },
-    {
-      "operationId": "API-FILE-PREVIEW",
-      "method": "POST",
-      "path": "/v1/knowledge/files/{blobId}/preview",
-      "group": "file",
-      "requestSchema": "FileTicketRequest",
-      "responseSchema": "FileTicket",
-      "scopes": [
-        "knowledge:write"
-      ],
-      "idempotent": true,
-      "rateLimit": "30 QPS/workspace",
-      "timeoutMs": 15000,
-      "audit": true,
-      "downstreamAllowed": false,
-      "runtime": false,
-      "stage": "F1",
-      "targetSection": "9.2",
-      "accId": "ACC-CAP-FILE-003",
-      "capabilityIds": [
-        "FILE-003",
-        "FILE-004"
       ],
       "reason": "OUT_OF_ARCHITECTURE_BASELINE_RUNTIME_SCOPE"
     },
@@ -1000,32 +925,6 @@
       "reason": "OUT_OF_ARCHITECTURE_BASELINE_RUNTIME_SCOPE"
     },
     {
-      "operationId": "API-SOURCE-DOWNLOAD",
-      "method": "POST",
-      "path": "/v1/knowledge/sources/{sourceId}/download",
-      "group": "source",
-      "requestSchema": "DownloadRequest",
-      "responseSchema": "FileTicket",
-      "scopes": [
-        "knowledge:write"
-      ],
-      "idempotent": true,
-      "rateLimit": "30 QPS/workspace",
-      "timeoutMs": 15000,
-      "audit": true,
-      "downstreamAllowed": false,
-      "runtime": false,
-      "stage": "F1",
-      "targetSection": "9.2",
-      "accId": "ACC-CAP-COL-001",
-      "capabilityIds": [
-        "COL-001",
-        "COL-002",
-        "COL-004"
-      ],
-      "reason": "OUT_OF_ARCHITECTURE_BASELINE_RUNTIME_SCOPE"
-    },
-    {
       "operationId": "API-SOURCE-MOVE",
       "method": "POST",
       "path": "/v1/knowledge/sources/{sourceId}/move",
@@ -1039,32 +938,6 @@
       "rateLimit": "30 QPS/workspace",
       "timeoutMs": 15000,
       "audit": true,
-      "downstreamAllowed": false,
-      "runtime": false,
-      "stage": "F1",
-      "targetSection": "9.2",
-      "accId": "ACC-CAP-COL-001",
-      "capabilityIds": [
-        "COL-001",
-        "COL-002",
-        "COL-004"
-      ],
-      "reason": "OUT_OF_ARCHITECTURE_BASELINE_RUNTIME_SCOPE"
-    },
-    {
-      "operationId": "API-SOURCE-PREVIEW",
-      "method": "GET",
-      "path": "/v1/knowledge/sources/{sourceId}/preview",
-      "group": "source",
-      "requestSchema": null,
-      "responseSchema": "PreviewResult",
-      "scopes": [
-        "knowledge:read"
-      ],
-      "idempotent": false,
-      "rateLimit": "100 QPS/workspace",
-      "timeoutMs": 5000,
-      "audit": false,
       "downstreamAllowed": false,
       "runtime": false,
       "stage": "F1",
@@ -1523,32 +1396,6 @@
       "reason": "OUT_OF_ARCHITECTURE_BASELINE_RUNTIME_SCOPE"
     },
     {
-      "operationId": "API-SOURCE-ARCHIVE",
-      "method": "POST",
-      "path": "/v1/knowledge/spaces/{spaceId}/source-archives",
-      "group": "source",
-      "requestSchema": "ArchiveCreate",
-      "responseSchema": "Job",
-      "scopes": [
-        "knowledge:write"
-      ],
-      "idempotent": true,
-      "rateLimit": "30 QPS/workspace",
-      "timeoutMs": 30000,
-      "audit": true,
-      "downstreamAllowed": false,
-      "runtime": false,
-      "stage": "F1",
-      "targetSection": "9.2",
-      "accId": "ACC-CAP-COL-001",
-      "capabilityIds": [
-        "COL-001",
-        "COL-002",
-        "COL-004"
-      ],
-      "reason": "OUT_OF_ARCHITECTURE_BASELINE_RUNTIME_SCOPE"
-    },
-    {
       "operationId": "API-SYNONYM-DELETE",
       "method": "DELETE",
       "path": "/v1/knowledge/spaces/{spaceId}/synonyms",
@@ -1770,156 +1617,6 @@
       "capabilityIds": [
         "KB-001",
         "KB-003"
-      ],
-      "reason": "OUT_OF_ARCHITECTURE_BASELINE_RUNTIME_SCOPE"
-    },
-    {
-      "operationId": "API-UPLOAD-INIT",
-      "method": "POST",
-      "path": "/v1/knowledge/uploads",
-      "group": "upload",
-      "requestSchema": "UploadInit",
-      "responseSchema": "UploadSession",
-      "scopes": [
-        "knowledge:write"
-      ],
-      "idempotent": true,
-      "rateLimit": "10 QPS/workspace",
-      "timeoutMs": 10000,
-      "audit": true,
-      "downstreamAllowed": false,
-      "runtime": false,
-      "stage": "F1",
-      "targetSection": "9.2",
-      "accId": "ACC-CAP-FILE-001",
-      "capabilityIds": [
-        "FILE-001",
-        "FILE-002"
-      ],
-      "reason": "OUT_OF_ARCHITECTURE_BASELINE_RUNTIME_SCOPE"
-    },
-    {
-      "operationId": "API-UPLOAD-GET",
-      "method": "GET",
-      "path": "/v1/knowledge/uploads/{uploadId}",
-      "group": "upload",
-      "requestSchema": null,
-      "responseSchema": "UploadSession",
-      "scopes": [
-        "knowledge:read"
-      ],
-      "idempotent": false,
-      "rateLimit": "100 QPS/workspace",
-      "timeoutMs": 5000,
-      "audit": false,
-      "downstreamAllowed": false,
-      "runtime": false,
-      "stage": "F1",
-      "targetSection": "9.2",
-      "accId": "ACC-CAP-FILE-001",
-      "capabilityIds": [
-        "FILE-001",
-        "FILE-002"
-      ],
-      "reason": "OUT_OF_ARCHITECTURE_BASELINE_RUNTIME_SCOPE"
-    },
-    {
-      "operationId": "API-UPLOAD-ABORT",
-      "method": "POST",
-      "path": "/v1/knowledge/uploads/{uploadId}/abort",
-      "group": "upload",
-      "requestSchema": "VersionedMutation",
-      "responseSchema": "OperationResult",
-      "scopes": [
-        "knowledge:write"
-      ],
-      "idempotent": true,
-      "rateLimit": "30 QPS/workspace",
-      "timeoutMs": 15000,
-      "audit": true,
-      "downstreamAllowed": false,
-      "runtime": false,
-      "stage": "F1",
-      "targetSection": "9.2",
-      "accId": "ACC-CAP-FILE-001",
-      "capabilityIds": [
-        "FILE-001",
-        "FILE-002"
-      ],
-      "reason": "OUT_OF_ARCHITECTURE_BASELINE_RUNTIME_SCOPE"
-    },
-    {
-      "operationId": "API-UPLOAD-COMPLETE",
-      "method": "POST",
-      "path": "/v1/knowledge/uploads/{uploadId}/complete",
-      "group": "upload",
-      "requestSchema": "UploadComplete",
-      "responseSchema": "ObjectBlobReference",
-      "scopes": [
-        "knowledge:write"
-      ],
-      "idempotent": true,
-      "rateLimit": "30 QPS/workspace",
-      "timeoutMs": 120000,
-      "audit": true,
-      "downstreamAllowed": false,
-      "runtime": false,
-      "stage": "F1",
-      "targetSection": "9.2",
-      "accId": "ACC-CAP-FILE-001",
-      "capabilityIds": [
-        "FILE-001",
-        "FILE-002"
-      ],
-      "reason": "OUT_OF_ARCHITECTURE_BASELINE_RUNTIME_SCOPE"
-    },
-    {
-      "operationId": "API-UPLOAD-PART",
-      "method": "PUT",
-      "path": "/v1/knowledge/uploads/{uploadId}/parts/{partNumber}",
-      "group": "upload",
-      "requestSchema": null,
-      "responseSchema": "UploadPartResult",
-      "scopes": [
-        "knowledge:write"
-      ],
-      "idempotent": true,
-      "rateLimit": "20 QPS/upload",
-      "timeoutMs": 120000,
-      "audit": true,
-      "downstreamAllowed": false,
-      "runtime": false,
-      "stage": "F1",
-      "targetSection": "9.2",
-      "accId": "ACC-CAP-FILE-001",
-      "capabilityIds": [
-        "FILE-001",
-        "FILE-002"
-      ],
-      "reason": "OUT_OF_ARCHITECTURE_BASELINE_RUNTIME_SCOPE"
-    },
-    {
-      "operationId": "API-UPLOAD-PRESIGN",
-      "method": "POST",
-      "path": "/v1/knowledge/uploads/{uploadId}/presign",
-      "group": "upload",
-      "requestSchema": "PresignUploadParts",
-      "responseSchema": "PresignedUploadParts",
-      "scopes": [
-        "knowledge:write"
-      ],
-      "idempotent": true,
-      "rateLimit": "20 QPS/upload",
-      "timeoutMs": 10000,
-      "audit": true,
-      "downstreamAllowed": false,
-      "runtime": false,
-      "stage": "F1",
-      "targetSection": "9.2",
-      "accId": "ACC-CAP-FILE-001",
-      "capabilityIds": [
-        "FILE-001",
-        "FILE-002"
       ],
       "reason": "OUT_OF_ARCHITECTURE_BASELINE_RUNTIME_SCOPE"
     },

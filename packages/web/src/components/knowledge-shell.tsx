@@ -61,10 +61,11 @@ export function KnowledgeAppShell(props: { location: ShellLocation; children: Re
     ? [
         ['01', 'nav.overview', `/spaces/${spaceId}/overview`],
         ['02', 'nav.sources', `/spaces/${spaceId}/sources`],
-        ['03', 'nav.segments', `/spaces/${spaceId}/segments`],
-        ['04', 'nav.tags', `/spaces/${spaceId}/tags`],
-        ['05', 'nav.access', `/spaces/${spaceId}/access`],
-        ['06', 'nav.jobs', `/spaces/${spaceId}/jobs`],
+        ['03', 'nav.import', `/spaces/${spaceId}/import`],
+        ['04', 'nav.segments', `/spaces/${spaceId}/segments`],
+        ['05', 'nav.tags', `/spaces/${spaceId}/tags`],
+        ['06', 'nav.access', `/spaces/${spaceId}/access`],
+        ['07', 'nav.jobs', `/spaces/${spaceId}/jobs`],
       ]
     : [];
 

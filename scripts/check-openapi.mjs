@@ -39,5 +39,6 @@ if (stale.length > 0) {
 console.log(
   `openapi:check 通过：${artifacts.actualCounts.paths} paths、` +
     `${artifacts.actualCounts.operations} operations、` +
-    `${artifacts.actualCounts.schemas} schemas；runtime 46、deferred 74`,
+    `${artifacts.actualCounts.schemas} schemas；` +
+    `runtime ${artifacts.runtimeRegistry.count}、deferred ${artifacts.deferredManifest.count}`,
 );

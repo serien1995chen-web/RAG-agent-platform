@@ -29,7 +29,9 @@
     "yauzl": "catalog:"
   },
   "devDependencies": {
+    "@types/mime-types": "catalog:",
     "@types/node": "catalog:",
+    "@types/yauzl": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
   }

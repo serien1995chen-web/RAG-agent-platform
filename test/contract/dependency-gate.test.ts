@@ -32,6 +32,44 @@ const workspaceManifests = [
   ['sdk/storage', '@kb/storage'],
 ] as const;
 
+const workspaceManifestExtras: Record<
+  string,
+  {
+    dependencies?: Record<string, string>;
+    devDependencies?: Record<string, string>;
+  }
+> = {
+  'sdk/storage': {
+    dependencies: {
+      '@aws-sdk/client-s3': 'catalog:',
+      '@aws-sdk/lib-storage': 'catalog:',
+      '@aws-sdk/s3-request-presigner': 'catalog:',
+      'ali-oss': 'catalog:',
+      'cos-nodejs-sdk-v5': 'catalog:',
+      'es-toolkit': 'catalog:',
+      mime: 'catalog:',
+    },
+    devDependencies: {
+      '@types/ali-oss': 'catalog:',
+    },
+  },
+  'projects/app': {
+    dependencies: {
+      archiver: 'catalog:',
+      jszip: 'catalog:',
+    },
+    devDependencies: {
+      '@types/archiver': 'catalog:',
+    },
+  },
+  'packages/parse': {
+    devDependencies: {
+      '@types/mime-types': 'catalog:',
+      '@types/yauzl': 'catalog:',
+    },
+  },
+};
+
 type FixtureMutation = {
   ledger?: (entries: Array<Record<string, unknown>>) => void;
   audit?: (entries: Array<Record<string, unknown>>) => void;
@@ -67,7 +105,16 @@ function runFixture(mutation: FixtureMutation = {}) {
       mkdirSync(join(root, directory), { recursive: true });
       writeFileSync(
         join(root, directory, 'package.json'),
-        `${JSON.stringify({ name, version: '0.1.0', private: true }, null, 2)}\n`,
+        `${JSON.stringify(
+          {
+            name,
+            version: '0.1.0',
+            private: true,
+            ...(workspaceManifestExtras[directory] ?? {}),
+          },
+          null,
+          2,
+        )}\n`,
       );
     }
     mkdirSync(join(root, 'packages/contracts/src/dependencies'), {

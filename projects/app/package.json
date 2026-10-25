@@ -27,13 +27,16 @@
     "@kb/service": "workspace:*",
     "@kb/storage": "workspace:*",
     "@kb/web": "workspace:*",
+    "archiver": "catalog:",
     "bullmq": "catalog:",
+    "jszip": "catalog:",
     "next": "catalog:",
     "next-i18next": "catalog:",
     "react": "catalog:",
     "react-dom": "catalog:"
   },
   "devDependencies": {
+    "@types/archiver": "catalog:",
     "@types/node": "catalog:",
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
