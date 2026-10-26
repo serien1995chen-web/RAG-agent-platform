@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   CONNECTOR_CREDENTIAL_FIELDS,
   CONNECTOR_PROVIDERS,
+  normalizeConnectorProvider,
 } from '../../src/components/connector-form';
 
 describe('S4 connector form contract', () => {
@@ -17,5 +18,12 @@ describe('S4 connector form contract', () => {
     const fields = Object.values(CONNECTOR_CREDENTIAL_FIELDS).flat();
     expect(fields).not.toContain('credentialCiphertext');
     expect(fields).not.toContain('objectKey');
+  });
+
+  it('ACC-UI-06 initializes the connector provider from the URL query value', () => {
+    expect(normalizeConnectorProvider('yuque')).toBe('yuque');
+    expect(normalizeConnectorProvider('dingtalk')).toBe('dingtalk');
+    expect(normalizeConnectorProvider('unknown')).toBe('feishu');
+    expect(normalizeConnectorProvider(undefined)).toBe('feishu');
   });
 });

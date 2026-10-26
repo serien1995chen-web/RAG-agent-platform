@@ -82,7 +82,7 @@ afterAll(async () => {
 });
 
 describe('TEST-ING-007-BLOCK connector state', () => {
-  it('stores encrypted credentials and only exposes redacted metadata', async () => {
+  it('TEST-X-SECRET-LEAK stores encrypted credentials and only exposes redacted metadata', async () => {
     const connected = await repository.connect(
       spaceId,
       {
@@ -154,7 +154,7 @@ describe('TEST-ING-007-BLOCK connector state', () => {
     );
     const sync = await repository.markSyncing(
       connected.id,
-      { full: false, requestHash: 'sync-hash' },
+      { full: false, requestHash: 'sync-hash', idempotencyKey: `sync-${suffix}-00000001` },
       context,
     );
     expect(sync.job.kind).toBe('sync');
@@ -164,7 +164,127 @@ describe('TEST-ING-007-BLOCK connector state', () => {
     expect(outbox.some((event) => event.eventType === 'connector.sync')).toBe(true);
   });
 
-  it('erases credentials and propagates Source delete jobs', async () => {
+  it('TEST-X-S4-CONNECTOR-CAS allows only one concurrent connector update', async () => {
+    const connected = await repository.connect(
+      spaceId,
+      {
+        provider: 'feishu',
+        name: 'CAS',
+        credentials: { provider: 'feishu', appId: 'id', appSecret: 'secret' },
+        config: { provider: 'feishu', folderToken: 'folder' },
+        syncEnabled: true,
+        syncIntervalMinutes: 60,
+      },
+      context,
+    );
+    const outcomes = await Promise.allSettled([
+      repository.update(
+        { connectorId: connected.id, version: connected.version, name: 'Left' },
+        context,
+      ),
+      repository.update(
+        { connectorId: connected.id, version: connected.version, name: 'Right' },
+        context,
+      ),
+    ]);
+    expect(outcomes.filter((outcome) => outcome.status === 'fulfilled')).toHaveLength(1);
+    expect(outcomes.filter((outcome) => outcome.status === 'rejected')).toHaveLength(1);
+    const latest = await repository.get(connected.id, context);
+    expect(latest.version).toBe(connected.version + 1);
+  });
+
+  it('TEST-X-S4-CONNECTOR-SYNC-IDEMPOTENCY scopes replay by Idempotency-Key', async () => {
+    const connected = await repository.connect(
+      spaceId,
+      {
+        provider: 'feishu',
+        name: 'Sync',
+        credentials: { provider: 'feishu', appId: 'id', appSecret: 'secret' },
+        config: { provider: 'feishu', folderToken: 'folder' },
+        syncEnabled: true,
+        syncIntervalMinutes: 60,
+      },
+      context,
+    );
+    const key = `sync-replay-${suffix}-0001`;
+    const first = await repository.markSyncing(
+      connected.id,
+      { full: false, requestHash: 'same-body', idempotencyKey: key },
+      context,
+    );
+    const replay = await repository.markSyncing(
+      connected.id,
+      { full: false, requestHash: 'same-body', idempotencyKey: key },
+      context,
+    );
+    expect(replay.job.jobId).toBe(first.job.jobId);
+    await expect(
+      repository.markSyncing(
+        connected.id,
+        { full: true, requestHash: 'different-body', idempotencyKey: key },
+        context,
+      ),
+    ).rejects.toMatchObject({
+      problem: { error: { code: 'KNOWLEDGE_CONFLICT' } },
+    });
+
+    await connection.models.KnowledgeConnector.updateOne(
+      { _id: connected.id, workspaceId },
+      { $set: { status: 'active' } },
+    );
+    const next = await repository.markSyncing(
+      connected.id,
+      {
+        full: false,
+        requestHash: 'same-body',
+        idempotencyKey: `sync-replay-${suffix}-0002`,
+      },
+      context,
+    );
+    expect(next.job.jobId).not.toBe(first.job.jobId);
+    expect(await connection.models.KnowledgeJob.countDocuments({ workspaceId, kind: 'sync' })).toBe(
+      2,
+    );
+    expect(
+      await connection.models.KnowledgeOutboxEvent.countDocuments({
+        workspaceId,
+        eventType: 'connector.sync',
+      }),
+    ).toBe(2);
+  });
+
+  it('rejects cross-provider credential updates without changing version or ciphertext', async () => {
+    const connected = await repository.connect(
+      spaceId,
+      {
+        provider: 'feishu',
+        name: 'Provider lock',
+        credentials: { provider: 'feishu', appId: 'id', appSecret: 'secret' },
+        config: { provider: 'feishu', folderToken: 'folder' },
+        syncEnabled: true,
+        syncIntervalMinutes: 60,
+      },
+      context,
+    );
+    const before = await connection.models.KnowledgeConnector.findById(connected.id).lean();
+    await expect(
+      repository.update(
+        {
+          connectorId: connected.id,
+          version: connected.version,
+          credentials: { provider: 'yuque', userId: 'u', token: 'wrong-provider' },
+        },
+        context,
+      ),
+    ).rejects.toMatchObject({
+      problem: { error: { code: 'KNOWLEDGE_PROVIDER_CONFIG_INVALID' } },
+    });
+    const after = await connection.models.KnowledgeConnector.findById(connected.id).lean();
+    expect(after?.version).toBe(before?.version);
+    expect(after?.credentialCiphertext).toBe(before?.credentialCiphertext);
+  });
+
+  it('TEST-X-CONNECTOR-DELETE erases credentials and propagates Source delete jobs', async () => {
     const connected = await repository.connect(
       spaceId,
       {

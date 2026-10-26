@@ -12,12 +12,17 @@ export class FeishuConnectorClient {
     config: Record<string, unknown>;
     credentials: Record<string, unknown>;
     rootId: string;
+    cursor?: string;
     context: TenantContext;
   }) {
     if (input.config.provider !== 'feishu' || typeof input.config.folderToken !== 'string') {
       providerConfigError('feishu', input.context, 'folderToken_required');
     }
     return this.delegate.catalog({ ...input, provider: 'feishu' });
+  }
+
+  get tokenRefreshCount(): number {
+    return this.delegate instanceof MockCloudConnectorClient ? this.delegate.tokenRefreshCount : 0;
   }
 
   content(input: {

@@ -12,6 +12,7 @@ import {
   ImportUrlSchema,
   createKnowledgeError,
 } from '@kb/contracts';
+import type { QueuePort } from '@kb/dal';
 import { z } from 'zod';
 import type { TenantContext } from '../../../../shared/persistence/knowledge/tenant';
 import type {
@@ -21,12 +22,14 @@ import type {
   CustomApiClientPort,
   ImportSourceDraft,
   ImportSubmissionCommand,
+  ImportSubmissionResult,
   IngestionContentResult,
   IngestionContentPort,
   ImportPlanningPort,
   ScopedAuthPort,
   UrlImportAdapterPort,
   ImportTemplateParserPort,
+  QuotaGatePort,
 } from '../ingestion.ports';
 import type { ConnectorRepositoryPort } from '../ingestion.ports';
 import type { AccessPort, ObjectRefRepositoryPort } from '../ports';
@@ -51,7 +54,9 @@ export interface S04IngestionDependencies {
   providers: Readonly<Record<CloudConnectorProvider, CloudProviderClientPort>>;
   access: AccessPort;
   scopedAuth: ScopedAuthPort;
+  quotaGate: QuotaGatePort;
   templateParser: ImportTemplateParserPort;
+  queuePort?: QueuePort;
 }
 
 export class FixtureScopedAuthPort implements ScopedAuthPort {
@@ -78,6 +83,12 @@ export class FixtureScopedAuthPort implements ScopedAuthPort {
         details: { requiredScope: input.requiredScope },
       });
     }
+  }
+}
+
+export class FixtureQuotaGatePort implements QuotaGatePort {
+  async check(): Promise<void> {
+    return undefined;
   }
 }
 
@@ -282,6 +293,54 @@ function commandOf(input: {
   };
 }
 
+async function preflightImport(input: {
+  dependencies: S04IngestionDependencies;
+  operation: KnowledgeOperationInput;
+  knowledgeSpaceId: string;
+  importKind: ImportSubmissionCommand['importKind'];
+  idempotencyKey: string;
+  requestHash: string;
+}): Promise<ImportSubmissionResult | null> {
+  return input.dependencies.imports.preflight(
+    {
+      workspaceId: input.operation.context.workspaceId,
+      knowledgeSpaceId: input.knowledgeSpaceId,
+      directoryId: null,
+      importKind: input.importKind,
+      idempotencyKey: input.idempotencyKey,
+      requestHash: input.requestHash,
+      configurationHash: '',
+      sourceDrafts: [],
+      parseConfigSnapshot: {},
+      chunkingConfigSnapshot: {},
+      qaConfigSnapshot: {},
+    },
+    input.operation.context,
+  );
+}
+
+async function assertQuota(
+  dependencies: S04IngestionDependencies,
+  input: {
+    operation: 'import' | 'sync';
+    knowledgeSpaceId: string;
+    sourceCount: number;
+    sizeBytes: number;
+    context: TenantContext;
+  },
+): Promise<void> {
+  await dependencies.quotaGate.check(
+    {
+      operation: input.operation,
+      workspaceId: input.context.workspaceId,
+      knowledgeSpaceId: input.knowledgeSpaceId,
+      sourceCount: input.sourceCount,
+      sizeBytes: input.sizeBytes,
+    },
+    input.context,
+  );
+}
+
 async function fileDrafts(
   dependencies: S04IngestionDependencies,
   input: KnowledgeOperationInput,
@@ -332,6 +391,24 @@ export class S04IngestionApplication {
         const body = parseBody(ImportFilesSchema, input);
         const targetSpaceId = spaceId(input);
         await assertWriteAccess(this.dependencies, targetSpaceId, input.context);
+        const idempotency = idempotencyKey(input);
+        const requestHash = operationHash(input);
+        const replay = await preflightImport({
+          dependencies: this.dependencies,
+          operation: input,
+          knowledgeSpaceId: targetSpaceId,
+          importKind: 'files',
+          idempotencyKey: idempotency,
+          requestHash,
+        });
+        if (replay) return { status: 202, data: replay.job };
+        await assertQuota(this.dependencies, {
+          operation: 'import',
+          knowledgeSpaceId: targetSpaceId,
+          sourceCount: body.uploadIds.length,
+          sizeBytes: 0,
+          context: input.context,
+        });
         const sources = await fileDrafts(
           this.dependencies,
           input,
@@ -349,8 +426,8 @@ export class S04IngestionApplication {
             sources,
             parseConfig: body.parseConfig,
             chunking: body.chunking as Record<string, unknown>,
-            idempotencyKey: idempotencyKey(input),
-            requestHash: operationHash(input),
+            idempotencyKey: idempotency,
+            requestHash,
           }),
           input.context,
         );
@@ -369,6 +446,24 @@ export class S04IngestionApplication {
         }
         await assertWriteAccess(this.dependencies, targetSpaceId, input.context);
         const text = assertNonEmptyText(body.text, input.context);
+        const idempotency = idempotencyKey(input);
+        const requestHash = operationHash(input);
+        const replay = await preflightImport({
+          dependencies: this.dependencies,
+          operation: input,
+          knowledgeSpaceId: targetSpaceId,
+          importKind: 'text',
+          idempotencyKey: idempotency,
+          requestHash,
+        });
+        if (replay) return { status: 202, data: replay.job };
+        await assertQuota(this.dependencies, {
+          operation: 'import',
+          knowledgeSpaceId: targetSpaceId,
+          sourceCount: 1,
+          sizeBytes: Buffer.byteLength(text, 'utf8'),
+          context: input.context,
+        });
         const material = await this.dependencies.content.materializeText({
           knowledgeSpaceId: targetSpaceId,
           directoryId: body.directoryId ?? null,
@@ -385,11 +480,14 @@ export class S04IngestionApplication {
               importKind: 'text',
               sources: [material.source],
               chunking: body.chunking as Record<string, unknown>,
-              idempotencyKey: idempotencyKey(input),
-              requestHash: operationHash(input),
+              idempotencyKey: idempotency,
+              requestHash,
             }),
             input.context,
           );
+          if (result.replayed) {
+            await compensate(this.dependencies, [material], targetSpaceId, input.context);
+          }
           return { status: 202, data: result.job };
         } catch (error) {
           await compensate(this.dependencies, [material], targetSpaceId, input.context);
@@ -400,6 +498,24 @@ export class S04IngestionApplication {
         const body = parseBody(ImportUrlSchema, input);
         const targetSpaceId = spaceId(input);
         await assertWriteAccess(this.dependencies, targetSpaceId, input.context);
+        const idempotency = idempotencyKey(input);
+        const requestHash = operationHash(input);
+        const replay = await preflightImport({
+          dependencies: this.dependencies,
+          operation: input,
+          knowledgeSpaceId: targetSpaceId,
+          importKind: 'url',
+          idempotencyKey: idempotency,
+          requestHash,
+        });
+        if (replay) return { status: 202, data: replay.job };
+        await assertQuota(this.dependencies, {
+          operation: 'import',
+          knowledgeSpaceId: targetSpaceId,
+          sourceCount: 1,
+          sizeBytes: 0,
+          context: input.context,
+        });
         const snapshot = await this.dependencies.urlImport.fetch({
           url: body.url,
           selector: body.selector,
@@ -420,11 +536,14 @@ export class S04IngestionApplication {
               directoryId: body.directoryId ?? null,
               importKind: 'url',
               sources: [material.source],
-              idempotencyKey: idempotencyKey(input),
-              requestHash: operationHash(input),
+              idempotencyKey: idempotency,
+              requestHash,
             }),
             input.context,
           );
+          if (result.replayed) {
+            await compensate(this.dependencies, [material], targetSpaceId, input.context);
+          }
           return { status: 202, data: result.job };
         } catch (error) {
           await compensate(this.dependencies, [material], targetSpaceId, input.context);
@@ -435,6 +554,17 @@ export class S04IngestionApplication {
         const body = parseBody(ImportTemplateSchema, input);
         const targetSpaceId = spaceId(input);
         await assertWriteAccess(this.dependencies, targetSpaceId, input.context);
+        const idempotency = idempotencyKey(input);
+        const requestHash = operationHash(input);
+        const replay = await preflightImport({
+          dependencies: this.dependencies,
+          operation: input,
+          knowledgeSpaceId: targetSpaceId,
+          importKind: 'template',
+          idempotencyKey: idempotency,
+          requestHash,
+        });
+        if (replay) return { status: 202, data: replay.job };
         const upload = await this.dependencies.objectRefs.findObjectRef(
           body.uploadId,
           input.context,
@@ -452,6 +582,13 @@ export class S04IngestionApplication {
             details: { field: 'uploadId' },
           });
         }
+        await assertQuota(this.dependencies, {
+          operation: 'import',
+          knowledgeSpaceId: targetSpaceId,
+          sourceCount: 1,
+          sizeBytes: upload.sizeBytes,
+          context: input.context,
+        });
         const bytes = await this.dependencies.content.readObjectBytes({
           ref: upload,
           knowledgeSpaceId: targetSpaceId,
@@ -485,11 +622,14 @@ export class S04IngestionApplication {
               importKind: 'template',
               sources: [material.source],
               chunking: { trainingType: 'template', chunkSettingMode: 'auto' },
-              idempotencyKey: idempotencyKey(input),
-              requestHash: operationHash(input),
+              idempotencyKey: idempotency,
+              requestHash,
             }),
             input.context,
           );
+          if (result.replayed) {
+            await compensate(this.dependencies, [material], targetSpaceId, input.context);
+          }
           return { status: 202, data: result.job };
         } catch (error) {
           await compensate(this.dependencies, [material], targetSpaceId, input.context);
@@ -500,6 +640,17 @@ export class S04IngestionApplication {
         const body = parseBody(ImportBackupSchema, input);
         const targetSpaceId = spaceId(input);
         await assertWriteAccess(this.dependencies, targetSpaceId, input.context);
+        const idempotency = idempotencyKey(input);
+        const requestHash = operationHash(input);
+        const replay = await preflightImport({
+          dependencies: this.dependencies,
+          operation: input,
+          knowledgeSpaceId: targetSpaceId,
+          importKind: 'backup',
+          idempotencyKey: idempotency,
+          requestHash,
+        });
+        if (replay) return { status: 202, data: replay.job };
         const upload = await this.dependencies.objectRefs.findObjectRef(
           body.uploadId,
           input.context,
@@ -517,6 +668,13 @@ export class S04IngestionApplication {
             details: { field: 'uploadId' },
           });
         }
+        await assertQuota(this.dependencies, {
+          operation: 'import',
+          knowledgeSpaceId: targetSpaceId,
+          sourceCount: 1,
+          sizeBytes: upload.sizeBytes,
+          context: input.context,
+        });
         const bytes = await this.dependencies.content.readObjectBytes({
           ref: upload,
           knowledgeSpaceId: targetSpaceId,
@@ -545,7 +703,6 @@ export class S04IngestionApplication {
           rowNumber: conflict.rowNumber,
           action: body.conflictStrategy,
         }));
-        const requestHash = operationHash(input);
         if (
           body.dryRun ||
           (body.conflictStrategy === 'skip' && parsed.rows.length === conflicts.length)
@@ -553,7 +710,7 @@ export class S04IngestionApplication {
           const plan = await this.dependencies.imports.createDryRunJob(
             {
               knowledgeSpaceId: targetSpaceId,
-              idempotencyKey: idempotencyKey(input),
+              idempotencyKey: idempotency,
               requestHash,
               configurationHash: configurationHash({}),
               importKind: 'backup',
@@ -577,36 +734,37 @@ export class S04IngestionApplication {
           conflicts.map((conflict) => [conflict.externalId, conflict]),
         );
         const materials: IngestionContentResult[] = [];
-        for (const row of parsed.rows) {
-          const externalId = backupExternalId(row.question, row.answer);
-          const conflict = conflictByExternalId.get(externalId);
-          if (body.conflictStrategy === 'skip' && conflict) continue;
-          const material = await this.dependencies.content.materialize({
-            kind: 'backup',
-            name: row.question.slice(0, 240),
-            mimeType: 'text/plain; charset=utf-8',
-            bytes: Buffer.from(`${row.question}\n\n${row.answer}`, 'utf8'),
-            directoryId: body.directoryId ?? null,
-            parseProvider: 'liteparse',
-            metadata: {
-              rowNumber: row.rowNumber,
-              question: row.question,
-              answer: row.answer,
-              indexes: row.indexes,
-              backupMetadata: row.metadata,
-              schemaVersion: 1,
-            },
-            context: input.context,
-            knowledgeSpaceId: targetSpaceId,
-            externalId,
-          });
-          if (conflict && body.conflictStrategy === 'overwrite') {
-            material.source.id = conflict.existingSourceId;
-            material.source.replaceSourceId = conflict.existingSourceId;
-          }
-          materials.push(material);
-        }
         try {
+          for (const row of parsed.rows) {
+            const externalId = backupExternalId(row.question, row.answer);
+            const conflict = conflictByExternalId.get(externalId);
+            if (body.conflictStrategy === 'skip' && conflict) continue;
+            const material = await this.dependencies.content.materialize({
+              kind: 'backup',
+              name: row.question.slice(0, 240),
+              mimeType: 'text/plain; charset=utf-8',
+              bytes: Buffer.from(`${row.question}\n\n${row.answer}`, 'utf8'),
+              directoryId: body.directoryId ?? null,
+              parseProvider: 'liteparse',
+              metadata: {
+                rowNumber: row.rowNumber,
+                question: row.question,
+                answer: row.answer,
+                indexes: row.indexes,
+                backupMetadata: row.metadata,
+                schemaVersion: 1,
+              },
+              context: input.context,
+              knowledgeSpaceId: targetSpaceId,
+              externalId,
+            });
+            if (conflict && body.conflictStrategy === 'overwrite') {
+              material.source.id = conflict.existingSourceId;
+              material.source.replaceSourceId = conflict.existingSourceId;
+              material.source.replaceSourceVersion = conflict.existingVersion;
+            }
+            materials.push(material);
+          }
           const result = await this.dependencies.imports.submit(
             commandOf({
               operation: input,
@@ -615,13 +773,16 @@ export class S04IngestionApplication {
               importKind: 'backup',
               sources: materials.map((material) => material.source),
               chunking: { trainingType: 'backup', chunkSettingMode: 'auto' },
-              idempotencyKey: idempotencyKey(input),
+              idempotencyKey: idempotency,
               requestHash,
               dryRun: false,
               conflictStrategy: body.conflictStrategy,
             }),
             input.context,
           );
+          if (result.replayed) {
+            await compensate(this.dependencies, materials, targetSpaceId, input.context);
+          }
           return { status: 202, data: result.job };
         } catch (error) {
           await compensate(this.dependencies, materials, targetSpaceId, input.context);
@@ -629,12 +790,15 @@ export class S04IngestionApplication {
         }
       }
       case 'API-IMPORT-API-CATALOG': {
+        const targetSpaceId = spaceId(input);
+        await assertWriteAccess(this.dependencies, targetSpaceId, input.context);
         const body = parseBody(
           z.object({
             config: z.record(z.string(), z.unknown()),
             credentials: z.record(z.string(), z.unknown()),
             parentId: z.string().default(''),
             cursor: z.string().optional(),
+            offset: z.number().int().min(0).optional(),
           }),
           input,
         );
@@ -645,6 +809,7 @@ export class S04IngestionApplication {
             credentials: body.credentials,
             parentId: body.parentId,
             cursor: body.cursor,
+            offset: body.offset,
             context: input.context,
           }),
         };
@@ -653,6 +818,24 @@ export class S04IngestionApplication {
         const body = parseBody(ImportApiLibrarySchema, input);
         const targetSpaceId = spaceId(input);
         await assertWriteAccess(this.dependencies, targetSpaceId, input.context);
+        const idempotency = idempotencyKey(input);
+        const requestHash = operationHash(input);
+        const replay = await preflightImport({
+          dependencies: this.dependencies,
+          operation: input,
+          knowledgeSpaceId: targetSpaceId,
+          importKind: 'api_library',
+          idempotencyKey: idempotency,
+          requestHash,
+        });
+        if (replay) return { status: 202, data: replay.job };
+        await assertQuota(this.dependencies, {
+          operation: 'import',
+          knowledgeSpaceId: targetSpaceId,
+          sourceCount: body.fileIds.length,
+          sizeBytes: 0,
+          context: input.context,
+        });
         const contents = await this.dependencies.customApi.content({
           config: body.config as Record<string, unknown>,
           credentials: body.credentials as Record<string, unknown>,
@@ -660,19 +843,19 @@ export class S04IngestionApplication {
           context: input.context,
         });
         const materials: IngestionContentResult[] = [];
-        for (const content of contents) {
-          materials.push(
-            await this.dependencies.content.materializeProviderContent({
-              kind: 'api_library',
-              knowledgeSpaceId: targetSpaceId,
-              directoryId: body.directoryId ?? null,
-              connectorId: null,
-              content,
-              context: input.context,
-            }),
-          );
-        }
         try {
+          for (const content of contents) {
+            materials.push(
+              await this.dependencies.content.materializeProviderContent({
+                kind: 'api_library',
+                knowledgeSpaceId: targetSpaceId,
+                directoryId: body.directoryId ?? null,
+                connectorId: null,
+                content,
+                context: input.context,
+              }),
+            );
+          }
           const result = await this.dependencies.imports.submit(
             commandOf({
               operation: input,
@@ -680,11 +863,14 @@ export class S04IngestionApplication {
               directoryId: body.directoryId ?? null,
               importKind: 'api_library',
               sources: materials.map((material) => material.source),
-              idempotencyKey: idempotencyKey(input),
-              requestHash: operationHash(input),
+              idempotencyKey: idempotency,
+              requestHash,
             }),
             input.context,
           );
+          if (result.replayed) {
+            await compensate(this.dependencies, materials, targetSpaceId, input.context);
+          }
           return { status: 202, data: result.job };
         } catch (error) {
           await compensate(this.dependencies, materials, targetSpaceId, input.context);
@@ -753,6 +939,24 @@ export class S04IngestionApplication {
         const targetSpaceId = spaceId(input);
         await assertWriteAccess(this.dependencies, targetSpaceId, input.context);
         const provider = cloudProvider(input.params.provider, input.context);
+        const idempotency = idempotencyKey(input);
+        const requestHash = operationHash(input);
+        const replay = await preflightImport({
+          dependencies: this.dependencies,
+          operation: input,
+          knowledgeSpaceId: targetSpaceId,
+          importKind: provider,
+          idempotencyKey: idempotency,
+          requestHash,
+        });
+        if (replay) return { status: 202, data: replay.job };
+        await assertQuota(this.dependencies, {
+          operation: 'import',
+          knowledgeSpaceId: targetSpaceId,
+          sourceCount: body.externalIds.length,
+          sizeBytes: 0,
+          context: input.context,
+        });
         const connector = await this.dependencies.connectors.findByProvider(
           targetSpaceId,
           provider,
@@ -770,19 +974,19 @@ export class S04IngestionApplication {
           context: input.context,
         });
         const materials: IngestionContentResult[] = [];
-        for (const content of contents) {
-          materials.push(
-            await this.dependencies.content.materializeProviderContent({
-              kind: provider,
-              knowledgeSpaceId: targetSpaceId,
-              directoryId: body.directoryId ?? null,
-              connectorId: connector.id,
-              content,
-              context: input.context,
-            }),
-          );
-        }
         try {
+          for (const content of contents) {
+            materials.push(
+              await this.dependencies.content.materializeProviderContent({
+                kind: provider,
+                knowledgeSpaceId: targetSpaceId,
+                directoryId: body.directoryId ?? null,
+                connectorId: connector.id,
+                content,
+                context: input.context,
+              }),
+            );
+          }
           const result = await this.dependencies.imports.submit(
             commandOf({
               operation: input,
@@ -790,11 +994,14 @@ export class S04IngestionApplication {
               directoryId: body.directoryId ?? null,
               importKind: provider,
               sources: materials.map((material) => material.source),
-              idempotencyKey: idempotencyKey(input),
-              requestHash: operationHash(input),
+              idempotencyKey: idempotency,
+              requestHash,
             }),
             input.context,
           );
+          if (result.replayed) {
+            await compensate(this.dependencies, materials, targetSpaceId, input.context);
+          }
           return { status: 202, data: result.job };
         } catch (error) {
           await compensate(this.dependencies, materials, targetSpaceId, input.context);
@@ -819,12 +1026,20 @@ export class S04IngestionApplication {
           'write',
           input.context,
         );
+        await assertQuota(this.dependencies, {
+          operation: 'sync',
+          knowledgeSpaceId: connector.knowledgeSpaceId,
+          sourceCount: 1,
+          sizeBytes: 0,
+          context: input.context,
+        });
         const result = await this.dependencies.connectors.markSyncing(
           connectorId,
           {
             full: body.full,
             expectedCursorVersion: body.expectedCursorVersion,
             requestHash: operationHash(input),
+            idempotencyKey: idempotencyKey(input),
           },
           input.context,
         );
@@ -870,6 +1085,21 @@ export class S04IngestionApplication {
           'manage',
           input.context,
         );
+        if (
+          (body.credentials &&
+            (body.credentials as { provider?: unknown }).provider !== current.provider) ||
+          (body.config && (body.config as { provider?: unknown }).provider !== current.provider)
+        ) {
+          throw createKnowledgeError({
+            code: 'KNOWLEDGE_PROVIDER_CONFIG_INVALID',
+            requestId: input.context.requestId,
+            traceId: input.context.traceId,
+            details: {
+              provider: current.provider,
+              reason: 'connector_update_provider_mismatch',
+            },
+          });
+        }
         return {
           status: 200,
           data: await this.dependencies.connectors.update(

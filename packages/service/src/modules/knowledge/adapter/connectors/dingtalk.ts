@@ -12,6 +12,7 @@ export class DingtalkConnectorClient {
     config: Record<string, unknown>;
     credentials: Record<string, unknown>;
     rootId: string;
+    cursor?: string;
     context: TenantContext;
   }) {
     if (input.config.provider !== 'dingtalk') {

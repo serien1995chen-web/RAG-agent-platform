@@ -4,6 +4,7 @@ export { ObjectLifecycleService } from './application/object-lifecycle';
 export { SourceFileApplication } from './application/source-preview';
 export {
   FixtureScopedAuthPort,
+  FixtureQuotaGatePort,
   S04IngestionApplication,
   isS04Operation,
 } from './application/operations/s04-ingestion';
@@ -23,6 +24,7 @@ export type {
   ImportSubmissionResult,
   IngestionObjectStorePort,
   IngestionContentPort,
+  QuotaGatePort,
   ProviderCatalogResult,
   ProviderContent,
   ScopedAuthPort,

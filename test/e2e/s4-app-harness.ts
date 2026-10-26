@@ -156,7 +156,11 @@ export async function createSpace(input: {
     }),
   });
   const payload = (await response.json()) as { success: boolean; data: { id: string } };
-  expect(payload.success).toBe(true);
+  if (!response.ok || !payload.success) {
+    throw new Error(
+      `createSpace failed: status=${response.status} body=${JSON.stringify(payload)}`,
+    );
+  }
   return payload.data.id;
 }
 

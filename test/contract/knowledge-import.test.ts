@@ -42,13 +42,31 @@ describe('S4 import contract', () => {
   });
 
   it('maps import operations to S4 Capabilities only', () => {
-    for (const operation of runtime.operations.filter((entry) =>
-      IMPORT_OPERATIONS.includes(entry.operationId),
-    )) {
-      expect(
-        operation.capabilityIds.some((id) => id.startsWith('ING-')),
-        operation.operationId,
-      ).toBe(true);
+    const expected = new Map([
+      ['API-IMPORT-FILES', ['ING-001']],
+      ['API-IMPORT-TEXT', ['ING-002', 'DOWN-004']],
+      ['API-IMPORT-URL', ['ING-003']],
+      ['API-IMPORT-TEMPLATE', ['ING-004']],
+      ['API-IMPORT-BACKUP', ['ING-005']],
+      ['API-IMPORT-API-CATALOG', ['ING-006', 'API-002']],
+      ['API-IMPORT-API-LIBRARY', ['ING-006', 'API-002']],
+      ['API-CONNECTOR-CONNECT', ['ING-007', 'ING-008', 'ING-009']],
+      ['API-CONNECTOR-CATALOG', ['ING-007', 'ING-008', 'ING-009', 'OPS-005']],
+      ['API-CONNECTOR-IMPORT', ['ING-007', 'ING-008', 'ING-009']],
+      ['API-CONNECTOR-SYNC', ['ING-007', 'ING-008', 'ING-009']],
+      ['API-CONNECTOR-UPDATE', ['ING-007', 'ING-008', 'ING-009']],
+      ['API-CONNECTOR-GET', ['ING-007', 'ING-008', 'ING-009', 'OPS-005']],
+      ['API-CONNECTOR-DELETE', ['ING-007', 'ING-008', 'ING-009']],
+    ]);
+    const actual = new Map(
+      runtime.operations
+        .filter((entry) => expected.has(entry.operationId))
+        .map((entry) => [entry.operationId, entry.capabilityIds]),
+    );
+    expect(Object.fromEntries(actual)).toEqual(Object.fromEntries(expected));
+    for (const capabilityIds of actual.values()) {
+      expect(capabilityIds.some((id) => id.startsWith('PARSE-'))).toBe(false);
+      expect(capabilityIds.some((id) => id.startsWith('FILE-'))).toBe(false);
     }
   });
 

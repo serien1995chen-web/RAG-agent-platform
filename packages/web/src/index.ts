@@ -55,6 +55,7 @@ export {
   CONNECTOR_CREDENTIAL_FIELDS,
   CONNECTOR_PROVIDERS,
   ConnectorForm,
+  normalizeConnectorProvider,
 } from './components/connector-form';
 export type { ConnectorFormInput, ConnectorRecord } from './components/connector-form';
 export { ConnectorsPanel } from './components/connectors-panel';

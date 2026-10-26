@@ -1,4 +1,6 @@
-import { createKnowledgeError } from '@kb/contracts';
+import { request as httpRequest } from 'node:http';
+import { request as httpsRequest } from 'node:https';
+import { createKnowledgeError, KnowledgeApiError } from '@kb/contracts';
 import type { TenantContext } from '../../../shared/persistence/knowledge/tenant';
 import type {
   CustomApiClientPort,
@@ -10,7 +12,11 @@ import {
   providerContractError,
   validateCustomApiConfiguration,
 } from './provider-json';
-import { validateUrlTarget } from './ssrf';
+import { validateUrlTarget, type VettedUrlTarget } from './ssrf';
+
+const MAX_REDIRECTS = 5;
+const MAX_RESPONSE_BYTES = 50 * 1024 * 1024;
+const CONNECT_TIMEOUT_MS = 5000;
 
 export interface JsonHttpResponse {
   status: number;
@@ -21,55 +27,218 @@ export interface JsonHttpResponse {
 export type JsonRequester = (
   url: string,
   input: {
-    method: 'POST';
+    method: 'GET' | 'POST';
     headers: Record<string, string>;
-    body: unknown;
+    body?: unknown;
     timeoutMs: number;
+    maxBytes?: number;
+    context: TenantContext;
   },
 ) => Promise<JsonHttpResponse>;
 
-async function defaultRequester(
-  url: string,
+interface RawHttpResponse {
+  status: number;
+  location: string | null;
+  headers: Record<string, string>;
+  bytes: Uint8Array;
+}
+
+async function requestPinnedOnce(
+  target: VettedUrlTarget,
   input: {
-    method: 'POST';
+    method: 'GET' | 'POST';
     headers: Record<string, string>;
-    body: unknown;
+    body?: unknown;
     timeoutMs: number;
+    maxBytes: number;
+    context: TenantContext;
   },
-): Promise<JsonHttpResponse> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), input.timeoutMs);
-  try {
-    const response = await fetch(url, {
-      method: input.method,
-      headers: input.headers,
-      body: JSON.stringify(input.body),
-      signal: controller.signal,
-    });
-    const body = (await response.json().catch(() => null)) as unknown;
-    return {
-      status: response.status,
-      body,
-      headers: Object.fromEntries(response.headers.entries()),
+): Promise<RawHttpResponse> {
+  return new Promise((resolve, reject) => {
+    const payload =
+      input.method === 'POST' && input.body !== undefined ? JSON.stringify(input.body) : undefined;
+    const request = target.url.protocol === 'https:' ? httpsRequest : httpRequest;
+    let settled = false;
+    const finish = (work: () => void) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(totalTimer);
+      work();
     };
-  } catch (error) {
-    if (error instanceof Error && error.name === 'AbortError') {
-      throw createKnowledgeError({
-        code: 'KNOWLEDGE_DEPENDENCY_TIMEOUT',
-        requestId: 'provider',
-        traceId: 'provider',
-        details: { provider: 'custom_api', timeoutMs: input.timeoutMs },
-      });
-    }
-    throw createKnowledgeError({
-      code: 'KNOWLEDGE_DEPENDENCY_UNAVAILABLE',
-      requestId: 'provider',
-      traceId: 'provider',
-      details: { provider: 'custom_api' },
+    const requestInstance = request(
+      target.url,
+      {
+        method: input.method,
+        headers: {
+          accept: 'application/json',
+          ...(payload
+            ? {
+                'content-type': 'application/json',
+                'content-length': String(Buffer.byteLength(payload)),
+              }
+            : {}),
+          ...input.headers,
+        },
+        lookup: (_hostname, _options, callback) => {
+          callback(null, target.address, target.family);
+        },
+        servername: target.url.hostname,
+        timeout: Math.min(CONNECT_TIMEOUT_MS, input.timeoutMs),
+      },
+      (response) => {
+        const status = response.statusCode ?? 0;
+        const location =
+          typeof response.headers.location === 'string' ? response.headers.location : null;
+        if (status >= 300 && status < 400) {
+          response.resume();
+          finish(() =>
+            resolve({
+              status,
+              location,
+              headers: {},
+              bytes: new Uint8Array(),
+            }),
+          );
+          return;
+        }
+        const declaredLength = Number(response.headers['content-length'] ?? 0);
+        if (Number.isFinite(declaredLength) && declaredLength > input.maxBytes) {
+          requestInstance.destroy();
+          finish(() => {
+            reject(
+              createKnowledgeError({
+                code: 'KNOWLEDGE_PAYLOAD_TOO_LARGE',
+                requestId: input.context.requestId,
+                traceId: input.context.traceId,
+                details: { provider: 'custom_api', limitBytes: input.maxBytes },
+              }),
+            );
+          });
+          return;
+        }
+        const chunks: Buffer[] = [];
+        let total = 0;
+        response.on('data', (chunk: Buffer) => {
+          total += chunk.byteLength;
+          if (total > input.maxBytes) {
+            requestInstance.destroy();
+            finish(() => {
+              reject(
+                createKnowledgeError({
+                  code: 'KNOWLEDGE_PAYLOAD_TOO_LARGE',
+                  requestId: input.context.requestId,
+                  traceId: input.context.traceId,
+                  details: { provider: 'custom_api', limitBytes: input.maxBytes },
+                }),
+              );
+            });
+            return;
+          }
+          chunks.push(chunk);
+        });
+        response.on('end', () => {
+          finish(() =>
+            resolve({
+              status,
+              location,
+              headers: Object.fromEntries(
+                Object.entries(response.headers).map(([key, value]) => [
+                  key,
+                  Array.isArray(value) ? value.join(',') : String(value ?? ''),
+                ]),
+              ),
+              bytes: Buffer.concat(chunks),
+            }),
+          );
+        });
+        response.on('error', (error) => finish(() => reject(error)));
+      },
+    );
+    const totalTimer = setTimeout(() => {
+      requestInstance.destroy(
+        createKnowledgeError({
+          code: 'KNOWLEDGE_DEPENDENCY_TIMEOUT',
+          requestId: input.context.requestId,
+          traceId: input.context.traceId,
+          details: { provider: 'custom_api', timeoutMs: input.timeoutMs },
+        }),
+      );
+    }, input.timeoutMs);
+    requestInstance.on('timeout', () => {
+      requestInstance.destroy(
+        createKnowledgeError({
+          code: 'KNOWLEDGE_DEPENDENCY_TIMEOUT',
+          requestId: input.context.requestId,
+          traceId: input.context.traceId,
+          details: { provider: 'custom_api', timeoutMs: CONNECT_TIMEOUT_MS },
+        }),
+      );
     });
-  } finally {
-    clearTimeout(timer);
-  }
+    requestInstance.on('error', (error) =>
+      finish(() => {
+        if (error instanceof KnowledgeApiError) {
+          reject(error);
+          return;
+        }
+        reject(
+          createKnowledgeError({
+            code: 'KNOWLEDGE_DEPENDENCY_UNAVAILABLE',
+            requestId: input.context.requestId,
+            traceId: input.context.traceId,
+            details: { provider: 'custom_api' },
+          }),
+        );
+      }),
+    );
+    if (payload) requestInstance.write(payload);
+    requestInstance.end();
+  });
+}
+
+export function createPinnedJsonRequester(
+  options: {
+    resolve?: typeof validateUrlTarget;
+    requestOnce?: typeof requestPinnedOnce;
+  } = {},
+): JsonRequester {
+  const resolve = options.resolve ?? validateUrlTarget;
+  const request = options.requestOnce ?? requestPinnedOnce;
+  return async (url, input) => {
+    const deadline = Date.now() + input.timeoutMs;
+    let current = url;
+    for (let redirect = 0; redirect <= MAX_REDIRECTS; redirect += 1) {
+      const target = await resolve(current, input.context);
+      const response = await request(target, {
+        ...input,
+        maxBytes: input.maxBytes ?? MAX_RESPONSE_BYTES,
+        timeoutMs: Math.max(1, deadline - Date.now()),
+      });
+      if (response.status >= 300 && response.status < 400) {
+        if (redirect === MAX_REDIRECTS) {
+          throw createKnowledgeError({
+            code: 'KNOWLEDGE_UNSUPPORTED_CONTENT',
+            requestId: input.context.requestId,
+            traceId: input.context.traceId,
+            details: { provider: 'custom_api', reason: 'redirect_limit' },
+          });
+        }
+        if (!response.location) {
+          providerContractError('custom_api', input.context, 'redirect_location_missing');
+        }
+        current = new URL(response.location, target.url).toString();
+        continue;
+      }
+      const text = Buffer.from(response.bytes).toString('utf8');
+      let body: unknown = null;
+      try {
+        body = text ? (JSON.parse(text) as unknown) : null;
+      } catch {
+        providerContractError('custom_api', input.context, 'json_response_invalid');
+      }
+      return { status: response.status, headers: response.headers, body };
+    }
+    return providerContractError('custom_api', input.context, 'redirect_limit');
+  };
 }
 
 function authHeaders(credentials: Record<string, unknown>): Record<string, string> {
@@ -96,6 +265,33 @@ function checkResponse(
       details: { provider: 'custom_api' },
     });
   }
+  if (response.status === 413) {
+    throw createKnowledgeError({
+      code: 'KNOWLEDGE_PAYLOAD_TOO_LARGE',
+      requestId: context.requestId,
+      traceId: context.traceId,
+      details: { provider: 'custom_api' },
+    });
+  }
+  if (response.status === 429) {
+    throw createKnowledgeError({
+      code: 'KNOWLEDGE_RATE_LIMITED',
+      requestId: context.requestId,
+      traceId: context.traceId,
+      details: {
+        provider: 'custom_api',
+        retryAfterSeconds: Number(response.headers?.['retry-after'] ?? 0),
+      },
+    });
+  }
+  if (response.status >= 500) {
+    throw createKnowledgeError({
+      code: 'KNOWLEDGE_DEPENDENCY_UNAVAILABLE',
+      requestId: context.requestId,
+      traceId: context.traceId,
+      details: { provider: 'custom_api', providerStatus: response.status },
+    });
+  }
   if (response.status < 200 || response.status >= 300) {
     return providerContractError('custom_api', context, `http_${response.status}`);
   }
@@ -105,23 +301,39 @@ function checkResponse(
   return response.body as Record<string, unknown>;
 }
 
-function baseUrlOf(config: Record<string, unknown>, path: string): string {
+function baseUrlOf(
+  config: Record<string, unknown>,
+  path: string,
+  query: Record<string, string> = {},
+): string {
   const base = new URL(String(config.baseUrl));
   const basePath = String(config.basePath ?? '').replace(/\/+$/, '');
   base.pathname = `${base.pathname.replace(/\/+$/, '')}${basePath}${path}`;
   base.search = '';
   base.hash = '';
+  for (const [key, value] of Object.entries(query)) base.searchParams.set(key, value);
   return base.toString();
 }
 
+function catalogBody(
+  config: Record<string, unknown>,
+  input: { parentId: string; cursor?: string; offset?: number },
+): Record<string, unknown> {
+  const base = { parentId: input.parentId };
+  if (config.pageMode === 'cursor') return { ...base, cursor: input.cursor ?? null };
+  if (config.pageMode === 'offset') return { ...base, offset: input.offset ?? 0 };
+  return base;
+}
+
 export class CustomApiLibraryClient implements CustomApiClientPort {
-  constructor(private readonly requester: JsonRequester = defaultRequester) {}
+  constructor(private readonly requester: JsonRequester = createPinnedJsonRequester()) {}
 
   async catalog(input: {
     config: Record<string, unknown>;
     credentials: Record<string, unknown>;
     parentId: string;
     cursor?: string;
+    offset?: number;
     context: TenantContext;
   }): Promise<ProviderCatalogResult> {
     const validated = validateCustomApiConfiguration(
@@ -129,16 +341,12 @@ export class CustomApiLibraryClient implements CustomApiClientPort {
       input.credentials,
       input.context,
     );
-    await validateUrlTarget(String(validated.config.baseUrl), input.context);
     const response = await this.requester(baseUrlOf(validated.config, '/v1/file/list'), {
       method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        accept: 'application/json',
-        ...authHeaders(validated.credentials),
-      },
-      body: { parentId: input.parentId, cursor: input.cursor ?? null },
+      headers: authHeaders(validated.credentials),
+      body: catalogBody(validated.config, input),
       timeoutMs: 30_000,
+      context: input.context,
     });
     const body = checkResponse(response, input.context);
     if (!Array.isArray(body.items)) {
@@ -180,33 +388,30 @@ export class CustomApiLibraryClient implements CustomApiClientPort {
       input.credentials,
       input.context,
     );
-    await validateUrlTarget(String(validated.config.baseUrl), input.context);
     const results: ProviderContent[] = [];
     for (const fileId of input.fileIds) {
-      const detail = await this.requester(baseUrlOf(validated.config, '/v1/file/detail'), {
-        method: 'POST',
-        headers: {
-          'content-type': 'application/json',
-          accept: 'application/json',
-          ...authHeaders(validated.credentials),
+      const detail = await this.requester(
+        baseUrlOf(validated.config, '/v1/file/detail', { fileId }),
+        {
+          method: 'GET',
+          headers: authHeaders(validated.credentials),
+          timeoutMs: 30_000,
+          context: input.context,
         },
-        body: { fileId },
-        timeoutMs: 30_000,
-      });
+      );
       const detailBody = checkResponse(detail, input.context);
-      const content = await this.requester(baseUrlOf(validated.config, '/v1/file/content'), {
-        method: 'POST',
-        headers: {
-          'content-type': 'application/json',
-          accept: 'application/json',
-          ...authHeaders(validated.credentials),
+      const content = await this.requester(
+        baseUrlOf(validated.config, '/v1/file/content', { fileId }),
+        {
+          method: 'GET',
+          headers: authHeaders(validated.credentials),
+          timeoutMs: 30_000,
+          context: input.context,
         },
-        body: { fileId },
-        timeoutMs: 30_000,
-      });
+      );
       const contentBody = checkResponse(content, input.context);
-      if (typeof contentBody.content !== 'string') {
-        providerContractError('custom_api', input.context, 'content_string_required');
+      if (typeof contentBody.content !== 'string' || contentBody.content.trim().length === 0) {
+        providerContractError('custom_api', input.context, 'content_non_empty_string_required');
       }
       results.push({
         externalId: fileId,
@@ -220,7 +425,7 @@ export class CustomApiLibraryClient implements CustomApiClientPort {
           typeof detailBody.mimeType === 'string'
             ? detailBody.mimeType
             : 'text/plain; charset=utf-8',
-        bytes: Buffer.from(String(contentBody.content), 'utf8'),
+        bytes: Buffer.from(contentBody.content, 'utf8'),
       });
     }
     return results;

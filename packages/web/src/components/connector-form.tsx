@@ -51,14 +51,21 @@ export const CONNECTOR_CREDENTIAL_FIELDS: Readonly<
   dingtalk: ['appKey', 'appSecret', 'userId'],
 };
 
+export function normalizeConnectorProvider(value: string | undefined): ConnectorRecord['provider'] {
+  return CONNECTOR_PROVIDERS.includes(value as ConnectorRecord['provider'])
+    ? (value as ConnectorRecord['provider'])
+    : 'feishu';
+}
+
 export function ConnectorForm(props: {
   connector?: ConnectorRecord | null;
+  initialProvider?: string;
   busy?: boolean;
   onSubmit: (input: ConnectorFormInput) => Promise<boolean>;
 }) {
   const { t } = useKnowledgeI18n();
   const [provider, setProvider] = useState<ConnectorRecord['provider']>(
-    props.connector?.provider ?? 'feishu',
+    props.connector?.provider ?? normalizeConnectorProvider(props.initialProvider),
   );
   const [name, setName] = useState(props.connector?.name ?? '');
   const [syncEnabled, setSyncEnabled] = useState(props.connector?.syncEnabled ?? true);
@@ -80,7 +87,10 @@ export function ConnectorForm(props: {
   const [localBusy, setLocalBusy] = useState(false);
 
   useEffect(() => {
-    if (!props.connector) return;
+    if (!props.connector) {
+      setProvider(normalizeConnectorProvider(props.initialProvider));
+      return;
+    }
     setProvider(props.connector.provider);
     setName(props.connector.name);
     setSyncEnabled(props.connector.syncEnabled);
@@ -91,7 +101,7 @@ export function ConnectorForm(props: {
     setRootNodeId(String(props.connector.config.rootNodeId ?? ''));
     setApiBaseUrl(String(props.connector.config.baseUrl ?? ''));
     setPageMode(String(props.connector.config.pageMode ?? 'cursor'));
-  }, [props.connector]);
+  }, [props.connector, props.initialProvider]);
 
   const clearCredentials = () => {
     setAppSecret('');

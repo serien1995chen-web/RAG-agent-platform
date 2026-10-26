@@ -37,6 +37,7 @@ export interface BackupConflict {
   rowNumber: number;
   code: 'KNOWLEDGE_CONFLICT';
   existingSourceId: string;
+  existingVersion: number;
   externalId: string;
 }
 
@@ -339,8 +340,8 @@ export class KnowledgeImportRepository implements ImportSubmissionPort {
     space: Plain<KnowledgeSpaceDoc>,
     session: ClientSession,
     context: TenantContext,
-  ): Promise<void> {
-    if (!draft.replaceSourceId) return;
+  ): Promise<number> {
+    if (!draft.replaceSourceId) return 1;
     const existing = await this.sources
       .findOne({
         workspaceId: requireWorkspaceId(context),
@@ -350,34 +351,60 @@ export class KnowledgeImportRepository implements ImportSubmissionPort {
       })
       .session(session);
     if (!existing) throw tenantError(context, 'KNOWLEDGE_NOT_FOUND');
-    await this.sources.updateOne(
-      {
-        _id: existing._id,
-        workspaceId: context.workspaceId,
-        version: existing.version,
-      },
-      {
-        $set: {
-          directoryId: command.directoryId
-            ? objectIdOf(command.directoryId, context, 'directoryId')
-            : null,
-          name: draft.name,
-          blobRefId: draft.blobRefId ? objectIdOf(draft.blobRefId, context, 'blobRefId') : null,
-          mimeType: draft.mimeType,
-          sizeBytes: draft.sizeBytes,
-          contentHash: draft.contentHash,
-          processingStatus: 'queued',
-          metadata: {
-            ...draft.metadata,
-            importKind: command.importKind,
-            configurationHash: command.configurationHash,
-          },
-          updatedByMemberId: context.memberId,
+    const expectedVersion = draft.replaceSourceVersion ?? existing.version;
+    if (existing.version !== expectedVersion) {
+      throw tenantError(context, 'KNOWLEDGE_CONFLICT');
+    }
+    const updated = await this.sources
+      .findOneAndUpdate(
+        {
+          _id: existing._id,
+          workspaceId: context.workspaceId,
+          version: expectedVersion,
+          deletedAt: null,
         },
-        $inc: { version: 1, sourceVersion: 1 },
-      },
-      { session },
-    );
+        {
+          $set: {
+            directoryId: command.directoryId
+              ? objectIdOf(command.directoryId, context, 'directoryId')
+              : null,
+            name: draft.name,
+            blobRefId: draft.blobRefId ? objectIdOf(draft.blobRefId, context, 'blobRefId') : null,
+            mimeType: draft.mimeType,
+            sizeBytes: draft.sizeBytes,
+            contentHash: draft.contentHash,
+            processingStatus: 'queued',
+            metadata: {
+              ...draft.metadata,
+              importKind: command.importKind,
+              configurationHash: command.configurationHash,
+            },
+            updatedByMemberId: context.memberId,
+          },
+          $inc: { version: 1, sourceVersion: 1 },
+        },
+        { new: true, session },
+      )
+      .lean<Plain<KnowledgeSourceDoc> | null>();
+    if (!updated) throw tenantError(context, 'KNOWLEDGE_CONFLICT');
+    return updated.sourceVersion;
+  }
+
+  async preflight(
+    command: ImportSubmissionCommand,
+    context: TenantContext,
+  ): Promise<ImportSubmissionResult | null> {
+    requireWorkspaceId(context);
+    if (command.workspaceId !== context.workspaceId) {
+      throw createKnowledgeError({
+        code: 'KNOWLEDGE_FORBIDDEN',
+        requestId: context.requestId,
+        traceId: context.traceId,
+        details: { reason: 'workspace_mismatch' },
+      });
+    }
+    const existing = await this.existingJob(command, context);
+    return existing ? this.replay(existing, command.requestHash, context) : null;
   }
 
   async submit(
@@ -402,11 +429,18 @@ export class KnowledgeImportRepository implements ImportSubmissionPort {
         if (duplicate) return this.replay(duplicate, command.requestHash, context);
         const { space } = await this.validateTarget(command, context, session);
         const sourceIds = command.sourceDrafts.map((draft) => draft.id);
+        const sourceVersions: Record<string, number> = {};
         const jobId = new Types.ObjectId();
         const now = new Date();
 
         for (const draft of command.sourceDrafts) {
-          await this.replaceSource(draft, command, space, session, context);
+          sourceVersions[draft.id] = await this.replaceSource(
+            draft,
+            command,
+            space,
+            session,
+            context,
+          );
           if (!draft.replaceSourceId) {
             await this.sources.create([this.sourceDocument(draft, command, space, context)], {
               session,
@@ -435,7 +469,7 @@ export class KnowledgeImportRepository implements ImportSubmissionPort {
               idempotencyKey: command.idempotencyKey,
               inputSnapshot: {
                 sourceIds: sourceIds.map((id) => objectIdOfDraft(id, context, 'sourceId')),
-                sourceVersions: Object.fromEntries(sourceIds.map((id) => [id, 1])),
+                sourceVersions,
                 configurationHash: command.configurationHash,
                 requestHash: command.requestHash,
                 importKind: command.importKind,
@@ -546,13 +580,14 @@ export class KnowledgeImportRepository implements ImportSubmissionPort {
         externalId: { $in: [...externalIds] },
         deletedAt: null,
       })
-      .select({ _id: 1, externalId: 1 })
+      .select({ _id: 1, externalId: 1, version: 1 })
       .lean()
       .exec();
     return sources.map((source, index) => ({
       rowNumber: index + 1,
       code: 'KNOWLEDGE_CONFLICT',
       existingSourceId: String(source._id),
+      existingVersion: Number(source.version),
       externalId: String(source.externalId),
     }));
   }

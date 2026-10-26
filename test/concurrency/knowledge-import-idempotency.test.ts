@@ -105,7 +105,7 @@ afterAll(async () => {
 });
 
 describe('TEST-X-S4-IDEMPOTENCY', () => {
-  it('coalesces 10 concurrent identical submissions into one business fact set', async () => {
+  it('TEST-X-S4-IDEMPOTENCY/TEST-DOWN-004-U03 coalesces 10 concurrent identical submissions', async () => {
     const shared = command(`concurrent-${suffix}`, 'same-body');
     const results = await Promise.all(
       Array.from({ length: 10 }, () => repository.submit(shared, context)),
@@ -117,7 +117,7 @@ describe('TEST-X-S4-IDEMPOTENCY', () => {
     expect(await connection.models.KnowledgeOutboxEvent.countDocuments({ workspaceId })).toBe(1);
   });
 
-  it('allows only one side of a concurrent different-body conflict', async () => {
+  it('TEST-DOWN-004-U04 allows only one side of a concurrent different-body conflict', async () => {
     const key = `different-${suffix}`;
     const outcomes = await Promise.allSettled([
       repository.submit(command(key, 'left'), context),

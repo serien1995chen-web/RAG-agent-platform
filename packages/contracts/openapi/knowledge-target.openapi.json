@@ -24293,6 +24293,13 @@
           "parentId": {
             "type": "string",
             "default": ""
+          },
+          "cursor": {
+            "type": "string"
+          },
+          "offset": {
+            "type": "integer",
+            "minimum": 0
           }
         }
       },

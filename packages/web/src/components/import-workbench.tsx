@@ -54,6 +54,12 @@ export function splitIds(value: string): string[] {
     .filter(Boolean);
 }
 
+export function connectorProviderForKind(
+  kind: ImportSourceKind,
+): 'feishu' | 'yuque' | 'dingtalk' | null {
+  return kind === 'feishu' || kind === 'yuque' || kind === 'dingtalk' ? kind : null;
+}
+
 export function ImportWorkbench(props: ImportWorkbenchProps) {
   const { t } = useKnowledgeI18n();
   const [kind, setKind] = useState<ImportSourceKind>(props.initialKind ?? 'files');
@@ -73,7 +79,6 @@ export function ImportWorkbench(props: ImportWorkbenchProps) {
   const [apiParentId, setApiParentId] = useState('');
   const [apiFileIds, setApiFileIds] = useState('');
   const [apiCatalog, setApiCatalog] = useState<Array<Record<string, unknown>>>([]);
-  const [connectorProvider, setConnectorProvider] = useState('feishu');
   const [connectorRoot, setConnectorRoot] = useState('');
   const [connectorItems, setConnectorItems] = useState('');
   const [connectorCatalog, setConnectorCatalog] = useState<Array<Record<string, unknown>>>([]);
@@ -106,6 +111,7 @@ export function ImportWorkbench(props: ImportWorkbenchProps) {
     authMode: apiAuthMode,
     ...(apiAuthorization ? { authorization: apiAuthorization } : {}),
   };
+  const activeConnectorProvider = connectorProviderForKind(kind) ?? 'feishu';
 
   const submit = async (path: string, body: unknown) => {
     setBusy(true);
@@ -207,7 +213,7 @@ export function ImportWorkbench(props: ImportWorkbenchProps) {
     setError(null);
     try {
       const catalog = await knowledgeRequest<{ items: Array<Record<string, unknown>> }>(
-        `/v1/knowledge/spaces/${props.spaceId}/connectors/${connectorProvider}/catalog`,
+        `/v1/knowledge/spaces/${props.spaceId}/connectors/${activeConnectorProvider}/catalog`,
         {
           method: 'POST',
           body: { rootId: connectorRoot },
@@ -227,7 +233,14 @@ export function ImportWorkbench(props: ImportWorkbenchProps) {
         <Field label={t('import.kind')}>
           <SelectInput
             value={kind}
-            onChange={(event) => setKind(event.target.value as ImportSourceKind)}
+            onChange={(event) => {
+              setKind(event.target.value as ImportSourceKind);
+              setConnectorItems('');
+              setConnectorCatalog([]);
+              setConnectorRoot('');
+              setJobId('');
+              setError(null);
+            }}
           >
             {IMPORT_SOURCE_KINDS.map((option) => (
               <option key={option} value={option}>
@@ -393,13 +406,14 @@ export function ImportWorkbench(props: ImportWorkbenchProps) {
       {kind === 'feishu' || kind === 'yuque' || kind === 'dingtalk' ? (
         <Flex direction="column" gap={4}>
           <Field label={t('import.connectorProvider')}>
-            <SelectInput
-              value={connectorProvider}
-              onChange={(event) => setConnectorProvider(event.target.value)}
-            >
-              <option value="feishu">{t('enum.feishu')}</option>
-              <option value="yuque">{t('enum.yuque')}</option>
-              <option value="dingtalk">{t('enum.dingtalk')}</option>
+            <SelectInput value={activeConnectorProvider} disabled>
+              <option value={activeConnectorProvider}>
+                {activeConnectorProvider === 'feishu'
+                  ? t('enum.feishu')
+                  : activeConnectorProvider === 'yuque'
+                    ? t('enum.yuque')
+                    : t('enum.dingtalk')}
+              </option>
             </SelectInput>
           </Field>
           <Field label={t('import.connectorRoot')}>

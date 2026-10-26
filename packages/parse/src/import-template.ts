@@ -81,6 +81,13 @@ function normalizeHeader(value: unknown): string {
     .toLowerCase();
 }
 
+function isFormulaInjection(value: unknown): boolean {
+  const normalized = String(value ?? '').trimStart();
+  if (/^[=+@]/.test(normalized)) return true;
+  if (!normalized.startsWith('-')) return false;
+  return !/^-(?:\d+(?:\.\d+)?|\.\d+)(?:e[+-]?\d+)?$/i.test(normalized);
+}
+
 function decodeUtf8(bytes: Uint8Array, requestId: string, traceId: string): string {
   try {
     return new TextDecoder('utf-8', { fatal: true }).decode(bytes);
@@ -283,13 +290,7 @@ export function parseImportTemplate(
   const primaryKeys = new Set<string>();
   for (const [index, row] of body.entries()) {
     const rowNumber = index + 2;
-    if (
-      row.some((cell) =>
-        String(cell ?? '')
-          .trim()
-          .startsWith('='),
-      )
-    ) {
+    if (row.some(isFormulaInjection)) {
       return fail(
         input.requestId,
         input.traceId,

@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { chromium, expect as expectUi } from '@playwright/test';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { registerKnowledgeModels } from '../../packages/service/src/shared/persistence/schemas/knowledge-index';
 import { createKnowledgeMongoConnection } from '../../packages/service/src/shared/runtime/knowledge-connections';
@@ -114,5 +115,140 @@ describe('TEST-ING-007-BLOCK and ACC-UI-06 connector', () => {
       cookie: await consoleCookie({ baseUrl: app!.baseUrl, authToken, workspaceId }),
       screenshotPrefix: 'connectors',
     });
+  });
+
+  it('ACC-UI-06 initializes provider and completes connect/update/sync/delete without credential echo', async () => {
+    const browser = await chromium.launch({ headless: true });
+    const connectorIdForUi = randomUUID();
+    const connected = {
+      id: connectorIdForUi,
+      workspaceId,
+      knowledgeSpaceId: spaceId,
+      provider: 'yuque',
+      name: 'Yuque UI',
+      status: 'active',
+      syncEnabled: true,
+      syncIntervalMinutes: 60,
+      nextSyncAt: null,
+      lastAttemptAt: null,
+      lastSuccessAt: null,
+      lastError: null,
+      cursorVersion: 1,
+      version: 1,
+      config: { provider: 'yuque' },
+      credentialMetadata: {
+        provider: 'yuque',
+        schemaVersion: 1,
+        keyVersion: 1,
+        configured: true,
+        redactedFields: ['token'],
+      },
+    };
+    try {
+      const pageContext = await browser.newContext({ viewport: { width: 1200, height: 900 } });
+      await pageContext.addCookies([
+        await consoleCookie({ baseUrl: app!.baseUrl, authToken, workspaceId }),
+      ]);
+      const page = await pageContext.newPage();
+      let connectBody: unknown;
+      let updateBody: unknown;
+      let syncSubmitted = false;
+      await page.route('**/v1/knowledge/spaces/*/connectors/yuque/connect', async (route) => {
+        connectBody = route.request().postDataJSON();
+        await route.fulfill({
+          status: 201,
+          contentType: 'application/json',
+          body: JSON.stringify({ success: true, data: connected }),
+        });
+      });
+      await page.route(`**/v1/knowledge/connectors/${connectorIdForUi}`, async (route) => {
+        if (route.request().method() === 'PATCH') {
+          updateBody = route.request().postDataJSON();
+          await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({
+              success: true,
+              data: { ...connected, name: 'Yuque UI updated', version: 2 },
+            }),
+          });
+          return;
+        }
+        if (route.request().method() === 'DELETE') {
+          await route.fulfill({
+            status: 202,
+            contentType: 'application/json',
+            body: JSON.stringify({
+              success: true,
+              data: { id: connectorIdForUi, status: 'accepted', jobId: null },
+            }),
+          });
+          return;
+        }
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            success: true,
+            data: syncSubmitted ? { ...connected, status: 'syncing', version: 2 } : connected,
+          }),
+        });
+      });
+      await page.route(`**/v1/knowledge/connectors/${connectorIdForUi}/sync`, async (route) => {
+        syncSubmitted = true;
+        await route.fulfill({
+          status: 202,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            success: true,
+            data: {
+              jobId: 'sync-ui-job',
+              kind: 'sync',
+              status: 'queued',
+            },
+          }),
+        });
+      });
+
+      await page.goto(`${app!.baseUrl}/settings/connectors?spaceId=${spaceId}&provider=yuque`, {
+        waitUntil: 'networkidle',
+      });
+      await expectUi(page.locator('select').first()).toHaveValue('yuque');
+      await page.locator('input').nth(0).fill('Yuque UI');
+      await page.locator('input').nth(2).fill('user-1');
+      await page.locator('input').nth(3).fill('secret-token');
+      await page.getByRole('button', { name: /创建连接器|Create connector/ }).click();
+      await expectUi(page.getByText('Yuque UI').first()).toBeVisible();
+      expect(connectBody).toMatchObject({
+        provider: 'yuque',
+        config: { provider: 'yuque' },
+        credentials: { provider: 'yuque', userId: 'user-1', token: 'secret-token' },
+      });
+      await expectUi(page.locator('input').nth(3)).toHaveValue('');
+      await expectUi(page.locator('body')).not.toContainText('secret-token');
+
+      await page.locator('input').nth(0).fill('Yuque UI updated');
+      const updateResponse = page.waitForResponse(
+        (response) =>
+          response.request().method() === 'PATCH' &&
+          response.url().endsWith(`/v1/knowledge/connectors/${connectorIdForUi}`),
+      );
+      await page.getByRole('button', { name: /更新连接器|Update connector/ }).click();
+      expect((await updateResponse).status()).toBe(200);
+      await expectUi(page.getByText('Yuque UI updated').first()).toBeVisible();
+      expect(updateBody).toMatchObject({ version: 1, name: 'Yuque UI updated' });
+      expect(updateBody).not.toHaveProperty('credentials');
+
+      await page.getByRole('button', { name: /提交同步|Submit sync/ }).click();
+      await expectUi(page.getByRole('status')).toContainText(/sync-ui-job/);
+      await expectUi(page.getByText('syncing')).toBeVisible();
+
+      page.once('dialog', (dialog) => void dialog.accept());
+      await page.getByRole('button', { name: /删除连接器|Delete connector/ }).click();
+      await expectUi(page.getByRole('status')).toContainText(/删除|deletion/i);
+      await pageContext.close();
+    } finally {
+      await browser.close();
+    }
   });
 });

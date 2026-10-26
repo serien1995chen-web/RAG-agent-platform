@@ -147,6 +147,7 @@ export function ConnectorsPanel(props: ConnectorsPanelProps) {
         <ConnectorForm
           key={connector?.id ?? `new-${props.initialProvider ?? 'feishu'}`}
           connector={connector}
+          initialProvider={props.initialProvider}
           busy={busy}
           onSubmit={submit}
         />

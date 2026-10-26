@@ -278,12 +278,18 @@ export class KnowledgeConnectorRepository implements ConnectorRepositoryPort {
       .lean<Plain<KnowledgeConnectorDoc>>()
       .exec();
     if (!current) throw tenantError(context, 'KNOWLEDGE_CONFLICT');
-    if (command.config && command.config.provider !== current.provider) {
+    if (
+      (command.config && command.config.provider !== current.provider) ||
+      (command.credentials && command.credentials.provider !== current.provider)
+    ) {
       throw createKnowledgeError({
         code: 'KNOWLEDGE_PROVIDER_CONFIG_INVALID',
         requestId: context.requestId,
         traceId: context.traceId,
-        details: { provider: current.provider, reason: 'provider_mismatch' },
+        details: {
+          provider: current.provider,
+          reason: command.credentials ? 'credentials_provider_mismatch' : 'provider_mismatch',
+        },
       });
     }
     const update: Record<string, unknown> = {
@@ -367,144 +373,199 @@ export class KnowledgeConnectorRepository implements ConnectorRepositoryPort {
 
   async markSyncing(
     connectorId: string,
-    command: { full: boolean; expectedCursorVersion?: number; requestHash: string },
+    command: {
+      full: boolean;
+      expectedCursorVersion?: number;
+      requestHash: string;
+      idempotencyKey: string;
+    },
     context: TenantContext,
   ): Promise<{ connector: ConnectorView; job: JobView }> {
-    return withMongoTransaction(this.connection, async (session) => {
-      const current = await this.connectors
-        .findOne({
-          workspaceId: requireWorkspaceId(context),
-          _id: objectIdOf(connectorId, context, 'connectorId'),
-          deletedAt: null,
-        })
-        .session(session)
-        .lean<Plain<KnowledgeConnectorDoc>>();
-      if (!current) throw tenantError(context, 'KNOWLEDGE_NOT_FOUND');
-      const spaceObjectId = current.knowledgeSpaceId;
-      if (!spaceObjectId) throw tenantError(context, 'KNOWLEDGE_NOT_FOUND');
-      if (current.provider === 'custom_api') {
-        throw createKnowledgeError({
-          code: 'KNOWLEDGE_UNSUPPORTED_CONTENT',
-          requestId: context.requestId,
-          traceId: context.traceId,
-          details: { provider: 'custom_api', operation: 'sync' },
-        });
-      }
-      if (!current.syncEnabled || current.status === 'paused' || current.status === 'failed') {
-        throw createKnowledgeError({
-          code: 'KNOWLEDGE_CONFLICT',
-          requestId: context.requestId,
-          traceId: context.traceId,
-          details: { reason: 'connector_sync_disabled', status: current.status },
-        });
-      }
-      if (
-        command.expectedCursorVersion !== undefined &&
-        command.expectedCursorVersion !== current.cursorVersion
-      ) {
-        throw createKnowledgeError({
-          code: 'KNOWLEDGE_CURSOR_INVALID',
-          requestId: context.requestId,
-          traceId: context.traceId,
-          details: { expected: command.expectedCursorVersion, actual: current.cursorVersion },
-        });
-      }
-      assertConnectorTransition(current.status, 'syncing', context);
-      const idempotencyKey = `connector-sync:${connectorId}:${command.requestHash}`;
+    const idempotencyKey = `connector-sync:${connectorId}:${command.idempotencyKey}`;
+    const replay = async (): Promise<{ connector: ConnectorView; job: JobView } | null> => {
       const existing = await this.jobs
         .findOne({
           workspaceId: context.workspaceId,
           idempotencyKey,
           deletedAt: null,
         })
-        .session(session)
         .lean<Plain<KnowledgeJobDoc>>();
-      if (existing) {
-        const connector = await this.connectors
+      if (!existing) return null;
+      if (existing.inputSnapshot.requestHash !== command.requestHash) {
+        throw createKnowledgeError({
+          code: 'KNOWLEDGE_CONFLICT',
+          requestId: context.requestId,
+          traceId: context.traceId,
+          details: {
+            reason: 'idempotency_body_mismatch',
+            jobId: String(existing._id),
+          },
+        });
+      }
+      const connector = await this.connectors
+        .findOne({
+          workspaceId: context.workspaceId,
+          _id: objectIdOf(connectorId, context, 'connectorId'),
+          deletedAt: null,
+        })
+        .lean<Plain<KnowledgeConnectorDoc>>();
+      if (!connector) throw tenantError(context, 'KNOWLEDGE_NOT_FOUND');
+      return { connector: connectorView(connector), job: jobView(existing) };
+    };
+    const replayed = await replay();
+    if (replayed) return replayed;
+    try {
+      return await withMongoTransaction(this.connection, async (session) => {
+        const current = await this.connectors
           .findOne({
-            workspaceId: context.workspaceId,
-            _id: current._id,
+            workspaceId: requireWorkspaceId(context),
+            _id: objectIdOf(connectorId, context, 'connectorId'),
             deletedAt: null,
           })
           .session(session)
           .lean<Plain<KnowledgeConnectorDoc>>();
-        if (!connector) throw tenantError(context, 'KNOWLEDGE_NOT_FOUND');
-        return { connector: connectorView(connector), job: jobView(existing) };
-      }
-      const updated = await this.connectors
-        .findOneAndUpdate(
-          {
-            _id: current._id,
+        if (!current) throw tenantError(context, 'KNOWLEDGE_NOT_FOUND');
+        const spaceObjectId = current.knowledgeSpaceId;
+        if (!spaceObjectId) throw tenantError(context, 'KNOWLEDGE_NOT_FOUND');
+        if (current.provider === 'custom_api') {
+          throw createKnowledgeError({
+            code: 'KNOWLEDGE_UNSUPPORTED_CONTENT',
+            requestId: context.requestId,
+            traceId: context.traceId,
+            details: { provider: 'custom_api', operation: 'sync' },
+          });
+        }
+        const existing = await this.jobs
+          .findOne({
             workspaceId: context.workspaceId,
-            version: current.version,
-            status: current.status,
-          },
-          {
-            $set: {
-              status: 'syncing',
-              lastAttemptAt: new Date(),
-              nextSyncAt: null,
-              lastError: null,
-              updatedByMemberId: context.memberId,
-            },
-            $inc: { version: 1 },
-          },
-          { new: true, session },
-        )
-        .lean<Plain<KnowledgeConnectorDoc>>();
-      if (!updated) throw tenantError(context, 'KNOWLEDGE_CONFLICT');
-      const [job] = await this.jobs.create(
-        [
-          jobDocument({
-            kind: 'sync',
-            spaceId: spaceObjectId,
-            resourceType: 'connector',
-            resourceId: connectorId,
             idempotencyKey,
-            inputSnapshot: {
+            deletedAt: null,
+          })
+          .session(session)
+          .lean<Plain<KnowledgeJobDoc>>();
+        if (existing) {
+          if (existing.inputSnapshot.requestHash !== command.requestHash) {
+            throw createKnowledgeError({
+              code: 'KNOWLEDGE_CONFLICT',
+              requestId: context.requestId,
+              traceId: context.traceId,
+              details: {
+                reason: 'idempotency_body_mismatch',
+                jobId: String(existing._id),
+              },
+            });
+          }
+          const connector = await this.connectors
+            .findOne({
+              workspaceId: context.workspaceId,
+              _id: current._id,
+              deletedAt: null,
+            })
+            .session(session)
+            .lean<Plain<KnowledgeConnectorDoc>>();
+          if (!connector) throw tenantError(context, 'KNOWLEDGE_NOT_FOUND');
+          return { connector: connectorView(connector), job: jobView(existing) };
+        }
+        if (!current.syncEnabled || current.status === 'paused' || current.status === 'failed') {
+          throw createKnowledgeError({
+            code: 'KNOWLEDGE_CONFLICT',
+            requestId: context.requestId,
+            traceId: context.traceId,
+            details: { reason: 'connector_sync_disabled', status: current.status },
+          });
+        }
+        if (
+          command.expectedCursorVersion !== undefined &&
+          command.expectedCursorVersion !== current.cursorVersion
+        ) {
+          throw createKnowledgeError({
+            code: 'KNOWLEDGE_CURSOR_INVALID',
+            requestId: context.requestId,
+            traceId: context.traceId,
+            details: { expected: command.expectedCursorVersion, actual: current.cursorVersion },
+          });
+        }
+        assertConnectorTransition(current.status, 'syncing', context);
+        const updated = await this.connectors
+          .findOneAndUpdate(
+            {
+              _id: current._id,
+              workspaceId: context.workspaceId,
+              version: current.version,
+              status: current.status,
+            },
+            {
+              $set: {
+                status: 'syncing',
+                lastAttemptAt: new Date(),
+                nextSyncAt: null,
+                lastError: null,
+                updatedByMemberId: context.memberId,
+              },
+              $inc: { version: 1 },
+            },
+            { new: true, session },
+          )
+          .lean<Plain<KnowledgeConnectorDoc>>();
+        if (!updated) throw tenantError(context, 'KNOWLEDGE_CONFLICT');
+        const [job] = await this.jobs.create(
+          [
+            jobDocument({
+              kind: 'sync',
+              spaceId: spaceObjectId,
+              resourceType: 'connector',
+              resourceId: connectorId,
+              idempotencyKey,
+              inputSnapshot: {
+                connectorId,
+                provider: current.provider,
+                full: command.full,
+                requestHash: command.requestHash,
+              },
+              context,
+              total: 1,
+            }),
+          ],
+          { session, ordered: true },
+        );
+        if (!job) {
+          throw createKnowledgeError({
+            code: 'KNOWLEDGE_INTERNAL_ERROR',
+            requestId: context.requestId,
+            traceId: context.traceId,
+            details: { reason: 'sync_job_create_failed' },
+          });
+        }
+        await createKnowledgeOutboxEvent(
+          this.connection,
+          {
+            workspaceId: context.workspaceId,
+            knowledgeSpaceId: String(current.knowledgeSpaceId),
+            eventType: 'connector.sync',
+            aggregateType: 'job',
+            aggregateId: String(job._id),
+            queue: 'knowledge-sync',
+            payload: {
+              jobId: String(job._id),
               connectorId,
               provider: current.provider,
               full: command.full,
-              requestHash: command.requestHash,
             },
-            context,
-            total: 1,
-          }),
-        ],
-        { session, ordered: true },
-      );
-      if (!job) {
-        throw createKnowledgeError({
-          code: 'KNOWLEDGE_INTERNAL_ERROR',
-          requestId: context.requestId,
-          traceId: context.traceId,
-          details: { reason: 'sync_job_create_failed' },
-        });
-      }
-      await createKnowledgeOutboxEvent(
-        this.connection,
-        {
-          workspaceId: context.workspaceId,
-          knowledgeSpaceId: String(current.knowledgeSpaceId),
-          eventType: 'connector.sync',
-          aggregateType: 'job',
-          aggregateId: String(job._id),
-          queue: 'knowledge-sync',
-          payload: {
-            jobId: String(job._id),
-            connectorId,
-            provider: current.provider,
-            full: command.full,
           },
-        },
-        context,
-        session,
-      );
-      return {
-        connector: connectorView(updated),
-        job: jobView(job.toObject() as unknown as Plain<KnowledgeJobDoc>),
-      };
-    });
+          context,
+          session,
+        );
+        return {
+          connector: connectorView(updated),
+          job: jobView(job.toObject() as unknown as Plain<KnowledgeJobDoc>),
+        };
+      });
+    } catch (error) {
+      if (!duplicateKey(error)) throw error;
+      const raced = await replay();
+      if (!raced) throw error;
+      return raced;
+    }
   }
 
   async delete(

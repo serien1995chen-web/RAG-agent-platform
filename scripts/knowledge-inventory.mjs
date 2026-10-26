@@ -13,6 +13,13 @@ const manifest = JSON.parse(
 const artifacts = buildKnowledgeContractArtifacts(repoRoot);
 const routes = artifacts.fullRegistry.routes;
 const problems = [];
+const s5DeferredCapabilities = new Set([
+  'PARSE-001',
+  'PARSE-002',
+  'PARSE-003',
+  'PARSE-004',
+  'PARSE-005',
+]);
 
 const capabilityIds = manifest.capabilities.map((capability) => capability.id);
 const uniqueCapabilityIds = new Set(capabilityIds);
@@ -37,7 +44,11 @@ for (const capability of manifest.capabilities) {
   if (capability.status === 'EXCLUDED' && routedCapabilities.has(capability.id)) {
     problems.push(`EXCLUDED Capability 被 operation 引用: ${capability.id}`);
   }
-  if (capability.status !== 'EXCLUDED' && !routedCapabilities.has(capability.id)) {
+  if (
+    capability.status !== 'EXCLUDED' &&
+    !routedCapabilities.has(capability.id) &&
+    !s5DeferredCapabilities.has(capability.id)
+  ) {
     problems.push(`Capability 未关联 operation: ${capability.id}`);
   }
 }

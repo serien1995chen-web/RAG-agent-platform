@@ -62,6 +62,7 @@ export {
   KnowledgeApplication,
   S04IngestionApplication,
   FixtureScopedAuthPort,
+  FixtureQuotaGatePort,
   KnowledgeAccessRepository,
   KnowledgeCatalogRepository,
   KnowledgeConnectorRepository,
@@ -119,6 +120,7 @@ export type {
   ImportSubmissionPort,
   ImportSubmissionResult,
   IngestionContentPort,
+  QuotaGatePort,
   ScopedAuthPort,
   UrlImportAdapterPort,
 } from './modules/knowledge';

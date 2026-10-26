@@ -2081,12 +2081,7 @@
       "accId": "ACC-CAP-ING-006",
       "capabilityIds": [
         "ING-006",
-        "API-002",
-        "PARSE-001",
-        "PARSE-002",
-        "PARSE-003",
-        "PARSE-004",
-        "PARSE-005"
+        "API-002"
       ]
     },
     {
@@ -2110,12 +2105,7 @@
       "accId": "ACC-CAP-ING-006",
       "capabilityIds": [
         "ING-006",
-        "API-002",
-        "PARSE-001",
-        "PARSE-002",
-        "PARSE-003",
-        "PARSE-004",
-        "PARSE-005"
+        "API-002"
       ]
     },
     {
@@ -2138,12 +2128,7 @@
       "targetSection": "9.2",
       "accId": "ACC-CAP-ING-005",
       "capabilityIds": [
-        "ING-005",
-        "PARSE-001",
-        "PARSE-002",
-        "PARSE-003",
-        "PARSE-004",
-        "PARSE-005"
+        "ING-005"
       ]
     },
     {
@@ -2166,13 +2151,7 @@
       "targetSection": "9.2",
       "accId": "ACC-CAP-ING-001",
       "capabilityIds": [
-        "ING-001",
-        "FILE-001",
-        "PARSE-001",
-        "PARSE-002",
-        "PARSE-003",
-        "PARSE-004",
-        "PARSE-005"
+        "ING-001"
       ]
     },
     {
@@ -2195,12 +2174,7 @@
       "targetSection": "9.2",
       "accId": "ACC-CAP-ING-004",
       "capabilityIds": [
-        "ING-004",
-        "PARSE-001",
-        "PARSE-002",
-        "PARSE-003",
-        "PARSE-004",
-        "PARSE-005"
+        "ING-004"
       ]
     },
     {
@@ -2224,12 +2198,7 @@
       "accId": "ACC-CAP-ING-002",
       "capabilityIds": [
         "ING-002",
-        "DOWN-004",
-        "PARSE-001",
-        "PARSE-002",
-        "PARSE-003",
-        "PARSE-004",
-        "PARSE-005"
+        "DOWN-004"
       ]
     },
     {
@@ -2252,12 +2221,7 @@
       "targetSection": "9.2",
       "accId": "ACC-CAP-ING-003",
       "capabilityIds": [
-        "ING-003",
-        "PARSE-001",
-        "PARSE-002",
-        "PARSE-003",
-        "PARSE-004",
-        "PARSE-005"
+        "ING-003"
       ]
     },
     {

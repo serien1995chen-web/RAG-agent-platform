@@ -24,6 +24,7 @@ import {
   DingtalkConnectorClient,
   S04IngestionApplication,
   FixtureScopedAuthPort,
+  FixtureQuotaGatePort,
   isS04Operation,
   KnowledgeAuditRepository,
   KnowledgeApplication,
@@ -222,6 +223,7 @@ async function bootstrapRuntime(): Promise<TelemetryKnowledgeApiRuntime> {
     },
     access,
     scopedAuth: new FixtureScopedAuthPort(),
+    quotaGate: new FixtureQuotaGatePort(),
     templateParser: {
       parse(input) {
         return parseImportTemplate(input);

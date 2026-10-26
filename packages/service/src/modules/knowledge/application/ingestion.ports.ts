@@ -50,6 +50,7 @@ export interface ImportSourceDraft {
   metadata: Record<string, unknown>;
   object?: ImportObjectDraft;
   replaceSourceId?: string;
+  replaceSourceVersion?: number;
 }
 
 export interface ImportSubmissionCommand {
@@ -79,6 +80,10 @@ export interface ImportSubmissionResult {
 }
 
 export interface ImportSubmissionPort {
+  preflight(
+    command: ImportSubmissionCommand,
+    context: TenantContext,
+  ): Promise<ImportSubmissionResult | null>;
   submit(command: ImportSubmissionCommand, context: TenantContext): Promise<ImportSubmissionResult>;
 }
 
@@ -86,6 +91,7 @@ export interface BackupConflict {
   rowNumber: number;
   code: 'KNOWLEDGE_CONFLICT';
   existingSourceId: string;
+  existingVersion: number;
   externalId: string;
 }
 
@@ -122,6 +128,19 @@ export interface ScopedAuthPort {
     knowledgeSpaceId: string;
     requiredScope: 'knowledge:write';
   }): Promise<void>;
+}
+
+export interface QuotaGatePort {
+  check(
+    input: {
+      operation: 'import' | 'sync';
+      workspaceId: string;
+      knowledgeSpaceId: string;
+      sourceCount: number;
+      sizeBytes: number;
+    },
+    context: TenantContext,
+  ): Promise<void>;
 }
 
 export interface IngestionObjectStorePort {
@@ -310,6 +329,7 @@ export interface CustomApiClientPort {
     credentials: Record<string, unknown>;
     parentId: string;
     cursor?: string;
+    offset?: number;
     context: TenantContext;
   }): Promise<ProviderCatalogResult>;
   content(input: {
@@ -403,7 +423,12 @@ export interface ConnectorRepositoryPort {
   ): Promise<{ id: string; status: 'accepted'; jobId: string | null }>;
   markSyncing(
     connectorId: string,
-    command: { full: boolean; expectedCursorVersion?: number; requestHash: string },
+    command: {
+      full: boolean;
+      expectedCursorVersion?: number;
+      requestHash: string;
+      idempotencyKey: string;
+    },
     context: TenantContext,
   ): Promise<{ connector: ConnectorView; job: JobView }>;
   decryptCredentials(connectorId: string, context: TenantContext): Promise<Record<string, unknown>>;
