@@ -36,7 +36,7 @@
 | 组件统计            | 12 个 workspace 包、59 个 catalog 登记项、236 个生产闭包 npm 组件                                   |
 | SPDX 规范化         | `duck@0.1.12` 归一化为 BSD-2-Clause；`jszip@3.10.2` 选择 MIT 分支                                   |
 | dev/build-only 审计 | `@csstools/color-helpers@5.1.0`、`argparse@2.0.1`、`lightningcss@1.33.0`、`minimatch@10.2.6` 非阻塞 |
-| 发布阻塞            | 3 条 `RELEASE BLOCKER`，待法务复核，详见第 10 节                                                    |
+| 发布阻塞            | 5 条 `RELEASE BLOCKER`，待法务复核，详见第 10 节                                                    |
 
 B 未重新生成 `NOTICE`，避免回改 personA 的只读产物；本报告引用 A 的 `pnpm sbom:generate` 证据、当前 NOTICE 哈希和本次 `pnpm license:check` 实测输出。P8-04 的 CI release-smoke 作业会在干净检出中再次生成并校验 `artifacts/sbom.json`。
 
@@ -185,20 +185,22 @@ Compose 生命周期证据：
 
 `stage-closed` 不等于可对外发布。以下条目阻断对外发布，不因本报告全绿而消失：
 
-| 阻塞项                      | 状态                           | 依据                                                                  |
-| --------------------------- | ------------------------------ | --------------------------------------------------------------------- |
-| `caniuse-lite@1.0.30001814` | pending-legal-review，发布阻断 | CC-BY-4.0；`projects/app → next@16.3.0 → caniuse-lite`                |
-| `pako@1.0.11`               | pending-legal-review，发布阻断 | MIT AND Zlib；`packages/parse → mammoth@1.11.0 → jszip@3.10.2 → pako` |
-| `sax@1.6.1`                 | pending-legal-review，发布阻断 | BlueOak-1.0.0；`sdk/storage → minio@8.0.7 → xml2js@0.6.2 → sax`       |
-| U-15 husky/lint-staged      | 未接线                         | 需要用户安装和接线                                                    |
-| `node:22-alpine` digest     | 待用户或 CI 登记               | 当前保持具名 tag，未伪造 digest                                       |
-| README / LICENSE            | 团队外置，未完成               | Agent 不修改 README、不添加 LICENSE                                   |
-| 备份工具与介质              | 未提供                         | 无真实恢复证据                                                        |
-| 容量与配额 profile          | 未提供                         | 只有非承诺默认值                                                      |
-| 通知 / 工单平台             | 未提供                         | 核心不依赖，扩展未联调                                                |
-| PDF Provider 凭证           | 未提供                         | 真实解析 Provider 未联调                                              |
-| 模型网关                    | 未提供                         | 仅 mock 合同                                                          |
-| mock 开关                   | 待平台配置                     | 生产环境 mock 保护仍按设计约束                                        |
+| 阻塞项                      | 状态                           | 依据                                                                                                   |
+| --------------------------- | ------------------------------ | ------------------------------------------------------------------------------------------------------ |
+| `caniuse-lite@1.0.30001814` | pending-legal-review，发布阻断 | CC-BY-4.0；`projects/app → next@16.3.0 → caniuse-lite`                                                 |
+| `pako@1.0.11`               | pending-legal-review，发布阻断 | MIT AND Zlib；`packages/parse → mammoth@1.11.0 → jszip@3.10.2 → pako`                                  |
+| `sax@1.6.1`                 | pending-legal-review，发布阻断 | BlueOak-1.0.0；`sdk/storage → minio@8.0.7 → xml2js@0.6.2 → sax`                                        |
+| `argparse@2.0.1`            | pending-legal-review，发布阻断 | Python-2.0；`packages/service → @apidevtools/json-schema-ref-parser@11.7.2 → js-yaml@4.3.2 → argparse` |
+| `jschardet@3.1.1`           | pending-legal-review，发布阻断 | LGPL-2.1+；`packages/parse → jschardet`                                                                |
+| U-15 husky/lint-staged      | 未接线                         | 需要用户安装和接线                                                                                     |
+| `node:22-alpine` digest     | 待用户或 CI 登记               | 当前保持具名 tag，未伪造 digest                                                                        |
+| README / LICENSE            | 团队外置，未完成               | Agent 不修改 README、不添加 LICENSE                                                                    |
+| 备份工具与介质              | 未提供                         | 无真实恢复证据                                                                                         |
+| 容量与配额 profile          | 未提供                         | 只有非承诺默认值                                                                                       |
+| 通知 / 工单平台             | 未提供                         | 核心不依赖，扩展未联调                                                                                 |
+| PDF Provider 凭证           | 未提供                         | 真实解析 Provider 未联调                                                                               |
+| 模型网关                    | 未提供                         | 仅 mock 合同                                                                                           |
+| mock 开关                   | 待平台配置                     | 生产环境 mock 保护仍按设计约束                                                                         |
 
 追溯残余：
 

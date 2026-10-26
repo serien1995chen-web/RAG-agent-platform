@@ -70,7 +70,7 @@
 
 - npm 生产闭包白名单：MIT、Apache-2.0、BSD-2-Clause、BSD-3-Clause、ISC、0BSD；字体另允许 OFL-1.1。
 - SPDX 判定：`OR` 表达式命中任一白名单分支即通过并记录所选分支（`jszip` → MIT）；`AND` 表达式要求全部分支命中（`pako` 的 Zlib 不命中）；裸 `BSD` 仅在包内 LICENSE 文本匹配时归一化为 BSD-2-Clause/BSD-3-Clause（`duck` → BSD-2-Clause）。
-- N6-A 例外表（`check-licenses.mjs` 内置，精确 `name@version`）：`caniuse-lite@1.0.30001814`、`pako@1.0.11`、`sax@1.6.1` 标记 `pending-legal-review` + `releaseBlocking: true`。
+- N6-A 例外表（`check-licenses.mjs` 内置，精确 `name@version`）：`caniuse-lite@1.0.30001814`、`pako@1.0.11`、`sax@1.6.1`、`argparse@2.0.1`、`jschardet@3.1.1` 标记 `pending-legal-review` + `releaseBlocking: true`。
 - 阻断行为：例外条目使 `license:check` 退出 0 但输出 `RELEASE BLOCKER`；任何未登记的非白名单 production 包使 `license:check` 非 0。
 - dev/build-only 白名单外许可证只做非阻塞审计，不阻断发布。
 - 容器镜像白名单单独一套：mongo（SSPL）、redis（RSAL/SSPL）、minio（AGPL-3.0）、pgvector（PostgreSQL License，N2-A 确认）。
@@ -104,11 +104,13 @@ digest 来源为设计文档 §6.3 + U-11 只读验证；Agent 不得执行 `doc
 
 **stage-closed ≠ 可对外发布。** 以下条目阻断对外发布，待法务复核；在法务给出批准人/日期前不得声明为已批准。
 
-| 条目                        | 许可证         | 依赖父链                                                | 状态                 | 阻断范围            |
-| --------------------------- | -------------- | ------------------------------------------------------- | -------------------- | ------------------- |
-| `caniuse-lite@1.0.30001814` | CC-BY-4.0      | `projects/app → next@16.3.0 → caniuse-lite`             | pending-legal-review | 发布阻断，CI 不阻断 |
-| `pako@1.0.11`               | (MIT AND Zlib) | `packages/parse → mammoth@1.11.0 → jszip@3.10.2 → pako` | pending-legal-review | 发布阻断，CI 不阻断 |
-| `sax@1.6.1`                 | BlueOak-1.0.0  | `sdk/storage → minio@8.0.7 → xml2js@0.6.2 → sax`        | pending-legal-review | 发布阻断，CI 不阻断 |
+| 条目                        | 许可证         | 依赖父链                                                                                   | 状态                 | 阻断范围            |
+| --------------------------- | -------------- | ------------------------------------------------------------------------------------------ | -------------------- | ------------------- |
+| `caniuse-lite@1.0.30001814` | CC-BY-4.0      | `projects/app → next@16.3.0 → caniuse-lite`                                                | pending-legal-review | 发布阻断，CI 不阻断 |
+| `pako@1.0.11`               | (MIT AND Zlib) | `packages/parse → mammoth@1.11.0 → jszip@3.10.2 → pako`                                    | pending-legal-review | 发布阻断，CI 不阻断 |
+| `sax@1.6.1`                 | BlueOak-1.0.0  | `sdk/storage → minio@8.0.7 → xml2js@0.6.2 → sax`                                           | pending-legal-review | 发布阻断，CI 不阻断 |
+| `argparse@2.0.1`            | Python-2.0     | `packages/service → @apidevtools/json-schema-ref-parser@11.7.2 → js-yaml@4.3.2 → argparse` | pending-legal-review | 发布阻断，CI 不阻断 |
+| `jschardet@3.1.1`           | LGPL-2.1+      | `packages/parse → jschardet`                                                               | pending-legal-review | 发布阻断，CI 不阻断 |
 
 已按 N6-A 规范化通过（非阻塞，附证据）：`duck@0.1.12` 的裸 `BSD` 由包内 LICENSE 文本归一化为 BSD-2-Clause；`jszip@3.10.2` 的 `(MIT OR GPL-3.0-or-later)` 按 MIT 分支通过。
 

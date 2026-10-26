@@ -6,7 +6,7 @@
  * 1. 既有三项不削弱：catalog: 已登记 / workspace: 指向存在包 / 禁止 latest、*。
  * 2. npm 生产闭包白名单：SPDX OR 命中任一白名单分支即通过并记录所选分支；
  *    AND 要求全部分支命中；裸 BSD 读取包内 LICENSE 文本归一化为 BSD-2/3-Clause。
- * 3. N6-A `PENDING_LEGAL_REVIEW` 例外表（精确 name@version，仅 3 条）：
+ * 3. N6-A `PENDING_LEGAL_REVIEW` 例外表（精确 name@version，仅 5 条）：
  *    命中即退出 0，但必须输出 `RELEASE BLOCKER`，并登记到 NOTICE 与 release.md。
  * 4. 容器镜像白名单单独一套（与 npm 清单分开）。
  * 5. dev/build-only 白名单外许可证记非阻塞审计，不阻断。
@@ -44,7 +44,7 @@ export const NORMALIZED_DECLARED_LICENSES = new Map([
 ]);
 
 /**
- * N6-A 生产闭包例外表：只登记 3 条待法务复核项。
+ * N6-A 生产闭包例外表：只登记 5 条待法务复核项。
  * 状态固定为 `pending-legal-review`，`releaseBlocking: true` 表示阻断发布、但不阻断 CI。
  */
 export const PENDING_LEGAL_REVIEW = [
@@ -69,6 +69,23 @@ export const PENDING_LEGAL_REVIEW = [
     version: '1.0.30001814',
     expression: 'CC-BY-4.0',
     parentChain: 'projects/app → next@16.3.0 → caniuse-lite@1.0.30001814',
+    status: 'pending-legal-review',
+    releaseBlocking: true,
+  },
+  {
+    name: 'argparse',
+    version: '2.0.1',
+    expression: 'Python-2.0',
+    parentChain:
+      'packages/service → @apidevtools/json-schema-ref-parser@11.7.2 → js-yaml@4.3.2 → argparse@2.0.1',
+    status: 'pending-legal-review',
+    releaseBlocking: true,
+  },
+  {
+    name: 'jschardet',
+    version: '3.1.1',
+    expression: 'LGPL-2.1+',
+    parentChain: 'packages/parse → jschardet@3.1.1',
     status: 'pending-legal-review',
     releaseBlocking: true,
   },
