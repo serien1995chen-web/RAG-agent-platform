@@ -52,6 +52,11 @@ export const KNOWLEDGE_ERROR_CATALOG = {
     retryable: true,
     message: 'The provider response does not match the declared contract.',
   },
+  KNOWLEDGE_PROVIDER_CONFIG_INVALID: {
+    status: 422,
+    retryable: false,
+    message: 'The provider configuration does not match the local contract.',
+  },
   KNOWLEDGE_CURSOR_INVALID: {
     status: 409,
     retryable: false,

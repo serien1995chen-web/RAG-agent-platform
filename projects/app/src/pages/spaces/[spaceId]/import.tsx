@@ -1,5 +1,5 @@
 import {
-  FileUploadPanel,
+  ImportWorkbench,
   LoadingState,
   PageHeader,
   ProblemNotice,
@@ -16,6 +16,32 @@ export default function ImportPage() {
   const router = useRouter();
   const { t } = useKnowledgeI18n();
   const spaceId = typeof router.query.spaceId === 'string' ? router.query.spaceId : '';
+  const initialKind =
+    typeof router.query.kind === 'string' &&
+    [
+      'files',
+      'text',
+      'url',
+      'template',
+      'backup',
+      'api_library',
+      'feishu',
+      'yuque',
+      'dingtalk',
+    ].includes(router.query.kind)
+      ? (router.query.kind as
+          | 'files'
+          | 'text'
+          | 'url'
+          | 'template'
+          | 'backup'
+          | 'api_library'
+          | 'feishu'
+          | 'yuque'
+          | 'dingtalk')
+      : 'files';
+  const initialDirectoryId =
+    typeof router.query.directoryId === 'string' ? router.query.directoryId : '';
   const space = useKnowledgeQuery<SpaceRecord>(
     knowledgeQueryKeys.spaces.detail(spaceId),
     spaceId ? `/v1/knowledge/spaces/${spaceId}` : null,
@@ -36,7 +62,13 @@ export default function ImportPage() {
       <ProblemNotice error={space.error} onRetry={() => void space.refetch()} />
       <Section title={t('import.uploadTitle')} meta={t('import.uploadMeta')}>
         {!spaceId ? <LoadingState label={t('import.noSpace')} /> : null}
-        {spaceId ? <FileUploadPanel knowledgeSpaceId={spaceId} /> : null}
+        {spaceId ? (
+          <ImportWorkbench
+            spaceId={spaceId}
+            initialKind={initialKind}
+            initialDirectoryId={initialDirectoryId}
+          />
+        ) : null}
       </Section>
     </>
   );

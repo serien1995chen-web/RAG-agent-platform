@@ -193,6 +193,22 @@ export function KnowledgeAppShell(props: { location: ShellLocation; children: Re
               </Text>
               <Text as="span">{t('nav.systemStatus')}</Text>
             </Box>
+            <Box
+              as="a"
+              href={spaceId ? `/settings/connectors?spaceId=${spaceId}` : '/settings/connectors'}
+              aria-current={props.location.pathname === '/settings/connectors' ? 'page' : undefined}
+              {...navLink(props.location.pathname === '/settings/connectors')}
+            >
+              <Text
+                as="span"
+                display={{ base: 'none', lg: 'block' }}
+                color="currentColor"
+                fontSize="xs"
+              >
+                {t('nav.connectorsCode')}
+              </Text>
+              <Text as="span">{t('nav.connectors')}</Text>
+            </Box>
           </Box>
 
           {spaceLinks.length > 0 ? (
@@ -263,23 +279,24 @@ export function KnowledgeAppShell(props: { location: ShellLocation; children: Re
           py={{ base: '10px', lg: '14px' }}
           borderBottomWidth="1px"
           borderColor="kn.line"
-          align="center"
           justify="space-between"
-          gap={6}
+          direction={{ base: 'column', md: 'row' }}
+          align={{ base: 'stretch', md: 'center' }}
+          gap={{ base: 2, md: 6 }}
           position={{ base: 'static', lg: 'sticky' }}
           top="0"
           zIndex="sticky"
           bg="kn.surface"
         >
-          <Box>
+          <Box minW={0}>
             <Text color="kn.inkMuted" fontSize="xs">
               {t('shell.knowledgeWorkspace')}
             </Text>
-            <Text as="strong" fontSize="sm">
+            <Text as="strong" display="block" fontSize="sm" overflowWrap="anywhere">
               {session?.workspaceId ?? t('shell.noWorkspace')}
             </Text>
           </Box>
-          <Flex align="center" gap={3}>
+          <Flex align="center" justify="space-between" gap={3} width={{ base: '100%', md: 'auto' }}>
             <Flex as="div" role="group" aria-label={t('shell.language')} align="center" gap={1}>
               <Button
                 size="xs"

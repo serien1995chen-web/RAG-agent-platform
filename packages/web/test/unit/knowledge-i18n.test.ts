@@ -10,7 +10,7 @@ describe('knowledge i18n and problem rendering', () => {
   });
 
   it('maps every declared Knowledge error code to local copy', () => {
-    expect(Object.keys(ERROR_MESSAGE_KEYS)).toHaveLength(22);
+    expect(Object.keys(ERROR_MESSAGE_KEYS)).toHaveLength(23);
     for (const key of Object.values(ERROR_MESSAGE_KEYS)) {
       expect(messages['zh-CN'][key]).toBeTruthy();
       expect(messages.en[key]).toBeTruthy();

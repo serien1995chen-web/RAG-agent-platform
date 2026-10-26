@@ -10,6 +10,7 @@ export const ERROR_MESSAGE_KEYS = {
   KNOWLEDGE_REFERENCE_CONFLICT: 'errors.referenceConflict',
   KNOWLEDGE_SYNONYM_INVALID: 'errors.synonymInvalid',
   KNOWLEDGE_PROVIDER_CONTRACT_INVALID: 'errors.providerContractInvalid',
+  KNOWLEDGE_PROVIDER_CONFIG_INVALID: 'errors.providerConfigInvalid',
   KNOWLEDGE_CURSOR_INVALID: 'errors.cursorInvalid',
   KNOWLEDGE_RATE_LIMITED: 'errors.rateLimited',
   KNOWLEDGE_QUOTA_EXCEEDED: 'errors.quotaExceeded',

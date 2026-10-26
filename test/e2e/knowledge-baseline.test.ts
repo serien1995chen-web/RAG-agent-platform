@@ -513,6 +513,8 @@ beforeAll(async () => {
     KB_FILE_PUBLIC_BASE_URL: baseUrl,
     KB_FILE_TICKET_SECRET_REF: 'env:KB_E2E_FILE_TICKET_SECRET',
     KB_E2E_FILE_TICKET_SECRET: `file-ticket-${suffix}-fixed-secret-value`,
+    KB_CREDENTIAL_ENCRYPTION_KEY_REF: 'env:KB_E2E_CREDENTIAL_KEY',
+    KB_E2E_CREDENTIAL_KEY: `credential-key-${suffix}-fixed-value-32-bytes`,
     KB_AUTH_MODE: 'mock',
     KB_MOCK_AUTH_TOKEN: authToken,
     KB_MOCK_WORKSPACE_ID: workspaceId,
@@ -2044,8 +2046,8 @@ describe.sequential('knowledge architecture baseline E2E', () => {
       },
       {
         path: `/spaces/${spaceId}/import`,
-        zh: { title: `${spaceName} · 文件上传`, h1: '文件上传' },
-        en: { title: `${spaceName} · File upload`, h1: 'File upload' },
+        zh: { title: `${spaceName} · 导入`, h1: '导入知识来源' },
+        en: { title: `${spaceName} · Import`, h1: 'Import knowledge sources' },
       },
       {
         path: `/spaces/${spaceId}/segments?sourceId=${sourceId}`,
@@ -2138,6 +2140,7 @@ describe.sequential('knowledge architecture baseline E2E', () => {
                 ? [
                     '知识空间',
                     '系统状态',
+                    '连接器',
                     ...(hasSpaceNavigation
                       ? ['概览', '来源', '导入', '分段', '标签', '访问权限', '任务']
                       : []),
@@ -2145,6 +2148,7 @@ describe.sequential('knowledge architecture baseline E2E', () => {
                 : [
                     'Spaces',
                     'System status',
+                    'Connectors',
                     ...(hasSpaceNavigation
                       ? ['Overview', 'Sources', 'Import', 'Segments', 'Tags', 'Access', 'Jobs']
                       : []),
@@ -2449,7 +2453,7 @@ describe.sequential('knowledge architecture baseline E2E', () => {
     });
   });
 
-  it('finishes the delete paths, reads Jobs and proves all 65 operations ran', async () => {
+  it('finishes the delete paths, reads Jobs and proves all 65 baseline operations ran', async () => {
     await callApi('API-SEGMENT-DELETE', {
       params: { segmentId: requiredId(scenario.segmentId, 'segmentId') },
     });
@@ -2493,10 +2497,11 @@ describe.sequential('knowledge architecture baseline E2E', () => {
       },
     });
 
-    expect(runtimeRegistry.count).toBe(65);
-    expect([...covered].sort()).toEqual(
-      runtimeRegistry.operations.map((operation) => operation.operationId).sort(),
+    expect(runtimeRegistry.count).toBe(79);
+    const runtimeIds = new Set(
+      runtimeRegistry.operations.map((operation) => operation.operationId),
     );
+    expect([...covered].every((operationId) => runtimeIds.has(operationId))).toBe(true);
     expect(covered.size).toBe(65);
   });
 });

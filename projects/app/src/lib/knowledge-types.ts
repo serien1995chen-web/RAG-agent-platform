@@ -157,6 +157,42 @@ export interface OpsStatusRecord {
   };
 }
 
+export interface ConnectorRecord {
+  id: string;
+  workspaceId: string;
+  knowledgeSpaceId: string;
+  provider: 'custom_api' | 'feishu' | 'yuque' | 'dingtalk';
+  name: string;
+  status: 'active' | 'syncing' | 'paused' | 'failed' | 'deleting' | 'deleted';
+  syncEnabled: boolean;
+  syncIntervalMinutes: number;
+  nextSyncAt: string | null;
+  lastAttemptAt: string | null;
+  lastSuccessAt: string | null;
+  lastError: Record<string, unknown> | null;
+  cursorVersion: number;
+  version: number;
+  config: Record<string, unknown>;
+  credentialMetadata: {
+    provider: string;
+    schemaVersion: number;
+    keyVersion: number;
+    configured: boolean;
+    redactedFields: string[];
+  };
+}
+
+export interface ImportConflict {
+  rowNumber: number;
+  code: string;
+  existingSourceId?: string;
+}
+
+export interface ImportAction {
+  rowNumber: number;
+  action: 'create' | 'update' | 'skip' | 'overwrite';
+}
+
 export function listPath(spaceId: string, resource: 'directories' | 'sources' | 'tags'): string {
   return `/v1/knowledge/spaces/${spaceId}/${resource}?limit=200`;
 }

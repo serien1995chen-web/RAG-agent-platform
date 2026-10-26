@@ -124,6 +124,10 @@ export type OperationId =
 export type RuntimeOperationId =
   | 'API-HEALTH-LIVE'
   | 'API-HEALTH-READY'
+  | 'API-CONNECTOR-DELETE'
+  | 'API-CONNECTOR-GET'
+  | 'API-CONNECTOR-UPDATE'
+  | 'API-CONNECTOR-SYNC'
   | 'API-DIRECTORY-DELETE'
   | 'API-DIRECTORY-GET'
   | 'API-DIRECTORY-UPDATE'
@@ -165,9 +169,19 @@ export type RuntimeOperationId =
   | 'API-COLLABORATOR-CREATE'
   | 'API-COLLABORATOR-DELETE'
   | 'API-COLLABORATOR-UPDATE'
+  | 'API-CONNECTOR-CATALOG'
+  | 'API-CONNECTOR-CONNECT'
+  | 'API-CONNECTOR-IMPORT'
   | 'API-DIRECTORY-LIST'
   | 'API-DIRECTORY-CREATE'
   | 'API-SPACE-EXPORT'
+  | 'API-IMPORT-API-LIBRARY'
+  | 'API-IMPORT-API-CATALOG'
+  | 'API-IMPORT-BACKUP'
+  | 'API-IMPORT-FILES'
+  | 'API-IMPORT-TEMPLATE'
+  | 'API-IMPORT-TEXT'
+  | 'API-IMPORT-URL'
   | 'API-SPACE-MOVE'
   | 'API-OWNERSHIP-TRANSFER'
   | 'API-SPACE-REFERENCES'
@@ -196,10 +210,6 @@ export type DeferredOperationId =
   | 'API-APIKEY-ROTATE'
   | 'API-AUDIT-LIST'
   | 'API-CITATION-GET'
-  | 'API-CONNECTOR-DELETE'
-  | 'API-CONNECTOR-GET'
-  | 'API-CONNECTOR-UPDATE'
-  | 'API-CONNECTOR-SYNC'
   | 'API-JOB-CREATE'
   | 'API-JOB-CANCEL'
   | 'API-JOB-PAUSE'
@@ -223,16 +233,6 @@ export type DeferredOperationId =
   | 'API-SEGMENT-INDEX-UPDATE'
   | 'API-SEGMENT-REINDEX'
   | 'API-SEGMENT-BATCH'
-  | 'API-CONNECTOR-CATALOG'
-  | 'API-CONNECTOR-CONNECT'
-  | 'API-CONNECTOR-IMPORT'
-  | 'API-IMPORT-API-LIBRARY'
-  | 'API-IMPORT-API-CATALOG'
-  | 'API-IMPORT-BACKUP'
-  | 'API-IMPORT-FILES'
-  | 'API-IMPORT-TEMPLATE'
-  | 'API-IMPORT-TEXT'
-  | 'API-IMPORT-URL'
   | 'API-MODEL-BINDING-GET'
   | 'API-MODEL-BINDING-UPDATE'
   | 'API-SYNONYM-DELETE'
@@ -389,6 +389,10 @@ export type SchemaName =
 export interface RuntimeRouteMethodPathMap {
   'API-HEALTH-LIVE': 'GET /healthz';
   'API-HEALTH-READY': 'GET /readyz';
+  'API-CONNECTOR-DELETE': 'DELETE /v1/knowledge/connectors/{connectorId}';
+  'API-CONNECTOR-GET': 'GET /v1/knowledge/connectors/{connectorId}';
+  'API-CONNECTOR-UPDATE': 'PATCH /v1/knowledge/connectors/{connectorId}';
+  'API-CONNECTOR-SYNC': 'POST /v1/knowledge/connectors/{connectorId}/sync';
   'API-DIRECTORY-DELETE': 'DELETE /v1/knowledge/directories/{directoryId}';
   'API-DIRECTORY-GET': 'GET /v1/knowledge/directories/{directoryId}';
   'API-DIRECTORY-UPDATE': 'PATCH /v1/knowledge/directories/{directoryId}';
@@ -430,9 +434,19 @@ export interface RuntimeRouteMethodPathMap {
   'API-COLLABORATOR-CREATE': 'POST /v1/knowledge/spaces/{spaceId}/collaborators';
   'API-COLLABORATOR-DELETE': 'DELETE /v1/knowledge/spaces/{spaceId}/collaborators/{memberId}';
   'API-COLLABORATOR-UPDATE': 'PATCH /v1/knowledge/spaces/{spaceId}/collaborators/{memberId}';
+  'API-CONNECTOR-CATALOG': 'POST /v1/knowledge/spaces/{spaceId}/connectors/{provider}/catalog';
+  'API-CONNECTOR-CONNECT': 'POST /v1/knowledge/spaces/{spaceId}/connectors/{provider}/connect';
+  'API-CONNECTOR-IMPORT': 'POST /v1/knowledge/spaces/{spaceId}/connectors/{provider}/import';
   'API-DIRECTORY-LIST': 'GET /v1/knowledge/spaces/{spaceId}/directories';
   'API-DIRECTORY-CREATE': 'POST /v1/knowledge/spaces/{spaceId}/directories';
   'API-SPACE-EXPORT': 'POST /v1/knowledge/spaces/{spaceId}/exports';
+  'API-IMPORT-API-LIBRARY': 'POST /v1/knowledge/spaces/{spaceId}/imports/api-library';
+  'API-IMPORT-API-CATALOG': 'POST /v1/knowledge/spaces/{spaceId}/imports/api-library/catalog';
+  'API-IMPORT-BACKUP': 'POST /v1/knowledge/spaces/{spaceId}/imports/backup';
+  'API-IMPORT-FILES': 'POST /v1/knowledge/spaces/{spaceId}/imports/files';
+  'API-IMPORT-TEMPLATE': 'POST /v1/knowledge/spaces/{spaceId}/imports/template';
+  'API-IMPORT-TEXT': 'POST /v1/knowledge/spaces/{spaceId}/imports/text';
+  'API-IMPORT-URL': 'POST /v1/knowledge/spaces/{spaceId}/imports/url';
   'API-SPACE-MOVE': 'POST /v1/knowledge/spaces/{spaceId}/move';
   'API-OWNERSHIP-TRANSFER': 'POST /v1/knowledge/spaces/{spaceId}/ownership-transfer';
   'API-SPACE-REFERENCES': 'GET /v1/knowledge/spaces/{spaceId}/references';
@@ -462,10 +476,6 @@ export interface DeferredRouteMethodPathMap {
   'API-APIKEY-ROTATE': 'POST /v1/knowledge/api-keys/{keyId}/rotate';
   'API-AUDIT-LIST': 'GET /v1/knowledge/audit-events';
   'API-CITATION-GET': 'GET /v1/knowledge/citations/{citationId}';
-  'API-CONNECTOR-DELETE': 'DELETE /v1/knowledge/connectors/{connectorId}';
-  'API-CONNECTOR-GET': 'GET /v1/knowledge/connectors/{connectorId}';
-  'API-CONNECTOR-UPDATE': 'PATCH /v1/knowledge/connectors/{connectorId}';
-  'API-CONNECTOR-SYNC': 'POST /v1/knowledge/connectors/{connectorId}/sync';
   'API-JOB-CREATE': 'POST /v1/knowledge/jobs';
   'API-JOB-CANCEL': 'POST /v1/knowledge/jobs/{jobId}/cancel';
   'API-JOB-PAUSE': 'POST /v1/knowledge/jobs/{jobId}/pause';
@@ -489,16 +499,6 @@ export interface DeferredRouteMethodPathMap {
   'API-SEGMENT-INDEX-UPDATE': 'PATCH /v1/knowledge/segments/{segmentId}/indexes/{indexId}';
   'API-SEGMENT-REINDEX': 'POST /v1/knowledge/segments/{segmentId}/reindex';
   'API-SEGMENT-BATCH': 'POST /v1/knowledge/segments/batch-actions';
-  'API-CONNECTOR-CATALOG': 'POST /v1/knowledge/spaces/{spaceId}/connectors/{provider}/catalog';
-  'API-CONNECTOR-CONNECT': 'POST /v1/knowledge/spaces/{spaceId}/connectors/{provider}/connect';
-  'API-CONNECTOR-IMPORT': 'POST /v1/knowledge/spaces/{spaceId}/connectors/{provider}/import';
-  'API-IMPORT-API-LIBRARY': 'POST /v1/knowledge/spaces/{spaceId}/imports/api-library';
-  'API-IMPORT-API-CATALOG': 'POST /v1/knowledge/spaces/{spaceId}/imports/api-library/catalog';
-  'API-IMPORT-BACKUP': 'POST /v1/knowledge/spaces/{spaceId}/imports/backup';
-  'API-IMPORT-FILES': 'POST /v1/knowledge/spaces/{spaceId}/imports/files';
-  'API-IMPORT-TEMPLATE': 'POST /v1/knowledge/spaces/{spaceId}/imports/template';
-  'API-IMPORT-TEXT': 'POST /v1/knowledge/spaces/{spaceId}/imports/text';
-  'API-IMPORT-URL': 'POST /v1/knowledge/spaces/{spaceId}/imports/url';
   'API-MODEL-BINDING-GET': 'GET /v1/knowledge/spaces/{spaceId}/model-bindings';
   'API-MODEL-BINDING-UPDATE': 'PUT /v1/knowledge/spaces/{spaceId}/model-bindings';
   'API-SYNONYM-DELETE': 'DELETE /v1/knowledge/spaces/{spaceId}/synonyms';
