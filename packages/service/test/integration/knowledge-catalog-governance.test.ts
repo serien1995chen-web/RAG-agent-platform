@@ -400,20 +400,21 @@ describe('TEST-KB-003-BLOCK catalog governance', () => {
   it('rejects 0, 101, duplicate IDs and inexact versions before item execution', async () => {
     const validId = new mongoose.Types.ObjectId().toString();
     const secondValidId = new mongoose.Types.ObjectId().toString();
+    const ids101 = Array.from({ length: 101 }, () => new mongoose.Types.ObjectId().toString());
     const invalidBodies = [
-      { ids: [], versions: {} },
+      { field: 'ids', ids: [], versions: {} },
       {
-        ids: Array.from({ length: 101 }, () => new mongoose.Types.ObjectId().toString()),
-        versions: Object.fromEntries(
-          Array.from({ length: 101 }, (_, index) => [
-            new mongoose.Types.ObjectId().toString(),
-            index + 1,
-          ]),
-        ),
+        field: 'ids',
+        ids: ids101,
+        versions: Object.fromEntries(ids101.map((id, index) => [id, index + 1])),
       },
-      { ids: [validId, validId], versions: { [validId]: 1 } },
-      { ids: [validId, secondValidId], versions: { [validId]: 1 } },
-      { ids: [validId], versions: { [validId]: 1, [secondValidId]: 1 } },
+      { field: 'ids', ids: [validId, validId], versions: { [validId]: 1 } },
+      { field: 'versions', ids: [validId, secondValidId], versions: { [validId]: 1 } },
+      {
+        field: 'versions',
+        ids: [validId],
+        versions: { [validId]: 1, [secondValidId]: 1 },
+      },
     ];
     for (const input of invalidBodies) {
       await expect(
@@ -427,7 +428,12 @@ describe('TEST-KB-003-BLOCK catalog governance', () => {
           },
         }),
       ).rejects.toMatchObject({
-        problem: { error: { code: 'KNOWLEDGE_VALIDATION_FAILED' } },
+        problem: {
+          error: {
+            code: 'KNOWLEDGE_VALIDATION_FAILED',
+            details: { field: input.field },
+          },
+        },
       });
     }
   });
