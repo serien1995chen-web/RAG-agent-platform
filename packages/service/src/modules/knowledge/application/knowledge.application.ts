@@ -4,10 +4,12 @@ import type { TenantContext } from '../../../shared/persistence/knowledge/tenant
 import { assertBatchVersions, type AclResourceType, type PermissionLevel } from '../domain';
 import type {
   AccessPort,
+  AuditPort,
   CatalogPort,
   FileBinaryResult,
   JobPort,
   ReferencePort,
+  SourceView,
   TagPort,
 } from './ports';
 import type { FileApplication } from './file.application';
@@ -77,6 +79,7 @@ export class KnowledgeApplication {
     private readonly files?: FileApplication,
     private readonly sources?: SourceFileApplication,
     private readonly references?: ReferencePort,
+    private readonly audits?: AuditPort,
   ) {}
 
   private async requireExistingPermission(
@@ -134,6 +137,38 @@ export class KnowledgeApplication {
       return String((error as { problem: { error: { code: string } } }).problem.error.code);
     }
     return 'KNOWLEDGE_INTERNAL_ERROR';
+  }
+
+  private async failedBatchItem(
+    input: {
+      id: string;
+      action: 'move' | 'delete';
+      resourceType: 'space' | 'source';
+      knowledgeSpaceId: string | null;
+    },
+    error: unknown,
+    context: TenantContext,
+  ): Promise<Record<string, unknown>> {
+    const failureCode = this.itemCode(error);
+    if (!this.audits) {
+      return { id: input.id, success: false, code: 'KNOWLEDGE_INTERNAL_ERROR' };
+    }
+    try {
+      await this.audits.appendStandalone(
+        {
+          knowledgeSpaceId: input.resourceType === 'space' ? input.id : input.knowledgeSpaceId,
+          action: `batch.${input.resourceType}.failed`,
+          resourceType: input.resourceType,
+          resourceId: input.id,
+          outcome: 'failed',
+          safeDiff: { action: input.action, failureCode },
+        },
+        context,
+      );
+    } catch {
+      return { id: input.id, success: false, code: 'KNOWLEDGE_INTERNAL_ERROR' };
+    }
+    return { id: input.id, success: false, code: failureCode };
   }
 
   async dispatch(input: KnowledgeOperationInput): Promise<KnowledgeOperationResult> {
@@ -254,6 +289,14 @@ export class KnowledgeApplication {
             details: { field: 'targetParentId', reason: 'not_allowed_for_delete' },
           });
         }
+        if (action === 'move' && body.targetParentId != null) {
+          await this.requireExistingPermission(
+            'space',
+            String(body.targetParentId),
+            'write',
+            context,
+          );
+        }
         const items: Array<Record<string, unknown>> = [];
         let succeeded = 0;
         for (const id of ids) {
@@ -289,7 +332,18 @@ export class KnowledgeApplication {
                 : {}),
             });
           } catch (error) {
-            items.push({ id, success: false, code: this.itemCode(error) });
+            items.push(
+              await this.failedBatchItem(
+                {
+                  id,
+                  action,
+                  resourceType: 'space',
+                  knowledgeSpaceId: id,
+                },
+                error,
+                context,
+              ),
+            );
           }
         }
         return {
@@ -560,21 +614,51 @@ export class KnowledgeApplication {
             details: { field: 'targetDirectoryId', reason: 'not_allowed_for_delete' },
           });
         }
-        const sourceSpaces = new Set<string>();
+        if (action === 'move' && body.targetDirectoryId != null) {
+          await this.requireExistingPermission(
+            'directory',
+            String(body.targetDirectoryId),
+            'write',
+            context,
+          );
+        }
+        const candidates = new Map<string, { source: SourceView; spaceId: string }>();
+        const failures = new Map<string, Record<string, unknown>>();
+        const attempts = new Map<string, string>();
         for (const id of ids) {
-          await this.requireExistingPermission('source', id, 'manage', context);
-          const source = await this.catalog.getSource(id, context);
-          sourceSpaces.add(source.knowledgeSpaceId);
-          if (Number(source.version) !== versions[id]) {
-            throw createKnowledgeError({
-              code: 'KNOWLEDGE_CONFLICT',
-              requestId: context.requestId,
-              traceId: context.traceId,
-              details: { resourceId: id, field: 'version' },
-            });
+          try {
+            await this.requireExistingPermission('source', id, 'manage', context);
+            const source = await this.catalog.getSource(id, context);
+            attempts.set(id, source.knowledgeSpaceId);
+            if (Number(source.version) !== versions[id]) {
+              throw createKnowledgeError({
+                code: 'KNOWLEDGE_CONFLICT',
+                requestId: context.requestId,
+                traceId: context.traceId,
+                details: { resourceId: id, field: 'version' },
+              });
+            }
+            candidates.set(id, { source, spaceId: source.knowledgeSpaceId });
+          } catch (error) {
+            failures.set(
+              id,
+              await this.failedBatchItem(
+                {
+                  id,
+                  action,
+                  resourceType: 'source',
+                  knowledgeSpaceId: attempts.get(id) ?? null,
+                },
+                error,
+                context,
+              ),
+            );
           }
         }
-        if (sourceSpaces.size !== 1) {
+        const sourceSpaces = new Set(
+          [...candidates.values()].map((candidate) => candidate.spaceId),
+        );
+        if (sourceSpaces.size > 1) {
           throw createKnowledgeError({
             code: 'KNOWLEDGE_VALIDATION_FAILED',
             requestId: context.requestId,
@@ -585,6 +669,11 @@ export class KnowledgeApplication {
         const items: Array<Record<string, unknown>> = [];
         let succeeded = 0;
         for (const id of ids) {
+          const failed = failures.get(id);
+          if (failed) {
+            items.push(failed);
+            continue;
+          }
           try {
             const data =
               action === 'move'
@@ -609,7 +698,18 @@ export class KnowledgeApplication {
                 : {}),
             });
           } catch (error) {
-            items.push({ id, success: false, code: this.itemCode(error) });
+            items.push(
+              await this.failedBatchItem(
+                {
+                  id,
+                  action,
+                  resourceType: 'source',
+                  knowledgeSpaceId: candidates.get(id)?.spaceId ?? null,
+                },
+                error,
+                context,
+              ),
+            );
           }
         }
         return {

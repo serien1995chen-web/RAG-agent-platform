@@ -353,6 +353,52 @@ export class KnowledgeJobRepository {
     return jobDto(updated.toObject() as unknown as Plain<KnowledgeJobDoc>);
   }
 
+  async requeueDueRetries(
+    input: { kind: KnowledgeJobDoc['kind']; now?: Date },
+    context: TenantContext,
+  ): Promise<number> {
+    const workspaceId = requireWorkspaceId(context);
+    const now = input.now ?? new Date();
+    const due = (await this.jobs
+      .find({
+        workspaceId,
+        kind: input.kind,
+        status: 'retry_wait',
+        availableAt: { $lte: now },
+        deletedAt: null,
+      })
+      .select({ _id: 1, version: 1 })
+      .sort({ availableAt: 1, _id: 1 })
+      .lean()) as unknown as Array<{ _id: Types.ObjectId; version: number }>;
+    let requeued = 0;
+    for (const job of due) {
+      const updated = await this.jobs.findOneAndUpdate(
+        {
+          _id: job._id,
+          workspaceId,
+          version: job.version,
+          status: 'retry_wait',
+          availableAt: { $lte: now },
+          deletedAt: null,
+        },
+        {
+          $set: {
+            status: 'queued',
+            availableAt: now,
+            leaseOwner: null,
+            leaseExpiresAt: null,
+            error: null,
+            updatedByMemberId: context.memberId,
+          },
+          $inc: { version: 1 },
+        },
+        { new: true },
+      );
+      if (updated) requeued += 1;
+    }
+    return requeued;
+  }
+
   async transition(
     input: {
       jobId: string;

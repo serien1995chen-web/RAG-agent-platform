@@ -211,12 +211,17 @@ export class KnowledgeArchiveRepository {
   }
 
   async queuedWorkspaces(): Promise<string[]> {
+    const now = new Date();
     const values = await this.jobModel.distinct('workspaceId', {
       kind: 'export',
-      status: 'queued',
       deletedAt: null,
+      $or: [{ status: 'queued' }, { status: 'retry_wait', availableAt: { $lte: now } }],
     });
     return values.filter((value): value is string => typeof value === 'string');
+  }
+
+  requeueDueRetries(context: TenantContext, now: Date = new Date()) {
+    return this.jobs.requeueDueRetries({ kind: 'export', now }, context);
   }
 
   async claim(workerId: string, context: TenantContext) {

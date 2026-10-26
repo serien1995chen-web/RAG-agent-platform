@@ -7,6 +7,12 @@ import { knowledgeQueryKeys } from '../query/query-keys';
 import { useKnowledgeQuery } from '../query/use-knowledge-query';
 import { useKnowledgeI18n } from '../i18n';
 import { Button, ProblemNotice, SelectInput, StatusTag } from './knowledge-primitives';
+import {
+  batchResultRole,
+  exportStatusTone,
+  hasBlockingReference,
+  shouldResetMoveIdempotencyKey,
+} from './catalog-governance-state';
 
 export interface MoveTargetOption {
   id: string;
@@ -41,6 +47,7 @@ export function CatalogMoveControl(props: {
       key.current = null;
       await props.onMoved();
     } catch (error) {
+      if (shouldResetMoveIdempotencyKey(error)) key.current = null;
       setProblem(error);
     } finally {
       setBusy(false);
@@ -55,7 +62,10 @@ export function CatalogMoveControl(props: {
           aria-label={t('governance.moveTarget')}
           value={target}
           maxW="160px"
-          onChange={(event) => setTarget(event.target.value)}
+          onChange={(event) => {
+            key.current = null;
+            setTarget(event.target.value);
+          }}
         >
           <option value="">{t('governance.root')}</option>
           {props.targets
@@ -88,7 +98,7 @@ export function CatalogBatchResult(props: { result: BatchResultView | null }) {
   if (!props.result) return null;
   return (
     <Box
-      role={props.result.failed > 0 ? 'alert' : 'status'}
+      role={batchResultRole(props.result)}
       mt={3}
       borderTopWidth="1px"
       borderBottomWidth="1px"
@@ -191,12 +201,7 @@ export function SpaceExportAction(props: { spaceId: string }) {
         <Button size="sm" tone="primary" busy={busy} onClick={() => void exportSpace()}>
           {t('governance.exportSpace')}
         </Button>
-        {status !== 'idle' ? (
-          <StatusTag
-            value={status}
-            tone={status === 'succeeded' ? 'success' : status === 'failed' ? 'danger' : 'warning'}
-          />
-        ) : null}
+        {status !== 'idle' ? <StatusTag value={status} tone={exportStatusTone(status)} /> : null}
         {downloadUrl ? (
           <Button href={downloadUrl} target="_blank" rel="noopener noreferrer" size="sm">
             {t('governance.downloadExport')}
@@ -227,9 +232,15 @@ export function SpaceReferencesPanel(props: { spaceId: string }) {
     knowledgeQueryKeys.spaces.references(props.spaceId),
     `/v1/knowledge/spaces/${props.spaceId}/references`,
   );
+  const blocking = hasBlockingReference(query.data?.items ?? []);
   return (
     <Box>
       <ProblemNotice error={query.error} onRetry={() => void query.refetch()} />
+      {blocking ? (
+        <Text role="alert" color="kn.danger" fontWeight="700" mt={2}>
+          {t('governance.referenceBlocked')}
+        </Text>
+      ) : null}
       {query.isLoading ? (
         <Text>{t('common.loading')}</Text>
       ) : query.data?.items.length ? (

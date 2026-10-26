@@ -1,6 +1,9 @@
 import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { KnowledgeCatalogRepository } from '../../packages/service/src/modules/knowledge';
+import {
+  KnowledgeCatalogRepository,
+  KnowledgeReferenceRepository,
+} from '../../packages/service/src/modules/knowledge';
 import { createKnowledgeMongoConnection } from '../../packages/service/src/shared/runtime/knowledge-connections';
 import {
   ensureKnowledgeCollections,
@@ -19,6 +22,7 @@ const workspaceA = `ws_tenant_a_${suffix}`;
 const workspaceB = `ws_tenant_b_${suffix}`;
 let connection: Awaited<ReturnType<typeof createKnowledgeMongoConnection>>;
 let repository: KnowledgeCatalogRepository;
+let references: KnowledgeReferenceRepository;
 
 function context(workspaceId: string): TenantContext {
   return {
@@ -34,6 +38,7 @@ beforeAll(async () => {
   connection = await createKnowledgeMongoConnection(requiredEnv('KB_TEST_MONGO_URI'));
   await ensureKnowledgeCollections(connection);
   repository = new KnowledgeCatalogRepository(connection);
+  references = new KnowledgeReferenceRepository(connection);
 }, 60_000);
 
 afterAll(async () => {
@@ -105,5 +110,41 @@ describe('workspace tenant boundary', () => {
     ).rejects.toMatchObject({
       problem: { error: { code: 'KNOWLEDGE_NOT_FOUND' } },
     });
+  });
+
+  it('does not resolve or mutate references across workspaces', async () => {
+    const target = await repository.createSpace(
+      {
+        kind: 'space',
+        name: `Reference tenant ${suffix}`,
+        accessMode: 'workspace',
+        sourceAclMode: 'enforced',
+        sourcePermissionEnabled: true,
+      },
+      context(workspaceA),
+    );
+    await expect(
+      references.applyUpsert(
+        {
+          spaceId: target.id,
+          referrerType: 'app',
+          referrerId: `app_${suffix}`,
+          referrerVersion: 'v1',
+          referrerName: 'Cross tenant app',
+          registryRevision: 1,
+        },
+        context(workspaceB),
+      ),
+    ).rejects.toMatchObject({
+      problem: { error: { code: 'KNOWLEDGE_NOT_FOUND' } },
+    });
+    await expect(references.list(target.id, context(workspaceB))).rejects.toMatchObject({
+      problem: { error: { code: 'KNOWLEDGE_NOT_FOUND' } },
+    });
+    expect(
+      await connection.models.KnowledgeReferenceBinding.countDocuments({
+        workspaceId: workspaceB,
+      }),
+    ).toBe(0);
   });
 });

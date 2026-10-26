@@ -275,6 +275,28 @@ export interface AccessPort {
   ): Promise<AclView>;
 }
 
+export interface AuditPort {
+  appendStandalone(
+    input: {
+      knowledgeSpaceId: string | null;
+      action: string;
+      resourceType:
+        | 'workspace'
+        | 'space'
+        | 'directory'
+        | 'source'
+        | 'segment'
+        | 'job'
+        | 'connector'
+        | 'api_key';
+      resourceId: string;
+      outcome: 'allowed' | 'denied' | 'succeeded' | 'failed';
+      safeDiff: Record<string, unknown>;
+    },
+    context: TenantContext,
+  ): Promise<void>;
+}
+
 export interface JobPort {
   list(
     query: OperationPageRequest,
@@ -464,13 +486,12 @@ export interface ObjectStorageContext {
 }
 
 export interface ArchiveSafetyInput {
-  kind: 'upload' | 'archive';
+  kind: 'upload' | 'archive' | 'space-archive';
   bucket: string;
   objectKey: string;
   sizeBytes: number;
   mimeType: string;
   originalName: string;
-  archiveLayout?: 'source' | 'space';
   storage: ObjectStorageContext;
 }
 

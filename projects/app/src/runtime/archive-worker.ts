@@ -178,6 +178,7 @@ export class KnowledgeArchiveWorker {
         traceId: `archive:${this.workerId}`,
         scopes: ['knowledge:admin'],
       };
+      await this.archive.requeueDueRetries(context);
       for (;;) {
         const claimed = await this.archive.claim(this.workerId, context);
         if (!claimed) break;
@@ -410,7 +411,7 @@ export class KnowledgeArchiveWorker {
       directories: directoryManifest,
       sources: sourceManifest,
     };
-    const zip = await buildZip(entries, manifest, context);
+    const zip = await buildZip(entries, null, context);
     const blobId = createHash('sha1')
       .update(`space-export:${String(job.jobId)}`)
       .digest('hex')
@@ -486,13 +487,12 @@ export class KnowledgeArchiveWorker {
         storage,
       );
       const inspected = await this.archiveSafety.inspect({
-        kind: 'archive',
+        kind: 'space-archive',
         bucket: stored.bucket,
         objectKey: stored.key,
         sizeBytes: stored.size,
         mimeType: 'application/zip',
         originalName: `${root}.zip`,
-        archiveLayout: 'space',
         storage,
       });
       if (!inspected.archive || !inspected.safe) {

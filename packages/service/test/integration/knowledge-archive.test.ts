@@ -467,20 +467,7 @@ describe('TEST-FILE-004-BLOCK source archive worker', () => {
     const pending = await objectRefs.findObjectRef(blobId, context);
     expect(pending?.state).toBe('deleting');
 
-    await connection.models.KnowledgeJob.updateOne(
-      {
-        workspaceId: context.workspaceId,
-        _id: new mongoose.Types.ObjectId(String(job.jobId)),
-      },
-      {
-        $set: {
-          status: 'queued',
-          availableAt: new Date(0),
-          leaseOwner: null,
-          leaseExpiresAt: null,
-        },
-      },
-    );
+    await new Promise((resolve) => setTimeout(resolve, 2_100));
     const retryWorker = new KnowledgeArchiveWorker(
       connection,
       runtimeConfig(),
@@ -489,6 +476,8 @@ describe('TEST-FILE-004-BLOCK source archive worker', () => {
       objectStore,
     );
     await retryWorker.runOnce();
+    const reclaimed = await jobs.get(String(job.jobId), context);
+    expect(reclaimed.attempts).toBeGreaterThan(1);
     const converged = await objectRefs.findObjectRef(blobId, context);
     expect(converged?.state).toBe('deleted');
   });

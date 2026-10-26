@@ -3,6 +3,7 @@ import type { ClientSession, Connection } from 'mongoose';
 import type { TenantContext } from './tenant';
 import { requireWorkspaceId } from './tenant';
 import { registerKnowledgeModels } from '../schemas/knowledge-index';
+import { withMongoTransaction } from '../with-mongo-transaction';
 
 const SENSITIVE_KEY = /token|secret|password|credential|authorization|cookie|objectKey/i;
 
@@ -41,6 +42,10 @@ export function safeAuditDiff(value: unknown, keyHint = ''): unknown {
 
 export class KnowledgeAuditRepository {
   constructor(private readonly connection: Connection) {}
+
+  async appendStandalone(input: KnowledgeAuditInput, context: TenantContext): Promise<void> {
+    await withMongoTransaction(this.connection, (session) => this.append(input, context, session));
+  }
 
   async append(
     input: KnowledgeAuditInput,

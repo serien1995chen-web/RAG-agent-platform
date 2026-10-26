@@ -1,9 +1,10 @@
 import { randomUUID } from 'node:crypto';
 import mongoose from 'mongoose';
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   KnowledgeAccessRepository,
   KnowledgeApplication,
+  KnowledgeAuditRepository,
   KnowledgeArchiveRepository,
   KnowledgeCatalogRepository,
   KnowledgeReferenceRepository,
@@ -29,6 +30,7 @@ let connection: mongoose.Connection;
 let catalog: KnowledgeCatalogRepository;
 let references: KnowledgeReferenceRepository;
 let application: KnowledgeApplication;
+let audits: KnowledgeAuditRepository;
 
 async function run(input: {
   operationId: string;
@@ -88,6 +90,7 @@ beforeAll(async () => {
   await ensureKnowledgeCollections(connection);
   catalog = new KnowledgeCatalogRepository(connection);
   references = new KnowledgeReferenceRepository(connection);
+  audits = new KnowledgeAuditRepository(connection);
   application = new KnowledgeApplication(
     catalog,
     new KnowledgeTagRepository(connection),
@@ -96,6 +99,7 @@ beforeAll(async () => {
     undefined,
     undefined,
     references,
+    audits,
   );
 }, 60_000);
 
@@ -103,6 +107,10 @@ beforeEach(async () => {
   for (const model of Object.values(registerKnowledgeModels(connection))) {
     await model.deleteMany({ workspaceId });
   }
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
 });
 
 afterAll(async () => {
@@ -211,9 +219,161 @@ describe('TEST-KB-003-BLOCK catalog governance', () => {
     expect((await catalog.getSpace(first.id, context)).parentSpaceId).toBe(destination.id);
   });
 
-  it('blocks active references until the registry removes them with a newer revision', async () => {
+  it('requires write permission on batch move targets', async () => {
+    const destination = await folder(`Restricted batch folder ${suffix}`);
+    const targetSpace = await space(`Restricted batch space ${suffix}`);
+    const source = (
+      await run({
+        operationId: 'API-SOURCE-CREATE',
+        params: { spaceId: targetSpace.id },
+        body: { kind: 'text', name: `Restricted source ${suffix}` },
+      })
+    ).data as { id: string; version: number };
+    const targetDirectory = (
+      await run({
+        operationId: 'API-DIRECTORY-CREATE',
+        params: { spaceId: targetSpace.id },
+        body: { name: `Restricted target directory ${suffix}` },
+      })
+    ).data as { id: string };
+    const reader: TenantContext = {
+      ...context,
+      memberId: `mem_reader_${suffix}`,
+    };
+    await expect(
+      run({
+        operationId: 'API-SPACE-BATCH',
+        context: reader,
+        body: {
+          action: 'move',
+          ids: [targetSpace.id],
+          targetParentId: destination.id,
+          versions: { [targetSpace.id]: targetSpace.version },
+        },
+      }),
+    ).rejects.toMatchObject({
+      problem: { error: { code: 'KNOWLEDGE_FORBIDDEN' } },
+    });
+    await expect(
+      run({
+        operationId: 'API-SOURCE-BATCH',
+        context: reader,
+        body: {
+          action: 'move',
+          ids: [source.id],
+          targetDirectoryId: targetDirectory.id,
+          versions: { [source.id]: source.version },
+        },
+      }),
+    ).rejects.toMatchObject({
+      problem: { error: { code: 'KNOWLEDGE_FORBIDDEN' } },
+    });
+  });
+
+  it('returns ordered Source batch 207 results for stale versions and audits failures', async () => {
+    const targetSpace = await space(`Source batch space ${suffix}`);
+    const current = (
+      await run({
+        operationId: 'API-SOURCE-CREATE',
+        params: { spaceId: targetSpace.id },
+        body: { kind: 'text', name: `Source current ${suffix}` },
+      })
+    ).data as { id: string; version: number };
+    const stale = (
+      await run({
+        operationId: 'API-SOURCE-CREATE',
+        params: { spaceId: targetSpace.id },
+        body: { kind: 'text', name: `Source stale ${suffix}` },
+      })
+    ).data as { id: string; version: number };
+    const result = await run({
+      operationId: 'API-SOURCE-BATCH',
+      body: {
+        action: 'move',
+        ids: [current.id, stale.id],
+        targetDirectoryId: null,
+        versions: {
+          [current.id]: current.version,
+          [stale.id]: stale.version + 1,
+        },
+      },
+    });
+    expect(result.status).toBe(207);
+    expect(result.data).toMatchObject({
+      code: 'KNOWLEDGE_PARTIAL_SUCCESS',
+      requested: 2,
+      succeeded: 1,
+      failed: 1,
+    });
+    const batch = result.data as {
+      items: Array<{ id: string; success: boolean; code?: string }>;
+    };
+    expect(batch.items.map((item) => item.id)).toEqual([current.id, stale.id]);
+    expect(batch.items[0]).toMatchObject({ id: current.id, success: true });
+    expect(batch.items[1]).toMatchObject({
+      id: stale.id,
+      success: false,
+      code: 'KNOWLEDGE_CONFLICT',
+    });
+    expect((await catalog.getSource(current.id, context)).directoryId).toBeNull();
+    expect((await catalog.getSource(stale.id, context)).version).toBe(stale.version);
+    const failedAudit = await connection.models.KnowledgeAuditEvent.findOne({
+      workspaceId,
+      action: 'batch.source.failed',
+      resourceId: stale.id,
+      outcome: 'failed',
+    }).lean();
+    expect(failedAudit).not.toBeNull();
+  });
+
+  it('TEST-OPS-003-BLOCK rolls back business data when audit or Outbox insertion fails', async () => {
+    const destination = await folder(`Audit rollback folder ${suffix}`);
+    const resource = await space(`Audit rollback space ${suffix}`);
+    vi.spyOn(KnowledgeAuditRepository.prototype, 'append').mockRejectedValueOnce(
+      new Error('injected audit failure'),
+    );
+    await expect(
+      catalog.moveSpace(
+        resource.id,
+        { targetParentId: destination.id, version: resource.version },
+        context,
+      ),
+    ).rejects.toThrow('injected audit failure');
+    const afterAuditFailure = await catalog.getSpace(resource.id, context);
+    expect(afterAuditFailure.parentSpaceId).toBeNull();
+    expect(afterAuditFailure.version).toBe(resource.version);
+
+    vi.restoreAllMocks();
+    const deleteTarget = await space(`Outbox rollback space ${suffix}`);
+    vi.spyOn(connection.models.KnowledgeOutboxEvent, 'create').mockRejectedValueOnce(
+      new Error('injected outbox failure'),
+    );
+    await expect(
+      catalog.deleteSpace(
+        deleteTarget.id,
+        {
+          version: deleteTarget.version,
+          expectedReferenceRevision: deleteTarget.referenceRevision,
+          referenceStrategy: 'block',
+        },
+        context,
+      ),
+    ).rejects.toThrow('injected outbox failure');
+    const afterOutboxFailure = await catalog.getSpace(deleteTarget.id, context);
+    expect(afterOutboxFailure.status).toBe('active');
+    expect(afterOutboxFailure.version).toBe(deleteTarget.version);
+    expect(
+      await connection.models.KnowledgeJob.countDocuments({
+        workspaceId,
+        resourceType: 'space',
+        resourceId: deleteTarget.id,
+      }),
+    ).toBe(0);
+  });
+
+  it('TEST-X-REFERENCE-DELETE keeps revisions, stale bindings and removal blocking consistent', async () => {
     const target = await space(`Reference ${suffix}`);
-    await references.applyUpsert(
+    const first = await references.applyUpsert(
       {
         spaceId: target.id,
         referrerType: 'app',
@@ -224,6 +384,53 @@ describe('TEST-KB-003-BLOCK catalog governance', () => {
       },
       context,
     );
+    const second = await references.applyUpsert(
+      {
+        spaceId: target.id,
+        referrerType: 'app',
+        referrerId: `app_${suffix}`,
+        referrerVersion: 'v2',
+        referrerName: 'Reference app v2',
+        registryRevision: 2,
+      },
+      context,
+    );
+    expect(first.referenceRevision).toBe(1);
+    expect(second.referenceRevision).toBe(2);
+    const replay = await references.applyUpsert(
+      {
+        spaceId: target.id,
+        referrerType: 'app',
+        referrerId: `app_${suffix}`,
+        referrerVersion: 'v2',
+        referrerName: 'Ignored replay name',
+        registryRevision: 2,
+      },
+      context,
+    );
+    expect(replay.referenceRevision).toBe(2);
+    const listed = await references.list(target.id, context);
+    expect(listed.referenceRevision).toBe(2);
+    expect(listed.items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ referrerVersion: 'v1', status: 'stale' }),
+        expect.objectContaining({ referrerVersion: 'v2', status: 'active' }),
+      ]),
+    );
+    await expect(
+      references.applyRemove(
+        {
+          spaceId: target.id,
+          referrerType: 'app',
+          referrerId: `app_${suffix}`,
+          referrerVersion: 'v2',
+          registryRevision: 1,
+        },
+        context,
+      ),
+    ).rejects.toMatchObject({
+      problem: { error: { code: 'KNOWLEDGE_CONFLICT' } },
+    });
     const current = await catalog.getSpace(target.id, context);
     await expect(
       run({
@@ -243,11 +450,24 @@ describe('TEST-KB-003-BLOCK catalog governance', () => {
         spaceId: target.id,
         referrerType: 'app',
         referrerId: `app_${suffix}`,
-        referrerVersion: 'v1',
-        registryRevision: 2,
+        referrerVersion: 'v2',
+        registryRevision: 3,
       },
       context,
     );
+    const removed = await connection.models.KnowledgeReferenceBinding.findOne({
+      workspaceId,
+      resourceType: 'space',
+      resourceId: target.id,
+      referrerVersion: 'v2',
+    }).lean();
+    expect(removed?.status).toBe('removed');
+    expect(removed?.expiresAt).toBeInstanceOf(Date);
+    expect(
+      connection.models.KnowledgeReferenceBinding.schema
+        .indexes()
+        .some(([, options]) => options?.name === 'ttl_reference_binding'),
+    ).toBe(true);
     const released = await catalog.getSpace(target.id, context);
     const deleted = await run({
       operationId: 'API-SPACE-DELETE',

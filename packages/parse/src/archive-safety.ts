@@ -62,7 +62,6 @@ export interface ArchiveInspectionInput {
   source: ArchiveRangeSource;
   container: ArchiveContainer;
   originalName: string;
-  archiveLayout?: 'source' | 'space';
   limits?: Partial<ArchiveInspectionLimits>;
 }
 
@@ -502,7 +501,6 @@ async function buildEntryPlans(
   limits: ArchiveInspectionLimits,
   centralDirectoryOffset: number,
   container: ArchiveContainer,
-  archiveLayout: 'source' | 'space',
 ): Promise<EntryPlan[]> {
   const plans: EntryPlan[] = [];
   const filePaths = new Set<string>();
@@ -520,7 +518,7 @@ async function buildEntryPlans(
     if (directory && (entry.uncompressedSize !== 0 || entry.compressedSize !== 0)) {
       throw new ArchiveSafetyError('directory_has_data');
     }
-    if (container === 'archive' && directory && archiveLayout !== 'space') {
+    if (container === 'archive' && directory) {
       throw new ArchiveSafetyError('manifest_invalid');
     }
     const normalizedName = normalizedEntryName(name);
@@ -632,7 +630,6 @@ async function validateContainerMarkers(
   plans: EntryPlan[],
   container: ArchiveContainer,
   mimetype: string | null,
-  archiveLayout: 'source' | 'space',
 ): Promise<void> {
   const names = new Set(plans.map((plan) => plan.normalizedName));
   if (container === 'docx') {
@@ -655,7 +652,6 @@ async function validateContainerMarkers(
     const manifests = plans.filter((plan) => plan.normalizedName === 'manifest.json');
     if (manifests.length !== 1) throw new ArchiveSafetyError('manifest_missing');
     if (
-      archiveLayout === 'source' &&
       plans.some(
         (plan) =>
           plan.normalizedName !== 'manifest.json' &&
@@ -824,7 +820,6 @@ async function inspectArchive(
       limits,
       eocd.centralDirectoryOffset,
       container,
-      input.archiveLayout ?? 'source',
     );
     let actualTotal = 0;
     let actualCompressedTotal = 0;
@@ -873,7 +868,7 @@ async function inspectArchive(
         mimetype = inspected.capturedPrefix.toString('utf8');
       }
     }
-    await validateContainerMarkers(plans, container, mimetype, input.archiveLayout ?? 'source');
+    await validateContainerMarkers(plans, container, mimetype);
     return {
       archive: true,
       safe: true,

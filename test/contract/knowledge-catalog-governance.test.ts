@@ -66,9 +66,19 @@ describe('S3 catalog governance contract', () => {
       ).toBeDefined();
     }
     for (const schema of ['KnowledgeSpaceBatchAction', 'SourceBatchAction']) {
-      expect(
-        (openapi.components.schemas[schema]?.properties as Record<string, unknown>)?.versions,
-      ).toBeDefined();
+      const batch = openapi.components.schemas[schema] as {
+        required: string[];
+        properties: {
+          ids: { uniqueItems: boolean };
+          versions: { minProperties: number; maxProperties: number };
+        };
+      };
+      expect(batch.required).toContain('versions');
+      expect(batch.properties.ids.uniqueItems).toBe(true);
+      expect(batch.properties.versions).toMatchObject({
+        minProperties: 1,
+        maxProperties: 100,
+      });
     }
     const exportCreate = openapi.components.schemas.ExportCreate as {
       properties: {
@@ -78,5 +88,13 @@ describe('S3 catalog governance contract', () => {
     };
     expect(exportCreate.properties.format).toMatchObject({ enum: ['zip'], default: 'zip' });
     expect(exportCreate.properties.sourceIds.maxItems).toBe(2000);
+    const exportPath = openapi.paths['/v1/knowledge/spaces/{spaceId}/exports']?.post as {
+      responses: Record<string, unknown>;
+      requestBody: {
+        content: { 'application/json': { example: { format: string } } };
+      };
+    };
+    expect(exportPath.responses).toHaveProperty('413');
+    expect(exportPath.requestBody.content['application/json'].example.format).toBe('zip');
   });
 });

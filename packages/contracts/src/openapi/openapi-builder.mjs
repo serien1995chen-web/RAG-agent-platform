@@ -336,14 +336,17 @@ export function buildKnowledgeContractArtifacts(repoRoot) {
   const runtimeRoutes = routes.filter((route) => route.runtime);
   const runtimeIds = runtimeRoutes.map((route) => route.operationId).sort();
   const expectedRuntimeIds = [...RUNTIME_OPERATION_IDS].sort();
-  if (runtimeIds.length !== 65) problems.push(`runtime 应为 65，实际 ${runtimeIds.length}`);
+  if (runtimeIds.length !== RUNTIME_OPERATION_IDS.length) {
+    problems.push(`runtime 应为 ${RUNTIME_OPERATION_IDS.length}，实际 ${runtimeIds.length}`);
+  }
   if (runtimeIds.join('\n') !== expectedRuntimeIds.join('\n')) {
     problems.push('runtime allowlist 与目标合同 operationId 不一致');
   }
 
   const deferredRoutes = routes.filter((route) => !route.runtime);
-  if (deferredRoutes.length !== 55) {
-    problems.push(`deferred 应为 55，实际 ${deferredRoutes.length}`);
+  const expectedDeferredCount = routes.length - RUNTIME_OPERATION_IDS.length;
+  if (deferredRoutes.length !== expectedDeferredCount) {
+    problems.push(`deferred 应为 ${expectedDeferredCount}，实际 ${deferredRoutes.length}`);
   }
   if (problems.length > 0) {
     const error = new Error(problems.join('\n'));

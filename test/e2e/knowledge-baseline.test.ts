@@ -1310,6 +1310,180 @@ describe.sequential('knowledge architecture baseline E2E', () => {
     }
   });
 
+  it('renders S3 partial, conflict, forbidden, reference and export states', async () => {
+    const cookie = await consoleCookie();
+    const separator = cookie.indexOf('=');
+    const cookieName = separator > 0 ? cookie.slice(0, separator) : '';
+    const cookieValue = separator > 0 ? cookie.slice(separator + 1) : '';
+    if (!cookieName || !cookieValue) throw new Error('console cookie was not initialized');
+    const spaceId = requiredId(scenario.spaceId, 'spaceId');
+    const browser = await chromium.launch({ headless: true });
+    const context = await browser.newContext({ viewport: { width: 1200, height: 900 } });
+    await context.addCookies([
+      {
+        name: cookieName,
+        value: cookieValue,
+        domain: '127.0.0.1',
+        path: '/',
+        sameSite: 'Strict',
+      },
+    ]);
+
+    try {
+      const page = await context.newPage();
+      await page.route('**/v1/knowledge/spaces/batch-actions', (route) =>
+        route.fulfill({
+          status: 207,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            success: true,
+            data: {
+              code: 'KNOWLEDGE_PARTIAL_SUCCESS',
+              requested: 2,
+              succeeded: 1,
+              failed: 1,
+              items: [
+                { id: spaceId, success: true },
+                { id: '65f1e5b2a1c9d4b7e8f09999', success: false, code: 'KNOWLEDGE_CONFLICT' },
+              ],
+            },
+            traceId: 'trace-ui-partial',
+            requestId: 'request-ui-partial',
+          }),
+        }),
+      );
+      await page.goto(`${baseUrl}/spaces`, { waitUntil: 'networkidle' });
+      await page.locator('table caption').waitFor();
+      await page
+        .getByRole('checkbox', { name: /选择空间/ })
+        .first()
+        .check();
+      await page.getByRole('button', { name: '批量移动' }).click();
+      await page.getByText('部分完成：成功 1 项，失败 1 项').waitFor();
+      await page.unroute('**/v1/knowledge/spaces/batch-actions');
+
+      const moveKeys: string[] = [];
+      let moveCount = 0;
+      await page.route('**/v1/knowledge/spaces/*/move', async (route) => {
+        moveCount += 1;
+        moveKeys.push(route.request().headers()['idempotency-key'] ?? '');
+        const forbidden = moveCount > 1;
+        await route.fulfill({
+          status: forbidden ? 403 : 409,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            success: false,
+            error: {
+              code: forbidden ? 'KNOWLEDGE_FORBIDDEN' : 'KNOWLEDGE_CONFLICT',
+              message: 'localized fixture',
+              retryable: false,
+              details: {},
+            },
+            traceId: `trace-ui-move-${moveCount}`,
+            requestId: `request-ui-move-${moveCount}`,
+          }),
+        });
+      });
+      const moveTarget = page.getByLabel('移动目标').first();
+      const moveOptions = await moveTarget
+        .locator('option')
+        .evaluateAll((options) => options.map((option) => (option as HTMLOptionElement).value));
+      await moveTarget.selectOption(moveOptions[1] ?? '');
+      await page.getByRole('button', { name: '移动', exact: true }).first().click();
+      await page.locator('.move-control .problem-notice').getByText('KNOWLEDGE_CONFLICT').waitFor();
+      await page.getByRole('button', { name: '移动', exact: true }).first().click();
+      await page
+        .locator('.move-control .problem-notice')
+        .getByText('KNOWLEDGE_FORBIDDEN')
+        .waitFor();
+      await moveTarget.selectOption(moveOptions[0] ?? '');
+      await page.getByRole('button', { name: '移动', exact: true }).first().click();
+      expect(new Set(moveKeys).size).toBe(3);
+      await page.unroute('**/v1/knowledge/spaces/*/move');
+
+      await page.route(`**/v1/knowledge/spaces/${spaceId}/references`, (route) =>
+        route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            success: true,
+            data: {
+              referenceRevision: 7,
+              count: 1,
+              items: [
+                {
+                  referrerType: 'workflow',
+                  referrerId: 'workflow-ui',
+                  referrerVersion: 'v3',
+                  referrerName: 'UI workflow',
+                  status: 'active',
+                  lastSeenAt: '2026-10-26T10:00:00+08:00',
+                },
+              ],
+            },
+            traceId: 'trace-ui-reference',
+            requestId: 'request-ui-reference',
+          }),
+        }),
+      );
+      await page.route(`**/v1/knowledge/spaces/${spaceId}/exports`, (route) =>
+        route.fulfill({
+          status: 202,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            success: true,
+            data: {
+              jobId: '65f1e5b2a1c9d4b7e8f07777',
+              workspaceId,
+              knowledgeSpaceId: spaceId,
+              kind: 'export',
+              status: 'queued',
+              priority: 0,
+              attempts: 0,
+              maxAttempts: 3,
+              progress: { stage: 'queued', completed: 0, total: 1, percent: 0 },
+              createdAt: '2026-10-26T10:00:00+08:00',
+              updatedAt: '2026-10-26T10:00:00+08:00',
+            },
+            traceId: 'trace-ui-export',
+            requestId: 'request-ui-export',
+          }),
+        }),
+      );
+      await page.route('**/v1/knowledge/jobs/65f1e5b2a1c9d4b7e8f07777', (route) =>
+        route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            success: true,
+            data: {
+              jobId: '65f1e5b2a1c9d4b7e8f07777',
+              workspaceId,
+              knowledgeSpaceId: spaceId,
+              kind: 'export',
+              status: 'failed',
+              priority: 0,
+              attempts: 1,
+              maxAttempts: 3,
+              progress: { stage: 'running', completed: 0, total: 1, percent: 0 },
+              error: { code: 'KNOWLEDGE_JOB_FAILED', retryable: false, details: {} },
+              createdAt: '2026-10-26T10:00:00+08:00',
+              updatedAt: '2026-10-26T10:00:01+08:00',
+            },
+            traceId: 'trace-ui-export-job',
+            requestId: 'request-ui-export-job',
+          }),
+        }),
+      );
+      await page.goto(`${baseUrl}/spaces/${spaceId}/overview`, { waitUntil: 'networkidle' });
+      await page.getByText('存在活动引用，当前空间不能删除。').waitFor();
+      await page.getByRole('button', { name: '导出空间 ZIP' }).click();
+      await page.getByText('失败', { exact: true }).waitFor({ timeout: 10_000 });
+    } finally {
+      await browser.close();
+    }
+  });
+
   it('handles 204 deletes for an isolated tag and collaborator through the UI', async () => {
     const cookie = await consoleCookie();
     const separator = cookie.indexOf('=');
