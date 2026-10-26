@@ -2,7 +2,7 @@
 
 - [ ] 分支为 `feat/kb-architecture-baseline`，从干净 `origin/main` 创建
 - [ ] 完整合同为 92 paths / 120 operations / 139 schemas
-- [ ] runtime 恰好 46 operations，deferred 恰好 74 operations
+- [ ] runtime 恰好 65 operations，deferred 恰好 55 operations
 - [ ] 23 个 `knowledge_*` 集合、4 个 pgvector profile、13 个 `knowledge-*` 队列
 - [ ] runtime 不包含旧 Dataset route、旧 catch-all 或未批准 alias
 - [ ] 不包含骨架占位码、临时错误码、200 假数据或空对象占位

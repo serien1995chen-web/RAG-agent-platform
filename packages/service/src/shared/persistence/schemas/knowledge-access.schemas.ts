@@ -115,6 +115,7 @@ export interface KnowledgeReferenceBindingDoc extends WorkspaceFields {
   status: 'active' | 'stale' | 'removed';
   registryRevision: number;
   lastSeenAt: Date;
+  expiresAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -136,6 +137,7 @@ export const KnowledgeReferenceBindingSchema = new Schema(
     },
     registryRevision: { type: Number, required: true, min: 0, default: 1 },
     lastSeenAt: { type: Date, required: true },
+    expiresAt: { type: Date, default: null },
   },
   knowledgeSchemaOptions('knowledge_reference_bindings'),
 );
@@ -159,6 +161,11 @@ defineKnowledgeIndex(KnowledgeReferenceBindingSchema, {
 defineKnowledgeIndex(KnowledgeReferenceBindingSchema, {
   name: 'ix_reference_referrer',
   key: { workspaceId: 1, referrerType: 1, referrerId: 1, status: 1 },
+});
+defineKnowledgeIndex(KnowledgeReferenceBindingSchema, {
+  name: 'ttl_reference_binding',
+  key: { expiresAt: 1 },
+  options: { expireAfterSeconds: 0 },
 });
 
 export interface KnowledgeApiKeyDoc extends WorkspaceFields {

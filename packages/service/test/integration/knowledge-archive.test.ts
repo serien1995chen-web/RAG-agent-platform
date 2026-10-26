@@ -12,6 +12,7 @@ import type {
   CatalogPort,
   JobPort,
 } from '../../src/modules/knowledge/application/ports';
+import { KnowledgeApplication } from '../../src/modules/knowledge/application/knowledge.application';
 import { KnowledgeArchiveRepository } from '../../src/modules/knowledge/repository/archive.repository';
 import { KnowledgeObjectRefRepository } from '../../src/modules/knowledge/repository/object-ref.repository';
 import {
@@ -37,8 +38,10 @@ let connection: mongoose.Connection;
 let objectStore: MinioKnowledgeObjectStore;
 let objectRefs: KnowledgeObjectRefRepository;
 let files: FileApplication;
+let fileTickets: FileTicketService;
 let jobs: KnowledgeArchiveRepository;
 let sourceId: string;
+let ticketNowMs = Date.now();
 const createdObjects = new Set<string>();
 
 const catalog = {
@@ -156,13 +159,12 @@ beforeAll(async () => {
   });
   objectRefs = new KnowledgeObjectRefRepository(connection);
   jobs = new KnowledgeArchiveRepository(connection);
-  files = new FileApplication(
-    objectRefs,
-    objectStore,
-    catalog,
-    access,
-    new FileTicketService('archive-file-ticket-secret-at-least-32-bytes', 'http://127.0.0.1:3010'),
+  fileTickets = new FileTicketService(
+    'archive-file-ticket-secret-at-least-32-bytes',
+    'http://127.0.0.1:3010',
+    () => ticketNowMs,
   );
+  files = new FileApplication(objectRefs, objectStore, catalog, access, fileTickets);
 }, 60_000);
 
 afterAll(async () => {
@@ -254,7 +256,7 @@ describe('TEST-FILE-004-BLOCK source archive worker', () => {
     );
     await worker.runOnce();
     const succeeded = await jobs.get(String(job.jobId), context);
-    expect(succeeded.status).toBe('succeeded');
+    expect(succeeded.status, JSON.stringify(succeeded)).toBe('succeeded');
     const result = succeeded.result as Record<string, unknown>;
     expect(typeof result.objectBlobRefId).toBe('string');
     const artifact = await objectRefs.findObjectRef(String(result.objectBlobRefId), context);
@@ -271,6 +273,240 @@ describe('TEST-FILE-004-BLOCK source archive worker', () => {
     expect(zip.subarray(0, 2).toString('ascii')).toBe('PK');
     expect(zip.byteLength).toBeGreaterThan(body.byteLength);
     await objectStore.deleteObject(artifact.objectKey, { ...context, knowledgeSpaceId });
+  });
+
+  it('exports a Space directory tree with manifest, ACL and metadata', async () => {
+    await connection.models.KnowledgeSpace.create({
+      _id: new mongoose.Types.ObjectId(knowledgeSpaceId),
+      workspaceId,
+      knowledgeSpaceId: null,
+      version: 1,
+      deletedAt: null,
+      createdByMemberId: context.memberId,
+      updatedByMemberId: context.memberId,
+      kind: 'space',
+      parentSpaceId: null,
+      name: `Export Space ${suffix}`,
+      normalizedName: `export space ${suffix}`,
+      description: '',
+      iconKey: 'book-open',
+      ownershipMemberId: context.memberId,
+      accessMode: 'workspace',
+      sourceAclMode: 'enforced',
+      sourcePermissionEnabled: true,
+      referenceRevision: 0,
+      permissionRevision: 0,
+      modelBindings: {},
+      defaultChunking: {},
+      status: 'active',
+    });
+    const directory = await connection.models.KnowledgeDirectory.create({
+      workspaceId,
+      knowledgeSpaceId: new mongoose.Types.ObjectId(knowledgeSpaceId),
+      version: 1,
+      deletedAt: null,
+      createdByMemberId: context.memberId,
+      updatedByMemberId: context.memberId,
+      parentDirectoryId: null,
+      name: 'Guides',
+      normalizedName: 'guides',
+      path: [],
+      depth: 0,
+      sortOrder: 0,
+      aclMode: 'inherited',
+      permissionRevision: 0,
+      ownershipMemberId: context.memberId,
+    });
+    const archiveSource = await createSource(Buffer.from('space export body'), 'space-export.txt');
+    const duplicateArchiveSource = await createSource(
+      Buffer.from('duplicate space export body'),
+      'space-export.txt',
+    );
+    const metadataOnlySource = await connection.models.KnowledgeSource.create({
+      workspaceId,
+      knowledgeSpaceId: new mongoose.Types.ObjectId(knowledgeSpaceId),
+      version: 1,
+      deletedAt: null,
+      createdByMemberId: context.memberId,
+      updatedByMemberId: context.memberId,
+      directoryId: directory._id,
+      kind: 'text',
+      name: 'metadata-only.txt',
+      normalizedName: 'metadata-only.txt',
+      blobRefId: null,
+      mimeType: 'text/plain',
+      sizeBytes: 0,
+      contentHash: createHash('sha256').update('metadata-only').digest('hex'),
+      sourceVersion: 1,
+      permissionState: 'disabled',
+      permissionRevision: 0,
+      ownershipMemberId: context.memberId,
+      metadata: { section: 'metadata-only' },
+      tagValues: [],
+    });
+    await connection.models.KnowledgeSource.updateOne(
+      { _id: new mongoose.Types.ObjectId(archiveSource.sourceId), workspaceId },
+      {
+        $set: {
+          directoryId: directory._id,
+          metadata: { section: 'space-export' },
+        },
+      },
+    );
+    await connection.models.KnowledgeSource.updateOne(
+      { _id: new mongoose.Types.ObjectId(duplicateArchiveSource.sourceId), workspaceId },
+      {
+        $set: {
+          directoryId: directory._id,
+          metadata: { section: 'duplicate-space-export' },
+        },
+      },
+    );
+    const sourceIds = [
+      archiveSource.sourceId,
+      duplicateArchiveSource.sourceId,
+      String(metadataOnlySource._id),
+    ];
+    const sourceDocs = await connection.models.KnowledgeSource.find({
+      workspaceId,
+      _id: { $in: sourceIds.map((id) => new mongoose.Types.ObjectId(id)) },
+    }).lean();
+    const sourceVersions = Object.fromEntries(
+      sourceDocs.map((source) => [String(source._id), Number(source.version)]),
+    );
+    const job = await jobs.createExportJob(
+      {
+        spaceId: knowledgeSpaceId,
+        sourceIds,
+        sourceVersions,
+        exportScope: 'space',
+        format: 'zip',
+        idempotencyKey: `space-export-${suffix}`,
+      },
+      context,
+    );
+    const worker = new KnowledgeArchiveWorker(
+      connection,
+      runtimeConfig(),
+      `space-export-worker-${suffix}`,
+      undefined,
+      objectStore,
+    );
+    await worker.runOnce();
+    const succeeded = await jobs.get(String(job.jobId), context);
+    expect(succeeded.status, JSON.stringify(succeeded)).toBe('succeeded');
+    const result = succeeded.result as {
+      objectBlobRefId: string;
+      manifest: {
+        directories: string[];
+        sources: Array<{
+          sourceId: string;
+          name: string;
+          path: string | null;
+          artifactState: string;
+          metadata: Record<string, unknown>;
+          acl: { permissionState: string };
+        }>;
+      };
+    };
+    expect(result.manifest.directories[0]).toContain('Guides');
+    expect(result.manifest.sources).toHaveLength(3);
+    const archived = result.manifest.sources.find(
+      (source) => source.sourceId === archiveSource.sourceId,
+    );
+    expect(archived).toMatchObject({
+      sourceId: archiveSource.sourceId,
+      artifactState: 'file',
+      metadata: { section: 'space-export' },
+    });
+    expect(archived?.path).toContain('/Guides/');
+    expect(archived?.acl.permissionState).toBe('disabled');
+    const duplicateArchived = result.manifest.sources.find(
+      (source) => source.sourceId === duplicateArchiveSource.sourceId,
+    );
+    expect(duplicateArchived?.path).toContain('/Guides/');
+    expect(duplicateArchived?.path).not.toBe(archived?.path);
+    const metadataOnly = result.manifest.sources.find(
+      (source) => source.sourceId === String(metadataOnlySource._id),
+    );
+    expect(metadataOnly).toMatchObject({
+      name: 'metadata-only.txt',
+      path: null,
+      artifactState: 'metadata_only',
+      metadata: { section: 'metadata-only' },
+    });
+    const artifact = await objectRefs.findObjectRef(result.objectBlobRefId, context);
+    expect(artifact?.state).toBe('active');
+    expect(artifact).toMatchObject({
+      purpose: 'export',
+      mimeType: 'application/zip',
+      state: 'active',
+    });
+    if (!artifact) throw new Error('space export artifact missing');
+    const storage = {
+      workspaceId: context.workspaceId,
+      knowledgeSpaceId,
+      requestId: context.requestId,
+      traceId: context.traceId,
+    };
+    const head = await objectStore.headObject(artifact.bucket, artifact.objectKey, storage);
+    expect(head).toMatchObject({
+      size: artifact.sizeBytes,
+      contentType: 'application/zip',
+    });
+    expect(head.etag).toBe(artifact.etag);
+
+    const issued = await files.download(
+      result.objectBlobRefId,
+      { ttlSeconds: 1, disposition: 'attachment' },
+      context,
+    );
+    const ticket = new URL(issued.url).searchParams.get('ticket');
+    expect(ticket).not.toBeNull();
+    const ticketed = await files.content(result.objectBlobRefId, 'bytes=0-3', ticket, {
+      ...context,
+      workspaceId: 'ticket',
+    });
+    expect(ticketed).toMatchObject({
+      contentType: 'application/zip',
+      disposition: 'attachment',
+      filename: artifact.originalName,
+    });
+    expect(ticketed.contentRange).toMatch(/^bytes 0-3\//);
+    const ticketChunks: Buffer[] = [];
+    for await (const chunk of ticketed.body) ticketChunks.push(Buffer.from(chunk));
+    expect(Buffer.concat(ticketChunks)).toHaveLength(4);
+
+    ticketNowMs += 2_000;
+    await expect(
+      files.content(result.objectBlobRefId, null, ticket, {
+        ...context,
+        workspaceId: 'ticket',
+      }),
+    ).rejects.toMatchObject({
+      problem: {
+        error: {
+          code: 'KNOWLEDGE_FORBIDDEN',
+          details: { reason: 'ticket_expired' },
+        },
+      },
+    });
+
+    const foreignContext = {
+      ...context,
+      workspaceId: `ws_foreign_${suffix}`,
+      memberId: `mem_foreign_${suffix}`,
+    };
+    await expect(jobs.get(String(job.jobId), foreignContext)).rejects.toMatchObject({
+      problem: { error: { code: 'KNOWLEDGE_NOT_FOUND' } },
+    });
+    expect(await objectRefs.findObjectRef(result.objectBlobRefId, foreignContext)).toBeNull();
+    await expect(
+      files.download(result.objectBlobRefId, { ttlSeconds: 300 }, foreignContext),
+    ).rejects.toMatchObject({
+      problem: { error: { code: 'KNOWLEDGE_NOT_FOUND' } },
+    });
+    await objectStore.deleteObject(artifact.objectKey, storage);
   });
 
   it('TEST-FILE-004-A13/A14 fails a real compression bomb and leaves no active artifact', async () => {
@@ -362,20 +598,7 @@ describe('TEST-FILE-004-BLOCK source archive worker', () => {
     const pending = await objectRefs.findObjectRef(blobId, context);
     expect(pending?.state).toBe('deleting');
 
-    await connection.models.KnowledgeJob.updateOne(
-      {
-        workspaceId: context.workspaceId,
-        _id: new mongoose.Types.ObjectId(String(job.jobId)),
-      },
-      {
-        $set: {
-          status: 'queued',
-          availableAt: new Date(0),
-          leaseOwner: null,
-          leaseExpiresAt: null,
-        },
-      },
-    );
+    await new Promise((resolve) => setTimeout(resolve, 2_100));
     const retryWorker = new KnowledgeArchiveWorker(
       connection,
       runtimeConfig(),
@@ -384,6 +607,8 @@ describe('TEST-FILE-004-BLOCK source archive worker', () => {
       objectStore,
     );
     await retryWorker.runOnce();
+    const reclaimed = await jobs.get(String(job.jobId), context);
+    expect(reclaimed.attempts).toBeGreaterThan(1);
     const converged = await objectRefs.findObjectRef(blobId, context);
     expect(converged?.state).toBe('deleted');
   });
@@ -461,6 +686,63 @@ describe('TEST-FILE-004-BLOCK source archive worker', () => {
 });
 
 describe('TEST-FILE-004-BLOCK source archive admission', () => {
+  it('accepts 2000 and rejects 2001 Sources through the Space Export API', async () => {
+    const spaceId = new mongoose.Types.ObjectId().toString();
+    const sourceIds = Array.from({ length: 2000 }, () => new mongoose.Types.ObjectId().toString());
+    const createExportJob = vi.fn(async (input: { sourceIds: string[] }) => ({
+      jobId: new mongoose.Types.ObjectId().toString(),
+      status: 'queued',
+      sourceCount: input.sourceIds.length,
+    }));
+    const fakeCatalog = {
+      async getSpace(id: string) {
+        return { id, version: 1 };
+      },
+      async getSource(id: string) {
+        return {
+          id,
+          knowledgeSpaceId: spaceId,
+          version: 1,
+          name: `${id}.txt`,
+          searchEnabled: true,
+        };
+      },
+    } as unknown as CatalogPort;
+    const permits = { async assertPermission() {} } as unknown as AccessPort;
+    const application = new KnowledgeApplication(
+      fakeCatalog,
+      {} as never,
+      permits,
+      { createExportJob } as unknown as JobPort,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+    );
+    const dispatch = (ids: string[]) =>
+      application.dispatch({
+        operationId: 'API-SPACE-EXPORT',
+        params: { spaceId },
+        query: {},
+        headers: {},
+        body: {
+          format: 'zip',
+          sourceIds: ids,
+        },
+        context,
+      });
+
+    const accepted = await dispatch(sourceIds);
+    expect(accepted.status).toBe(202);
+    expect(createExportJob).toHaveBeenCalledTimes(1);
+    expect(createExportJob.mock.calls[0]?.[0].sourceIds).toHaveLength(2000);
+    await expect(
+      dispatch([...sourceIds, new mongoose.Types.ObjectId().toString()]),
+    ).rejects.toMatchObject({
+      problem: { error: { code: 'KNOWLEDGE_PAYLOAD_TOO_LARGE' } },
+    });
+  });
+
   it('TEST-FILE-004-A06 queues exactly 2000 Sources without creating a second Job', async () => {
     const sourceIds = Array.from({ length: 2000 }, (_, index) => `source-${index}`);
     const createExportJob = vi.fn(async (input: { sourceIds: string[] }) => ({

@@ -1,8 +1,11 @@
 import type { Connection } from 'mongoose';
+import { createKnowledgeError } from '@kb/contracts';
 import { registerKnowledgeModels } from '../../../shared/persistence/schemas/knowledge-index';
 import type { KnowledgeSourceDoc } from '../../../shared/persistence/schemas/knowledge-catalog.schemas';
 import type { TenantContext } from '../../../shared/persistence/knowledge/tenant';
 import { objectIdOf, requireWorkspaceId } from '../../../shared/persistence/knowledge/tenant';
+import { KnowledgeAuditRepository } from '../../../shared/persistence/knowledge/audit';
+import { withMongoTransaction } from '../../../shared/persistence/with-mongo-transaction';
 import { KnowledgeJobRepository } from './job.repository';
 
 function safeName(name: string): string {
@@ -14,13 +17,19 @@ function safeName(name: string): string {
 export class KnowledgeArchiveRepository {
   private readonly jobs: KnowledgeJobRepository;
   private readonly jobModel;
+  private readonly spaceModel;
+  private readonly directoryModel;
   private readonly sourceModel;
+  private readonly audit: KnowledgeAuditRepository;
 
-  constructor(connection: Connection) {
+  constructor(private readonly connection: Connection) {
     const models = registerKnowledgeModels(connection);
     this.jobs = new KnowledgeJobRepository(connection);
     this.jobModel = models.KnowledgeJob;
+    this.spaceModel = models.KnowledgeSpace;
+    this.directoryModel = models.KnowledgeDirectory;
     this.sourceModel = models.KnowledgeSource;
+    this.audit = new KnowledgeAuditRepository(connection);
   }
 
   private async enrichedJob(
@@ -84,21 +93,28 @@ export class KnowledgeArchiveRepository {
       spaceId: string;
       sourceIds: string[];
       idempotencyKey: string;
+      format?: 'zip';
+      exportScope?: 'sources' | 'space';
+      sourceVersions?: Record<string, number>;
     },
     context: TenantContext,
   ): Promise<Record<string, unknown>> {
     requireWorkspaceId(context);
     const now = new Date();
     try {
-      const document = await this.jobModel
-        .findOneAndUpdate(
-          {
+      const document = await withMongoTransaction(this.connection, async (session) => {
+        const existing = await this.jobModel
+          .findOne({
             workspaceId: context.workspaceId,
             idempotencyKey: input.idempotencyKey,
             deletedAt: null,
-          },
-          {
-            $setOnInsert: {
+          })
+          .session(session)
+          .lean();
+        if (existing) return existing;
+        const [created] = await this.jobModel.create(
+          [
+            {
               workspaceId: context.workspaceId,
               knowledgeSpaceId: objectIdOf(input.spaceId, context, 'spaceId'),
               version: 1,
@@ -113,7 +129,9 @@ export class KnowledgeArchiveRepository {
               idempotencyKey: input.idempotencyKey,
               inputSnapshot: {
                 sourceIds: [...new Set(input.sourceIds)],
-                format: 'zip',
+                sourceVersions: input.sourceVersions ?? {},
+                format: input.format ?? 'zip',
+                exportScope: input.exportScope ?? 'sources',
               },
               progress: {
                 stage: 'queued',
@@ -135,10 +153,36 @@ export class KnowledgeArchiveRepository {
               result: null,
               expiresAt: new Date(now.getTime() + 24 * 60 * 60 * 1000),
             },
+          ],
+          { session },
+        );
+        if (!created) {
+          throw createKnowledgeError({
+            code: 'KNOWLEDGE_INTERNAL_ERROR',
+            requestId: context.requestId,
+            traceId: context.traceId,
+            details: { reason: 'export_job_create_failed' },
+          });
+        }
+        await this.audit.append(
+          {
+            knowledgeSpaceId: input.spaceId,
+            action: 'export.create',
+            resourceType: 'space',
+            resourceId: input.spaceId,
+            outcome: 'succeeded',
+            safeDiff: {
+              jobId: String(created._id),
+              sourceCount: new Set(input.sourceIds).size,
+              format: input.format ?? 'zip',
+              exportScope: input.exportScope ?? 'sources',
+            },
           },
-          { upsert: true, new: true },
-        )
-        .lean();
+          context,
+          session,
+        );
+        return created.toObject();
+      });
       return this.enrichedJob(await this.jobs.get(String(document?._id), context), context);
     } catch (error) {
       if (
@@ -167,12 +211,17 @@ export class KnowledgeArchiveRepository {
   }
 
   async queuedWorkspaces(): Promise<string[]> {
+    const now = new Date();
     const values = await this.jobModel.distinct('workspaceId', {
       kind: 'export',
-      status: 'queued',
       deletedAt: null,
+      $or: [{ status: 'queued' }, { status: 'retry_wait', availableAt: { $lte: now } }],
     });
     return values.filter((value): value is string => typeof value === 'string');
+  }
+
+  requeueDueRetries(context: TenantContext, now: Date = new Date()) {
+    return this.jobs.requeueDueRetries({ kind: 'export', now }, context);
   }
 
   async claim(workerId: string, context: TenantContext) {
@@ -192,7 +241,12 @@ export class KnowledgeArchiveRepository {
     return this.enrichedJob(await this.jobs.fail(input, context), context);
   }
 
-  async markFailureCode(jobId: string, code: string, context: TenantContext) {
+  async markFailureCode(
+    jobId: string,
+    code: string,
+    context: TenantContext,
+    details: Record<string, unknown> = {},
+  ) {
     requireWorkspaceId(context);
     await this.jobModel.updateOne(
       {
@@ -204,6 +258,7 @@ export class KnowledgeArchiveRepository {
         $set: {
           'error.code': code,
           'error.retryable': false,
+          'error.details': details,
         },
       },
     );
@@ -225,5 +280,31 @@ export class KnowledgeArchiveRepository {
       ...doc,
       safeName: safeName(doc.name),
     }));
+  }
+
+  async space(spaceId: string, context: TenantContext) {
+    requireWorkspaceId(context);
+    const document = await this.spaceModel
+      .findOne({
+        _id: objectIdOf(spaceId, context, 'spaceId'),
+        workspaceId: context.workspaceId,
+        deletedAt: null,
+        status: 'active',
+      })
+      .lean();
+    if (!document) return null;
+    return document;
+  }
+
+  async directories(spaceId: string, context: TenantContext) {
+    requireWorkspaceId(context);
+    return this.directoryModel
+      .find({
+        workspaceId: context.workspaceId,
+        knowledgeSpaceId: objectIdOf(spaceId, context, 'spaceId'),
+        deletedAt: null,
+      })
+      .sort({ depth: 1, sortOrder: 1, _id: 1 })
+      .lean();
   }
 }

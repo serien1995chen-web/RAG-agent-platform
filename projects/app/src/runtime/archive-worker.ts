@@ -9,6 +9,7 @@ import type { Connection } from 'mongoose';
 import { createKnowledgeError } from '@kb/contracts';
 import {
   KnowledgeArchiveRepository,
+  KnowledgeAccessRepository,
   KnowledgeObjectRefRepository,
   resolveSecretRef,
   type ArchiveSafetyPort,
@@ -39,7 +40,7 @@ async function buildZip(
     expectedSizeBytes: number;
     open(): Promise<Readable>;
   }>,
-  manifest: Record<string, unknown>,
+  manifest: Record<string, unknown> | null,
   context: TenantContext,
 ): Promise<{ directory: string; path: string; sizeBytes: number }> {
   const directory = await mkdtemp(join(tmpdir(), 'kb-archive-'));
@@ -51,7 +52,9 @@ async function buildZip(
     const archive = archiver('zip', { zlib: { level: 6 } });
     archive.on('error', reject);
     archive.pipe(output);
-    archive.append(`${JSON.stringify(manifest, null, 2)}\n`, { name: 'manifest.json' });
+    if (manifest) {
+      archive.append(`${JSON.stringify(manifest, null, 2)}\n`, { name: 'manifest.json' });
+    }
     let actualTotalBytes = 0;
     for (const entry of entries) {
       archive.append(
@@ -100,6 +103,26 @@ async function buildZip(
   }
 }
 
+function safeSegment(value: string, fallback: string): string {
+  const base = value.replaceAll('\\', '/').split('/').pop() ?? fallback;
+  const safe = base.replace(/[^A-Za-z0-9\u4e00-\u9fff._-]/g, '_').replace(/^\.+/, '');
+  return (safe || fallback).slice(0, 180);
+}
+
+function reserveName(used: Set<string>, requested: string): string {
+  const dot = requested.lastIndexOf('.');
+  const stem = dot > 0 ? requested.slice(0, dot) : requested;
+  const extension = dot > 0 ? requested.slice(dot) : '';
+  let candidate = requested;
+  let counter = 2;
+  while (used.has(candidate.toLocaleLowerCase('en-US'))) {
+    candidate = `${stem}_${counter}${extension}`;
+    counter += 1;
+  }
+  used.add(candidate.toLocaleLowerCase('en-US'));
+  return candidate;
+}
+
 function objectContext(context: TenantContext, knowledgeSpaceId: string): KnowledgeObjectContext {
   return {
     workspaceId: context.workspaceId,
@@ -112,6 +135,7 @@ function objectContext(context: TenantContext, knowledgeSpaceId: string): Knowle
 export class KnowledgeArchiveWorker {
   private readonly archive: KnowledgeArchiveRepository;
   private readonly objectRefs: KnowledgeObjectRefRepository;
+  private readonly access: KnowledgeAccessRepository;
   private readonly objectStore: MinioKnowledgeObjectStore;
   private readonly archiveSafety: ArchiveSafetyPort;
   private readonly workerId: string;
@@ -126,6 +150,7 @@ export class KnowledgeArchiveWorker {
     const endpoint = new URL(config.s3.endpoint);
     this.archive = new KnowledgeArchiveRepository(connection);
     this.objectRefs = new KnowledgeObjectRefRepository(connection);
+    this.access = new KnowledgeAccessRepository(connection);
     this.objectStore =
       objectStore ??
       new MinioKnowledgeObjectStore({
@@ -153,6 +178,7 @@ export class KnowledgeArchiveWorker {
         traceId: `archive:${this.workerId}`,
         scopes: ['knowledge:admin'],
       };
+      await this.archive.requeueDueRetries(context);
       for (;;) {
         const claimed = await this.archive.claim(this.workerId, context);
         if (!claimed) break;
@@ -194,6 +220,7 @@ export class KnowledgeArchiveWorker {
                 ? 'KNOWLEDGE_PAYLOAD_TOO_LARGE'
                 : 'KNOWLEDGE_UNSUPPORTED_CONTENT',
               context,
+              { reason: safetyError.reason },
             );
           }
         }
@@ -202,11 +229,342 @@ export class KnowledgeArchiveWorker {
     return processed;
   }
 
+  private async processSpaceExport(
+    job: Record<string, unknown>,
+    snapshot: Record<string, unknown>,
+    context: TenantContext,
+  ): Promise<void> {
+    const spaceId = String(job.knowledgeSpaceId ?? '');
+    const sourceIds = Array.isArray(snapshot.sourceIds)
+      ? [...new Set(snapshot.sourceIds.map(String))]
+      : [];
+    if (sourceIds.length > MAX_SOURCES) {
+      throw createKnowledgeError({
+        code: 'KNOWLEDGE_PAYLOAD_TOO_LARGE',
+        requestId: context.requestId,
+        traceId: context.traceId,
+        details: { field: 'sourceIds', max: MAX_SOURCES },
+      });
+    }
+    const space = (await this.archive.space(spaceId, context)) as Record<string, unknown> | null;
+    if (!space) {
+      throw createKnowledgeError({
+        code: 'KNOWLEDGE_NOT_FOUND',
+        requestId: context.requestId,
+        traceId: context.traceId,
+        details: { spaceId },
+      });
+    }
+    const sources = (await this.archive.sources(sourceIds, context)) as unknown as Array<
+      Record<string, unknown> & { _id: unknown; safeName: string }
+    >;
+    if (sources.length !== sourceIds.length) {
+      throw createKnowledgeError({
+        code: 'KNOWLEDGE_NOT_FOUND',
+        requestId: context.requestId,
+        traceId: context.traceId,
+        details: { reason: 'space_export_member_missing' },
+      });
+    }
+    const expectedVersions =
+      typeof snapshot.sourceVersions === 'object' && snapshot.sourceVersions !== null
+        ? (snapshot.sourceVersions as Record<string, unknown>)
+        : {};
+    for (const source of sources) {
+      const sourceId = String(source._id);
+      if (Number(source.version) !== Number(expectedVersions[sourceId])) {
+        throw createKnowledgeError({
+          code: 'KNOWLEDGE_CONFLICT',
+          requestId: context.requestId,
+          traceId: context.traceId,
+          details: { sourceId, reason: 'export_snapshot_stale' },
+        });
+      }
+    }
+    const directories = (await this.archive.directories(spaceId, context)) as Array<
+      Record<string, unknown>
+    >;
+    const root = safeSegment(String(space.name ?? 'space'), 'space');
+    const directoryPath = new Map<string, string>();
+    const usedNames = new Map<string, Set<string>>();
+    const usedAt = (path: string) => {
+      const set = usedNames.get(path) ?? new Set<string>();
+      usedNames.set(path, set);
+      return set;
+    };
+    const directoryManifest: string[] = [];
+    for (const directory of [...directories].sort(
+      (left, right) => Number(left.depth ?? 0) - Number(right.depth ?? 0),
+    )) {
+      const id = String(directory._id);
+      const parentId = directory.parentDirectoryId ? String(directory.parentDirectoryId) : null;
+      const parentPath = parentId ? (directoryPath.get(parentId) ?? root) : root;
+      const name = reserveName(
+        usedAt(parentPath),
+        safeSegment(String(directory.name ?? 'folder'), 'folder'),
+      );
+      const path = `${parentPath}/${name}`;
+      directoryPath.set(id, path);
+      directoryManifest.push(path);
+      const validation = this.archiveSafety.validateEntryPath(`${path}/`);
+      if (!validation.safe) {
+        throw createKnowledgeError({
+          code: 'KNOWLEDGE_UNSUPPORTED_CONTENT',
+          requestId: context.requestId,
+          traceId: context.traceId,
+          details: { directoryId: id, reason: validation.reason },
+        });
+      }
+    }
+    const storage = objectContext(context, spaceId);
+    const entries: Array<{
+      path: string;
+      sourceId: string;
+      expectedSizeBytes: number;
+      open(): Promise<Readable>;
+    }> = [];
+    const sourceManifest: Array<Record<string, unknown>> = [];
+    let declaredTotalBytes = 0;
+    for (const source of [...sources].sort((left, right) =>
+      String(left._id).localeCompare(String(right._id)),
+    )) {
+      const sourceId = String(source._id);
+      const directoryId = source.directoryId ? String(source.directoryId) : null;
+      const parentPath = directoryId ? (directoryPath.get(directoryId) ?? root) : root;
+      const fileName = reserveName(usedAt(parentPath), source.safeName);
+      const relativePath = `${parentPath}/${fileName}`;
+      const validation = this.archiveSafety.validateEntryPath(relativePath);
+      if (!validation.safe) {
+        throw createKnowledgeError({
+          code: 'KNOWLEDGE_UNSUPPORTED_CONTENT',
+          requestId: context.requestId,
+          traceId: context.traceId,
+          details: { sourceId, reason: validation.reason },
+        });
+      }
+      const acl = await this.access.exportAclSnapshot('source', sourceId, context);
+      let objectRef: ObjectRefView | null = null;
+      if (source.blobRefId) {
+        objectRef = await this.objectRefs.findObjectRef(String(source.blobRefId), context);
+        if (
+          !objectRef ||
+          objectRef.state !== 'active' ||
+          objectRef.sourceId !== sourceId ||
+          objectRef.knowledgeSpaceId !== spaceId
+        ) {
+          throw createKnowledgeError({
+            code: 'KNOWLEDGE_NOT_FOUND',
+            requestId: context.requestId,
+            traceId: context.traceId,
+            details: { sourceId, reason: 'source_object_binding_invalid' },
+          });
+        }
+        declaredTotalBytes += objectRef.sizeBytes;
+        if (declaredTotalBytes > MAX_SOURCE_BYTES) {
+          throw createKnowledgeError({
+            code: 'KNOWLEDGE_PAYLOAD_TOO_LARGE',
+            requestId: context.requestId,
+            traceId: context.traceId,
+            details: { limitBytes: MAX_SOURCE_BYTES },
+          });
+        }
+        entries.push({
+          path: relativePath,
+          sourceId,
+          expectedSizeBytes: objectRef.sizeBytes,
+          open: async () => {
+            const object = await this.objectStore.getObject(
+              this.objectStore.bucket,
+              objectRef!.objectKey,
+              null,
+              storage,
+            );
+            return object.body;
+          },
+        });
+      }
+      sourceManifest.push({
+        sourceId,
+        name: String(source.name ?? 'source'),
+        path: objectRef ? relativePath : null,
+        directoryId,
+        kind: source.kind,
+        mimeType: source.mimeType,
+        sizeBytes: Number(source.sizeBytes ?? 0),
+        contentHash: source.contentHash,
+        sourceVersion: source.sourceVersion,
+        version: source.version,
+        metadata: source.metadata ?? {},
+        artifactState: objectRef ? 'file' : 'metadata_only',
+        acl,
+      });
+    }
+    const manifest = {
+      version: 1,
+      format: 'zip',
+      generatedAt: new Date().toISOString(),
+      space: {
+        id: spaceId,
+        name: String(space.name ?? ''),
+        version: Number(space.version ?? 0),
+      },
+      directories: directoryManifest,
+      sources: sourceManifest,
+    };
+    const zip = await buildZip(entries, null, context);
+    const blobId = createHash('sha1')
+      .update(`space-export:${String(job.jobId)}`)
+      .digest('hex')
+      .slice(0, 24);
+    const key = knowledgeObjectKey({
+      workspaceId: context.workspaceId,
+      knowledgeSpaceId: spaceId,
+      sourceId: 'unbound',
+      purpose: 'export',
+      blobId,
+      safeName: `${root}.zip`,
+    });
+    const expiresAt = new Date(Date.now() + EXPORT_TTL_MS);
+    const existing = await this.objectRefs.findObjectRef(blobId, context);
+    if (existing?.state === 'active') {
+      await this.archive.commit(
+        {
+          jobId: String(job.jobId),
+          workerId: this.workerId,
+          attemptEpoch: Number(job.attemptEpoch),
+          fencingToken: String(job.fencingToken),
+          expectedVersion: Number(job.version),
+          result: {
+            objectBlobRefId: existing.blobId,
+            manifest,
+            sourceCount: sources.length,
+            expiresAt: existing.expiresAt,
+          },
+          audit: {
+            knowledgeSpaceId: spaceId,
+            action: 'export.succeeded',
+            resourceType: 'space',
+            resourceId: spaceId,
+            outcome: 'succeeded',
+            safeDiff: {
+              jobId: String(job.jobId),
+              sourceCount: sources.length,
+              objectBlobRefId: existing.blobId,
+            },
+          },
+        },
+        context,
+      );
+      await rm(zip.directory, { recursive: true, force: true });
+      return;
+    }
+    if (existing) await this.cleanupArtifact(existing, storage, context);
+    let pending: ObjectRefView | undefined;
+    try {
+      pending = await this.objectRefs.createPendingArchiveArtifact(
+        {
+          blobId,
+          knowledgeSpaceId: spaceId,
+          provider: this.objectStore.provider,
+          bucket: this.objectStore.bucket,
+          objectKey: key,
+          mimeType: 'application/zip',
+          sizeBytes: zip.sizeBytes,
+          expiresAt,
+        },
+        context,
+      );
+      const stored = await this.objectStore.putObject(
+        {
+          key,
+          body: createReadStream(zip.path),
+          sizeBytes: zip.sizeBytes,
+          contentType: 'application/zip',
+          workspaceId: context.workspaceId,
+          knowledgeSpaceId: spaceId,
+          ttlExpireAt: expiresAt,
+        },
+        storage,
+      );
+      const inspected = await this.archiveSafety.inspect({
+        kind: 'space-archive',
+        bucket: stored.bucket,
+        objectKey: stored.key,
+        sizeBytes: stored.size,
+        mimeType: 'application/zip',
+        originalName: `${root}.zip`,
+        storage,
+      });
+      if (!inspected.archive || !inspected.safe) {
+        throw new ArchiveSafetyJobError(
+          inspected.archive
+            ? inspected
+            : {
+                archive: true,
+                safe: false,
+                status: 'unsupported',
+                reason: 'archive_not_recognized',
+              },
+        );
+      }
+      pending = await this.objectRefs.activateArchiveArtifact(
+        {
+          blobId,
+          expectedVersion: pending.version,
+          sizeBytes: stored.size,
+          etag: stored.etag,
+          sha256: stored.sha256,
+          expiresAt,
+        },
+        context,
+      );
+      await this.archive.commit(
+        {
+          jobId: String(job.jobId),
+          workerId: this.workerId,
+          attemptEpoch: Number(job.attemptEpoch),
+          fencingToken: String(job.fencingToken),
+          expectedVersion: Number(job.version),
+          result: {
+            objectBlobRefId: pending.blobId,
+            manifest,
+            sourceCount: sources.length,
+            expiresAt: pending.expiresAt,
+          },
+          audit: {
+            knowledgeSpaceId: spaceId,
+            action: 'export.succeeded',
+            resourceType: 'space',
+            resourceId: spaceId,
+            outcome: 'succeeded',
+            safeDiff: {
+              jobId: String(job.jobId),
+              sourceCount: sources.length,
+              objectBlobRefId: pending.blobId,
+            },
+          },
+        },
+        context,
+      );
+    } catch (error) {
+      if (pending) {
+        await this.cleanupArtifact(pending, storage, context).catch(() => undefined);
+      }
+      throw error;
+    } finally {
+      await rm(zip.directory, { recursive: true, force: true });
+    }
+  }
+
   private async processJob(job: Record<string, unknown>, context: TenantContext): Promise<void> {
     const snapshot =
       typeof job.inputSnapshot === 'object' && job.inputSnapshot !== null
         ? (job.inputSnapshot as Record<string, unknown>)
         : {};
+    if (snapshot.exportScope === 'space') {
+      await this.processSpaceExport(job, snapshot, context);
+      return;
+    }
     const sourceIds = Array.isArray(snapshot.sourceIds) ? snapshot.sourceIds.map(String) : [];
     if (sourceIds.length === 0 || sourceIds.length > MAX_SOURCES) {
       throw createKnowledgeError({

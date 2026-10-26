@@ -1,6 +1,6 @@
 import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { join, resolve } from 'node:path';
 import AxeBuilder from '@axe-core/playwright';
@@ -876,6 +876,103 @@ describe.sequential('knowledge architecture baseline E2E', () => {
     expect(transferredSpace.id).toBe(scenario.spaceId);
     expect(transferredSpace.ownershipMemberId).toBe(`mem_e2e_space_owner_${suffix}`);
 
+    const moveFolder = asObject(
+      await callApi('API-SPACE-CREATE', {
+        body: {
+          kind: 'folder',
+          name: `E2E move folder ${suffix}`,
+          accessMode: 'workspace',
+          sourceAclMode: 'inherited',
+          sourcePermissionEnabled: true,
+        },
+      }),
+    );
+    const currentSpace = asObject(
+      await callApi('API-SPACE-GET', { params: { spaceId: scenario.spaceId } }),
+    );
+    await callApi('API-SPACE-MOVE', {
+      params: { spaceId: scenario.spaceId },
+      body: {
+        targetParentId: asString(moveFolder.id, 'moveFolder.id'),
+        version: asNumber(currentSpace.version, 'currentSpace.version'),
+      },
+    });
+    const moveDirectory = asObject(
+      await callApi('API-DIRECTORY-CREATE', {
+        params: { spaceId: scenario.spaceId },
+        body: { name: `E2E move destination ${suffix}` },
+      }),
+    );
+    const currentDirectory = asObject(
+      await callApi('API-DIRECTORY-GET', {
+        params: { directoryId: scenario.directoryId },
+      }),
+    );
+    await callApi('API-DIRECTORY-MOVE', {
+      params: { directoryId: scenario.directoryId },
+      body: {
+        targetParentId: asString(moveDirectory.id, 'moveDirectory.id'),
+        version: asNumber(currentDirectory.version, 'currentDirectory.version'),
+      },
+    });
+    const currentSource = asObject(
+      await callApi('API-SOURCE-GET', { params: { sourceId: scenario.sourceId } }),
+    );
+    await callApi('API-SOURCE-MOVE', {
+      params: { sourceId: scenario.sourceId },
+      body: {
+        targetParentId: null,
+        version: asNumber(currentSource.version, 'currentSource.version'),
+      },
+    });
+    const extraSpace = asObject(
+      await callApi('API-SPACE-CREATE', {
+        body: {
+          kind: 'space',
+          name: `E2E batch space ${suffix}`,
+          accessMode: 'workspace',
+          sourceAclMode: 'enforced',
+          sourcePermissionEnabled: true,
+        },
+      }),
+    );
+    await callApi('API-SPACE-BATCH', {
+      body: {
+        action: 'delete',
+        ids: [asString(extraSpace.id, 'extraSpace.id')],
+        versions: {
+          [asString(extraSpace.id, 'extraSpace.id')]: asNumber(
+            extraSpace.version,
+            'extraSpace.version',
+          ),
+        },
+      },
+    });
+    const extraSource = asObject(
+      await callApi('API-SOURCE-CREATE', {
+        params: { spaceId: scenario.spaceId },
+        body: { kind: 'text', name: `E2E batch source ${suffix}` },
+      }),
+    );
+    await callApi('API-SOURCE-BATCH', {
+      body: {
+        action: 'move',
+        ids: [asString(extraSource.id, 'extraSource.id')],
+        targetDirectoryId: asString(moveDirectory.id, 'moveDirectory.id'),
+        versions: {
+          [asString(extraSource.id, 'extraSource.id')]: asNumber(
+            extraSource.version,
+            'extraSource.version',
+          ),
+        },
+      },
+    });
+    await callApi('API-SPACE-REFERENCES', { params: { spaceId: scenario.spaceId } });
+    await callApi('API-SPACE-EXPORT', {
+      params: { spaceId: scenario.spaceId },
+      body: { format: 'zip' },
+    });
+
     const operations = asObject(await callApi('API-OPS-STATUS'));
     expect(operations.vector).toMatchObject({
       backend: 'pgvector',
@@ -1076,6 +1173,22 @@ describe.sequential('knowledge architecture baseline E2E', () => {
     const cookieName = separator > 0 ? cookie.slice(0, separator) : '';
     const cookieValue = separator > 0 ? cookie.slice(separator + 1) : '';
     if (!cookieName || !cookieValue) throw new Error('console cookie was not initialized');
+    if (!scenario.spaceId) {
+      const createdSpace = asObject(
+        await callApi('API-SPACE-CREATE', {
+          body: {
+            kind: 'space',
+            name: `E2E table space ${suffix}`,
+            description: 'Focused table control fixture',
+            iconKey: 'book-open',
+            accessMode: 'workspace',
+            sourceAclMode: 'enforced',
+            sourcePermissionEnabled: true,
+          },
+        }),
+      );
+      scenario.spaceId = asString(createdSpace.id, 'table.spaceId');
+    }
     const spaceId = requiredId(scenario.spaceId, 'spaceId');
     const browser = await chromium.launch({ headless: true });
     const context = await browser.newContext({ viewport: { width: 360, height: 800 } });
@@ -1098,8 +1211,10 @@ describe.sequential('knowledge architecture baseline E2E', () => {
       expect(await page.locator('th[scope="col"]').count()).toBeGreaterThan(0);
 
       await page.getByRole('button', { name: '列' }).click();
-      await page.getByRole('checkbox', { name: '名称' }).click();
-      expect(await page.locator('thead th').allTextContents()).not.toContain('名称');
+      const statusColumnToggle = page.getByRole('checkbox', { name: '状态', exact: true });
+      await statusColumnToggle.uncheck({ force: true });
+      expect(await statusColumnToggle.isChecked()).toBe(false);
+      await page.locator('thead th').filter({ hasText: '状态' }).waitFor({ state: 'hidden' });
       await page.getByRole('button', { name: '紧凑' }).click();
       expect(await page.getByRole('button', { name: '紧凑' }).getAttribute('aria-pressed')).toBe(
         'true',
@@ -1191,6 +1306,601 @@ describe.sequential('knowledge architecture baseline E2E', () => {
       await page.close();
     } finally {
       await context.close();
+      await browser.close();
+    }
+  });
+
+  it('replays a batch idempotency key without a second write and rejects changed bodies', async () => {
+    const target = asObject(
+      await callApi('API-SPACE-CREATE', {
+        body: {
+          kind: 'folder',
+          name: `Batch idempotency target ${suffix}`,
+          accessMode: 'workspace',
+          sourceAclMode: 'inherited',
+          sourcePermissionEnabled: true,
+        },
+      }),
+    );
+    const targetId = asString(target.id, 'targetId');
+    const first = asObject(
+      await callApi('API-SPACE-CREATE', {
+        body: {
+          kind: 'space',
+          name: `Batch idempotency A ${suffix}`,
+          accessMode: 'workspace',
+          sourceAclMode: 'enforced',
+          sourcePermissionEnabled: true,
+        },
+      }),
+    );
+    const second = asObject(
+      await callApi('API-SPACE-CREATE', {
+        body: {
+          kind: 'space',
+          name: `Batch idempotency B ${suffix}`,
+          accessMode: 'workspace',
+          sourceAclMode: 'enforced',
+          sourcePermissionEnabled: true,
+        },
+      }),
+    );
+    const firstId = asString(first.id, 'firstId');
+    const secondId = asString(second.id, 'secondId');
+    const operation = runtimeById.get('API-SPACE-BATCH');
+    if (!operation) throw new Error('API-SPACE-BATCH is not in runtime');
+    const batchPath = `${baseUrl}${operation.path}`;
+    const requestBatch = async (idempotencyKey: string, body: unknown) => {
+      requestSequence += 1;
+      const response = await fetch(batchPath, {
+        method: 'POST',
+        headers: {
+          authorization: `Bearer ${authToken}`,
+          'x-workspace-id': workspaceId,
+          'x-request-id': `req_batch_idem_${suffix}_${requestSequence}`,
+          traceparent: `00-${suffix.padEnd(32, '0').slice(0, 32)}-${String(requestSequence).padStart(16, '0')}-01`,
+          'content-type': 'application/json',
+          'idempotency-key': idempotencyKey,
+        },
+        body: JSON.stringify(body),
+      });
+      return {
+        status: response.status,
+        payload: (await response.json()) as Record<string, unknown>,
+      };
+    };
+    const firstBody = {
+      action: 'move',
+      ids: [firstId, secondId],
+      targetParentId: targetId,
+      versions: {
+        [firstId]: Number(first.version),
+        [secondId]: Number(second.version),
+      },
+    };
+    const key = `batch-idempotency-${suffix}`;
+    const original = await requestBatch(key, firstBody);
+    const replay = await requestBatch(key, firstBody);
+    expect(original.status).toBe(200);
+    expect(replay.status).toBe(200);
+    expect(replay.payload.data).toEqual(original.payload.data);
+    const movedFirst = asObject(await callApi('API-SPACE-GET', { params: { spaceId: firstId } }));
+    const movedSecond = asObject(await callApi('API-SPACE-GET', { params: { spaceId: secondId } }));
+    expect(movedFirst).toMatchObject({
+      parentSpaceId: targetId,
+      version: Number(first.version) + 1,
+    });
+    expect(movedSecond).toMatchObject({
+      parentSpaceId: targetId,
+      version: Number(second.version) + 1,
+    });
+
+    const changedBody = await requestBatch(key, {
+      ...firstBody,
+      targetParentId: null,
+      versions: {
+        [firstId]: Number(movedFirst.version),
+        [secondId]: Number(movedSecond.version),
+      },
+    });
+    expect(changedBody.status).toBe(409);
+    expect(changedBody.payload).toMatchObject({
+      success: false,
+      error: { code: 'KNOWLEDGE_CONFLICT' },
+    });
+
+    const newKey = await requestBatch(`batch-idempotency-new-${suffix}`, {
+      action: 'move',
+      ids: [firstId, secondId],
+      targetParentId: null,
+      versions: {
+        [firstId]: Number(movedFirst.version),
+        [secondId]: Number(movedSecond.version),
+      },
+    });
+    expect(newKey.status).toBe(200);
+    const restoredFirst = asObject(
+      await callApi('API-SPACE-GET', { params: { spaceId: firstId } }),
+    );
+    const restoredSecond = asObject(
+      await callApi('API-SPACE-GET', { params: { spaceId: secondId } }),
+    );
+    expect(restoredFirst).toMatchObject({
+      parentSpaceId: null,
+      version: Number(first.version) + 2,
+    });
+    expect(restoredSecond).toMatchObject({
+      parentSpaceId: null,
+      version: Number(second.version) + 2,
+    });
+  });
+
+  it('renders S3 partial, conflict, forbidden, reference and export states', async () => {
+    const cookie = await consoleCookie();
+    const separator = cookie.indexOf('=');
+    const cookieName = separator > 0 ? cookie.slice(0, separator) : '';
+    const cookieValue = separator > 0 ? cookie.slice(separator + 1) : '';
+    if (!cookieName || !cookieValue) throw new Error('console cookie was not initialized');
+    const spaceId = requiredId(scenario.spaceId, 'spaceId');
+    const browser = await chromium.launch({ headless: true });
+    const context = await browser.newContext({ viewport: { width: 1200, height: 900 } });
+    await context.addCookies([
+      {
+        name: cookieName,
+        value: cookieValue,
+        domain: '127.0.0.1',
+        path: '/',
+        sameSite: 'Strict',
+      },
+    ]);
+
+    try {
+      const page = await context.newPage();
+      await page.route('**/v1/knowledge/spaces/batch-actions', (route) =>
+        route.fulfill({
+          status: 207,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            success: true,
+            data: {
+              code: 'KNOWLEDGE_PARTIAL_SUCCESS',
+              requested: 2,
+              succeeded: 1,
+              failed: 1,
+              items: [
+                { id: spaceId, success: true },
+                { id: '65f1e5b2a1c9d4b7e8f09999', success: false, code: 'KNOWLEDGE_CONFLICT' },
+              ],
+            },
+            traceId: 'trace-ui-partial',
+            requestId: 'request-ui-partial',
+          }),
+        }),
+      );
+      await page.goto(`${baseUrl}/spaces`, { waitUntil: 'networkidle' });
+      await page.locator('table caption').waitFor();
+      await page
+        .getByRole('checkbox', { name: /选择空间/ })
+        .first()
+        .check();
+      await page.getByRole('button', { name: '批量移动' }).click();
+      await page.getByText('部分完成：成功 1 项，失败 1 项').waitFor();
+      await page.unroute('**/v1/knowledge/spaces/batch-actions');
+
+      const moveKeys: string[] = [];
+      let moveCount = 0;
+      await page.route('**/v1/knowledge/spaces/*/move', async (route) => {
+        moveCount += 1;
+        moveKeys.push(route.request().headers()['idempotency-key'] ?? '');
+        const forbidden = moveCount > 1;
+        await route.fulfill({
+          status: forbidden ? 403 : 409,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            success: false,
+            error: {
+              code: forbidden ? 'KNOWLEDGE_FORBIDDEN' : 'KNOWLEDGE_CONFLICT',
+              message: 'localized fixture',
+              retryable: false,
+              details: {},
+            },
+            traceId: `trace-ui-move-${moveCount}`,
+            requestId: `request-ui-move-${moveCount}`,
+          }),
+        });
+      });
+      const moveTarget = page.getByLabel('移动目标').first();
+      const moveOptions = await moveTarget
+        .locator('option')
+        .evaluateAll((options) => options.map((option) => (option as HTMLOptionElement).value));
+      await moveTarget.selectOption(moveOptions[1] ?? '');
+      await page.getByRole('button', { name: '移动', exact: true }).first().click();
+      await page.locator('.move-control .problem-notice').getByText('KNOWLEDGE_CONFLICT').waitFor();
+      await page.getByRole('button', { name: '移动', exact: true }).first().click();
+      await page
+        .locator('.move-control .problem-notice')
+        .getByText('KNOWLEDGE_FORBIDDEN')
+        .waitFor();
+      await moveTarget.selectOption(moveOptions[0] ?? '');
+      await page.getByRole('button', { name: '移动', exact: true }).first().click();
+      expect(new Set(moveKeys).size).toBe(3);
+      await page.unroute('**/v1/knowledge/spaces/*/move');
+
+      await page.route(`**/v1/knowledge/spaces/${spaceId}/references`, (route) =>
+        route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            success: true,
+            data: {
+              referenceRevision: 7,
+              count: 1,
+              items: [
+                {
+                  referrerType: 'workflow',
+                  referrerId: 'workflow-ui',
+                  referrerVersion: 'v3',
+                  referrerName: 'UI workflow',
+                  status: 'active',
+                  lastSeenAt: '2026-10-26T10:00:00+08:00',
+                },
+              ],
+            },
+            traceId: 'trace-ui-reference',
+            requestId: 'request-ui-reference',
+          }),
+        }),
+      );
+      await page.route(`**/v1/knowledge/spaces/${spaceId}/exports`, (route) =>
+        route.fulfill({
+          status: 202,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            success: true,
+            data: {
+              jobId: '65f1e5b2a1c9d4b7e8f07777',
+              workspaceId,
+              knowledgeSpaceId: spaceId,
+              kind: 'export',
+              status: 'queued',
+              priority: 0,
+              attempts: 0,
+              maxAttempts: 3,
+              progress: { stage: 'queued', completed: 0, total: 1, percent: 0 },
+              createdAt: '2026-10-26T10:00:00+08:00',
+              updatedAt: '2026-10-26T10:00:00+08:00',
+            },
+            traceId: 'trace-ui-export',
+            requestId: 'request-ui-export',
+          }),
+        }),
+      );
+      await page.route('**/v1/knowledge/jobs/65f1e5b2a1c9d4b7e8f07777', (route) =>
+        route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            success: true,
+            data: {
+              jobId: '65f1e5b2a1c9d4b7e8f07777',
+              workspaceId,
+              knowledgeSpaceId: spaceId,
+              kind: 'export',
+              status: 'failed',
+              priority: 0,
+              attempts: 1,
+              maxAttempts: 3,
+              progress: { stage: 'running', completed: 0, total: 1, percent: 0 },
+              error: { code: 'KNOWLEDGE_JOB_FAILED', retryable: false, details: {} },
+              createdAt: '2026-10-26T10:00:00+08:00',
+              updatedAt: '2026-10-26T10:00:01+08:00',
+            },
+            traceId: 'trace-ui-export-job',
+            requestId: 'request-ui-export-job',
+          }),
+        }),
+      );
+      await page.goto(`${baseUrl}/spaces/${spaceId}/overview`, { waitUntil: 'networkidle' });
+      await page.getByText('存在活动引用，当前空间不能删除。').waitFor();
+      await page.getByRole('button', { name: '导出空间 ZIP' }).click();
+      await page.getByText('失败', { exact: true }).waitFor({ timeout: 10_000 });
+    } finally {
+      await browser.close();
+    }
+  });
+
+  it('renders S3 states with export lifecycle and screenshots at three viewports', async () => {
+    const cookie = await consoleCookie();
+    const separator = cookie.indexOf('=');
+    const cookieName = separator > 0 ? cookie.slice(0, separator) : '';
+    const cookieValue = separator > 0 ? cookie.slice(separator + 1) : '';
+    if (!cookieName || !cookieValue) throw new Error('console cookie was not initialized');
+    const spaceId = requiredId(scenario.spaceId, 'spaceId');
+    const exportBlobId = '65f1e5b2a1c9d4b7e8f08888';
+    const firstJobId = '65f1e5b2a1c9d4b7e8f07777';
+    const secondJobId = '65f1e5b2a1c9d4b7e8f06666';
+    const screenshotDirectory = join(repositoryRoot, 'docs', 'acceptance', 's3-ui');
+    mkdirSync(screenshotDirectory, { recursive: true });
+    const browser = await chromium.launch({ headless: true });
+    try {
+      for (const viewport of [
+        { name: 'mobile', width: 360, height: 900 },
+        { name: 'tablet', width: 768, height: 900 },
+        { name: 'desktop', width: 1200, height: 900 },
+      ]) {
+        const viewportContext = await browser.newContext({
+          viewport: { width: viewport.width, height: viewport.height },
+        });
+        await viewportContext.addCookies([
+          {
+            name: cookieName,
+            value: cookieValue,
+            domain: '127.0.0.1',
+            path: '/',
+            sameSite: 'Strict',
+          },
+        ]);
+        try {
+          const page = await viewportContext.newPage();
+          await page.route('**/v1/knowledge/spaces/batch-actions', (route) =>
+            route.fulfill({
+              status: 207,
+              contentType: 'application/json',
+              body: JSON.stringify({
+                success: true,
+                data: {
+                  code: 'KNOWLEDGE_PARTIAL_SUCCESS',
+                  requested: 2,
+                  succeeded: 1,
+                  failed: 1,
+                  items: [
+                    { id: spaceId, success: true },
+                    {
+                      id: '65f1e5b2a1c9d4b7e8f09999',
+                      success: false,
+                      code: 'KNOWLEDGE_CONFLICT',
+                    },
+                  ],
+                },
+                traceId: `trace-ui-partial-${viewport.name}`,
+                requestId: `request-ui-partial-${viewport.name}`,
+              }),
+            }),
+          );
+          await page.goto(`${baseUrl}/spaces`, { waitUntil: 'networkidle' });
+          await page.locator('table caption').waitFor();
+          await page
+            .getByRole('checkbox', { name: /选择空间/ })
+            .first()
+            .check();
+          await page.getByRole('button', { name: '批量移动' }).click();
+          await page.getByText('部分完成：成功 1 项，失败 1 项').waitFor();
+          await page.unroute('**/v1/knowledge/spaces/batch-actions');
+
+          const moveKeys: string[] = [];
+          let moveCount = 0;
+          await page.route('**/v1/knowledge/spaces/*/move', async (route) => {
+            moveCount += 1;
+            moveKeys.push(route.request().headers()['idempotency-key'] ?? '');
+            const forbidden = moveCount > 1;
+            await route.fulfill({
+              status: forbidden ? 403 : 409,
+              contentType: 'application/json',
+              body: JSON.stringify({
+                success: false,
+                error: {
+                  code: forbidden ? 'KNOWLEDGE_FORBIDDEN' : 'KNOWLEDGE_CONFLICT',
+                  message: 'localized fixture',
+                  retryable: false,
+                  details: {},
+                },
+                traceId: `trace-ui-move-${viewport.name}-${moveCount}`,
+                requestId: `request-ui-move-${viewport.name}-${moveCount}`,
+              }),
+            });
+          });
+          const moveTarget = page.getByLabel('移动目标').first();
+          const moveOptions = await moveTarget
+            .locator('option')
+            .evaluateAll((options) => options.map((option) => (option as HTMLOptionElement).value));
+          await moveTarget.selectOption(moveOptions[1] ?? '');
+          await page.getByRole('button', { name: '移动', exact: true }).first().click();
+          await page
+            .locator('.move-control .problem-notice')
+            .getByText('KNOWLEDGE_CONFLICT')
+            .waitFor();
+          await page.getByRole('button', { name: '移动', exact: true }).first().click();
+          await page
+            .locator('.move-control .problem-notice')
+            .getByText('KNOWLEDGE_FORBIDDEN')
+            .waitFor();
+          await moveTarget.selectOption(moveOptions[0] ?? '');
+          await page.getByRole('button', { name: '移动', exact: true }).first().click();
+          expect(new Set(moveKeys).size).toBe(3);
+          await page.unroute('**/v1/knowledge/spaces/*/move');
+
+          await page.route(`**/v1/knowledge/spaces/${spaceId}/references`, (route) =>
+            route.fulfill({
+              status: 200,
+              contentType: 'application/json',
+              body: JSON.stringify({
+                success: true,
+                data: {
+                  referenceRevision: 7,
+                  count: 1,
+                  items: [
+                    {
+                      referrerType: 'workflow',
+                      referrerId: 'workflow-ui',
+                      referrerVersion: 'v3',
+                      referrerName: 'UI workflow',
+                      status: 'active',
+                      lastSeenAt: '2026-10-26T10:00:00+08:00',
+                    },
+                  ],
+                },
+                traceId: `trace-ui-reference-${viewport.name}`,
+                requestId: `request-ui-reference-${viewport.name}`,
+              }),
+            }),
+          );
+          let exportPosts = 0;
+          await page.route(`**/v1/knowledge/spaces/${spaceId}/exports`, (route) => {
+            exportPosts += 1;
+            const jobId = exportPosts === 1 ? firstJobId : secondJobId;
+            return route.fulfill({
+              status: 202,
+              contentType: 'application/json',
+              body: JSON.stringify({
+                success: true,
+                data: {
+                  jobId,
+                  workspaceId,
+                  knowledgeSpaceId: spaceId,
+                  kind: 'export',
+                  status: 'queued',
+                  priority: 0,
+                  attempts: 0,
+                  maxAttempts: 3,
+                  progress: { stage: 'queued', completed: 0, total: 1, percent: 0 },
+                  createdAt: '2026-10-26T10:00:00+08:00',
+                  updatedAt: '2026-10-26T10:00:00+08:00',
+                },
+                traceId: `trace-ui-export-${viewport.name}-${exportPosts}`,
+                requestId: `request-ui-export-${viewport.name}-${exportPosts}`,
+              }),
+            });
+          });
+          let releaseRunning: (() => void) | undefined;
+          const runningGate = new Promise<void>((resolveRunning) => {
+            releaseRunning = resolveRunning;
+          });
+          let firstJobGets = 0;
+          await page.route(`**/v1/knowledge/jobs/${firstJobId}`, async (route) => {
+            firstJobGets += 1;
+            if (firstJobGets === 1) {
+              await runningGate;
+            }
+            const succeeded = firstJobGets > 1;
+            await route.fulfill({
+              status: 200,
+              contentType: 'application/json',
+              body: JSON.stringify({
+                success: true,
+                data: {
+                  jobId: firstJobId,
+                  workspaceId,
+                  knowledgeSpaceId: spaceId,
+                  kind: 'export',
+                  status: succeeded ? 'succeeded' : 'running',
+                  priority: 0,
+                  attempts: 1,
+                  maxAttempts: 3,
+                  progress: {
+                    stage: succeeded ? 'succeeded' : 'running',
+                    completed: succeeded ? 1 : 0,
+                    total: 1,
+                    percent: succeeded ? 100 : 50,
+                  },
+                  result: succeeded
+                    ? {
+                        objectBlobRefId: exportBlobId,
+                        sourceCount: 1,
+                        expiresAt: '2026-10-27T10:00:00+08:00',
+                      }
+                    : null,
+                  error: null,
+                  createdAt: '2026-10-26T10:00:00+08:00',
+                  updatedAt: succeeded ? '2026-10-26T10:00:02+08:00' : '2026-10-26T10:00:01+08:00',
+                },
+                traceId: `trace-ui-export-job-${viewport.name}-${firstJobGets}`,
+                requestId: `request-ui-export-job-${viewport.name}-${firstJobGets}`,
+              }),
+            });
+          });
+          await page.route(`**/v1/knowledge/jobs/${secondJobId}`, (route) =>
+            route.fulfill({
+              status: 200,
+              contentType: 'application/json',
+              body: JSON.stringify({
+                success: true,
+                data: {
+                  jobId: secondJobId,
+                  workspaceId,
+                  knowledgeSpaceId: spaceId,
+                  kind: 'export',
+                  status: 'failed',
+                  priority: 0,
+                  attempts: 1,
+                  maxAttempts: 3,
+                  progress: { stage: 'running', completed: 0, total: 1, percent: 0 },
+                  error: { code: 'KNOWLEDGE_JOB_FAILED', retryable: false, details: {} },
+                  createdAt: '2026-10-26T10:00:00+08:00',
+                  updatedAt: '2026-10-26T10:00:01+08:00',
+                },
+                traceId: `trace-ui-export-failed-${viewport.name}`,
+                requestId: `request-ui-export-failed-${viewport.name}`,
+              }),
+            }),
+          );
+          await page.route(`**/v1/knowledge/files/${exportBlobId}/download`, (route) =>
+            route.fulfill({
+              status: 200,
+              contentType: 'application/json',
+              body: JSON.stringify({
+                success: true,
+                data: {
+                  ticketId: 'export-ticket',
+                  url: `${baseUrl}/downloads/export.zip?ticket=export-ticket`,
+                  disposition: 'attachment',
+                  expiresAt: '2026-10-26T10:05:00+08:00',
+                },
+                traceId: `trace-ui-export-ticket-${viewport.name}`,
+                requestId: `request-ui-export-ticket-${viewport.name}`,
+              }),
+            }),
+          );
+
+          await page.goto(`${baseUrl}/spaces/${spaceId}/overview`, {
+            waitUntil: 'networkidle',
+          });
+          await page.getByText('存在活动引用，当前空间不能删除。').waitFor();
+          await page.getByRole('button', { name: '导出空间 ZIP' }).click();
+          await page.getByText('排队中', { exact: true }).waitFor();
+          if (!releaseRunning) throw new Error('running gate was not initialized');
+          releaseRunning();
+          await page.getByText('运行中', { exact: true }).waitFor();
+          await page.getByText('已成功', { exact: true }).waitFor({ timeout: 10_000 });
+          await page.getByRole('link', { name: '下载导出' }).waitFor();
+
+          const accessibility = await new AxeBuilder({ page }).analyze();
+          const blockingViolations = accessibility.violations.filter(
+            (violation) => violation.impact === 'serious' || violation.impact === 'critical',
+          );
+          expect(blockingViolations, `${viewport.name} S3 overview axe serious/critical`).toEqual(
+            [],
+          );
+          const hasNoHorizontalOverflow = await page.evaluate(
+            () => document.documentElement.scrollWidth <= window.innerWidth + 1,
+          );
+          expect(hasNoHorizontalOverflow, `${viewport.name} horizontal overflow`).toBe(true);
+          await page.evaluate(() => {
+            window.scrollTo(0, 0);
+            if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+          });
+          await page.waitForTimeout(100);
+          await page.screenshot({
+            path: join(screenshotDirectory, `s3-overview-${viewport.width}.png`),
+            fullPage: true,
+          });
+
+          await page.getByRole('button', { name: '导出空间 ZIP' }).click();
+          await page.getByText('失败', { exact: true }).waitFor({ timeout: 10_000 });
+        } finally {
+          await viewportContext.close();
+        }
+      }
+    } finally {
       await browser.close();
     }
   });
@@ -1739,7 +2449,7 @@ describe.sequential('knowledge architecture baseline E2E', () => {
     });
   });
 
-  it('finishes the delete paths, reads Jobs and proves all 58 operations ran', async () => {
+  it('finishes the delete paths, reads Jobs and proves all 65 operations ran', async () => {
     await callApi('API-SEGMENT-DELETE', {
       params: { segmentId: requiredId(scenario.segmentId, 'segmentId') },
     });
@@ -1783,10 +2493,10 @@ describe.sequential('knowledge architecture baseline E2E', () => {
       },
     });
 
-    expect(runtimeRegistry.count).toBe(58);
+    expect(runtimeRegistry.count).toBe(65);
     expect([...covered].sort()).toEqual(
       runtimeRegistry.operations.map((operation) => operation.operationId).sort(),
     );
-    expect(covered.size).toBe(58);
+    expect(covered.size).toBe(65);
   });
 });

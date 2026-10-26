@@ -8,10 +8,10 @@
 | operations           |  120 |
 | component schemas    |  139 |
 | component parameters |    8 |
-| runtime operations   |   46 |
-| deferred operations  |   74 |
+| runtime operations   |   65 |
+| deferred operations  |   55 |
 
-完整合同是唯一目标合同；运行时只注册 46 个已批准 operation。Deferred
+完整合同是唯一目标合同；运行时只注册当前阶段批准的 operation。Deferred
 operation 不得用占位路由、骨架占位码、200 空对象或其他假成功实现。
 
 ## 公共合同
@@ -29,9 +29,9 @@ operation 不得用占位路由、骨架占位码、200 空对象或其他假成
 | 错误响应  | `{ success:false, error:{code,message,retryable,details}, traceId, requestId }` |
 | 错误码    | 只允许 `KNOWLEDGE_*`                                                            |
 
-## Runtime 46
+## Runtime 65
 
-`4 + 5 + 5 + 5 + 5 + 7 + 13 + 2 = 46`
+`4 + 6 + 3 + 2 + 13 + 5 + 10 + 7 + 9 + 6 = 65`
 
 | 分组      | Operation                                                              |
 | --------- | ---------------------------------------------------------------------- |

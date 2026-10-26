@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { createKnowledgeError } from '@kb/contracts';
-import type { Types, Connection, Model } from 'mongoose';
+import type { ClientSession, Connection, Model, Types } from 'mongoose';
 import { registerKnowledgeModels } from '../../../shared/persistence/schemas/knowledge-index';
 import type {
   KnowledgeDirectoryDoc,
@@ -11,13 +11,20 @@ import type {
 import type { KnowledgeJobDoc } from '../../../shared/persistence/schemas/knowledge-job.schemas';
 import { workspaceCasUpdate } from '../../../shared/persistence/knowledge/cas';
 import { createKnowledgeOutboxEvent } from '../../../shared/persistence/knowledge/outbox';
+import { KnowledgeAuditRepository } from '../../../shared/persistence/knowledge/audit';
+import { withMongoTransaction } from '../../../shared/persistence/with-mongo-transaction';
 import type { TenantContext } from '../../../shared/persistence/knowledge/tenant';
 import {
   objectIdOf,
   requireWorkspaceId,
   tenantError,
 } from '../../../shared/persistence/knowledge/tenant';
-import { assertDirectoryDepth, assertResourceName } from '../domain/hierarchy';
+import {
+  assertCatalogMoveDepth,
+  assertCatalogNoCycle,
+  assertDirectoryDepth,
+  assertResourceName,
+} from '../domain/hierarchy';
 import {
   cursorFilter,
   decodeCursor,
@@ -34,7 +41,7 @@ function iso(value: Date): string {
   return value.toISOString();
 }
 
-function spaceDto(document: Plain<KnowledgeSpaceDoc>) {
+function spaceDto(document: Plain<KnowledgeSpaceDoc>, parentPath?: string[]) {
   return {
     id: String(document._id),
     workspaceId: document.workspaceId,
@@ -52,10 +59,11 @@ function spaceDto(document: Plain<KnowledgeSpaceDoc>) {
     version: document.version,
     createdAt: iso(document.createdAt),
     updatedAt: iso(document.updatedAt),
+    ...(parentPath ? { parentPath } : {}),
   };
 }
 
-function directoryDto(document: Plain<KnowledgeDirectoryDoc>) {
+function directoryDto(document: Plain<KnowledgeDirectoryDoc>, parentPath?: string[]) {
   return {
     id: String(document._id),
     workspaceId: document.workspaceId,
@@ -66,10 +74,11 @@ function directoryDto(document: Plain<KnowledgeDirectoryDoc>) {
     depth: document.depth,
     aclMode: document.aclMode,
     version: document.version,
+    ...(parentPath ? { parentPath } : {}),
   };
 }
 
-function sourceDto(document: Plain<KnowledgeSourceDoc>) {
+function sourceDto(document: Plain<KnowledgeSourceDoc>, parentPath?: string[]) {
   return {
     id: String(document._id),
     workspaceId: document.workspaceId,
@@ -89,6 +98,7 @@ function sourceDto(document: Plain<KnowledgeSourceDoc>) {
     permissionState: document.permissionState,
     permissionRevision: document.permissionRevision,
     version: document.version,
+    ...(parentPath ? { parentPath } : {}),
   };
 }
 
@@ -118,6 +128,23 @@ function operationResult(id: string, jobId?: string | null) {
 
 function jobIdempotencyKey(kind: string, resourceId: string, version: number): string {
   return createHash('sha256').update(`${kind}|${resourceId}|${version}`).digest('hex');
+}
+
+function duplicateKeyConflict(error: unknown, context: TenantContext): unknown {
+  if (
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    (error as { code?: unknown }).code === 11000
+  ) {
+    return createKnowledgeError({
+      code: 'KNOWLEDGE_CONFLICT',
+      requestId: context.requestId,
+      traceId: context.traceId,
+      details: { reason: 'sibling_name_conflict' },
+    });
+  }
+  return error;
 }
 
 export interface CreateSpaceInput {
@@ -158,6 +185,7 @@ export class KnowledgeCatalogRepository {
   private readonly sources: Model<KnowledgeSourceDoc>;
   private readonly segments: Model<KnowledgeSegmentDoc>;
   private readonly jobs: Model<KnowledgeJobDoc>;
+  private readonly audit: KnowledgeAuditRepository;
 
   constructor(private readonly connection: Connection) {
     const models = registerKnowledgeModels(connection);
@@ -166,6 +194,7 @@ export class KnowledgeCatalogRepository {
     this.sources = models.KnowledgeSource as Model<KnowledgeSourceDoc>;
     this.segments = models.KnowledgeSegment as Model<KnowledgeSegmentDoc>;
     this.jobs = models.KnowledgeJob as Model<KnowledgeJobDoc>;
+    this.audit = new KnowledgeAuditRepository(connection);
   }
 
   private baseFilter(context: TenantContext): { workspaceId: string; deletedAt: null } {
@@ -294,21 +323,19 @@ export class KnowledgeCatalogRepository {
             details: { field: 'referenceRevision' },
           });
         }
-        if (input.referenceStrategy !== 'detach') {
-          const bindings = await this.connection.models.KnowledgeReferenceBinding?.countDocuments({
-            workspaceId: context.workspaceId,
-            knowledgeSpaceId: objectId,
-            status: 'active',
-            deletedAt: null,
-          }).session(session);
-          if ((bindings ?? 0) > 0) {
-            throw createKnowledgeError({
-              code: 'KNOWLEDGE_REFERENCE_CONFLICT',
-              requestId: context.requestId,
-              traceId: context.traceId,
-              details: { references: bindings },
-            });
-          }
+        const bindings = await this.connection.models.KnowledgeReferenceBinding?.countDocuments({
+          workspaceId: context.workspaceId,
+          knowledgeSpaceId: objectId,
+          status: 'active',
+          deletedAt: null,
+        }).session(session);
+        if ((bindings ?? 0) > 0) {
+          throw createKnowledgeError({
+            code: 'KNOWLEDGE_REFERENCE_CONFLICT',
+            requestId: context.requestId,
+            traceId: context.traceId,
+            details: { references: bindings, strategy: input.referenceStrategy ?? 'block' },
+          });
         }
         await this.spaces.updateOne(
           { _id: objectId, workspaceId: context.workspaceId, version },
@@ -372,11 +399,391 @@ export class KnowledgeCatalogRepository {
           context,
           session,
         );
+        await this.audit.append(
+          {
+            knowledgeSpaceId: spaceId,
+            action: 'space.delete',
+            resourceType: 'space',
+            resourceId: spaceId,
+            outcome: 'succeeded',
+            safeDiff: { version, jobId, referenceRevision: expectedReferenceRevision },
+          },
+          context,
+          session,
+        );
       });
       return operationResult(spaceId, jobId);
     } finally {
       await session.endSession();
     }
+  }
+
+  private async spaceAncestorIds(
+    document: Pick<KnowledgeSpaceDoc, 'parentSpaceId'>,
+    context: TenantContext,
+    session?: ClientSession,
+  ): Promise<Types.ObjectId[]> {
+    const result: Types.ObjectId[] = [];
+    const visited = new Set<string>();
+    let parentId = document.parentSpaceId;
+    while (parentId) {
+      const key = String(parentId);
+      if (visited.has(key)) {
+        throw createKnowledgeError({
+          code: 'KNOWLEDGE_CONFLICT',
+          requestId: context.requestId,
+          traceId: context.traceId,
+          details: { reason: 'catalog_cycle', parentSpaceId: key },
+        });
+      }
+      visited.add(key);
+      const parent = await this.spaces
+        .findOne({ ...this.baseFilter(context), _id: parentId })
+        .session(session ?? null);
+      if (!parent) throw tenantError(context, 'KNOWLEDGE_NOT_FOUND');
+      result.unshift(parent._id as Types.ObjectId);
+      parentId = parent.parentSpaceId;
+    }
+    return result;
+  }
+
+  private async spaceSubtreeHeight(
+    rootId: Types.ObjectId,
+    context: TenantContext,
+    session: ClientSession,
+  ): Promise<number> {
+    let frontier = [rootId];
+    let height = 1;
+    const visited = new Set(frontier.map(String));
+    while (frontier.length > 0) {
+      const children = await this.spaces
+        .find({
+          ...this.baseFilter(context),
+          parentSpaceId: { $in: frontier },
+        })
+        .select({ _id: 1 })
+        .session(session)
+        .lean();
+      if (children.length === 0) break;
+      frontier = children
+        .map((child) => child._id as Types.ObjectId)
+        .filter((id) => {
+          const key = String(id);
+          if (visited.has(key)) {
+            throw createKnowledgeError({
+              code: 'KNOWLEDGE_CONFLICT',
+              requestId: context.requestId,
+              traceId: context.traceId,
+              details: { reason: 'catalog_cycle', resourceId: key },
+            });
+          }
+          visited.add(key);
+          return true;
+        });
+      height += 1;
+    }
+    return height;
+  }
+
+  async moveSpace(spaceId: string, input: Record<string, unknown>, context: TenantContext) {
+    requireWorkspaceId(context);
+    const expectedVersion = Number(input.version);
+    if (!Number.isInteger(expectedVersion) || expectedVersion < 1) throw tenantError(context);
+    const targetParentId =
+      input.targetParentId === null || input.targetParentId === undefined
+        ? null
+        : String(input.targetParentId);
+    try {
+      return await withMongoTransaction(this.connection, async (session) => {
+        const id = objectIdOf(spaceId, context, 'spaceId');
+        const current = await this.spaces
+          .findOne({
+            _id: id,
+            workspaceId: context.workspaceId,
+            version: expectedVersion,
+            deletedAt: null,
+          })
+          .session(session);
+        if (!current) throw tenantError(context, 'KNOWLEDGE_CONFLICT', { field: 'version' });
+        const targetParentPath: Types.ObjectId[] = [];
+        if (targetParentId) {
+          const parent = await this.spaces
+            .findOne({
+              ...this.baseFilter(context),
+              _id: objectIdOf(targetParentId, context, 'targetParentId'),
+            })
+            .session(session);
+          if (!parent) throw tenantError(context, 'KNOWLEDGE_NOT_FOUND');
+          if (parent.kind !== 'folder') {
+            throw tenantError(context, 'KNOWLEDGE_VALIDATION_FAILED', {
+              field: 'targetParentId',
+              reason: 'folder_required',
+            });
+          }
+          targetParentPath.push(...(await this.spaceAncestorIds(parent, context, session)));
+          targetParentPath.push(parent._id as Types.ObjectId);
+        }
+        assertCatalogNoCycle(spaceId, targetParentId, targetParentPath.map(String), context);
+        const height = await this.spaceSubtreeHeight(id, context, session);
+        assertCatalogMoveDepth(targetParentPath.length + height - 1, context);
+        if (String(current.parentSpaceId ?? '') === String(targetParentId ?? '')) {
+          return spaceDto(
+            current.toObject() as unknown as Plain<KnowledgeSpaceDoc>,
+            targetParentPath.map(String),
+          );
+        }
+        const updated = await this.spaces.findOneAndUpdate(
+          {
+            _id: id,
+            workspaceId: context.workspaceId,
+            version: expectedVersion,
+            deletedAt: null,
+          },
+          {
+            $set: {
+              parentSpaceId: targetParentId
+                ? objectIdOf(targetParentId, context, 'targetParentId')
+                : null,
+              updatedByMemberId: context.memberId,
+            },
+            $inc: { version: 1 },
+          },
+          { new: true, runValidators: true, session },
+        );
+        if (!updated) throw tenantError(context, 'KNOWLEDGE_CONFLICT', { field: 'version' });
+        await this.audit.append(
+          {
+            knowledgeSpaceId: spaceId,
+            action: 'space.move',
+            resourceType: 'space',
+            resourceId: spaceId,
+            outcome: 'succeeded',
+            safeDiff: {
+              fromParentId: current.parentSpaceId ? String(current.parentSpaceId) : null,
+              targetParentId,
+              version: expectedVersion,
+            },
+          },
+          context,
+          session,
+        );
+        return spaceDto(
+          updated.toObject() as unknown as Plain<KnowledgeSpaceDoc>,
+          targetParentPath.map(String),
+        );
+      });
+    } catch (error) {
+      throw duplicateKeyConflict(error, context);
+    }
+  }
+
+  async moveDirectoryTree(
+    directoryId: string,
+    input: Record<string, unknown>,
+    context: TenantContext,
+  ) {
+    const expectedVersion = Number(input.version);
+    if (!Number.isInteger(expectedVersion) || expectedVersion < 1) throw tenantError(context);
+    const targetParentId =
+      input.targetParentId === null || input.targetParentId === undefined
+        ? null
+        : String(input.targetParentId);
+    try {
+      return await withMongoTransaction(this.connection, async (session) => {
+        const id = objectIdOf(directoryId, context, 'directoryId');
+        const current = await this.directories
+          .findOne({
+            _id: id,
+            workspaceId: context.workspaceId,
+            version: expectedVersion,
+            deletedAt: null,
+          })
+          .session(session);
+        if (!current) throw tenantError(context, 'KNOWLEDGE_CONFLICT', { field: 'version' });
+        let targetPath: Types.ObjectId[] = [];
+        if (targetParentId) {
+          const parent = await this.directories
+            .findOne({
+              ...this.baseFilter(context),
+              _id: objectIdOf(targetParentId, context, 'targetParentId'),
+              knowledgeSpaceId: current.knowledgeSpaceId,
+            })
+            .session(session);
+          if (!parent) throw tenantError(context, 'KNOWLEDGE_NOT_FOUND');
+          targetPath = [...parent.path, parent._id as Types.ObjectId];
+        }
+        assertCatalogNoCycle(directoryId, targetParentId, targetPath.map(String), context);
+        const subtree = (await this.directories
+          .find({
+            ...this.baseFilter(context),
+            knowledgeSpaceId: current.knowledgeSpaceId,
+            $or: [{ _id: id }, { path: id }],
+          })
+          .session(session)
+          .lean()) as unknown as Plain<KnowledgeDirectoryDoc>[];
+        const deepest = Math.max(...subtree.map((entry) => entry.depth));
+        const height = deepest - current.depth + 1;
+        assertCatalogMoveDepth(targetPath.length + height - 1, context);
+        if (String(current.parentDirectoryId ?? '') === String(targetParentId ?? '')) {
+          return directoryDto(
+            current.toObject() as unknown as Plain<KnowledgeDirectoryDoc>,
+            targetPath.map(String),
+          );
+        }
+        const updatedCurrent = await this.directories.findOneAndUpdate(
+          {
+            _id: id,
+            workspaceId: context.workspaceId,
+            version: expectedVersion,
+            deletedAt: null,
+          },
+          {
+            $set: {
+              parentDirectoryId: targetParentId
+                ? objectIdOf(targetParentId, context, 'targetParentId')
+                : null,
+              path: targetPath,
+              depth: targetPath.length,
+              updatedByMemberId: context.memberId,
+            },
+            $inc: { version: 1 },
+          },
+          { new: true, runValidators: true, session },
+        );
+        if (!updatedCurrent) {
+          throw tenantError(context, 'KNOWLEDGE_CONFLICT', { field: 'version' });
+        }
+        const descendants = subtree.filter((entry) => String(entry._id) !== directoryId);
+        for (const descendant of descendants) {
+          const index = descendant.path.findIndex((entry) => String(entry) === directoryId);
+          if (index < 0) continue;
+          const nextPath = [...targetPath, id, ...descendant.path.slice(index + 1)];
+          const result = await this.directories.updateOne(
+            {
+              _id: descendant._id,
+              workspaceId: context.workspaceId,
+              version: descendant.version,
+              deletedAt: null,
+            },
+            {
+              $set: {
+                path: nextPath,
+                depth: nextPath.length,
+                updatedByMemberId: context.memberId,
+              },
+              $inc: { version: 1 },
+            },
+            { session },
+          );
+          if (result.modifiedCount !== 1) {
+            throw tenantError(context, 'KNOWLEDGE_CONFLICT', {
+              resourceId: String(descendant._id),
+            });
+          }
+        }
+        await this.audit.append(
+          {
+            knowledgeSpaceId: String(current.knowledgeSpaceId),
+            action: 'directory.move',
+            resourceType: 'directory',
+            resourceId: directoryId,
+            outcome: 'succeeded',
+            safeDiff: {
+              fromParentId: current.parentDirectoryId ? String(current.parentDirectoryId) : null,
+              targetParentId,
+              descendantCount: descendants.length,
+              version: expectedVersion,
+            },
+          },
+          context,
+          session,
+        );
+        return directoryDto(
+          updatedCurrent.toObject() as unknown as Plain<KnowledgeDirectoryDoc>,
+          targetPath.map(String),
+        );
+      });
+    } catch (error) {
+      throw duplicateKeyConflict(error, context);
+    }
+  }
+
+  async moveSource(sourceId: string, input: Record<string, unknown>, context: TenantContext) {
+    const expectedVersion = Number(input.version);
+    if (!Number.isInteger(expectedVersion) || expectedVersion < 1) throw tenantError(context);
+    const targetDirectoryId =
+      input.targetParentId === null || input.targetParentId === undefined
+        ? null
+        : String(input.targetParentId);
+    return withMongoTransaction(this.connection, async (session) => {
+      const id = objectIdOf(sourceId, context, 'sourceId');
+      const current = await this.sources
+        .findOne({
+          _id: id,
+          workspaceId: context.workspaceId,
+          version: expectedVersion,
+          deletedAt: null,
+        })
+        .session(session);
+      if (!current) throw tenantError(context, 'KNOWLEDGE_CONFLICT', { field: 'version' });
+      let targetPath: Types.ObjectId[] = [];
+      if (targetDirectoryId) {
+        const directory = await this.directories
+          .findOne({
+            ...this.baseFilter(context),
+            _id: objectIdOf(targetDirectoryId, context, 'targetParentId'),
+            knowledgeSpaceId: current.knowledgeSpaceId,
+          })
+          .session(session);
+        if (!directory) throw tenantError(context, 'KNOWLEDGE_NOT_FOUND');
+        targetPath = [...directory.path, directory._id as Types.ObjectId];
+      }
+      if (String(current.directoryId ?? '') === String(targetDirectoryId ?? '')) {
+        return sourceDto(
+          current.toObject() as unknown as Plain<KnowledgeSourceDoc>,
+          targetPath.map(String),
+        );
+      }
+      const updated = await this.sources.findOneAndUpdate(
+        {
+          _id: id,
+          workspaceId: context.workspaceId,
+          version: expectedVersion,
+          deletedAt: null,
+        },
+        {
+          $set: {
+            directoryId: targetDirectoryId
+              ? objectIdOf(targetDirectoryId, context, 'targetParentId')
+              : null,
+            updatedByMemberId: context.memberId,
+          },
+          $inc: { version: 1 },
+        },
+        { new: true, runValidators: true, session },
+      );
+      if (!updated) throw tenantError(context, 'KNOWLEDGE_CONFLICT', { field: 'version' });
+      await this.audit.append(
+        {
+          knowledgeSpaceId: String(current.knowledgeSpaceId),
+          action: 'source.move',
+          resourceType: 'source',
+          resourceId: sourceId,
+          outcome: 'succeeded',
+          safeDiff: {
+            fromDirectoryId: current.directoryId ? String(current.directoryId) : null,
+            targetDirectoryId,
+            version: expectedVersion,
+          },
+        },
+        context,
+        session,
+      );
+      return sourceDto(
+        updated.toObject() as unknown as Plain<KnowledgeSourceDoc>,
+        targetPath.map(String),
+      );
+    });
   }
 
   async listDirectories(spaceId: string, query: PageRequest, context: TenantContext) {
@@ -389,7 +796,7 @@ export class KnowledgeCatalogRepository {
       .sort({ depth: 1, sortOrder: 1, _id: 1 })
       .limit(limit)
       .lean()) as unknown as Plain<KnowledgeDirectoryDoc>[];
-    return { items: docs.map(directoryDto) };
+    return { items: docs.map((doc) => directoryDto(doc)) };
   }
 
   async createDirectory(spaceId: string, input: CreateDirectoryInput, context: TenantContext) {
@@ -546,6 +953,18 @@ export class KnowledgeCatalogRepository {
           context,
           session,
         );
+        await this.audit.append(
+          {
+            knowledgeSpaceId: String(doc.knowledgeSpaceId),
+            action: 'directory.delete',
+            resourceType: 'directory',
+            resourceId: directoryId,
+            outcome: 'succeeded',
+            safeDiff: { version: doc.version, jobId },
+          },
+          context,
+          session,
+        );
       });
       return operationResult(directoryId, jobId);
     } finally {
@@ -650,7 +1069,7 @@ export class KnowledgeCatalogRepository {
     return sourceDto(updated as unknown as Plain<KnowledgeSourceDoc>);
   }
 
-  async deleteSource(sourceId: string, context: TenantContext) {
+  async deleteSource(sourceId: string, context: TenantContext, expectedVersion?: number) {
     requireWorkspaceId(context);
     const sourceObjectId = objectIdOf(sourceId, context, 'sourceId');
     const session = await this.connection.startSession();
@@ -665,6 +1084,15 @@ export class KnowledgeCatalogRepository {
           })
           .session(session);
         if (!source) throw tenantError(context, 'KNOWLEDGE_NOT_FOUND');
+        if (
+          expectedVersion !== undefined &&
+          (!Number.isInteger(expectedVersion) || source.version !== expectedVersion)
+        ) {
+          throw tenantError(context, 'KNOWLEDGE_CONFLICT', {
+            resourceId: sourceId,
+            expectedVersion,
+          });
+        }
         const now = new Date();
         await this.sources.updateOne(
           { _id: sourceObjectId, workspaceId: context.workspaceId, version: source.version },
@@ -737,6 +1165,18 @@ export class KnowledgeCatalogRepository {
             aggregateId: sourceId,
             queue: 'knowledge-delete',
             payload: { sourceId, jobId, version: source.version },
+          },
+          context,
+          session,
+        );
+        await this.audit.append(
+          {
+            knowledgeSpaceId: String(source.knowledgeSpaceId),
+            action: 'source.delete',
+            resourceType: 'source',
+            resourceId: sourceId,
+            outcome: 'succeeded',
+            safeDiff: { version: source.version, jobId },
           },
           context,
           session,

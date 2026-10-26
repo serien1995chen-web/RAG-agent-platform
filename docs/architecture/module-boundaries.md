@@ -40,5 +40,5 @@ extensions -> public port
 ## 机器门禁
 
 `pnpm architecture:check` 检查禁止依赖、循环依赖、旧 Dataset 聚合、旧路由
-和空实现模式。`pnpm knowledge:check-runtime` 检查完整合同与 46/74 运行时
+和空实现模式。`pnpm knowledge:check-runtime` 检查完整合同与 65/55 运行时
 子集的一致性。

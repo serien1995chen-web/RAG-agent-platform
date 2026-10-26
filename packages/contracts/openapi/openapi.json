@@ -1411,16 +1411,16 @@
                     "jobId": "65f1e5b2a1c9d4b7e8f07777",
                     "workspaceId": "ws_acme_cn",
                     "knowledgeSpaceId": "65f1e5b2a1c9d4b7e8f01234",
-                    "kind": "parse",
-                    "status": "running",
+                    "kind": "export",
+                    "status": "queued",
                     "priority": 5,
                     "attempts": 1,
                     "maxAttempts": 3,
                     "progress": {
-                      "stage": "parsing",
-                      "completed": 12,
-                      "total": 32,
-                      "percent": 37.5
+                      "stage": "queued",
+                      "completed": 0,
+                      "total": 1,
+                      "percent": 0
                     },
                     "steps": [],
                     "error": null,
@@ -1444,6 +1444,9 @@
           },
           "404": {
             "$ref": "#/components/responses/Problem404"
+          },
+          "413": {
+            "$ref": "#/components/responses/Problem413"
           },
           "429": {
             "$ref": "#/components/responses/Problem429"
@@ -1470,7 +1473,7 @@
                 "$ref": "#/components/schemas/ExportCreate"
               },
               "example": {
-                "format": "csv"
+                "format": "zip"
               }
             }
           }
@@ -19773,6 +19776,13 @@
               }
             ]
           },
+          "parentPath": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{24}$"
+            }
+          },
           "name": {
             "type": "string",
             "examples": [
@@ -19935,6 +19945,13 @@
               ]
             ]
           },
+          "parentPath": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{24}$"
+            }
+          },
           "depth": {
             "type": "integer",
             "minimum": 0,
@@ -20013,6 +20030,13 @@
                 "type": "null"
               }
             ]
+          },
+          "parentPath": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{24}$"
+            }
           },
           "kind": {
             "type": "string",
@@ -20646,6 +20670,34 @@
             "oneOf": [
               {
                 "$ref": "#/components/schemas/ErrorBody"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "result": {
+            "oneOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "objectBlobRefId": {
+                    "type": "string",
+                    "pattern": "^[a-f0-9]{24}$"
+                  },
+                  "manifest": {
+                    "type": "object",
+                    "additionalProperties": true
+                  },
+                  "sourceCount": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "expiresAt": {
+                    "type": "string",
+                    "format": "date-time"
+                  }
+                }
               },
               {
                 "type": "null"
@@ -22172,6 +22224,10 @@
           "items"
         ],
         "properties": {
+          "code": {
+            "type": "string",
+            "const": "KNOWLEDGE_PARTIAL_SUCCESS"
+          },
           "requested": {
             "type": "integer",
             "examples": [
@@ -22214,6 +22270,17 @@
                   "examples": [
                     "KNOWLEDGE_CONFLICT"
                   ]
+                },
+                "version": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "parentPath": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "pattern": "^[a-f0-9]{24}$"
+                  }
                 }
               }
             }
@@ -22656,7 +22723,8 @@
         "type": "object",
         "required": [
           "action",
-          "ids"
+          "ids",
+          "versions"
         ],
         "properties": {
           "action": {
@@ -22670,6 +22738,7 @@
             "type": "array",
             "minItems": 1,
             "maxItems": 100,
+            "uniqueItems": true,
             "items": {
               "type": "string",
               "pattern": "^[a-f0-9]{24}$",
@@ -22691,6 +22760,18 @@
                 "type": "null"
               }
             ]
+          },
+          "versions": {
+            "type": "object",
+            "minProperties": 1,
+            "maxProperties": 100,
+            "propertyNames": {
+              "pattern": "^[a-f0-9]{24}$"
+            },
+            "additionalProperties": {
+              "type": "integer",
+              "minimum": 1
+            }
           }
         }
       },
@@ -22698,7 +22779,8 @@
         "type": "object",
         "required": [
           "action",
-          "ids"
+          "ids",
+          "versions"
         ],
         "properties": {
           "action": {
@@ -22713,6 +22795,7 @@
             "type": "array",
             "minItems": 1,
             "maxItems": 100,
+            "uniqueItems": true,
             "items": {
               "type": "string",
               "pattern": "^[a-f0-9]{24}$",
@@ -22734,6 +22817,18 @@
                 "type": "null"
               }
             ]
+          },
+          "versions": {
+            "type": "object",
+            "minProperties": 1,
+            "maxProperties": 100,
+            "propertyNames": {
+              "pattern": "^[a-f0-9]{24}$"
+            },
+            "additionalProperties": {
+              "type": "integer",
+              "minimum": 1
+            }
           }
         }
       },
@@ -22772,10 +22867,18 @@
           "format": {
             "type": "string",
             "enum": [
-              "csv",
-              "jsonl"
+              "zip"
             ],
-            "default": "csv"
+            "default": "zip"
+          },
+          "sourceIds": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 2000,
+            "items": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{24}$"
+            }
           }
         }
       },
@@ -25198,8 +25301,8 @@
     "operations": 120,
     "schemas": 139,
     "parameters": 8,
-    "runtimeOperations": 58,
-    "deferredOperations": 62,
+    "runtimeOperations": 65,
+    "deferredOperations": 55,
     "canonicalCollections": 23,
     "vectorProfiles": 4,
     "canonicalQueues": 13

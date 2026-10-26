@@ -38,6 +38,7 @@ export class ObjectStoreArchiveSafetyAdapter implements ArchiveSafetyPort {
         container: input.kind === 'archive' ? 'archive' : 'zip',
         originalName: input.originalName,
         ...(input.kind === 'archive' ? { limits: { maxEntries: 2001 } } : {}),
+        ...(input.kind === 'space-archive' ? { limits: { maxEntries: 10_000 } } : {}),
         source: {
           size: input.sizeBytes,
           readRange: async (start, end) => {

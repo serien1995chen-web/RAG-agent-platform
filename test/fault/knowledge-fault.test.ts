@@ -18,6 +18,13 @@ import {
   classifyExternalFailure,
   redactExternalValue,
 } from '../../packages/service/src/modules/knowledge/adapter/external-providers';
+import { FileTicketService } from '../../sdk/storage/src';
+import {
+  KnowledgeAccessRepository,
+  KnowledgeApplication,
+  KnowledgeAuditRepository,
+  KnowledgeCatalogRepository,
+} from '../../packages/service/src/modules/knowledge';
 import { createTelemetryRuntime } from '../../sdk/otel/src';
 import { safeErrorAttributes } from '../../sdk/otel/src/redaction';
 
@@ -36,12 +43,26 @@ const context: TenantContext = {
   requestId: `req_${suffix}`,
   traceId: suffix.padEnd(32, '0').slice(0, 32),
   scopes: ['knowledge:admin'],
+  isWorkspaceOwner: true,
 };
 let connection: Awaited<ReturnType<typeof createKnowledgeMongoConnection>>;
+let application: KnowledgeApplication;
+let catalog: KnowledgeCatalogRepository;
 
 beforeAll(async () => {
   connection = await createKnowledgeMongoConnection(requiredEnv('KB_TEST_MONGO_URI'));
   await ensureKnowledgeCollections(connection);
+  catalog = new KnowledgeCatalogRepository(connection);
+  application = new KnowledgeApplication(
+    catalog,
+    {} as never,
+    new KnowledgeAccessRepository(connection),
+    {} as never,
+    undefined,
+    undefined,
+    undefined,
+    new KnowledgeAuditRepository(connection),
+  );
 }, 60_000);
 
 afterAll(async () => {
@@ -143,6 +164,104 @@ describe('knowledge fault contracts', () => {
     expect(redactExternalValue({ authorization: 'Bearer secret' })).toEqual({
       authorization: '[REDACTED]',
     });
+  });
+
+  it('keeps successful batch items after an independent item failure', async () => {
+    const target = await catalog.createSpace(
+      {
+        kind: 'folder',
+        name: `Batch fault target ${suffix}`,
+        accessMode: 'workspace',
+        sourceAclMode: 'inherited',
+        sourcePermissionEnabled: true,
+      },
+      context,
+    );
+    const good = await catalog.createSpace(
+      {
+        kind: 'space',
+        name: `Batch fault good ${suffix}`,
+        accessMode: 'workspace',
+        sourceAclMode: 'enforced',
+        sourcePermissionEnabled: true,
+      },
+      context,
+    );
+    const failed = await catalog.createSpace(
+      {
+        kind: 'space',
+        name: `Batch fault failed ${suffix}`,
+        accessMode: 'workspace',
+        sourceAclMode: 'enforced',
+        sourcePermissionEnabled: true,
+      },
+      context,
+    );
+    const result = await application.dispatch({
+      operationId: 'API-SPACE-BATCH',
+      params: {},
+      query: {},
+      headers: {},
+      body: {
+        action: 'move',
+        ids: [good.id, failed.id],
+        targetParentId: target.id,
+        versions: {
+          [good.id]: good.version,
+          [failed.id]: failed.version + 1,
+        },
+      },
+      context,
+    });
+    expect(result.status).toBe(207);
+    expect(result.data).toMatchObject({ succeeded: 1, failed: 1 });
+    expect(await catalog.getSpace(good.id, context)).toMatchObject({
+      parentSpaceId: target.id,
+      version: good.version + 1,
+    });
+    expect(await catalog.getSpace(failed.id, context)).toMatchObject({
+      parentSpaceId: null,
+      version: failed.version,
+    });
+  });
+
+  it('expires export download tickets deterministically', () => {
+    let now = Date.now();
+    const tickets = new FileTicketService(
+      'fault-ticket-secret-at-least-32-characters',
+      'http://127.0.0.1:3010',
+      () => now,
+    );
+    const blobId = '65f1e5b2a1c9d4b7e8f01234';
+    const issued = tickets.issue(
+      {
+        workspaceId,
+        blobId,
+        sourceId: null,
+        knowledgeSpaceId: spaceId,
+        disposition: 'attachment',
+        ttlSeconds: 1,
+      },
+      context.requestId,
+      context.traceId,
+    );
+    expect(tickets.verify(issued.ticket, context.requestId, context.traceId)).toMatchObject({
+      workspaceId,
+      blobId,
+      knowledgeSpaceId: spaceId,
+      disposition: 'attachment',
+    });
+    now += 2_000;
+    expect(() => tickets.verify(issued.ticket, context.requestId, context.traceId)).toThrowError(
+      expect.objectContaining({
+        problem: expect.objectContaining({
+          error: expect.objectContaining({
+            code: 'KNOWLEDGE_FORBIDDEN',
+            details: expect.objectContaining({ reason: 'ticket_expired' }),
+          }),
+        }),
+      }),
+    );
   });
 
   it('keeps Outbox failed instead of claiming successful dispatch when Redis fails', async () => {

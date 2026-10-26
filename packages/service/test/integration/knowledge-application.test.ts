@@ -5,6 +5,7 @@ import type { KnowledgeApiError } from '@kb/contracts';
 import {
   KnowledgeAccessRepository,
   KnowledgeApplication,
+  KnowledgeAuditRepository,
   KnowledgeCatalogRepository,
   KnowledgeJobRepository,
   KnowledgeTagRepository,
@@ -82,6 +83,10 @@ beforeAll(async () => {
     new KnowledgeTagRepository(connection),
     new KnowledgeAccessRepository(connection),
     new KnowledgeJobRepository(connection),
+    undefined,
+    undefined,
+    undefined,
+    new KnowledgeAuditRepository(connection),
   );
   jobs = new KnowledgeJobRepository(connection);
 }, 60_000);

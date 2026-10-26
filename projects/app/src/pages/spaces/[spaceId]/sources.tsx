@@ -1,6 +1,8 @@
 import {
   ArchiveAction,
   Button,
+  CatalogBatchResult,
+  CatalogMoveControl,
   FilePreviewPanel,
   FormField,
   KnowledgeDataTable,
@@ -26,6 +28,7 @@ import Head from 'next/head';
 import { useRouter } from 'next/router';
 import { useState } from 'react';
 import type { DirectoryRecord, SourceRecord, SpaceRecord } from '../../../lib/knowledge-types';
+import type { BatchActionResult } from '../../../lib/knowledge-types';
 import { listPath, statusTone } from '../../../lib/knowledge-types';
 
 function SourceDownloadButton({ sourceId }: { sourceId: string }) {
@@ -77,6 +80,10 @@ export default function SourcesPage() {
   const spaceId = typeof router.query.spaceId === 'string' ? router.query.spaceId : '';
   const [problem, setProblem] = useState<unknown>(null);
   const [selectedSourceIds, setSelectedSourceIds] = useState<string[]>([]);
+  const [batchTarget, setBatchTarget] = useState('');
+  const [batchResult, setBatchResult] = useState<BatchActionResult | null>(null);
+  const [batchProblem, setBatchProblem] = useState<unknown>(null);
+  const [batchBusy, setBatchBusy] = useState(false);
   const space = useKnowledgeQuery<SpaceRecord>(
     knowledgeQueryKeys.spaces.detail(spaceId),
     spaceId ? `/v1/knowledge/spaces/${spaceId}` : null,
@@ -118,6 +125,46 @@ export default function SourcesPage() {
     invalidateKeys: [knowledgeQueryKeys.sources.list(spaceId), knowledgeQueryKeys.jobs.list()],
   });
 
+  const runSourceBatch = async (action: 'move' | 'delete') => {
+    if (selectedSourceIds.length === 0) return;
+    if (
+      action === 'delete' &&
+      !window.confirm(t('sources.confirmBatchDelete', { count: selectedSourceIds.length }))
+    ) {
+      return;
+    }
+    setBatchBusy(true);
+    setBatchProblem(null);
+    try {
+      const versions = Object.fromEntries(
+        selectedSourceIds.map((id) => [
+          id,
+          sources.data?.items.find((source) => source.id === id)?.version ?? 0,
+        ]),
+      );
+      const result = await knowledgeRequest<BatchActionResult>(
+        '/v1/knowledge/sources/batch-actions',
+        {
+          method: 'POST',
+          idempotencyKey: globalThis.crypto.randomUUID(),
+          body: {
+            action,
+            ids: selectedSourceIds,
+            versions,
+            ...(action === 'move' ? { targetDirectoryId: batchTarget || null } : {}),
+          },
+        },
+      );
+      setBatchResult(result);
+      setSelectedSourceIds([]);
+      await Promise.all([sources.refetch(), directories.refetch()]);
+    } catch (error) {
+      setBatchProblem(error);
+    } finally {
+      setBatchBusy(false);
+    }
+  };
+
   const submitSource = form.handleSubmit(async (values) => {
     await submitWithProblem(
       async () => {
@@ -153,6 +200,7 @@ export default function SourcesPage() {
           directories.error ??
           sources.error ??
           problem ??
+          batchProblem ??
           createSource.error ??
           deleteSource.error
         }
@@ -226,6 +274,47 @@ export default function SourcesPage() {
           </div>
         </form>
       </Section>
+      <Section title={t('directories.title')} meta={t('directories.meta')}>
+        <KnowledgeDataTable
+          rows={directories.data?.items ?? []}
+          rowKey={(directory) => directory.id}
+          empty={t('directories.empty')}
+          caption={t('directories.title')}
+          columns={[
+            {
+              key: 'name',
+              label: t('directories.name'),
+              render: (directory) => directory.name,
+            },
+            {
+              key: 'path',
+              label: t('spaces.columnPath'),
+              render: (directory) =>
+                directory.parentPath?.length ? directory.parentPath.length : t('governance.root'),
+            },
+            {
+              key: 'actions',
+              label: t('sources.columnActions'),
+              render: (directory) => (
+                <CatalogMoveControl
+                  resourceType="directory"
+                  resourceId={directory.id}
+                  endpoint={`/v1/knowledge/directories/${directory.id}/move`}
+                  version={directory.version}
+                  currentParentId={directory.parentDirectoryId}
+                  targets={(directories.data?.items ?? []).map((entry) => ({
+                    id: entry.id,
+                    label: entry.name,
+                  }))}
+                  onMoved={async () => {
+                    await Promise.all([directories.refetch(), sources.refetch()]);
+                  }}
+                />
+              ),
+            },
+          ]}
+        />
+      </Section>
       <Section
         title={t('sources.register')}
         meta={sources.data ? t('common.records', { count: sources.data.items.length }) : undefined}
@@ -235,8 +324,39 @@ export default function SourcesPage() {
             {t('sources.selectFile')}
           </Button>
           <ArchiveAction spaceId={spaceId} sourceIds={selectedSourceIds} />
+          <SelectInput
+            aria-label={t('governance.moveTarget')}
+            value={batchTarget}
+            onChange={(event) => setBatchTarget(event.target.value)}
+            maxW="220px"
+          >
+            <option value="">{t('directories.root')}</option>
+            {directories.data?.items.map((directory) => (
+              <option key={directory.id} value={directory.id}>
+                {directory.name}
+              </option>
+            ))}
+          </SelectInput>
+          <Button
+            size="sm"
+            busy={batchBusy}
+            isDisabled={selectedSourceIds.length === 0}
+            onClick={() => void runSourceBatch('move')}
+          >
+            {t('sources.batchMove')}
+          </Button>
+          <Button
+            size="sm"
+            tone="danger"
+            busy={batchBusy}
+            isDisabled={selectedSourceIds.length === 0}
+            onClick={() => void runSourceBatch('delete')}
+          >
+            {t('sources.batchDelete')}
+          </Button>
           <span>{t('sources.selectedCount', { count: selectedSourceIds.length })}</span>
         </div>
+        <CatalogBatchResult result={batchResult} />
         {sources.isLoading ? (
           <LoadingState />
         ) : (
@@ -293,6 +413,20 @@ export default function SourcesPage() {
                   <div className="inline-actions">
                     <FilePreviewPanel sourceId={source.id} />
                     <SourceDownloadButton sourceId={source.id} />
+                    <CatalogMoveControl
+                      resourceType="source"
+                      resourceId={source.id}
+                      endpoint={`/v1/knowledge/sources/${source.id}/move`}
+                      version={source.version}
+                      currentParentId={source.directoryId}
+                      targets={(directories.data?.items ?? []).map((directory) => ({
+                        id: directory.id,
+                        label: directory.name,
+                      }))}
+                      onMoved={async () => {
+                        await Promise.all([sources.refetch(), directories.refetch()]);
+                      }}
+                    />
                     <Button href={`/spaces/${spaceId}/segments?sourceId=${source.id}`} size="sm">
                       {t('sources.actionSegments')}
                     </Button>

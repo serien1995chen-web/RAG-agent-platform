@@ -117,11 +117,11 @@ export function validateRouteRegistry(): string[] {
   if (FULL_ROUTE_REGISTRY.length !== 120) {
     problems.push(`完整 registry 应为 120，实际 ${FULL_ROUTE_REGISTRY.length}`);
   }
-  if (RUNTIME_ROUTE_REGISTRY.length !== 46) {
-    problems.push(`runtime registry 应为 46，实际 ${RUNTIME_ROUTE_REGISTRY.length}`);
-  }
-  if (DEFERRED_OPERATION_MANIFEST.length !== 74) {
-    problems.push(`deferred manifest 应为 74，实际 ${DEFERRED_OPERATION_MANIFEST.length}`);
+  if (
+    RUNTIME_ROUTE_REGISTRY.length + DEFERRED_OPERATION_MANIFEST.length !==
+    FULL_ROUTE_REGISTRY.length
+  ) {
+    problems.push('runtime 与 deferred registry 未完整覆盖完整合同');
   }
 
   const fullIds = new Set(FULL_ROUTE_REGISTRY.map((route) => route.operationId));

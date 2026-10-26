@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "count": 58,
+  "count": 65,
   "operations": [
     {
       "operationId": "API-HEALTH-LIVE",
@@ -118,6 +118,29 @@
       "capabilityIds": [
         "COL-001",
         "COL-004"
+      ]
+    },
+    {
+      "operationId": "API-DIRECTORY-MOVE",
+      "method": "POST",
+      "path": "/v1/knowledge/directories/{directoryId}/move",
+      "group": "directory",
+      "requestSchema": "MoveResource",
+      "responseSchema": "Directory",
+      "scopes": [
+        "knowledge:write"
+      ],
+      "idempotent": true,
+      "rateLimit": "30 QPS/workspace",
+      "timeoutMs": 15000,
+      "audit": true,
+      "downstreamAllowed": false,
+      "runtime": true,
+      "stage": "BASE",
+      "targetSection": "9.2",
+      "accId": "ACC-CAP-KB-003",
+      "capabilityIds": [
+        "KB-003"
       ]
     },
     {
@@ -561,6 +584,29 @@
       ]
     },
     {
+      "operationId": "API-SOURCE-MOVE",
+      "method": "POST",
+      "path": "/v1/knowledge/sources/{sourceId}/move",
+      "group": "source",
+      "requestSchema": "MoveResource",
+      "responseSchema": "Source",
+      "scopes": [
+        "knowledge:write"
+      ],
+      "idempotent": true,
+      "rateLimit": "30 QPS/workspace",
+      "timeoutMs": 15000,
+      "audit": true,
+      "downstreamAllowed": false,
+      "runtime": true,
+      "stage": "BASE",
+      "targetSection": "9.2",
+      "accId": "ACC-CAP-KB-003",
+      "capabilityIds": [
+        "KB-003"
+      ]
+    },
+    {
       "operationId": "API-PERMISSION-DETACH",
       "method": "POST",
       "path": "/v1/knowledge/sources/{sourceId}/permissions/detach",
@@ -734,6 +780,29 @@
       "capabilityIds": [
         "DATA-001",
         "DATA-004"
+      ]
+    },
+    {
+      "operationId": "API-SOURCE-BATCH",
+      "method": "POST",
+      "path": "/v1/knowledge/sources/batch-actions",
+      "group": "source",
+      "requestSchema": "SourceBatchAction",
+      "responseSchema": "BatchResult",
+      "scopes": [
+        "knowledge:manage"
+      ],
+      "idempotent": true,
+      "rateLimit": "30 QPS/workspace",
+      "timeoutMs": 15000,
+      "audit": true,
+      "downstreamAllowed": false,
+      "runtime": true,
+      "stage": "BASE",
+      "targetSection": "9.2",
+      "accId": "ACC-CAP-KB-003",
+      "capabilityIds": [
+        "KB-003"
       ]
     },
     {
@@ -1027,6 +1096,52 @@
       ]
     },
     {
+      "operationId": "API-SPACE-EXPORT",
+      "method": "POST",
+      "path": "/v1/knowledge/spaces/{spaceId}/exports",
+      "group": "space",
+      "requestSchema": "ExportCreate",
+      "responseSchema": "Job",
+      "scopes": [
+        "knowledge:write"
+      ],
+      "idempotent": true,
+      "rateLimit": "30 QPS/workspace",
+      "timeoutMs": 15000,
+      "audit": true,
+      "downstreamAllowed": false,
+      "runtime": true,
+      "stage": "BASE",
+      "targetSection": "9.2",
+      "accId": "ACC-CAP-KB-003",
+      "capabilityIds": [
+        "KB-003"
+      ]
+    },
+    {
+      "operationId": "API-SPACE-MOVE",
+      "method": "POST",
+      "path": "/v1/knowledge/spaces/{spaceId}/move",
+      "group": "space",
+      "requestSchema": "MoveResource",
+      "responseSchema": "KnowledgeSpace",
+      "scopes": [
+        "knowledge:write"
+      ],
+      "idempotent": true,
+      "rateLimit": "30 QPS/workspace",
+      "timeoutMs": 15000,
+      "audit": true,
+      "downstreamAllowed": false,
+      "runtime": true,
+      "stage": "BASE",
+      "targetSection": "9.2",
+      "accId": "ACC-CAP-KB-003",
+      "capabilityIds": [
+        "KB-003"
+      ]
+    },
+    {
       "operationId": "API-OWNERSHIP-TRANSFER",
       "method": "POST",
       "path": "/v1/knowledge/spaces/{spaceId}/ownership-transfer",
@@ -1050,6 +1165,30 @@
         "AUTH-002",
         "AUTH-003",
         "AUTH-004"
+      ]
+    },
+    {
+      "operationId": "API-SPACE-REFERENCES",
+      "method": "GET",
+      "path": "/v1/knowledge/spaces/{spaceId}/references",
+      "group": "space",
+      "requestSchema": null,
+      "responseSchema": "KnowledgeSpaceReferences",
+      "scopes": [
+        "knowledge:read"
+      ],
+      "idempotent": false,
+      "rateLimit": "100 QPS/workspace",
+      "timeoutMs": 5000,
+      "audit": false,
+      "downstreamAllowed": false,
+      "runtime": true,
+      "stage": "BASE",
+      "targetSection": "9.2",
+      "accId": "ACC-CAP-KB-002",
+      "capabilityIds": [
+        "KB-002",
+        "KB-003"
       ]
     },
     {
@@ -1169,6 +1308,29 @@
       "accId": "ACC-CAP-COL-003",
       "capabilityIds": [
         "COL-003"
+      ]
+    },
+    {
+      "operationId": "API-SPACE-BATCH",
+      "method": "POST",
+      "path": "/v1/knowledge/spaces/batch-actions",
+      "group": "space",
+      "requestSchema": "KnowledgeSpaceBatchAction",
+      "responseSchema": "BatchResult",
+      "scopes": [
+        "knowledge:manage"
+      ],
+      "idempotent": true,
+      "rateLimit": "30 QPS/workspace",
+      "timeoutMs": 15000,
+      "audit": true,
+      "downstreamAllowed": false,
+      "runtime": true,
+      "stage": "BASE",
+      "targetSection": "9.2",
+      "accId": "ACC-CAP-KB-003",
+      "capabilityIds": [
+        "KB-003"
       ]
     },
     {

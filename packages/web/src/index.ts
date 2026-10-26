@@ -32,6 +32,21 @@ export {
 } from './components/knowledge-primitives';
 export { KnowledgeDataTable } from './components/data-table';
 export { ArchiveAction } from './components/archive-action';
+export {
+  CatalogBatchResult,
+  CatalogMoveControl,
+  SpaceExportAction,
+  SpaceReferencesPanel,
+} from './components/catalog-governance';
+export type { BatchResultView, MoveTargetOption } from './components/catalog-governance';
+export {
+  batchResultRole,
+  catalogGovernanceState,
+  exportStatusTone,
+  hasBlockingReference,
+  shouldResetMoveIdempotencyKey,
+} from './components/catalog-governance-state';
+export type { CatalogGovernanceState } from './components/catalog-governance-state';
 export { FilePreviewPanel } from './components/file-preview';
 export { FileUploadPanel } from './components/file-upload';
 export type {

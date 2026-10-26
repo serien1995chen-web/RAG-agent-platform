@@ -129,6 +129,11 @@ export interface CatalogPort {
     input: Record<string, unknown>,
     context: TenantContext,
   ): Promise<Record<string, unknown>>;
+  moveSpace(
+    spaceId: string,
+    input: Record<string, unknown>,
+    context: TenantContext,
+  ): Promise<SpaceView>;
   listDirectories(
     spaceId: string,
     query: OperationPageRequest,
@@ -146,6 +151,11 @@ export interface CatalogPort {
     context: TenantContext,
   ): Promise<DirectoryView>;
   deleteDirectory(directoryId: string, context: TenantContext): Promise<Record<string, unknown>>;
+  moveDirectoryTree(
+    directoryId: string,
+    input: Record<string, unknown>,
+    context: TenantContext,
+  ): Promise<DirectoryView>;
   listSources(
     spaceId: string,
     query: OperationPageRequest,
@@ -162,7 +172,16 @@ export interface CatalogPort {
     input: Record<string, unknown>,
     context: TenantContext,
   ): Promise<SourceView>;
-  deleteSource(sourceId: string, context: TenantContext): Promise<Record<string, unknown>>;
+  deleteSource(
+    sourceId: string,
+    context: TenantContext,
+    expectedVersion?: number,
+  ): Promise<Record<string, unknown>>;
+  moveSource(
+    sourceId: string,
+    input: Record<string, unknown>,
+    context: TenantContext,
+  ): Promise<SourceView>;
   listSegments(
     sourceId: string,
     query: OperationPageRequest,
@@ -256,6 +275,28 @@ export interface AccessPort {
   ): Promise<AclView>;
 }
 
+export interface AuditPort {
+  appendStandalone(
+    input: {
+      knowledgeSpaceId: string | null;
+      action: string;
+      resourceType:
+        | 'workspace'
+        | 'space'
+        | 'directory'
+        | 'source'
+        | 'segment'
+        | 'job'
+        | 'connector'
+        | 'api_key';
+      resourceId: string;
+      outcome: 'allowed' | 'denied' | 'succeeded' | 'failed';
+      safeDiff: Record<string, unknown>;
+    },
+    context: TenantContext,
+  ): Promise<void>;
+}
+
 export interface JobPort {
   list(
     query: OperationPageRequest,
@@ -268,7 +309,14 @@ export interface JobPort {
     context: TenantContext,
   ): Promise<Record<string, unknown> | null>;
   createExportJob(
-    input: { spaceId: string; sourceIds: string[]; idempotencyKey: string },
+    input: {
+      spaceId: string;
+      sourceIds: string[];
+      idempotencyKey: string;
+      format?: 'zip';
+      exportScope?: 'sources' | 'space';
+      sourceVersions?: Record<string, number>;
+    },
     context: TenantContext,
   ): Promise<Record<string, unknown>>;
   transition(
@@ -279,6 +327,63 @@ export interface JobPort {
     },
     context: TenantContext,
   ): Promise<Record<string, unknown>>;
+}
+
+export interface ReferenceView {
+  referrerType: 'app' | 'workflow';
+  referrerId: string;
+  referrerVersion: string;
+  referrerName: string;
+  status: 'active' | 'stale' | 'removed';
+  lastSeenAt: string;
+}
+
+export interface ReferenceRegistryDescriptor {
+  referrerType: 'app' | 'workflow';
+  referrerId: string;
+  referrerVersion: string;
+  referrerName: string;
+  verification: 'EXTERNAL_UNVERIFIED';
+}
+
+export interface ReferenceRegistryPort {
+  resolve(
+    referrerType: 'app' | 'workflow',
+    referrerId: string,
+    referrerVersion: string,
+    context: TenantContext,
+  ): ReferenceRegistryDescriptor;
+}
+
+export interface ReferenceEventPort {
+  applyUpsert(
+    input: {
+      spaceId: string;
+      referrerType: 'app' | 'workflow';
+      referrerId: string;
+      referrerVersion: string;
+      referrerName: string;
+      registryRevision: number;
+    },
+    context: TenantContext,
+  ): Promise<{ referenceRevision: number; item: ReferenceView }>;
+  applyRemove(
+    input: {
+      spaceId: string;
+      referrerType: 'app' | 'workflow';
+      referrerId: string;
+      referrerVersion: string;
+      registryRevision: number;
+    },
+    context: TenantContext,
+  ): Promise<{ referenceRevision: number; item: ReferenceView }>;
+}
+
+export interface ReferencePort extends ReferenceEventPort {
+  list(
+    spaceId: string,
+    context: TenantContext,
+  ): Promise<{ referenceRevision: number; count: number; items: ReferenceView[] }>;
 }
 
 export type KnowledgeObjectProvider = 'minio' | 'aws-s3' | 'r2' | 'cos' | 'oss';
@@ -381,7 +486,7 @@ export interface ObjectStorageContext {
 }
 
 export interface ArchiveSafetyInput {
-  kind: 'upload' | 'archive';
+  kind: 'upload' | 'archive' | 'space-archive';
   bucket: string;
   objectKey: string;
   sizeBytes: number;

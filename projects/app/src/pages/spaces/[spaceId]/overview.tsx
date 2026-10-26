@@ -5,6 +5,8 @@ import {
   PageHeader,
   ProblemNotice,
   Section,
+  SpaceExportAction,
+  SpaceReferencesPanel,
   StatusTag,
   TextArea,
   TextInput,
@@ -233,6 +235,12 @@ export default function SpaceOverviewPage() {
                 </Button>
               </div>
             </form>
+          </Section>
+          <Section title={t('governance.exportSpace')}>
+            <SpaceExportAction spaceId={space.id} />
+          </Section>
+          <Section title={t('governance.references')}>
+            <SpaceReferencesPanel spaceId={space.id} />
           </Section>
         </>
       )}

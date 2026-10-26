@@ -13,11 +13,13 @@ import {
 } from '@kb/otel';
 import {
   KnowledgeAccessRepository,
+  KnowledgeAuditRepository,
   KnowledgeApplication,
   KnowledgeArchiveRepository,
   KnowledgeCatalogRepository,
   FileApplication,
   KnowledgeObjectRefRepository,
+  KnowledgeReferenceRepository,
   KnowledgeMockAuthProvider,
   KnowledgeTagRepository,
   SourceFileApplication,
@@ -202,6 +204,8 @@ async function bootstrapRuntime(): Promise<TelemetryKnowledgeApiRuntime> {
     archiveSafety,
   );
   const jobs = new KnowledgeArchiveRepository(mongo);
+  const references = new KnowledgeReferenceRepository(mongo);
+  const audits = new KnowledgeAuditRepository(mongo);
   const sourceFiles = new SourceFileApplication(
     catalog,
     jobs,
@@ -218,6 +222,8 @@ async function bootstrapRuntime(): Promise<TelemetryKnowledgeApiRuntime> {
     jobs,
     files,
     sourceFiles,
+    references,
+    audits,
   );
   const queueAdapter = new BullMqQueueAdapter({ connection: redis });
   const queues = new Map(

@@ -16,8 +16,8 @@
 | OpenAPI paths       |   92 |
 | OpenAPI operations  |  120 |
 | OpenAPI schemas     |  139 |
-| runtime operations  |   46 |
-| deferred operations |   74 |
+| runtime operations  |   65 |
+| deferred operations |   55 |
 | Mongo collections   |   23 |
 | pgvector profiles   |    4 |
 | BullMQ queues       |   13 |

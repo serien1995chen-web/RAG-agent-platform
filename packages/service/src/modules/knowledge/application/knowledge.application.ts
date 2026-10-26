@@ -1,7 +1,17 @@
+import { createHash } from 'node:crypto';
 import { createKnowledgeError } from '@kb/contracts';
 import type { TenantContext } from '../../../shared/persistence/knowledge/tenant';
-import type { AclResourceType } from '../domain';
-import type { AccessPort, CatalogPort, FileBinaryResult, JobPort, TagPort } from './ports';
+import { assertBatchVersions, type AclResourceType, type PermissionLevel } from '../domain';
+import type {
+  AccessPort,
+  AuditPort,
+  CatalogPort,
+  FileBinaryResult,
+  JobPort,
+  ReferencePort,
+  SourceView,
+  TagPort,
+} from './ports';
 import type { FileApplication } from './file.application';
 import type { SourceFileApplication } from './source-preview';
 
@@ -68,7 +78,98 @@ export class KnowledgeApplication {
     private readonly jobs: JobPort,
     private readonly files?: FileApplication,
     private readonly sources?: SourceFileApplication,
+    private readonly references?: ReferencePort,
+    private readonly audits?: AuditPort,
   ) {}
+
+  private async requireExistingPermission(
+    resourceType: AclResourceType,
+    resourceId: string,
+    required: PermissionLevel,
+    context: TenantContext,
+  ): Promise<void> {
+    if (resourceType === 'space') await this.catalog.getSpace(resourceId, context);
+    else if (resourceType === 'directory') await this.catalog.getDirectory(resourceId, context);
+    else await this.catalog.getSource(resourceId, context);
+    try {
+      await this.access.assertPermission(resourceType, resourceId, required, context);
+    } catch (error) {
+      if (
+        typeof error === 'object' &&
+        error !== null &&
+        'problem' in error &&
+        (error as { problem?: { error?: { code?: string } } }).problem?.error?.code ===
+          'KNOWLEDGE_NOT_FOUND'
+      ) {
+        throw createKnowledgeError({
+          code: 'KNOWLEDGE_FORBIDDEN',
+          requestId: context.requestId,
+          traceId: context.traceId,
+          details: { resourceType },
+        });
+      }
+      throw error;
+    }
+  }
+
+  private normalizeBatchIds(value: unknown, context: TenantContext): string[] {
+    const raw = Array.isArray(value) ? value.map(String) : [];
+    const ids = [...new Set(raw)];
+    if (ids.length < 1 || ids.length > 100 || ids.length !== raw.length) {
+      throw createKnowledgeError({
+        code: 'KNOWLEDGE_VALIDATION_FAILED',
+        requestId: context.requestId,
+        traceId: context.traceId,
+        details: { field: 'ids', min: 1, max: 100, unique: true },
+      });
+    }
+    return ids;
+  }
+
+  private itemCode(error: unknown): string {
+    if (
+      typeof error === 'object' &&
+      error !== null &&
+      'problem' in error &&
+      typeof (error as { problem?: { error?: { code?: unknown } } }).problem?.error?.code ===
+        'string'
+    ) {
+      return String((error as { problem: { error: { code: string } } }).problem.error.code);
+    }
+    return 'KNOWLEDGE_INTERNAL_ERROR';
+  }
+
+  private async failedBatchItem(
+    input: {
+      id: string;
+      action: 'move' | 'delete';
+      resourceType: 'space' | 'source';
+      knowledgeSpaceId: string | null;
+    },
+    error: unknown,
+    context: TenantContext,
+  ): Promise<Record<string, unknown>> {
+    const failureCode = this.itemCode(error);
+    if (!this.audits) {
+      return { id: input.id, success: false, code: 'KNOWLEDGE_INTERNAL_ERROR' };
+    }
+    try {
+      await this.audits.appendStandalone(
+        {
+          knowledgeSpaceId: input.resourceType === 'space' ? input.id : input.knowledgeSpaceId,
+          action: `batch.${input.resourceType}.failed`,
+          resourceType: input.resourceType,
+          resourceId: input.id,
+          outcome: 'failed',
+          safeDiff: { action: input.action, failureCode },
+        },
+        context,
+      );
+    } catch {
+      return { id: input.id, success: false, code: 'KNOWLEDGE_INTERNAL_ERROR' };
+    }
+    return { id: input.id, success: false, code: failureCode };
+  }
 
   async dispatch(input: KnowledgeOperationInput): Promise<KnowledgeOperationResult> {
     const { context, params } = input;
@@ -121,6 +222,21 @@ export class KnowledgeApplication {
         await this.access.assertPermission('space', params.spaceId ?? '', 'read', context);
         return { status: 200, data: await this.catalog.getSpace(params.spaceId ?? '', context) };
       }
+      case 'API-SPACE-REFERENCES': {
+        await this.requireExistingPermission('space', params.spaceId ?? '', 'read', context);
+        if (!this.references) {
+          throw createKnowledgeError({
+            code: 'KNOWLEDGE_INTERNAL_ERROR',
+            requestId: context.requestId,
+            traceId: context.traceId,
+            details: { reason: 'reference_port_missing' },
+          });
+        }
+        return {
+          status: 200,
+          data: await this.references.list(params.spaceId ?? '', context),
+        };
+      }
       case 'API-SPACE-UPDATE': {
         await this.access.assertPermission('space', params.spaceId ?? '', 'write', context);
         return {
@@ -133,6 +249,203 @@ export class KnowledgeApplication {
         return {
           status: 202,
           data: await this.catalog.deleteSpace(params.spaceId ?? '', body, context),
+        };
+      }
+      case 'API-SPACE-MOVE': {
+        await this.requireExistingPermission('space', params.spaceId ?? '', 'write', context);
+        if (body.targetParentId && typeof body.targetParentId === 'string') {
+          await this.requireExistingPermission('space', body.targetParentId, 'write', context);
+        }
+        return {
+          status: 200,
+          data: await this.catalog.moveSpace(params.spaceId ?? '', body, context),
+        };
+      }
+      case 'API-SPACE-BATCH': {
+        const ids = this.normalizeBatchIds(body.ids, context);
+        const versions = assertBatchVersions(ids, body.versions, context);
+        const action = String(body.action ?? '');
+        if (action !== 'move' && action !== 'delete') {
+          throw createKnowledgeError({
+            code: 'KNOWLEDGE_VALIDATION_FAILED',
+            requestId: context.requestId,
+            traceId: context.traceId,
+            details: { field: 'action' },
+          });
+        }
+        if (action === 'move' && !Object.hasOwn(body, 'targetParentId')) {
+          throw createKnowledgeError({
+            code: 'KNOWLEDGE_VALIDATION_FAILED',
+            requestId: context.requestId,
+            traceId: context.traceId,
+            details: { field: 'targetParentId', reason: 'required_for_move' },
+          });
+        }
+        if (action === 'delete' && body.targetParentId != null) {
+          throw createKnowledgeError({
+            code: 'KNOWLEDGE_VALIDATION_FAILED',
+            requestId: context.requestId,
+            traceId: context.traceId,
+            details: { field: 'targetParentId', reason: 'not_allowed_for_delete' },
+          });
+        }
+        if (action === 'move' && body.targetParentId != null) {
+          await this.requireExistingPermission(
+            'space',
+            String(body.targetParentId),
+            'write',
+            context,
+          );
+        }
+        const items: Array<Record<string, unknown>> = [];
+        let succeeded = 0;
+        for (const id of ids) {
+          try {
+            await this.requireExistingPermission('space', id, 'manage', context);
+            const current = await this.catalog.getSpace(id, context);
+            const data =
+              action === 'move'
+                ? await this.catalog.moveSpace(
+                    id,
+                    { targetParentId: body.targetParentId ?? null, version: versions[id] },
+                    context,
+                  )
+                : await this.catalog.deleteSpace(
+                    id,
+                    {
+                      version: versions[id],
+                      expectedReferenceRevision: Number(current.referenceRevision),
+                      referenceStrategy: 'block',
+                    },
+                    context,
+                  );
+            succeeded += 1;
+            items.push({
+              id,
+              success: true,
+              version:
+                action === 'move'
+                  ? Number((data as Record<string, unknown>).version ?? 0)
+                  : (versions[id] ?? 1) + 1,
+              ...(Array.isArray((data as Record<string, unknown>).parentPath)
+                ? { parentPath: (data as Record<string, unknown>).parentPath }
+                : {}),
+            });
+          } catch (error) {
+            items.push(
+              await this.failedBatchItem(
+                {
+                  id,
+                  action,
+                  resourceType: 'space',
+                  knowledgeSpaceId: id,
+                },
+                error,
+                context,
+              ),
+            );
+          }
+        }
+        return {
+          status: succeeded === ids.length ? 200 : 207,
+          data: {
+            ...(succeeded === ids.length ? {} : { code: 'KNOWLEDGE_PARTIAL_SUCCESS' }),
+            requested: ids.length,
+            succeeded,
+            failed: ids.length - succeeded,
+            items,
+          },
+        };
+      }
+      case 'API-SPACE-EXPORT': {
+        await this.requireExistingPermission('space', params.spaceId ?? '', 'write', context);
+        if (body.format !== undefined && body.format !== 'zip') {
+          throw createKnowledgeError({
+            code: 'KNOWLEDGE_VALIDATION_FAILED',
+            requestId: context.requestId,
+            traceId: context.traceId,
+            details: { field: 'format', supported: ['zip'] },
+          });
+        }
+        const requestedIds = Array.isArray(body.sourceIds)
+          ? [...new Set(body.sourceIds.map(String))]
+          : null;
+        if (requestedIds && (requestedIds.length < 1 || requestedIds.length > 2000)) {
+          throw createKnowledgeError({
+            code: 'KNOWLEDGE_PAYLOAD_TOO_LARGE',
+            requestId: context.requestId,
+            traceId: context.traceId,
+            details: { field: 'sourceIds', min: 1, max: 2000 },
+          });
+        }
+        const sources = [];
+        if (requestedIds) {
+          for (const sourceId of requestedIds) {
+            sources.push(await this.catalog.getSource(sourceId, context));
+          }
+        } else {
+          let cursor: string | undefined;
+          do {
+            const page = await this.catalog.listSources(
+              params.spaceId ?? '',
+              { limit: 200, cursor },
+              context,
+            );
+            sources.push(...page.items);
+            cursor = page.pageInfo.nextCursor ?? undefined;
+          } while (cursor);
+        }
+        if (sources.length > 2000) {
+          throw createKnowledgeError({
+            code: 'KNOWLEDGE_PAYLOAD_TOO_LARGE',
+            requestId: context.requestId,
+            traceId: context.traceId,
+            details: { field: 'sourceIds', max: 2000 },
+          });
+        }
+        const sourceVersions: Record<string, number> = {};
+        for (const source of sources) {
+          if (source.knowledgeSpaceId !== params.spaceId) {
+            throw createKnowledgeError({
+              code: 'KNOWLEDGE_NOT_FOUND',
+              requestId: context.requestId,
+              traceId: context.traceId,
+              details: { sourceId: source.id },
+            });
+          }
+          await this.requireExistingPermission('source', source.id, 'read', context);
+          sourceVersions[source.id] = Number(source.version);
+        }
+        const headerValue = input.headers?.['idempotency-key'];
+        const suppliedKey = Array.isArray(headerValue) ? headerValue[0] : headerValue;
+        const idempotencyKey =
+          suppliedKey ??
+          `space-export:${createHash('sha256')
+            .update(
+              [
+                context.workspaceId,
+                params.spaceId ?? '',
+                'zip',
+                sources
+                  .map((source) => `${source.id}:${source.version}`)
+                  .sort()
+                  .join(','),
+              ].join('|'),
+            )
+            .digest('hex')}`;
+        return {
+          status: 202,
+          data: await this.jobs.createExportJob(
+            {
+              spaceId: params.spaceId ?? '',
+              sourceIds: sources.map((source) => source.id),
+              sourceVersions,
+              format: 'zip',
+              exportScope: 'space',
+              idempotencyKey,
+            },
+            context,
+          ),
         };
       }
       case 'API-DIRECTORY-LIST': {
@@ -184,6 +497,21 @@ export class KnowledgeApplication {
         return {
           status: 202,
           data: await this.catalog.deleteDirectory(params.directoryId ?? '', context),
+        };
+      }
+      case 'API-DIRECTORY-MOVE': {
+        await this.requireExistingPermission(
+          'directory',
+          params.directoryId ?? '',
+          'write',
+          context,
+        );
+        if (body.targetParentId && typeof body.targetParentId === 'string') {
+          await this.requireExistingPermission('directory', body.targetParentId, 'write', context);
+        }
+        return {
+          status: 200,
+          data: await this.catalog.moveDirectoryTree(params.directoryId ?? '', body, context),
         };
       }
       case 'API-SOURCE-LIST': {
@@ -246,6 +574,153 @@ export class KnowledgeApplication {
         return {
           status: 202,
           data: await this.catalog.deleteSource(params.sourceId ?? '', context),
+        };
+      }
+      case 'API-SOURCE-MOVE': {
+        await this.requireExistingPermission('source', params.sourceId ?? '', 'write', context);
+        if (body.targetParentId && typeof body.targetParentId === 'string') {
+          await this.requireExistingPermission('directory', body.targetParentId, 'write', context);
+        }
+        return {
+          status: 200,
+          data: await this.catalog.moveSource(params.sourceId ?? '', body, context),
+        };
+      }
+      case 'API-SOURCE-BATCH': {
+        const ids = this.normalizeBatchIds(body.ids, context);
+        const versions = assertBatchVersions(ids, body.versions, context);
+        const action = String(body.action ?? '');
+        if (action !== 'move' && action !== 'delete') {
+          throw createKnowledgeError({
+            code: 'KNOWLEDGE_VALIDATION_FAILED',
+            requestId: context.requestId,
+            traceId: context.traceId,
+            details: { field: 'action', supported: ['move', 'delete'] },
+          });
+        }
+        if (action === 'move' && !Object.hasOwn(body, 'targetDirectoryId')) {
+          throw createKnowledgeError({
+            code: 'KNOWLEDGE_VALIDATION_FAILED',
+            requestId: context.requestId,
+            traceId: context.traceId,
+            details: { field: 'targetDirectoryId', reason: 'required_for_move' },
+          });
+        }
+        if (action === 'delete' && body.targetDirectoryId != null) {
+          throw createKnowledgeError({
+            code: 'KNOWLEDGE_VALIDATION_FAILED',
+            requestId: context.requestId,
+            traceId: context.traceId,
+            details: { field: 'targetDirectoryId', reason: 'not_allowed_for_delete' },
+          });
+        }
+        if (action === 'move' && body.targetDirectoryId != null) {
+          await this.requireExistingPermission(
+            'directory',
+            String(body.targetDirectoryId),
+            'write',
+            context,
+          );
+        }
+        const candidates = new Map<string, { source: SourceView; spaceId: string }>();
+        const failures = new Map<string, Record<string, unknown>>();
+        const attempts = new Map<string, string>();
+        for (const id of ids) {
+          try {
+            await this.requireExistingPermission('source', id, 'manage', context);
+            const source = await this.catalog.getSource(id, context);
+            attempts.set(id, source.knowledgeSpaceId);
+            if (Number(source.version) !== versions[id]) {
+              throw createKnowledgeError({
+                code: 'KNOWLEDGE_CONFLICT',
+                requestId: context.requestId,
+                traceId: context.traceId,
+                details: { resourceId: id, field: 'version' },
+              });
+            }
+            candidates.set(id, { source, spaceId: source.knowledgeSpaceId });
+          } catch (error) {
+            failures.set(
+              id,
+              await this.failedBatchItem(
+                {
+                  id,
+                  action,
+                  resourceType: 'source',
+                  knowledgeSpaceId: attempts.get(id) ?? null,
+                },
+                error,
+                context,
+              ),
+            );
+          }
+        }
+        const sourceSpaces = new Set(
+          [...candidates.values()].map((candidate) => candidate.spaceId),
+        );
+        if (sourceSpaces.size > 1) {
+          throw createKnowledgeError({
+            code: 'KNOWLEDGE_VALIDATION_FAILED',
+            requestId: context.requestId,
+            traceId: context.traceId,
+            details: { field: 'ids', reason: 'single_knowledge_space_required' },
+          });
+        }
+        const items: Array<Record<string, unknown>> = [];
+        let succeeded = 0;
+        for (const id of ids) {
+          const failed = failures.get(id);
+          if (failed) {
+            items.push(failed);
+            continue;
+          }
+          try {
+            const data =
+              action === 'move'
+                ? await this.catalog.moveSource(
+                    id,
+                    {
+                      targetParentId: body.targetDirectoryId ?? null,
+                      version: versions[id],
+                    },
+                    context,
+                  )
+                : await this.catalog.deleteSource(id, context, versions[id]);
+            succeeded += 1;
+            items.push({
+              id,
+              success: true,
+              ...(action === 'move'
+                ? {
+                    version: Number((data as Record<string, unknown>).version ?? 0),
+                    parentPath: (data as Record<string, unknown>).parentPath,
+                  }
+                : {}),
+            });
+          } catch (error) {
+            items.push(
+              await this.failedBatchItem(
+                {
+                  id,
+                  action,
+                  resourceType: 'source',
+                  knowledgeSpaceId: candidates.get(id)?.spaceId ?? null,
+                },
+                error,
+                context,
+              ),
+            );
+          }
+        }
+        return {
+          status: succeeded === ids.length ? 200 : 207,
+          data: {
+            ...(succeeded === ids.length ? {} : { code: 'KNOWLEDGE_PARTIAL_SUCCESS' }),
+            requested: ids.length,
+            succeeded,
+            failed: ids.length - succeeded,
+            items,
+          },
         };
       }
       case 'API-SEGMENT-LIST': {

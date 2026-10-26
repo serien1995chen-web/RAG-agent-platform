@@ -33,6 +33,13 @@ export const knowledgeQueryKeys = {
       stableParams(params),
     ],
     detail: (spaceId: string): QueryKey => ['knowledge', VERSION, 'spaces', 'detail', spaceId],
+    references: (spaceId: string): QueryKey => [
+      'knowledge',
+      VERSION,
+      'spaces',
+      spaceId,
+      'references',
+    ],
   },
   directories: {
     list: (spaceId: string, params: QueryParams = { limit: 200 }): QueryKey => [

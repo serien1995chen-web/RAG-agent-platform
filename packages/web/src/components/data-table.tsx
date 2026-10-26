@@ -4,7 +4,6 @@ import {
   Box,
   Button as ChakraButton,
   ButtonGroup,
-  Checkbox,
   Flex,
   Popover,
   PopoverBody,
@@ -124,32 +123,27 @@ export function KnowledgeDataTable<T>(props: KnowledgeDataTableProps<T>) {
                 <PopoverBody>
                   <Stack spacing={2}>
                     {hideableColumns.map((column) => (
-                      <Checkbox
+                      <label
                         key={column.id}
-                        isChecked={column.getIsVisible()}
-                        onChange={column.getToggleVisibilityHandler()}
-                        position="relative"
-                        sx={{
-                          '.chakra-checkbox__input': {
-                            position: 'absolute !important',
-                            inset: '0 !important',
-                            width: '100% !important',
-                            height: '100% !important',
-                            margin: '0 !important',
-                            padding: '0 !important',
-                            overflow: 'visible !important',
-                            whiteSpace: 'normal !important',
-                            opacity: '0 !important',
-                            cursor: 'pointer',
-                            clip: 'auto !important',
-                            clipPath: 'none !important',
-                            zIndex: 1,
-                          },
-                          '.chakra-checkbox__control': { pointerEvents: 'none' },
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '8px',
+                          cursor: 'pointer',
                         }}
                       >
-                        {String(column.columnDef.header)}
-                      </Checkbox>
+                        <input
+                          type="checkbox"
+                          checked={column.getIsVisible()}
+                          onChange={() =>
+                            setColumnVisibility((current) => ({
+                              ...current,
+                              [column.id]: !column.getIsVisible(),
+                            }))
+                          }
+                        />
+                        <span>{String(column.columnDef.header)}</span>
+                      </label>
                     ))}
                   </Stack>
                 </PopoverBody>

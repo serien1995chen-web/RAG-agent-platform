@@ -245,6 +245,23 @@ export class KnowledgeAccessRepository {
     };
   }
 
+  async exportAclSnapshot(
+    resourceType: AclResourceType,
+    resourceId: string,
+    context: TenantContext,
+  ) {
+    const resource = await this.resolveResource(resourceType, resourceId, context);
+    const entries =
+      resource.permissionState === 'independent'
+        ? await this.localEntries(resourceType, resource.resourceId, context)
+        : await this.effectiveEntries(resource, context);
+    return {
+      permissionState: resource.permissionState,
+      permissionRevision: resource.permissionRevision,
+      entries,
+    };
+  }
+
   async assertPermission(
     resourceType: AclResourceType,
     resourceId: string,
