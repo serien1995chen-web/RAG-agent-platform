@@ -39,6 +39,8 @@ export { dedupeQaItems, limitChunkCount } from './dedup';
 export type { DedupOutcome } from './dedup';
 
 export { buildQaDedupKey, normalizeQaText };
+export { repairQaOutputOnce, validateQaItems } from './s5-validation';
+export type { QaValidationResult } from './s5-validation';
 
 export interface GenerateQaOptions {
   templateRegistry: QaTemplateRegistryPort;

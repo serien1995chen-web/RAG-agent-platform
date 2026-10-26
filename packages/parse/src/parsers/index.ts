@@ -13,6 +13,8 @@ import { parsePdf } from './pdf';
 import { parsePptx } from './pptx';
 import { parseText } from './text';
 import { parseXlsx } from './xlsx';
+import { parseOfd } from '../s5/ofd-parser';
+import { parsePdfWithLiteParse } from '../s5/liteparse-provider';
 
 /** 建立包含全部 9 类格式的注册表；缺失任一矩阵项会在注册期抛错。 */
 export function createParserRegistry(): ParseFormatRegistry {
@@ -21,12 +23,13 @@ export function createParserRegistry(): ParseFormatRegistry {
     text: parseText,
     markdown: parseMarkdown,
     html: parseHtml,
-    pdf: parsePdf,
+    pdf: parsePdfWithLiteParse,
     docx: parseDocx,
     pptx: parsePptx,
     xlsx: parseXlsx,
     csv: parseCsv,
     ebook: parseEbook,
+    ofd: parseOfd,
   };
   for (const format of Object.keys(handlers) as ParseFormat[]) {
     registry.register(format, handlers[format]);
@@ -41,6 +44,7 @@ export {
   parseHtml,
   parseMarkdown,
   parsePdf,
+  parseOfd,
   parsePptx,
   parseText,
   parseXlsx,

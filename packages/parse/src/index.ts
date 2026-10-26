@@ -7,12 +7,17 @@ import { parseFailedError, unsupportedFormatError } from './format-registry';
 import type { ParseFormatRegistry } from './format-registry';
 import { createParserRegistry } from './parsers/index';
 import type { DocumentParserPort, ParseRequest, ParseResult } from './format-registry';
+import { detectAnyDocExtension } from './s5/anydoc-detector';
 
 export const PACKAGE_NAME = '@kb/parse' as const;
 
 export { contentHashOf, PARSE_FORMAT_MATRIX, resolveParseFormat } from './format-registry';
 export type {
+  ParseAsset,
+  ParseDiagnostic,
+  ParseEvidence,
   DocumentParserPort,
+  ParsePage,
   ParseFormatSpec,
   ParseRequest,
   ParseResult,
@@ -52,6 +57,15 @@ export type {
   ImportTemplateRow,
   ParseImportTemplateInput,
 } from './import-template';
+export {
+  S5LiteParseConfigSchema,
+  loadLiteParse,
+  parsePdfWithLiteParse,
+  parseWithLiteParse,
+} from './s5/liteparse-provider';
+export type { LiteParseLoader, S5LiteParseConfig } from './s5/liteparse-provider';
+export { detectAnyDocExtension } from './s5/anydoc-detector';
+export { parseOfd } from './s5/ofd-parser';
 
 /**
  * 解析所需上下文：兼容既有 DocumentParserPort.parse(request) 调用面。
@@ -83,18 +97,34 @@ export function createDefaultDocumentParser(): DocumentParserPort {
   const registry: ParseFormatRegistry = createParserRegistry();
   return {
     async parse(request: ParseRequest): Promise<ParseResult> {
-      const format = registry.resolve(request.extension, request.mimeType);
-      if (!format) {
-        throw unsupportedFormatError(request.extension, request.fileRef);
-      }
-      const registration = registry.get(format);
-      if (!registration) {
-        throw unsupportedFormatError(request.extension, request.fileRef);
-      }
       const context = toHandlerContext(request);
       if (!context)
         throw parseFailedError(request.extension, 'parse_bytes_missing', request.fileRef);
-      return registration.handler(context);
+      const anyDocExtension = await detectAnyDocExtension(request, context.bytes);
+      if (
+        anyDocExtension === null &&
+        (request.extension.replace(/^\./, '').toLowerCase() === 'anydoc' ||
+          /anydoc/i.test(request.mimeType ?? ''))
+      ) {
+        throw unsupportedFormatError(request.extension, request.fileRef);
+      }
+      const normalizedRequest =
+        anyDocExtension === null
+          ? request
+          : {
+              ...request,
+              extension: anyDocExtension,
+              ...(anyDocExtension === 'pdf' ? { mimeType: 'application/pdf' } : {}),
+            };
+      const format = registry.resolve(normalizedRequest.extension, normalizedRequest.mimeType);
+      if (!format) {
+        throw unsupportedFormatError(normalizedRequest.extension, request.fileRef);
+      }
+      const registration = registry.get(format);
+      if (!registration) {
+        throw unsupportedFormatError(normalizedRequest.extension, request.fileRef);
+      }
+      return registration.handler({ ...context, request: normalizedRequest });
     },
   };
 }

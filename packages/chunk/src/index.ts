@@ -25,6 +25,8 @@ export type {
 export { buildSegments, normalizeChunkText } from './paragraph';
 export type { Segment, SegmentKind, SegmentOptions } from './paragraph';
 export { CHUNK_LIMIT_ERROR_CODE, chunkLimitError } from './chunker';
+export { S5ChunkingSettingsSchema, toChunkPolicy, validateChunkingSettings } from './s5-settings';
+export type { ChunkingSettings } from './s5-settings';
 
 /** 确定性切分入口：空输入返回空数组；上限越界抛 KNOWLEDGE_VALIDATION_FAILED。 */
 export function chunkText(input: ChunkInput): ChunkOutput {

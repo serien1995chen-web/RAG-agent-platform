@@ -9,8 +9,8 @@ import {
 import { unsupportedFormatError } from '../../src/format-registry';
 
 describe('TEST-PARSE-FORMAT-001 parser format matrix', () => {
-  it('freezes exactly nine formats with the documented extensions', () => {
-    expect(PARSE_FORMAT_MATRIX).toHaveLength(9);
+  it('freezes the nine baseline formats plus OFD with documented extensions', () => {
+    expect(PARSE_FORMAT_MATRIX).toHaveLength(10);
     expect(PARSE_FORMAT_MATRIX.map((spec) => spec.format)).toEqual([
       'text',
       'markdown',
@@ -21,16 +21,18 @@ describe('TEST-PARSE-FORMAT-001 parser format matrix', () => {
       'xlsx',
       'csv',
       'ebook',
+      'ofd',
     ]);
     expect(resolveParseFormat('.TXT')?.format).toBe('text');
     expect(resolveParseFormat('markdown')?.format).toBe('markdown');
     expect(resolveParseFormat('htm')?.format).toBe('html');
     expect(resolveParseFormat('epub')?.format).toBe('ebook');
+    expect(resolveParseFormat('ofd')?.format).toBe('ofd');
   });
 
   it('maps every matrix format to a registered parser', () => {
     const registry = createParserRegistry();
-    expect(registry.size).toBe(9);
+    expect(registry.size).toBe(10);
     for (const spec of PARSE_FORMAT_MATRIX) {
       for (const extension of spec.extensions) {
         expect(registry.resolveByExtension(extension)).toBe(spec.format);

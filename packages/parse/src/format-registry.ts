@@ -52,6 +52,7 @@ export const PARSE_FORMAT_MATRIX: readonly ParseFormatSpec[] = [
   { format: 'xlsx', extensions: ['xlsx'], parser: 'xlsx-precheck', fallback: 'none' },
   { format: 'csv', extensions: ['csv'], parser: 'csv-parser', fallback: 'none' },
   { format: 'ebook', extensions: ['epub'], parser: 'document-parser-port', fallback: 'none' },
+  { format: 'ofd', extensions: ['ofd'], parser: 'ofd-parser', fallback: 'none' },
 ];
 
 export interface ParseRequest {
@@ -67,9 +68,42 @@ export interface ParseRequest {
 export interface ParseResult {
   format: string;
   rawText: string;
+  pages: ParsePage[];
+  assets: ParseAsset[];
+  diagnostics: ParseDiagnostic[];
   scanRequired: boolean;
   imageRefs: string[];
   contentHash: string;
+  parserVersion: string;
+  configHash: string;
+}
+
+export interface ParseAsset {
+  assetId: string;
+  mimeType: string;
+  sha256: string;
+  sizeBytes: number;
+  objectRefId?: string;
+  /** Internal bytes used by the service artifact materializer; never part of C2 serialization. */
+  bytes?: Uint8Array;
+}
+
+export interface ParsePage {
+  pageNumber: number;
+  text: string;
+  assets: ParseAsset[];
+}
+
+export interface ParseDiagnostic {
+  severity: 'info' | 'warning' | 'error';
+  code: string;
+  path?: string;
+  page?: number;
+}
+
+export interface ParseEvidence {
+  parserVersion: string;
+  configHash: string;
 }
 
 /** 扩展格式必须实现该 Port；未注册格式不得静默降级为普通文本。 */
@@ -104,7 +138,8 @@ export type ParseFormat =
   | 'pptx'
   | 'xlsx'
   | 'csv'
-  | 'ebook';
+  | 'ebook'
+  | 'ofd';
 
 export interface ParseHandlerContext {
   request: ParseRequest;
@@ -138,6 +173,7 @@ const MIME_BY_FORMAT: Record<ParseFormat, readonly string[]> = {
   xlsx: ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'],
   csv: ['text/csv', 'application/csv'],
   ebook: ['application/epub+zip'],
+  ofd: ['application/ofd', 'application/ofd+xml'],
 };
 
 /** 归一化扩展名：去前导点、小写。 */
@@ -306,14 +342,38 @@ export function normalizeRawText(text: string): string {
 export function makeResult(
   format: string,
   rawText: string,
-  options: { scanRequired?: boolean; imageRefs?: string[] } = {},
+  options: {
+    scanRequired?: boolean;
+    imageRefs?: string[];
+    pages?: ParsePage[];
+    assets?: ParseAsset[];
+    diagnostics?: ParseDiagnostic[];
+    parserVersion?: string;
+    configHash?: string;
+  } = {},
 ): ParseResult {
+  const assets = options.assets ?? [];
+  const pages =
+    options.pages ?? (rawText.length === 0 ? [] : [{ pageNumber: 1, text: rawText, assets }]);
   return {
     format,
     rawText,
+    pages,
+    assets,
+    diagnostics: options.diagnostics ?? [],
     scanRequired: options.scanRequired ?? false,
     imageRefs: options.imageRefs ?? [],
     contentHash: contentHashOf(rawText),
+    parserVersion: options.parserVersion ?? `native-${format}@1`,
+    configHash:
+      options.configHash ??
+      contentHashOf(
+        JSON.stringify({
+          format,
+          scanRequired: options.scanRequired ?? false,
+          parserVersion: options.parserVersion ?? `native-${format}@1`,
+        }),
+      ),
   };
 }
 
@@ -340,6 +400,7 @@ export interface ZipEntry {
   name: string;
   size: number;
   readUtf8(): string;
+  readBytes(): Uint8Array;
 }
 
 export interface ZipReadOptions {
@@ -428,6 +489,7 @@ export async function openZipEntries(
             name,
             size: entry.uncompressedSize,
             readUtf8: () => data.toString('utf8'),
+            readBytes: () => new Uint8Array(data),
           });
           zip.readEntry();
         });

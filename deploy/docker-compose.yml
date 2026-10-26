@@ -27,6 +27,11 @@ x-knowledge-environment: &knowledge-environment
   KB_EXTERNAL_MODEL_MODE: ${KB_EXTERNAL_MODEL_MODE:-mock}
   KB_EXTERNAL_OCR_MODE: ${KB_EXTERNAL_OCR_MODE:-mock}
   KB_EXTERNAL_CONNECTOR_MODE: ${KB_EXTERNAL_CONNECTOR_MODE:-mock}
+  AIPROXY_MODE: ${AIPROXY_MODE:-compose}
+  AIPROXY_BASE_URL: ${AIPROXY_BASE_URL:-http://aiproxy:3000}
+  AIPROXY_API_TOKEN_REF: ${AIPROXY_API_TOKEN_REF:-env:AIPROXY_API_TOKEN}
+  AIPROXY_POSTGRES_URI_REF: ${AIPROXY_POSTGRES_URI_REF:-env:AIPROXY_POSTGRES_URI}
+  AIPROXY_API_TOKEN: ${AIPROXY_API_TOKEN:-kb-local-aiproxy-token}
   KB_LOG_LEVEL: ${KB_LOG_LEVEL:-info}
   OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
   MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
@@ -119,6 +124,42 @@ services:
       timeout: 5s
       retries: 10
 
+  aiproxy-postgres:
+    image: registry.cn-hangzhou.aliyuncs.com/fastgpt/pgvector:0.8.0-pg15@sha256:92be4ea0424cccf17003f5803d54448e2864ac27a70e6ac5d24b3d8b463c689c
+    profiles: ['aiproxy']
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${AIPROXY_POSTGRES_USER:-aiproxy}
+      POSTGRES_PASSWORD: ${AIPROXY_POSTGRES_PASSWORD:-aiproxy_dev_password}
+      POSTGRES_DB: aiproxy
+    volumes:
+      - aiproxy-pg-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${AIPROXY_POSTGRES_USER:-aiproxy} -d aiproxy']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  aiproxy:
+    image: registry.cn-hangzhou.aliyuncs.com/labring/aiproxy:v0.7.3@sha256:da8d8394634eacdcf72533953c77c1e0ca3e28920545354dd20bdaa0aaa9ee4b
+    profiles: ['aiproxy']
+    restart: unless-stopped
+    environment:
+      PORT: '3000'
+      SQL_DSN: postgresql://${AIPROXY_POSTGRES_USER:-aiproxy}:${AIPROXY_POSTGRES_PASSWORD:-aiproxy_dev_password}@aiproxy-postgres:5432/aiproxy?sslmode=disable
+      AUTH_TOKEN: ${AIPROXY_API_TOKEN:-kb-local-aiproxy-token}
+      LOG_LEVEL: ${AIPROXY_LOG_LEVEL:-info}
+    depends_on:
+      aiproxy-postgres:
+        condition: service_healthy
+    ports:
+      - '3001:3000'
+    healthcheck:
+      test: ['CMD-SHELL', 'wget -q -O - http://127.0.0.1:3000/api/status >/dev/null || exit 1']
+      interval: 10s
+      timeout: 5s
+      retries: 20
+
   app:
     image: rag-agent-platform:kb-baseline
     build:
@@ -180,3 +221,4 @@ volumes:
   redis-data:
   pg-data:
   minio-data:
+  aiproxy-pg-data:

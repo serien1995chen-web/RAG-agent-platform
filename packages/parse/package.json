@@ -18,6 +18,7 @@
   "dependencies": {
     "@kb/contracts": "workspace:*",
     "@xmldom/xmldom": "catalog:",
+    "@llamaindex/liteparse-wasm": "catalog:",
     "cheerio": "catalog:",
     "domino-ext": "catalog:",
     "encoding": "catalog:",
@@ -37,6 +38,7 @@
     "@types/mime-types": "catalog:",
     "@types/node": "catalog:",
     "@types/papaparse": "catalog:",
+    "@types/turndown": "catalog:",
     "@types/yauzl": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
