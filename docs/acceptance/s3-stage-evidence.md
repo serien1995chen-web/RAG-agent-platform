@@ -54,15 +54,19 @@ API-SOURCE-BATCH
 
 - Move uses expected-version CAS, tenant-scoped parent lookup, ObjectId `parentPath`, cycle detection and a maximum depth of 4.
 - Directory move atomically rewrites the complete subtree path/depth/version.
+- Database tests cover Space/Directory self and descendant cycles, depth 5, sibling-name conflicts, Directory/Source tenant isolation and Directory/Source same-version races.
 - Batch execution uses at most 100 unique IDs, exact per-item versions, independent Mongo transactions and ordered 200/207 results.
+- Batch tests cover 0/1/100/101 boundaries, duplicate IDs, exact version maps, HTTP idempotency replay/conflict and successful items surviving an independent item failure.
 - Batch move validates the common non-null target folder/directory `write` permission before item execution; Source Batch keeps resource permission, version and transaction failures itemized.
 - Space export uses a real Mongo Job, queued/leased/running terminal states, deterministic directory tree ZIP, manifest in `result`, active ObjectRef and short-lived FileTicket download.
+- Space Export tests verify the 2000/2001 API limit, duplicate archive names, metadata-only Sources, ObjectRef HEAD/size/MIME, ticket download, ticket expiry and cross-workspace isolation.
 - Retryable Export Jobs are atomically requeued from `retry_wait` by the worker after the backoff time; tests no longer mutate the database to simulate recovery.
 - Reference Binding is persisted in `knowledge_reference_bindings`; upsert/remove increments Space `referenceRevision`, marks old versions stale and removed bindings expire after 30 days.
 - Active references block both `block` and `detach` Space deletion until the Registry removes them with a newer revision.
 - External Registry behavior is mock-only and is explicitly `EXTERNAL_UNVERIFIED`.
 - Business writes and audit are committed in one Mongo transaction; delete Job and `knowledge-delete` Outbox are in the same transaction.
 - UI consumes `messageKey + params`, exposes partial/conflict/forbidden/reference-blocked and export job states at 360/768/1200.
+- Browser evidence covers queued, running, succeeded and failed Export states at 360/768/1200 with axe and overflow assertions.
 - Move Idempotency-Key is reset when the target changes or a non-network 4xx is returned, while retryable network/server failures keep the key for a true replay.
 
 ## Review Remediation
@@ -76,6 +80,18 @@ API-SOURCE-BATCH
 | S3-R05 | Added CAS-based `retry_wait` to `queued` requeue before worker claims.                                                                         | Archive integration retry test and `build:workers`.                               |
 | S3-R06 | Added Reference stale/replay/revision/TTL/tenant coverage, audit and Outbox rollback cases, UI state assertions and real browser S3 scenarios. | Unit, integration, tenant, concurrency, fault and E2E suites.                     |
 | S3-R07 | Rotated Move idempotency keys on target changes and business 4xx failures; exposed active-reference deletion blocking.                         | Web unit test and S3 E2E scenario.                                                |
+| S3-R08 | Added the complete database Move matrix for Space/Directory/Source tenant, concurrency, cycle, depth and sibling-name cases.                   | Integration, tenant and concurrency suites; zero-write assertions.                |
+| S3-R09 | Added Batch 0/100/101, duplicate/version, idempotency and independent-item failure coverage.                                                   | Contract, integration, concurrency, fault and E2E suites.                         |
+| S3-R10 | Added real Space Export artifact, ticket, tenant, name-collision, metadata-only and 2000-limit coverage.                                       | Archive integration, tenant and fault suites.                                     |
+| S3-R11 | Added three-viewport Export lifecycle evidence with committed screenshots, axe and overflow checks.                                            | E2E suite and `docs/acceptance/s3-ui/*.png`.                                      |
+
+## UI Evidence
+
+| Viewport | Screenshot                                   |
+| -------- | -------------------------------------------- |
+| 360px    | `docs/acceptance/s3-ui/s3-overview-360.png`  |
+| 768px    | `docs/acceptance/s3-ui/s3-overview-768.png`  |
+| 1200px   | `docs/acceptance/s3-ui/s3-overview-1200.png` |
 
 ## Verification
 
@@ -90,11 +106,11 @@ API-SOURCE-BATCH
 | `pnpm knowledge:check-runtime` | PASS                                                   |
 | `pnpm test:unit`               | PASS, 20/20 tasks                                      |
 | `pnpm test:contract`           | PASS, 40/40 tests                                      |
-| `pnpm test:integration`        | PASS, 20/20 tasks; Service 53/53 tests                 |
-| `pnpm test:tenant`             | PASS, 6/6 tests                                        |
-| `pnpm test:concurrency`        | PASS, 5/5 tests                                        |
-| `pnpm test:fault`              | PASS, 13/13 tests                                      |
-| `pnpm test:e2e`                | PASS, 18/18 tests                                      |
+| `pnpm test:integration`        | PASS, 20/20 tasks; Service 57/57 tests                 |
+| `pnpm test:tenant`             | PASS, 8/8 tests                                        |
+| `pnpm test:concurrency`        | PASS, 8/8 tests                                        |
+| `pnpm test:fault`              | PASS, 15/15 tests                                      |
+| `pnpm test:e2e`                | PASS, 20/20 tests                                      |
 | `pnpm build`                   | PASS                                                   |
 | `pnpm build:workers`           | PASS                                                   |
 | `pnpm architecture:check`      | PASS                                                   |

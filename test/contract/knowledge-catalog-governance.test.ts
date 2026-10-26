@@ -69,12 +69,16 @@ describe('S3 catalog governance contract', () => {
       const batch = openapi.components.schemas[schema] as {
         required: string[];
         properties: {
-          ids: { uniqueItems: boolean };
+          ids: { minItems: number; maxItems: number; uniqueItems: boolean };
           versions: { minProperties: number; maxProperties: number };
         };
       };
       expect(batch.required).toContain('versions');
-      expect(batch.properties.ids.uniqueItems).toBe(true);
+      expect(batch.properties.ids).toMatchObject({
+        minItems: 1,
+        maxItems: 100,
+        uniqueItems: true,
+      });
       expect(batch.properties.versions).toMatchObject({
         minProperties: 1,
         maxProperties: 100,

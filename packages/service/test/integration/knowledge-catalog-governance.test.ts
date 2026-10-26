@@ -65,12 +65,13 @@ async function space(name: string) {
   ).data as { id: string; version: number; referenceRevision: number };
 }
 
-async function folder(name: string) {
+async function folder(name: string, parentSpaceId: string | null = null) {
   return (
     await run({
       operationId: 'API-SPACE-CREATE',
       body: {
         kind: 'folder',
+        parentSpaceId,
         name,
         accessMode: 'workspace',
         sourceAclMode: 'inherited',
@@ -78,6 +79,26 @@ async function folder(name: string) {
       },
     })
   ).data as { id: string; version: number };
+}
+
+async function directory(spaceId: string, name: string, parentDirectoryId: string | null = null) {
+  return (
+    await run({
+      operationId: 'API-DIRECTORY-CREATE',
+      params: { spaceId },
+      body: { name, parentDirectoryId },
+    })
+  ).data as { id: string; version: number; path: string[]; depth: number };
+}
+
+async function sourceIn(spaceId: string, name: string, directoryId: string | null = null) {
+  return (
+    await run({
+      operationId: 'API-SOURCE-CREATE',
+      params: { spaceId },
+      body: { kind: 'text', name, directoryId },
+    })
+  ).data as { id: string; version: number; directoryId: string | null };
 }
 
 beforeAll(async () => {
@@ -167,8 +188,11 @@ describe('TEST-KB-003-BLOCK catalog governance', () => {
       })
     ).data as { version: number; parentPath: string[] };
     expect(movedDirectory.parentPath).toEqual([destinationDirectory.id]);
+    expect(movedDirectory.version).toBe(parent.version + 1);
     const childAfter = await catalog.getDirectory(child.id, context);
     expect(childAfter.depth).toBe(2);
+    expect(childAfter.path).toEqual([destinationDirectory.id, parent.id]);
+    expect(childAfter.version).toBe(child.version + 1);
 
     const source = (
       await run({
@@ -188,18 +212,144 @@ describe('TEST-KB-003-BLOCK catalog governance', () => {
     expect(movedSource.directoryId).toBe(destinationDirectory.id);
   });
 
+  it('enforces the database move matrix without partial writes', async () => {
+    const rootFolder = await folder(`Cycle root ${suffix}`);
+    const childFolder = await folder(`Cycle child ${suffix}`, rootFolder.id);
+    await expect(
+      catalog.moveSpace(
+        rootFolder.id,
+        { targetParentId: childFolder.id, version: rootFolder.version },
+        context,
+      ),
+    ).rejects.toMatchObject({
+      problem: { error: { code: 'KNOWLEDGE_CONFLICT' } },
+    });
+    await expect(
+      catalog.moveSpace(
+        childFolder.id,
+        { targetParentId: childFolder.id, version: childFolder.version },
+        context,
+      ),
+    ).rejects.toMatchObject({
+      problem: { error: { code: 'KNOWLEDGE_CONFLICT' } },
+    });
+    expect((await catalog.getSpace(rootFolder.id, context)).version).toBe(rootFolder.version);
+    expect((await catalog.getSpace(childFolder.id, context)).version).toBe(childFolder.version);
+
+    const treeSpace = await space(`Move matrix space ${suffix}`);
+    const cycleRoot = await directory(treeSpace.id, `Directory root ${suffix}`);
+    const cycleChild = await directory(treeSpace.id, `Directory child ${suffix}`, cycleRoot.id);
+    await expect(
+      catalog.moveDirectoryTree(
+        cycleRoot.id,
+        { targetParentId: cycleRoot.id, version: cycleRoot.version },
+        context,
+      ),
+    ).rejects.toMatchObject({
+      problem: { error: { code: 'KNOWLEDGE_CONFLICT' } },
+    });
+    await expect(
+      catalog.moveDirectoryTree(
+        cycleRoot.id,
+        { targetParentId: cycleChild.id, version: cycleRoot.version },
+        context,
+      ),
+    ).rejects.toMatchObject({
+      problem: { error: { code: 'KNOWLEDGE_CONFLICT' } },
+    });
+    expect((await catalog.getDirectory(cycleRoot.id, context)).version).toBe(cycleRoot.version);
+    expect((await catalog.getDirectory(cycleChild.id, context)).path).toEqual([cycleRoot.id]);
+
+    const depthOne = await directory(treeSpace.id, `Depth 1 ${suffix}`, cycleRoot.id);
+    const depthTwo = await directory(treeSpace.id, `Depth 2 ${suffix}`, depthOne.id);
+    const depthThree = await directory(treeSpace.id, `Depth 3 ${suffix}`, depthTwo.id);
+    const depthFour = await directory(treeSpace.id, `Depth 4 ${suffix}`, depthThree.id);
+    const depthLeaf = await directory(treeSpace.id, `Depth leaf ${suffix}`);
+    await expect(
+      catalog.moveDirectoryTree(
+        depthLeaf.id,
+        { targetParentId: depthFour.id, version: depthLeaf.version },
+        context,
+      ),
+    ).rejects.toMatchObject({
+      problem: { error: { code: 'KNOWLEDGE_CONFLICT' } },
+    });
+    expect((await catalog.getDirectory(depthLeaf.id, context)).version).toBe(depthLeaf.version);
+
+    const duplicateTarget = await directory(treeSpace.id, `Duplicate target ${suffix}`);
+    await directory(treeSpace.id, `Duplicate name ${suffix}`, duplicateTarget.id);
+    const duplicateCandidate = await directory(treeSpace.id, `Duplicate name ${suffix}`);
+    await expect(
+      catalog.moveDirectoryTree(
+        duplicateCandidate.id,
+        { targetParentId: duplicateTarget.id, version: duplicateCandidate.version },
+        context,
+      ),
+    ).rejects.toMatchObject({
+      problem: { error: { code: 'KNOWLEDGE_CONFLICT' } },
+    });
+    expect((await catalog.getDirectory(duplicateCandidate.id, context)).version).toBe(
+      duplicateCandidate.version,
+    );
+
+    const duplicateSpaceTarget = await folder(`Duplicate space target ${suffix}`);
+    await folder(`Duplicate space name ${suffix}`, duplicateSpaceTarget.id);
+    const duplicateSpaceCandidate = await folder(`Duplicate space name ${suffix}`);
+    await expect(
+      catalog.moveSpace(
+        duplicateSpaceCandidate.id,
+        { targetParentId: duplicateSpaceTarget.id, version: duplicateSpaceCandidate.version },
+        context,
+      ),
+    ).rejects.toMatchObject({
+      problem: { error: { code: 'KNOWLEDGE_CONFLICT' } },
+    });
+    expect((await catalog.getSpace(duplicateSpaceCandidate.id, context)).version).toBe(
+      duplicateSpaceCandidate.version,
+    );
+
+    const foreignSpace = await space(`Foreign move space ${suffix}`);
+    const foreignDirectory = await directory(foreignSpace.id, `Foreign target ${suffix}`);
+    const source = await sourceIn(treeSpace.id, `Cross-space source ${suffix}`);
+    await expect(
+      catalog.moveSource(
+        source.id,
+        { targetParentId: foreignDirectory.id, version: source.version },
+        context,
+      ),
+    ).rejects.toMatchObject({
+      problem: { error: { code: 'KNOWLEDGE_NOT_FOUND' } },
+    });
+    expect(await catalog.getSource(source.id, context)).toMatchObject({
+      id: source.id,
+      version: source.version,
+      directoryId: null,
+    });
+
+    const auditCount = await connection.models.KnowledgeAuditEvent.countDocuments({
+      workspaceId,
+      action: { $in: ['space.move', 'directory.move', 'source.move'] },
+    });
+    expect(auditCount).toBe(0);
+  });
+
   it('returns 207 for a mixed batch and keeps successful items committed', async () => {
     const first = await space(`Batch A ${suffix}`);
     const second = await space(`Batch B ${suffix}`);
+    const third = await space(`Batch C ${suffix}`);
     const destination = await folder(`Batch folder ${suffix}`);
     const result = (
       await run({
         operationId: 'API-SPACE-BATCH',
         body: {
           action: 'move',
-          ids: [first.id, second.id],
+          ids: [first.id, second.id, third.id],
           targetParentId: destination.id,
-          versions: { [first.id]: first.version, [second.id]: second.version + 1 },
+          versions: {
+            [first.id]: first.version,
+            [second.id]: second.version + 1,
+            [third.id]: third.version,
+          },
         },
       })
     ).data as {
@@ -209,7 +359,7 @@ describe('TEST-KB-003-BLOCK catalog governance', () => {
       items: Array<{ id: string; success: boolean; code?: string }>;
     };
     expect(result.code).toBe('KNOWLEDGE_PARTIAL_SUCCESS');
-    expect(result.succeeded).toBe(1);
+    expect(result.succeeded).toBe(2);
     expect(result.failed).toBe(1);
     expect(result.items[1]).toMatchObject({
       id: second.id,
@@ -217,6 +367,69 @@ describe('TEST-KB-003-BLOCK catalog governance', () => {
       code: 'KNOWLEDGE_CONFLICT',
     });
     expect((await catalog.getSpace(first.id, context)).parentSpaceId).toBe(destination.id);
+    expect((await catalog.getSpace(third.id, context)).parentSpaceId).toBe(destination.id);
+    expect((await catalog.getSpace(second.id, context)).parentSpaceId).toBeNull();
+  });
+
+  it('accepts exactly 100 Space batch items and persists every success', async () => {
+    const resources = [];
+    for (let index = 0; index < 100; index += 1) {
+      resources.push(await space(`Batch 100 ${index} ${suffix}`));
+    }
+    const destination = await folder(`Batch 100 destination ${suffix}`);
+    const result = await run({
+      operationId: 'API-SPACE-BATCH',
+      body: {
+        action: 'move',
+        ids: resources.map((resource) => resource.id),
+        targetParentId: destination.id,
+        versions: Object.fromEntries(resources.map((resource) => [resource.id, resource.version])),
+      },
+    });
+    expect(result.status).toBe(200);
+    expect(result.data).toMatchObject({ requested: 100, succeeded: 100, failed: 0 });
+    const persisted = await Promise.all(
+      resources.map((resource) => catalog.getSpace(resource.id, context)),
+    );
+    for (const [index, resource] of persisted.entries()) {
+      expect(resource.parentSpaceId).toBe(destination.id);
+      expect(resource.version).toBe(resources[index]!.version + 1);
+    }
+  }, 30_000);
+
+  it('rejects 0, 101, duplicate IDs and inexact versions before item execution', async () => {
+    const validId = new mongoose.Types.ObjectId().toString();
+    const secondValidId = new mongoose.Types.ObjectId().toString();
+    const invalidBodies = [
+      { ids: [], versions: {} },
+      {
+        ids: Array.from({ length: 101 }, () => new mongoose.Types.ObjectId().toString()),
+        versions: Object.fromEntries(
+          Array.from({ length: 101 }, (_, index) => [
+            new mongoose.Types.ObjectId().toString(),
+            index + 1,
+          ]),
+        ),
+      },
+      { ids: [validId, validId], versions: { [validId]: 1 } },
+      { ids: [validId, secondValidId], versions: { [validId]: 1 } },
+      { ids: [validId], versions: { [validId]: 1, [secondValidId]: 1 } },
+    ];
+    for (const input of invalidBodies) {
+      await expect(
+        run({
+          operationId: 'API-SPACE-BATCH',
+          body: {
+            action: 'move',
+            ids: input.ids,
+            targetParentId: null,
+            versions: input.versions,
+          },
+        }),
+      ).rejects.toMatchObject({
+        problem: { error: { code: 'KNOWLEDGE_VALIDATION_FAILED' } },
+      });
+    }
   });
 
   it('requires write permission on batch move targets', async () => {
