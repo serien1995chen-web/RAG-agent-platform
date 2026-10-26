@@ -17,6 +17,7 @@
     "lint": "eslint src"
   },
   "dependencies": {
+    "@apidevtools/json-schema-ref-parser": "catalog:",
     "@kb/chunk": "workspace:*",
     "@kb/contracts": "workspace:*",
     "@kb/dal": "workspace:*",
@@ -24,15 +25,28 @@
     "@t3-oss/env-core": "catalog:",
     "axios": "catalog:",
     "bullmq": "catalog:",
+    "form-data": "catalog:",
+    "http-proxy-agent": "catalog:",
+    "https-proxy-agent": "catalog:",
     "ioredis": "catalog:",
+    "ipaddr.js": "catalog:",
+    "jsonpath-plus": "catalog:",
     "mongoose": "catalog:",
+    "multer": "catalog:",
     "openai": "catalog:",
     "pg": "catalog:",
+    "proxy-addr": "catalog:",
+    "proxy-agent": "catalog:",
+    "proxy-from-env": "catalog:",
     "undici": "catalog:",
     "zod": "catalog:"
   },
   "devDependencies": {
+    "@types/async-retry": "catalog:",
+    "@types/multer": "catalog:",
     "@types/node": "catalog:",
+    "@types/proxy-from-env": "catalog:",
+    "@types/tunnel": "catalog:",
     "mongodb-memory-server": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"

@@ -17,8 +17,13 @@
   },
   "dependencies": {
     "@kb/contracts": "workspace:*",
+    "@xmldom/xmldom": "catalog:",
     "cheerio": "catalog:",
+    "domino-ext": "catalog:",
+    "encoding": "catalog:",
     "file-type": "catalog:",
+    "iconv-lite": "catalog:",
+    "jschardet": "catalog:",
     "joplin-turndown-plugin-gfm": "catalog:",
     "mammoth": "catalog:",
     "mime-types": "catalog:",
@@ -31,6 +36,7 @@
   "devDependencies": {
     "@types/mime-types": "catalog:",
     "@types/node": "catalog:",
+    "@types/papaparse": "catalog:",
     "@types/yauzl": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"

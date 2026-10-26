@@ -118,7 +118,7 @@ const DEPENDENCY_STAGES = new Set([
   'S11',
 ]);
 const DEPENDENCY_SOURCES = new Set(['PROJECT_BASELINE', 'FASTGPT_SUPPLEMENT', TEST_ONLY_SOURCE]);
-const DECLARED_DEPENDENCY_STAGES = new Set(['S1', 'S2']);
+const DECLARED_DEPENDENCY_STAGES = new Set(['S1', 'S2', 'S4']);
 const AUDIT_CATEGORIES = new Map([
   ['DECLARED_INSTALLED', 52],
   ['DECLARED_NOT_INSTALLED', 5],
@@ -380,10 +380,10 @@ function checkDependencyBaseline(repoRoot, catalog, manifests, options = {}) {
       )
       .map((entry) => [entry.name, entry.version]),
   );
-  if (expectedCatalog.size !== 108) {
-    errors.push(`catalog 期望项应为 108，账本计算为 ${expectedCatalog.size}`);
+  if (expectedCatalog.size !== 131) {
+    errors.push(`catalog 期望项应为 131，账本计算为 ${expectedCatalog.size}`);
   }
-  if (catalog.size !== 108) errors.push(`catalog 应为 108 项，实际 ${catalog.size}`);
+  if (catalog.size !== 131) errors.push(`catalog 应为 131 项，实际 ${catalog.size}`);
   for (const [name, version] of expectedCatalog) {
     const actual = catalog.get(name);
     if (actual === undefined) errors.push(`catalog 缺少 ${name}@${version}`);
@@ -763,7 +763,7 @@ export async function main(argv = process.argv.slice(2)) {
       process.exit(1);
     }
     console.log(
-      `dependency gate 通过：166 项 ledger、166 项 audit、108 项 catalog、` +
+      `dependency gate 通过：166 项 ledger、166 项 audit、131 项 catalog、` +
         `${workspaceCount} 个 workspace 包。`,
     );
     return;
