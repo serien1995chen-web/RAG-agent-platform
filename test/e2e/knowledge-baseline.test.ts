@@ -876,6 +876,103 @@ describe.sequential('knowledge architecture baseline E2E', () => {
     expect(transferredSpace.id).toBe(scenario.spaceId);
     expect(transferredSpace.ownershipMemberId).toBe(`mem_e2e_space_owner_${suffix}`);
 
+    const moveFolder = asObject(
+      await callApi('API-SPACE-CREATE', {
+        body: {
+          kind: 'folder',
+          name: `E2E move folder ${suffix}`,
+          accessMode: 'workspace',
+          sourceAclMode: 'inherited',
+          sourcePermissionEnabled: true,
+        },
+      }),
+    );
+    const currentSpace = asObject(
+      await callApi('API-SPACE-GET', { params: { spaceId: scenario.spaceId } }),
+    );
+    await callApi('API-SPACE-MOVE', {
+      params: { spaceId: scenario.spaceId },
+      body: {
+        targetParentId: asString(moveFolder.id, 'moveFolder.id'),
+        version: asNumber(currentSpace.version, 'currentSpace.version'),
+      },
+    });
+    const moveDirectory = asObject(
+      await callApi('API-DIRECTORY-CREATE', {
+        params: { spaceId: scenario.spaceId },
+        body: { name: `E2E move destination ${suffix}` },
+      }),
+    );
+    const currentDirectory = asObject(
+      await callApi('API-DIRECTORY-GET', {
+        params: { directoryId: scenario.directoryId },
+      }),
+    );
+    await callApi('API-DIRECTORY-MOVE', {
+      params: { directoryId: scenario.directoryId },
+      body: {
+        targetParentId: asString(moveDirectory.id, 'moveDirectory.id'),
+        version: asNumber(currentDirectory.version, 'currentDirectory.version'),
+      },
+    });
+    const currentSource = asObject(
+      await callApi('API-SOURCE-GET', { params: { sourceId: scenario.sourceId } }),
+    );
+    await callApi('API-SOURCE-MOVE', {
+      params: { sourceId: scenario.sourceId },
+      body: {
+        targetParentId: null,
+        version: asNumber(currentSource.version, 'currentSource.version'),
+      },
+    });
+    const extraSpace = asObject(
+      await callApi('API-SPACE-CREATE', {
+        body: {
+          kind: 'space',
+          name: `E2E batch space ${suffix}`,
+          accessMode: 'workspace',
+          sourceAclMode: 'enforced',
+          sourcePermissionEnabled: true,
+        },
+      }),
+    );
+    await callApi('API-SPACE-BATCH', {
+      body: {
+        action: 'delete',
+        ids: [asString(extraSpace.id, 'extraSpace.id')],
+        versions: {
+          [asString(extraSpace.id, 'extraSpace.id')]: asNumber(
+            extraSpace.version,
+            'extraSpace.version',
+          ),
+        },
+      },
+    });
+    const extraSource = asObject(
+      await callApi('API-SOURCE-CREATE', {
+        params: { spaceId: scenario.spaceId },
+        body: { kind: 'text', name: `E2E batch source ${suffix}` },
+      }),
+    );
+    await callApi('API-SOURCE-BATCH', {
+      body: {
+        action: 'move',
+        ids: [asString(extraSource.id, 'extraSource.id')],
+        targetDirectoryId: asString(moveDirectory.id, 'moveDirectory.id'),
+        versions: {
+          [asString(extraSource.id, 'extraSource.id')]: asNumber(
+            extraSource.version,
+            'extraSource.version',
+          ),
+        },
+      },
+    });
+    await callApi('API-SPACE-REFERENCES', { params: { spaceId: scenario.spaceId } });
+    await callApi('API-SPACE-EXPORT', {
+      params: { spaceId: scenario.spaceId },
+      body: { format: 'zip' },
+    });
+
     const operations = asObject(await callApi('API-OPS-STATUS'));
     expect(operations.vector).toMatchObject({
       backend: 'pgvector',
@@ -1076,6 +1173,22 @@ describe.sequential('knowledge architecture baseline E2E', () => {
     const cookieName = separator > 0 ? cookie.slice(0, separator) : '';
     const cookieValue = separator > 0 ? cookie.slice(separator + 1) : '';
     if (!cookieName || !cookieValue) throw new Error('console cookie was not initialized');
+    if (!scenario.spaceId) {
+      const createdSpace = asObject(
+        await callApi('API-SPACE-CREATE', {
+          body: {
+            kind: 'space',
+            name: `E2E table space ${suffix}`,
+            description: 'Focused table control fixture',
+            iconKey: 'book-open',
+            accessMode: 'workspace',
+            sourceAclMode: 'enforced',
+            sourcePermissionEnabled: true,
+          },
+        }),
+      );
+      scenario.spaceId = asString(createdSpace.id, 'table.spaceId');
+    }
     const spaceId = requiredId(scenario.spaceId, 'spaceId');
     const browser = await chromium.launch({ headless: true });
     const context = await browser.newContext({ viewport: { width: 360, height: 800 } });
@@ -1098,8 +1211,10 @@ describe.sequential('knowledge architecture baseline E2E', () => {
       expect(await page.locator('th[scope="col"]').count()).toBeGreaterThan(0);
 
       await page.getByRole('button', { name: '列' }).click();
-      await page.getByRole('checkbox', { name: '名称' }).click();
-      expect(await page.locator('thead th').allTextContents()).not.toContain('名称');
+      const statusColumnToggle = page.getByRole('checkbox', { name: '状态', exact: true });
+      await statusColumnToggle.uncheck({ force: true });
+      expect(await statusColumnToggle.isChecked()).toBe(false);
+      await page.locator('thead th').filter({ hasText: '状态' }).waitFor({ state: 'hidden' });
       await page.getByRole('button', { name: '紧凑' }).click();
       expect(await page.getByRole('button', { name: '紧凑' }).getAttribute('aria-pressed')).toBe(
         'true',
@@ -1739,7 +1854,7 @@ describe.sequential('knowledge architecture baseline E2E', () => {
     });
   });
 
-  it('finishes the delete paths, reads Jobs and proves all 58 operations ran', async () => {
+  it('finishes the delete paths, reads Jobs and proves all 65 operations ran', async () => {
     await callApi('API-SEGMENT-DELETE', {
       params: { segmentId: requiredId(scenario.segmentId, 'segmentId') },
     });
@@ -1783,10 +1898,10 @@ describe.sequential('knowledge architecture baseline E2E', () => {
       },
     });
 
-    expect(runtimeRegistry.count).toBe(58);
+    expect(runtimeRegistry.count).toBe(65);
     expect([...covered].sort()).toEqual(
       runtimeRegistry.operations.map((operation) => operation.operationId).sort(),
     );
-    expect(covered.size).toBe(58);
+    expect(covered.size).toBe(65);
   });
 });

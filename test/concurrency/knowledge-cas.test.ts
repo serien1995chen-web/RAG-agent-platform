@@ -59,4 +59,51 @@ describe('Mongo CAS concurrency', () => {
     expect(outcomes.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
     expect(outcomes.filter((result) => result.status === 'rejected')).toHaveLength(2);
   });
+
+  it('allows exactly one same-version move', async () => {
+    const folderA = await repository.createSpace(
+      {
+        kind: 'folder',
+        name: `Move A ${suffix}`,
+        accessMode: 'workspace',
+        sourceAclMode: 'inherited',
+        sourcePermissionEnabled: true,
+      },
+      context,
+    );
+    const folderB = await repository.createSpace(
+      {
+        kind: 'folder',
+        name: `Move B ${suffix}`,
+        accessMode: 'workspace',
+        sourceAclMode: 'inherited',
+        sourcePermissionEnabled: true,
+      },
+      context,
+    );
+    const resource = await repository.createSpace(
+      {
+        kind: 'space',
+        name: `Move Resource ${suffix}`,
+        accessMode: 'workspace',
+        sourceAclMode: 'enforced',
+        sourcePermissionEnabled: true,
+      },
+      context,
+    );
+    const outcomes = await Promise.allSettled([
+      repository.moveSpace(
+        resource.id,
+        { targetParentId: folderA.id, version: resource.version },
+        context,
+      ),
+      repository.moveSpace(
+        resource.id,
+        { targetParentId: folderB.id, version: resource.version },
+        context,
+      ),
+    ]);
+    expect(outcomes.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
+    expect(outcomes.filter((result) => result.status === 'rejected')).toHaveLength(1);
+  });
 });

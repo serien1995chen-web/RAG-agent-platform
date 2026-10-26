@@ -2,6 +2,10 @@ export { JOB_STATES, assertJobTransition, canTransitionJob } from './job-state';
 export type { JobState } from './job-state';
 export {
   MAX_DIRECTORY_DEPTH,
+  MAX_CATALOG_DEPTH,
+  assertBatchVersions,
+  assertCatalogMoveDepth,
+  assertCatalogNoCycle,
   assertDirectoryDepth,
   assertResourceName,
   assertSameKnowledgeSpace,

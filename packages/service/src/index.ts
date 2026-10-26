@@ -31,6 +31,8 @@ export {
   KnowledgeOutboxDispatcher,
 } from './shared/persistence/knowledge/outbox';
 export type { CreateKnowledgeOutboxEventInput } from './shared/persistence/knowledge/outbox';
+export { KnowledgeAuditRepository, safeAuditDiff } from './shared/persistence/knowledge/audit';
+export type { KnowledgeAuditInput } from './shared/persistence/knowledge/audit';
 export {
   objectIdOf,
   requireWorkspaceId,
@@ -67,6 +69,9 @@ export {
   ObjectLifecycleService,
   SourceFileApplication,
   KnowledgeTagRepository,
+  KnowledgeReferenceRepository,
+  ReferenceApplication,
+  MockReferenceRegistryAdapter,
 } from './modules/knowledge';
 export type {
   AclResourceType,

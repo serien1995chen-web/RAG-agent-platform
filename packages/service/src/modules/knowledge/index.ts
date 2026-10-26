@@ -52,6 +52,8 @@ export { KnowledgeJobRepository } from './repository/job.repository';
 export { KnowledgeObjectRefRepository } from './repository/object-ref.repository';
 export { KnowledgeArchiveRepository } from './repository/archive.repository';
 export { KnowledgeTagRepository } from './repository/tag.repository';
+export { KnowledgeReferenceRepository } from './repository/reference.repository';
+export { ReferenceApplication } from './application/reference.application';
 export {
   AiproxyMockAdapter,
   ConnectorMockAdapter,
@@ -60,6 +62,8 @@ export {
   classifyExternalFailure,
   redactExternalValue,
 } from './adapter/external-providers';
+export { MockReferenceRegistryAdapter } from './adapter/reference-registry.mock';
+export { KnowledgeAuditRepository, safeAuditDiff } from '../../shared/persistence/knowledge/audit';
 export type {
   AiproxyProviderConfig,
   ConnectorMockResult,

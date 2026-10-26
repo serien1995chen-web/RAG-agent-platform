@@ -8,6 +8,7 @@ export interface SpaceRecord {
   workspaceId: string;
   kind: 'space' | 'folder';
   parentSpaceId: string | null;
+  parentPath?: string[];
   name: string;
   description: string;
   iconKey: string;
@@ -29,6 +30,7 @@ export interface DirectoryRecord {
   parentDirectoryId: string | null;
   name: string;
   path: string[];
+  parentPath?: string[];
   depth: number;
   aclMode: 'inherited' | 'override';
   version: number;
@@ -39,6 +41,7 @@ export interface SourceRecord {
   workspaceId: string;
   knowledgeSpaceId: string;
   directoryId: string | null;
+  parentPath?: string[];
   kind: string;
   name: string;
   processingStatus: string;
@@ -109,8 +112,37 @@ export interface JobRecord {
   maxAttempts: number;
   progress: Record<string, unknown>;
   error: { code?: string; message?: string } | null;
+  result?: {
+    objectBlobRefId?: string;
+    expiresAt?: string;
+    sourceCount?: number;
+    manifest?: Record<string, unknown>;
+  } | null;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface BatchActionResult {
+  code?: 'KNOWLEDGE_PARTIAL_SUCCESS';
+  requested: number;
+  succeeded: number;
+  failed: number;
+  items: Array<{
+    id: string;
+    success: boolean;
+    code?: string;
+    version?: number;
+    parentPath?: string[];
+  }>;
+}
+
+export interface ReferenceRecord {
+  referrerType: 'app' | 'workflow';
+  referrerId: string;
+  referrerVersion: string;
+  referrerName: string;
+  status: 'active' | 'stale' | 'removed';
+  lastSeenAt: string;
 }
 
 export interface OpsStatusRecord {

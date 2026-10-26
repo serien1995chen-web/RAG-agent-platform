@@ -20,17 +20,24 @@ export const RUNTIME_OPERATION_IDS = Object.freeze([
   'API-SPACE-LIST',
   'API-SPACE-CREATE',
   'API-SPACE-GET',
+  'API-SPACE-MOVE',
+  'API-SPACE-BATCH',
+  'API-SPACE-EXPORT',
+  'API-SPACE-REFERENCES',
   'API-SPACE-UPDATE',
   'API-SPACE-DELETE',
   'API-DIRECTORY-LIST',
   'API-DIRECTORY-CREATE',
   'API-DIRECTORY-GET',
   'API-DIRECTORY-UPDATE',
+  'API-DIRECTORY-MOVE',
   'API-DIRECTORY-DELETE',
   'API-SOURCE-LIST',
   'API-SOURCE-CREATE',
   'API-SOURCE-GET',
   'API-SOURCE-UPDATE',
+  'API-SOURCE-MOVE',
+  'API-SOURCE-BATCH',
   'API-SOURCE-DELETE',
   'API-SOURCE-PREVIEW',
   'API-SOURCE-DOWNLOAD',
@@ -173,6 +180,19 @@ function stageOf(operationId) {
 }
 
 function capabilityIdsOf(operationId) {
+  if (operationId === 'API-SPACE-REFERENCES') return ['KB-002', 'KB-003'];
+  if (
+    [
+      'API-SPACE-MOVE',
+      'API-SPACE-BATCH',
+      'API-SPACE-EXPORT',
+      'API-DIRECTORY-MOVE',
+      'API-SOURCE-MOVE',
+      'API-SOURCE-BATCH',
+    ].includes(operationId)
+  ) {
+    return ['KB-003'];
+  }
   if (operationId === 'API-OPENAPI' || operationId.startsWith('API-APIKEY-')) {
     return ['API-001', 'API-003'];
   }
@@ -316,14 +336,14 @@ export function buildKnowledgeContractArtifacts(repoRoot) {
   const runtimeRoutes = routes.filter((route) => route.runtime);
   const runtimeIds = runtimeRoutes.map((route) => route.operationId).sort();
   const expectedRuntimeIds = [...RUNTIME_OPERATION_IDS].sort();
-  if (runtimeIds.length !== 58) problems.push(`runtime 应为 58，实际 ${runtimeIds.length}`);
+  if (runtimeIds.length !== 65) problems.push(`runtime 应为 65，实际 ${runtimeIds.length}`);
   if (runtimeIds.join('\n') !== expectedRuntimeIds.join('\n')) {
     problems.push('runtime allowlist 与目标合同 operationId 不一致');
   }
 
   const deferredRoutes = routes.filter((route) => !route.runtime);
-  if (deferredRoutes.length !== 62) {
-    problems.push(`deferred 应为 62，实际 ${deferredRoutes.length}`);
+  if (deferredRoutes.length !== 55) {
+    problems.push(`deferred 应为 55，实际 ${deferredRoutes.length}`);
   }
   if (problems.length > 0) {
     const error = new Error(problems.join('\n'));

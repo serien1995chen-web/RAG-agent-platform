@@ -32,6 +32,13 @@ export {
 } from './components/knowledge-primitives';
 export { KnowledgeDataTable } from './components/data-table';
 export { ArchiveAction } from './components/archive-action';
+export {
+  CatalogBatchResult,
+  CatalogMoveControl,
+  SpaceExportAction,
+  SpaceReferencesPanel,
+} from './components/catalog-governance';
+export type { BatchResultView, MoveTargetOption } from './components/catalog-governance';
 export { FilePreviewPanel } from './components/file-preview';
 export { FileUploadPanel } from './components/file-upload';
 export type {

@@ -18,6 +18,7 @@ import {
   KnowledgeCatalogRepository,
   FileApplication,
   KnowledgeObjectRefRepository,
+  KnowledgeReferenceRepository,
   KnowledgeMockAuthProvider,
   KnowledgeTagRepository,
   SourceFileApplication,
@@ -202,6 +203,7 @@ async function bootstrapRuntime(): Promise<TelemetryKnowledgeApiRuntime> {
     archiveSafety,
   );
   const jobs = new KnowledgeArchiveRepository(mongo);
+  const references = new KnowledgeReferenceRepository(mongo);
   const sourceFiles = new SourceFileApplication(
     catalog,
     jobs,
@@ -218,6 +220,7 @@ async function bootstrapRuntime(): Promise<TelemetryKnowledgeApiRuntime> {
     jobs,
     files,
     sourceFiles,
+    references,
   );
   const queueAdapter = new BullMqQueueAdapter({ connection: redis });
   const queues = new Map(

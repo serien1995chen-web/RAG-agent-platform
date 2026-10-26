@@ -74,4 +74,36 @@ describe('workspace tenant boundary', () => {
       },
     });
   });
+
+  it('rejects a move target from another workspace as not found', async () => {
+    const source = await repository.createSpace(
+      {
+        kind: 'space',
+        name: `Move source ${suffix}`,
+        accessMode: 'workspace',
+        sourceAclMode: 'enforced',
+        sourcePermissionEnabled: true,
+      },
+      context(workspaceA),
+    );
+    const foreignFolder = await repository.createSpace(
+      {
+        kind: 'folder',
+        name: `Foreign folder ${suffix}`,
+        accessMode: 'workspace',
+        sourceAclMode: 'inherited',
+        sourcePermissionEnabled: true,
+      },
+      context(workspaceB),
+    );
+    await expect(
+      repository.moveSpace(
+        source.id,
+        { targetParentId: foreignFolder.id, version: source.version },
+        context(workspaceA),
+      ),
+    ).rejects.toMatchObject({
+      problem: { error: { code: 'KNOWLEDGE_NOT_FOUND' } },
+    });
+  });
 });

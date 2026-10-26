@@ -47,8 +47,8 @@
 ## 合同与运行时
 
 1. 完整目标合同固定为 92 paths、120 operations、139 schemas。
-2. runtime registry 只允许 46 个已批准 operation。
-3. 其余 74 个 operation 只存在于 deferred manifest；不得注册运行时路由、
+2. runtime registry 只允许 S3 结束基线批准的 65 个 operation。
+3. 其余 55 个 operation 只存在于 deferred manifest；不得注册运行时路由、
    不得用占位错误伪装、不得在 UI 显示为可用。
 4. 修改合同后必须执行 `pnpm openapi:generate`，再执行
    `pnpm openapi:check`、`pnpm knowledge:inventory` 和

@@ -254,7 +254,7 @@ describe('TEST-FILE-004-BLOCK source archive worker', () => {
     );
     await worker.runOnce();
     const succeeded = await jobs.get(String(job.jobId), context);
-    expect(succeeded.status).toBe('succeeded');
+    expect(succeeded.status, JSON.stringify(succeeded)).toBe('succeeded');
     const result = succeeded.result as Record<string, unknown>;
     expect(typeof result.objectBlobRefId).toBe('string');
     const artifact = await objectRefs.findObjectRef(String(result.objectBlobRefId), context);
@@ -271,6 +271,111 @@ describe('TEST-FILE-004-BLOCK source archive worker', () => {
     expect(zip.subarray(0, 2).toString('ascii')).toBe('PK');
     expect(zip.byteLength).toBeGreaterThan(body.byteLength);
     await objectStore.deleteObject(artifact.objectKey, { ...context, knowledgeSpaceId });
+  });
+
+  it('exports a Space directory tree with manifest, ACL and metadata', async () => {
+    await connection.models.KnowledgeSpace.create({
+      _id: new mongoose.Types.ObjectId(knowledgeSpaceId),
+      workspaceId,
+      knowledgeSpaceId: null,
+      version: 1,
+      deletedAt: null,
+      createdByMemberId: context.memberId,
+      updatedByMemberId: context.memberId,
+      kind: 'space',
+      parentSpaceId: null,
+      name: `Export Space ${suffix}`,
+      normalizedName: `export space ${suffix}`,
+      description: '',
+      iconKey: 'book-open',
+      ownershipMemberId: context.memberId,
+      accessMode: 'workspace',
+      sourceAclMode: 'enforced',
+      sourcePermissionEnabled: true,
+      referenceRevision: 0,
+      permissionRevision: 0,
+      modelBindings: {},
+      defaultChunking: {},
+      status: 'active',
+    });
+    const directory = await connection.models.KnowledgeDirectory.create({
+      workspaceId,
+      knowledgeSpaceId: new mongoose.Types.ObjectId(knowledgeSpaceId),
+      version: 1,
+      deletedAt: null,
+      createdByMemberId: context.memberId,
+      updatedByMemberId: context.memberId,
+      parentDirectoryId: null,
+      name: 'Guides',
+      normalizedName: 'guides',
+      path: [],
+      depth: 0,
+      sortOrder: 0,
+      aclMode: 'inherited',
+      permissionRevision: 0,
+      ownershipMemberId: context.memberId,
+    });
+    const archiveSource = await createSource(Buffer.from('space export body'), 'space-export.txt');
+    await connection.models.KnowledgeSource.updateOne(
+      { _id: new mongoose.Types.ObjectId(archiveSource.sourceId), workspaceId },
+      {
+        $set: {
+          directoryId: directory._id,
+          metadata: { section: 'space-export' },
+        },
+      },
+    );
+    const sourceDoc = await connection.models.KnowledgeSource.findOne({
+      _id: new mongoose.Types.ObjectId(archiveSource.sourceId),
+      workspaceId,
+    }).lean();
+    const job = await jobs.createExportJob(
+      {
+        spaceId: knowledgeSpaceId,
+        sourceIds: [archiveSource.sourceId],
+        sourceVersions: { [archiveSource.sourceId]: Number(sourceDoc?.version ?? 1) },
+        exportScope: 'space',
+        format: 'zip',
+        idempotencyKey: `space-export-${suffix}`,
+      },
+      context,
+    );
+    const worker = new KnowledgeArchiveWorker(
+      connection,
+      runtimeConfig(),
+      `space-export-worker-${suffix}`,
+      undefined,
+      objectStore,
+    );
+    await worker.runOnce();
+    const succeeded = await jobs.get(String(job.jobId), context);
+    expect(succeeded.status, JSON.stringify(succeeded)).toBe('succeeded');
+    const result = succeeded.result as {
+      objectBlobRefId: string;
+      manifest: {
+        directories: string[];
+        sources: Array<{
+          sourceId: string;
+          path: string;
+          artifactState: string;
+          metadata: Record<string, unknown>;
+          acl: { permissionState: string };
+        }>;
+      };
+    };
+    expect(result.manifest.directories[0]).toContain('Guides');
+    expect(result.manifest.sources[0]).toMatchObject({
+      sourceId: archiveSource.sourceId,
+      artifactState: 'file',
+      metadata: { section: 'space-export' },
+    });
+    expect(result.manifest.sources[0]?.path).toContain('/Guides/');
+    expect(result.manifest.sources[0]?.acl.permissionState).toBe('disabled');
+    const artifact = await objectRefs.findObjectRef(result.objectBlobRefId, context);
+    expect(artifact?.state).toBe('active');
+    if (artifact) {
+      await objectStore.deleteObject(artifact.objectKey, { ...context, knowledgeSpaceId });
+    }
   });
 
   it('TEST-FILE-004-A13/A14 fails a real compression bomb and leaves no active artifact', async () => {

@@ -1,12 +1,17 @@
 import { randomUUID } from 'node:crypto';
 import { createKnowledgeError } from '@kb/contracts';
-import type { Types, Connection, Model } from 'mongoose';
+import type { ClientSession, Types, Connection, Model } from 'mongoose';
 import { registerKnowledgeModels } from '../../../shared/persistence/schemas/knowledge-index';
 import type {
   KnowledgeJobDoc,
   KnowledgeJobStepDoc,
 } from '../../../shared/persistence/schemas/knowledge-job.schemas';
 import type { TenantContext } from '../../../shared/persistence/knowledge/tenant';
+import {
+  KnowledgeAuditRepository,
+  type KnowledgeAuditInput,
+} from '../../../shared/persistence/knowledge/audit';
+import { withMongoTransaction } from '../../../shared/persistence/with-mongo-transaction';
 import {
   objectIdOf,
   requireWorkspaceId,
@@ -57,11 +62,13 @@ function jobDto(document: Plain<KnowledgeJobDoc>, steps: Plain<KnowledgeJobStepD
 export class KnowledgeJobRepository {
   private readonly jobs: Model<KnowledgeJobDoc>;
   private readonly steps: Model<KnowledgeJobStepDoc>;
+  private readonly audit: KnowledgeAuditRepository;
 
   constructor(private readonly connection: Connection) {
     const models = registerKnowledgeModels(connection);
     this.jobs = models.KnowledgeJob as Model<KnowledgeJobDoc>;
     this.steps = models.KnowledgeJobStep as Model<KnowledgeJobStepDoc>;
+    this.audit = new KnowledgeAuditRepository(connection);
   }
 
   async list(query: PageRequest, context: TenantContext) {
@@ -238,45 +245,53 @@ export class KnowledgeJobRepository {
       fencingToken: string;
       expectedVersion: number;
       result: Record<string, unknown>;
+      audit?: KnowledgeAuditInput;
     },
     context: TenantContext,
   ): Promise<ReturnType<typeof jobDto>> {
     requireWorkspaceId(context);
-    const now = new Date();
-    const updated = await this.jobs.findOneAndUpdate(
-      {
-        _id: objectIdOf(input.jobId, context, 'jobId'),
-        workspaceId: context.workspaceId,
-        version: input.expectedVersion,
-        status: 'running',
-        leaseOwner: input.workerId,
-        attemptEpoch: input.attemptEpoch,
-        fencingToken: input.fencingToken,
-        leaseExpiresAt: { $gt: now },
-        deletedAt: null,
-      },
-      {
-        $set: {
-          status: 'succeeded',
-          result: input.result,
-          progress: { stage: 'succeeded', completed: 1, total: 1, percent: 100 },
-          leaseOwner: null,
-          leaseExpiresAt: null,
-          updatedByMemberId: context.memberId,
+    const run = async (session?: ClientSession) => {
+      const now = new Date();
+      const updated = await this.jobs.findOneAndUpdate(
+        {
+          _id: objectIdOf(input.jobId, context, 'jobId'),
+          workspaceId: context.workspaceId,
+          version: input.expectedVersion,
+          status: 'running',
+          leaseOwner: input.workerId,
+          attemptEpoch: input.attemptEpoch,
+          fencingToken: input.fencingToken,
+          leaseExpiresAt: { $gt: now },
+          deletedAt: null,
         },
-        $inc: { version: 1 },
-      },
-      { new: true },
-    );
-    if (!updated) {
-      throw createKnowledgeError({
-        code: 'KNOWLEDGE_JOB_FAILED',
-        requestId: context.requestId,
-        traceId: context.traceId,
-        details: { reason: 'stale_fencing_token', jobId: input.jobId },
-      });
-    }
-    return jobDto(updated.toObject() as unknown as Plain<KnowledgeJobDoc>);
+        {
+          $set: {
+            status: 'succeeded',
+            result: input.result,
+            progress: { stage: 'succeeded', completed: 1, total: 1, percent: 100 },
+            leaseOwner: null,
+            leaseExpiresAt: null,
+            updatedByMemberId: context.memberId,
+          },
+          $inc: { version: 1 },
+        },
+        { new: true, ...(session ? { session } : {}) },
+      );
+      if (!updated) {
+        throw createKnowledgeError({
+          code: 'KNOWLEDGE_JOB_FAILED',
+          requestId: context.requestId,
+          traceId: context.traceId,
+          details: { reason: 'stale_fencing_token', jobId: input.jobId },
+        });
+      }
+      if (input.audit) {
+        if (!session) throw tenantError(context);
+        await this.audit.append(input.audit, context, session);
+      }
+      return jobDto(updated.toObject() as unknown as Plain<KnowledgeJobDoc>);
+    };
+    return input.audit ? withMongoTransaction(this.connection, (session) => run(session)) : run();
   }
 
   async fail(

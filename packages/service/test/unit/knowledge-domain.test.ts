@@ -1,10 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import {
+  assertBatchVersions,
+  assertCatalogMoveDepth,
+  assertCatalogNoCycle,
   assertDirectoryDepth,
   canTransitionJob,
   permissionAllows,
   transitionSourcePermission,
 } from '../../src/modules/knowledge/domain';
+import { safeAuditDiff } from '../../src/shared/persistence/knowledge/audit';
 import type { TenantContext } from '../../src/shared/persistence/knowledge/tenant';
 
 const context: TenantContext = {
@@ -51,5 +55,33 @@ describe('knowledge domain invariants', () => {
         }),
       }),
     );
+  });
+
+  it('rejects catalog cycles and paths beyond depth four', () => {
+    expect(() => assertCatalogNoCycle('a', null, [], context)).not.toThrow();
+    expect(() => assertCatalogNoCycle('a', 'b', ['root', 'a', 'b'], context)).toThrowError(
+      expect.objectContaining({
+        problem: expect.objectContaining({
+          error: expect.objectContaining({ code: 'KNOWLEDGE_CONFLICT' }),
+        }),
+      }),
+    );
+    expect(() => assertCatalogMoveDepth(4, context)).not.toThrow();
+    expect(() => assertCatalogMoveDepth(5, context)).toThrowError(
+      expect.objectContaining({
+        problem: expect.objectContaining({
+          error: expect.objectContaining({ code: 'KNOWLEDGE_CONFLICT' }),
+        }),
+      }),
+    );
+  });
+
+  it('requires an exact positive version for every batch item and redacts audit data', () => {
+    expect(assertBatchVersions(['a', 'b'], { a: 1, b: 2 }, context)).toEqual({ a: 1, b: 2 });
+    expect(() => assertBatchVersions(['a'], { a: 1, b: 2 }, context)).toThrow();
+    expect(safeAuditDiff({ token: 'secret', nested: { authorization: 'Bearer x' } })).toEqual({
+      token: '[REDACTED]',
+      nested: { authorization: '[REDACTED]' },
+    });
   });
 });
