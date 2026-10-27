@@ -57,6 +57,9 @@ describe('TEST-X-COMPOSE-READY AIProxy Compose contract', () => {
     expect(compose).toContain(
       'AIPROXY_API_TOKEN_REF: ${AIPROXY_API_TOKEN_REF:-env:AIPROXY_API_TOKEN}',
     );
+    expect(serviceBlock('aiproxy')).toContain(
+      'ADMIN_KEY: ${AIPROXY_API_TOKEN:-kb-local-aiproxy-token}',
+    );
     expect(compose).not.toMatch(/AIPROXY_API_TOKEN:\s+(?!\$\{AIPROXY_API_TOKEN)/);
   });
 });

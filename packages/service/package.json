@@ -21,6 +21,7 @@
     "@kb/chunk": "workspace:*",
     "@kb/contracts": "workspace:*",
     "@kb/dal": "workspace:*",
+    "@kb/qa": "workspace:*",
     "@node-rs/jieba": "catalog:",
     "@t3-oss/env-core": "catalog:",
     "axios": "catalog:",

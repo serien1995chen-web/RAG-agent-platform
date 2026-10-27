@@ -3,6 +3,7 @@ import {
   FormField,
   PageHeader,
   ProblemNotice,
+  S5ModelBindingPanel,
   SelectInput,
   TextArea,
   TextInput,
@@ -13,6 +14,10 @@ import {
   useKnowledgeI18n,
   useKnowledgeForm,
   useKnowledgeMutation,
+  useKnowledgeQuery,
+  type S5ModelBindingView,
+  type S5ModelValidationView,
+  type S5ModelView,
   type NewSpaceFormValues,
 } from '@kb/web';
 import Head from 'next/head';
@@ -24,6 +29,11 @@ export default function NewSpacePage() {
   const router = useRouter();
   const { t } = useKnowledgeI18n();
   const [problem, setProblem] = useState<unknown>(null);
+  const [createdSpace, setCreatedSpace] = useState<SpaceRecord | null>(null);
+  const modelsRequest = useKnowledgeQuery<{ items: S5ModelView[] }>(
+    knowledgeQueryKeys.models.list(),
+    '/v1/knowledge/models',
+  );
   const form = useKnowledgeForm(newSpaceFormSchema, {
     defaultValues: {
       kind: 'space',
@@ -44,20 +54,51 @@ export default function NewSpacePage() {
         },
       }),
     invalidateKeys: [knowledgeQueryKeys.spaces.list({ limit: 200 })],
-    onSuccess: async (space) => {
-      await router.push(`/spaces/${space.id}/overview`);
+    onSuccess: (space) => {
+      setCreatedSpace(space);
     },
   });
 
   const submit = form.handleSubmit(async (values) => {
     await submitWithProblem(
       async () => {
-        await createSpace.mutateAsync(values);
+        const space = createdSpace ?? (await createSpace.mutateAsync(values));
+        await router.push(`/spaces/${space.id}/overview`);
       },
       setProblem,
       form,
     );
   });
+
+  const saveBindings = async (input: { bindings: S5ModelBindingView[]; version: number }) => {
+    const valid = await form.trigger();
+    if (!valid) return;
+    let space = createdSpace;
+    try {
+      space ??= await createSpace.mutateAsync(form.getValues());
+      await knowledgeRequest(`/v1/knowledge/spaces/${space.id}/model-bindings`, {
+        method: 'PUT',
+        body: {
+          bindings: input.bindings,
+          version: space.version,
+        },
+      });
+      await router.push(`/spaces/${space.id}/overview`);
+    } catch (caught) {
+      setProblem(caught);
+      throw caught;
+    }
+  };
+
+  const validateBinding = (binding: S5ModelBindingView) =>
+    knowledgeRequest<S5ModelValidationView>('/v1/knowledge/model-bindings/validate', {
+      method: 'POST',
+      body: {
+        modelId: binding.modelId,
+        modelType: binding.modelType,
+        requiredCapabilities: binding.requiredCapabilities,
+      },
+    });
 
   return (
     <>
@@ -170,6 +211,26 @@ export default function NewSpacePage() {
             </label>
           )}
         />
+        {form.watch('kind') === 'space' ? (
+          <div style={{ gridColumn: '1 / -1' }}>
+            <S5ModelBindingPanel
+              models={modelsRequest.data?.items ?? []}
+              bindings={[]}
+              spaceVersion={createdSpace?.version ?? 1}
+              onValidate={validateBinding}
+              onSave={saveBindings}
+              labels={{
+                title: t('models.title'),
+                validate: t('models.validate'),
+                save: t('models.save'),
+                noModels: t('models.noModels'),
+                capabilities: t('models.capabilities'),
+                disabled: t('models.disabled'),
+              }}
+              messageFor={(entry) => t(entry.messageKey, entry.params)}
+            />
+          </div>
+        ) : null}
       </FormBand>
     </>
   );

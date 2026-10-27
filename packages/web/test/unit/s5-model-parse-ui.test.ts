@@ -13,6 +13,7 @@ import {
   type S5ModelView,
 } from '../../src/components/s5-model-parse-state';
 import {
+  buildImportChunkingSettings,
   parseChunkingSettingsDraft,
   s5ExternalOcrConfigFormSchema,
   s5LiteParseConfigFormSchema,
@@ -157,6 +158,20 @@ describe('ACC-UI-01..07 S5 independent UI state', () => {
         unknown: true,
       }).success,
     ).toBe(false);
+    expect(
+      buildImportChunkingSettings({
+        trainingType: 'qa',
+        chunkSettingMode: 'custom',
+        chunkSize: 512,
+        chunkSplitMode: 'char',
+        chunkSplitter: '---',
+        qaPrompt: 'Use concise answers.',
+      }),
+    ).toEqual({
+      trainingType: 'qa',
+      chunkSettingMode: 'custom',
+      chunkSize: 512,
+    });
   });
 
   it('keeps phase1 components independent from pages, query keys and the shared API client', () => {

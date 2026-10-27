@@ -143,3 +143,33 @@ export function parseChunkingSettingsDraft(value: unknown):
     ),
   };
 }
+
+export function buildImportParseConfig(config: S5ParseProviderConfigView): Record<string, unknown> {
+  if (config.provider === 'liteparse') return config;
+  if (config.provider === 'sangfor') {
+    return {
+      ...config,
+      keepHeaderFooter: false,
+      keepAppendix: true,
+      imageAnalysis: false,
+      chartAnalysis: false,
+    };
+  }
+  if (config.provider === 'textin') {
+    return { ...config, removeWatermark: true, parseMode: 'auto' };
+  }
+  if (config.provider === 'doc2x') {
+    return { ...config, pollIntervalMs: 5_000 };
+  }
+  return config;
+}
+
+export function buildImportChunkingSettings(
+  config: S5ChunkingSettingsView,
+): Record<string, unknown> {
+  return {
+    trainingType: config.trainingType,
+    chunkSettingMode: config.chunkSettingMode,
+    ...(config.chunkSize === undefined ? {} : { chunkSize: config.chunkSize }),
+  };
+}

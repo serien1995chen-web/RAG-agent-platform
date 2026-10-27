@@ -298,7 +298,7 @@ export class S5ModelGateway implements S5ModelGatewayPort {
     const fact: S5GatewayUsageFact = {
       workspaceId: request.workspaceId,
       knowledgeSpaceId: request.knowledgeSpaceId,
-      operation: request.kind,
+      operation: request.operation ?? request.kind,
       requestId: request.requestId,
       traceId: request.traceId,
       modelId: candidate.modelId,

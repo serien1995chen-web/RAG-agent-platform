@@ -2497,7 +2497,7 @@ describe.sequential('knowledge architecture baseline E2E', () => {
       },
     });
 
-    expect(runtimeRegistry.count).toBe(79);
+    expect(runtimeRegistry.count).toBe(83);
     const runtimeIds = new Set(
       runtimeRegistry.operations.map((operation) => operation.operationId),
     );

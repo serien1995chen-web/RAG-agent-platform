@@ -84,6 +84,9 @@ describe('TEST-PARSE-003/004-BLOCK S5 processing application', () => {
     const qa = new FakeQa();
     const application = new S5ProcessingApplication(qa);
     const result = await application.process({
+      workspaceId: context.workspaceId,
+      knowledgeSpaceId: 'space-processing',
+      sourceId: 'source-processing',
       sourceVersion: 1,
       rawText: '知识库切分文本。'.repeat(20),
       artifact,
@@ -107,6 +110,9 @@ describe('TEST-PARSE-003/004-BLOCK S5 processing application', () => {
     }));
     const application = new S5ProcessingApplication(qa);
     const result = await application.process({
+      workspaceId: context.workspaceId,
+      knowledgeSpaceId: 'space-processing',
+      sourceId: 'source-processing',
       sourceVersion: 1,
       rawText: 'First paragraph.\n\nSecond paragraph.',
       artifact,
@@ -126,6 +132,9 @@ describe('TEST-PARSE-003/004-BLOCK S5 processing application', () => {
     const qa = new FakeQa();
     const application = new S5ProcessingApplication(qa);
     const result = await application.process({
+      workspaceId: context.workspaceId,
+      knowledgeSpaceId: 'space-processing',
+      sourceId: 'source-processing',
       sourceVersion: 1,
       rawText: '   ',
       artifact,
@@ -146,6 +155,9 @@ describe('TEST-PARSE-003/004-BLOCK S5 processing application', () => {
     );
     await expect(
       application.process({
+        workspaceId: context.workspaceId,
+        knowledgeSpaceId: 'space-processing',
+        sourceId: 'source-processing',
         sourceVersion: 1,
         rawText: 'text',
         artifact,
@@ -157,6 +169,9 @@ describe('TEST-PARSE-003/004-BLOCK S5 processing application', () => {
     });
     await expect(
       application.process({
+        workspaceId: context.workspaceId,
+        knowledgeSpaceId: 'space-processing',
+        sourceId: 'source-processing',
         sourceVersion: 1,
         rawText: 'text',
         artifact,

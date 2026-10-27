@@ -92,6 +92,10 @@ export const RUNTIME_OPERATION_IDS = Object.freeze([
   'API-CONNECTOR-UPDATE',
   'API-CONNECTOR-GET',
   'API-CONNECTOR-DELETE',
+  'API-MODEL-LIST',
+  'API-MODEL-BINDING-GET',
+  'API-MODEL-BINDING-UPDATE',
+  'API-MODEL-BINDING-VALIDATE',
 ]);
 
 const HTTP_METHODS = new Set(['get', 'post', 'put', 'patch', 'delete', 'options', 'head', 'trace']);

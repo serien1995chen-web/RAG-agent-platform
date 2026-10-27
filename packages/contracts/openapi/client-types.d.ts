@@ -137,6 +137,8 @@ export type RuntimeOperationId =
   | 'API-FILE-PREVIEW'
   | 'API-JOB-LIST'
   | 'API-JOB-GET'
+  | 'API-MODEL-BINDING-VALIDATE'
+  | 'API-MODEL-LIST'
   | 'API-OPENAPI'
   | 'API-OPS-STATUS'
   | 'API-ACL-GET'
@@ -182,6 +184,8 @@ export type RuntimeOperationId =
   | 'API-IMPORT-TEMPLATE'
   | 'API-IMPORT-TEXT'
   | 'API-IMPORT-URL'
+  | 'API-MODEL-BINDING-GET'
+  | 'API-MODEL-BINDING-UPDATE'
   | 'API-SPACE-MOVE'
   | 'API-OWNERSHIP-TRANSFER'
   | 'API-SPACE-REFERENCES'
@@ -216,8 +220,6 @@ export type DeferredOperationId =
   | 'API-JOB-REPLAY'
   | 'API-JOB-RESUME'
   | 'API-JOB-RETRY'
-  | 'API-MODEL-BINDING-VALIDATE'
-  | 'API-MODEL-LIST'
   | 'API-OPS-CLEANUP'
   | 'API-OPS-OUTBOX-REPLAY'
   | 'API-OPS-RECONCILE'
@@ -233,8 +235,6 @@ export type DeferredOperationId =
   | 'API-SEGMENT-INDEX-UPDATE'
   | 'API-SEGMENT-REINDEX'
   | 'API-SEGMENT-BATCH'
-  | 'API-MODEL-BINDING-GET'
-  | 'API-MODEL-BINDING-UPDATE'
   | 'API-SYNONYM-DELETE'
   | 'API-SYNONYM-GET'
   | 'API-SYNONYM-ENABLE'
@@ -402,6 +402,8 @@ export interface RuntimeRouteMethodPathMap {
   'API-FILE-PREVIEW': 'POST /v1/knowledge/files/{blobId}/preview';
   'API-JOB-LIST': 'GET /v1/knowledge/jobs';
   'API-JOB-GET': 'GET /v1/knowledge/jobs/{jobId}';
+  'API-MODEL-BINDING-VALIDATE': 'POST /v1/knowledge/model-bindings/validate';
+  'API-MODEL-LIST': 'GET /v1/knowledge/models';
   'API-OPENAPI': 'GET /v1/knowledge/openapi.json';
   'API-OPS-STATUS': 'GET /v1/knowledge/operations/status';
   'API-ACL-GET': 'GET /v1/knowledge/resources/{resourceType}/{resourceId}/acl';
@@ -447,6 +449,8 @@ export interface RuntimeRouteMethodPathMap {
   'API-IMPORT-TEMPLATE': 'POST /v1/knowledge/spaces/{spaceId}/imports/template';
   'API-IMPORT-TEXT': 'POST /v1/knowledge/spaces/{spaceId}/imports/text';
   'API-IMPORT-URL': 'POST /v1/knowledge/spaces/{spaceId}/imports/url';
+  'API-MODEL-BINDING-GET': 'GET /v1/knowledge/spaces/{spaceId}/model-bindings';
+  'API-MODEL-BINDING-UPDATE': 'PUT /v1/knowledge/spaces/{spaceId}/model-bindings';
   'API-SPACE-MOVE': 'POST /v1/knowledge/spaces/{spaceId}/move';
   'API-OWNERSHIP-TRANSFER': 'POST /v1/knowledge/spaces/{spaceId}/ownership-transfer';
   'API-SPACE-REFERENCES': 'GET /v1/knowledge/spaces/{spaceId}/references';
@@ -482,8 +486,6 @@ export interface DeferredRouteMethodPathMap {
   'API-JOB-REPLAY': 'POST /v1/knowledge/jobs/{jobId}/replay';
   'API-JOB-RESUME': 'POST /v1/knowledge/jobs/{jobId}/resume';
   'API-JOB-RETRY': 'POST /v1/knowledge/jobs/{jobId}/retry';
-  'API-MODEL-BINDING-VALIDATE': 'POST /v1/knowledge/model-bindings/validate';
-  'API-MODEL-LIST': 'GET /v1/knowledge/models';
   'API-OPS-CLEANUP': 'POST /v1/knowledge/operations/cleanup';
   'API-OPS-OUTBOX-REPLAY': 'POST /v1/knowledge/operations/outbox/{eventId}/replay';
   'API-OPS-RECONCILE': 'POST /v1/knowledge/operations/reconcile';
@@ -499,8 +501,6 @@ export interface DeferredRouteMethodPathMap {
   'API-SEGMENT-INDEX-UPDATE': 'PATCH /v1/knowledge/segments/{segmentId}/indexes/{indexId}';
   'API-SEGMENT-REINDEX': 'POST /v1/knowledge/segments/{segmentId}/reindex';
   'API-SEGMENT-BATCH': 'POST /v1/knowledge/segments/batch-actions';
-  'API-MODEL-BINDING-GET': 'GET /v1/knowledge/spaces/{spaceId}/model-bindings';
-  'API-MODEL-BINDING-UPDATE': 'PUT /v1/knowledge/spaces/{spaceId}/model-bindings';
   'API-SYNONYM-DELETE': 'DELETE /v1/knowledge/spaces/{spaceId}/synonyms';
   'API-SYNONYM-GET': 'GET /v1/knowledge/spaces/{spaceId}/synonyms';
   'API-SYNONYM-ENABLE': 'PATCH /v1/knowledge/spaces/{spaceId}/synonyms';

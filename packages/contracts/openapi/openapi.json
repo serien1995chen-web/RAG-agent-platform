@@ -25708,8 +25708,8 @@
     "operations": 120,
     "schemas": 139,
     "parameters": 8,
-    "runtimeOperations": 79,
-    "deferredOperations": 41,
+    "runtimeOperations": 83,
+    "deferredOperations": 37,
     "canonicalCollections": 23,
     "vectorProfiles": 4,
     "canonicalQueues": 13

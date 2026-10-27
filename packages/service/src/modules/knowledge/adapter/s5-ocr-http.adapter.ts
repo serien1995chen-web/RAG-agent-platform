@@ -90,7 +90,11 @@ function classifyStatus(status: number, usage: S5ProviderUsage[]): ProviderError
 
 function multipartFile(input: S5OcrRequest): FormData {
   const form = new FormData();
-  form.append('file', new Blob([input.bytes], { type: input.mimeType }), input.fileName);
+  form.append(
+    'file',
+    new Blob([new Uint8Array(input.bytes).buffer], { type: input.mimeType }),
+    input.fileName,
+  );
   return form;
 }
 

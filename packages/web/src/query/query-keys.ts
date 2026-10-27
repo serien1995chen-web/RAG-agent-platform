@@ -136,4 +136,22 @@ export const knowledgeQueryKeys = {
       connectorId ?? null,
     ],
   },
+  models: {
+    list: (params: QueryParams = { limit: 200 }): QueryKey => [
+      'knowledge',
+      VERSION,
+      'models',
+      'list',
+      stableParams(params),
+    ],
+  },
+  modelBindings: {
+    detail: (spaceId: string): QueryKey => [
+      'knowledge',
+      VERSION,
+      'spaces',
+      spaceId,
+      'model-bindings',
+    ],
+  },
 };

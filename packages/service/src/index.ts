@@ -5,6 +5,8 @@
 export const PACKAGE_NAME = '@kb/service' as const;
 
 export { loadKnowledgeRuntimeConfig } from './shared/config/knowledge-runtime-config';
+export { loadS5AiproxyConfig } from './shared/config/s5-aiproxy-config';
+export { loadS5RuntimeEnvironment } from './shared/config/s5-runtime-env';
 export type {
   KnowledgeMockAuthConfig,
   KnowledgeRuntimeConfig,
@@ -85,6 +87,26 @@ export {
   ReferenceApplication,
   MockReferenceRegistryAdapter,
   isS04Operation,
+  S5AiproxyCatalogAdapter,
+  S5MockModelCatalog,
+  AxiosS5HttpTransport,
+  S5AiproxyHttpAdapter,
+  S5MockAiproxyTransport,
+  S5KeyedSemaphore,
+  S5ModelApplication,
+  S5ModelBindingApplication,
+  S5ModelGateway,
+  createS5ModelGateway,
+  S5UsageRepository,
+  S5ModelBindingRepository,
+  S5ArtifactRepository,
+  S5ProcessingApplication,
+  S5QaPipelineAdapter,
+  S5OcrApplication,
+  S5OcrHttpAdapter,
+  AxiosS5OcrHttpTransport,
+  S5OcrCredentialProfileAdapter,
+  S5RemoteAssetAdapter,
 } from './modules/knowledge';
 export type {
   AclResourceType,
@@ -123,6 +145,15 @@ export type {
   QuotaGatePort,
   ScopedAuthPort,
   UrlImportAdapterPort,
+  S5ModelGatewayPort,
+  S5UsageRecorderPort,
+  S5OcrAssetSinkPort,
+  S5OcrHttpTransportPort,
+  S5ProviderUsageRecorderPort,
+  S5ArtifactMaterializeResult,
+  S5ArtifactStorePort,
+  S5ObjectArtifactRef,
+  S5ProcessingResult,
 } from './modules/knowledge';
 export {
   KnowledgeMockAuthProvider,

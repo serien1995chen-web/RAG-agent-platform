@@ -31,10 +31,26 @@ const S5_OPERATIONS = [
   'API-MODEL-BINDING-UPDATE',
   'API-MODEL-BINDING-VALIDATE',
 ] as const;
+const S4_OPERATIONS = [
+  'API-IMPORT-FILES',
+  'API-IMPORT-TEXT',
+  'API-IMPORT-URL',
+  'API-IMPORT-TEMPLATE',
+  'API-IMPORT-BACKUP',
+  'API-IMPORT-API-CATALOG',
+  'API-IMPORT-API-LIBRARY',
+  'API-CONNECTOR-CONNECT',
+  'API-CONNECTOR-CATALOG',
+  'API-CONNECTOR-IMPORT',
+  'API-CONNECTOR-SYNC',
+  'API-CONNECTOR-UPDATE',
+  'API-CONNECTOR-GET',
+  'API-CONNECTOR-DELETE',
+] as const;
 const FORBIDDEN_LEGACY_FIELD = ['parse', 'Version'].join('');
 
 describe('S5 model and parse frozen contract', () => {
-  it('keeps the four S5 operations in the target and deferred, not runtime', () => {
+  it('promotes exactly the four S5 operations to runtime', () => {
     const targetIds = Object.values(openapi.paths)
       .flatMap((methods) => Object.values(methods))
       .map((operation) => operation.operationId)
@@ -43,8 +59,8 @@ describe('S5 model and parse frozen contract', () => {
     const deferredIds = new Set(deferred.operations.map((operation) => operation.operationId));
     for (const operationId of S5_OPERATIONS) {
       expect(targetIds).toContain(operationId);
-      expect(deferredIds).toContain(operationId);
-      expect(runtimeIds.has(operationId)).toBe(false);
+      expect(runtimeIds.has(operationId)).toBe(true);
+      expect(deferredIds.has(operationId)).toBe(false);
     }
   });
 
@@ -160,13 +176,20 @@ describe('S5 model and parse frozen contract', () => {
     expect(openapiText).not.toContain(FORBIDDEN_LEGACY_FIELD);
   });
 
-  it('does not register S5 runtime operations or expose an S6 worker consumer', () => {
-    expect(runtime.operations).toHaveLength(65);
-    expect(deferred.operations).toHaveLength(55);
+  it('registers the four S5 operations without exposing an S6 worker consumer', () => {
+    expect(runtime.operations).toHaveLength(83);
+    expect(deferred.operations).toHaveLength(37);
     const worker = readFileSync(
       join(root, 'projects', 'app', 'src', 'runtime', 'knowledge-worker.ts'),
       'utf8',
     );
     expect(worker).not.toMatch(/s5|liteparse|S5ModelGateway|S5OcrApplication/);
+  });
+
+  it('keeps S4 14 and S5 4 operations in the W1 runtime union', () => {
+    const runtimeIds = new Set(runtime.operations.map((operation) => operation.operationId));
+    for (const operationId of [...S4_OPERATIONS, ...S5_OPERATIONS]) {
+      expect(runtimeIds.has(operationId), operationId).toBe(true);
+    }
   });
 });

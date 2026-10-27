@@ -95,7 +95,7 @@ function formDataOf(input: Extract<S5ModelInvocation, { kind: 'stt' }>): FormDat
   form.append('model', input.modelId);
   form.append(
     'file',
-    new Blob([input.audio], { type: input.mimeType }),
+    new Blob([new Uint8Array(input.audio).buffer], { type: input.mimeType }),
     `audio.${input.mimeType.split('/')[1] ?? 'bin'}`,
   );
   return form;

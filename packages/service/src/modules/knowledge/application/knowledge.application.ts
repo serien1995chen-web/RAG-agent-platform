@@ -31,6 +31,10 @@ export interface KnowledgeOperationResult {
   binary?: FileBinaryResult;
 }
 
+interface S5OperationApplication {
+  dispatch(input: KnowledgeOperationInput): Promise<KnowledgeOperationResult>;
+}
+
 function objectBody(value: unknown, context: TenantContext): Record<string, unknown> {
   if (value === undefined || value === null || value === '') return {};
   if (typeof value !== 'object' || Array.isArray(value)) {
@@ -80,6 +84,8 @@ export class KnowledgeApplication {
     private readonly sources?: SourceFileApplication,
     private readonly references?: ReferencePort,
     private readonly audits?: AuditPort,
+    private readonly s5Models?: S5OperationApplication,
+    private readonly s5ModelBindings?: S5OperationApplication,
   ) {}
 
   private async requireExistingPermission(
@@ -173,6 +179,37 @@ export class KnowledgeApplication {
 
   async dispatch(input: KnowledgeOperationInput): Promise<KnowledgeOperationResult> {
     const { context, params } = input;
+    if (
+      input.operationId === 'API-MODEL-LIST' ||
+      input.operationId === 'API-MODEL-BINDING-VALIDATE'
+    ) {
+      if (!this.s5Models) {
+        throw createKnowledgeError({
+          code: 'KNOWLEDGE_INTERNAL_ERROR',
+          requestId: context.requestId,
+          traceId: context.traceId,
+          details: { operationId: input.operationId, reason: 's5_model_application_missing' },
+        });
+      }
+      return this.s5Models.dispatch(input);
+    }
+    if (
+      input.operationId === 'API-MODEL-BINDING-GET' ||
+      input.operationId === 'API-MODEL-BINDING-UPDATE'
+    ) {
+      if (!this.s5ModelBindings) {
+        throw createKnowledgeError({
+          code: 'KNOWLEDGE_INTERNAL_ERROR',
+          requestId: context.requestId,
+          traceId: context.traceId,
+          details: {
+            operationId: input.operationId,
+            reason: 's5_model_binding_application_missing',
+          },
+        });
+      }
+      return this.s5ModelBindings.dispatch(input);
+    }
     const body = input.operationId === 'API-UPLOAD-PART' ? {} : objectBody(input.body, context);
     switch (input.operationId) {
       case 'API-SPACE-LIST': {

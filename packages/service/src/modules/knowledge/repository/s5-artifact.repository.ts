@@ -13,6 +13,7 @@ import type {
   S5ObjectArtifactRef,
   S5ParseAsset,
 } from '../application/s5-processing-ports';
+import type { S5OcrAssetSinkPort } from '../application/s5-ocr-ports';
 
 interface PlainObjectRef extends KnowledgeObjectRefDoc {
   _id: Types.ObjectId;
@@ -57,7 +58,7 @@ function objectRefView(document: PlainObjectRef): S5ObjectArtifactRef {
   };
 }
 
-export class S5ArtifactRepository {
+export class S5ArtifactRepository implements S5OcrAssetSinkPort {
   private readonly objects: Model<KnowledgeObjectRefDoc>;
   private readonly sources: Model<KnowledgeSourceDoc>;
 
@@ -300,6 +301,35 @@ export class S5ArtifactRepository {
       sha256: asset.sha256,
       sizeBytes: asset.sizeBytes,
       objectRefId: ref.blobId,
+    };
+  }
+
+  async putImage(
+    input: {
+      workspaceId: string;
+      knowledgeSpaceId: string;
+      sourceId: string;
+      sourceVersion: number;
+      bytes: Uint8Array;
+      mimeType: string;
+      sha256: string;
+    },
+    context: TenantContext,
+  ): Promise<{ objectRefId: string; markdownUrl: string }> {
+    const ref = await this.materializeOne({
+      sourceId: input.sourceId,
+      sourceVersion: input.sourceVersion,
+      knowledgeSpaceId: input.knowledgeSpaceId,
+      purpose: 'image',
+      bytes: input.bytes,
+      mimeType: input.mimeType,
+      sha256: input.sha256,
+      context,
+      assetId: input.sha256,
+    });
+    return {
+      objectRefId: ref.blobId,
+      markdownUrl: `object://${ref.blobId}`,
     };
   }
 

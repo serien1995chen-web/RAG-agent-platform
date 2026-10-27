@@ -52,6 +52,7 @@ export type S5ModelGatewayRequest = S5ModelInvocation & {
   fallbackModelIds?: string[];
   resourceType?: 'space' | 'source';
   resourceId?: string;
+  operation?: string;
 };
 
 export type S5UsageUnit = 'token' | 'request' | 'second' | 'page' | 'image';

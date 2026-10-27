@@ -45,6 +45,8 @@ export interface ImportWorkbenchProps {
   spaceId: string;
   initialKind?: ImportSourceKind;
   initialDirectoryId?: string;
+  s5ParseConfig?: Record<string, unknown>;
+  s5ChunkingSettings?: Record<string, unknown>;
 }
 
 export function splitIds(value: string): string[] {
@@ -105,7 +107,10 @@ export function ImportWorkbench(props: ImportWorkbenchProps) {
     window.history.replaceState(window.history.state, '', next);
   }, [directoryId, kind]);
 
-  const chunking = { trainingType: 'chunk', chunkSettingMode: 'auto' };
+  const chunking = props.s5ChunkingSettings ?? {
+    trainingType: 'chunk',
+    chunkSettingMode: 'auto',
+  };
   const apiConfig = {
     provider: 'custom_api',
     baseUrl: apiBaseUrl,
@@ -147,8 +152,11 @@ export function ImportWorkbench(props: ImportWorkbenchProps) {
       await submit(`${base}/files`, {
         directoryId: directoryId || null,
         uploadIds: [uploadId],
-        parseProvider,
-        parseConfig: {},
+        parseProvider:
+          typeof props.s5ParseConfig?.provider === 'string'
+            ? props.s5ParseConfig.provider
+            : parseProvider,
+        parseConfig: props.s5ParseConfig ?? {},
         chunking,
       });
       return;

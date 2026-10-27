@@ -699,6 +699,9 @@ importers:
       '@kb/dal':
         specifier: workspace:*
         version: link:../dal
+      '@kb/qa':
+        specifier: workspace:*
+        version: link:../qa
       '@node-rs/jieba':
         specifier: 'catalog:'
         version: 2.0.1

@@ -21,11 +21,17 @@ export interface S5QaPipelinePort {
     chunk: ChunkItem;
     settings: ChunkingSettings;
     context: TenantContext;
+    workspaceId: string;
+    knowledgeSpaceId: string;
+    sourceId: string;
   }): Promise<S5QaChunkResult>;
   dedupe(items: readonly S5QaResultItem[]): S5QaResultItem[];
 }
 
 export interface S5ProcessingInput {
+  workspaceId: string;
+  knowledgeSpaceId: string;
+  sourceId: string;
   sourceVersion: number;
   rawText: string;
   artifact: S5ArtifactMaterializeResult;
@@ -91,9 +97,10 @@ export class S5ProcessingApplication {
   }
 
   async generateQaForChunks(
-    input: Pick<S5ProcessingInput, 'settings' | 'qaFallbackPolicy' | 'context'> & {
-      chunks: readonly ChunkItem[];
-    },
+    input: Pick<
+      S5ProcessingInput,
+      'workspaceId' | 'knowledgeSpaceId' | 'sourceId' | 'settings' | 'qaFallbackPolicy' | 'context'
+    > & { chunks: readonly ChunkItem[] },
   ): Promise<{
     items: S5QaResultItem[];
     fallbackUsed: boolean;
@@ -120,6 +127,9 @@ export class S5ProcessingApplication {
         chunk,
         settings: input.settings,
         context: input.context,
+        workspaceId: input.workspaceId,
+        knowledgeSpaceId: input.knowledgeSpaceId,
+        sourceId: input.sourceId,
       });
       if (result.fallback === 'chunk_split') {
         fallbackUsed = true;

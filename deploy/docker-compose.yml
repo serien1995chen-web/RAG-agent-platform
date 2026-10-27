@@ -147,7 +147,7 @@ services:
     environment:
       PORT: '3000'
       SQL_DSN: postgresql://${AIPROXY_POSTGRES_USER:-aiproxy}:${AIPROXY_POSTGRES_PASSWORD:-aiproxy_dev_password}@aiproxy-postgres:5432/aiproxy?sslmode=disable
-      AUTH_TOKEN: ${AIPROXY_API_TOKEN:-kb-local-aiproxy-token}
+      ADMIN_KEY: ${AIPROXY_API_TOKEN:-kb-local-aiproxy-token}
       LOG_LEVEL: ${AIPROXY_LOG_LEVEL:-info}
     depends_on:
       aiproxy-postgres:
