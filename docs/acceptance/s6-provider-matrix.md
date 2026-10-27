@@ -2,7 +2,7 @@
 
 ## Candidate
 
-- Candidate SHA: `cb9df7db4cf8de29bec26849c3ebbe2a3a19073c`.
+- Candidate SHA: `c398593db550e6d4832a24642b368f11bac22ff8`.
 - Branch: `feat/kb-s06-job-index`.
 - Conclusion scope: S6 branch only.
 

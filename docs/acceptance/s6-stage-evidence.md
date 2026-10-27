@@ -5,7 +5,7 @@
 - Wave: `W2`.
 - Stage: `S6 / personB`.
 - Branch: `feat/kb-s06-job-index`.
-- Candidate SHA: `cb9df7db4cf8de29bec26849c3ebbe2a3a19073c`.
+- Candidate SHA: `c398593db550e6d4832a24642b368f11bac22ff8`.
 - Evidence commit SHA: `EVIDENCE_DOCS_ONLY_COMMIT`, recorded exactly in the final
   delivery report.
 - W2 baseline: `87ba3bdea3d7daf3e738a04998b80b49cbf7a77b`.
@@ -75,7 +75,7 @@ operations were not implemented.
 ## Command Matrix
 
 All commands were run on candidate SHA
-`cb9df7db4cf8de29bec26849c3ebbe2a3a19073c` with the real local infrastructure
+`c398593db550e6d4832a24642b368f11bac22ff8` with the real local infrastructure
 environment and exited `0`.
 
 | Gate                           | Result                                        |
@@ -87,7 +87,7 @@ environment and exited `0`.
 | `pnpm forbidden-files:check`   | PASS, 413 files                               |
 | `pnpm test:unit`               | PASS, Turbo 21/21                             |
 | `pnpm test:contract`           | PASS, 79 tests                                |
-| `pnpm test:integration`        | PASS, Turbo 21/21; service 113 tests          |
+| `pnpm test:integration`        | PASS, Turbo 21/21; service 114 tests          |
 | `pnpm test:tenant`             | PASS, 12 tests                                |
 | `pnpm test:concurrency`        | PASS, 13 tests                                |
 | `pnpm test:fault`              | PASS, 25 tests                                |
@@ -159,9 +159,10 @@ C3:
 - Duplicate sync delivery replays the same cursor run without another Source,
   ObjectRef or parse child.
 - A changed external document increments its Source `sourceVersion`.
-- A failed sync connector returns to `syncing` in the same transaction as Job
-  retry/replay; terminal success clears the prior error and returns it to
-  `active` without duplicating provider artifacts.
+- A failed sync connector returns to `syncing` in the same transaction as
+  retry/replay of the sync root or any failed parse/index descendant; terminal
+  success clears the prior error and returns it to `active` without duplicating
+  provider artifacts.
 - Sync creates one parse child per Source and only marks the connector active
   after the sync root reaches a terminal state.
 - Duplicate sync delivery does not create another Source or child.
@@ -220,6 +221,9 @@ question/answer after both pointer and keyboard submission.
   retry/replay transaction, the same Job then recovers to `active`, and the
   regression proves cursor stability with no duplicate Source, ObjectRef or
   parse child.
+- `S6-R06`: Jobs UI retry on a failed parse/index child now locates the sync
+  root in the same Job tree, restores its connector to `syncing`, and requeues
+  the root and failed descendants in one Mongo transaction.
 
 ## Evidence And Hygiene
 
