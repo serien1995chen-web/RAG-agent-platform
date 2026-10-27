@@ -58,6 +58,7 @@ class FakeQa implements S5QaPipelinePort {
       ...result,
       promptVersion: 'qa.default@1',
       usage: { inputTokens: 1, outputTokens: 1 },
+      diagnostics: [],
     };
   }
 
@@ -91,6 +92,11 @@ describe('TEST-PARSE-003/004-BLOCK S5 processing application', () => {
       rawText: '知识库切分文本。'.repeat(20),
       artifact,
       settings: baseSettings,
+      ocrEvidence: {
+        actualProvider: 'textin',
+        fallbackProvider: 'liteparse',
+        fallbackUsed: true,
+      },
       context,
     });
     expect(result.chunks.length).toBeGreaterThan(0);
@@ -98,6 +104,11 @@ describe('TEST-PARSE-003/004-BLOCK S5 processing application', () => {
     expect(qa.calls).toHaveLength(0);
     expect(result.rawTextObjectRef.purpose).toBe('source');
     expect(result.evidence.chunkingConfigHash).toMatch(/^sha256:[0-9a-f]{64}$/);
+    expect(result.evidence).toMatchObject({
+      ocrProvider: 'textin',
+      ocrFallbackProvider: 'liteparse',
+      fallbackUsed: true,
+    });
   });
 
   it('calls QA per chunk, dedupes globally and records prompt/fallback evidence', async () => {

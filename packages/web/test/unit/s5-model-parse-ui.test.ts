@@ -91,6 +91,7 @@ describe('ACC-UI-01..07 S5 independent UI state', () => {
       keepDraft: true,
     });
     expect(canSaveBinding({ state: 'ready', bindings: [binding] })).toBe(true);
+    expect(canSaveBinding({ state: 'ready', bindings: [] })).toBe(true);
     expect(canSaveBinding({ state: 'conflict', bindings: [binding] })).toBe(false);
   });
 
@@ -195,5 +196,14 @@ describe('ACC-UI-01..07 S5 independent UI state', () => {
         expect(content, `${file}: ${forbidden}`).not.toContain(forbidden);
       }
     }
+  });
+
+  it('keeps the S5 parser panel as the only import provider selector', () => {
+    const workbench = readFileSync(
+      join(import.meta.dirname, '..', '..', 'src', 'components', 'import-workbench.tsx'),
+      'utf8',
+    );
+    expect(workbench).not.toContain("t('import.parseProvider')");
+    expect(workbench).not.toContain('setParseProvider');
   });
 });

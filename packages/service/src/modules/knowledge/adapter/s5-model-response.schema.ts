@@ -54,7 +54,13 @@ const RerankResponseSchema = z
   })
   .passthrough();
 
-const SttResponseSchema = z.object({ text: z.string() }).passthrough();
+const SttResponseSchema = z
+  .object({
+    text: z.string(),
+    duration: z.number().finite().min(0).optional(),
+    duration_seconds: z.number().finite().min(0).optional(),
+  })
+  .passthrough();
 
 export interface ParsedModelResponse {
   data: unknown;
@@ -88,6 +94,7 @@ export function parseModelResponse(input: {
   data: unknown;
   dimension?: S5VectorDimension;
   inputText?: string;
+  durationSeconds?: number;
 }): ParsedModelResponse {
   switch (input.kind) {
     case 'llm':
@@ -130,7 +137,7 @@ export function parseModelResponse(input: {
       return {
         data: parsed.data,
         usage: { inputTokens: 0, outputTokens: 0 },
-        quantity: 0,
+        quantity: parsed.data.duration_seconds ?? parsed.data.duration ?? 0,
       };
     }
     case 'tts': {
@@ -140,7 +147,12 @@ export function parseModelResponse(input: {
       return {
         data: input.data,
         usage: { inputTokens: 0, outputTokens: 0 },
-        quantity: [...(input.inputText ?? '')].length,
+        quantity:
+          typeof input.durationSeconds === 'number' &&
+          Number.isFinite(input.durationSeconds) &&
+          input.durationSeconds >= 0
+            ? input.durationSeconds
+            : 0,
       };
     }
   }

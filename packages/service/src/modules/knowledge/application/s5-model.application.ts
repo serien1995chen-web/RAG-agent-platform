@@ -9,6 +9,13 @@ import {
   type S5ModelType,
   S5_MODEL_TYPES,
 } from './s5-model-ports';
+import {
+  pageInfoOf,
+  parseModelSort,
+  parsePageLimit,
+  parsePageOffset,
+  queryValue,
+} from './s5-pagination';
 
 function operationError(
   code: 'KNOWLEDGE_VALIDATION_FAILED' | 'KNOWLEDGE_MODEL_FAILED',
@@ -42,11 +49,6 @@ function objectBody(value: unknown, context: TenantContext): Record<string, unkn
     });
   }
   return value as Record<string, unknown>;
-}
-
-function firstQuery(query: KnowledgeOperationInput['query'], key: string): string | undefined {
-  const value = query[key];
-  return Array.isArray(value) ? value[0] : value;
 }
 
 function modelView(item: ModelCatalogItem) {
@@ -120,35 +122,34 @@ export class S5ModelApplication {
       requestId: input.context.requestId,
       traceId: input.context.traceId,
     });
-    const typeFilter = firstQuery(input.query, 'type');
-    const limitValue = firstQuery(input.query, 'limit');
-    const limit = limitValue === undefined ? 200 : Number(limitValue);
-    if (!Number.isInteger(limit) || limit < 1 || limit > 200) {
-      throw operationError('KNOWLEDGE_VALIDATION_FAILED', input.context, {
-        field: 'limit',
-        min: 1,
-        max: 200,
-      });
-    }
-    const sort = firstQuery(input.query, 'sort') ?? 'modelType';
-    if (!['modelType', 'modelId'].includes(sort)) {
-      throw operationError('KNOWLEDGE_VALIDATION_FAILED', input.context, {
-        field: 'sort',
-        supported: ['modelType', 'modelId'],
-      });
-    }
+    const typeFilter = queryValue(input.query, 'type');
+    const limit = parsePageLimit(input.query, input.context);
+    const offset = parsePageOffset(input.query, input.context);
+    const sort = parseModelSort(input.query, input.context);
     const filtered = models
       .filter((item) => item.authorized)
       .filter((item) => typeFilter === undefined || item.type === typeFilter)
-      .sort((left, right) =>
-        sort === 'modelId'
-          ? left.modelId.localeCompare(right.modelId)
-          : S5_MODEL_TYPES.indexOf(left.type) - S5_MODEL_TYPES.indexOf(right.type) ||
-            left.modelId.localeCompare(right.modelId),
-      )
-      .slice(0, limit)
-      .map(modelView);
-    return { status: 200, data: { items: filtered } };
+      .sort((left, right) => {
+        if (sort === 'modelId' || sort === '-modelId') {
+          return left.modelId.localeCompare(right.modelId);
+        }
+        if (sort === 'modelType' || sort === '-modelType') {
+          return (
+            S5_MODEL_TYPES.indexOf(left.type) - S5_MODEL_TYPES.indexOf(right.type) ||
+            left.modelId.localeCompare(right.modelId)
+          );
+        }
+        return 0;
+      });
+    if (sort.startsWith('-') && !sort.endsWith('updatedAt')) filtered.reverse();
+    const page = filtered.slice(offset, offset + limit).map(modelView);
+    return {
+      status: 200,
+      data: {
+        items: page,
+        pageInfo: pageInfoOf(filtered.length, offset, limit),
+      },
+    };
   }
 
   async validateBinding(input: KnowledgeOperationInput): Promise<KnowledgeOperationResult> {

@@ -14,6 +14,7 @@ export interface S5QaChunkResult {
   fallback: 'none' | 'chunk_split';
   promptVersion: string | null;
   usage: { inputTokens: number; outputTokens: number };
+  diagnostics: S5ParseDiagnostic[];
 }
 
 export interface S5QaPipelinePort {
@@ -37,6 +38,11 @@ export interface S5ProcessingInput {
   artifact: S5ArtifactMaterializeResult;
   settings: ChunkingSettings;
   qaFallbackPolicy?: 'chunk_split' | 'none';
+  ocrEvidence?: {
+    actualProvider: string;
+    fallbackProvider: string | null;
+    fallbackUsed: boolean;
+  };
   context: TenantContext;
 }
 
@@ -148,6 +154,7 @@ export class S5ProcessingApplication {
         });
       }
       if (result.promptVersion) promptVersions.add(result.promptVersion);
+      diagnostics.push(...result.diagnostics);
       items.push(...result.items);
     }
     return {
@@ -177,11 +184,13 @@ export class S5ProcessingApplication {
       qaItems: qa.items,
       evidence: {
         ...input.artifact.evidence,
-        ocrProvider: null,
-        ocrFallbackProvider: null,
+        ocrProvider: input.ocrEvidence?.actualProvider ?? null,
+        ocrFallbackProvider: input.ocrEvidence?.fallbackUsed
+          ? (input.ocrEvidence.fallbackProvider ?? null)
+          : null,
         chunkingConfigHash: chunks.policyHash,
         qaPromptVersion: qa.promptVersion,
-        fallbackUsed: qa.fallbackUsed,
+        fallbackUsed: qa.fallbackUsed || (input.ocrEvidence?.fallbackUsed ?? false),
       },
     };
   }

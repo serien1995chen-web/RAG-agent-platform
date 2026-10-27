@@ -18,6 +18,7 @@ export interface QaRequest {
   qaTemplateId: string;
   qaTemplateVersion: number;
   qaPrompt?: string;
+  sourceChunkHash?: string;
   models: { llmModel: string; embeddingModel: string };
   limits: QaLimits;
 }
@@ -32,6 +33,11 @@ export interface QaResult {
   items: QaResultItem[];
   usage: { inputTokens: number; outputTokens: number };
   fallback: 'none' | 'chunk_split';
+  diagnostics: Array<{
+    code: string;
+    count?: number;
+    problems?: string[];
+  }>;
 }
 
 export interface QaModelInput {

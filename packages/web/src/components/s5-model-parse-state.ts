@@ -75,7 +75,6 @@ export function canSaveBinding(input: {
 }): boolean {
   return (
     input.state === 'ready' &&
-    input.bindings.length > 0 &&
     new Set(input.bindings.map((binding) => binding.modelType)).size === input.bindings.length
   );
 }

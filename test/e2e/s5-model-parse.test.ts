@@ -272,9 +272,20 @@ describe('TEST-MODEL-001 / TEST-KB-002 / TEST-X-FRONTEND-IMPORT', () => {
         const session = await authenticatedPage(browser, `/spaces/${spaceId}/import`, viewport);
         await session.page.getByRole('heading', { level: 1, name: '导入知识来源' }).waitFor();
         await session.page.getByRole('region', { name: '解析、切分与 QA' }).waitFor();
+        expect(await session.page.getByText('解析器', { exact: true }).count()).toBe(1);
+        expect(await session.page.getByRole('option', { name: '深信服' }).count()).toBe(1);
         await session.page.getByRole('button', { name: '选择文件' }).waitFor();
         await session.page.getByRole('button', { name: '预览配置' }).click();
         await session.page.getByRole('status').getByText('仅预览配置，不创建解析任务').waitFor();
+        expect(
+          await session.page.getByText('仅预览配置，不创建解析任务', { exact: true }).count(),
+        ).toBe(1);
+        await session.page.evaluate(() => {
+          if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+        });
+        await session.page.waitForTimeout(250);
+        const skipBox = await session.page.locator('.skip-link').boundingBox();
+        expect(skipBox === null || skipBox.y + skipBox.height <= 1).toBe(true);
         expect(
           await session.page.evaluate(
             () => document.documentElement.scrollWidth > window.innerWidth + 1,
@@ -305,6 +316,20 @@ describe('TEST-MODEL-001 / TEST-KB-002 / TEST-X-FRONTEND-IMPORT', () => {
       const session = await authenticatedPage(browser, `/spaces/${spaceId}/overview`);
       await session.page.getByRole('region', { name: '模型绑定' }).waitFor();
       await session.page.getByText('v2').waitFor();
+      await session.page.getByLabel('LLM', { exact: true }).selectOption('');
+      await session.page.getByLabel('Embedding', { exact: true }).selectOption('');
+      await session.page.getByRole('button', { name: '校验模型' }).click();
+      const saved = session.page.waitForResponse(
+        (candidate) =>
+          candidate.request().method() === 'PUT' &&
+          candidate.url().endsWith(`/spaces/${spaceId}/model-bindings`),
+      );
+      await session.page.getByRole('button', { name: '保存绑定' }).click();
+      expect((await saved).status()).toBe(200);
+      const cleared = await api<{ items: unknown[] }>(
+        `/v1/knowledge/spaces/${spaceId}/model-bindings`,
+      );
+      expect(cleared.items).toEqual([]);
       await session.close();
     } finally {
       await browser.close();

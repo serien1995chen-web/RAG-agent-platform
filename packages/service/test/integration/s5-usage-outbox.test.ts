@@ -71,6 +71,7 @@ describe('TEST-MODEL-003-BLOCK usage event and outbox transaction', () => {
     const models = registerKnowledgeModels(connection);
     expect(await models.KnowledgeUsageEvent.countDocuments({ workspaceId })).toBe(1);
     expect(await models.KnowledgeOutboxEvent.countDocuments({ workspaceId })).toBe(1);
+    expect(await models.KnowledgeAuditEvent.countDocuments({ workspaceId })).toBe(1);
     const event = await models.KnowledgeUsageEvent.findOne({ workspaceId }).lean();
     expect(event?.eventId).toBe(
       usageEventIdOf({
@@ -88,6 +89,15 @@ describe('TEST-MODEL-003-BLOCK usage event and outbox transaction', () => {
     const outbox = await models.KnowledgeOutboxEvent.findOne({ workspaceId }).lean();
     expect(outbox?.status).toBe('pending');
     expect(outbox?.payload.queue).toBe('knowledge-outbox');
+    const audit = await models.KnowledgeAuditEvent.findOne({ workspaceId }).lean();
+    expect(audit).toMatchObject({
+      action: 'model.invoke',
+      outcome: 'succeeded',
+      resourceType: 'space',
+    });
+    expect(JSON.stringify(audit)).not.toMatch(
+      /"(authorization|credential|prompt|objectKey|password|secret|token)":/i,
+    );
   });
 
   it('records failed attempts with zero quantity and a safe status', async () => {
@@ -155,5 +165,12 @@ describe('TEST-MODEL-003-BLOCK usage event and outbox transaction', () => {
       resourceType: 'source',
     });
     expect(await models.KnowledgeOutboxEvent.countDocuments({ workspaceId })).toBe(1);
+    expect(
+      await models.KnowledgeAuditEvent.countDocuments({
+        workspaceId,
+        action: 'ocr.invoke',
+        resourceType: 'source',
+      }),
+    ).toBe(1);
   });
 });

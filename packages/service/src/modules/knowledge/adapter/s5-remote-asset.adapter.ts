@@ -2,7 +2,9 @@ import { createHash } from 'node:crypto';
 import { lookup as dnsLookup } from 'node:dns/promises';
 import { isIP } from 'node:net';
 import { createKnowledgeError } from '@kb/contracts';
+import { Agent, fetch as undiciFetch } from 'undici';
 import type { S5RemoteAssetPort } from '../application/s5-ocr-ports';
+import { isForbiddenAddress } from './ssrf';
 
 const MAX_ASSET_BYTES = 20 * 1024 * 1024;
 const TOTAL_TIMEOUT_MS = 30_000;
@@ -15,47 +17,12 @@ interface LookupAddress {
 }
 
 type LookupFn = (hostname: string) => Promise<LookupAddress[]>;
-type FetchFn = typeof fetch;
+type FetchFn = (input: URL, init: Record<string, unknown>) => Promise<Response>;
 
-function privateIpv4(address: string): boolean {
-  const octets = address.split('.').map(Number);
-  if (octets.length !== 4 || octets.some((value) => !Number.isInteger(value))) return true;
-  const [a, b] = octets as [number, number, number, number];
-  return (
-    a === 0 ||
-    a === 10 ||
-    a === 127 ||
-    (a === 100 && b >= 64 && b <= 127) ||
-    (a === 169 && b === 254) ||
-    (a === 172 && b >= 16 && b <= 31) ||
-    (a === 192 && b === 168) ||
-    (a === 198 && (b === 18 || b === 19)) ||
-    a >= 224
-  );
-}
-
-function privateIpv6(address: string): boolean {
-  const normalized = address.toLowerCase();
-  return (
-    normalized === '::1' ||
-    normalized === '::' ||
-    normalized.startsWith('fc') ||
-    normalized.startsWith('fd') ||
-    normalized.startsWith('fe8') ||
-    normalized.startsWith('fe9') ||
-    normalized.startsWith('fea') ||
-    normalized.startsWith('feb') ||
-    normalized.startsWith('::ffff:127.') ||
-    normalized.startsWith('::ffff:10.') ||
-    normalized.startsWith('::ffff:192.168.')
-  );
-}
-
-function privateAddress(address: string): boolean {
-  const family = isIP(address);
-  if (family === 4) return privateIpv4(address);
-  if (family === 6) return privateIpv6(address);
-  return true;
+interface VettedAssetTarget {
+  url: URL;
+  address: string;
+  family: 4 | 6;
 }
 
 function error(
@@ -82,7 +49,7 @@ export class S5RemoteAssetAdapter implements S5RemoteAssetPort {
     } = {},
   ) {}
 
-  private async assertPublicUrl(value: string): Promise<URL> {
+  private async assertPublicUrl(value: string): Promise<VettedAssetTarget> {
     let url: URL;
     try {
       url = new URL(value);
@@ -96,7 +63,7 @@ export class S5RemoteAssetAdapter implements S5RemoteAssetPort {
     ) {
       throw error('KNOWLEDGE_VALIDATION_FAILED', 'asset_url_scheme_invalid');
     }
-    const hostname = url.hostname.toLowerCase();
+    const hostname = url.hostname.toLowerCase().replace(/^\[|\]$/g, '');
     if (
       hostname === 'localhost' ||
       hostname.endsWith('.localhost') ||
@@ -105,30 +72,55 @@ export class S5RemoteAssetAdapter implements S5RemoteAssetPort {
     ) {
       throw error('KNOWLEDGE_VALIDATION_FAILED', 'asset_host_forbidden');
     }
-    const addresses = isIP(hostname)
-      ? [{ address: hostname, family: isIP(hostname) }]
+    const literalFamily = isIP(hostname);
+    const addresses = literalFamily
+      ? [{ address: hostname, family: literalFamily }]
       : await (this.input.lookup ?? ((name) => dnsLookup(name, { all: true })))(hostname);
-    if (addresses.length === 0 || addresses.some((entry) => privateAddress(entry.address))) {
+    if (addresses.length === 0 || addresses.some((entry) => isForbiddenAddress(entry.address))) {
       throw error('KNOWLEDGE_VALIDATION_FAILED', 'asset_address_forbidden');
     }
-    return url;
+    const selected = addresses[0];
+    if (!selected || (selected.family !== 4 && selected.family !== 6)) {
+      throw error('KNOWLEDGE_VALIDATION_FAILED', 'asset_address_forbidden');
+    }
+    return { url, address: selected.address, family: selected.family };
   }
 
   async fetch(value: string) {
-    let url = await this.assertPublicUrl(value);
+    let target = await this.assertPublicUrl(value);
     const deadline = new AbortController();
     const timeout = setTimeout(() => deadline.abort(), TOTAL_TIMEOUT_MS);
-    const fetchImpl = this.input.fetch ?? fetch;
+    const fetchImpl: FetchFn =
+      this.input.fetch ??
+      ((input, init) =>
+        undiciFetch(
+          input,
+          init as Parameters<typeof undiciFetch>[1],
+        ) as unknown as Promise<Response>);
+    const dispatchers: Agent[] = [];
     try {
       let response: Response | undefined;
       for (let redirect = 0; redirect <= MAX_REDIRECTS; redirect += 1) {
         const connect = new AbortController();
         const connectTimer = setTimeout(() => connect.abort(), CONNECT_TIMEOUT_MS);
+        const dispatcher = new Agent({
+          connect: {
+            lookup: (_hostname, options, callback) => {
+              if (options.all) {
+                callback(null, [{ address: target.address, family: target.family }]);
+                return;
+              }
+              callback(null, target.address, target.family);
+            },
+          },
+        });
+        dispatchers.push(dispatcher);
         try {
-          response = await fetchImpl(url, {
+          response = await fetchImpl(target.url, {
             method: 'GET',
             redirect: 'manual',
             signal: AbortSignal.any([deadline.signal, connect.signal]),
+            dispatcher,
           });
         } finally {
           clearTimeout(connectTimer);
@@ -138,7 +130,7 @@ export class S5RemoteAssetAdapter implements S5RemoteAssetPort {
           if (!location || redirect === MAX_REDIRECTS) {
             throw error('KNOWLEDGE_DEPENDENCY_UNAVAILABLE', 'asset_redirect_invalid');
           }
-          url = await this.assertPublicUrl(new URL(location, url).toString());
+          target = await this.assertPublicUrl(new URL(location, target.url).toString());
           continue;
         }
         break;
@@ -179,6 +171,7 @@ export class S5RemoteAssetAdapter implements S5RemoteAssetPort {
       }
       throw error('KNOWLEDGE_DEPENDENCY_UNAVAILABLE', 'asset_fetch_failed');
     } finally {
+      await Promise.all(dispatchers.map((dispatcher) => dispatcher.close()));
       clearTimeout(timeout);
     }
   }

@@ -6,6 +6,7 @@ import type {
   S5HttpTransportPort,
 } from '../../src/modules/knowledge/adapter/s5-aiproxy-http.adapter';
 import { S5ModelApplication } from '../../src/modules/knowledge/application/s5-model.application';
+import { S5ModelBindingApplication } from '../../src/modules/knowledge/application/s5-model-binding.application';
 import type { TenantContext } from '../../src/shared/persistence/knowledge/tenant';
 import type { S5AiproxyConfig } from '../../src/shared/config/s5-aiproxy-config';
 
@@ -95,6 +96,41 @@ describe('TEST-MODEL-001-BLOCK AIProxy catalog and model operations', () => {
     });
   });
 
+  it('defaults MODEL-LIST to 50 items and applies cursor pagination', async () => {
+    const models = Array.from({ length: 60 }, (_, index) => ({
+      id: `llm-${String(index).padStart(3, '0')}`,
+      type: 'llm',
+      capabilities: ['chat'],
+    }));
+    const application = new S5ModelApplication(
+      new S5AiproxyCatalogAdapter({
+        config,
+        transport: {
+          async request<T>() {
+            return catalogResponse({ data: models }) as S5HttpResponse<T>;
+          },
+        },
+        env: { AIPROXY_API_TOKEN: 'fake-catalog-token' },
+      }),
+    );
+    const first = await application.dispatch(input('API-MODEL-LIST'));
+    const firstData = first.data as {
+      items: unknown[];
+      pageInfo: { hasMore: boolean; nextCursor: string | null };
+    };
+    expect(firstData.items).toHaveLength(50);
+    expect(firstData.pageInfo).toMatchObject({ hasMore: true });
+    const second = await application.dispatch(
+      input('API-MODEL-LIST', {}, { cursor: firstData.pageInfo.nextCursor ?? '' }),
+    );
+    expect((second.data as { items: unknown[] }).items).toHaveLength(10);
+    await expect(
+      application.dispatch(input('API-MODEL-LIST', {}, { cursor: 'not-a-cursor' })),
+    ).rejects.toMatchObject({
+      problem: { error: { code: 'KNOWLEDGE_VALIDATION_FAILED' } },
+    });
+  });
+
   it('validates type, required capabilities and all four embedding dimensions', async () => {
     const models = [768, 1024, 1536, 3072].map((dimension) => ({
       id: `embedding-${dimension}`,
@@ -153,6 +189,7 @@ describe('TEST-MODEL-001-BLOCK AIProxy catalog and model operations', () => {
     for (const response of [
       catalogResponse({ error: 'unauthorized' }, 401),
       catalogResponse({ data: [{ id: 'missing-fields' }] }, 200),
+      catalogResponse({ data: [{ id: 'llm-no-capabilities', type: 'llm' }] }, 200),
     ]) {
       const transport: S5HttpTransportPort = {
         async request<T>() {
@@ -179,6 +216,37 @@ describe('TEST-MODEL-001-BLOCK AIProxy catalog and model operations', () => {
                 : 'KNOWLEDGE_PROVIDER_CONTRACT_INVALID',
           },
         },
+      });
+    }
+  });
+
+  it('rejects BINDING-GET limit, cursor and sort values instead of returning 200', async () => {
+    const application = new S5ModelBindingApplication(
+      {
+        async list() {
+          return [];
+        },
+        async replace() {
+          return { items: [], version: 1 };
+        },
+      },
+      {
+        async listModels() {
+          return [];
+        },
+      },
+      {
+        async assertPermission() {},
+      },
+    );
+    const bindingInput = (query: Record<string, string>) => ({
+      ...input('API-MODEL-BINDING-GET'),
+      params: { spaceId: 'space-1' },
+      query,
+    });
+    for (const query of [{ limit: '0' }, { cursor: 'bad' }, { sort: 'updatedAt-desc-nope' }]) {
+      await expect(application.dispatch(bindingInput(query))).rejects.toMatchObject({
+        problem: { error: { code: 'KNOWLEDGE_VALIDATION_FAILED' } },
       });
     }
   });

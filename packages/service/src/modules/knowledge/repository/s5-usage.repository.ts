@@ -6,6 +6,7 @@ import { requireWorkspaceId } from '../../../shared/persistence/knowledge/tenant
 import { withMongoTransaction } from '../../../shared/persistence/with-mongo-transaction';
 import { registerKnowledgeModels } from '../../../shared/persistence/schemas/knowledge-index';
 import type { KnowledgeUsageEventDoc } from '../../../shared/persistence/schemas/knowledge-operations.schemas';
+import { KnowledgeAuditRepository } from '../../../shared/persistence/knowledge/audit';
 import { createKnowledgeOutboxEvent } from '../../../shared/persistence/knowledge/outbox';
 import type { S5GatewayUsageFact, S5UsageRecorderPort } from '../application/s5-model-gateway.port';
 import type { S5ProviderUsageFact, S5ProviderUsageRecorderPort } from '../application/s5-ocr-ports';
@@ -41,9 +42,11 @@ function objectIdOf(value: string): Types.ObjectId {
 
 export class S5UsageRepository implements S5UsageRecorderPort, S5ProviderUsageRecorderPort {
   private readonly usage: Model<KnowledgeUsageEventDoc>;
+  private readonly audit: KnowledgeAuditRepository;
 
   constructor(private readonly connection: Connection) {
     this.usage = registerKnowledgeModels(connection).KnowledgeUsageEvent;
+    this.audit = new KnowledgeAuditRepository(connection);
   }
 
   async recordInvocationUsage(fact: S5GatewayUsageFact, context: TenantContext): Promise<boolean> {
@@ -110,6 +113,30 @@ export class S5UsageRepository implements S5UsageRecorderPort, S5ProviderUsageRe
             usageEventId: eventId,
             eventType,
             modelId: fact.modelId,
+            provider: fact.provider,
+            quantity: fact.quantity,
+            unit: fact.unit,
+            status: fact.status,
+            attempt: fact.attempt,
+            fallbackUsed: fact.fallbackUsed,
+          },
+        },
+        context,
+        session,
+      );
+      await this.audit.append(
+        {
+          knowledgeSpaceId: fact.knowledgeSpaceId,
+          action: 'model.invoke',
+          resourceType: fact.resourceType,
+          resourceId: fact.resourceId,
+          outcome:
+            fact.status !== null && fact.status >= 200 && fact.status < 300
+              ? 'succeeded'
+              : 'failed',
+          safeDiff: {
+            modelId: fact.modelId,
+            kind: fact.kind,
             provider: fact.provider,
             quantity: fact.quantity,
             unit: fact.unit,
@@ -193,6 +220,29 @@ export class S5UsageRepository implements S5UsageRecorderPort, S5ProviderUsageRe
             attempt: fact.attempt,
             fallbackUsed: fact.fallbackUsed,
             sourceVersion: fact.sourceVersion,
+          },
+        },
+        context,
+        session,
+      );
+      await this.audit.append(
+        {
+          knowledgeSpaceId: fact.knowledgeSpaceId,
+          action: 'ocr.invoke',
+          resourceType: 'source',
+          resourceId: fact.sourceId,
+          outcome:
+            fact.status !== null && fact.status >= 200 && fact.status < 300
+              ? 'succeeded'
+              : 'failed',
+          safeDiff: {
+            provider: fact.provider,
+            sourceVersion: fact.sourceVersion,
+            quantity: fact.quantity,
+            unit: fact.unit,
+            status: fact.status,
+            attempt: fact.attempt,
+            fallbackUsed: fact.fallbackUsed,
           },
         },
         context,

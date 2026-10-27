@@ -1,3 +1,4 @@
+import { jsonrepair } from 'jsonrepair';
 import { parseQaOutput } from './parser';
 import type { QaResultItem } from './parser';
 
@@ -34,31 +35,56 @@ export function validateQaItems(
   return problems.length > 0 ? { valid: false, problems } : { valid: true, items: normalized };
 }
 
-function strictJsonArray(content: string): unknown[] | null {
+export interface QaParsedValidation {
+  items: QaResultItem[];
+  problems: string[];
+  repairCount: 0 | 1;
+}
+
+export function parseQaOutputValidated(
+  content: string,
+  sourceChunkHash: string,
+): QaParsedValidation {
+  if (!content.trim()) return { items: [], problems: ['output_empty'], repairCount: 0 };
   const start = content.indexOf('[');
   const end = content.lastIndexOf(']');
-  if (start < 0 || end <= start) return null;
-  try {
-    const parsed = JSON.parse(content.slice(start, end + 1));
-    return Array.isArray(parsed) ? parsed : null;
-  } catch {
-    return null;
+  if (start >= 0 && end > start) {
+    const fragment = content.slice(start, end + 1);
+    let parsed: unknown;
+    let repairCount: 0 | 1 = 0;
+    try {
+      parsed = JSON.parse(fragment);
+    } catch {
+      repairCount = 1;
+      try {
+        parsed = JSON.parse(jsonrepair(fragment));
+      } catch {
+        return { items: [], problems: ['json_unrepairable'], repairCount };
+      }
+    }
+    if (!Array.isArray(parsed)) {
+      return { items: [], problems: ['items_not_array'], repairCount };
+    }
+    const validated = validateQaItems(parsed, sourceChunkHash);
+    return validated.valid
+      ? { items: validated.items, problems: [], repairCount }
+      : { items: [], problems: validated.problems, repairCount };
   }
+  const parsed = parseQaOutput(content, sourceChunkHash);
+  const validated = validateQaItems(parsed, sourceChunkHash);
+  return validated.valid && validated.items.length > 0
+    ? { items: validated.items, problems: [], repairCount: 1 }
+    : {
+        items: [],
+        problems: validated.valid ? ['items_empty'] : validated.problems,
+        repairCount: 1,
+      };
 }
 
 /**
  * Parses model output and permits exactly one repair path through @kb/qa's existing
  * parser/jsonrepair implementation. A second repair is never attempted here.
  */
-export function repairQaOutputOnce(
-  content: string,
-  sourceChunkHash: string,
-): { items: QaResultItem[]; repairCount: 0 | 1 } {
-  const strict = strictJsonArray(content);
-  if (strict !== null) {
-    const validated = validateQaItems(strict, sourceChunkHash);
-    return { items: validated.valid ? validated.items : [], repairCount: 0 };
-  }
-  const parsed = parseQaOutput(content, sourceChunkHash);
-  return { items: parsed, repairCount: parsed.length > 0 ? 1 : 1 };
+export function repairQaOutputOnce(content: string, sourceChunkHash: string): QaParsedValidation {
+  return parseQaOutputValidated(content, sourceChunkHash);
 }

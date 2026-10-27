@@ -58,8 +58,12 @@ describe('TEST-X-COMPOSE-READY AIProxy Compose contract', () => {
       'AIPROXY_API_TOKEN_REF: ${AIPROXY_API_TOKEN_REF:-env:AIPROXY_API_TOKEN}',
     );
     expect(serviceBlock('aiproxy')).toContain(
-      'ADMIN_KEY: ${AIPROXY_API_TOKEN:-kb-local-aiproxy-token}',
+      'AIPROXY_ADMIN_KEY: ${AIPROXY_ADMIN_KEY:-kb-local-aiproxy-admin-token}',
     );
+    expect(serviceBlock('aiproxy-init')).toContain("profiles: ['aiproxy']");
+    expect(serviceBlock('aiproxy-init')).toContain('INSERT INTO tokens');
+    expect(serviceBlock('app')).not.toContain('AIPROXY_ADMIN_KEY');
+    expect(serviceBlock('worker')).not.toContain('AIPROXY_ADMIN_KEY');
     expect(compose).not.toMatch(/AIPROXY_API_TOKEN:\s+(?!\$\{AIPROXY_API_TOKEN)/);
   });
 });

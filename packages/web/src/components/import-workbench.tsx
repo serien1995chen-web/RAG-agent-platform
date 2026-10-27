@@ -76,7 +76,6 @@ export function ImportWorkbench(props: ImportWorkbenchProps) {
   const { t } = useKnowledgeI18n();
   const [kind, setKind] = useState<ImportSourceKind>(props.initialKind ?? 'files');
   const [directoryId, setDirectoryId] = useState(props.initialDirectoryId ?? '');
-  const [parseProvider, setParseProvider] = useState('liteparse');
   const [uploadId, setUploadId] = useState('');
   const [uploadMessage, setUploadMessage] = useState('');
   const [textName, setTextName] = useState('');
@@ -155,7 +154,7 @@ export function ImportWorkbench(props: ImportWorkbenchProps) {
         parseProvider:
           typeof props.s5ParseConfig?.provider === 'string'
             ? props.s5ParseConfig.provider
-            : parseProvider,
+            : 'liteparse',
         parseConfig: props.s5ParseConfig ?? {},
         chunking,
       });
@@ -307,16 +306,6 @@ export function ImportWorkbench(props: ImportWorkbenchProps) {
             }}
           />
           {uploadMessage ? <Text mt={3}>{uploadMessage}</Text> : null}
-          <Field label={t('import.parseProvider')}>
-            <SelectInput
-              value={parseProvider}
-              onChange={(event) => setParseProvider(event.target.value)}
-            >
-              {['liteparse', 'sangfor', 'somark', 'textin', 'doc2x'].map((provider) => (
-                <option key={provider}>{provider}</option>
-              ))}
-            </SelectInput>
-          </Field>
         </Box>
       ) : null}
 

@@ -36,6 +36,7 @@ export interface S5ParseDiagnostic {
   code: string;
   path?: string;
   page?: number;
+  count?: number;
 }
 
 export interface S5ParseResult {

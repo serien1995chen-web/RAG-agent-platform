@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ChunkingSettings } from '@kb/chunk';
+import { createKnowledgeError } from '@kb/contracts';
 import { S5QaPipelineAdapter } from '../../src/modules/knowledge/application/s5-qa-pipeline';
 import type {
   S5GatewayResult,
@@ -89,6 +90,57 @@ describe('TEST-PARSE-004-BLOCK QA model pipeline', () => {
     await expect(result).resolves.toMatchObject({
       items: [],
       fallback: 'chunk_split',
+    });
+  });
+
+  it('rejects mixed valid/invalid QA fields instead of silently keeping valid items', async () => {
+    const { result } = request('[{"q":"合法","a":"答案"},{"q":"","a":"非法"}]');
+    await expect(result).resolves.toMatchObject({
+      items: [],
+      fallback: 'chunk_split',
+      diagnostics: [{ code: 'qa_output_invalid' }],
+    });
+  });
+
+  it('keeps chunk hash format and reports over-limit diagnostics', async () => {
+    const content = Array.from(
+      { length: 6 },
+      (_, index) => `Q${index + 1}: 问题${index + 1}\nA${index + 1}: 答案${index + 1}`,
+    ).join('\n');
+    const { result } = request(content);
+    const value = await result;
+    expect(value.items).toHaveLength(5);
+    expect(value.items.every((item) => item.sourceChunkHash === 'sha256:chunk')).toBe(true);
+    expect(value.diagnostics).toContainEqual(
+      expect.objectContaining({ code: 'qa_over_limit', count: 1 }),
+    );
+  });
+
+  it('preserves gateway timeout classification', async () => {
+    const adapter = new S5QaPipelineAdapter({
+      gateway: {
+        async invoke() {
+          throw createKnowledgeError({
+            code: 'KNOWLEDGE_DEPENDENCY_TIMEOUT',
+            requestId: context.requestId,
+            traceId: context.traceId,
+            details: { reason: 'model_timeout' },
+          });
+        },
+      },
+      resolveModels: async () => ({ llmModelId: 'mock-llm-general' }),
+    });
+    await expect(
+      adapter.generate({
+        chunk: { index: 0, text: 'text', contentHash: 'sha256:chunk' },
+        settings,
+        context,
+        workspaceId: context.workspaceId,
+        knowledgeSpaceId: '65f1e5b2a1c9d4b7e8f10001',
+        sourceId: '65f1e5b2a1c9d4b7e8f10002',
+      }),
+    ).rejects.toMatchObject({
+      problem: { error: { code: 'KNOWLEDGE_DEPENDENCY_TIMEOUT', retryable: true } },
     });
   });
 });

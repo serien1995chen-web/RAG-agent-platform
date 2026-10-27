@@ -103,6 +103,7 @@ export class S5QaPipelineAdapter implements S5QaPipelinePort {
         knowledgeSpaceId: request.knowledgeSpaceId,
         sourceId: request.sourceId,
         chunkText: request.chunk.text,
+        sourceChunkHash: request.chunk.contentHash,
         qaTemplateId: 'qa.default',
         qaTemplateVersion: 1,
         ...(request.settings.qaPrompt ? { qaPrompt: request.settings.qaPrompt } : {}),
@@ -123,6 +124,11 @@ export class S5QaPipelineAdapter implements S5QaPipelinePort {
       fallback: result.fallback,
       promptVersion: 'qa.default@1',
       usage: result.usage,
+      diagnostics: result.diagnostics.map((diagnostic) => ({
+        severity: diagnostic.code === 'qa_output_invalid' ? 'warning' : 'info',
+        code: diagnostic.code,
+        ...(diagnostic.count === undefined ? {} : { count: diagnostic.count }),
+      })),
     };
   }
 

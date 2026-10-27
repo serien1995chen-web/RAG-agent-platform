@@ -43,6 +43,27 @@ export interface S5ParseSettingsPanelProps {
     qaPrompt: string;
     preview: string;
     noJob: string;
+    providerLiteparse: string;
+    providerSangfor: string;
+    providerSomark: string;
+    providerTextin: string;
+    providerDoc2x: string;
+    fallbackLiteparse: string;
+    fallbackNone: string;
+    imageUpload: string;
+    imageKeepUrl: string;
+    imageDrop: string;
+    trainingChunk: string;
+    trainingQa: string;
+    trainingImageParse: string;
+    trainingBackup: string;
+    trainingTemplate: string;
+    modeAuto: string;
+    modeIntelligent: string;
+    modeCustom: string;
+    splitParagraph: string;
+    splitSize: string;
+    splitChar: string;
   }>;
 }
 
@@ -90,6 +111,27 @@ export function S5ParseSettingsPanel(props: S5ParseSettingsPanelProps) {
     qaPrompt: 'QA instructions',
     preview: 'Preview configuration',
     noJob: 'Configuration preview only',
+    providerLiteparse: 'LiteParse',
+    providerSangfor: 'Sangfor',
+    providerSomark: 'Somark',
+    providerTextin: 'Textin',
+    providerDoc2x: 'Doc2x',
+    fallbackLiteparse: 'LiteParse',
+    fallbackNone: 'None',
+    imageUpload: 'Upload',
+    imageKeepUrl: 'Keep URL',
+    imageDrop: 'Drop',
+    trainingChunk: 'Chunk',
+    trainingQa: 'QA',
+    trainingImageParse: 'Image parse',
+    trainingBackup: 'Backup',
+    trainingTemplate: 'Template',
+    modeAuto: 'Auto',
+    modeIntelligent: 'Intelligent',
+    modeCustom: 'Custom',
+    splitParagraph: 'Paragraph',
+    splitSize: 'Size',
+    splitChar: 'Character',
     ...props.labels,
   };
 
@@ -135,11 +177,11 @@ export function S5ParseSettingsPanel(props: S5ParseSettingsPanelProps) {
               )
             }
           >
-            <option value="liteparse">LiteParse</option>
-            <option value="sangfor">Sangfor</option>
-            <option value="somark">Somark</option>
-            <option value="textin">Textin</option>
-            <option value="doc2x">Doc2x</option>
+            <option value="liteparse">{labels.providerLiteparse}</option>
+            <option value="sangfor">{labels.providerSangfor}</option>
+            <option value="somark">{labels.providerSomark}</option>
+            <option value="textin">{labels.providerTextin}</option>
+            <option value="doc2x">{labels.providerDoc2x}</option>
           </Select>
           {props.verification ? (
             <Text
@@ -180,8 +222,8 @@ export function S5ParseSettingsPanel(props: S5ParseSettingsPanelProps) {
                   })
                 }
               >
-                <option value="liteparse">LiteParse</option>
-                <option value="none">None</option>
+                <option value="liteparse">{labels.fallbackLiteparse}</option>
+                <option value="none">{labels.fallbackNone}</option>
               </Select>
             </FormControl>
             <FormControl>
@@ -198,9 +240,9 @@ export function S5ParseSettingsPanel(props: S5ParseSettingsPanelProps) {
                   })
                 }
               >
-                <option value="upload_to_storage">Upload</option>
-                <option value="keep_url">Keep URL</option>
-                <option value="drop">Drop</option>
+                <option value="upload_to_storage">{labels.imageUpload}</option>
+                <option value="keep_url">{labels.imageKeepUrl}</option>
+                <option value="drop">{labels.imageDrop}</option>
               </Select>
             </FormControl>
           </>
@@ -231,11 +273,11 @@ export function S5ParseSettingsPanel(props: S5ParseSettingsPanelProps) {
               setField('trainingType', event.target.value as S5ChunkingSettingsView['trainingType'])
             }
           >
-            <option value="chunk">Chunk</option>
-            <option value="qa">QA</option>
-            <option value="imageParse">Image parse</option>
-            <option value="backup">Backup</option>
-            <option value="template">Template</option>
+            <option value="chunk">{labels.trainingChunk}</option>
+            <option value="qa">{labels.trainingQa}</option>
+            <option value="imageParse">{labels.trainingImageParse}</option>
+            <option value="backup">{labels.trainingBackup}</option>
+            <option value="template">{labels.trainingTemplate}</option>
           </Select>
         </FormControl>
 
@@ -253,9 +295,9 @@ export function S5ParseSettingsPanel(props: S5ParseSettingsPanelProps) {
               )
             }
           >
-            <option value="auto">Auto</option>
-            <option value="intelligent">Intelligent</option>
-            <option value="custom">Custom</option>
+            <option value="auto">{labels.modeAuto}</option>
+            <option value="intelligent">{labels.modeIntelligent}</option>
+            <option value="custom">{labels.modeCustom}</option>
           </Select>
         </FormControl>
 
@@ -273,9 +315,9 @@ export function S5ParseSettingsPanel(props: S5ParseSettingsPanelProps) {
               )
             }
           >
-            <option value="paragraph">Paragraph</option>
-            <option value="size">Size</option>
-            <option value="char">Character</option>
+            <option value="paragraph">{labels.splitParagraph}</option>
+            <option value="size">{labels.splitSize}</option>
+            <option value="char">{labels.splitChar}</option>
           </Select>
         </FormControl>
 
@@ -348,9 +390,6 @@ export function S5ParseSettingsPanel(props: S5ParseSettingsPanelProps) {
         <Button size="sm" tone="primary" onClick={props.onPreview}>
           {labels.preview}
         </Button>
-        <Text mt={2} fontSize="xs" color="kn.inkMuted">
-          {labels.noJob}
-        </Text>
       </Box>
     </Box>
   );

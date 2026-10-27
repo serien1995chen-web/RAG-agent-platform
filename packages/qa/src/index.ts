@@ -6,9 +6,9 @@ import { createHash } from 'node:crypto';
 import { KnowledgeApiError, createKnowledgeError, type KnowledgeErrorCode } from '@kb/contracts';
 import { dedupeQaItems } from './dedup';
 import { buildQaDedupKey, normalizeQaText } from './dedup';
-import { parseQaOutput } from './parser';
 import { buildQaPrompt, resolvePrompt, type QaTemplateRegistryPort } from './prompt';
 import type { QaModelPort, QaRequest, QaResult } from './parser';
+import { parseQaOutputValidated } from './s5-validation';
 
 export const PACKAGE_NAME = '@kb/qa' as const;
 
@@ -39,7 +39,7 @@ export { dedupeQaItems, limitChunkCount } from './dedup';
 export type { DedupOutcome } from './dedup';
 
 export { buildQaDedupKey, normalizeQaText };
-export { repairQaOutputOnce, validateQaItems } from './s5-validation';
+export { parseQaOutputValidated, repairQaOutputOnce, validateQaItems } from './s5-validation';
 export type { QaValidationResult } from './s5-validation';
 
 export interface GenerateQaOptions {
@@ -65,20 +65,34 @@ function qaError(
   });
 }
 
-function isRetryableModelError(error: unknown): boolean {
-  if (error instanceof KnowledgeApiError) return error.problem.error.retryable;
-  if (typeof error === 'object' && error !== null) {
-    const record = error as Record<string, unknown>;
-    if (record.retryable === 'retryable') return true;
-    const status = record.status ?? record.statusCode ?? record.httpStatus;
-    if (typeof status === 'number') return status === 429 || status >= 500;
-    if (record.name === 'AbortError' || record.name === 'TimeoutError') return true;
+function modelFailure(error: unknown, request: QaRequest, requestId: string): Error {
+  if (error instanceof KnowledgeApiError) return error;
+  const record =
+    typeof error === 'object' && error !== null ? (error as Record<string, unknown>) : null;
+  const status = record?.status ?? record?.statusCode ?? record?.httpStatus;
+  if (status === 429) {
+    return qaError(
+      'KNOWLEDGE_RATE_LIMITED',
+      { model: request.models.llmModel, taskId: requestId, upstreamStatus: 429 },
+      requestId,
+    );
   }
-  return false;
-}
-
-function chunkHashOf(text: string): string {
-  return createHash('sha256').update(text, 'utf8').digest('hex');
+  if (record?.name === 'AbortError' || record?.name === 'TimeoutError') {
+    return qaError(
+      'KNOWLEDGE_DEPENDENCY_TIMEOUT',
+      { model: request.models.llmModel, taskId: requestId, reason: 'model_timeout' },
+      requestId,
+    );
+  }
+  return qaError(
+    'KNOWLEDGE_MODEL_FAILED',
+    {
+      model: request.models.llmModel,
+      taskId: requestId,
+      reason: typeof status === 'number' && status >= 500 ? 'model_retryable_error' : 'model_error',
+    },
+    requestId,
+  );
 }
 
 /**
@@ -110,23 +124,35 @@ export async function generateQa(
       timeoutMs: options.timeoutMs ?? DEFAULT_QA_TIMEOUT_MS,
     });
   } catch (error) {
-    const reason = isRetryableModelError(error) ? 'model_retryable_error' : 'model_error';
-    throw qaError(
-      'KNOWLEDGE_MODEL_FAILED',
-      { model: request.models.llmModel, taskId: requestId, reason },
-      requestId,
-    );
+    throw modelFailure(error, request, requestId);
   }
 
-  const sourceChunkHash = chunkHashOf(request.chunkText);
-  const parsed = parseQaOutput(output.content, sourceChunkHash);
-  if (parsed.length === 0) {
+  const sourceChunkHash =
+    request.sourceChunkHash ??
+    `sha256:${createHash('sha256').update(request.chunkText, 'utf8').digest('hex')}`;
+  const parsed = parseQaOutputValidated(output.content, sourceChunkHash);
+  if (parsed.items.length === 0) {
     const fallbackItems = options.fallbackToChunkSplit
       ? (await options.fallbackToChunkSplit(request)).items
       : [];
-    return { items: fallbackItems, usage: output.usage, fallback: 'chunk_split' };
+    return {
+      items: fallbackItems,
+      usage: output.usage,
+      fallback: 'chunk_split',
+      diagnostics: [{ code: 'qa_output_invalid', problems: parsed.problems }],
+    };
   }
 
-  const deduped = dedupeQaItems(parsed, request.limits.maxQaPerChunk);
-  return { items: deduped.items, usage: output.usage, fallback: 'none' };
+  const deduped = dedupeQaItems(parsed.items, request.limits.maxQaPerChunk);
+  return {
+    items: deduped.items,
+    usage: output.usage,
+    fallback: 'none',
+    diagnostics: [
+      ...(deduped.duplicates > 0
+        ? [{ code: 'qa_duplicate_removed', count: deduped.duplicates }]
+        : []),
+      ...(deduped.overLimit > 0 ? [{ code: 'qa_over_limit', count: deduped.overLimit }] : []),
+    ],
+  };
 }

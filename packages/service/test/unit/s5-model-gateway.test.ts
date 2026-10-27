@@ -295,4 +295,109 @@ describe('TEST-MODEL-002/003/006-BLOCK model gateway', () => {
     });
     expect(parsed).toMatchObject({ status: 200, quantity: 0 });
   });
+
+  it('sends VLM images as chat message image_url content parts', async () => {
+    let body: Record<string, unknown> | undefined;
+    const transport: S5HttpTransportPort = {
+      async request<T>(request) {
+        body = request.body as Record<string, unknown>;
+        return {
+          status: 200,
+          headers: {},
+          data: {
+            choices: [{ message: { content: 'vision ok' } }],
+          },
+        } as S5HttpResponse<T>;
+      },
+    };
+    const http = new S5AiproxyHttpAdapter({
+      baseUrl: 'https://proxy.example.invalid',
+      token: 'fake-token',
+      transport,
+    });
+    await http.invoke({
+      kind: 'vlm',
+      modelId: 'vlm-primary',
+      messages: [{ role: 'user', content: 'describe' }],
+      imageUrls: ['https://assets.example.invalid/a.png'],
+    });
+    expect(body).not.toHaveProperty('image_urls');
+    expect(body?.messages).toEqual([
+      {
+        role: 'user',
+        content: [
+          { type: 'text', text: 'describe' },
+          {
+            type: 'image_url',
+            image_url: { url: 'https://assets.example.invalid/a.png' },
+          },
+        ],
+      },
+    ]);
+  });
+
+  it('never uses TTS character count as billed seconds', async () => {
+    const transport: S5HttpTransportPort = {
+      async request<T>() {
+        return {
+          status: 200,
+          headers: {},
+          data: new Uint8Array([1]),
+        } as S5HttpResponse<T>;
+      },
+    };
+    const http = new S5AiproxyHttpAdapter({
+      baseUrl: 'https://proxy.example.invalid',
+      token: 'fake-token',
+      transport,
+    });
+    await expect(
+      http.invoke({
+        kind: 'tts',
+        modelId: 'tts-primary',
+        text: 'abc',
+      }),
+    ).resolves.toMatchObject({ quantity: 0 });
+  });
+
+  it('uses observable STT/TTS duration fields when the provider returns them', async () => {
+    const tts = new S5AiproxyHttpAdapter({
+      baseUrl: 'https://proxy.example.invalid',
+      token: 'fake-token',
+      transport: {
+        async request<T>() {
+          return {
+            status: 200,
+            headers: { 'x-audio-duration-seconds': '2.5' },
+            data: new Uint8Array([1]),
+          } as S5HttpResponse<T>;
+        },
+      },
+    });
+    await expect(
+      tts.invoke({ kind: 'tts', modelId: 'tts-primary', text: 'abc' }),
+    ).resolves.toMatchObject({ quantity: 2.5 });
+
+    const stt = new S5AiproxyHttpAdapter({
+      baseUrl: 'https://proxy.example.invalid',
+      token: 'fake-token',
+      transport: {
+        async request<T>() {
+          return {
+            status: 200,
+            headers: {},
+            data: { text: 'transcript', duration_seconds: 4 },
+          } as S5HttpResponse<T>;
+        },
+      },
+    });
+    await expect(
+      stt.invoke({
+        kind: 'stt',
+        modelId: 'stt-primary',
+        audio: new Uint8Array([1]),
+        mimeType: 'audio/mpeg',
+      }),
+    ).resolves.toMatchObject({ quantity: 4 });
+  });
 });

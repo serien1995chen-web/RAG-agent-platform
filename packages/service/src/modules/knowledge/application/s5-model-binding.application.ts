@@ -10,6 +10,7 @@ import type {
   S5ModelType,
 } from './s5-model-ports';
 import { S5_MODEL_TYPES } from './s5-model-ports';
+import { pageInfoOf, parseModelSort, parsePageLimit, parsePageOffset } from './s5-pagination';
 
 function objectBody(value: unknown, context: TenantContext): Record<string, unknown> {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
@@ -106,10 +107,17 @@ export class S5ModelBindingApplication {
 
   async get(input: KnowledgeOperationInput): Promise<KnowledgeOperationResult> {
     const spaceId = input.params.spaceId ?? '';
+    const limit = parsePageLimit(input.query, input.context);
+    const offset = parsePageOffset(input.query, input.context);
+    parseModelSort(input.query, input.context);
     await this.access.assertPermission('space', spaceId, 'read', input.context);
+    const items = await this.repository.list(spaceId, input.context);
     return {
       status: 200,
-      data: { items: await this.repository.list(spaceId, input.context) },
+      data: {
+        items: items.slice(offset, offset + limit),
+        pageInfo: pageInfoOf(items.length, offset, limit),
+      },
     };
   }
 

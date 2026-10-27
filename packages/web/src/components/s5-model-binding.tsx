@@ -82,6 +82,17 @@ export function S5ModelBindingPanel(props: S5ModelBindingPanelProps) {
     setProblem(null);
   };
 
+  const removeBinding = (modelType: S5ModelView['type']) => {
+    setValidated((current) => {
+      const next = new Set(current);
+      next.delete(modelType);
+      return next;
+    });
+    setDraft((current) => current.filter((binding) => binding.modelType !== modelType));
+    setState('idle');
+    setProblem(null);
+  };
+
   const validate = async () => {
     setState('validating');
     setProblem(null);
@@ -92,7 +103,7 @@ export function S5ModelBindingPanel(props: S5ModelBindingPanelProps) {
         if (result.valid) accepted.add(binding.modelType);
       }
       setValidated(accepted);
-      setState(accepted.size === draft.length && draft.length > 0 ? 'ready' : 'validation');
+      setState(accepted.size === draft.length ? 'ready' : 'validation');
     } catch (error) {
       setState(stateFromProblem(error));
       setProblem(toS5ProblemView(error));
@@ -149,6 +160,10 @@ export function S5ModelBindingPanel(props: S5ModelBindingPanelProps) {
                   aria-label={TYPE_LABELS[group.type]}
                   value={selected?.modelId ?? ''}
                   onChange={(event) => {
+                    if (event.target.value === '') {
+                      removeBinding(group.type);
+                      return;
+                    }
                     const model = group.models.find(
                       (candidate) => candidate.modelId === event.target.value,
                     );
@@ -230,7 +245,6 @@ export function S5ModelBindingPanel(props: S5ModelBindingPanelProps) {
           size="sm"
           tone="primary"
           busy={state === 'validating'}
-          isDisabled={draft.length === 0}
           onClick={() => void validate()}
         >
           {labels.validate}

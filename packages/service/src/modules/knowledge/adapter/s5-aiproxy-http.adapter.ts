@@ -101,6 +101,31 @@ function formDataOf(input: Extract<S5ModelInvocation, { kind: 'stt' }>): FormDat
   return form;
 }
 
+function vlmMessages(input: Extract<S5ModelInvocation, { kind: 'vlm' }>): unknown[] {
+  const imageParts = input.imageUrls.map((url) => ({
+    type: 'image_url',
+    image_url: { url },
+  }));
+  const messages = input.messages.map((message) => {
+    if (typeof message !== 'object' || message === null) return message;
+    return { ...(message as Record<string, unknown>) };
+  });
+  const last = messages.at(-1);
+  if (
+    typeof last === 'object' &&
+    last !== null &&
+    (last as Record<string, unknown>).role === 'user'
+  ) {
+    const user = last as Record<string, unknown>;
+    const content = Array.isArray(user.content)
+      ? [...user.content, ...imageParts]
+      : [{ type: 'text', text: String(user.content ?? '') }, ...imageParts];
+    messages[messages.length - 1] = { ...user, content };
+    return messages;
+  }
+  return [...messages, { role: 'user', content: imageParts }];
+}
+
 function bodyOf(input: S5ModelInvocation): unknown {
   switch (input.kind) {
     case 'llm':
@@ -112,8 +137,8 @@ function bodyOf(input: S5ModelInvocation): unknown {
     case 'vlm':
       return {
         model: input.modelId,
-        messages: input.messages,
-        image_urls: input.imageUrls,
+        messages: vlmMessages(input),
+        ...(input.maxOutputTokens === undefined ? {} : { max_tokens: input.maxOutputTokens }),
       };
     case 'embedding':
       return { model: input.modelId, input: input.texts };
@@ -138,6 +163,15 @@ function retryAfterMs(response: S5HttpResponse): number | null {
   if (Number.isFinite(seconds) && seconds >= 0) return Math.min(seconds * 1000, 5_000);
   const date = Date.parse(value);
   return Number.isFinite(date) ? Math.min(Math.max(date - Date.now(), 0), 5_000) : null;
+}
+
+function responseDurationSeconds(response: S5HttpResponse): number | undefined {
+  const raw =
+    response.headers['x-audio-duration-seconds'] ??
+    response.headers['x-duration-seconds'] ??
+    response.headers['content-duration'];
+  const value = Number(Array.isArray(raw) ? raw[0] : raw);
+  return Number.isFinite(value) && value >= 0 ? value : undefined;
 }
 
 export class S5AiproxyHttpAdapter implements S5ModelInvocationAdapterPort {
@@ -199,7 +233,12 @@ export class S5AiproxyHttpAdapter implements S5ModelInvocationAdapterPort {
         kind: invocation.kind,
         data: response.data,
         ...(invocation.kind === 'embedding' ? { dimension: invocation.dimension } : {}),
-        ...(invocation.kind === 'tts' ? { inputText: invocation.text } : {}),
+        ...(invocation.kind === 'tts'
+          ? {
+              inputText: invocation.text,
+              durationSeconds: responseDurationSeconds(response),
+            }
+          : {}),
       });
       return {
         data: parsed.data as T,

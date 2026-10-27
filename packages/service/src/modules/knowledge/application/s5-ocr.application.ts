@@ -39,6 +39,7 @@ export interface S5OcrApplicationInput {
 
 export interface S5OcrApplicationResult extends S5OcrProviderResult {
   fallbackUsed: boolean;
+  fallbackProvider: string | null;
   actualProvider: string;
   attempts: number;
 }
@@ -180,6 +181,7 @@ export class S5OcrApplication {
         fallbackUsed: true,
       },
       fallbackUsed: true,
+      fallbackProvider: 'liteparse',
       actualProvider: 'liteparse',
       attempts: attempt,
     };
@@ -290,6 +292,7 @@ export class S5OcrApplication {
         return {
           ...(await this.transferImages(input, result)),
           fallbackUsed: false,
+          fallbackProvider: null,
           actualProvider: input.config.provider,
           attempts: attempt,
         };

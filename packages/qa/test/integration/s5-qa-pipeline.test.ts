@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   buildQaDedupKey,
   dedupeQaItems,
+  parseQaOutputValidated,
   repairQaOutputOnce,
   validateQaItems,
 } from '../../src/index';
@@ -33,7 +34,17 @@ describe('TEST-PARSE-004-BLOCK QA validation, one repair and dedup', () => {
     expect(repaired.repairCount).toBe(1);
     expect(repaired.items).toEqual([{ q: '问题', a: '答案', sourceChunkHash: 'sha256:chunk' }]);
     const failed = repairQaOutputOnce('not qa output at all', 'sha256:chunk');
-    expect(failed).toEqual({ items: [], repairCount: 1 });
+    expect(failed).toMatchObject({
+      items: [],
+      repairCount: 1,
+      problems: ['items_empty'],
+    });
+    expect(
+      parseQaOutputValidated('[{"q":"合法","a":"答案"},{"q":"","a":"非法"}]', 'sha256:chunk'),
+    ).toMatchObject({
+      items: [],
+      problems: ['items.1.q:empty'],
+    });
   });
 
   it('uses the frozen dedup key and keeps the first duplicate globally', () => {

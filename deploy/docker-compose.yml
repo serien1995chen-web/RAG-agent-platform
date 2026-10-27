@@ -31,7 +31,7 @@ x-knowledge-environment: &knowledge-environment
   AIPROXY_BASE_URL: ${AIPROXY_BASE_URL:-http://aiproxy:3000}
   AIPROXY_API_TOKEN_REF: ${AIPROXY_API_TOKEN_REF:-env:AIPROXY_API_TOKEN}
   AIPROXY_POSTGRES_URI_REF: ${AIPROXY_POSTGRES_URI_REF:-env:AIPROXY_POSTGRES_URI}
-  AIPROXY_API_TOKEN: ${AIPROXY_API_TOKEN:-kb-local-aiproxy-token}
+  AIPROXY_API_TOKEN: ${AIPROXY_API_TOKEN:-0123456789abcdef0123456789abcdef0123456789abcdef}
   KB_LOG_LEVEL: ${KB_LOG_LEVEL:-info}
   OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
   MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
@@ -144,10 +144,17 @@ services:
     image: registry.cn-hangzhou.aliyuncs.com/labring/aiproxy:v0.7.3@sha256:da8d8394634eacdcf72533953c77c1e0ca3e28920545354dd20bdaa0aaa9ee4b
     profiles: ['aiproxy']
     restart: unless-stopped
+    entrypoint: ['/bin/sh', '-c']
+    command:
+      - >
+        mkdir -p /aiproxy &&
+        printf 'ADMIN_KEY=%s\n' "$$AIPROXY_ADMIN_KEY"
+        > /aiproxy/.env.aiproxy.local &&
+        exec aiproxy
     environment:
       PORT: '3000'
       SQL_DSN: postgresql://${AIPROXY_POSTGRES_USER:-aiproxy}:${AIPROXY_POSTGRES_PASSWORD:-aiproxy_dev_password}@aiproxy-postgres:5432/aiproxy?sslmode=disable
-      ADMIN_KEY: ${AIPROXY_API_TOKEN:-kb-local-aiproxy-token}
+      AIPROXY_ADMIN_KEY: ${AIPROXY_ADMIN_KEY:-kb-local-aiproxy-admin-token}
       LOG_LEVEL: ${AIPROXY_LOG_LEVEL:-info}
     depends_on:
       aiproxy-postgres:
@@ -159,6 +166,38 @@ services:
       interval: 10s
       timeout: 5s
       retries: 20
+
+  aiproxy-init:
+    image: registry.cn-hangzhou.aliyuncs.com/fastgpt/pgvector:0.8.0-pg15@sha256:92be4ea0424cccf17003f5803d54448e2864ac27a70e6ac5d24b3d8b463c689c
+    profiles: ['aiproxy']
+    restart: 'no'
+    depends_on:
+      aiproxy-postgres:
+        condition: service_healthy
+      aiproxy:
+        condition: service_healthy
+    environment:
+      PGPASSWORD: ${AIPROXY_POSTGRES_PASSWORD:-aiproxy_dev_password}
+      AIPROXY_API_TOKEN: ${AIPROXY_API_TOKEN:-0123456789abcdef0123456789abcdef0123456789abcdef}
+    entrypoint: ['/bin/sh', '-c']
+    command:
+      - |
+        psql -h aiproxy-postgres -U ${AIPROXY_POSTGRES_USER:-aiproxy} -d aiproxy \
+          -v ON_ERROR_STOP=1 -v client_token="$$AIPROXY_API_TOKEN" <<'SQL'
+        INSERT INTO groups (id, status, created_at)
+        VALUES ('w1-compose-default', 1, now())
+        ON CONFLICT (id) DO NOTHING;
+        INSERT INTO tokens (
+          key, name, group_id, status, quota, period_quota, period_type, created_at
+        )
+        VALUES (
+          :'client_token', 'w1-compose-default', 'w1-compose-default',
+          1, -1, -1, 'monthly', now()
+        )
+        ON CONFLICT (name, group_id) DO UPDATE SET
+          key = EXCLUDED.key,
+          status = 1;
+        SQL
 
   app:
     image: rag-agent-platform:kb-baseline

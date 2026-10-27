@@ -20,7 +20,7 @@ const CatalogItemSchema = z
     display_name: z.string().min(1).max(256).optional(),
     displayName: z.string().min(1).max(256).optional(),
     type: z.enum(S5_MODEL_TYPES),
-    capabilities: z.array(z.string().min(1).max(128)).default([]),
+    capabilities: z.array(z.string().min(1).max(128)),
     dimension: z.number().int().optional(),
   })
   .passthrough();

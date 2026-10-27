@@ -172,7 +172,13 @@ describe('TEST-PARSE-002-BLOCK four OCR provider contracts', () => {
       lookup: async (hostname) =>
         hostname === 'public.example.invalid'
           ? [{ address: '93.184.216.34', family: 4 }]
-          : [{ address: '127.0.0.1', family: 4 }],
+          : hostname === 'mapped-private.example.invalid'
+            ? [{ address: '::ffff:ac10:1', family: 6 }]
+            : hostname === 'mapped-metadata.example.invalid'
+              ? [{ address: '::ffff:a9fe:a9fe', family: 6 }]
+              : hostname === 'mapped-cgnat.example.invalid'
+                ? [{ address: '::ffff:6440:1', family: 6 }]
+                : [{ address: '127.0.0.1', family: 4 }],
       fetch: async (input) => {
         const url = input instanceof Request ? input.url : String(input);
         if (url.includes('public.example.invalid')) {
@@ -191,6 +197,9 @@ describe('TEST-PARSE-002-BLOCK four OCR provider contracts', () => {
       'http://127.0.0.1/image.png',
       'http://localhost/image.png',
       'http://169.254.169.254/latest/meta-data',
+      'https://mapped-private.example.invalid/image.png',
+      'https://mapped-metadata.example.invalid/image.png',
+      'https://mapped-cgnat.example.invalid/image.png',
       'https://public.example.invalid/redirect.png',
     ]) {
       await expect(adapter.fetch(url)).rejects.toMatchObject({
@@ -200,19 +209,23 @@ describe('TEST-PARSE-002-BLOCK four OCR provider contracts', () => {
   });
 
   it('fetches a bounded public image and hashes actual bytes', async () => {
+    let dispatcherPinned = false;
     const adapter = new S5RemoteAssetAdapter({
       lookup: async () => [{ address: '93.184.216.34', family: 4 }],
-      fetch: async () =>
-        new Response(new Uint8Array([1, 2, 3]), {
+      fetch: async (_input, init) => {
+        dispatcherPinned = init.dispatcher !== undefined;
+        return new Response(new Uint8Array([1, 2, 3]), {
           status: 200,
           headers: { 'content-type': 'image/png', 'content-length': '3' },
-        }),
+        });
+      },
     });
     await expect(adapter.fetch('https://public.example.invalid/image.png')).resolves.toMatchObject({
       mimeType: 'image/png',
       bytes: new Uint8Array([1, 2, 3]),
       sha256: '039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81',
     });
+    expect(dispatcherPinned).toBe(true);
   });
 });
 
