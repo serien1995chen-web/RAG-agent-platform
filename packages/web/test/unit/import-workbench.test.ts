@@ -3,6 +3,7 @@ import {
   IMPORT_SOURCE_KINDS,
   connectorProviderForKind,
   splitIds,
+  toggleIdSelection,
 } from '../../src/components/import-workbench';
 
 describe('S4 import workbench contract', () => {
@@ -33,5 +34,12 @@ describe('S4 import workbench contract', () => {
     expect(connectorProviderForKind('dingtalk')).toBe('dingtalk');
     expect(connectorProviderForKind('api_library')).toBeNull();
     expect(connectorProviderForKind('text')).toBeNull();
+  });
+
+  it('ACC-UI-05/06 selects catalog documents without manual ID entry', () => {
+    expect(toggleIdSelection('', 'file:1', true)).toBe('file:1');
+    expect(toggleIdSelection('file:1', 'file:2', true)).toBe('file:1, file:2');
+    expect(toggleIdSelection('file:1, file:2', 'file:1', false)).toBe('file:2');
+    expect(toggleIdSelection('doc:1', 'doc:1', true)).toBe('doc:1');
   });
 });

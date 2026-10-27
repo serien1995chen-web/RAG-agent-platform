@@ -1,6 +1,6 @@
 # S4 Stage Evidence
 
-Status: `S4_BRANCH_EVIDENCE_DRAFT / REVIEW_FIXES_READY`
+Status: `S4_BRANCH_EVIDENCE_DRAFT / R2_FIXES_READY`
 
 ## Baseline
 
@@ -44,6 +44,18 @@ Inputs:
 | `S4-REV-12` | FIXED  | S4 runtime capabilities are exact and contain no S5 parser capability          |
 | `S4-REV-13` | FIXED  | CSV markers reject `= + - @`, leading whitespace/tabs; safe negative retained  |
 
+## R2 Review Fix Matrix
+
+| Review ID  | Result | Evidence                                                                        |
+| ---------- | ------ | ------------------------------------------------------------------------------- |
+| `S4-R2-01` | FIXED  | Cross-origin redirects strip all credentials; HTTPS downgrade is rejected       |
+| `S4-R2-02` | FIXED  | Detail/content/preview DTOs and `/v1/file/read` are typed and tested            |
+| `S4-R2-03` | FIXED  | UI `parentId` only enters the catalog body; fixed provider paths stay unchanged |
+| `S4-R2-04` | FIXED  | Concurrent dry-run duplicate key replays the winning Job                        |
+| `S4-R2-05` | FIXED  | Connector sync replay is resolved before QuotaGate                              |
+| `S4-R2-06` | FIXED  | Duplicate API library `fileIds` fail before Provider/Object/Mongo writes        |
+| `S4-R2-07` | FIXED  | API and connector catalog documents are selectable and submit network requests  |
+
 ## Task And Capability Coverage
 
 | Task     | Capability                        | Status                                | Evidence                                                                                      |
@@ -55,7 +67,7 @@ Inputs:
 | `S4-T05` | `ING-006`, `API-002`              | PASS                                  | `TEST-ING-006-*`, `TEST-API-002-BLOCK`, `TEST-X-SECRET-LEAK`                                  |
 | `S4-T06` | `ING-007...009`, `OPS-005` subset | PASS                                  | provider IDs, token/delete/CAS/sync idempotency                                               |
 | `S4-T07` | `DOWN-004` S4 subset              | PASS / `IMPLEMENTED_S4_SUBSET / DATA` | `TEST-DOWN-004-*`, QuotaGate, scoped auth                                                     |
-| `S4-T08` | S4 UI                             | PASS                                  | `ACC-UI-01...07`, 4 E2E files / 30 tests, axe and viewports                                   |
+| `S4-T08` | S4 UI                             | PASS                                  | `ACC-UI-01...07`, 4 E2E files / 31 tests, axe and viewports                                   |
 | `S4-T09` | Full S4 regression                | PASS                                  | all stage commands below, S4 branch only                                                      |
 
 Capability counts remain:
@@ -101,6 +113,7 @@ capability is registered on these operations.
 - Batch imports create one parent Job and N Sources.
 - Preflight prevents duplicate ObjectStore/provider calls on replay.
 - Concurrent replay compensates objects created by the losing request.
+- Concurrent backup dry-run creation replays the single succeeded Job.
 - Same key/body replays the original Job and Source IDs; different body returns 409.
 - Outbox is pending and Fake QueuePort `enqueue` count is zero.
 - No parse child Job or Segment is created.
@@ -110,6 +123,8 @@ capability is registered on these operations.
 - S4 creates ObjectRef, Source, configuration snapshots and parent Job only.
 - Text import stores source raw content, not S5 parsed `rawText`.
 - URL/custom API requests use validated, pinned network targets and bounded responses.
+- Custom API detail/content/preview are strongly typed and do not expose `objectKey`.
+- Redirect credentials remain same-origin only; HTTPS-to-HTTP redirects fail closed.
 - No parse, chunk, QA, embedding or index work is executed.
 
 ### C6
@@ -117,6 +132,7 @@ capability is registered on these operations.
 - Files/text and all dynamic import entries require workspace, scope and Space ACL.
 - API catalog checks Space write ACL before provider or credential use.
 - Connector update validates provider identity before credential encryption.
+- Connector sync replay resolves before QuotaGate, so retries return the original Job.
 - The `ScopedAuthPort` and QuotaGate fixture are S4-only extension points.
 - Real API Key lifecycle remains deferred to S10.
 
@@ -146,12 +162,12 @@ Core IDs are locatable in:
 | `pnpm forbidden-files:check`        | PASS, 327 files scanned               |
 | `pnpm license:check`                | PASS, 5 pending legal-review blockers |
 | `pnpm test:unit`                    | PASS, 20/20 tasks                     |
-| `pnpm test:contract`                | PASS, 11 files / 61 tests             |
-| `pnpm test:integration`             | PASS, service 8 files / 79 tests      |
+| `pnpm test:contract`                | PASS, 11 files / 64 tests             |
+| `pnpm test:integration`             | PASS, service 8 files / 82 tests      |
 | `pnpm test:tenant`                  | PASS, 3 files / 10 tests              |
-| `pnpm test:concurrency`             | PASS, 4 files / 10 tests              |
+| `pnpm test:concurrency`             | PASS, 4 files / 11 tests              |
 | `pnpm test:fault`                   | PASS, 4 files / 21 tests              |
-| `pnpm test:e2e`                     | PASS, 4 files / 30 tests              |
+| `pnpm test:e2e`                     | PASS, 4 files / 31 tests              |
 | `pnpm build`                        | PASS                                  |
 | `pnpm build:workers`                | PASS                                  |
 | `pnpm openapi:check`                | PASS                                  |
@@ -192,7 +208,8 @@ test-results/s4-ui/connectors-1200.png
 The E2E gate checks 360/768/1200 layout, horizontal overflow, serious/critical
 axe findings and console errors. S4 interaction coverage includes text submit,
 URL SSRF Problem, template rowNumber, API catalog network capture, conflict
-retry, connector provider initialization and connect/update/sync/delete.
+retry, connector provider initialization, connect/update/sync/delete, and
+catalog-to-import selection for both API library and connector documents.
 
 ## Side Effects And Boundaries
 

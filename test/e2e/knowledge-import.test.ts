@@ -173,7 +173,7 @@ describe('TEST-X-FRONTEND-IMPORT, TEST-DOWN-004-BLOCK and ACC-UI', () => {
     }
   });
 
-  it('ACC-UI-05 captures the API catalog request and renders catalog items', async () => {
+  it('ACC-UI-05 selects an API catalog document and submits without manual ID entry', async () => {
     const browser = await chromium.launch({ headless: true });
     try {
       const pageContext = await browser.newContext({ viewport: { width: 1200, height: 900 } });
@@ -182,6 +182,18 @@ describe('TEST-X-FRONTEND-IMPORT, TEST-DOWN-004-BLOCK and ACC-UI', () => {
       ]);
       const page = await pageContext.newPage();
       let requestBody: unknown;
+      let importBody: unknown;
+      await page.route('**/imports/api-library', async (route) => {
+        importBody = route.request().postDataJSON();
+        await route.fulfill({
+          status: 202,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            success: true,
+            data: { jobId: 'api-library-ui-job', kind: 'import', status: 'queued' },
+          }),
+        });
+      });
       await page.route('**/imports/api-library/catalog', async (route) => {
         requestBody = route.request().postDataJSON();
         await route.fulfill({
@@ -200,16 +212,104 @@ describe('TEST-X-FRONTEND-IMPORT, TEST-DOWN-004-BLOCK and ACC-UI', () => {
         waitUntil: 'networkidle',
       });
       await page.locator('input[type=url]').fill('https://api.example.test');
+      await page.locator('input').nth(3).fill('folder:eng');
+      const catalogResponse = page.waitForResponse(
+        (response) =>
+          response.request().method() === 'POST' &&
+          response.url().endsWith('/imports/api-library/catalog'),
+      );
       await page.getByRole('button', { name: /浏览目录|Browse catalog/ }).click();
+      expect((await catalogResponse).status()).toBe(200);
       await expectUi(page.getByText(/UI fixture/)).toBeVisible();
+      await page.getByText(/UI fixture.*document/).click();
+      const importResponse = page.waitForResponse(
+        (response) =>
+          response.request().method() === 'POST' && response.url().endsWith('/imports/api-library'),
+      );
+      await page.getByRole('button', { name: /提交导入|Submit import/ }).click();
+      expect((await importResponse).status()).toBe(202);
+      await expectUi(page.getByRole('status')).toContainText('api-library-ui-job');
       expect(requestBody).toMatchObject({
-        parentId: '',
+        parentId: 'folder:eng',
         config: {
           provider: 'custom_api',
           catalogPath: '/v1/file/list',
           pageMode: 'cursor',
         },
       });
+      expect(requestBody).not.toHaveProperty('config.basePath');
+      expect(importBody).toMatchObject({
+        fileIds: ['file:ui'],
+        config: {
+          provider: 'custom_api',
+          catalogPath: '/v1/file/list',
+          pageMode: 'cursor',
+        },
+      });
+      expect(importBody).not.toHaveProperty('config.basePath');
+    } finally {
+      await browser.close();
+    }
+  });
+
+  it('ACC-UI-06 selects a connector document and submits connector import', async () => {
+    const browser = await chromium.launch({ headless: true });
+    try {
+      const pageContext = await browser.newContext({ viewport: { width: 1200, height: 900 } });
+      await pageContext.addCookies([
+        await consoleCookie({ baseUrl: app!.baseUrl, authToken, workspaceId }),
+      ]);
+      const page = await pageContext.newPage();
+      let catalogBody: unknown;
+      let importBody: unknown;
+      await page.route('**/spaces/*/connectors/feishu/catalog', async (route) => {
+        catalogBody = route.request().postDataJSON();
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            success: true,
+            data: {
+              provider: 'feishu',
+              verificationStatus: 'EXTERNAL_UNVERIFIED',
+              items: [{ id: 'doc:ui', name: 'Feishu UI fixture', type: 'document' }],
+            },
+          }),
+        });
+      });
+      await page.route('**/spaces/*/connectors/feishu/import', async (route) => {
+        importBody = route.request().postDataJSON();
+        await route.fulfill({
+          status: 202,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            success: true,
+            data: { jobId: 'connector-ui-job', kind: 'import', status: 'queued' },
+          }),
+        });
+      });
+      await page.goto(`${app!.baseUrl}/spaces/${spaceId}/import?kind=feishu`, {
+        waitUntil: 'networkidle',
+      });
+      await page.locator('input').nth(1).fill('folder:feishu');
+      const catalogResponse = page.waitForResponse(
+        (response) =>
+          response.request().method() === 'POST' &&
+          response.url().endsWith('/connectors/feishu/catalog'),
+      );
+      await page.getByRole('button', { name: /浏览目录|Browse catalog/ }).click();
+      expect((await catalogResponse).status()).toBe(200);
+      await page.getByText(/Feishu UI fixture.*document/).click();
+      const importResponse = page.waitForResponse(
+        (response) =>
+          response.request().method() === 'POST' &&
+          response.url().endsWith('/connectors/feishu/import'),
+      );
+      await page.getByRole('button', { name: /提交导入|Submit import/ }).click();
+      expect((await importResponse).status()).toBe(202);
+      await expectUi(page.getByRole('status')).toContainText('connector-ui-job');
+      expect(catalogBody).toEqual({ rootId: 'folder:feishu' });
+      expect(importBody).toMatchObject({ externalIds: ['doc:ui'] });
     } finally {
       await browser.close();
     }

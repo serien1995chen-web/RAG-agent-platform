@@ -127,3 +127,29 @@ describe('TEST-X-S4-IDEMPOTENCY', () => {
     expect(outcomes.filter((outcome) => outcome.status === 'rejected')).toHaveLength(1);
   });
 });
+
+describe('TEST-X-S4-BACKUP-DRYRUN', () => {
+  it('S4-R2-04 coalesces concurrent dry-run creation into one succeeded Job', async () => {
+    const input = {
+      knowledgeSpaceId: spaceId,
+      idempotencyKey: `dry-run-${suffix}`,
+      requestHash: requestHashOf({ dryRun: true, body: 'same' }),
+      configurationHash: requestHashOf({ conflictStrategy: 'fail' }),
+      importKind: 'backup' as const,
+      dryRun: true,
+      conflicts: [],
+      actions: [],
+    };
+    const results = await Promise.all([
+      repository.createDryRunJob(input, context),
+      repository.createDryRunJob(input, context),
+    ]);
+    expect(new Set(results.map((result) => result.parentJobId)).size).toBe(1);
+    expect(results.map((result) => result.status)).toEqual(['succeeded', 'succeeded']);
+    expect(results.filter((result) => result.replayed)).toHaveLength(1);
+    expect(await connection.models.KnowledgeJob.countDocuments({ workspaceId })).toBe(1);
+    expect(await connection.models.KnowledgeSource.countDocuments({ workspaceId })).toBe(0);
+    expect(await connection.models.KnowledgeAuditEvent.countDocuments({ workspaceId })).toBe(0);
+    expect(await connection.models.KnowledgeOutboxEvent.countDocuments({ workspaceId })).toBe(0);
+  });
+});

@@ -630,43 +630,51 @@ export class KnowledgeImportRepository implements ImportSubmissionPort {
       actions: input.actions,
     };
     const jobId = new Types.ObjectId();
-    const document = await this.jobs.create({
-      _id: jobId,
-      workspaceId: context.workspaceId,
-      knowledgeSpaceId: new Types.ObjectId(input.knowledgeSpaceId),
-      version: 1,
-      deletedAt: null,
-      createdByMemberId: context.memberId,
-      updatedByMemberId: context.memberId,
-      kind: 'import',
-      resourceType: 'space',
-      resourceId: input.knowledgeSpaceId,
-      status: 'succeeded',
-      priority: 5,
-      idempotencyKey: input.idempotencyKey,
-      inputSnapshot: {
-        sourceIds: [],
-        configurationHash: input.configurationHash,
-        requestHash: input.requestHash,
-        importKind: 'backup',
-        dryRun,
-      },
-      progress: { stage: 'succeeded', completed: 1, total: 1, percent: 100 },
-      attempts: 0,
-      maxAttempts: 3,
-      attemptEpoch: 0,
-      fencingToken: 'unassigned',
-      leaseOwner: null,
-      leaseExpiresAt: null,
-      heartbeatAt: null,
-      availableAt: now,
-      cancelRequestedAt: null,
-      pausedAt: null,
-      error: null,
-      result,
-      expiresAt: new Date(now.getTime() + 30 * 86_400_000),
-    });
-    const plain = document.toObject() as unknown as Plain<KnowledgeJobDoc>;
+    let plain: Plain<KnowledgeJobDoc>;
+    try {
+      const document = await this.jobs.create({
+        _id: jobId,
+        workspaceId: context.workspaceId,
+        knowledgeSpaceId: new Types.ObjectId(input.knowledgeSpaceId),
+        version: 1,
+        deletedAt: null,
+        createdByMemberId: context.memberId,
+        updatedByMemberId: context.memberId,
+        kind: 'import',
+        resourceType: 'space',
+        resourceId: input.knowledgeSpaceId,
+        status: 'succeeded',
+        priority: 5,
+        idempotencyKey: input.idempotencyKey,
+        inputSnapshot: {
+          sourceIds: [],
+          configurationHash: input.configurationHash,
+          requestHash: input.requestHash,
+          importKind: 'backup',
+          dryRun,
+        },
+        progress: { stage: 'succeeded', completed: 1, total: 1, percent: 100 },
+        attempts: 0,
+        maxAttempts: 3,
+        attemptEpoch: 0,
+        fencingToken: 'unassigned',
+        leaseOwner: null,
+        leaseExpiresAt: null,
+        heartbeatAt: null,
+        availableAt: now,
+        cancelRequestedAt: null,
+        pausedAt: null,
+        error: null,
+        result,
+        expiresAt: new Date(now.getTime() + 30 * 86_400_000),
+      });
+      plain = document.toObject() as unknown as Plain<KnowledgeJobDoc>;
+    } catch (error) {
+      if (!duplicateKey(error)) throw error;
+      const raced = await this.existingJob(command, context);
+      if (!raced) throw error;
+      return this.replay(raced, input.requestHash, context);
+    }
     return {
       parentJobId: String(jobId),
       sourceIds: [],

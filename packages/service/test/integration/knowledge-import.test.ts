@@ -282,16 +282,14 @@ function ingestionApplication(
               items: [{ id: 'doc_fixture', name: 'Fixture', type: 'document' as const }],
             };
           },
-          async content() {
+          async content(input: { externalIds: readonly string[] }) {
             counters.providerContent += 1;
-            return [
-              {
-                externalId: 'doc_fixture',
-                title: 'Fixture',
-                mimeType: 'text/plain',
-                bytes: Buffer.from('fixture'),
-              },
-            ];
+            return input.externalIds.map((externalId) => ({
+              externalId,
+              title: `Fixture ${externalId}`,
+              mimeType: 'text/plain',
+              bytes: Buffer.from(`fixture ${externalId}`),
+            }));
           },
         },
       } as never),
@@ -821,6 +819,224 @@ describe('S4 import entry workflows', () => {
     expect(await connection.models.KnowledgeSource.countDocuments({ workspaceId })).toBe(0);
     expect(await connection.models.KnowledgeJob.countDocuments({ workspaceId })).toBe(0);
     expect(await connection.models.KnowledgeOutboxEvent.countDocuments({ workspaceId })).toBe(0);
+  });
+
+  it('S4-R2-05 replays sync before quota while a new sync key remains quota-gated', async () => {
+    const connectorId = id();
+    const replayJob = {
+      jobId: id(),
+      workspaceId,
+      knowledgeSpaceId: spaceId,
+      kind: 'sync',
+      status: 'queued',
+      priority: 5,
+      attempts: 0,
+      maxAttempts: 3,
+      progress: { stage: 'queued', completed: 0, total: 1, percent: 0 },
+      steps: [],
+      error: null,
+      result: null,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    const connector = {
+      id: connectorId,
+      workspaceId,
+      knowledgeSpaceId: spaceId,
+      provider: 'feishu',
+      name: 'Replay connector',
+      status: 'syncing',
+      syncEnabled: true,
+      syncIntervalMinutes: 60,
+      nextSyncAt: null,
+      lastAttemptAt: null,
+      lastSuccessAt: null,
+      lastError: null,
+      cursorVersion: 1,
+      version: 2,
+      config: { provider: 'feishu', folderToken: 'folder' },
+      credentialMetadata: {
+        provider: 'feishu',
+        schemaVersion: 1,
+        keyVersion: 1,
+        configured: true,
+        redactedFields: ['appSecret'],
+      },
+    };
+    let quotaChecks = 0;
+    let markCalls = 0;
+    const existingKey = `sync-existing-${suffix}-01`;
+    const connectors = {
+      async get() {
+        return connector;
+      },
+      async preflightSync(
+        _connectorId: string,
+        command: { requestHash: string; idempotencyKey: string },
+      ) {
+        return command.idempotencyKey === existingKey ? replayJob : null;
+      },
+      async markSyncing() {
+        markCalls += 1;
+        throw new Error('markSyncing must not run for replay');
+      },
+    };
+    const ingestion = ingestionApplication('template', {
+      dependencies: {
+        connectors: connectors as never,
+        quotaGate: {
+          async check() {
+            quotaChecks += 1;
+            throw Object.assign(new Error('quota'), {
+              problem: { error: { code: 'KNOWLEDGE_QUOTA_EXCEEDED' } },
+            });
+          },
+        },
+      },
+    });
+    const baseInput = {
+      operationId: 'API-CONNECTOR-SYNC' as const,
+      params: { connectorId },
+      query: {},
+      body: { full: false },
+      context,
+    };
+    await expect(
+      ingestion.dispatch({
+        ...baseInput,
+        headers: { 'idempotency-key': existingKey },
+      }),
+    ).resolves.toMatchObject({ status: 202, data: { jobId: replayJob.jobId } });
+    expect(quotaChecks).toBe(0);
+    expect(markCalls).toBe(0);
+    await expect(
+      ingestion.dispatch({
+        ...baseInput,
+        headers: { 'idempotency-key': `sync-new-${suffix}-000001` },
+      }),
+    ).rejects.toMatchObject({
+      problem: { error: { code: 'KNOWLEDGE_QUOTA_EXCEEDED' } },
+    });
+    expect(quotaChecks).toBe(1);
+    expect(markCalls).toBe(0);
+  });
+
+  it('S4-R2-06 rejects duplicate API library fileIds before provider or object writes', async () => {
+    const counters = newCounters();
+    const ingestion = ingestionApplication('template', { counters });
+    await expect(
+      ingestion.dispatch({
+        operationId: 'API-IMPORT-API-LIBRARY',
+        params: { spaceId },
+        query: {},
+        headers: { 'idempotency-key': `duplicate-api-${suffix}-01` },
+        body: {
+          config: {
+            provider: 'custom_api',
+            baseUrl: 'https://api.example.com',
+            catalogPath: '/v1/file/list',
+            detailPath: '/v1/file/detail',
+            contentPath: '/v1/file/content',
+            previewPath: '/v1/file/read',
+            pageMode: 'none',
+          },
+          credentials: { provider: 'custom_api', authMode: 'none' },
+          fileIds: ['file:1', 'file:1'],
+          directoryId: null,
+        },
+        context,
+      }),
+    ).rejects.toMatchObject({
+      problem: {
+        error: {
+          code: 'KNOWLEDGE_VALIDATION_FAILED',
+          details: { field: 'fileIds' },
+        },
+      },
+    });
+    expect(counters.customApiContent).toBe(0);
+    expect(counters.puts).toHaveLength(0);
+    expect(await connection.models.KnowledgeJob.countDocuments({ workspaceId })).toBe(0);
+    expect(await connection.models.KnowledgeSource.countDocuments({ workspaceId })).toBe(0);
+    expect(await connection.models.KnowledgeOutboxEvent.countDocuments({ workspaceId })).toBe(0);
+  });
+
+  it('TEST-ING-007-BLOCK imports selected connector documents through Mongo C1', async () => {
+    const connectorId = id();
+    const connector = {
+      id: connectorId,
+      workspaceId,
+      knowledgeSpaceId: spaceId,
+      provider: 'feishu',
+      name: 'Feishu fixture',
+      status: 'active',
+      syncEnabled: true,
+      syncIntervalMinutes: 60,
+      nextSyncAt: null,
+      lastAttemptAt: null,
+      lastSuccessAt: null,
+      lastError: null,
+      cursorVersion: 1,
+      version: 1,
+      config: { provider: 'feishu', folderToken: 'folder' },
+      credentialMetadata: {
+        provider: 'feishu',
+        schemaVersion: 1,
+        keyVersion: 1,
+        configured: true,
+        redactedFields: ['appSecret'],
+      },
+    };
+    const providers = {
+      feishu: {
+        async catalog() {
+          return {
+            provider: 'feishu' as const,
+            items: [{ id: 'doc:1', name: 'Selected Feishu doc', type: 'document' as const }],
+          };
+        },
+        async content(input: { externalIds: readonly string[] }) {
+          return input.externalIds.map((externalId) => ({
+            externalId,
+            title: `Selected ${externalId}`,
+            mimeType: 'text/markdown',
+            bytes: Buffer.from(`# ${externalId}`),
+          }));
+        },
+      },
+    };
+    const ingestion = ingestionApplication('template', {
+      dependencies: {
+        connectors: {
+          async findByProvider() {
+            return connector;
+          },
+          async decryptCredentials() {
+            return { provider: 'feishu', appId: 'app', appSecret: 'secret' };
+          },
+        } as never,
+        providers: providers as never,
+      },
+    });
+    await expect(
+      ingestion.dispatch({
+        operationId: 'API-CONNECTOR-IMPORT',
+        params: { spaceId, provider: 'feishu' },
+        query: {},
+        headers: { 'idempotency-key': `connector-import-${suffix}-01` },
+        body: {
+          externalIds: ['doc:1'],
+          directoryId: null,
+        },
+        context,
+      }),
+    ).resolves.toMatchObject({ status: 202 });
+    expect(await connection.models.KnowledgeJob.countDocuments({ workspaceId })).toBe(1);
+    expect(await connection.models.KnowledgeSource.countDocuments({ workspaceId })).toBe(1);
+    expect(await connection.models.KnowledgeOutboxEvent.countDocuments({ workspaceId })).toBe(1);
+    expect(
+      await connection.models.KnowledgeJob.countDocuments({ workspaceId, kind: 'parse' }),
+    ).toBe(0);
   });
 
   it('TEST-ING-003-BLOCK/TEST-ING-006-BLOCK submits URL and API imports without parsing', async () => {

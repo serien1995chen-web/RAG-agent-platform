@@ -371,6 +371,36 @@ export class KnowledgeConnectorRepository implements ConnectorRepositoryPort {
     });
   }
 
+  async preflightSync(
+    connectorId: string,
+    command: {
+      requestHash: string;
+      idempotencyKey: string;
+    },
+    context: TenantContext,
+  ): Promise<JobView | null> {
+    const existing = await this.jobs
+      .findOne({
+        workspaceId: requireWorkspaceId(context),
+        idempotencyKey: `connector-sync:${connectorId}:${command.idempotencyKey}`,
+        deletedAt: null,
+      })
+      .lean<Plain<KnowledgeJobDoc>>();
+    if (!existing) return null;
+    if (existing.inputSnapshot.requestHash !== command.requestHash) {
+      throw createKnowledgeError({
+        code: 'KNOWLEDGE_CONFLICT',
+        requestId: context.requestId,
+        traceId: context.traceId,
+        details: {
+          reason: 'idempotency_body_mismatch',
+          jobId: String(existing._id),
+        },
+      });
+    }
+    return jobView(existing);
+  }
+
   async markSyncing(
     connectorId: string,
     command: {

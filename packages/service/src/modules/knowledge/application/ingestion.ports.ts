@@ -323,6 +323,26 @@ export interface ProviderContent {
   bytes: Uint8Array;
 }
 
+export interface CustomApiFileDetail {
+  fileId: string;
+  name: string;
+  mimeType: string;
+  sizeBytes: number | null;
+  updatedAt: string | null;
+}
+
+export interface CustomApiFileContent {
+  fileId: string;
+  content: string;
+  mimeType: string;
+}
+
+export interface CustomApiFilePreview {
+  fileId: string;
+  mimeType: string;
+  previewText: string;
+}
+
 export interface CustomApiClientPort {
   catalog(input: {
     config: Record<string, unknown>;
@@ -332,12 +352,24 @@ export interface CustomApiClientPort {
     offset?: number;
     context: TenantContext;
   }): Promise<ProviderCatalogResult>;
+  detail(input: {
+    config: Record<string, unknown>;
+    credentials: Record<string, unknown>;
+    fileIds: readonly string[];
+    context: TenantContext;
+  }): Promise<CustomApiFileDetail[]>;
   content(input: {
     config: Record<string, unknown>;
     credentials: Record<string, unknown>;
     fileIds: readonly string[];
     context: TenantContext;
   }): Promise<ProviderContent[]>;
+  preview(input: {
+    config: Record<string, unknown>;
+    credentials: Record<string, unknown>;
+    fileIds: readonly string[];
+    context: TenantContext;
+  }): Promise<CustomApiFilePreview[]>;
 }
 
 export interface CloudProviderClientPort {
@@ -421,6 +453,14 @@ export interface ConnectorRepositoryPort {
     version: number,
     context: TenantContext,
   ): Promise<{ id: string; status: 'accepted'; jobId: string | null }>;
+  preflightSync(
+    connectorId: string,
+    command: {
+      requestHash: string;
+      idempotencyKey: string;
+    },
+    context: TenantContext,
+  ): Promise<JobView | null>;
   markSyncing(
     connectorId: string,
     command: {

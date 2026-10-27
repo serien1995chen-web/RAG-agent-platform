@@ -22807,6 +22807,105 @@
               }
             ]
           }
+        },
+        "$defs": {
+          "ApiLibraryFileDetail": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "fileId",
+              "name",
+              "mimeType"
+            ],
+            "properties": {
+              "fileId": {
+                "type": "string",
+                "minLength": 1
+              },
+              "name": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 240
+              },
+              "mimeType": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 255
+              },
+              "sizeBytes": {
+                "oneOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "updatedAt": {
+                "oneOf": [
+                  {
+                    "type": "string",
+                    "format": "date-time"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            }
+          },
+          "ApiLibraryFileContent": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "fileId",
+              "content",
+              "mimeType"
+            ],
+            "properties": {
+              "fileId": {
+                "type": "string",
+                "minLength": 1
+              },
+              "content": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 10000000
+              },
+              "mimeType": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 255
+              }
+            }
+          },
+          "ApiLibraryFilePreview": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "fileId",
+              "mimeType",
+              "previewText"
+            ],
+            "properties": {
+              "fileId": {
+                "type": "string",
+                "minLength": 1
+              },
+              "mimeType": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 255
+              },
+              "previewText": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 1000000
+              }
+            }
+          }
         }
       },
       "ConnectorCatalog": {

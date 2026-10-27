@@ -1,5 +1,7 @@
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   CustomApiLibraryClient,
@@ -57,7 +59,7 @@ async function listen(
 }
 
 describe('TEST-ING-006 and TEST-API-002 custom API contract', () => {
-  it('TEST-ING-006-BLOCK uses fixed catalog/detail/content methods and safe DTOs', async () => {
+  it('TEST-ING-006-BLOCK/TEST-API-002-BLOCK uses fixed catalog/detail/content/preview DTOs', async () => {
     const calls: Array<{
       url: string;
       method: 'GET' | 'POST';
@@ -81,9 +83,23 @@ describe('TEST-ING-006 and TEST-API-002 custom API contract', () => {
         };
       }
       if (url.includes('/v1/file/detail')) {
-        return { status: 200, body: { name: 'Runbook', mimeType: 'text/markdown' } };
+        return {
+          status: 200,
+          body: {
+            name: 'Runbook',
+            mimeType: 'text/markdown',
+            sizeBytes: 9,
+            updatedAt: '2026-10-27T00:00:00.000Z',
+          },
+        };
       }
-      return { status: 200, body: { content: '# Runbook' } };
+      if (url.includes('/v1/file/content')) {
+        return { status: 200, body: { content: '# Runbook' } };
+      }
+      return {
+        status: 200,
+        body: { mimeType: 'text/markdown', previewText: '# Runbook preview' },
+      };
     };
     const client = new CustomApiLibraryClient(requester);
 
@@ -100,7 +116,19 @@ describe('TEST-ING-006 and TEST-API-002 custom API contract', () => {
       items: [{ id: 'file:1', name: 'Runbook', type: 'document' }],
       nextCursor: 'next',
     });
+    const detail = await client.detail({
+      config,
+      credentials,
+      fileIds: ['file:1'],
+      context,
+    });
     const content = await client.content({
+      config,
+      credentials,
+      fileIds: ['file:1'],
+      context,
+    });
+    const preview = await client.preview({
       config,
       credentials,
       fileIds: ['file:1'],
@@ -110,12 +138,25 @@ describe('TEST-ING-006 and TEST-API-002 custom API contract', () => {
     expect(calls.map((call) => [call.method, new URL(call.url).pathname])).toEqual([
       ['POST', '/v1/file/list'],
       ['GET', '/v1/file/detail'],
+      ['GET', '/v1/file/detail'],
       ['GET', '/v1/file/content'],
+      ['GET', '/v1/file/read'],
     ]);
     expect(calls[0]?.body).toEqual({ parentId: 'root', cursor: 'cursor-1' });
     expect(calls[0]?.headers.authorization).toBe('Bearer secret-token');
     expect(new URL(calls[1]!.url).searchParams.get('fileId')).toBe('file:1');
     expect(new URL(calls[2]!.url).searchParams.get('fileId')).toBe('file:1');
+    expect(new URL(calls[3]!.url).searchParams.get('fileId')).toBe('file:1');
+    expect(new URL(calls[4]!.url).searchParams.get('fileId')).toBe('file:1');
+    expect(detail).toEqual([
+      {
+        fileId: 'file:1',
+        name: 'Runbook',
+        mimeType: 'text/markdown',
+        sizeBytes: 9,
+        updatedAt: '2026-10-27T00:00:00.000Z',
+      },
+    ]);
     expect(content).toEqual([
       {
         externalId: 'file:1',
@@ -126,6 +167,32 @@ describe('TEST-ING-006 and TEST-API-002 custom API contract', () => {
     ]);
     expect(JSON.stringify(content)).not.toContain('objectKey');
     expect(JSON.stringify(content)).not.toContain('secret-token');
+    expect(preview).toEqual([
+      {
+        fileId: 'file:1',
+        mimeType: 'text/markdown',
+        previewText: '# Runbook preview',
+      },
+    ]);
+    expect(JSON.stringify(preview)).not.toContain('objectKey');
+
+    const openapi = JSON.parse(
+      readFileSync(
+        join(process.cwd(), 'packages/contracts/openapi/knowledge-target.openapi.json'),
+        'utf8',
+      ),
+    ) as {
+      components: {
+        schemas: Record<string, { $defs?: Record<string, unknown> }>;
+      };
+    };
+    const api002 = openapi.components.schemas.ApiLibraryCatalog?.$defs;
+    expect(Object.keys(api002 ?? {})).toEqual([
+      'ApiLibraryFileDetail',
+      'ApiLibraryFileContent',
+      'ApiLibraryFilePreview',
+    ]);
+    expect(JSON.stringify(api002)).not.toContain('objectKey');
   });
 
   it('TEST-ING-006-BLOCK captures none/cursor/offset page modes', async () => {
@@ -234,9 +301,196 @@ describe('TEST-ING-006 and TEST-API-002 custom API contract', () => {
       problem: { error: { code: 'KNOWLEDGE_PROVIDER_CONTRACT_INVALID' } },
     });
   });
+
+  it('TEST-API-002-BLOCK rejects missing detail and preview fields', async () => {
+    const detailClient = new CustomApiLibraryClient(async () => ({
+      status: 200,
+      body: { mimeType: 'text/plain' },
+    }));
+    await expect(
+      detailClient.detail({
+        config: { ...config, pageMode: 'none' },
+        credentials,
+        fileIds: ['file:missing-detail'],
+        context,
+      }),
+    ).rejects.toMatchObject({
+      problem: { error: { code: 'KNOWLEDGE_PROVIDER_CONTRACT_INVALID' } },
+    });
+
+    const previewClient = new CustomApiLibraryClient(async () => ({
+      status: 200,
+      body: { mimeType: 'text/plain', previewText: '   ' },
+    }));
+    await expect(
+      previewClient.preview({
+        config: { ...config, pageMode: 'none' },
+        credentials,
+        fileIds: ['file:missing-preview'],
+        context,
+      }),
+    ).rejects.toMatchObject({
+      problem: { error: { code: 'KNOWLEDGE_PROVIDER_CONTRACT_INVALID' } },
+    });
+  });
 });
 
 describe('TEST-X-SECURITY-URL custom API transport', () => {
+  it('S4-R2-01 strips credentials on cross-origin redirect and rejects HTTPS downgrade', async () => {
+    const seen: Array<{
+      url: string;
+      method: 'GET' | 'POST';
+      headers: Record<string, string>;
+      body?: unknown;
+    }> = [];
+    const requester = createPinnedJsonRequester({
+      async resolve(raw) {
+        return {
+          url: new URL(raw),
+          address: '93.184.216.34',
+          family: 4,
+          addresses: ['93.184.216.34'],
+        };
+      },
+      async requestOnce(target, input) {
+        seen.push({
+          url: target.url.toString(),
+          method: input.method,
+          headers: input.headers,
+          body: input.body,
+        });
+        if (target.url.hostname === 'api.example.test') {
+          return {
+            status: 302,
+            location: 'https://cdn.example.test/file',
+            headers: {},
+            bytes: new Uint8Array(),
+          };
+        }
+        return {
+          status: 200,
+          location: null,
+          headers: {},
+          bytes: Buffer.from(JSON.stringify({ ok: true })),
+        };
+      },
+    });
+    await expect(
+      requester('https://api.example.test/start', {
+        method: 'POST',
+        headers: {
+          authorization: 'Bearer secret-token',
+          'x-api-key': 'secret-api-key',
+          cookie: 'session=secret-cookie',
+          'x-trace-id': 'trace-safe',
+        },
+        body: { parentId: 'root' },
+        timeoutMs: 1_000,
+        context,
+      }),
+    ).resolves.toMatchObject({ status: 200, body: { ok: true } });
+    expect(seen[1]).toMatchObject({
+      url: 'https://cdn.example.test/file',
+      method: 'GET',
+      headers: { 'x-trace-id': 'trace-safe' },
+    });
+    expect(seen[1]?.body).toBeUndefined();
+    expect(JSON.stringify(seen[1])).not.toContain('secret-token');
+    expect(JSON.stringify(seen[1])).not.toContain('secret-api-key');
+    expect(JSON.stringify(seen[1])).not.toContain('secret-cookie');
+
+    let downgradeRequests = 0;
+    const downgrade = createPinnedJsonRequester({
+      async resolve(raw) {
+        return {
+          url: new URL(raw),
+          address: '93.184.216.34',
+          family: 4,
+          addresses: ['93.184.216.34'],
+        };
+      },
+      async requestOnce() {
+        downgradeRequests += 1;
+        return {
+          status: 302,
+          location: 'http://api.example.test/insecure',
+          headers: {},
+          bytes: new Uint8Array(),
+        };
+      },
+    });
+    await expect(
+      downgrade('https://api.example.test/start', {
+        method: 'GET',
+        headers: { authorization: 'Bearer secret-token' },
+        timeoutMs: 1_000,
+        context,
+      }),
+    ).rejects.toMatchObject({
+      problem: {
+        error: {
+          code: 'KNOWLEDGE_UNSUPPORTED_CONTENT',
+          details: { reason: 'https_downgrade' },
+        },
+      },
+    });
+    expect(downgradeRequests).toBe(1);
+  });
+
+  it('S4-R2-01 preserves credential and body only for same-origin 307 redirects', async () => {
+    const seen: Array<{
+      url: string;
+      method: 'GET' | 'POST';
+      headers: Record<string, string>;
+      body?: unknown;
+    }> = [];
+    const requester = createPinnedJsonRequester({
+      async resolve(raw) {
+        return {
+          url: new URL(raw),
+          address: '93.184.216.34',
+          family: 4,
+          addresses: ['93.184.216.34'],
+        };
+      },
+      async requestOnce(target, input) {
+        seen.push({
+          url: target.url.toString(),
+          method: input.method,
+          headers: input.headers,
+          body: input.body,
+        });
+        if (target.url.pathname === '/start') {
+          return {
+            status: 307,
+            location: '/next',
+            headers: {},
+            bytes: new Uint8Array(),
+          };
+        }
+        return {
+          status: 200,
+          location: null,
+          headers: {},
+          bytes: Buffer.from(JSON.stringify({ ok: true })),
+        };
+      },
+    });
+    await requester('https://api.example.test/start', {
+      method: 'POST',
+      headers: { authorization: 'Bearer secret-token' },
+      body: { parentId: 'root' },
+      timeoutMs: 1_000,
+      context,
+    });
+    expect(seen[1]).toMatchObject({
+      url: 'https://api.example.test/next',
+      method: 'POST',
+      headers: { authorization: 'Bearer secret-token' },
+      body: { parentId: 'root' },
+    });
+  });
+
   it('revalidates every redirect and blocks redirect-to-private before the second request', async () => {
     let requests = 0;
     let resolutions = 0;

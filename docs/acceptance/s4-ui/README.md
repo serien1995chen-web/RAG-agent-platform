@@ -26,9 +26,10 @@ S4 interaction coverage now also verifies:
 - `ACC-UI-02`: text submit and queued parent Job status.
 - `ACC-UI-03`: URL SSRF Problem code and trace metadata.
 - `ACC-UI-04`: template parser `rowNumber` diagnostics.
-- `ACC-UI-05`: API catalog request capture and catalog rendering.
-- `ACC-UI-06`: connector provider URL initialization plus connect/update/sync/delete.
+- `ACC-UI-05`: API catalog request capture, document selection and import submit.
+- `ACC-UI-06`: connector catalog selection, connector import, provider URL
+  initialization and connect/update/sync/delete.
 - `ACC-UI-07`: conflict preserves input and exposes retry.
 
-The full E2E command result is 4 files / 30 tests. This UI evidence does not
+The full E2E command result is 4 files / 31 tests. This UI evidence does not
 constitute real external provider verification.

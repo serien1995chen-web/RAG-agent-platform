@@ -829,17 +829,18 @@ export class S04IngestionApplication {
           requestHash,
         });
         if (replay) return { status: 202, data: replay.job };
+        const fileIds = assertUniqueIds(body.fileIds, 'fileIds', input.context);
         await assertQuota(this.dependencies, {
           operation: 'import',
           knowledgeSpaceId: targetSpaceId,
-          sourceCount: body.fileIds.length,
+          sourceCount: fileIds.length,
           sizeBytes: 0,
           context: input.context,
         });
         const contents = await this.dependencies.customApi.content({
           config: body.config as Record<string, unknown>,
           credentials: body.credentials as Record<string, unknown>,
-          fileIds: body.fileIds,
+          fileIds,
           context: input.context,
         });
         const materials: IngestionContentResult[] = [];
@@ -1026,6 +1027,17 @@ export class S04IngestionApplication {
           'write',
           input.context,
         );
+        const idempotency = idempotencyKey(input);
+        const requestHash = operationHash(input);
+        const replay = await this.dependencies.connectors.preflightSync(
+          connectorId,
+          {
+            requestHash,
+            idempotencyKey: idempotency,
+          },
+          input.context,
+        );
+        if (replay) return { status: 202, data: replay };
         await assertQuota(this.dependencies, {
           operation: 'sync',
           knowledgeSpaceId: connector.knowledgeSpaceId,
@@ -1038,8 +1050,8 @@ export class S04IngestionApplication {
           {
             full: body.full,
             expectedCursorVersion: body.expectedCursorVersion,
-            requestHash: operationHash(input),
-            idempotencyKey: idempotencyKey(input),
+            requestHash,
+            idempotencyKey: idempotency,
           },
           input.context,
         );

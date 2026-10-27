@@ -4,6 +4,9 @@ import { createKnowledgeError, KnowledgeApiError } from '@kb/contracts';
 import type { TenantContext } from '../../../shared/persistence/knowledge/tenant';
 import type {
   CustomApiClientPort,
+  CustomApiFileContent,
+  CustomApiFileDetail,
+  CustomApiFilePreview,
   ProviderCatalogResult,
   ProviderContent,
 } from '../application/ingestion.ports';
@@ -35,6 +38,13 @@ export type JsonRequester = (
     context: TenantContext;
   },
 ) => Promise<JsonHttpResponse>;
+
+const REDIRECT_SENSITIVE_HEADERS = new Set([
+  'authorization',
+  'proxy-authorization',
+  'cookie',
+  'x-api-key',
+]);
 
 interface RawHttpResponse {
   status: number;
@@ -206,11 +216,12 @@ export function createPinnedJsonRequester(
   return async (url, input) => {
     const deadline = Date.now() + input.timeoutMs;
     let current = url;
+    let currentInput = { ...input };
     for (let redirect = 0; redirect <= MAX_REDIRECTS; redirect += 1) {
-      const target = await resolve(current, input.context);
+      const target = await resolve(current, currentInput.context);
       const response = await request(target, {
-        ...input,
-        maxBytes: input.maxBytes ?? MAX_RESPONSE_BYTES,
+        ...currentInput,
+        maxBytes: currentInput.maxBytes ?? MAX_RESPONSE_BYTES,
         timeoutMs: Math.max(1, deadline - Date.now()),
       });
       if (response.status >= 300 && response.status < 400) {
@@ -223,9 +234,37 @@ export function createPinnedJsonRequester(
           });
         }
         if (!response.location) {
-          providerContractError('custom_api', input.context, 'redirect_location_missing');
+          providerContractError('custom_api', currentInput.context, 'redirect_location_missing');
         }
-        current = new URL(response.location, target.url).toString();
+        const nextUrl = new URL(response.location, target.url);
+        if (target.url.protocol === 'https:' && nextUrl.protocol === 'http:') {
+          throw createKnowledgeError({
+            code: 'KNOWLEDGE_UNSUPPORTED_CONTENT',
+            requestId: currentInput.context.requestId,
+            traceId: currentInput.context.traceId,
+            details: { provider: 'custom_api', reason: 'https_downgrade' },
+          });
+        }
+        const nextMethod =
+          response.status === 303 ||
+          ((response.status === 301 || response.status === 302) && currentInput.method === 'POST')
+            ? 'GET'
+            : currentInput.method;
+        const sameOrigin = target.url.origin === nextUrl.origin;
+        const headers = sameOrigin
+          ? currentInput.headers
+          : Object.fromEntries(
+              Object.entries(currentInput.headers).filter(
+                ([name]) => !REDIRECT_SENSITIVE_HEADERS.has(name.toLowerCase()),
+              ),
+            );
+        currentInput = {
+          ...currentInput,
+          method: nextMethod,
+          headers,
+          ...(nextMethod === 'GET' ? { body: undefined } : {}),
+        };
+        current = nextUrl.toString();
         continue;
       }
       const text = Buffer.from(response.bytes).toString('utf8');
@@ -325,6 +364,29 @@ function catalogBody(
   return base;
 }
 
+function requiredString(value: unknown, context: TenantContext, reason: string): string {
+  if (typeof value !== 'string' || value.trim().length === 0) {
+    return providerContractError('custom_api', context, reason);
+  }
+  return value;
+}
+
+function optionalNumber(value: unknown, context: TenantContext, reason: string): number | null {
+  if (value === undefined || value === null) return null;
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) {
+    return providerContractError('custom_api', context, reason);
+  }
+  return value;
+}
+
+function optionalTimestamp(value: unknown, context: TenantContext, reason: string): string | null {
+  if (value === undefined || value === null) return null;
+  if (typeof value !== 'string' || Number.isNaN(Date.parse(value))) {
+    return providerContractError('custom_api', context, reason);
+  }
+  return value;
+}
+
 export class CustomApiLibraryClient implements CustomApiClientPort {
   constructor(private readonly requester: JsonRequester = createPinnedJsonRequester()) {}
 
@@ -377,6 +439,40 @@ export class CustomApiLibraryClient implements CustomApiClientPort {
     };
   }
 
+  async detail(input: {
+    config: Record<string, unknown>;
+    credentials: Record<string, unknown>;
+    fileIds: readonly string[];
+    context: TenantContext;
+  }): Promise<CustomApiFileDetail[]> {
+    const validated = validateCustomApiConfiguration(
+      input.config,
+      input.credentials,
+      input.context,
+    );
+    const results: CustomApiFileDetail[] = [];
+    for (const fileId of input.fileIds) {
+      const response = await this.requester(
+        baseUrlOf(validated.config, '/v1/file/detail', { fileId }),
+        {
+          method: 'GET',
+          headers: authHeaders(validated.credentials),
+          timeoutMs: 30_000,
+          context: input.context,
+        },
+      );
+      const body = checkResponse(response, input.context);
+      results.push({
+        fileId,
+        name: requiredString(body.name, input.context, 'detail_name_required'),
+        mimeType: requiredString(body.mimeType, input.context, 'detail_mime_type_required'),
+        sizeBytes: optionalNumber(body.sizeBytes, input.context, 'detail_size_invalid'),
+        updatedAt: optionalTimestamp(body.updatedAt, input.context, 'detail_updated_at_invalid'),
+      });
+    }
+    return results;
+  }
+
   async content(input: {
     config: Record<string, unknown>;
     credentials: Record<string, unknown>;
@@ -388,18 +484,10 @@ export class CustomApiLibraryClient implements CustomApiClientPort {
       input.credentials,
       input.context,
     );
+    const details = await this.detail(input);
     const results: ProviderContent[] = [];
-    for (const fileId of input.fileIds) {
-      const detail = await this.requester(
-        baseUrlOf(validated.config, '/v1/file/detail', { fileId }),
-        {
-          method: 'GET',
-          headers: authHeaders(validated.credentials),
-          timeoutMs: 30_000,
-          context: input.context,
-        },
-      );
-      const detailBody = checkResponse(detail, input.context);
+    for (const detail of details) {
+      const fileId = detail.fileId;
       const content = await this.requester(
         baseUrlOf(validated.config, '/v1/file/content', { fileId }),
         {
@@ -413,19 +501,52 @@ export class CustomApiLibraryClient implements CustomApiClientPort {
       if (typeof contentBody.content !== 'string' || contentBody.content.trim().length === 0) {
         providerContractError('custom_api', input.context, 'content_non_empty_string_required');
       }
+      const contentDto: CustomApiFileContent = {
+        fileId,
+        content: requiredString(
+          contentBody.content,
+          input.context,
+          'content_non_empty_string_required',
+        ),
+        mimeType: detail.mimeType,
+      };
       results.push({
         externalId: fileId,
-        title:
-          typeof detailBody.name === 'string'
-            ? detailBody.name
-            : typeof contentBody.name === 'string'
-              ? contentBody.name
-              : fileId,
-        mimeType:
-          typeof detailBody.mimeType === 'string'
-            ? detailBody.mimeType
-            : 'text/plain; charset=utf-8',
-        bytes: Buffer.from(contentBody.content, 'utf8'),
+        title: detail.name,
+        mimeType: contentDto.mimeType,
+        bytes: Buffer.from(contentDto.content, 'utf8'),
+      });
+    }
+    return results;
+  }
+
+  async preview(input: {
+    config: Record<string, unknown>;
+    credentials: Record<string, unknown>;
+    fileIds: readonly string[];
+    context: TenantContext;
+  }): Promise<CustomApiFilePreview[]> {
+    const validated = validateCustomApiConfiguration(
+      input.config,
+      input.credentials,
+      input.context,
+    );
+    const results: CustomApiFilePreview[] = [];
+    for (const fileId of input.fileIds) {
+      const response = await this.requester(
+        baseUrlOf(validated.config, '/v1/file/read', { fileId }),
+        {
+          method: 'GET',
+          headers: authHeaders(validated.credentials),
+          timeoutMs: 30_000,
+          context: input.context,
+        },
+      );
+      const body = checkResponse(response, input.context);
+      results.push({
+        fileId,
+        mimeType: requiredString(body.mimeType, input.context, 'preview_mime_type_required'),
+        previewText: requiredString(body.previewText, input.context, 'preview_text_required'),
       });
     }
     return results;

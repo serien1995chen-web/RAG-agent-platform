@@ -54,6 +54,16 @@ export function splitIds(value: string): string[] {
     .filter(Boolean);
 }
 
+export function toggleIdSelection(value: string, id: string, selected: boolean): string {
+  const current = splitIds(value);
+  const next = selected
+    ? current.includes(id)
+      ? current
+      : [...current, id]
+    : current.filter((entry) => entry !== id);
+  return next.join(', ');
+}
+
 export function connectorProviderForKind(
   kind: ImportSourceKind,
 ): 'feishu' | 'yuque' | 'dingtalk' | null {
@@ -104,7 +114,6 @@ export function ImportWorkbench(props: ImportWorkbenchProps) {
     contentPath: '/v1/file/content',
     previewPath: '/v1/file/read',
     pageMode: 'cursor',
-    ...(apiParentId ? { basePath: apiParentId } : {}),
   };
   const apiCredentials = {
     provider: 'custom_api',
@@ -185,7 +194,7 @@ export function ImportWorkbench(props: ImportWorkbenchProps) {
     });
   };
 
-  const browseApi = async () => {
+  const browseApi = async (parentId = apiParentId) => {
     setBusy(true);
     setError(null);
     try {
@@ -196,11 +205,12 @@ export function ImportWorkbench(props: ImportWorkbenchProps) {
           body: {
             config: apiConfig,
             credentials: apiCredentials,
-            parentId: apiParentId,
+            parentId,
           },
         },
       );
       setApiCatalog(catalog.items);
+      setApiParentId(parentId);
     } catch (caught) {
       setError(caught);
     } finally {
@@ -235,6 +245,9 @@ export function ImportWorkbench(props: ImportWorkbenchProps) {
             value={kind}
             onChange={(event) => {
               setKind(event.target.value as ImportSourceKind);
+              setApiFileIds('');
+              setApiCatalog([]);
+              setApiParentId('');
               setConnectorItems('');
               setConnectorCatalog([]);
               setConnectorRoot('');
@@ -395,11 +408,30 @@ export function ImportWorkbench(props: ImportWorkbenchProps) {
               {t('import.apiBrowse')}
             </Button>
           </Flex>
-          {apiCatalog.map((item) => (
-            <Text key={String(item.id)} fontSize="sm">
-              {String(item.name)} · {String(item.type)}
-            </Text>
-          ))}
+          {apiCatalog.map((item) => {
+            const itemId = String(item.id);
+            if (item.type === 'directory') {
+              return (
+                <Flex key={itemId} align="center" gap={2} wrap="wrap">
+                  <Text fontSize="sm">{String(item.name)} · directory</Text>
+                  <Button size="sm" onClick={() => void browseApi(itemId)}>
+                    {t('import.apiBrowse')}
+                  </Button>
+                </Flex>
+              );
+            }
+            return (
+              <Checkbox
+                key={itemId}
+                isChecked={splitIds(apiFileIds).includes(itemId)}
+                onChange={(event) =>
+                  setApiFileIds(toggleIdSelection(apiFileIds, itemId, event.target.checked))
+                }
+              >
+                {String(item.name)} · document
+              </Checkbox>
+            );
+          })}
         </Flex>
       ) : null}
 
@@ -433,11 +465,27 @@ export function ImportWorkbench(props: ImportWorkbenchProps) {
               onChange={(event) => setConnectorItems(event.target.value)}
             />
           </Field>
-          {connectorCatalog.map((item) => (
-            <Text key={String(item.externalId ?? item.id)} fontSize="sm">
-              {String(item.title ?? item.name)} · {String(item.type)}
-            </Text>
-          ))}
+          {connectorCatalog.map((item) => {
+            const itemId = String(item.externalId ?? item.id);
+            if (item.type === 'directory') {
+              return (
+                <Text key={itemId} fontSize="sm">
+                  {String(item.title ?? item.name)} · directory
+                </Text>
+              );
+            }
+            return (
+              <Checkbox
+                key={itemId}
+                isChecked={splitIds(connectorItems).includes(itemId)}
+                onChange={(event) =>
+                  setConnectorItems(toggleIdSelection(connectorItems, itemId, event.target.checked))
+                }
+              >
+                {String(item.title ?? item.name)} · document
+              </Checkbox>
+            );
+          })}
         </Flex>
       ) : null}
 
