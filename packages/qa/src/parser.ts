@@ -72,13 +72,29 @@ function toItem(q: string, a: string, sourceChunkHash: string): QaResultItem | n
 }
 
 export function parseQaPairs(content: string): Array<{ q: string; a: string }> {
+  return parseQaText(content).pairs;
+}
+
+export interface QaTextParse {
+  pairs: Array<{ q: string; a: string }>;
+  unparsed: string[];
+}
+
+export function parseQaText(content: string): QaTextParse {
   const pairs: Array<{ q: string; a: string }> = [];
+  const unparsed: string[] = [];
   QA_PAIR_RE.lastIndex = 0;
   let match: RegExpExecArray | null;
+  let cursor = 0;
   while ((match = QA_PAIR_RE.exec(content)) !== null) {
+    const gap = content.slice(cursor, match.index).trim();
+    if (gap.length > 0) unparsed.push(gap);
     pairs.push({ q: match[2] ?? '', a: match[3] ?? '' });
+    cursor = match.index + match[0].length;
   }
-  return pairs;
+  const tail = content.slice(cursor).trim();
+  if (tail.length > 0) unparsed.push(tail);
+  return { pairs, unparsed };
 }
 
 /** 解析 Q/A 文本结构；保序，重复由 dedup 处理。 */

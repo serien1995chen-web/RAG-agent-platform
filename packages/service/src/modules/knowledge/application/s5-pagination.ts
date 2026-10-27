@@ -101,6 +101,19 @@ export function parsePageCursor(
   };
 }
 
+export function assertPageCursorExists<T extends KeyedModel>(
+  cursor: Pick<KeyedModel, 'modelType' | 'modelId'> | null,
+  items: readonly T[],
+  context: TenantContext,
+): void {
+  if (
+    cursor &&
+    !items.some((item) => item.modelType === cursor.modelType && item.modelId === cursor.modelId)
+  ) {
+    invalid(context, 'cursor', 'key_not_found');
+  }
+}
+
 function compareText(left: string, right: string): number {
   if (left === right) return 0;
   return left < right ? -1 : 1;

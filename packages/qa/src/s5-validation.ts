@@ -1,5 +1,5 @@
 import { jsonrepair } from 'jsonrepair';
-import { parseQaPairs } from './parser';
+import { parseQaText } from './parser';
 import type { QaResultItem } from './parser';
 
 export type QaValidationResult =
@@ -70,13 +70,20 @@ export function parseQaOutputValidated(
       ? { items: validated.items, problems: [], repairCount }
       : { items: [], problems: validated.problems, repairCount };
   }
-  const pairs = parseQaPairs(content);
-  const validated = validateQaItems(pairs, sourceChunkHash);
-  return validated.valid && validated.items.length > 0
+  const parsedText = parseQaText(content);
+  const validated = validateQaItems(parsedText.pairs, sourceChunkHash);
+  const problems =
+    parsedText.pairs.length === 0
+      ? ['items_empty']
+      : [
+          ...(validated.valid ? [] : validated.problems),
+          ...(parsedText.unparsed.length > 0 ? ['text_unparsed'] : []),
+        ];
+  return validated.valid && validated.items.length > 0 && problems.length === 0
     ? { items: validated.items, problems: [], repairCount: 1 }
     : {
         items: [],
-        problems: validated.valid ? ['items_empty'] : validated.problems,
+        problems: problems.length > 0 ? problems : ['items_empty'],
         repairCount: 1,
       };
 }

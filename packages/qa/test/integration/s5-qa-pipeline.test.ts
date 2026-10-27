@@ -47,6 +47,16 @@ describe('TEST-PARSE-004-BLOCK QA validation, one repair and dedup', () => {
     });
   });
 
+  it('rejects a truncated trailing Q/A block instead of silently keeping earlier pairs', () => {
+    expect(
+      parseQaOutputValidated('Q1: complete\nA1: answer\nQ2: missing answer', 'sha256:chunk'),
+    ).toMatchObject({
+      items: [],
+      problems: ['text_unparsed'],
+      repairCount: 1,
+    });
+  });
+
   it('uses the frozen dedup key and keeps the first duplicate globally', () => {
     const key = buildQaDedupKey('  问题 ', ' 答案 ');
     expect(key).toMatch(/^qa:[0-9a-f]{64}$/);

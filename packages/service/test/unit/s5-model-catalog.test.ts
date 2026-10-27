@@ -230,6 +230,22 @@ describe('TEST-MODEL-001-BLOCK AIProxy catalog and model operations', () => {
         problem: { error: { code: 'KNOWLEDGE_VALIDATION_FAILED' } },
       });
     }
+    await expect(
+      application.dispatch(
+        input(
+          'API-MODEL-LIST',
+          {},
+          {
+            cursor: encodeCursor({
+              ...valid,
+              lastModelId: 'model-that-does-not-exist',
+            }),
+          },
+        ),
+      ),
+    ).rejects.toMatchObject({
+      problem: { error: { code: 'KNOWLEDGE_VALIDATION_FAILED' } },
+    });
   });
 
   it('supports only the four model key sorts and ignores an unregistered type filter', async () => {
@@ -262,6 +278,39 @@ describe('TEST-MODEL-001-BLOCK AIProxy catalog and model operations', () => {
       ).rejects.toMatchObject({
         problem: { error: { code: 'KNOWLEDGE_VALIDATION_FAILED' } },
       });
+    }
+  });
+
+  it('paginates every supported key sort without duplicates or omissions', async () => {
+    const models: ModelCatalogItem[] = [
+      { ...model(1), modelId: 'llm-b', type: 'llm' },
+      { ...model(2), modelId: 'embedding-a', type: 'embedding' },
+      { ...model(3), modelId: 'llm-a', type: 'llm' },
+      { ...model(4), modelId: 'tts-a', type: 'tts' },
+      { ...model(5), modelId: 'embedding-b', type: 'embedding' },
+    ];
+    const application = new S5ModelApplication(catalogOf(models));
+    const ids = async (query: Record<string, string>) =>
+      (await application.dispatch(input('API-MODEL-LIST', {}, query))).data as {
+        items: Array<{ modelId: string }>;
+        pageInfo: { hasMore: boolean; nextCursor: string | null };
+      };
+
+    for (const sort of ['modelType', '-modelType', 'modelId', '-modelId']) {
+      const expected = (await ids({ sort, limit: '200' })).items.map((item) => item.modelId);
+      const traversed: string[] = [];
+      let cursor: string | null = null;
+      do {
+        const page = await ids({
+          sort,
+          limit: '2',
+          ...(cursor ? { cursor } : {}),
+        });
+        traversed.push(...page.items.map((item) => item.modelId));
+        cursor = page.pageInfo.nextCursor;
+      } while (cursor);
+      expect(traversed).toEqual(expected);
+      expect(new Set(traversed).size).toBe(models.length);
     }
   });
 
@@ -383,6 +432,20 @@ describe('TEST-MODEL-001-BLOCK AIProxy catalog and model operations', () => {
         problem: { error: { code: 'KNOWLEDGE_VALIDATION_FAILED' } },
       });
     }
+    await expect(
+      application.dispatch(
+        bindingInput({
+          cursor: encodeCursor({
+            v: 1,
+            sort: 'modelType',
+            lastModelType: 'llm',
+            lastModelId: 'missing-binding',
+          }),
+        }),
+      ),
+    ).rejects.toMatchObject({
+      problem: { error: { code: 'KNOWLEDGE_VALIDATION_FAILED' } },
+    });
   });
 
   it('paginates all six model bindings with the shared PageInfo contract', async () => {

@@ -9,7 +9,13 @@ import {
   type S5ModelType,
   S5_MODEL_TYPES,
 } from './s5-model-ports';
-import { paginateByKey, parseModelSort, parsePageCursor, parsePageLimit } from './s5-pagination';
+import {
+  assertPageCursorExists,
+  paginateByKey,
+  parseModelSort,
+  parsePageCursor,
+  parsePageLimit,
+} from './s5-pagination';
 
 function operationError(
   code: 'KNOWLEDGE_VALIDATION_FAILED' | 'KNOWLEDGE_MODEL_FAILED',
@@ -119,17 +125,14 @@ export class S5ModelApplication {
     const limit = parsePageLimit(input.query, input.context);
     const sort = parseModelSort(input.query, input.context);
     const cursor = parsePageCursor(input.query, sort, input.context);
-    const page = paginateByKey(
-      models
-        .filter((item) => item.authorized)
-        .map((item) => ({
-          ...item,
-          modelType: item.type,
-        })),
-      sort,
-      cursor,
-      limit,
-    );
+    const authorizedModels = models
+      .filter((item) => item.authorized)
+      .map((item) => ({
+        ...item,
+        modelType: item.type,
+      }));
+    assertPageCursorExists(cursor, authorizedModels, input.context);
+    const page = paginateByKey(authorizedModels, sort, cursor, limit);
     return {
       status: 200,
       data: {

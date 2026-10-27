@@ -10,7 +10,13 @@ import type {
   S5ModelType,
 } from './s5-model-ports';
 import { S5_MODEL_TYPES } from './s5-model-ports';
-import { paginateByKey, parseModelSort, parsePageCursor, parsePageLimit } from './s5-pagination';
+import {
+  assertPageCursorExists,
+  paginateByKey,
+  parseModelSort,
+  parsePageCursor,
+  parsePageLimit,
+} from './s5-pagination';
 
 function objectBody(value: unknown, context: TenantContext): Record<string, unknown> {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
@@ -112,6 +118,7 @@ export class S5ModelBindingApplication {
     const cursor = parsePageCursor(input.query, sort, input.context);
     await this.access.assertPermission('space', spaceId, 'read', input.context);
     const items = await this.repository.list(spaceId, input.context);
+    assertPageCursorExists(cursor, items, input.context);
     const page = paginateByKey(items, sort, cursor, limit);
     return {
       status: 200,
