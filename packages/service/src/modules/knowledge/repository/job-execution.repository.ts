@@ -587,6 +587,16 @@ export class KnowledgeJobExecutionRepository {
       }
       return descendants;
     };
+    const finalStatuses = new Map<string, JobState>();
+    const errorCodeOf = (jobId: string, fallback: string): string => {
+      const subtree = [byId.get(jobId)!, ...descendantsOf(jobId)].filter(Boolean);
+      const failed = subtree.find(
+        (candidate) =>
+          (candidate.status === 'failed' || candidate.status === 'dead_letter') &&
+          typeof candidate.error?.code === 'string',
+      );
+      return (failed?.error?.code as string | undefined) ?? fallback;
+    };
     const finalize = async (
       node: Plain<KnowledgeJobDoc>,
       visiting: ReadonlySet<string> = new Set(),
@@ -604,13 +614,23 @@ export class KnowledgeJobExecutionRepository {
         childStatuses.push(status);
       }
       if (childStatuses.some((status) => !TERMINAL_STATES.includes(status))) return null;
-      if (TERMINAL_STATES.includes(node.status)) return node.status;
+      if (TERMINAL_STATES.includes(node.status)) {
+        const childStatus: JobState | undefined = childStatuses.includes('dead_letter')
+          ? 'dead_letter'
+          : childStatuses.includes('cancelled')
+            ? 'cancelled'
+            : childStatuses.includes('failed')
+              ? 'failed'
+              : undefined;
+        const effectiveStatus = childStatus ?? node.status;
+        finalStatuses.set(jobId, effectiveStatus);
+        return effectiveStatus;
+      }
       if (node.progress?.stage !== 'waiting_children') return null;
 
       const failed = childStatuses.filter((status) => status === 'failed').length;
       const dead = childStatuses.filter((status) => status === 'dead_letter').length;
       const cancelled = childStatuses.filter((status) => status === 'cancelled').length;
-      const succeeded = childStatuses.filter((status) => status === 'succeeded').length;
       const nextStatus: JobState = dead
         ? 'dead_letter'
         : cancelled
@@ -629,23 +649,35 @@ export class KnowledgeJobExecutionRepository {
       const subtree = [node, ...descendantsOf(jobId)];
       const sources = subtree
         .filter((candidate) => candidate.kind === 'parse')
-        .map((candidate) => ({
-          sourceId: candidate.resourceId,
-          sourceVersion: Number(candidate.inputSnapshot.sourceVersion ?? 1),
-          status: candidate.status,
-          childJobIds: (childrenByParent.get(String(candidate._id)) ?? []).map((child) =>
-            String(child._id),
-          ),
-          errorCode: (candidate.error?.code as string | undefined) ?? null,
-        }));
+        .map((candidate) => {
+          const candidateId = String(candidate._id);
+          const status = finalStatuses.get(candidateId) ?? candidate.status;
+          return {
+            sourceId: candidate.resourceId,
+            sourceVersion: Number(candidate.inputSnapshot.sourceVersion ?? 1),
+            status,
+            childJobIds: (childrenByParent.get(candidateId) ?? []).map((child) =>
+              String(child._id),
+            ),
+            errorCode:
+              (candidate.error?.code as string | undefined) ??
+              (status === 'failed' || status === 'dead_letter'
+                ? errorCodeOf(candidateId, 'KNOWLEDGE_JOB_FAILED')
+                : null),
+          };
+        });
       const priorResult = (node.result ?? {}) as Record<string, unknown>;
+      const aggregateErrorCode =
+        nextStatus === 'failed' || nextStatus === 'dead_letter'
+          ? errorCodeOf(jobId, 'KNOWLEDGE_JOB_FAILED')
+          : null;
       const result = {
         ...priorResult,
         childJobIds: subtree
           .filter((candidate) => String(candidate._id) !== jobId)
           .map((candidate) => String(candidate._id)),
         sources,
-        partial: succeeded > 0 && (failed > 0 || dead > 0),
+        partial: failed > 0 || dead > 0,
         completedAt: new Date().toISOString(),
       };
       const updated = await this.jobs.findOneAndUpdate(
@@ -662,6 +694,10 @@ export class KnowledgeJobExecutionRepository {
               percent: 100,
             },
             result,
+            error:
+              nextStatus === 'failed' || nextStatus === 'dead_letter'
+                ? { code: aggregateErrorCode, retryable: false }
+                : null,
             updatedByMemberId: context.memberId,
           },
           $inc: { version: 1 },
@@ -701,9 +737,11 @@ export class KnowledgeJobExecutionRepository {
         );
         if (!terminal) throw conflict(context, { reason: 'root_terminal_cas', jobId });
         Object.assign(node, terminal.toObject());
+        finalStatuses.set(jobId, nextStatus);
         return nextStatus;
       }
       Object.assign(node, updated.toObject());
+      finalStatuses.set(jobId, nextStatus);
       return nextStatus;
     };
 

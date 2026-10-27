@@ -1,4 +1,6 @@
 import { randomUUID } from 'node:crypto';
+import AxeBuilder from '@axe-core/playwright';
+import { chromium } from '@playwright/test';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
   apiHeaders,
@@ -239,6 +241,98 @@ describe('S6 Jobs and Segment E2E', () => {
     });
     expect(spaceRebuild.response.status).toBe(202);
   });
+
+  it('preserves Segment Edit input and exposes conflict evidence after a real UI 409', async () => {
+    const cookie = await consoleCookie({ baseUrl: app.baseUrl, authToken, workspaceId });
+    const browser = await chromium.launch({ headless: true });
+    try {
+      const context = await browser.newContext({ viewport: { width: 1200, height: 900 } });
+      await context.addCookies([cookie]);
+      const page = await context.newPage();
+      const consoleErrors: string[] = [];
+      const failedRequests: string[] = [];
+      page.on('console', (message) => {
+        if (message.type() === 'error') consoleErrors.push(message.text());
+      });
+      page.on('requestfailed', (request) => {
+        failedRequests.push(`${request.method()} ${request.url()}`);
+      });
+      await page.goto(`${app.baseUrl}/spaces/${spaceId}/segments/${segmentId}`, {
+        waitUntil: 'networkidle',
+      });
+      const form = page.locator('form').first();
+      const fields = form.getByRole('textbox');
+      const question = fields.nth(0);
+      const answer = fields.nth(1);
+      const save = form.locator('button[type="submit"]');
+      await question.waitFor();
+      const localQuestion = `Local conflict question ${suffix}`;
+      const localAnswer = `Local conflict answer ${suffix}`;
+      await question.fill(localQuestion);
+      await answer.fill(localAnswer);
+
+      const current = await request(`/v1/knowledge/segments/${segmentId}`);
+      expect(current.response.status).toBe(200);
+      const currentVersion = (current.payload.data as { version: number }).version;
+      const advanced = await request(`/v1/knowledge/segments/${segmentId}`, {
+        method: 'PATCH',
+        idempotencyKey: `s6-ui-conflict-advance-${suffix}`,
+        body: {
+          question: `Server conflict question ${suffix}`,
+          answer: `Server conflict answer ${suffix}`,
+          searchEnabled: true,
+          version: currentVersion,
+        },
+      });
+      expect(advanced.response.status).toBe(200);
+
+      const conflictResponse = page.waitForResponse(
+        (response) =>
+          response.request().method() === 'PATCH' &&
+          response.url().includes(`/v1/knowledge/segments/${segmentId}`),
+      );
+      await save.click();
+      expect((await conflictResponse).status()).toBe(409);
+      const notice = page.locator('.problem-notice');
+      await notice.waitFor();
+      expect(await notice.textContent()).toContain('KNOWLEDGE_CONFLICT');
+      expect(await notice.textContent()).toMatch(/(追踪|trace)/i);
+      expect(await question.inputValue()).toBe(localQuestion);
+      expect(await answer.inputValue()).toBe(localAnswer);
+
+      await question.press('Escape');
+      expect(await question.inputValue()).toBe(localQuestion);
+      const keyboardConflict = page.waitForResponse(
+        (response) =>
+          response.request().method() === 'PATCH' &&
+          response.url().includes(`/v1/knowledge/segments/${segmentId}`),
+      );
+      await save.focus();
+      await page.keyboard.press('Enter');
+      expect((await keyboardConflict).status()).toBe(409);
+      expect(await question.inputValue()).toBe(localQuestion);
+
+      const accessibility = await new AxeBuilder({ page }).analyze();
+      expect(
+        accessibility.violations.filter(
+          (violation) => violation.impact === 'serious' || violation.impact === 'critical',
+        ),
+      ).toEqual([]);
+      const overflow = await page.evaluate(
+        () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      );
+      expect(overflow).toBeLessThanOrEqual(1);
+      expect(
+        consoleErrors.filter(
+          (message) => !message.includes('the server responded with a status of 409 (Conflict)'),
+        ),
+      ).toEqual([]);
+      expect(failedRequests).toEqual([]);
+      await context.close();
+    } finally {
+      await browser.close();
+    }
+  }, 60_000);
 
   it('renders Jobs, Segments and Segment Edit at 360/768/1200 with axe and no overflow', async () => {
     const cookie = await consoleCookie({ baseUrl: app.baseUrl, authToken, workspaceId });

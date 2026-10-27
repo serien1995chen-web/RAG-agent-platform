@@ -26,9 +26,10 @@ const S7_OPERATIONS = [
   'API-SEARCH-SEMANTIC',
   'API-SEARCH-FULLTEXT',
   'API-SEARCH-HYBRID',
-  'API-SEARCH-IMAGE',
   'API-SEARCH-MULTI',
+  'API-CITATION-GET',
 ] as const;
+const S8_OPERATIONS = ['API-SEARCH-IMAGE', 'API-SEARCH-DEEP'] as const;
 
 describe('S6 Job and index contract', () => {
   it('promotes exactly the 12 S6 operations and keeps S7 deferred', () => {
@@ -40,6 +41,10 @@ describe('S6 Job and index contract', () => {
       DEFERRED_OPERATION_MANIFEST.map((operation) => operation.operationId),
     );
     for (const operationId of S7_OPERATIONS) {
+      expect(runtimeIds.has(operationId), operationId).toBe(false);
+      expect(deferredIds.has(operationId), operationId).toBe(true);
+    }
+    for (const operationId of S8_OPERATIONS) {
       expect(runtimeIds.has(operationId), operationId).toBe(false);
       expect(deferredIds.has(operationId), operationId).toBe(true);
     }

@@ -263,6 +263,99 @@ describe('S6 Job execution repository', () => {
     expect((await repository.getRaw(root.jobId, context)).status).toBe('succeeded');
   });
 
+  it('propagates a failed descendant even when an intermediate parse already succeeded', async () => {
+    const models = registerKnowledgeModels(connection);
+    const rootId = new mongoose.Types.ObjectId();
+    const parseId = new mongoose.Types.ObjectId();
+    const indexId = new mongoose.Types.ObjectId();
+    const now = new Date();
+    const common = {
+      workspaceId,
+      knowledgeSpaceId: new mongoose.Types.ObjectId(),
+      version: 1,
+      deletedAt: null,
+      createdByMemberId: context.memberId,
+      updatedByMemberId: context.memberId,
+      priority: 5,
+      attempts: 1,
+      maxAttempts: 3,
+      attemptEpoch: 1,
+      fencingToken: 'fixture-token',
+      leaseOwner: null,
+      leaseExpiresAt: null,
+      heartbeatAt: now,
+      availableAt: now,
+      cancelRequestedAt: null,
+      pausedAt: null,
+      result: null,
+      expiresAt: new Date(now.getTime() + 86_400_000),
+    };
+    await models.KnowledgeJob.create([
+      {
+        ...common,
+        _id: rootId,
+        kind: 'import',
+        resourceType: 'job',
+        resourceId: String(rootId),
+        status: 'running',
+        idempotencyKey: `s6-hidden-failure-root-${suffix}`,
+        inputSnapshot: { sourceIds: [sourceId], requestHash: 'root' },
+        progress: { stage: 'waiting_children', completed: 0, total: 1, percent: 0 },
+        error: null,
+      },
+      {
+        ...common,
+        _id: parseId,
+        kind: 'parse',
+        resourceType: 'source',
+        resourceId: sourceId,
+        status: 'succeeded',
+        idempotencyKey: `s6-hidden-failure-parse-${suffix}`,
+        inputSnapshot: {
+          sourceId,
+          sourceVersion: 1,
+          rootJobId: String(rootId),
+          parentJobId: String(rootId),
+        },
+        progress: { stage: 'succeeded', completed: 1, total: 1, percent: 100 },
+        error: null,
+      },
+      {
+        ...common,
+        _id: indexId,
+        kind: 'index',
+        resourceType: 'segment',
+        resourceId: String(new mongoose.Types.ObjectId()),
+        status: 'dead_letter',
+        idempotencyKey: `s6-hidden-failure-index-${suffix}`,
+        inputSnapshot: {
+          operation: 'index',
+          sourceVersion: 1,
+          rootJobId: String(rootId),
+          parentJobId: String(parseId),
+        },
+        progress: { stage: 'dead_letter', completed: 1, total: 1, percent: 100 },
+        error: { code: 'KNOWLEDGE_MODEL_FAILED', retryable: false },
+      },
+    ]);
+
+    const aggregate = await repository.aggregateRoot(String(rootId), context);
+    expect(aggregate?.status).toBe('dead_letter');
+    expect(aggregate?.result?.partial).toBe(true);
+    expect(aggregate?.error).toMatchObject({
+      code: 'KNOWLEDGE_MODEL_FAILED',
+      retryable: false,
+    });
+    expect(aggregate?.result?.sources).toEqual([
+      expect.objectContaining({
+        sourceId,
+        status: 'dead_letter',
+        errorCode: 'KNOWLEDGE_MODEL_FAILED',
+        childJobIds: [String(indexId)],
+      }),
+    ]);
+  });
+
   it('retries a failed Job and replays a failed root with all failed descendants', async () => {
     const retryJob = await repository.create(
       {

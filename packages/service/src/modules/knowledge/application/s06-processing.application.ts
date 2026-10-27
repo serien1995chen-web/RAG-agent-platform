@@ -485,6 +485,9 @@ export class S06ProcessingApplication {
       },
       context,
     );
+    await this.input.jobs.releaseWaitingForChildren(String(job._id), indexJobIds, context, {
+      segmentIds,
+    });
     return {
       result: {
         rawTextBlobId: artifact.rawTextObjectRef.blobId,
@@ -495,6 +498,7 @@ export class S06ProcessingApplication {
         segmentIds,
       },
       value: segmentIds,
+      waitingForChildren: true,
     };
   }
 
