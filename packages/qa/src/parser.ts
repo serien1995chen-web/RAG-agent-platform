@@ -18,6 +18,7 @@ export interface QaRequest {
   qaTemplateId: string;
   qaTemplateVersion: number;
   qaPrompt?: string;
+  sourceChunkHash?: string;
   models: { llmModel: string; embeddingModel: string };
   limits: QaLimits;
 }
@@ -32,6 +33,11 @@ export interface QaResult {
   items: QaResultItem[];
   usage: { inputTokens: number; outputTokens: number };
   fallback: 'none' | 'chunk_split';
+  diagnostics: Array<{
+    code: string;
+    count?: number;
+    problems?: string[];
+  }>;
 }
 
 export interface QaModelInput {
@@ -65,16 +71,38 @@ function toItem(q: string, a: string, sourceChunkHash: string): QaResultItem | n
   return { q: question, a: answer, sourceChunkHash };
 }
 
+export function parseQaPairs(content: string): Array<{ q: string; a: string }> {
+  return parseQaText(content).pairs;
+}
+
+export interface QaTextParse {
+  pairs: Array<{ q: string; a: string }>;
+  unparsed: string[];
+}
+
+export function parseQaText(content: string): QaTextParse {
+  const pairs: Array<{ q: string; a: string }> = [];
+  const unparsed: string[] = [];
+  QA_PAIR_RE.lastIndex = 0;
+  let match: RegExpExecArray | null;
+  let cursor = 0;
+  while ((match = QA_PAIR_RE.exec(content)) !== null) {
+    const gap = content.slice(cursor, match.index).trim();
+    if (gap.length > 0) unparsed.push(gap);
+    pairs.push({ q: match[2] ?? '', a: match[3] ?? '' });
+    cursor = match.index + match[0].length;
+  }
+  const tail = content.slice(cursor).trim();
+  if (tail.length > 0) unparsed.push(tail);
+  return { pairs, unparsed };
+}
+
 /** 解析 Q/A 文本结构；保序，重复由 dedup 处理。 */
 export function parseQaOutput(content: string, sourceChunkHash: string): QaResultItem[] {
   if (!content || content.trim().length === 0) return [];
-  const items: QaResultItem[] = [];
-  QA_PAIR_RE.lastIndex = 0;
-  let match: RegExpExecArray | null;
-  while ((match = QA_PAIR_RE.exec(content)) !== null) {
-    const item = toItem(match[2] ?? '', match[3] ?? '', sourceChunkHash);
-    if (item) items.push(item);
-  }
+  const items = parseQaPairs(content)
+    .map((pair) => toItem(pair.q, pair.a, sourceChunkHash))
+    .filter((item): item is QaResultItem => item !== null);
   if (items.length > 0) return items;
   return parseJsonOutput(content, sourceChunkHash);
 }

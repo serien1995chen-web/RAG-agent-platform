@@ -69,7 +69,7 @@ describe('TEST-QA-FALLBACK-001 QA pipeline', () => {
     expect(result.fallback).toBe('chunk_split');
   });
 
-  it('classifies retryable model failures as KNOWLEDGE_MODEL_FAILED', async () => {
+  it('preserves rate limiting and timeout classifications', async () => {
     const model: QaModelPort = {
       generate: async () => {
         const error = new Error('rate limited') as Error & { status: number; retryable: string };
@@ -83,10 +83,25 @@ describe('TEST-QA-FALLBACK-001 QA pipeline', () => {
       model,
     }).catch((thrown: unknown) => thrown);
     expect((error as { problem: { error: { code: string } } }).problem.error.code).toBe(
-      'KNOWLEDGE_MODEL_FAILED',
+      'KNOWLEDGE_RATE_LIMITED',
     );
     expect((error as { problem: { error: { retryable: boolean } } }).problem.error.retryable).toBe(
       true,
+    );
+
+    const timeoutModel: QaModelPort = {
+      generate: async () => {
+        const timeout = new Error('timed out') as Error & { name: string };
+        timeout.name = 'TimeoutError';
+        throw timeout;
+      },
+    };
+    const timeout = await generateQa(request(), {
+      templateRegistry: createDefaultTemplateRegistry(),
+      model: timeoutModel,
+    }).catch((thrown: unknown) => thrown);
+    expect((timeout as { problem: { error: { code: string } } }).problem.error.code).toBe(
+      'KNOWLEDGE_DEPENDENCY_TIMEOUT',
     );
   });
 });

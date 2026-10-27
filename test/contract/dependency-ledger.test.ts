@@ -22,7 +22,8 @@ function realCatalog(): Map<string, string> {
         entry.ownerStage === 'S1' ||
         entry.ownerStage === 'S2' ||
         entry.ownerStage === 'S4' ||
-        entry.name === '@llamaindex/liteparse-wasm',
+        entry.name === '@llamaindex/liteparse-wasm' ||
+        entry.name === '@types/turndown',
     ).map((entry) => [entry.name, entry.version]),
   );
 }
@@ -52,7 +53,7 @@ describe('npm dependency ledger', () => {
     );
     expect(counts).toEqual(DEPENDENCY_OWNER_STAGE_COUNTS);
     expect(NPM_DEPENDENCY_BASELINE.find((entry) => entry.name === 'ajv')?.ownerStage).toBe('S4');
-    expect(DEPENDENCY_LEDGER_TOTALS.catalog).toBe(131);
+    expect(DEPENDENCY_LEDGER_TOTALS.catalog).toBe(132);
     expect(NPM_DEPENDENCY_BASELINE.filter((entry) => entry.ownerStage === 'S2')).toHaveLength(13);
     expect(
       NPM_DEPENDENCY_BASELINE.find((entry) => entry.name === '@llamaindex/liteparse-wasm')

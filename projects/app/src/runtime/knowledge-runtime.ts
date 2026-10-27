@@ -23,6 +23,27 @@ import {
   YuqueConnectorClient,
   DingtalkConnectorClient,
   S04IngestionApplication,
+  S5AiproxyCatalogAdapter,
+  S5AiproxyHttpAdapter,
+  S5ArtifactRepository,
+  S5KeyedSemaphore,
+  S5MockModelCatalog,
+  S5MockAiproxyTransport,
+  S5ModelApplication,
+  S5ModelBindingApplication,
+  S5ModelBindingRepository,
+  S5OcrApplication,
+  S5OcrCredentialProfileAdapter,
+  S5OcrHttpAdapter,
+  S5ProcessingApplication,
+  S5QaPipelineAdapter,
+  S5RemoteAssetAdapter,
+  S5UsageRepository,
+  AxiosS5HttpTransport,
+  AxiosS5OcrHttpTransport,
+  loadS5AiproxyConfig,
+  loadS5RuntimeEnvironment,
+  createS5ModelGateway,
   FixtureScopedAuthPort,
   FixtureQuotaGatePort,
   isS04Operation,
@@ -44,9 +65,10 @@ import {
   resolveSecretRef,
   tenantContextOf,
   type KnowledgeRuntimeConfig,
+  type S5ArtifactStorePort,
 } from '@kb/service';
 import { FileTicketService, MinioKnowledgeObjectStore } from '@kb/storage';
-import { parseImportTemplate } from '@kb/parse';
+import { parseImportTemplate, parseWithLiteParse } from '@kb/parse';
 import { Queue } from 'bullmq';
 import { ObjectStoreArchiveSafetyAdapter } from './archive-safety.adapter';
 import type {
@@ -69,6 +91,10 @@ interface RuntimeState {
   rateLimiter: RedisKnowledgeRateLimiter;
   application: KnowledgeApplication;
   ingestion: S04IngestionApplication;
+  s5Models: S5ModelApplication;
+  s5ModelBindings: S5ModelBindingApplication;
+  s5Processing: S5ProcessingApplication;
+  s5Ocr: S5OcrApplication;
   telemetry: TelemetryRuntime;
 }
 
@@ -205,6 +231,148 @@ async function bootstrapRuntime(): Promise<TelemetryKnowledgeApiRuntime> {
   const catalog = new KnowledgeCatalogRepository(mongo);
   const access = new KnowledgeAccessRepository(mongo);
   const objectRefs = new KnowledgeObjectRefRepository(mongo);
+  const s5RuntimeEnv = loadS5RuntimeEnvironment();
+  const s5AiproxyConfig = loadS5AiproxyConfig(s5RuntimeEnv);
+  const s5ArtifactStore: S5ArtifactStorePort = {
+    provider: objectStore.provider,
+    bucket: objectStore.bucket,
+    async putObject(input, context) {
+      const stored = await objectStore.putObject(
+        {
+          key: input.key,
+          body: input.body,
+          sizeBytes: input.body.byteLength,
+          contentType: input.contentType,
+          metadata: { purpose: input.purpose, sha256: input.sha256 },
+          workspaceId: input.workspaceId,
+          knowledgeSpaceId: input.knowledgeSpaceId,
+        },
+        {
+          workspaceId: context.workspaceId,
+          knowledgeSpaceId: input.knowledgeSpaceId,
+          requestId: context.requestId,
+          traceId: context.traceId,
+        },
+      );
+      return {
+        key: stored.key,
+        size: stored.size,
+        etag: stored.etag,
+        sha256: stored.sha256,
+      };
+    },
+  };
+  const s5Usage = new S5UsageRepository(mongo);
+  const s5Catalog =
+    s5AiproxyConfig.modelMode === 'mock'
+      ? new S5MockModelCatalog()
+      : new S5AiproxyCatalogAdapter({
+          config: s5AiproxyConfig,
+          transport: new AxiosS5HttpTransport(),
+          env: s5RuntimeEnv,
+        });
+  const s5ModelTransport =
+    s5AiproxyConfig.modelMode === 'mock'
+      ? new S5MockAiproxyTransport()
+      : new AxiosS5HttpTransport();
+  const s5ModelToken =
+    s5AiproxyConfig.modelMode === 'mock'
+      ? 'mock-aiproxy-token'
+      : resolveSecretRef(s5AiproxyConfig.apiTokenRef, s5RuntimeEnv);
+  const s5Gateway = createS5ModelGateway({
+    catalog: s5Catalog,
+    adapter: new S5AiproxyHttpAdapter({
+      baseUrl: s5AiproxyConfig.baseUrl,
+      token: s5ModelToken,
+      transport: s5ModelTransport,
+    }),
+    usage: s5Usage,
+    limiter: new S5KeyedSemaphore(10),
+  });
+  const s5Models = new S5ModelApplication(s5Catalog);
+  const s5BindingRepository = new S5ModelBindingRepository(mongo);
+  const s5ModelBindings = new S5ModelBindingApplication(s5BindingRepository, s5Catalog, access);
+  const s5Artifacts = new S5ArtifactRepository(mongo, s5ArtifactStore);
+  const s5Qa = new S5QaPipelineAdapter({
+    gateway: s5Gateway,
+    resolveModels: async ({ knowledgeSpaceId, context }) => {
+      const bindings = await s5BindingRepository.list(knowledgeSpaceId, context);
+      const llm = bindings.find(
+        (binding) => binding.modelType === 'llm' && binding.status === 'active',
+      );
+      const embedding = bindings.find(
+        (binding) => binding.modelType === 'embedding' && binding.status === 'active',
+      );
+      if (!llm) {
+        throw createKnowledgeError({
+          code: 'KNOWLEDGE_VALIDATION_FAILED',
+          requestId: context.requestId,
+          traceId: context.traceId,
+          details: { field: 'modelBindings.llm', reason: 'required_for_qa' },
+        });
+      }
+      return {
+        llmModelId: llm.modelId,
+        ...(embedding ? { embeddingModelId: embedding.modelId } : {}),
+      };
+    },
+  });
+  const s5Processing = new S5ProcessingApplication(s5Qa);
+  const s5Ocr = new S5OcrApplication({
+    provider: new S5OcrHttpAdapter({
+      profiles: new S5OcrCredentialProfileAdapter(s5RuntimeEnv),
+      transport: new AxiosS5OcrHttpTransport(),
+    }),
+    usage: s5Usage,
+    remoteAssets: new S5RemoteAssetAdapter(),
+    assetSink: s5Artifacts,
+    sourceGuard: {
+      async assertSource(input, context) {
+        const source = await catalog.getSource(input.sourceId, context);
+        if (String(source.knowledgeSpaceId) !== input.knowledgeSpaceId) {
+          throw createKnowledgeError({
+            code: 'KNOWLEDGE_NOT_FOUND',
+            requestId: context.requestId,
+            traceId: context.traceId,
+            details: { sourceId: input.sourceId },
+          });
+        }
+        if (Number(source.sourceVersion) !== input.sourceVersion) {
+          throw createKnowledgeError({
+            code: 'KNOWLEDGE_CONFLICT',
+            requestId: context.requestId,
+            traceId: context.traceId,
+            details: {
+              sourceId: input.sourceId,
+              expectedVersion: input.sourceVersion,
+              actualVersion: Number(source.sourceVersion),
+            },
+          });
+        }
+      },
+    },
+    fallbackPdf: async (input) => {
+      const parsed = await parseWithLiteParse({
+        request: {
+          workspaceId: input.workspaceId,
+          knowledgeSpaceId: input.knowledgeSpaceId,
+          sourceId: input.sourceId,
+          fileRef: input.fileName,
+          extension: 'pdf',
+          mimeType: input.mimeType,
+          timeoutMs: input.timeoutMs,
+        },
+        bytes: input.bytes,
+        mimeType: input.mimeType,
+      });
+      return {
+        markdown: parsed.rawText,
+        pages: parsed.pages,
+        assets: parsed.assets,
+        diagnostics: parsed.diagnostics,
+      };
+    },
+  });
   const credentialCipher = new KnowledgeCredentialCipher(
     resolveSecretRef(config.credentialEncryptionKeyRef),
   );
@@ -264,6 +432,8 @@ async function bootstrapRuntime(): Promise<TelemetryKnowledgeApiRuntime> {
     sourceFiles,
     references,
     audits,
+    s5Models,
+    s5ModelBindings,
   );
   const queueAdapter = new BullMqQueueAdapter({ connection: redis });
   const queues = new Map(
@@ -282,6 +452,10 @@ async function bootstrapRuntime(): Promise<TelemetryKnowledgeApiRuntime> {
     rateLimiter: new RedisKnowledgeRateLimiter(redis),
     application,
     ingestion,
+    s5Models,
+    s5ModelBindings,
+    s5Processing,
+    s5Ocr,
     telemetry,
   };
 

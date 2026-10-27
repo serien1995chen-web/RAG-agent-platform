@@ -96,7 +96,9 @@ describe('TEST-X-FRONTEND-IMPORT, TEST-DOWN-004-BLOCK and ACC-UI', () => {
         waitUntil: 'networkidle',
       });
       await page.locator('input').nth(1).fill('UI text');
-      await page.locator('textarea').fill('Text submitted through ACC-UI-02');
+      await page
+        .getByRole('textbox', { name: '文本正文' })
+        .fill('Text submitted through ACC-UI-02');
       const response = page.waitForResponse(
         (candidate) =>
           candidate.request().method() === 'POST' && candidate.url().endsWith('/imports/text'),
@@ -344,11 +346,11 @@ describe('TEST-X-FRONTEND-IMPORT, TEST-DOWN-004-BLOCK and ACC-UI', () => {
         waitUntil: 'networkidle',
       });
       await page.locator('input').nth(1).fill('Keep this name');
-      await page.locator('textarea').fill('Keep this body');
+      await page.getByRole('textbox', { name: '文本正文' }).fill('Keep this body');
       await page.getByRole('button', { name: /提交导入|Submit import/ }).click();
       await expectUi(page.locator('.problem-notice')).toContainText('KNOWLEDGE_CONFLICT');
       await expectUi(page.locator('input').nth(1)).toHaveValue('Keep this name');
-      await expectUi(page.locator('textarea')).toHaveValue('Keep this body');
+      await expectUi(page.getByRole('textbox', { name: '文本正文' })).toHaveValue('Keep this body');
       await expectUi(page.getByRole('button', { name: /重试|Retry/ })).toBeVisible();
     } finally {
       await browser.close();

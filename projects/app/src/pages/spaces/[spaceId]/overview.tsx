@@ -4,6 +4,7 @@ import {
   LoadingState,
   PageHeader,
   ProblemNotice,
+  S5ModelBindingPanel,
   Section,
   SpaceExportAction,
   SpaceReferencesPanel,
@@ -19,8 +20,11 @@ import {
   useKnowledgeForm,
   useKnowledgeI18n,
   useKnowledgeMutation,
+  useKnowledgeModelCatalog,
   useKnowledgeQuery,
   type UpdateSpaceFormValues,
+  type S5ModelBindingView,
+  type S5ModelValidationView,
 } from '@kb/web';
 import Head from 'next/head';
 import { useRouter } from 'next/router';
@@ -45,6 +49,11 @@ export default function SpaceOverviewPage() {
   const sourcesRequest = useKnowledgeQuery<{ items: SourceRecord[] }>(
     knowledgeQueryKeys.sources.list(spaceId),
     spaceId ? listPath(spaceId, 'sources') : null,
+  );
+  const modelsRequest = useKnowledgeModelCatalog();
+  const bindingsRequest = useKnowledgeQuery<{ items: S5ModelBindingView[] }>(
+    knowledgeQueryKeys.modelBindings.detail(spaceId),
+    spaceId ? `/v1/knowledge/spaces/${spaceId}/model-bindings` : null,
   );
   const form = useKnowledgeForm(updateSpaceFormSchema, {
     defaultValues: { name: '', description: '' },
@@ -87,6 +96,20 @@ export default function SpaceOverviewPage() {
       await router.push('/spaces');
     },
   });
+  const updateBindings = useKnowledgeMutation<
+    { items: S5ModelBindingView[]; version?: number },
+    { bindings: S5ModelBindingView[]; version: number }
+  >({
+    mutationFn: (input) =>
+      knowledgeRequest(`/v1/knowledge/spaces/${spaceId}/model-bindings`, {
+        method: 'PUT',
+        body: input,
+      }),
+    invalidateKeys: [
+      knowledgeQueryKeys.modelBindings.detail(spaceId),
+      knowledgeQueryKeys.spaces.detail(spaceId),
+    ],
+  });
 
   const submitUpdate = form.handleSubmit(async (values) => {
     await submitWithProblem(
@@ -105,6 +128,16 @@ export default function SpaceOverviewPage() {
       await deleteSpace.mutateAsync();
     }, setProblem);
   }
+
+  const validateBinding = (binding: S5ModelBindingView) =>
+    knowledgeRequest<S5ModelValidationView>('/v1/knowledge/model-bindings/validate', {
+      method: 'POST',
+      body: {
+        modelId: binding.modelId,
+        modelType: binding.modelType,
+        requiredCapabilities: binding.requiredCapabilities,
+      },
+    });
 
   return (
     <>
@@ -133,6 +166,8 @@ export default function SpaceOverviewPage() {
           spaceRequest.error ??
           directoriesRequest.error ??
           sourcesRequest.error ??
+          modelsRequest.error ??
+          bindingsRequest.error ??
           problem ??
           updateSpace.error ??
           deleteSpace.error
@@ -191,6 +226,29 @@ export default function SpaceOverviewPage() {
                 <strong>{formatDate(space.updatedAt, locale)}</strong>
               </div>
             </div>
+          </Section>
+
+          <Section title={t('models.title')}>
+            {modelsRequest.isLoading || bindingsRequest.isLoading ? (
+              <LoadingState label={t('models.loading')} />
+            ) : (
+              <S5ModelBindingPanel
+                models={modelsRequest.data?.items ?? []}
+                bindings={bindingsRequest.data?.items ?? []}
+                spaceVersion={space.version}
+                onValidate={validateBinding}
+                onSave={(input) => updateBindings.mutateAsync(input).then(() => undefined)}
+                labels={{
+                  title: t('models.title'),
+                  validate: t('models.validate'),
+                  save: t('models.save'),
+                  noModels: t('models.noModels'),
+                  capabilities: t('models.capabilities'),
+                  disabled: t('models.disabled'),
+                }}
+                messageFor={(entry) => t(entry.messageKey, entry.params)}
+              />
+            )}
           </Section>
 
           <Section title={t('overview.updateTitle')} meta={t('overview.updateMeta')}>

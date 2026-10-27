@@ -120,7 +120,8 @@ const EXPECTED_STAGE_COUNTS = new Map([
   ['S10', 6],
   ['S11', 0],
 ]);
-const CATALOG_ONLY_LATER_STAGE = new Set(['ajv', '@llamaindex/liteparse-wasm']);
+const CATALOG_ONLY_LATER_STAGE = new Set(['ajv', '@llamaindex/liteparse-wasm', '@types/turndown']);
+const APPROVED_S5_DIRECT_DEPENDENCIES = new Set(['@llamaindex/liteparse-wasm', '@types/turndown']);
 const DEPENDENCY_STAGES = new Set([
   'S1',
   'S2',
@@ -397,10 +398,10 @@ function checkDependencyBaseline(repoRoot, catalog, manifests, options = {}) {
       )
       .map((entry) => [entry.name, entry.version]),
   );
-  if (expectedCatalog.size !== 131) {
-    errors.push(`catalog 期望项应为 131，账本计算为 ${expectedCatalog.size}`);
+  if (expectedCatalog.size !== 132) {
+    errors.push(`catalog 期望项应为 132，账本计算为 ${expectedCatalog.size}`);
   }
-  if (catalog.size !== 131) errors.push(`catalog 应为 131 项，实际 ${catalog.size}`);
+  if (catalog.size !== 132) errors.push(`catalog 应为 132 项，实际 ${catalog.size}`);
   for (const [name, version] of expectedCatalog) {
     const actual = catalog.get(name);
     if (actual === undefined) errors.push(`catalog 缺少 ${name}@${version}`);
@@ -449,7 +450,9 @@ function checkDependencyBaseline(repoRoot, catalog, manifests, options = {}) {
           errors.push(`${rel}: 直接依赖 ${name} 未登记在 dependency ledger`);
           continue;
         }
-        if (workspace && !DECLARED_DEPENDENCY_STAGES.has(entry.ownerStage)) {
+        const approvedS5Direct =
+          entry.ownerStage === 'S5' && APPROVED_S5_DIRECT_DEPENDENCIES.has(name);
+        if (workspace && !DECLARED_DEPENDENCY_STAGES.has(entry.ownerStage) && !approvedS5Direct) {
           errors.push(`${rel}: 后续阶段依赖 ${name} 不得提前直接声明`);
         }
         if (!skipInstallationChecks) {
@@ -780,7 +783,7 @@ export async function main(argv = process.argv.slice(2)) {
       process.exit(1);
     }
     console.log(
-      `dependency gate 通过：166 项 ledger、166 项 audit、131 项 catalog、` +
+      `dependency gate 通过：166 项 ledger、166 项 audit、132 项 catalog、` +
         `${workspaceCount} 个 workspace 包。`,
     );
     return;

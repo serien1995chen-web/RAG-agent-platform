@@ -7,7 +7,7 @@ NOTICE
 生成脚本: scripts/generate-sbom.mjs（禁止手工维护本文件）
 SBOM 产物: artifacts/sbom.json
 
-一、直接依赖（130）
+一、直接依赖（132）
 名称@版本 | 许可证 | scope | 来源 workspace
 @apidevtools/json-schema-ref-parser@11.7.2 | MIT | production | packages/service
 @apidevtools/swagger-parser@10.1.1 | MIT | production | packages/contracts
@@ -25,6 +25,7 @@ SBOM 产物: artifacts/sbom.json
 @emotion/react@11.11.1 | MIT | production | packages/web
 @emotion/styled@11.11.0 | MIT | production | packages/web
 @eslint/js@9.39.5 | MIT | development | .
+@llamaindex/liteparse-wasm@2.0.8 | Apache-2.0 | production | packages/parse
 @logtape/logtape@2.0.2 | MIT | production | sdk/otel
 @logtape/pretty@2.0.2 | MIT | production | sdk/otel
 @node-rs/jieba@2.0.1 | MIT | production | packages/service
@@ -57,6 +58,7 @@ SBOM 产物: artifacts/sbom.json
 @types/react-dom@18.3.7 | MIT | development | packages/web,projects/app
 @types/react@18.3.31 | MIT | development | packages/web,projects/app
 @types/tunnel@0.0.4 | MIT | development | packages/service
+@types/turndown@5.0.5 | MIT | development | packages/parse
 @types/yauzl@2.10.3 | MIT | development | packages/parse
 @vitest/coverage-v8@4.1.11 | MIT | development | .
 @xmldom/xmldom@0.8.15 | MIT | production | packages/parse

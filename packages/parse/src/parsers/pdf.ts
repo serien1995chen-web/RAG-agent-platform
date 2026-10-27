@@ -20,7 +20,7 @@ interface PdfTextItem {
   hasEOL?: boolean;
 }
 
-export const parsePdf: ParseHandler = async (context) => {
+export const parsePdfWithPdfJs: ParseHandler = async (context) => {
   const requestId = context.request.fileRef;
   try {
     const task = pdfjs.getDocument({
@@ -60,3 +60,6 @@ export const parsePdf: ParseHandler = async (context) => {
     throw parseFailedError('pdf', 'pdf_text_layer_failed', requestId);
   }
 };
+
+/** Backward-compatible PDF.js entry point; the default registry uses LiteParse. */
+export const parsePdf = parsePdfWithPdfJs;

@@ -54,6 +54,9 @@ catalogs:
     '@eslint/js':
       specifier: 9.39.5
       version: 9.39.5
+    '@llamaindex/liteparse-wasm':
+      specifier: 2.0.8
+      version: 2.0.8
     '@logtape/logtape':
       specifier: 2.0.2
       version: 2.0.2
@@ -150,6 +153,9 @@ catalogs:
     '@types/tunnel':
       specifier: 0.0.4
       version: 0.0.4
+    '@types/turndown':
+      specifier: 5.0.5
+      version: 5.0.5
     '@types/yauzl':
       specifier: 2.10.3
       version: 2.10.3
@@ -567,6 +573,9 @@ importers:
       '@kb/contracts':
         specifier: workspace:*
         version: link:../contracts
+      '@llamaindex/liteparse-wasm':
+        specifier: 'catalog:'
+        version: 2.0.8
       '@xmldom/xmldom':
         specifier: 'catalog:'
         version: 0.8.15
@@ -622,6 +631,9 @@ importers:
       '@types/papaparse':
         specifier: 'catalog:'
         version: 5.3.7
+      '@types/turndown':
+        specifier: 'catalog:'
+        version: 5.0.5
       '@types/yauzl':
         specifier: 'catalog:'
         version: 2.10.3
@@ -687,6 +699,9 @@ importers:
       '@kb/dal':
         specifier: workspace:*
         version: link:../dal
+      '@kb/qa':
+        specifier: workspace:*
+        version: link:../qa
       '@node-rs/jieba':
         specifier: 'catalog:'
         version: 2.0.1
@@ -2787,6 +2802,10 @@ packages:
     peerDependencies:
       jsep: ^0.4.0||^1.0.0
 
+  '@llamaindex/liteparse-wasm@2.0.8':
+    resolution: {integrity: sha512-wz5Cw0JISgzv0VNUjw913bopXDI7gdB24rIeTt+IwPR4if18MtjI9Sb/EbgZu6TS5V5v3pZ4U5lBg6T/aO8nvw==}
+    engines: {node: '>=18.0.0'}
+
   '@logtape/logtape@2.0.2':
     resolution: {integrity: sha512-cveUBLbCMFkvkLycP/2vNWvywl47JcJbazHIju94/QNGboZ/jyYAgZIm0ZXezAOx3eIz8OG1EOZ5CuQP3+2FQg==}
 
@@ -4066,6 +4085,9 @@ packages:
 
   '@types/tunnel@0.0.4':
     resolution: {integrity: sha512-bQgDBL5XiqrrPUaZd9bZ2esOXcU4GTmgg0n6LHDqoMJezO3VFRZsW8qN6Gp64/LAmjtzNU3iAHBfV3Z2ht5DSg==}
+
+  '@types/turndown@5.0.5':
+    resolution: {integrity: sha512-TL2IgGgc7B5j78rIccBtlYAnkuv8nUQqhQc+DSYV5j9Be9XOcm/SKOVRuA47xAVI3680Tk9B1d8flK2GWT2+4w==}
 
   '@types/webidl-conversions@7.0.3':
     resolution: {integrity: sha512-CiJJvcRtIgzadHCYXw7dqEnMNRjhGZlYK05Mj9OyktqV8uVT8fD2BFOB7S1uwBE3Kj2Z+4UyPmFw/Ixgw/LAlA==}
@@ -11187,6 +11209,8 @@ snapshots:
     dependencies:
       jsep: 1.6.0
 
+  '@llamaindex/liteparse-wasm@2.0.8': {}
+
   '@logtape/logtape@2.0.2': {}
 
   '@logtape/pretty@2.0.2(@logtape/logtape@2.0.2)':
@@ -12254,6 +12278,8 @@ snapshots:
   '@types/tunnel@0.0.4':
     dependencies:
       '@types/node': 24.19.1
+
+  '@types/turndown@5.0.5': {}
 
   '@types/webidl-conversions@7.0.3': {}
 

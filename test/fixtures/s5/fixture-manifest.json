@@ -1,0 +1,61 @@
+{
+  "schemaVersion": 1,
+  "source": "test/fixtures/s5/generate-fixtures.ts",
+  "fixtures": {
+    "text": {
+      "sha256": "920bbecf3e7fc78fcb184474fdb8f804be31ae486a5bef1b4c24f6f3185e92c3",
+      "parserVersion": "native-text@1",
+      "configHash": "sha256:eb713f1cc4805b676c00d5e728e0d5440805f0e1f4aaac75147c73537c35372d"
+    },
+    "markdown": {
+      "sha256": "1fec9af5e1ebd618532954bef59a205f9c18952cac403098915341027b7a22f7",
+      "parserVersion": "native-markdown@1",
+      "configHash": "sha256:5d424a91381fb35afd61441b168b83971361bcbf6543bc47f3a93a2a674bd696"
+    },
+    "html": {
+      "sha256": "fc64f014cf757d9bea724ffa24a6427169956f8541e2b72a88873066c5989f45",
+      "parserVersion": "native-html@1",
+      "configHash": "sha256:1df68a7147af071fe897ba4f7c1a1791e63d91f99ed2ca88c7830e048309917a"
+    },
+    "csv": {
+      "sha256": "77d064f2fb34c79b756b6f7f419fc4052fa074b63394fdd4c20bbd134145b798",
+      "parserVersion": "native-csv@1",
+      "configHash": "sha256:bd7c1c7002cefa04df5b89eeccb577f4e03ed333ae3f3721e75366d17a03385e"
+    },
+    "pdf": {
+      "sha256": "b58e1ccc1778d496eb94a6f59c021a17b537966329c074197fe48c7f998766ca",
+      "parserVersion": "liteparse@2.0.8",
+      "configHash": "sha256:3042a9ca8d75a3951d19ef7340563d57696b5334e693fdf0a1e1791e0e892af9"
+    },
+    "docx": {
+      "sha256": "08b0d1e14e2ac6124f78570158a8e6581c39aefb05f97249492b52f748a6d97e",
+      "parserVersion": "native-docx@1",
+      "configHash": "sha256:68b5b7896c3d48c0f23ed7120ba356c444c880439cd276bf981f2cf43e8451bd"
+    },
+    "pptx": {
+      "sha256": "20a23e11d3ac9769673e10a9a840878fcef22175872a1007d655bf53ad76384a",
+      "parserVersion": "native-pptx@1",
+      "configHash": "sha256:6c2f140a3e33e0e6b2b4d2ad6668ec25052ed784c032630b273ddbe09d51f705"
+    },
+    "xlsx": {
+      "sha256": "5925605d8eaff1be27605ad95f8f3a4c5624fcb879acb603717ffdc2c15d68d6",
+      "parserVersion": "native-xlsx@1",
+      "configHash": "sha256:a7c9c84779536233a4b8fb716df56a93c86ca12ef7bd77ac868a5a59969cb085"
+    },
+    "epub": {
+      "sha256": "b633128e14abc7059064790490c19ff5f5456c32e24fcb47eb0a7d273e15b699",
+      "parserVersion": "native-ebook@1",
+      "configHash": "sha256:53922f52a1afb3739f541681052baf8f162d68b625519d79bb11478868cc7c27"
+    },
+    "ofd": {
+      "sha256": "025bcbbb2de721493ff00d126eb7878a9cff4b513aa784a6a1aff6b3eca6f8e0",
+      "parserVersion": "ofd-clean-room@1",
+      "configHash": "sha256:2659ded2bf0b32996724f83afe8beaec9656f5a8b0f5414513cbbe901d5385f4"
+    },
+    "hostileZip": {
+      "sha256": "8d73d7dd85523a0d69f705fd85aae69ce70d36f9940f3e507864d6b3183dcf82",
+      "parserVersion": "rejected",
+      "configHash": "rejected"
+    }
+  }
+}

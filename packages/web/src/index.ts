@@ -60,6 +60,31 @@ export {
 export type { ConnectorFormInput, ConnectorRecord } from './components/connector-form';
 export { ConnectorsPanel } from './components/connectors-panel';
 export type { ConnectorsPanelProps } from './components/connectors-panel';
+export { S5ModelBindingPanel } from './components/s5-model-binding';
+export type {
+  S5ModelBindingPanelProps,
+  S5ModelValidationView,
+} from './components/s5-model-binding';
+export { S5ParseSettingsPanel } from './components/s5-parse-settings';
+export type { S5ParseSettingsPanelProps } from './components/s5-parse-settings';
+export {
+  canSaveBinding,
+  groupModelsByType,
+  mergeBindingDraft,
+  providerVerificationLabel,
+  safeConflictRetryState,
+  selectedModelCapabilities,
+  stateFromProblem as s5StateFromProblem,
+  toS5ProblemView,
+} from './components/s5-model-parse-state';
+export type {
+  ProviderVerificationLabel,
+  S5ModelBindingView,
+  S5ModelParseState,
+  S5ModelType,
+  S5ModelView,
+  S5ProblemView,
+} from './components/s5-model-parse-state';
 export type {
   Column,
   Density,
@@ -81,6 +106,23 @@ export {
   updateSpaceFormSchema,
   useKnowledgeForm,
 } from './forms/knowledge-form';
+export {
+  buildImportChunkingSettings,
+  buildImportParseConfig,
+  modelOptionsForType,
+  parseChunkingSettingsDraft,
+  parseModelBindingDraft,
+  s5ChunkingSettingsFormSchema,
+  s5ExternalOcrConfigFormSchema,
+  s5LiteParseConfigFormSchema,
+  s5ModelBindingFormSchema,
+} from './forms/s5-model-parse-form';
+export type {
+  S5ChunkingSettingsView,
+  S5ExternalOcrConfigView,
+  S5LiteParseConfigView,
+  S5ParseProviderConfigView,
+} from './forms/s5-model-parse-form';
 export type {
   CollaboratorFormValues,
   NewSpaceFormValues,
@@ -105,6 +147,8 @@ export {
 } from './i18n';
 export { createKnowledgeQueryClient, KnowledgeQueryProvider } from './query/knowledge-query-client';
 export { knowledgeQueryKeys } from './query/query-keys';
+export { loadCompleteModelCatalog, useKnowledgeModelCatalog } from './query/model-catalog';
+export type { ModelCatalogPage, ModelPageInfo } from './query/model-catalog';
 export { useKnowledgeMutation } from './query/use-knowledge-mutation';
 export { useKnowledgeQuery } from './query/use-knowledge-query';
 export { knowledgeGlobalStyles, knowledgeTheme, KnowledgeUiProvider } from './theme';
