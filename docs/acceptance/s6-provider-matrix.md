@@ -2,7 +2,7 @@
 
 ## Candidate
 
-- Candidate SHA: `868c819b25d7493a1e6ccf6d87837f9728b499cd`.
+- Candidate SHA: `e8df687c671fe880a72dd2f1e66eee8ddfcd6202`.
 - Branch: `feat/kb-s06-job-index`.
 - Conclusion scope: S6 branch only.
 
@@ -19,8 +19,9 @@
 | External OCR provider                              | `EXTERNAL_UNVERIFIED` | no production credentials or provider response                 |
 | External LLM / embedding provider                  | `EXTERNAL_UNVERIFIED` | mock model catalog and gateway only                            |
 | External connector providers                       | `EXTERNAL_UNVERIFIED` | deterministic provider fixture only                            |
-| S4 connector sync submission                       | `FIXTURE_VERIFIED`    | existing Source batch in Job snapshot, no cursor advancement   |
-| S6 sync worker fan-out                             | `FIXTURE_VERIFIED`    | idempotent parse child fan-out and duplicate-delivery check    |
+| S4 connector sync submission                       | `FIXTURE_VERIFIED`    | connector Job handoff without pre-created Source payload       |
+| S6 connector sync discovery                        | `FIXTURE_VERIFIED`    | deterministic provider pagination/content, real Mongo/MinIO    |
+| S6 connector cursor and completion CAS             | `REAL_VERIFIED`       | cursorVersion/changeSet checkpoint and terminal root handoff   |
 | S8 caption executor                                | `OUT_OF_SCOPE`        | controlled dependency failure, never fake success              |
 | S7 search, RRF, rerank, citation                   | `DEFERRED`            | runtime remains `0` in the S6 branch                           |
 | Compose app/worker image release                   | `NOT_RELEASED`        | local build and local worker smoke only                        |
@@ -56,8 +57,9 @@ Observed results:
 
 ## Caveats
 
-- Connector remote change discovery and real provider credentials were not
-  available. S6 verifies the existing-Source batch path and S4 handoff only.
+- Connector discovery is verified with deterministic Feishu pagination/content
+  and real Mongo/MinIO transactions. Production connector credentials remain
+  external-unverified.
 - Optional PDF canvas warnings were emitted by the bundled worker, but worker
   readiness, shutdown and all required gates passed.
 - Five license release blockers remain pending legal review as documented in

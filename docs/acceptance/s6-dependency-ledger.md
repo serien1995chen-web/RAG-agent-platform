@@ -4,7 +4,7 @@
 
 - Stage: `S6 / personB`.
 - Branch: `feat/kb-s06-job-index`.
-- Candidate SHA: `868c819b25d7493a1e6ccf6d87837f9728b499cd`.
+- Candidate SHA: `e8df687c671fe880a72dd2f1e66eee8ddfcd6202`.
 - W2 baseline: `87ba3bdea3d7daf3e738a04998b80b49cbf7a77b`.
 - User installation record: `pnpm install` was executed by the user.
 - Agent installation record: none.

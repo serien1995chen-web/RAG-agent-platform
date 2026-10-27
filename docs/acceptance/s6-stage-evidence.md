@@ -5,7 +5,7 @@
 - Wave: `W2`.
 - Stage: `S6 / personB`.
 - Branch: `feat/kb-s06-job-index`.
-- Candidate SHA: `868c819b25d7493a1e6ccf6d87837f9728b499cd`.
+- Candidate SHA: `e8df687c671fe880a72dd2f1e66eee8ddfcd6202`.
 - Evidence commit SHA: `EVIDENCE_DOCS_ONLY_COMMIT`, recorded exactly in the final
   delivery report.
 - W2 baseline: `87ba3bdea3d7daf3e738a04998b80b49cbf7a77b`.
@@ -75,7 +75,7 @@ operations were not implemented.
 ## Command Matrix
 
 All commands were run on candidate SHA
-`868c819b25d7493a1e6ccf6d87837f9728b499cd` with the real local infrastructure
+`e8df687c671fe880a72dd2f1e66eee8ddfcd6202` with the real local infrastructure
 environment and exited `0`.
 
 | Gate                           | Result                                        |
@@ -83,15 +83,15 @@ environment and exited `0`.
 | `pnpm lint`                    | PASS                                          |
 | `pnpm format:check`            | PASS                                          |
 | `pnpm typecheck`               | PASS, 12 packages                             |
-| `pnpm architecture:check`      | PASS, 97 service sources                      |
-| `pnpm forbidden-files:check`   | PASS, 410 files                               |
+| `pnpm architecture:check`      | PASS, 98 service sources                      |
+| `pnpm forbidden-files:check`   | PASS, 413 files                               |
 | `pnpm test:unit`               | PASS, Turbo 21/21                             |
 | `pnpm test:contract`           | PASS, 79 tests                                |
-| `pnpm test:integration`        | PASS, Turbo 21/21; service 109 tests          |
+| `pnpm test:integration`        | PASS, Turbo 21/21; service 112 tests          |
 | `pnpm test:tenant`             | PASS, 12 tests                                |
 | `pnpm test:concurrency`        | PASS, 13 tests                                |
 | `pnpm test:fault`              | PASS, 25 tests                                |
-| `pnpm test:e2e`                | PASS, 36 tests                                |
+| `pnpm test:e2e`                | PASS, 37 tests                                |
 | `pnpm build`                   | PASS, 12/12                                   |
 | `pnpm build:workers`           | PASS, 10/10                                   |
 | `pnpm openapi:generate`        | PASS                                          |
@@ -127,8 +127,10 @@ C1:
 - Real S4 Outbox event dispatched through Redis/BullMQ.
 - `knowledge-import` hydrated the parent Job from Mongo.
 - Parent created one idempotent parse child and waited for all descendants.
-- Parse then created the index child.
+- Parse then entered `waiting_children`, created the index child and waited for it.
 - Real BullMQ import, parse and index workers completed the chain.
+- Failed index descendants propagate through a terminal intermediate parse Job
+  to the import root without being hidden by the prior parse success.
 
 C2:
 
@@ -152,8 +154,13 @@ C3:
 - Old Segment pointers remain unchanged until every child switches.
 - Space rebuild expands into source roots and index grandchildren.
 - Nested parent aggregation finalizes bottom-up with version CAS.
-- Sync deduplicates source IDs, creates one parse child per Source and preserves
-  the cursor version for the S4 change-set boundary.
+- Sync reads provider pages, materializes content into MinIO, commits Source and
+  cursor records in Mongo, and increments connector `cursorVersion` by CAS.
+- Duplicate sync delivery replays the same cursor run without another Source,
+  ObjectRef or parse child.
+- A changed external document increments its Source `sourceVersion`.
+- Sync creates one parse child per Source and only marks the connector active
+  after the sync root reaches a terminal state.
 - Duplicate sync delivery does not create another Source or child.
 - Cleanup preserves active vectors and vectors newer than 30 days.
 - Expired inactive vectors are deleted in a bounded batch.
@@ -170,24 +177,42 @@ C3:
 - Replay preserves step evidence and records `replayHistory`.
 - Root replay requeues failed descendants as well as the dead root.
 - Parent terminals are finalized only after all descendants are terminal.
+- A failed descendant always propagates to root `error`, `result.partial` and
+  per-Source `errorCode`, including inconsistent legacy terminal-parent trees.
 
 ## UI Evidence
 
 Jobs, Segments and Segment Edit passed at `360`, `768` and `1200` viewports with
-axe serious/critical count `0`, horizontal overflow `0`, console errors `0` and
-failed runtime requests `0`.
+axe serious/critical count `0`, horizontal overflow `0`, unexpected console
+errors `0` and failed runtime requests `0`. The deliberate UI 409 test records
+only the two expected browser resource messages and preserves the submitted
+question/answer after both pointer and keyboard submission.
 
 | Screenshot                 | SHA-256                                                            |
 | -------------------------- | ------------------------------------------------------------------ |
-| `s6-jobs-360.png`          | `49eec1e2c796529509c55e5c8ed8c75e397ca57518ee66d11a1b41fc3acce932` |
-| `s6-jobs-768.png`          | `b2669b2aee2d78d645e866dce31aa24ea7254e27269744e175f7be84a083361a` |
-| `s6-jobs-1200.png`         | `5d9e6515eb248b52ecf4e553637d03f1b32e4cc8eadb0b2f48390cec5a2f2898` |
-| `s6-segments-360.png`      | `f5b337202e4bc3bf65d0b11fcfc6d65b93e22339d0d50ca8d00f35e060122433` |
-| `s6-segments-768.png`      | `6a8b87cb479fce4dbb5fdf57d5ff261ef2aa61bb7c0069839931a0c16f88ff56` |
-| `s6-segments-1200.png`     | `b6098907146dd5feb9e8a0731e1a2eabb0c8d9ba9fc36fe6c847829c21a1547e` |
-| `s6-segment-edit-360.png`  | `ca760984c6bda3050d5a16325e837100997b01aa6db40360ea2dfc80d3f46f56` |
-| `s6-segment-edit-768.png`  | `6546298957d035fd7d6aa8601a5d32382465f1ff765497b538af31e5d8532317` |
-| `s6-segment-edit-1200.png` | `2fdb71b8d33287d7b1e03c7fdd3e12ef4e6ce91d30c789f39e5778b09154ea4e` |
+| `s6-jobs-360.png`          | `9ea955032d29bc3595f4da49340ae02d5e965d103ffc374a2c2cc65b0af9a335` |
+| `s6-jobs-768.png`          | `80a2fd481411425f466e9513c1488d08fc75f63e2221f9138d76e2cd834a5dad` |
+| `s6-jobs-1200.png`         | `f27a1d453672cb92f0990bcb231cd81b52f58a481ee9c6ae083e434773a3783c` |
+| `s6-segments-360.png`      | `2bbe3929d9282f22faba9a6e43f0ca8b5cb60a3b52d7c12c4fa4b403a380dfca` |
+| `s6-segments-768.png`      | `3198cfe95f3f4c0980f2afd3333d7eeef241873804a5c289a6762b7feec9da57` |
+| `s6-segments-1200.png`     | `98d1003bbbaedcb72ddc7a706364eabddae4232733d15365dd26c75324bc3a92` |
+| `s6-segment-edit-360.png`  | `2086f105465e351e68b7d7700082329ee92c975d2c9d3c73b7e2595da58243ea` |
+| `s6-segment-edit-768.png`  | `facd0add7177f08fe17e0e6673cfcacc8f7eb83228a973bef18ed27b6dddf9c9` |
+| `s6-segment-edit-1200.png` | `0a7ffdb2052896bb3ecbb88da232521dbe1da5784621647ca5fc22ca610bb54d` |
+
+## Review Remediation
+
+- `S6-R01`: the connector-sync WIP was completed and committed rather than
+  mixed into the prior evidence checkout. This evidence is generated from the
+  new clean candidate and a separate docs-only commit.
+- `S6-R02`: parse now waits for index descendants; failed descendants are
+  propagated through terminal intermediates to root and Source evidence. Two
+  regressions cover the live failure and the legacy inconsistent tree.
+- `S6-R03`: the contract guard now names the exact S7 set with
+  `API-CITATION-GET` and tests Image/Deep separately as S8.
+- `S6-R04`: Segment Edit E2E now performs a real stale-version UI submission,
+  checks 409, trace/request evidence, input preservation, keyboard submission,
+  axe, overflow, console and network behavior.
 
 ## Evidence And Hygiene
 
@@ -196,13 +221,13 @@ failed runtime requests `0`.
 - `test-results/` is outside the repository.
 - Unintended S3/S5 PNG rewrites from E2E were restored from `HEAD`.
 - Generated OpenAPI files came from `pnpm openapi:generate`.
-- No push, PR, merge, dependency install or W2 personB gate was performed.
+- No PR merge, dependency install or W2 personB gate was performed.
 
 ## Risks
 
 - No production OCR, LLM, embedding or connector credentials were available.
-- Connector remote change discovery remains external-unverified; the verified S6
-  path uses an existing-Source batch supplied by S4.
+- Connector orchestration is fixture-verified with deterministic Feishu pagination
+  and content; external connector providers remain `EXTERNAL_UNVERIFIED`.
 - S8 caption remains intentionally unsupported.
 - Five production license blockers remain pending legal review.
 - Optional PDF canvas warnings appear during bundled worker startup; readiness,
