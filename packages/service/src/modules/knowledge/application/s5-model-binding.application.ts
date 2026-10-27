@@ -10,7 +10,7 @@ import type {
   S5ModelType,
 } from './s5-model-ports';
 import { S5_MODEL_TYPES } from './s5-model-ports';
-import { pageInfoOf, parseModelSort, parsePageLimit, parsePageOffset } from './s5-pagination';
+import { paginateByKey, parseModelSort, parsePageCursor, parsePageLimit } from './s5-pagination';
 
 function objectBody(value: unknown, context: TenantContext): Record<string, unknown> {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
@@ -108,15 +108,16 @@ export class S5ModelBindingApplication {
   async get(input: KnowledgeOperationInput): Promise<KnowledgeOperationResult> {
     const spaceId = input.params.spaceId ?? '';
     const limit = parsePageLimit(input.query, input.context);
-    const offset = parsePageOffset(input.query, input.context);
-    parseModelSort(input.query, input.context);
+    const sort = parseModelSort(input.query, input.context);
+    const cursor = parsePageCursor(input.query, sort, input.context);
     await this.access.assertPermission('space', spaceId, 'read', input.context);
     const items = await this.repository.list(spaceId, input.context);
+    const page = paginateByKey(items, sort, cursor, limit);
     return {
       status: 200,
       data: {
-        items: items.slice(offset, offset + limit),
-        pageInfo: pageInfoOf(items.length, offset, limit),
+        items: page.items,
+        pageInfo: page.pageInfo,
       },
     };
   }
@@ -142,9 +143,18 @@ export class S5ModelBindingApplication {
         input.context,
       );
     }
+    const updated = await this.repository.replace(
+      spaceId,
+      parsed.version,
+      parsed.bindings,
+      input.context,
+    );
     return {
       status: 200,
-      data: await this.repository.replace(spaceId, parsed.version, parsed.bindings, input.context),
+      data: {
+        ...updated,
+        pageInfo: { nextCursor: null, hasMore: false },
+      },
     };
   }
 

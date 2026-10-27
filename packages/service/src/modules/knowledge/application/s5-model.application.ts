@@ -9,13 +9,7 @@ import {
   type S5ModelType,
   S5_MODEL_TYPES,
 } from './s5-model-ports';
-import {
-  pageInfoOf,
-  parseModelSort,
-  parsePageLimit,
-  parsePageOffset,
-  queryValue,
-} from './s5-pagination';
+import { paginateByKey, parseModelSort, parsePageCursor, parsePageLimit } from './s5-pagination';
 
 function operationError(
   code: 'KNOWLEDGE_VALIDATION_FAILED' | 'KNOWLEDGE_MODEL_FAILED',
@@ -122,32 +116,25 @@ export class S5ModelApplication {
       requestId: input.context.requestId,
       traceId: input.context.traceId,
     });
-    const typeFilter = queryValue(input.query, 'type');
     const limit = parsePageLimit(input.query, input.context);
-    const offset = parsePageOffset(input.query, input.context);
     const sort = parseModelSort(input.query, input.context);
-    const filtered = models
-      .filter((item) => item.authorized)
-      .filter((item) => typeFilter === undefined || item.type === typeFilter)
-      .sort((left, right) => {
-        if (sort === 'modelId' || sort === '-modelId') {
-          return left.modelId.localeCompare(right.modelId);
-        }
-        if (sort === 'modelType' || sort === '-modelType') {
-          return (
-            S5_MODEL_TYPES.indexOf(left.type) - S5_MODEL_TYPES.indexOf(right.type) ||
-            left.modelId.localeCompare(right.modelId)
-          );
-        }
-        return 0;
-      });
-    if (sort.startsWith('-') && !sort.endsWith('updatedAt')) filtered.reverse();
-    const page = filtered.slice(offset, offset + limit).map(modelView);
+    const cursor = parsePageCursor(input.query, sort, input.context);
+    const page = paginateByKey(
+      models
+        .filter((item) => item.authorized)
+        .map((item) => ({
+          ...item,
+          modelType: item.type,
+        })),
+      sort,
+      cursor,
+      limit,
+    );
     return {
       status: 200,
       data: {
-        items: page,
-        pageInfo: pageInfoOf(filtered.length, offset, limit),
+        items: page.items.map(({ modelType: _modelType, ...item }) => modelView(item)),
+        pageInfo: page.pageInfo,
       },
     };
   }

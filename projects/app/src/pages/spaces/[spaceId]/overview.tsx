@@ -20,11 +20,11 @@ import {
   useKnowledgeForm,
   useKnowledgeI18n,
   useKnowledgeMutation,
+  useKnowledgeModelCatalog,
   useKnowledgeQuery,
   type UpdateSpaceFormValues,
   type S5ModelBindingView,
   type S5ModelValidationView,
-  type S5ModelView,
 } from '@kb/web';
 import Head from 'next/head';
 import { useRouter } from 'next/router';
@@ -50,10 +50,7 @@ export default function SpaceOverviewPage() {
     knowledgeQueryKeys.sources.list(spaceId),
     spaceId ? listPath(spaceId, 'sources') : null,
   );
-  const modelsRequest = useKnowledgeQuery<{ items: S5ModelView[] }>(
-    knowledgeQueryKeys.models.list(),
-    '/v1/knowledge/models',
-  );
+  const modelsRequest = useKnowledgeModelCatalog();
   const bindingsRequest = useKnowledgeQuery<{ items: S5ModelBindingView[] }>(
     knowledgeQueryKeys.modelBindings.detail(spaceId),
     spaceId ? `/v1/knowledge/spaces/${spaceId}/model-bindings` : null,

@@ -274,6 +274,9 @@ describe('TEST-MODEL-001 / TEST-KB-002 / TEST-X-FRONTEND-IMPORT', () => {
         await session.page.getByRole('region', { name: '解析、切分与 QA' }).waitFor();
         expect(await session.page.getByText('解析器', { exact: true }).count()).toBe(1);
         expect(await session.page.getByRole('option', { name: '深信服' }).count()).toBe(1);
+        expect(
+          await session.page.getByText('加载失败时回退到 PDF.js', { exact: true }).count(),
+        ).toBe(1);
         await session.page.getByRole('button', { name: '选择文件' }).waitFor();
         await session.page.getByRole('button', { name: '预览配置' }).click();
         await session.page.getByRole('status').getByText('仅预览配置，不创建解析任务').waitFor();
@@ -299,6 +302,9 @@ describe('TEST-MODEL-001 / TEST-KB-002 / TEST-X-FRONTEND-IMPORT', () => {
             (violation) => violation.impact === 'serious' || violation.impact === 'critical',
           ),
         ).toEqual([]);
+        await session.page.addStyleTag({
+          content: '.skip-link { display: none !important; }',
+        });
         await session.page.screenshot({
           path: join(root, 'docs', 'acceptance', 's5-ui', `s5-model-parse-${viewport.width}.png`),
           fullPage: true,

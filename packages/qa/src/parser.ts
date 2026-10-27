@@ -71,16 +71,22 @@ function toItem(q: string, a: string, sourceChunkHash: string): QaResultItem | n
   return { q: question, a: answer, sourceChunkHash };
 }
 
-/** 解析 Q/A 文本结构；保序，重复由 dedup 处理。 */
-export function parseQaOutput(content: string, sourceChunkHash: string): QaResultItem[] {
-  if (!content || content.trim().length === 0) return [];
-  const items: QaResultItem[] = [];
+export function parseQaPairs(content: string): Array<{ q: string; a: string }> {
+  const pairs: Array<{ q: string; a: string }> = [];
   QA_PAIR_RE.lastIndex = 0;
   let match: RegExpExecArray | null;
   while ((match = QA_PAIR_RE.exec(content)) !== null) {
-    const item = toItem(match[2] ?? '', match[3] ?? '', sourceChunkHash);
-    if (item) items.push(item);
+    pairs.push({ q: match[2] ?? '', a: match[3] ?? '' });
   }
+  return pairs;
+}
+
+/** 解析 Q/A 文本结构；保序，重复由 dedup 处理。 */
+export function parseQaOutput(content: string, sourceChunkHash: string): QaResultItem[] {
+  if (!content || content.trim().length === 0) return [];
+  const items = parseQaPairs(content)
+    .map((pair) => toItem(pair.q, pair.a, sourceChunkHash))
+    .filter((item): item is QaResultItem => item !== null);
   if (items.length > 0) return items;
   return parseJsonOutput(content, sourceChunkHash);
 }

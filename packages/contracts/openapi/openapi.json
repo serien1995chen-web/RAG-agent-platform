@@ -15242,7 +15242,13 @@
             "required": false,
             "schema": {
               "type": "string",
-              "default": "-updatedAt"
+              "enum": [
+                "modelType",
+                "-modelType",
+                "modelId",
+                "-modelId"
+              ],
+              "default": "modelType"
             }
           },
           {
@@ -15310,7 +15316,11 @@
                 "example": {
                   "success": true,
                   "data": {
-                    "items": []
+                    "items": [],
+                    "pageInfo": {
+                      "nextCursor": null,
+                      "hasMore": false
+                    }
                   },
                   "traceId": "4bf92f3577b34da6a3ce929d0e0e4736",
                   "requestId": "req_01JABCDEF123"
@@ -15399,7 +15409,13 @@
             "required": false,
             "schema": {
               "type": "string",
-              "default": "-updatedAt"
+              "enum": [
+                "modelType",
+                "-modelType",
+                "modelId",
+                "-modelId"
+              ],
+              "default": "modelType"
             }
           },
           {
@@ -15467,7 +15483,11 @@
                 "example": {
                   "success": true,
                   "data": {
-                    "items": []
+                    "items": [],
+                    "pageInfo": {
+                      "nextCursor": null,
+                      "hasMore": false
+                    }
                   },
                   "traceId": "4bf92f3577b34da6a3ce929d0e0e4736",
                   "requestId": "req_01JABCDEF123"
@@ -22686,7 +22706,8 @@
       "ModelList": {
         "type": "object",
         "required": [
-          "items"
+          "items",
+          "pageInfo"
         ],
         "properties": {
           "items": {
@@ -22694,13 +22715,17 @@
             "items": {
               "$ref": "#/components/schemas/Model"
             }
+          },
+          "pageInfo": {
+            "$ref": "#/components/schemas/PageInfo"
           }
         }
       },
       "ModelBindingList": {
         "type": "object",
         "required": [
-          "items"
+          "items",
+          "pageInfo"
         ],
         "properties": {
           "items": {
@@ -22708,6 +22733,9 @@
             "items": {
               "$ref": "#/components/schemas/ModelBinding"
             }
+          },
+          "pageInfo": {
+            "$ref": "#/components/schemas/PageInfo"
           }
         }
       },

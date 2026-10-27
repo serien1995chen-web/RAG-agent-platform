@@ -147,6 +147,8 @@ export {
 } from './i18n';
 export { createKnowledgeQueryClient, KnowledgeQueryProvider } from './query/knowledge-query-client';
 export { knowledgeQueryKeys } from './query/query-keys';
+export { loadCompleteModelCatalog, useKnowledgeModelCatalog } from './query/model-catalog';
+export type { ModelCatalogPage, ModelPageInfo } from './query/model-catalog';
 export { useKnowledgeMutation } from './query/use-knowledge-mutation';
 export { useKnowledgeQuery } from './query/use-knowledge-query';
 export { knowledgeGlobalStyles, knowledgeTheme, KnowledgeUiProvider } from './theme';

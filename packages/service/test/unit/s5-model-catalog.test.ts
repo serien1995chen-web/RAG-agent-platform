@@ -7,6 +7,11 @@ import type {
 } from '../../src/modules/knowledge/adapter/s5-aiproxy-http.adapter';
 import { S5ModelApplication } from '../../src/modules/knowledge/application/s5-model.application';
 import { S5ModelBindingApplication } from '../../src/modules/knowledge/application/s5-model-binding.application';
+import type {
+  ModelCatalogItem,
+  ModelCatalogPort,
+  ModelBindingView,
+} from '../../src/modules/knowledge/application/s5-model-ports';
 import type { TenantContext } from '../../src/shared/persistence/knowledge/tenant';
 import type { S5AiproxyConfig } from '../../src/shared/config/s5-aiproxy-config';
 
@@ -38,6 +43,29 @@ function input(operationId: string, body: unknown = {}, query: Record<string, st
 
 function catalogResponse(data: unknown, status = 200): S5HttpResponse {
   return { status, headers: {}, data };
+}
+
+function catalogOf(models: ModelCatalogItem[]): ModelCatalogPort {
+  return {
+    async listModels() {
+      return models;
+    },
+  };
+}
+
+function encodeCursor(value: unknown): string {
+  return Buffer.from(JSON.stringify(value), 'utf8').toString('base64url');
+}
+
+function model(index: number, type: ModelCatalogItem['type'] = 'llm'): ModelCatalogItem {
+  return {
+    modelId: `model-${String(index).padStart(3, '0')}`,
+    displayName: `Model ${index}`,
+    type,
+    capabilities: ['chat'],
+    dimension: null,
+    authorized: true,
+  };
 }
 
 describe('TEST-MODEL-001-BLOCK AIProxy catalog and model operations', () => {
@@ -123,12 +151,118 @@ describe('TEST-MODEL-001-BLOCK AIProxy catalog and model operations', () => {
     const second = await application.dispatch(
       input('API-MODEL-LIST', {}, { cursor: firstData.pageInfo.nextCursor ?? '' }),
     );
-    expect((second.data as { items: unknown[] }).items).toHaveLength(10);
+    const secondData = second.data as {
+      items: Array<{ modelId: string }>;
+      pageInfo: { hasMore: boolean; nextCursor: string | null };
+    };
+    expect(secondData.items).toHaveLength(10);
+    expect(secondData.items[0]?.modelId).toBe('llm-050');
+    expect(secondData.pageInfo).toEqual({ hasMore: false, nextCursor: null });
+    const traversed = [...(firstData.items as Array<{ modelId: string }>), ...secondData.items].map(
+      (item) => item.modelId,
+    );
+    expect(new Set(traversed).size).toBe(60);
+    expect(traversed).toEqual(models.map((item) => item.id));
     await expect(
       application.dispatch(input('API-MODEL-LIST', {}, { cursor: 'not-a-cursor' })),
     ).rejects.toMatchObject({
       problem: { error: { code: 'KNOWLEDGE_VALIDATION_FAILED' } },
     });
+  });
+
+  it('does not repeat returned keys when a new item is inserted before the cursor', async () => {
+    let current = [model(1), model(2), model(3)];
+    const application = new S5ModelApplication({
+      async listModels() {
+        return current;
+      },
+    });
+    const first = await application.dispatch(input('API-MODEL-LIST', {}, { limit: '2' }));
+    const firstData = first.data as {
+      items: Array<{ modelId: string }>;
+      pageInfo: { nextCursor: string | null };
+    };
+    expect(firstData.items.map((item) => item.modelId)).toEqual(['model-001', 'model-002']);
+
+    current = [model(0), ...current];
+    const second = await application.dispatch(
+      input(
+        'API-MODEL-LIST',
+        {},
+        {
+          limit: '2',
+          cursor: firstData.pageInfo.nextCursor ?? '',
+        },
+      ),
+    );
+    expect(
+      (second.data as { items: Array<{ modelId: string }> }).items.map((item) => item.modelId),
+    ).toEqual(['model-003']);
+  });
+
+  it('binds cursor to sort and rejects offset, invalid versions, fields and base64', async () => {
+    const application = new S5ModelApplication(catalogOf([model(1), model(2), model(3)]));
+    const first = await application.dispatch(
+      input('API-MODEL-LIST', {}, { limit: '1', sort: 'modelType' }),
+    );
+    const cursor = (first.data as { pageInfo: { nextCursor: string | null } }).pageInfo.nextCursor;
+    expect(cursor).not.toBeNull();
+    await expect(
+      application.dispatch(input('API-MODEL-LIST', {}, { cursor: cursor ?? '', sort: 'modelId' })),
+    ).rejects.toMatchObject({
+      problem: { error: { code: 'KNOWLEDGE_VALIDATION_FAILED' } },
+    });
+
+    const valid = { v: 1, sort: 'modelType', lastModelType: 'llm', lastModelId: 'model-001' };
+    for (const invalidCursor of [
+      'not-a-cursor',
+      'not%base64',
+      `${encodeCursor(valid)}!`,
+      encodeCursor({ ...valid, v: 2 }),
+      encodeCursor({ ...valid, offset: 1 }),
+      encodeCursor({ ...valid, lastModelType: 'unknown' }),
+      encodeCursor({ v: 1, sort: 'modelType', lastModelType: 'llm' }),
+      encodeCursor({ offset: 1 }),
+    ]) {
+      await expect(
+        application.dispatch(input('API-MODEL-LIST', {}, { cursor: invalidCursor })),
+      ).rejects.toMatchObject({
+        problem: { error: { code: 'KNOWLEDGE_VALIDATION_FAILED' } },
+      });
+    }
+  });
+
+  it('supports only the four model key sorts and ignores an unregistered type filter', async () => {
+    const models = [
+      { ...model(2, 'llm'), modelId: 'b' },
+      { ...model(1, 'embedding'), modelId: 'c' },
+      { ...model(3, 'llm'), modelId: 'a' },
+    ];
+    const application = new S5ModelApplication(catalogOf(models));
+    const idsFor = async (sort: string) =>
+      (
+        (await application.dispatch(input('API-MODEL-LIST', {}, { sort }))).data as {
+          items: Array<{ modelId: string }>;
+        }
+      ).items.map((item) => item.modelId);
+    expect(await idsFor('modelType')).toEqual(['a', 'b', 'c']);
+    expect(await idsFor('-modelType')).toEqual(['c', 'b', 'a']);
+    expect(await idsFor('modelId')).toEqual(['a', 'b', 'c']);
+    expect(await idsFor('-modelId')).toEqual(['c', 'b', 'a']);
+    expect(
+      (
+        (await application.dispatch(input('API-MODEL-LIST', {}, { type: 'embedding' }))).data as {
+          items: Array<{ modelId: string }>;
+        }
+      ).items.map((item) => item.modelId),
+    ).toEqual(['a', 'b', 'c']);
+    for (const sort of ['updatedAt', '-updatedAt', 'createdAt', 'type']) {
+      await expect(
+        application.dispatch(input('API-MODEL-LIST', {}, { sort })),
+      ).rejects.toMatchObject({
+        problem: { error: { code: 'KNOWLEDGE_VALIDATION_FAILED' } },
+      });
+    }
   });
 
   it('validates type, required capabilities and all four embedding dimensions', async () => {
@@ -249,6 +383,61 @@ describe('TEST-MODEL-001-BLOCK AIProxy catalog and model operations', () => {
         problem: { error: { code: 'KNOWLEDGE_VALIDATION_FAILED' } },
       });
     }
+  });
+
+  it('paginates all six model bindings with the shared PageInfo contract', async () => {
+    const bindings: ModelBindingView[] = ['llm', 'embedding', 'rerank', 'vlm', 'stt', 'tts'].map(
+      (modelType, index) => ({
+        modelType: modelType as ModelBindingView['modelType'],
+        modelId: `binding-${index}`,
+        displayName: `Binding ${index}`,
+        requiredCapabilities: ['capability'],
+        status: 'active',
+      }),
+    );
+    const application = new S5ModelBindingApplication(
+      {
+        async list() {
+          return bindings;
+        },
+        async replace() {
+          return { items: [], version: 1 };
+        },
+      },
+      catalogOf([]),
+      {
+        async assertPermission() {},
+      },
+    );
+    const bindingInput = (query: Record<string, string>) => ({
+      ...input('API-MODEL-BINDING-GET'),
+      params: { spaceId: 'space-1' },
+      query,
+    });
+    const defaultPage = await application.dispatch(bindingInput({}));
+    expect(defaultPage.data).toMatchObject({
+      items: bindings,
+      pageInfo: { hasMore: false, nextCursor: null },
+    });
+    const traversed: string[] = [];
+    let cursor: string | null = null;
+    let pages = 0;
+    do {
+      const result = await application.dispatch(
+        bindingInput({ limit: '2', ...(cursor ? { cursor } : {}) }),
+      );
+      const data = result.data as {
+        items: ModelBindingView[];
+        pageInfo: { hasMore: boolean; nextCursor: string | null };
+      };
+      traversed.push(...data.items.map((item) => item.modelId));
+      cursor = data.pageInfo.nextCursor;
+      pages += 1;
+      expect(data.pageInfo.hasMore).toBe(cursor !== null);
+    } while (cursor);
+    expect(pages).toBe(3);
+    expect(traversed).toEqual(bindings.map((binding) => binding.modelId));
+    expect(new Set(traversed).size).toBe(6);
   });
 
   it('does not expand catalog authorization through query filters', async () => {

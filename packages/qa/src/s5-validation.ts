@@ -1,5 +1,5 @@
 import { jsonrepair } from 'jsonrepair';
-import { parseQaOutput } from './parser';
+import { parseQaPairs } from './parser';
 import type { QaResultItem } from './parser';
 
 export type QaValidationResult =
@@ -70,8 +70,8 @@ export function parseQaOutputValidated(
       ? { items: validated.items, problems: [], repairCount }
       : { items: [], problems: validated.problems, repairCount };
   }
-  const parsed = parseQaOutput(content, sourceChunkHash);
-  const validated = validateQaItems(parsed, sourceChunkHash);
+  const pairs = parseQaPairs(content);
+  const validated = validateQaItems(pairs, sourceChunkHash);
   return validated.valid && validated.items.length > 0
     ? { items: validated.items, problems: [], repairCount: 1 }
     : {

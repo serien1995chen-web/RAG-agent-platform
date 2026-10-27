@@ -13,11 +13,10 @@ import {
   submitWithProblem,
   useKnowledgeI18n,
   useKnowledgeForm,
+  useKnowledgeModelCatalog,
   useKnowledgeMutation,
-  useKnowledgeQuery,
   type S5ModelBindingView,
   type S5ModelValidationView,
-  type S5ModelView,
   type NewSpaceFormValues,
 } from '@kb/web';
 import Head from 'next/head';
@@ -30,10 +29,7 @@ export default function NewSpacePage() {
   const { t } = useKnowledgeI18n();
   const [problem, setProblem] = useState<unknown>(null);
   const [createdSpace, setCreatedSpace] = useState<SpaceRecord | null>(null);
-  const modelsRequest = useKnowledgeQuery<{ items: S5ModelView[] }>(
-    knowledgeQueryKeys.models.list(),
-    '/v1/knowledge/models',
-  );
+  const modelsRequest = useKnowledgeModelCatalog();
   const form = useKnowledgeForm(newSpaceFormSchema, {
     defaultValues: {
       kind: 'space',

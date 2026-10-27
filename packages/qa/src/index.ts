@@ -34,7 +34,7 @@ export {
   resolvePrompt,
 } from './prompt';
 export type { QaTemplate, QaTemplateRegistryPort } from './prompt';
-export { parseQaOutput } from './parser';
+export { parseQaOutput, parseQaPairs } from './parser';
 export { dedupeQaItems, limitChunkCount } from './dedup';
 export type { DedupOutcome } from './dedup';
 

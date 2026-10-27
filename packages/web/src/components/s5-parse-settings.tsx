@@ -50,6 +50,7 @@ export interface S5ParseSettingsPanelProps {
     providerDoc2x: string;
     fallbackLiteparse: string;
     fallbackNone: string;
+    pdfFallback: string;
     imageUpload: string;
     imageKeepUrl: string;
     imageDrop: string;
@@ -118,6 +119,7 @@ export function S5ParseSettingsPanel(props: S5ParseSettingsPanelProps) {
     providerDoc2x: 'Doc2x',
     fallbackLiteparse: 'LiteParse',
     fallbackNone: 'None',
+    pdfFallback: 'Fall back to PDF.js when loading fails',
     imageUpload: 'Upload',
     imageKeepUrl: 'Keep URL',
     imageDrop: 'Drop',
@@ -258,7 +260,7 @@ export function S5ParseSettingsPanel(props: S5ParseSettingsPanelProps) {
               })
             }
           >
-            PDF.js load fallback
+            {labels.pdfFallback}
           </Checkbox>
         )}
 

@@ -127,6 +127,7 @@ export default function ImportPage() {
               providerDoc2x: t('parseSettings.provider.doc2x'),
               fallbackLiteparse: t('parseSettings.provider.liteparse'),
               fallbackNone: t('parseSettings.fallback.none'),
+              pdfFallback: t('parseSettings.pdfFallback'),
               imageUpload: t('parseSettings.image.upload'),
               imageKeepUrl: t('parseSettings.image.keepUrl'),
               imageDrop: t('parseSettings.image.drop'),

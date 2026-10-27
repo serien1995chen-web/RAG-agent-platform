@@ -9,7 +9,20 @@ const openapi = JSON.parse(
     'utf8',
   ),
 ) as {
-  paths: Record<string, Record<string, { operationId?: string }>>;
+  paths: Record<
+    string,
+    Record<
+      string,
+      {
+        operationId?: string;
+        parameters?: Array<{
+          name?: string;
+          in?: string;
+          schema?: { enum?: string[]; default?: unknown; minimum?: number; maximum?: number };
+        }>;
+      }
+    >
+  >;
   components: { schemas: Record<string, unknown> };
 };
 const runtime = JSON.parse(
@@ -71,6 +84,55 @@ describe('S5 model and parse frozen contract', () => {
     expect(openapi.components.schemas.ParseProviderConfig).toBeDefined();
     expect(openapi.components.schemas.ChunkingSettings).toBeDefined();
     expect(openapi.components.schemas).not.toHaveProperty('ParseVersion');
+  });
+
+  it('exposes B09 pagination and sort contracts for both model lists', () => {
+    const operations = Object.values(openapi.paths)
+      .flatMap((pathItem) => Object.values(pathItem))
+      .filter((operation) => typeof operation.operationId === 'string');
+    for (const operationId of ['API-MODEL-LIST', 'API-MODEL-BINDING-GET']) {
+      const operation = operations.find((candidate) => candidate.operationId === operationId);
+      expect(operation, operationId).toBeDefined();
+      const parameters = operation?.parameters ?? [];
+      const limit = parameters.find(
+        (parameter) => parameter.in === 'query' && parameter.name === 'limit',
+      );
+      expect(limit?.schema).toMatchObject({
+        default: 50,
+        minimum: 1,
+        maximum: 200,
+      });
+      const sort = parameters.find(
+        (parameter) => parameter.in === 'query' && parameter.name === 'sort',
+      );
+      expect(sort?.schema).toMatchObject({
+        default: 'modelType',
+        enum: ['modelType', '-modelType', 'modelId', '-modelId'],
+      });
+      expect(
+        parameters.some((parameter) => parameter.in === 'query' && parameter.name === 'type'),
+      ).toBe(false);
+    }
+    for (const schemaName of ['ModelList', 'ModelBindingList']) {
+      const schema = openapi.components.schemas[schemaName] as {
+        required?: string[];
+        properties?: Record<string, unknown>;
+      };
+      expect(schema.required).toContain('pageInfo');
+      expect(schema.properties?.pageInfo).toEqual({ $ref: '#/components/schemas/PageInfo' });
+    }
+    const clientTypes = readFileSync(
+      join(root, 'packages', 'contracts', 'openapi', 'client-types.d.ts'),
+      'utf8',
+    );
+    const propertyMap =
+      clientTypes.match(/export interface SchemaPropertyMap \{\n([\s\S]*?)\n\}/)?.[1] ?? '';
+    const requiredMap =
+      clientTypes.match(/export interface RequiredSchemaPropertyMap \{\n([\s\S]*?)\n\}/)?.[1] ?? '';
+    for (const schemaName of ['ModelList', 'ModelBindingList']) {
+      expect(propertyMap).toContain(`"${schemaName}": "items" | "pageInfo";`);
+      expect(requiredMap).toContain(`"${schemaName}": "items" | "pageInfo";`);
+    }
   });
 
   it('covers six model types and four embedding dimensions', async () => {

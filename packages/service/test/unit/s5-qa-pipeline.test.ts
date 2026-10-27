@@ -102,6 +102,15 @@ describe('TEST-PARSE-004-BLOCK QA model pipeline', () => {
     });
   });
 
+  it('rejects mixed valid and empty text Q/A pairs', async () => {
+    const { result } = request('Q1: good\nA1: yes\nQ2: broken\nA2:');
+    await expect(result).resolves.toMatchObject({
+      items: [],
+      fallback: 'chunk_split',
+      diagnostics: [{ code: 'qa_output_invalid' }],
+    });
+  });
+
   it('keeps chunk hash format and reports over-limit diagnostics', async () => {
     const content = Array.from(
       { length: 6 },
