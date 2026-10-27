@@ -836,21 +836,21 @@ export class KnowledgeJobExecutionRepository {
         replay: ['dead_letter'],
       };
       const now = new Date();
-      if (
-        (action === 'retry' || action === 'replay') &&
-        root.kind === 'sync' &&
-        root.resourceType === 'connector'
-      ) {
+      const syncRoot = tree.find(
+        (node) =>
+          String(node._id) === rootId && node.kind === 'sync' && node.resourceType === 'connector',
+      );
+      if ((action === 'retry' || action === 'replay') && syncRoot) {
         const connector = await this.connectors
           .findOne({
-            _id: root.resourceId,
-            workspaceId: root.workspaceId,
+            _id: syncRoot.resourceId,
+            workspaceId: syncRoot.workspaceId,
             deletedAt: null,
           })
           .session(session);
         if (!connector) {
           throw tenantError(context, 'KNOWLEDGE_NOT_FOUND', {
-            connectorId: root.resourceId,
+            connectorId: syncRoot.resourceId,
           });
         }
         if (connector.status === 'failed' || connector.status === 'active') {
@@ -878,13 +878,13 @@ export class KnowledgeJobExecutionRepository {
           if (!resumed) {
             throw conflict(context, {
               reason: 'connector_retry_cas',
-              connectorId: root.resourceId,
+              connectorId: syncRoot.resourceId,
             });
           }
         } else if (connector.status !== 'syncing') {
           throw conflict(context, {
             reason: 'connector_retry_state',
-            connectorId: root.resourceId,
+            connectorId: syncRoot.resourceId,
             status: connector.status,
           });
         }

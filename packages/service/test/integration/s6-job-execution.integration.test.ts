@@ -6,6 +6,8 @@ import {
   ensureKnowledgeCollections,
   registerKnowledgeModels,
 } from '../../src/shared/persistence/schemas/knowledge-index';
+import { KnowledgeCredentialCipher } from '../../src/modules/knowledge/adapter/credential-cipher';
+import { KnowledgeConnectorRepository } from '../../src/modules/knowledge/repository/connector.repository';
 import { KnowledgeJobExecutionRepository } from '../../src/modules/knowledge/repository/job-execution.repository';
 import type { TenantContext } from '../../src/shared/persistence/knowledge/tenant';
 
@@ -354,6 +356,103 @@ describe('S6 Job execution repository', () => {
         childJobIds: [String(indexId)],
       }),
     ]);
+  });
+
+  it('resets a failed sync connector when retrying a failed child Job', async () => {
+    const models = registerKnowledgeModels(connection);
+    const connectorSpaceId = new mongoose.Types.ObjectId();
+    await models.KnowledgeSpace.create({
+      _id: connectorSpaceId,
+      workspaceId,
+      version: 1,
+      deletedAt: null,
+      createdByMemberId: context.memberId,
+      updatedByMemberId: context.memberId,
+      kind: 'space',
+      parentSpaceId: null,
+      name: `S6 child retry ${suffix}`,
+      description: '',
+      iconKey: 'book-open',
+      ownershipMemberId: context.memberId,
+      accessMode: 'workspace',
+      sourceAclMode: 'inherited',
+      sourcePermissionEnabled: true,
+      referenceRevision: 0,
+      permissionRevision: 0,
+      modelBindings: {},
+      defaultChunking: {},
+      status: 'active',
+    });
+    const connectorRepository = new KnowledgeConnectorRepository(
+      connection,
+      new KnowledgeCredentialCipher('c'.repeat(32)),
+    );
+    const connector = await connectorRepository.connect(
+      String(connectorSpaceId),
+      {
+        provider: 'feishu',
+        name: `S6 child retry ${suffix}`,
+        credentials: { provider: 'feishu', appId: 'app-id', appSecret: 'app-secret' },
+        config: { provider: 'feishu', folderToken: 'folder-token' },
+        syncEnabled: true,
+        syncIntervalMinutes: 60,
+      },
+      context,
+    );
+    const sync = await connectorRepository.markSyncing(
+      connector.id,
+      {
+        full: false,
+        requestHash: `s6-child-retry-${suffix}`,
+        idempotencyKey: `s6-child-retry-${suffix}`,
+      },
+      context,
+    );
+    const child = await repository.createChild(
+      {
+        kind: 'parse',
+        resourceType: 'source',
+        resourceId: String(new mongoose.Types.ObjectId()),
+        knowledgeSpaceId: String(connectorSpaceId),
+        inputSnapshot: {
+          sourceId: String(new mongoose.Types.ObjectId()),
+          sourceVersion: 1,
+          parseProvider: 'liteparse',
+          configHash: 'cfg',
+          chunking: { trainingType: 'chunk', chunkSettingMode: 'auto' },
+        },
+        rootJobId: sync.job.jobId,
+        parentJobId: sync.job.jobId,
+        priority: 5,
+        idempotencyKey: `s6-child-retry-parse-${suffix}`,
+      },
+      context,
+    );
+    await models.KnowledgeJob.updateMany(
+      { _id: { $in: [sync.job.jobId, child.jobId] }, workspaceId },
+      {
+        $set: {
+          status: 'failed',
+          error: { code: 'KNOWLEDGE_MODEL_FAILED', retryable: false },
+        },
+      },
+    );
+    await connectorRepository.completeSync(
+      {
+        connectorId: connector.id,
+        success: false,
+        errorCode: 'KNOWLEDGE_MODEL_FAILED',
+      },
+      context,
+    );
+    expect((await connectorRepository.get(connector.id, context)).status).toBe('failed');
+
+    const failedChild = await repository.getRaw(child.jobId, context);
+    const retried = await repository.control('retry', child.jobId, failedChild.version, context);
+    expect(retried.status).toBe('queued');
+    expect((await repository.getRaw(sync.job.jobId, context)).status).toBe('queued');
+    expect((await connectorRepository.get(connector.id, context)).status).toBe('syncing');
+    expect((await connectorRepository.get(connector.id, context)).lastError).toBeNull();
   });
 
   it('retries a failed Job and replays a failed root with all failed descendants', async () => {
