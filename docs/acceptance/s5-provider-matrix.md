@@ -2,12 +2,12 @@
 
 ## AIProxy
 
-| Check                                   | Evidence class       | Phase 1 result                      |
+| Check                                   | Evidence class       | Candidate result                    |
 | --------------------------------------- | -------------------- | ----------------------------------- |
 | Compose service/profile/digest          | Static real contract | PASS in `s5-compose-config.test.ts` |
 | AIProxy PostgreSQL independent database | Static real contract | PASS                                |
-| AIProxy `/api/status` live probe        | Real network         | NOT_RUN until phase 2 Compose smoke |
-| AIProxy `/v1/models` live probe         | Real network         | NOT_RUN until phase 2 Compose smoke |
+| AIProxy `/api/status` live probe        | Real network         | PASS, HTTP 200                      |
+| AIProxy `/v1/models` live probe         | Real network         | PASS, HTTP 200, empty catalog       |
 | Catalog HTTP fake                       | Mock contract        | PASS                                |
 | Model invocation HTTP fake              | Mock contract        | PASS                                |
 | Upstream model generation               | External provider    | `EXTERNAL_UNVERIFIED`               |
@@ -17,7 +17,7 @@ prove that an upstream model is usable.
 
 ## Parsing
 
-| Check                        | Evidence class              | Phase 1 result                               |
+| Check                        | Evidence class              | Candidate result                             |
 | ---------------------------- | --------------------------- | -------------------------------------------- |
 | LiteParse 2.0.8 real package | Local real package          | PASS                                         |
 | LiteParse PDF parse          | Local real package          | PASS                                         |
@@ -28,7 +28,7 @@ prove that an upstream model is usable.
 
 ## OCR
 
-| Provider                 | Phase 1 evidence                  | Result                |
+| Provider                 | Candidate evidence                | Result                |
 | ------------------------ | --------------------------------- | --------------------- |
 | Sangfor                  | HTTP fake contract                | `MOCK_PASS`           |
 | Somark                   | HTTP fake contract                | `MOCK_PASS`           |
