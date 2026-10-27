@@ -57,13 +57,40 @@ export interface SegmentRecord {
   workspaceId: string;
   knowledgeSpaceId: string;
   sourceId: string;
+  sourceVersion: number;
   searchEnabled: boolean;
   order: number;
   question: string;
   answer: string;
   content: string;
+  fullTextTokens: string;
+  fullTextVersion: number;
+  metadata: Record<string, unknown>;
+  history: SegmentHistoryRecord[];
+  indexes: SegmentIndexRecord[];
   indexStatus: string;
+  indexErrorCode: string | null;
   version: number;
+}
+
+export interface SegmentIndexRecord {
+  indexId: string;
+  type: 'default' | 'custom' | 'question' | 'summary';
+  modelId: string;
+  dimension: 768 | 1024 | 1536 | 3072;
+  storageType: 'vector' | 'halfvec';
+  vectorProfile: string;
+  vectorId: string;
+  text: string;
+  version: number;
+}
+
+export interface SegmentHistoryRecord {
+  version: number;
+  question: string;
+  answer: string;
+  changedAt: string;
+  changedByMemberId: string;
 }
 
 export interface TagRecord {
@@ -106,18 +133,51 @@ export interface JobRecord {
   workspaceId: string;
   knowledgeSpaceId: string;
   kind: string;
+  resourceType:
+    | 'workspace'
+    | 'space'
+    | 'directory'
+    | 'source'
+    | 'segment'
+    | 'job'
+    | 'connector'
+    | 'api_key'
+    | 'synonym'
+    | 'system';
+  resourceId: string;
+  inputSnapshot: Record<string, unknown>;
   status: string;
   priority: number;
   attempts: number;
   maxAttempts: number;
+  attemptEpoch: number;
+  leaseOwner: string | null;
+  leaseExpiresAt: string | null;
+  heartbeatAt: string | null;
+  availableAt: string;
+  cancelRequestedAt: string | null;
+  pausedAt: string | null;
   progress: Record<string, unknown>;
+  steps: Array<{
+    stepKey: string;
+    status: string;
+    attempts: number;
+    externalEvidence: Record<string, unknown> | null;
+    compensationState: string;
+    error?: Record<string, unknown> | null;
+  }>;
   error: { code?: string; message?: string } | null;
   result?: {
     objectBlobRefId?: string;
     expiresAt?: string;
     sourceCount?: number;
     manifest?: Record<string, unknown>;
+    childJobIds?: string[];
+    partial?: boolean;
+    sources?: Array<Record<string, unknown>>;
+    replayHistory?: Array<Record<string, unknown>>;
   } | null;
+  version: number;
   createdAt: string;
   updatedAt: string;
 }

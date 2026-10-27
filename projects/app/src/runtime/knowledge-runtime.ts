@@ -17,6 +17,10 @@ import {
   KnowledgeCredentialCipher,
   KnowledgeImportRepository,
   KnowledgeIngestionContentAdapter,
+  KnowledgeJobExecutionRepository,
+  KnowledgeSegmentIndexRepository,
+  KnowledgeFullTextRepository,
+  KnowledgeVectorRepository,
   KnowledgeUrlImportAdapter,
   CustomApiLibraryClient,
   FeishuConnectorClient,
@@ -39,6 +43,9 @@ import {
   S5QaPipelineAdapter,
   S5RemoteAssetAdapter,
   S5UsageRepository,
+  S06JobApplication,
+  S06ProcessingApplication,
+  S6ProcessingRepository,
   AxiosS5HttpTransport,
   AxiosS5OcrHttpTransport,
   loadS5AiproxyConfig,
@@ -53,6 +60,7 @@ import {
   KnowledgeCatalogRepository,
   FileApplication,
   KnowledgeObjectRefRepository,
+  KnowledgeOutboxDispatcher,
   KnowledgeReferenceRepository,
   KnowledgeMockAuthProvider,
   KnowledgeTagRepository,
@@ -67,8 +75,9 @@ import {
   type KnowledgeRuntimeConfig,
   type S5ArtifactStorePort,
 } from '@kb/service';
-import { FileTicketService, MinioKnowledgeObjectStore } from '@kb/storage';
-import { parseImportTemplate, parseWithLiteParse } from '@kb/parse';
+import { FileTicketService } from '../../../../sdk/storage/src/file-ticket';
+import { MinioKnowledgeObjectStore } from '../../../../sdk/storage/src/providers/minio';
+import { createDefaultDocumentParser, parseImportTemplate, parseWithLiteParse } from '@kb/parse';
 import { Queue } from 'bullmq';
 import { ObjectStoreArchiveSafetyAdapter } from './archive-safety.adapter';
 import type {
@@ -95,12 +104,21 @@ interface RuntimeState {
   s5ModelBindings: S5ModelBindingApplication;
   s5Processing: S5ProcessingApplication;
   s5Ocr: S5OcrApplication;
+  s06Jobs: S06JobApplication;
+  s06Processing: S06ProcessingApplication;
   telemetry: TelemetryRuntime;
 }
 
 interface TelemetryKnowledgeApiRuntime extends KnowledgeApiRuntime {
   withSpan<T>(name: string, attributes: SafeAttributes, fn: () => Promise<T> | T): Promise<T>;
   telemetryState(): TelemetryState;
+  s06WorkerServices(): {
+    processing: S06ProcessingApplication;
+    mongo: Awaited<ReturnType<typeof createKnowledgeConnections>>['mongo'];
+    redis: Awaited<ReturnType<typeof createKnowledgeConnections>>['redis'];
+    config: KnowledgeRuntimeConfig;
+    close: () => Promise<void>;
+  };
 }
 
 let runtimePromise: Promise<TelemetryKnowledgeApiRuntime> | undefined;
@@ -373,6 +391,87 @@ async function bootstrapRuntime(): Promise<TelemetryKnowledgeApiRuntime> {
       };
     },
   });
+  const queueAdapter = new BullMqQueueAdapter({ connection: redis });
+  const outboxDispatcher = new KnowledgeOutboxDispatcher(mongo, queueAdapter);
+  const jobExecution = new KnowledgeJobExecutionRepository(mongo);
+  const vectorRepository = new KnowledgeVectorRepository(pool);
+  const fullTextRepository = new KnowledgeFullTextRepository(mongo);
+  const processingStore = new S6ProcessingRepository(mongo);
+  const segmentIndexes = new KnowledgeSegmentIndexRepository(mongo, jobExecution, s5Catalog);
+  const s6Processing = new S06ProcessingApplication({
+    jobs: jobExecution,
+    store: processingStore,
+    artifacts: s5Artifacts,
+    processing: s5Processing,
+    vectors: vectorRepository,
+    fulltext: fullTextRepository,
+    models: s5Catalog,
+    bindings: s5BindingRepository,
+    port: {
+      async parse(input, context) {
+        const objectRef = await objectRefs.findObjectRef(input.blobRefId, context);
+        if (!objectRef || objectRef.state !== 'active') {
+          throw createKnowledgeError({
+            code: 'KNOWLEDGE_NOT_FOUND',
+            requestId: context.requestId,
+            traceId: context.traceId,
+            details: { blobRefId: input.blobRefId },
+          });
+        }
+        const object = await objectStore.getObject(objectRef.bucket, objectRef.objectKey, null, {
+          workspaceId: context.workspaceId,
+          knowledgeSpaceId: input.knowledgeSpaceId,
+          requestId: context.requestId,
+          traceId: context.traceId,
+        });
+        const chunks: Uint8Array[] = [];
+        for await (const chunk of object.body) chunks.push(chunk);
+        const bytes = Buffer.concat(chunks.map((chunk) => Buffer.from(chunk)));
+        const extension = input.fileName.includes('.')
+          ? input.fileName.split('.').at(-1)!.toLowerCase()
+          : 'txt';
+        const request = {
+          workspaceId: context.workspaceId,
+          knowledgeSpaceId: input.knowledgeSpaceId,
+          sourceId: input.sourceId,
+          fileRef: input.blobRefId,
+          extension,
+          mimeType: input.mimeType,
+          timeoutMs: 600_000,
+        };
+        if (input.mimeType === 'application/pdf' || extension === 'pdf') {
+          return parseWithLiteParse({ request, bytes, mimeType: input.mimeType });
+        }
+        const parseRequest = { ...request, bytes };
+        return createDefaultDocumentParser().parse(parseRequest);
+      },
+      async embed(input, context) {
+        const result = await s5Gateway.invoke<{
+          data: Array<{ index: number; embedding: number[] }>;
+        }>({
+          kind: 'embedding',
+          modelId: input.modelId,
+          texts: input.texts,
+          dimension: input.dimension,
+          workspaceId: context.workspaceId,
+          knowledgeSpaceId: input.knowledgeSpaceId,
+          resourceType: 'source',
+          resourceId: input.sourceId,
+          operation: 'knowledge.index.embed',
+          requestId: context.requestId,
+          traceId: context.traceId,
+          context,
+        });
+        return [...result.data.data]
+          .sort((left, right) => left.index - right.index)
+          .map((item) => item.embedding);
+      },
+      async dispatchOutbox(context) {
+        return (await outboxDispatcher.dispatchOnce(context)).dispatched;
+      },
+    },
+  });
+  const s06Jobs = new S06JobApplication(jobExecution, segmentIndexes, catalog, access);
   const credentialCipher = new KnowledgeCredentialCipher(
     resolveSecretRef(config.credentialEncryptionKeyRef),
   );
@@ -434,8 +533,8 @@ async function bootstrapRuntime(): Promise<TelemetryKnowledgeApiRuntime> {
     audits,
     s5Models,
     s5ModelBindings,
+    s06Jobs,
   );
-  const queueAdapter = new BullMqQueueAdapter({ connection: redis });
   const queues = new Map(
     KNOWLEDGE_QUEUE_NAMES.map((name) => [name, new Queue(name, { connection: redis })]),
   );
@@ -456,6 +555,8 @@ async function bootstrapRuntime(): Promise<TelemetryKnowledgeApiRuntime> {
     s5ModelBindings,
     s5Processing,
     s5Ocr,
+    s06Jobs,
+    s06Processing: s6Processing,
     telemetry,
   };
 
@@ -574,6 +675,17 @@ async function bootstrapRuntime(): Promise<TelemetryKnowledgeApiRuntime> {
     telemetryState() {
       return state.telemetry.state();
     },
+    s06WorkerServices() {
+      return {
+        processing: state.s06Processing,
+        mongo: state.mongo,
+        redis: state.redis,
+        config: state.config,
+        async close() {
+          await Promise.all([state.mongo.close(), state.redis.quit(), state.pool.end()]);
+        },
+      };
+    },
     async operationsStatus(input) {
       const health = await readiness(input.requestId);
       const queueDepth: Record<string, number> = {};
@@ -662,6 +774,16 @@ async function bootstrapRuntime(): Promise<TelemetryKnowledgeApiRuntime> {
 export function getKnowledgeApiRuntime(): Promise<TelemetryKnowledgeApiRuntime> {
   runtimePromise ??= bootstrapRuntime();
   return runtimePromise;
+}
+
+export async function getKnowledgeWorkerServices(): Promise<{
+  processing: S06ProcessingApplication;
+  mongo: Awaited<ReturnType<typeof createKnowledgeConnections>>['mongo'];
+  redis: Awaited<ReturnType<typeof createKnowledgeConnections>>['redis'];
+  config: KnowledgeRuntimeConfig;
+  close: () => Promise<void>;
+}> {
+  return (await getKnowledgeApiRuntime()).s06WorkerServices();
 }
 
 export function runtimeOperationIdsForTest(routes: readonly RouteEntry[]): string[] {

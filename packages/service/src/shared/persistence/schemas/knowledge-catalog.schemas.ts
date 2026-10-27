@@ -161,6 +161,7 @@ export interface KnowledgeSourceDoc extends WorkspaceFields {
     | 'queued'
     | 'parsing'
     | 'indexing'
+    | 'rebuilding'
     | 'ready'
     | 'partial'
     | 'failed'
@@ -222,6 +223,7 @@ export const KnowledgeSourceSchema = new Schema(
         'queued',
         'parsing',
         'indexing',
+        'rebuilding',
         'ready',
         'partial',
         'failed',
@@ -299,6 +301,7 @@ export interface SegmentIndexValue {
   type: string;
   modelId: string;
   dimension: 768 | 1024 | 1536 | 3072;
+  storageType: 'vector' | 'halfvec';
   vectorProfile: string;
   vectorId: string;
   text: string;
@@ -307,12 +310,14 @@ export interface SegmentIndexValue {
 
 export interface KnowledgeSegmentDoc extends WorkspaceFields {
   sourceId: Types.ObjectId;
+  sourceVersion: number;
   searchEnabled: boolean;
   order: number;
   question: string;
   answer: string;
   content: string;
   fullTextTokens: string;
+  fullTextVersion: number;
   metadata: Record<string, unknown>;
   history: Array<Record<string, unknown>>;
   indexes: SegmentIndexValue[];
@@ -331,6 +336,7 @@ const SegmentIndexSchema = new Schema(
     type: { type: String, required: true },
     modelId: { type: String, required: true },
     dimension: { type: Number, enum: [768, 1024, 1536, 3072], required: true },
+    storageType: { type: String, enum: ['vector', 'halfvec'], required: true },
     vectorProfile: { type: String, required: true },
     vectorId: { type: String, required: true },
     text: { type: String, required: true },
@@ -343,12 +349,14 @@ export const KnowledgeSegmentSchema = new Schema(
   {
     ...knowledgeCommonFields,
     sourceId: { type: Schema.Types.ObjectId, required: true },
+    sourceVersion: { type: Number, required: true, min: 1, default: 1 },
     searchEnabled: { type: Boolean, required: true, default: true },
     order: { type: Number, required: true, min: 0 },
     question: { type: String, required: true, maxlength: 100000 },
     answer: { type: String, required: true, maxlength: 100000 },
     content: { type: String, required: true },
     fullTextTokens: { type: String, default: '' },
+    fullTextVersion: { type: Number, required: true, min: 0, default: 0 },
     metadata: { type: Schema.Types.Mixed, required: true, default: {} },
     history: { type: [Schema.Types.Mixed], required: true, default: [] },
     indexes: { type: [SegmentIndexSchema], required: true, default: [] },
@@ -372,11 +380,35 @@ defineKnowledgeIndex(KnowledgeSegmentSchema, {
   options: { unique: true },
 });
 defineKnowledgeIndex(KnowledgeSegmentSchema, {
+  name: 'ix_segment_source_version',
+  key: {
+    workspaceId: 1,
+    knowledgeSpaceId: 1,
+    sourceId: 1,
+    sourceVersion: 1,
+    indexStatus: 1,
+  },
+});
+defineKnowledgeIndex(KnowledgeSegmentSchema, {
   name: 'ix_segment_fulltext',
-  key: { workspaceId: 1, knowledgeSpaceId: 1, fullTextTokens: 'text' },
+  key: {
+    workspaceId: 1,
+    knowledgeSpaceId: 1,
+    fullTextTokens: 'text',
+    question: 'text',
+    answer: 'text',
+    content: 'text',
+    'metadata.title': 'text',
+  },
   options: {
     default_language: 'none',
-    weights: { fullTextTokens: 1 },
+    weights: {
+      fullTextTokens: 1,
+      question: 4,
+      answer: 2,
+      content: 2,
+      'metadata.title': 1,
+    },
   },
 });
 defineKnowledgeIndex(KnowledgeSegmentSchema, {

@@ -169,6 +169,10 @@ defineKnowledgeIndex(KnowledgeJobSchema, {
   key: { status: 1, leaseExpiresAt: 1 },
 });
 defineKnowledgeIndex(KnowledgeJobSchema, {
+  name: 'ix_job_root',
+  key: { workspaceId: 1, 'inputSnapshot.rootJobId': 1, status: 1, updatedAt: 1 },
+});
+defineKnowledgeIndex(KnowledgeJobSchema, {
   name: 'ttl_job_expiry',
   key: { expiresAt: 1 },
   options: { expireAfterSeconds: 0 },

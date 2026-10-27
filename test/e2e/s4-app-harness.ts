@@ -194,6 +194,7 @@ export async function verifyResponsivePage(input: {
   path: string;
   cookie: Awaited<ReturnType<typeof consoleCookie>>;
   screenshotPrefix: string;
+  resultDir?: string;
 }): Promise<void> {
   const browser: Browser = await chromium.launch({ headless: true });
   try {
@@ -231,12 +232,13 @@ export async function verifyResponsivePage(input: {
         overflow,
         `${viewport.width}px horizontal overflow ${JSON.stringify(overflowDetails)}`,
       ).toBeLessThanOrEqual(1);
-      await mkdir(join(root, 'test-results', 's4-ui'), { recursive: true });
+      const resultDir = input.resultDir ?? 's4-ui';
+      await mkdir(join(root, 'test-results', resultDir), { recursive: true });
       await page.screenshot({
         path: join(
           root,
           'test-results',
-          's4-ui',
+          resultDir,
           `${input.screenshotPrefix}-${viewport.width}.png`,
         ),
         fullPage: true,

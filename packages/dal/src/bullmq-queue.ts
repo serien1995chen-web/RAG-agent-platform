@@ -50,6 +50,7 @@ export class BullMqQueueAdapter implements QueuePort {
       ...(options.weight !== undefined ? { priority: options.weight } : {}),
       ...(options.delayMs !== undefined ? { delay: options.delayMs } : {}),
       ...(options.attempts !== undefined ? { attempts: options.attempts } : {}),
+      ...(options.backoff !== undefined ? { backoff: options.backoff } : {}),
     };
     const existing = await this.queue(queue).getJob(jobId);
     if (existing) return { jobId, enqueued: false };

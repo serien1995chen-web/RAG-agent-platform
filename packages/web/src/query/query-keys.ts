@@ -73,6 +73,22 @@ export const knowledgeQueryKeys = {
       stableParams(params),
     ],
   },
+  segments: {
+    detail: (segmentId: string): QueryKey => [
+      'knowledge',
+      VERSION,
+      'segments',
+      'detail',
+      segmentId,
+    ],
+    history: (segmentId: string): QueryKey => [
+      'knowledge',
+      VERSION,
+      'segments',
+      segmentId,
+      'history',
+    ],
+  },
   tags: {
     list: (spaceId: string, params: QueryParams = { limit: 200 }): QueryKey => [
       'knowledge',

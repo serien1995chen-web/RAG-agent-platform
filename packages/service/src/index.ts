@@ -47,6 +47,7 @@ export {
   KNOWLEDGE_VECTOR_PROFILES,
   PGVECTOR_DDL_STATEMENTS,
   KnowledgeVectorRepository,
+  stableKnowledgeVectorId,
   ensurePgvectorDdl,
   vectorProfileOfDimension,
 } from './shared/persistence/pgvector';
@@ -78,6 +79,10 @@ export {
   DingtalkConnectorClient,
   FileApplication,
   KnowledgeJobRepository,
+  KnowledgeJobExecutionRepository,
+  KnowledgeSegmentIndexRepository,
+  KnowledgeFullTextRepository,
+  S6ProcessingRepository,
   KnowledgeObjectRefRepository,
   KnowledgeArchiveRepository,
   ObjectLifecycleService,
@@ -101,6 +106,10 @@ export {
   S5ModelBindingRepository,
   S5ArtifactRepository,
   S5ProcessingApplication,
+  S06ProcessingApplication,
+  S06JobApplication,
+  S06_OPERATION_IDS,
+  isS06Operation,
   S5QaPipelineAdapter,
   S5OcrApplication,
   S5OcrHttpAdapter,
@@ -154,6 +163,7 @@ export type {
   S5ArtifactStorePort,
   S5ObjectArtifactRef,
   S5ProcessingResult,
+  S6ProcessingPort,
 } from './modules/knowledge';
 export {
   KnowledgeMockAuthProvider,

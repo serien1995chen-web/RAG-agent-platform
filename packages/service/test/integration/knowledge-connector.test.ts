@@ -152,6 +152,35 @@ describe('TEST-ING-007-BLOCK connector state', () => {
       { connectorId: connected.id, version: updated.version, syncEnabled: true },
       context,
     );
+    const sourceId = new mongoose.Types.ObjectId();
+    await connection.models.KnowledgeSource.create({
+      _id: sourceId,
+      workspaceId,
+      knowledgeSpaceId: new mongoose.Types.ObjectId(spaceId),
+      version: 1,
+      deletedAt: null,
+      createdByMemberId: context.memberId,
+      updatedByMemberId: context.memberId,
+      directoryId: null,
+      kind: 'feishu',
+      name: 'Sync source',
+      externalId: 'doc_sync',
+      connectorId: new mongoose.Types.ObjectId(connected.id),
+      blobRefId: new mongoose.Types.ObjectId(),
+      originalUrl: null,
+      mimeType: 'text/markdown',
+      sizeBytes: 1,
+      contentHash: 'sync-source',
+      parseProvider: 'liteparse',
+      processingStatus: 'ready',
+      sourceVersion: 4,
+      searchEnabled: true,
+      permissionState: 'inherited',
+      permissionRevision: 0,
+      ownershipMemberId: context.memberId,
+      metadata: {},
+      tagValues: [],
+    });
     const sync = await repository.markSyncing(
       connected.id,
       { full: false, requestHash: 'sync-hash', idempotencyKey: `sync-${suffix}-00000001` },
@@ -160,6 +189,12 @@ describe('TEST-ING-007-BLOCK connector state', () => {
     expect(sync.job.kind).toBe('sync');
     expect(sync.connector.status).toBe('syncing');
     expect(sync.connector.cursorVersion).toBe(enabled.cursorVersion);
+    const syncJob = await connection.models.KnowledgeJob.findById(sync.job.jobId).lean();
+    expect(syncJob?.inputSnapshot).toMatchObject({
+      sourceIds: [String(sourceId)],
+      sourceVersions: { [String(sourceId)]: 4 },
+      cursorVersion: enabled.cursorVersion,
+    });
     const outbox = await connection.models.KnowledgeOutboxEvent.find({ workspaceId }).lean();
     expect(outbox.some((event) => event.eventType === 'connector.sync')).toBe(true);
   });

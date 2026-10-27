@@ -5,6 +5,8 @@ export interface OperationPageRequest {
   cursor?: string;
   limit?: number | string;
   sort?: string;
+  kind?: string;
+  status?: string;
 }
 
 export interface OperationPageInfo {

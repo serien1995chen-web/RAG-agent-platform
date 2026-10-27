@@ -30,8 +30,10 @@
     "archiver": "catalog:",
     "bullmq": "catalog:",
     "jszip": "catalog:",
+    "nanoid": "catalog:",
     "next": "catalog:",
     "next-i18next": "catalog:",
+    "p-limit": "catalog:",
     "react": "catalog:",
     "react-dom": "catalog:"
   },

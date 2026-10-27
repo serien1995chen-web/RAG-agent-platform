@@ -1,20 +1,37 @@
-import { BullMqQueueAdapter } from '@kb/dal';
+import { BullMqQueueAdapter, KNOWLEDGE_QUEUE_NAMES } from '@kb/dal';
 import { configureTelemetry } from '@kb/otel';
-import { writeFileSync } from 'node:fs';
+import { unlinkSync, writeFileSync } from 'node:fs';
+import { nanoid } from 'nanoid';
 import {
   KnowledgeOutboxDispatcher,
-  createKnowledgeConnections,
-  ensureKnowledgeCollections,
-  ensurePgvectorDdl,
   loadKnowledgeRuntimeConfig,
   registerKnowledgeModels,
   type TenantContext,
 } from '@kb/service';
 import { createFileCleanupCycle } from './file-worker';
 import { KnowledgeArchiveWorker } from './archive-worker';
+import { getKnowledgeWorkerServices } from './knowledge-runtime';
+import { S06JobHandlers, type S06QueuePayload } from './s06-job-handlers';
+import { createWorkerRegistry, startWorkerRegistry } from './worker-registry';
 
 const POLL_INTERVAL_MS = 1_000;
 const BATCH_SIZE = 20;
+
+const QUEUE_SETTINGS = {
+  'knowledge-import': { concurrency: 10, timeoutMs: 600_000, maxAttempts: 3 },
+  'knowledge-parse': { concurrency: 10, timeoutMs: 600_000, maxAttempts: 3 },
+  'knowledge-segment': { concurrency: 10, timeoutMs: 600_000, maxAttempts: 3 },
+  'knowledge-qa': { concurrency: 10, timeoutMs: 900_000, maxAttempts: 3 },
+  'knowledge-ocr': { concurrency: 10, timeoutMs: 600_000, maxAttempts: 3 },
+  'knowledge-caption': { concurrency: 10, timeoutMs: 600_000, maxAttempts: 3 },
+  'knowledge-embed': { concurrency: 10, timeoutMs: 600_000, maxAttempts: 3 },
+  'knowledge-index': { concurrency: 10, timeoutMs: 300_000, maxAttempts: 3 },
+  'knowledge-rebuild': { concurrency: 10, timeoutMs: 1_800_000, maxAttempts: 3 },
+  'knowledge-sync': { concurrency: 4, timeoutMs: 1_800_000, maxAttempts: 4 },
+  'knowledge-delete': { concurrency: 4, timeoutMs: 900_000, maxAttempts: 5 },
+  'knowledge-outbox': { concurrency: 20, timeoutMs: 30_000, maxAttempts: 10 },
+  'knowledge-cleanup': { concurrency: 4, timeoutMs: 1_800_000, maxAttempts: 5 },
+} as const;
 
 async function start(): Promise<void> {
   const config = loadKnowledgeRuntimeConfig();
@@ -27,18 +44,34 @@ async function start(): Promise<void> {
     telemetry.log('knowledge.worker.disabled', { operation: 'bootstrap' });
     return;
   }
-  const connections = await createKnowledgeConnections(config);
-  await ensureKnowledgeCollections(connections.mongo);
-  const models = registerKnowledgeModels(connections.mongo);
-  await ensurePgvectorDdl(connections.pg);
-  const queue = new BullMqQueueAdapter({ connection: connections.redis });
-  const dispatcher = new KnowledgeOutboxDispatcher(connections.mongo, queue);
+  const { mongo, redis, processing, close: closeServices } = await getKnowledgeWorkerServices();
+  const models = registerKnowledgeModels(mongo);
+  const queue = new BullMqQueueAdapter({ connection: redis });
+  const dispatcher = new KnowledgeOutboxDispatcher(mongo, queue);
+  const handlers = new S06JobHandlers(processing);
+  const definitions = KNOWLEDGE_QUEUE_NAMES.map((queueName) => ({
+    queue: queueName,
+    ...QUEUE_SETTINGS[queueName],
+    backoffMs: [1_000, 5_000, 30_000],
+    handler: (payload: S06QueuePayload, workerId: string) =>
+      queueName === 'knowledge-import'
+        ? handlers.import(payload, workerId)
+        : handlers.queue(queueName, payload, workerId),
+  }));
+  const registry = createWorkerRegistry(definitions);
+  const workers = startWorkerRegistry({
+    registry,
+    connection: redis,
+    workerId: `${config.instanceId}:${process.pid}:${nanoid(10)}`,
+    logger: telemetry,
+  });
+  await workers.ready;
   const fileCleanup = createFileCleanupCycle({
-    connection: connections.mongo,
+    connection: mongo,
     config,
     instanceId: config.instanceId,
   });
-  const archiveWorker = new KnowledgeArchiveWorker(connections.mongo, config, config.instanceId);
+  const archiveWorker = new KnowledgeArchiveWorker(mongo, config, config.instanceId);
   let stopping = false;
   let timer: NodeJS.Timeout | undefined;
 
@@ -62,6 +95,8 @@ async function start(): Promise<void> {
               scopes: ['knowledge:admin'],
               isWorkspaceOwner: false,
             };
+            await processing.recoverExpiredLeases(context);
+            await processing.requeueDueRetries(context);
             for (let index = 0; index < BATCH_SIZE; index += 1) {
               const result = await dispatcher.dispatchOnce(context);
               if (!result.dispatched) break;
@@ -87,22 +122,30 @@ async function start(): Promise<void> {
     if (stopping) return;
     stopping = true;
     if (timer) clearTimeout(timer);
+    try {
+      unlinkSync('/tmp/knowledge-worker-ready');
+    } catch {
+      // The readiness marker may already be absent after an abnormal start.
+    }
+    await workers.close();
     await queue.close();
-    await connections.close();
+    await closeServices();
     telemetry.log('knowledge.worker.stopped', { operation: 'shutdown' });
     await telemetry.dispose();
   };
 
   process.once('SIGINT', () => void stop());
   process.once('SIGTERM', () => void stop());
-  telemetry.log('knowledge.worker.started', { operation: 'bootstrap' });
+  telemetry.log('knowledge.worker.started', {
+    operation: `bootstrap:${KNOWLEDGE_QUEUE_NAMES.length}`,
+  });
   writeFileSync('/tmp/knowledge-worker-ready', 'ready\n');
   await tick();
 }
 
 start().catch((error) => {
-  configureTelemetry({ serviceName: 'knowledge-worker' }).log('knowledge.worker.bootstrap.failed', {
-    errorType: error instanceof Error ? error.name : typeof error,
-  });
-  process.exitCode = 1;
+  process.stderr.write(
+    `knowledge.worker.bootstrap.failed ${error instanceof Error ? error.name : typeof error}\n`,
+  );
+  process.exit(1);
 });

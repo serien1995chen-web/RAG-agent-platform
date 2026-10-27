@@ -12,6 +12,22 @@ import { registerKnowledgeModels } from '../schemas/knowledge-index';
 import type { KnowledgeOutboxEventDoc } from '../schemas/knowledge-job.schemas';
 import { requireWorkspaceId, type TenantContext } from './tenant';
 
+const QUEUE_ATTEMPTS = {
+  'knowledge-import': 3,
+  'knowledge-parse': 3,
+  'knowledge-segment': 3,
+  'knowledge-qa': 3,
+  'knowledge-ocr': 3,
+  'knowledge-caption': 3,
+  'knowledge-embed': 3,
+  'knowledge-index': 3,
+  'knowledge-rebuild': 3,
+  'knowledge-sync': 4,
+  'knowledge-delete': 5,
+  'knowledge-outbox': 10,
+  'knowledge-cleanup': 5,
+} as const satisfies Record<KnowledgeQueueName, number>;
+
 export interface CreateKnowledgeOutboxEventInput {
   workspaceId: string;
   knowledgeSpaceId: string | null;
@@ -159,12 +175,20 @@ export class KnowledgeOutboxDispatcher {
       inputHash,
     });
     try {
-      await this.queue.enqueue(queueName, jobId, {
-        outboxEventId: String(event._id),
-        eventKey: event.eventKey,
-        workspaceId: event.workspaceId,
-        payload: event.payload,
-      });
+      await this.queue.enqueue(
+        queueName,
+        jobId,
+        {
+          outboxEventId: String(event._id),
+          eventKey: event.eventKey,
+          workspaceId: event.workspaceId,
+          payload: event.payload,
+        },
+        {
+          attempts: QUEUE_ATTEMPTS[queueName],
+          backoff: { type: 'exponential', delay: 1_000 },
+        },
+      );
       await model.updateOne(
         { _id: event._id, workspaceId, version: event.version },
         {

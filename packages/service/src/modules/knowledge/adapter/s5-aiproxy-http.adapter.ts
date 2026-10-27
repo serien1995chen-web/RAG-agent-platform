@@ -273,7 +273,7 @@ export class S5MockAiproxyTransport implements S5HttpTransportPort {
         data: {
           data: body.input.map((_, index) => ({
             index,
-            embedding: Array.from({ length: dimension }, () => 0),
+            embedding: Array.from({ length: dimension }, (_, index) => (index === 0 ? 1 : 0)),
           })),
           usage: { prompt_tokens: 0, total_tokens: 0 },
         } as T,

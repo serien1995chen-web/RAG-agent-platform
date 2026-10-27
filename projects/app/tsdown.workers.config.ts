@@ -16,7 +16,33 @@ export default defineConfig({
   dts: false,
   sourcemap: true,
   clean: true,
+  shims: true,
+  banner: {
+    js: [
+      "import { createRequire as __kbCreateRequire } from 'node:module';",
+      "import __kbModule from 'node:module';",
+      "import { fileURLToPath as __kbFileURLToPath } from 'node:url';",
+      "import { dirname as __kbDirname } from 'node:path';",
+      "import { delimiter as __kbDelimiter, join as __kbJoin } from 'node:path';",
+      "process.env.NODE_PATH = [__kbJoin(process.cwd(), 'packages/service/node_modules'), __kbJoin(process.cwd(), 'packages/parse/node_modules'), __kbJoin(process.cwd(), 'packages/qa/node_modules'), __kbJoin(process.cwd(), 'packages/chunk/node_modules'), __kbJoin(process.cwd(), 'sdk/storage/node_modules'), process.env.NODE_PATH].filter(Boolean).join(__kbDelimiter);",
+      '__kbModule._initPaths();',
+      'var require = __kbCreateRequire(import.meta.url);',
+      'var __filename = __kbFileURLToPath(import.meta.url);',
+      'var __dirname = __kbDirname(__filename);',
+    ].join('\n'),
+  },
+  copy: [
+    {
+      from: '../../packages/service/node_modules/@node-rs/jieba/dict.txt',
+      to: 'dist/workers',
+    },
+    {
+      from: '../../packages/service/node_modules/@node-rs/jieba/idf.txt',
+      to: 'dist/workers',
+    },
+  ],
   deps: {
     alwaysBundle: [/^@kb\//],
+    neverBundle: ['ali-oss', 'cos-nodejs-sdk-v5'],
   },
 });

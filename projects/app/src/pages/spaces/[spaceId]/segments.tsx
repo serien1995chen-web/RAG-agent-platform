@@ -25,6 +25,7 @@ import Head from 'next/head';
 import { useRouter } from 'next/router';
 import { useEffect, useState } from 'react';
 import type {
+  BatchActionResult,
   PageInfo,
   SegmentRecord,
   SourceRecord,
@@ -41,6 +42,7 @@ export default function SegmentsPage() {
   const sourceFromQuery = typeof router.query.sourceId === 'string' ? router.query.sourceId : '';
   const [sourceId, setSourceId] = useState(sourceFromQuery);
   const [problem, setProblem] = useState<unknown>(null);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const space = useKnowledgeQuery<SpaceRecord>(
     knowledgeQueryKeys.spaces.detail(spaceId),
     spaceId ? `/v1/knowledge/spaces/${spaceId}` : null,
@@ -74,6 +76,18 @@ export default function SegmentsPage() {
         body: {},
       }),
     invalidateKeys: [knowledgeQueryKeys.sources.segments(sourceId), knowledgeQueryKeys.jobs.list()],
+  });
+  const batch = useKnowledgeMutation<
+    BatchActionResult,
+    { action: 'reindex' | 'delete'; items: Array<{ segmentId: string; version: number }> }
+  >({
+    mutationFn: (input) =>
+      knowledgeRequest<BatchActionResult>('/v1/knowledge/segments/batch-actions', {
+        method: 'POST',
+        body: input,
+      }),
+    invalidateKeys: [knowledgeQueryKeys.sources.segments(sourceId), knowledgeQueryKeys.jobs.list()],
+    onSuccess: () => setSelectedIds([]),
   });
 
   useEffect(() => {
@@ -120,7 +134,8 @@ export default function SegmentsPage() {
           segments.error ??
           problem ??
           createSegment.error ??
-          deleteSegment.error
+          deleteSegment.error ??
+          batch.error
         }
         onRetry={() => void segments.refetch()}
       />
@@ -202,6 +217,26 @@ export default function SegmentsPage() {
         meta={
           segments.data ? t('common.records', { count: segments.data.items.length }) : undefined
         }
+        actions={
+          <Button
+            busy={batch.isLoading}
+            disabled={sourceId === '' || selectedIds.length === 0}
+            onClick={() => {
+              const versions = new Map(
+                (segments.data?.items ?? []).map((segment) => [segment.id, segment.version]),
+              );
+              void batch.mutateAsync({
+                action: 'reindex',
+                items: selectedIds.map((segmentId) => ({
+                  segmentId,
+                  version: versions.get(segmentId) ?? 1,
+                })),
+              });
+            }}
+          >
+            {t('segments.reindexSelected')}
+          </Button>
+        }
       >
         {segments.isLoading ? (
           <LoadingState />
@@ -212,6 +247,24 @@ export default function SegmentsPage() {
             empty={t('segments.empty')}
             caption={t('segments.register')}
             columns={[
+              {
+                key: 'select',
+                label: t('segments.select'),
+                render: (segment) => (
+                  <input
+                    type="checkbox"
+                    aria-label={`${t('segments.select')} ${segment.order}`}
+                    checked={selectedIds.includes(segment.id)}
+                    onChange={(event) =>
+                      setSelectedIds((current) =>
+                        event.target.checked
+                          ? [...new Set([...current, segment.id])]
+                          : current.filter((id) => id !== segment.id),
+                      )
+                    }
+                  />
+                ),
+              },
               {
                 key: 'order',
                 label: t('segments.columnOrder'),
@@ -244,14 +297,22 @@ export default function SegmentsPage() {
                 key: 'actions',
                 label: t('segments.columnActions'),
                 render: (segment) => (
-                  <Button
-                    size="sm"
-                    tone="danger"
-                    busy={deleteSegment.isLoading}
-                    onClick={() => void removeSegment(segment)}
-                  >
-                    {t('segments.actionDelete')}
-                  </Button>
+                  <div className="row-actions">
+                    <Button
+                      size="sm"
+                      onClick={() => void router.push(`/spaces/${spaceId}/segments/${segment.id}`)}
+                    >
+                      {t('segments.actionEdit')}
+                    </Button>
+                    <Button
+                      size="sm"
+                      tone="danger"
+                      busy={deleteSegment.isLoading}
+                      onClick={() => void removeSegment(segment)}
+                    >
+                      {t('segments.actionDelete')}
+                    </Button>
+                  </div>
                 ),
               },
             ]}

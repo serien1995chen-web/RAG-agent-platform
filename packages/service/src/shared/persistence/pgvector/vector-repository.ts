@@ -63,7 +63,19 @@ function vectorLiteral(vector: readonly number[]): string {
   return `[${vector.join(',')}]`;
 }
 
-function vectorIdentity(record: KnowledgeVectorRecordInput): string {
+export function stableKnowledgeVectorId(
+  record: Pick<
+    KnowledgeVectorRecordInput,
+    | 'workspaceId'
+    | 'knowledgeSpaceId'
+    | 'sourceId'
+    | 'segmentId'
+    | 'indexId'
+    | 'embeddingModelId'
+    | 'version'
+    | 'contentHash'
+  >,
+): string {
   return uuidV5(
     [
       'kb-vector:v1',
@@ -126,9 +138,9 @@ export class KnowledgeVectorRepository {
           reason: 'zero_or_non_finite_norm',
         });
       }
-      const vectorId = vectorIdentity(record);
+      const vectorId = stableKnowledgeVectorId(record);
       try {
-        await this.pool.query(
+        const inserted = await this.pool.query(
           `INSERT INTO ${profile.tableName} (
             id, workspace_id, knowledge_space_id, source_id, segment_id, index_id,
             embedding_model_id, embedding, norm, search_enabled, content_hash, version
@@ -157,7 +169,11 @@ export class KnowledgeVectorRepository {
             record.version,
           ],
         );
+        if (inserted.rowCount !== 1) {
+          throw vectorError(context, 'KNOWLEDGE_CONFLICT', { vectorId });
+        }
       } catch (error) {
+        if (typeof error === 'object' && error !== null && 'problem' in error) throw error;
         if ((error as { code?: string }).code === '23505') {
           throw vectorError(context, 'KNOWLEDGE_CONFLICT', { vectorId });
         }
@@ -305,6 +321,54 @@ export class KnowledgeVectorRepository {
     return { deleted: result.rowCount ?? 0 };
   }
 
+  async cleanupUnreferenced(
+    input: {
+      workspaceId: string;
+      activeVectorIds: readonly string[];
+      olderThan: Date;
+      batchSize?: number;
+    },
+    context: TenantContext,
+  ): Promise<{ deleted: number; byProfile: Record<string, number> }> {
+    if (input.workspaceId !== context.workspaceId) {
+      throw vectorError(context, 'KNOWLEDGE_VALIDATION_FAILED', {
+        field: 'workspaceId',
+        reason: 'tenant_mismatch',
+      });
+    }
+    const batchSize = Math.max(1, Math.min(input.batchSize ?? 500, 500));
+    const byProfile: Record<string, number> = {};
+    let deleted = 0;
+    for (const profile of KNOWLEDGE_VECTOR_PROFILES) {
+      try {
+        const result = await this.pool.query(
+          `WITH candidates AS (
+             SELECT id FROM ${profile.tableName}
+             WHERE workspace_id = $1
+               AND updated_at < $2
+               AND NOT (id = ANY($3::uuid[]))
+             ORDER BY updated_at
+             LIMIT $4
+           )
+           DELETE FROM ${profile.tableName} target
+           USING candidates
+           WHERE target.id = candidates.id`,
+          [input.workspaceId, input.olderThan, [...input.activeVectorIds], batchSize],
+        );
+        const count = result.rowCount ?? 0;
+        byProfile[profile.tableName] = count;
+        deleted += count;
+      } catch {
+        throw vectorError(context, 'KNOWLEDGE_DEPENDENCY_UNAVAILABLE', {
+          dependency: 'postgres',
+          operation: 'vector_cleanup',
+          profile: profile.tableName,
+        });
+      }
+    }
+    return { deleted, byProfile };
+  }
+
   listProfiles(): readonly VectorProfile[] {
     return KNOWLEDGE_VECTOR_PROFILES;
   }
@@ -312,6 +376,6 @@ export class KnowledgeVectorRepository {
   stableVectorIdForTest(record: KnowledgeVectorRecordInput): string {
     const profile = vectorProfileOfDimension(record.dimension);
     if (!profile) return randomUUID();
-    return vectorIdentity(record);
+    return stableKnowledgeVectorId(record);
   }
 }

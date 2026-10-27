@@ -78,6 +78,10 @@ export type {
   CreateSpaceInput,
 } from './repository/catalog.repository';
 export { KnowledgeJobRepository } from './repository/job.repository';
+export { KnowledgeJobExecutionRepository } from './repository/job-execution.repository';
+export { KnowledgeSegmentIndexRepository } from './repository/segment-index.repository';
+export { KnowledgeFullTextRepository } from './repository/fulltext.repository';
+export { S6ProcessingRepository } from './repository/s06-processing.repository';
 export { KnowledgeImportRepository } from './repository/import.repository';
 export { KnowledgeConnectorRepository } from './repository/connector.repository';
 export { KnowledgeObjectRefRepository } from './repository/object-ref.repository';
@@ -115,11 +119,33 @@ export { S5ModelApplication } from './application/s5-model.application';
 export { S5ModelBindingApplication } from './application/s5-model-binding.application';
 export { S5ModelGateway, createS5ModelGateway } from './application/s5-model-gateway';
 export { S5ProcessingApplication } from './application/s5-processing.application';
+export { S06ProcessingApplication } from './application/s06-processing.application';
+export type { S6ProcessingPort } from './application/s06-processing.application';
+export type {
+  S6ArtifactPort,
+  S6ExternalProcessingPort,
+  S6FullTextPort,
+  S6JobPort,
+  S6ProcessingStorePort,
+  S6SegmentRecord,
+  S6SourceRecord,
+  S6VectorPort,
+} from './application/s06-processing-ports';
+export {
+  S06JobApplication,
+  S06_OPERATION_IDS,
+  isS06Operation,
+} from './application/operations/s06-jobs';
 export { S5QaPipelineAdapter } from './application/s5-qa-pipeline';
 export { S5OcrApplication } from './application/s5-ocr.application';
 export { S5ArtifactRepository } from './repository/s5-artifact.repository';
 export { S5ModelBindingRepository } from './repository/s5-model-binding.repository';
 export { S5UsageRepository } from './repository/s5-usage.repository';
+export { projectFullText } from './adapter/s06-jieba.tokenizer';
+export type {
+  FullTextProjectionInput,
+  FullTextProjectionOutput,
+} from './adapter/s06-jieba.tokenizer';
 export { KnowledgeAuditRepository, safeAuditDiff } from '../../shared/persistence/knowledge/audit';
 export type {
   AiproxyProviderConfig,

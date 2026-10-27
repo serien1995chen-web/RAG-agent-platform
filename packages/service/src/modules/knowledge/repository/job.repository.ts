@@ -41,10 +41,20 @@ function jobDto(document: Plain<KnowledgeJobDoc>, steps: Plain<KnowledgeJobStepD
       ? String(document.knowledgeSpaceId)
       : '000000000000000000000000',
     kind: document.kind,
+    resourceType: document.resourceType,
+    resourceId: document.resourceId,
+    inputSnapshot: document.inputSnapshot,
     status: document.status,
     priority: document.priority,
     attempts: document.attempts,
     maxAttempts: document.maxAttempts,
+    attemptEpoch: document.attemptEpoch,
+    leaseOwner: document.leaseOwner,
+    leaseExpiresAt: document.leaseExpiresAt?.toISOString() ?? null,
+    heartbeatAt: document.heartbeatAt?.toISOString() ?? null,
+    availableAt: document.availableAt.toISOString(),
+    cancelRequestedAt: document.cancelRequestedAt?.toISOString() ?? null,
+    pausedAt: document.pausedAt?.toISOString() ?? null,
     progress: document.progress,
     steps: steps.map((step) => ({
       stepKey: step.stepKey,
@@ -54,6 +64,8 @@ function jobDto(document: Plain<KnowledgeJobDoc>, steps: Plain<KnowledgeJobStepD
       compensationState: step.compensationState,
     })),
     error: document.error,
+    result: document.result,
+    version: document.version,
     createdAt: document.createdAt.toISOString(),
     updatedAt: document.updatedAt.toISOString(),
   };
@@ -71,7 +83,7 @@ export class KnowledgeJobRepository {
     this.audit = new KnowledgeAuditRepository(connection);
   }
 
-  async list(query: PageRequest, context: TenantContext) {
+  async list(query: PageRequest & { kind?: string; status?: string }, context: TenantContext) {
     requireWorkspaceId(context);
     const limit = parseLimit(query.limit, context);
     const sort = parseSort(query.sort, context);
@@ -80,6 +92,8 @@ export class KnowledgeJobRepository {
       .find({
         workspaceId: context.workspaceId,
         deletedAt: null,
+        ...(query.kind ? { kind: query.kind } : {}),
+        ...(query.status ? { status: query.status } : {}),
         ...cursorFilter(sort, cursor),
       })
       .sort({ [sort.field]: sort.direction, _id: sort.direction })

@@ -538,6 +538,22 @@ export class KnowledgeConnectorRepository implements ConnectorRepositoryPort {
           )
           .lean<Plain<KnowledgeConnectorDoc>>();
         if (!updated) throw tenantError(context, 'KNOWLEDGE_CONFLICT');
+        const linkedSources = await this.sources
+          .find({
+            workspaceId: context.workspaceId,
+            knowledgeSpaceId: current.knowledgeSpaceId,
+            connectorId: current._id,
+            deletedAt: null,
+          })
+          .sort({ _id: 1 })
+          .limit(200)
+          .select({ _id: 1, sourceVersion: 1 })
+          .session(session)
+          .lean<Array<{ _id: Types.ObjectId; sourceVersion: number }>>();
+        const sourceIds = linkedSources.map((source) => String(source._id));
+        const sourceVersions = Object.fromEntries(
+          linkedSources.map((source) => [String(source._id), source.sourceVersion]),
+        );
         const [job] = await this.jobs.create(
           [
             jobDocument({
@@ -551,6 +567,9 @@ export class KnowledgeConnectorRepository implements ConnectorRepositoryPort {
                 provider: current.provider,
                 full: command.full,
                 requestHash: command.requestHash,
+                sourceIds,
+                sourceVersions,
+                cursorVersion: current.cursorVersion,
               },
               context,
               total: 1,

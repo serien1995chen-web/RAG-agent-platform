@@ -238,14 +238,15 @@ describe('S5 model and parse frozen contract', () => {
     expect(openapiText).not.toContain(FORBIDDEN_LEGACY_FIELD);
   });
 
-  it('registers the four S5 operations without exposing an S6 worker consumer', () => {
-    expect(runtime.operations).toHaveLength(83);
-    expect(deferred.operations).toHaveLength(37);
+  it('keeps S5 operation wiring separate from the S6 worker registry', () => {
+    expect(runtime.operations).toHaveLength(95);
+    expect(deferred.operations).toHaveLength(25);
     const worker = readFileSync(
       join(root, 'projects', 'app', 'src', 'runtime', 'knowledge-worker.ts'),
       'utf8',
     );
-    expect(worker).not.toMatch(/s5|liteparse|S5ModelGateway|S5OcrApplication/);
+    expect(worker).toContain('createWorkerRegistry');
+    expect(worker).not.toMatch(/liteparse|S5ModelGateway|S5OcrApplication/);
   });
 
   it('keeps S4 14 and S5 4 operations in the W1 runtime union', () => {
