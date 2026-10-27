@@ -62,10 +62,48 @@ const workspaceManifestExtras: Record<
       '@types/archiver': 'catalog:',
     },
   },
+  'packages/contracts': {
+    dependencies: {
+      '@apidevtools/swagger-parser': 'catalog:',
+      ajv: 'catalog:',
+      'openapi-types': 'catalog:',
+    },
+    devDependencies: {
+      '@types/js-yaml': 'catalog:',
+    },
+  },
   'packages/parse': {
+    dependencies: {
+      '@xmldom/xmldom': 'catalog:',
+      'domino-ext': 'catalog:',
+      encoding: 'catalog:',
+      'iconv-lite': 'catalog:',
+      jschardet: 'catalog:',
+    },
     devDependencies: {
       '@types/mime-types': 'catalog:',
+      '@types/papaparse': 'catalog:',
       '@types/yauzl': 'catalog:',
+    },
+  },
+  'packages/service': {
+    dependencies: {
+      '@apidevtools/json-schema-ref-parser': 'catalog:',
+      'form-data': 'catalog:',
+      'http-proxy-agent': 'catalog:',
+      'https-proxy-agent': 'catalog:',
+      'ipaddr.js': 'catalog:',
+      'jsonpath-plus': 'catalog:',
+      multer: 'catalog:',
+      'proxy-addr': 'catalog:',
+      'proxy-agent': 'catalog:',
+      'proxy-from-env': 'catalog:',
+    },
+    devDependencies: {
+      '@types/async-retry': 'catalog:',
+      '@types/multer': 'catalog:',
+      '@types/proxy-from-env': 'catalog:',
+      '@types/tunnel': 'catalog:',
     },
   },
 };

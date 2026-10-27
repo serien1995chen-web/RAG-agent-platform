@@ -18,6 +18,7 @@ const EnvironmentSchema = z.object({
   KB_S3_SECRET_KEY_REF: z.string().min(1),
   KB_FILE_PUBLIC_BASE_URL: z.string().url().default('http://localhost:3010'),
   KB_FILE_TICKET_SECRET_REF: z.string().min(1).default('env:KB_FILE_TICKET_SECRET'),
+  KB_CREDENTIAL_ENCRYPTION_KEY_REF: z.string().min(1).default('env:KB_CREDENTIAL_ENCRYPTION_KEY'),
   KB_AUTH_MODE: z.enum(['mock', 'iam']).default('mock'),
   KB_MOCK_AUTH_TOKEN: z.string().min(16).optional(),
   KB_MOCK_WORKSPACE_ID: z.string().min(1).max(64).optional(),
@@ -61,6 +62,7 @@ export interface KnowledgeRuntimeConfig {
   };
   filePublicBaseUrl: string;
   fileTicketSecretRef: string;
+  credentialEncryptionKeyRef: string;
   auth: { mode: 'mock'; fixture: KnowledgeMockAuthConfig } | { mode: 'iam' } | { mode: 'disabled' };
   externalModes: {
     model: 'mock' | 'real';
@@ -132,6 +134,7 @@ export function loadKnowledgeRuntimeConfig(
     },
     filePublicBaseUrl: data.KB_FILE_PUBLIC_BASE_URL,
     fileTicketSecretRef: data.KB_FILE_TICKET_SECRET_REF,
+    credentialEncryptionKeyRef: data.KB_CREDENTIAL_ENCRYPTION_KEY_REF,
     auth,
     externalModes: {
       model: data.KB_EXTERNAL_MODEL_MODE,

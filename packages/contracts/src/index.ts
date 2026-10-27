@@ -66,6 +66,30 @@ export type {
 } from './errors/knowledge-errors';
 
 export {
+  CLOUD_CONNECTOR_PROVIDERS,
+  CONNECTOR_PROVIDERS,
+  ChunkingSettingsSchema,
+  ConnectorCatalogRequestSchema,
+  ConnectorConfigSchema,
+  ConnectorConnectSchema,
+  ConnectorCredentialsSchema,
+  ConnectorImportSchema,
+  ConnectorSyncSchema,
+  ConnectorUpdateSchema,
+  CustomApiConnectorConfigSchema,
+  CustomApiCredentialsSchema,
+  IMPORT_KINDS,
+  ImportApiLibrarySchema,
+  ImportBackupSchema,
+  ImportFilesSchema,
+  ImportTemplateSchema,
+  ImportTextSchema,
+  ImportUrlSchema,
+  PARSE_PROVIDERS,
+  credentialMetadataOf,
+} from './knowledge/ingestion-contract';
+
+export {
   DEFERRED_OPERATION_MANIFEST,
   FULL_ROUTE_REGISTRY,
   FULL_ROUTE_REGISTRY_BY_ID,

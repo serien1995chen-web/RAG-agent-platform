@@ -78,6 +78,20 @@ export const RUNTIME_OPERATION_IDS = Object.freeze([
   'API-RESOURCE-OWNERSHIP-TRANSFER',
   'API-JOB-LIST',
   'API-JOB-GET',
+  'API-IMPORT-FILES',
+  'API-IMPORT-TEXT',
+  'API-IMPORT-URL',
+  'API-IMPORT-TEMPLATE',
+  'API-IMPORT-BACKUP',
+  'API-IMPORT-API-CATALOG',
+  'API-IMPORT-API-LIBRARY',
+  'API-CONNECTOR-CONNECT',
+  'API-CONNECTOR-CATALOG',
+  'API-CONNECTOR-IMPORT',
+  'API-CONNECTOR-SYNC',
+  'API-CONNECTOR-UPDATE',
+  'API-CONNECTOR-GET',
+  'API-CONNECTOR-DELETE',
 ]);
 
 const HTTP_METHODS = new Set(['get', 'post', 'put', 'patch', 'delete', 'options', 'head', 'trace']);
@@ -226,13 +240,12 @@ function capabilityIdsOf(operationId) {
   }
   if (operationId.startsWith('API-JOB-')) return ['TRAIN-001', 'TRAIN-005', 'TRAIN-007'];
   if (operationId.startsWith('API-IMPORT-')) {
-    const parse = ['PARSE-001', 'PARSE-002', 'PARSE-003', 'PARSE-004', 'PARSE-005'];
-    if (operationId.endsWith('FILES')) return ['ING-001', 'FILE-001', ...parse];
-    if (operationId.endsWith('TEXT')) return ['ING-002', 'DOWN-004', ...parse];
-    if (operationId.endsWith('URL')) return ['ING-003', ...parse];
-    if (operationId.endsWith('TEMPLATE')) return ['ING-004', ...parse];
-    if (operationId.endsWith('BACKUP')) return ['ING-005', ...parse];
-    return ['ING-006', 'API-002', ...parse];
+    if (operationId.endsWith('FILES')) return ['ING-001'];
+    if (operationId.endsWith('TEXT')) return ['ING-002', 'DOWN-004'];
+    if (operationId.endsWith('URL')) return ['ING-003'];
+    if (operationId.endsWith('TEMPLATE')) return ['ING-004'];
+    if (operationId.endsWith('BACKUP')) return ['ING-005'];
+    return ['ING-006', 'API-002'];
   }
   if (operationId.startsWith('API-CONNECTOR-')) {
     if (operationId.includes('GET') || operationId.includes('CATALOG')) {

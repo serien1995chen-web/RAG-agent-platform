@@ -300,6 +300,8 @@ beforeAll(async () => {
       KB_FILE_PUBLIC_BASE_URL: baseUrl,
       KB_FILE_TICKET_SECRET_REF: 'env:KB_FILE_E2E_TICKET_SECRET',
       KB_FILE_E2E_TICKET_SECRET: `file-e2e-ticket-secret-${suffix}-value`,
+      KB_CREDENTIAL_ENCRYPTION_KEY_REF: 'env:KB_FILE_E2E_CREDENTIAL_KEY',
+      KB_FILE_E2E_CREDENTIAL_KEY: `file-e2e-credential-key-${suffix}-value`,
       KB_AUTH_MODE: 'mock',
       KB_MOCK_AUTH_TOKEN: authToken,
       KB_MOCK_WORKSPACE_ID: workspaceId,
@@ -416,7 +418,7 @@ describe('ACC-UI-01…07 file surfaces', () => {
         await page.goto(`${baseUrl}/spaces/${spaceId}/import`, {
           waitUntil: 'networkidle',
         });
-        await page.getByRole('heading', { level: 1, name: '文件上传' }).waitFor();
+        await page.getByRole('heading', { level: 1, name: '导入知识来源' }).waitFor();
         expect(await page.locator('input[type=file]').count()).toBe(1);
         expect(await page.getByRole('button', { name: '选择文件' }).count()).toBe(1);
         expect(await page.getByText('选择文件', { exact: true }).count()).toBeGreaterThan(0);

@@ -45,6 +45,13 @@ export type {
 } from './archive-safety';
 export { ConcurrencyLimiterError, createLimiter, mapWithConcurrency } from './concurrency';
 export type { ConcurrencyLimiter, ConcurrencyLimiterOptions } from './concurrency';
+export { IMPORT_TEMPLATE_LIMITS, parseImportTemplate } from './import-template';
+export type {
+  ImportTemplateDiagnostic,
+  ImportTemplateResult,
+  ImportTemplateRow,
+  ParseImportTemplateInput,
+} from './import-template';
 
 /**
  * 解析所需上下文：兼容既有 DocumentParserPort.parse(request) 调用面。

@@ -13,6 +13,19 @@ import {
 } from '@kb/otel';
 import {
   KnowledgeAccessRepository,
+  KnowledgeConnectorRepository,
+  KnowledgeCredentialCipher,
+  KnowledgeImportRepository,
+  KnowledgeIngestionContentAdapter,
+  KnowledgeUrlImportAdapter,
+  CustomApiLibraryClient,
+  FeishuConnectorClient,
+  YuqueConnectorClient,
+  DingtalkConnectorClient,
+  S04IngestionApplication,
+  FixtureScopedAuthPort,
+  FixtureQuotaGatePort,
+  isS04Operation,
   KnowledgeAuditRepository,
   KnowledgeApplication,
   KnowledgeArchiveRepository,
@@ -33,6 +46,7 @@ import {
   type KnowledgeRuntimeConfig,
 } from '@kb/service';
 import { FileTicketService, MinioKnowledgeObjectStore } from '@kb/storage';
+import { parseImportTemplate } from '@kb/parse';
 import { Queue } from 'bullmq';
 import { ObjectStoreArchiveSafetyAdapter } from './archive-safety.adapter';
 import type {
@@ -54,6 +68,7 @@ interface RuntimeState {
   authProvider: KnowledgeMockAuthProvider;
   rateLimiter: RedisKnowledgeRateLimiter;
   application: KnowledgeApplication;
+  ingestion: S04IngestionApplication;
   telemetry: TelemetryRuntime;
 }
 
@@ -190,6 +205,31 @@ async function bootstrapRuntime(): Promise<TelemetryKnowledgeApiRuntime> {
   const catalog = new KnowledgeCatalogRepository(mongo);
   const access = new KnowledgeAccessRepository(mongo);
   const objectRefs = new KnowledgeObjectRefRepository(mongo);
+  const credentialCipher = new KnowledgeCredentialCipher(
+    resolveSecretRef(config.credentialEncryptionKeyRef),
+  );
+  const ingestionContent = new KnowledgeIngestionContentAdapter(objectStore);
+  const ingestion = new S04IngestionApplication({
+    imports: new KnowledgeImportRepository(mongo),
+    connectors: new KnowledgeConnectorRepository(mongo, credentialCipher),
+    objectRefs,
+    content: ingestionContent,
+    urlImport: new KnowledgeUrlImportAdapter(),
+    customApi: new CustomApiLibraryClient(),
+    providers: {
+      feishu: new FeishuConnectorClient(),
+      yuque: new YuqueConnectorClient(),
+      dingtalk: new DingtalkConnectorClient(),
+    },
+    access,
+    scopedAuth: new FixtureScopedAuthPort(),
+    quotaGate: new FixtureQuotaGatePort(),
+    templateParser: {
+      parse(input) {
+        return parseImportTemplate(input);
+      },
+    },
+  });
   const fileTickets = new FileTicketService(
     resolveSecretRef(config.fileTicketSecretRef),
     config.filePublicBaseUrl,
@@ -241,6 +281,7 @@ async function bootstrapRuntime(): Promise<TelemetryKnowledgeApiRuntime> {
     authProvider: new KnowledgeMockAuthProvider(config.auth, config.environment),
     rateLimiter: new RedisKnowledgeRateLimiter(redis),
     application,
+    ingestion,
     telemetry,
   };
 
@@ -414,6 +455,16 @@ async function bootstrapRuntime(): Promise<TelemetryKnowledgeApiRuntime> {
         input.context.requestId,
         input.context.traceId,
       );
+      if (isS04Operation(input.route.operationId)) {
+        return state.ingestion.dispatch({
+          operationId: input.route.operationId,
+          params: input.params,
+          query: input.query,
+          headers: input.headers,
+          body: input.body,
+          context: tenant,
+        });
+      }
       return state.application.dispatch({
         operationId: input.route.operationId,
         params: input.params,

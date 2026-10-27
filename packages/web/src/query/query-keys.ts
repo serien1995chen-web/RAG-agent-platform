@@ -127,4 +127,13 @@ export const knowledgeQueryKeys = {
   operations: {
     status: ['knowledge', VERSION, 'operations', 'status'] as QueryKey,
   },
+  connectors: {
+    detail: (connectorId?: string): QueryKey => [
+      'knowledge',
+      VERSION,
+      'connectors',
+      'detail',
+      connectorId ?? null,
+    ],
+  },
 };

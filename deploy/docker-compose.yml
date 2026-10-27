@@ -16,6 +16,8 @@ x-knowledge-environment: &knowledge-environment
   KB_FILE_PUBLIC_BASE_URL: ${KB_FILE_PUBLIC_BASE_URL:-http://localhost:3010}
   KB_FILE_TICKET_SECRET_REF: env:KB_FILE_TICKET_SECRET
   KB_FILE_TICKET_SECRET: ${KB_FILE_TICKET_SECRET:-local-file-ticket-secret-32-bytes-minimum}
+  KB_CREDENTIAL_ENCRYPTION_KEY_REF: env:KB_CREDENTIAL_ENCRYPTION_KEY
+  KB_CREDENTIAL_ENCRYPTION_KEY: ${KB_CREDENTIAL_ENCRYPTION_KEY:-local-credential-key-32-bytes-minimum}
   KB_AUTH_MODE: ${KB_AUTH_MODE:-mock}
   KB_MOCK_AUTH_TOKEN: ${KB_MOCK_AUTH_TOKEN:-kb-dev-console-token-0000000000}
   KB_MOCK_WORKSPACE_ID: ${KB_MOCK_WORKSPACE_ID:-ws_compose_local}

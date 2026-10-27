@@ -60,8 +60,20 @@ export { withMongoTransaction } from './shared/persistence/with-mongo-transactio
 
 export {
   KnowledgeApplication,
+  S04IngestionApplication,
+  FixtureScopedAuthPort,
+  FixtureQuotaGatePort,
   KnowledgeAccessRepository,
   KnowledgeCatalogRepository,
+  KnowledgeConnectorRepository,
+  KnowledgeCredentialCipher,
+  KnowledgeImportRepository,
+  KnowledgeIngestionContentAdapter,
+  KnowledgeUrlImportAdapter,
+  CustomApiLibraryClient,
+  FeishuConnectorClient,
+  YuqueConnectorClient,
+  DingtalkConnectorClient,
   FileApplication,
   KnowledgeJobRepository,
   KnowledgeObjectRefRepository,
@@ -72,6 +84,7 @@ export {
   KnowledgeReferenceRepository,
   ReferenceApplication,
   MockReferenceRegistryAdapter,
+  isS04Operation,
 } from './modules/knowledge';
 export type {
   AclResourceType,
@@ -97,6 +110,19 @@ export type {
   PermissionLevel,
   SourcePermissionAction,
   SourcePermissionState,
+  S04IngestionDependencies,
+  ConnectorRepositoryPort,
+  CustomApiClientPort,
+  ImportKind,
+  ImportPlanningPort,
+  ImportSourceDraft,
+  ImportSubmissionCommand,
+  ImportSubmissionPort,
+  ImportSubmissionResult,
+  IngestionContentPort,
+  QuotaGatePort,
+  ScopedAuthPort,
+  UrlImportAdapterPort,
 } from './modules/knowledge';
 export {
   KnowledgeMockAuthProvider,

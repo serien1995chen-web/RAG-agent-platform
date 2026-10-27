@@ -49,6 +49,17 @@ export {
 export type { CatalogGovernanceState } from './components/catalog-governance-state';
 export { FilePreviewPanel } from './components/file-preview';
 export { FileUploadPanel } from './components/file-upload';
+export { IMPORT_SOURCE_KINDS, ImportWorkbench, splitIds } from './components/import-workbench';
+export type { ImportSourceKind, ImportWorkbenchProps } from './components/import-workbench';
+export {
+  CONNECTOR_CREDENTIAL_FIELDS,
+  CONNECTOR_PROVIDERS,
+  ConnectorForm,
+  normalizeConnectorProvider,
+} from './components/connector-form';
+export type { ConnectorFormInput, ConnectorRecord } from './components/connector-form';
+export { ConnectorsPanel } from './components/connectors-panel';
+export type { ConnectorsPanelProps } from './components/connectors-panel';
 export type {
   Column,
   Density,

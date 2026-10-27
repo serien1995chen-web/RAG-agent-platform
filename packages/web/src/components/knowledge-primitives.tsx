@@ -386,6 +386,11 @@ export function ProblemNotice(props: { error: unknown; onRetry?: () => void }) {
             {t('common.trace', { value: problem.traceId })} |{' '}
             {t('common.request', { value: problem.requestId })}
           </Text>
+          {typeof problem.params.rowNumber === 'number' ? (
+            <Text mt={1} fontSize="xs">
+              {t('common.rowNumber', { rowNumber: problem.params.rowNumber })}
+            </Text>
+          ) : null}
           <Text mt={1} color="kn.inkMuted" fontSize="xs">
             {problem.retryable ? t('common.retryable') : t('common.notRetryable')}
           </Text>

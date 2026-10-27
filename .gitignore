@@ -4,6 +4,7 @@ dist/
 .next/
 out/
 coverage/
+test-results/
 .turbo/
 *.tsbuildinfo
 artifacts/
