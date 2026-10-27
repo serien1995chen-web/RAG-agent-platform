@@ -371,6 +371,79 @@ export class KnowledgeConnectorRepository implements ConnectorRepositoryPort {
     });
   }
 
+  async getSyncCursor(
+    connectorId: string,
+    externalRootId: string,
+    context: TenantContext,
+  ): Promise<{
+    cursor: Record<string, unknown>;
+    cursorVersion: number;
+    syncRunId: string | null;
+    lastChangeSetHash: string;
+  } | null> {
+    const cursor = await this.cursors
+      .findOne({
+        workspaceId: requireWorkspaceId(context),
+        connectorId: objectIdOf(connectorId, context, 'connectorId'),
+        externalRootId,
+      })
+      .lean<Plain<KnowledgeConnectorCursorDoc>>();
+    if (!cursor) return null;
+    return {
+      cursor: cursor.cursor,
+      cursorVersion: cursor.cursorVersion,
+      syncRunId: cursor.syncRunId ? String(cursor.syncRunId) : null,
+      lastChangeSetHash: cursor.lastChangeSetHash,
+    };
+  }
+
+  async completeSync(
+    input: {
+      connectorId: string;
+      success: boolean;
+      errorCode?: string;
+    },
+    context: TenantContext,
+  ): Promise<void> {
+    const connector = await this.connectors
+      .findOne({
+        workspaceId: requireWorkspaceId(context),
+        _id: objectIdOf(input.connectorId, context, 'connectorId'),
+        deletedAt: null,
+      })
+      .lean<Plain<KnowledgeConnectorDoc>>();
+    if (!connector) throw tenantError(context, 'KNOWLEDGE_NOT_FOUND');
+    if (connector.status === 'active' || connector.status === 'failed') return;
+    if (connector.status !== 'syncing') return;
+    const now = new Date();
+    await this.connectors.updateOne(
+      {
+        _id: connector._id,
+        workspaceId: connector.workspaceId,
+        version: connector.version,
+        status: 'syncing',
+        deletedAt: null,
+      },
+      {
+        $set: {
+          status: input.success ? 'active' : 'failed',
+          nextSyncAt: input.success
+            ? new Date(now.getTime() + connector.syncIntervalMinutes * 60_000)
+            : null,
+          lastSuccessAt: input.success ? now : connector.lastSuccessAt,
+          lastError: input.success
+            ? null
+            : {
+                code: input.errorCode ?? 'KNOWLEDGE_JOB_FAILED',
+                retryable: false,
+              },
+          updatedByMemberId: context.memberId,
+        },
+        $inc: { version: 1 },
+      },
+    );
+  }
+
   async preflightSync(
     connectorId: string,
     command: {
@@ -538,22 +611,6 @@ export class KnowledgeConnectorRepository implements ConnectorRepositoryPort {
           )
           .lean<Plain<KnowledgeConnectorDoc>>();
         if (!updated) throw tenantError(context, 'KNOWLEDGE_CONFLICT');
-        const linkedSources = await this.sources
-          .find({
-            workspaceId: context.workspaceId,
-            knowledgeSpaceId: current.knowledgeSpaceId,
-            connectorId: current._id,
-            deletedAt: null,
-          })
-          .sort({ _id: 1 })
-          .limit(200)
-          .select({ _id: 1, sourceVersion: 1 })
-          .session(session)
-          .lean<Array<{ _id: Types.ObjectId; sourceVersion: number }>>();
-        const sourceIds = linkedSources.map((source) => String(source._id));
-        const sourceVersions = Object.fromEntries(
-          linkedSources.map((source) => [String(source._id), source.sourceVersion]),
-        );
         const [job] = await this.jobs.create(
           [
             jobDocument({
@@ -567,8 +624,6 @@ export class KnowledgeConnectorRepository implements ConnectorRepositoryPort {
                 provider: current.provider,
                 full: command.full,
                 requestHash: command.requestHash,
-                sourceIds,
-                sourceVersions,
                 cursorVersion: current.cursorVersion,
               },
               context,

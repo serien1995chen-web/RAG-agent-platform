@@ -318,3 +318,31 @@ export interface S6ExternalProcessingPort {
   ): Promise<number[][]>;
   dispatchOutbox(context: TenantContext): Promise<boolean>;
 }
+
+export interface S6ConnectorSyncResult {
+  sourceIds: string[];
+  sourceVersions: Record<string, number>;
+  cursorVersion: number;
+  sourceCount: number;
+  changeSetHash: string;
+  replayed: boolean;
+}
+
+export interface S6ConnectorSyncPort {
+  discover(
+    input: {
+      jobId: string;
+      connectorId: string;
+      full: boolean;
+    },
+    context: TenantContext,
+  ): Promise<S6ConnectorSyncResult>;
+  complete(
+    input: {
+      connectorId: string;
+      success: boolean;
+      errorCode?: string;
+    },
+    context: TenantContext,
+  ): Promise<void>;
+}

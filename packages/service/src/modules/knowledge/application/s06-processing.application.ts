@@ -10,6 +10,7 @@ import type {
   S6JobRecord,
   S6ProcessingStorePort,
   S6SegmentRecord,
+  S6ConnectorSyncPort,
   S6VectorPort,
 } from './s06-processing-ports';
 import { tenantError } from '../../../shared/persistence/knowledge/tenant';
@@ -99,6 +100,7 @@ export class S06ProcessingApplication {
       models: ModelCatalogPort;
       bindings: Pick<ModelBindingRepositoryPort, 'list'>;
       port: S6ProcessingPort;
+      sync?: S6ConnectorSyncPort;
     },
   ) {}
 
@@ -108,6 +110,31 @@ export class S06ProcessingApplication {
 
   recoverExpiredLeases(context: TenantContext) {
     return this.input.jobs.recoverExpiredLeases(context);
+  }
+
+  private async completeConnectorRoot(rootJobId: string, context: TenantContext) {
+    if (!this.input.sync) return;
+    let root: S6JobRecord;
+    try {
+      root = await this.input.jobs.getRaw(rootJobId, context);
+    } catch {
+      return;
+    }
+    if (
+      root.kind !== 'sync' ||
+      root.resourceType !== 'connector' ||
+      !['succeeded', 'failed', 'dead_letter', 'cancelled'].includes(root.status)
+    ) {
+      return;
+    }
+    await this.input.sync.complete(
+      {
+        connectorId: root.resourceId,
+        success: root.status === 'succeeded',
+        ...(typeof root.error?.code === 'string' ? { errorCode: root.error.code } : {}),
+      },
+      context,
+    );
   }
 
   requeueDueRetries(context: TenantContext) {
@@ -140,7 +167,9 @@ export class S06ProcessingApplication {
   ): Promise<{ outcome: 'succeeded' | 'retry' | 'dead_letter'; jobId: string; value?: T }> {
     const raw = await this.input.jobs.getRaw(jobId, context);
     if (['succeeded', 'failed', 'dead_letter', 'cancelled'].includes(raw.status)) {
-      await this.input.jobs.aggregateRoot(String(raw.inputSnapshot.rootJobId ?? raw._id), context);
+      const rootJobId = String(raw.inputSnapshot.rootJobId ?? raw._id);
+      await this.input.jobs.aggregateRoot(rootJobId, context);
+      await this.completeConnectorRoot(rootJobId, context);
       return { outcome: raw.status === 'succeeded' ? 'succeeded' : 'dead_letter', jobId };
     }
     const claimed = await this.input.jobs.claimById(
@@ -148,7 +177,9 @@ export class S06ProcessingApplication {
       context,
     );
     if (!claimed) {
-      await this.input.jobs.aggregateRoot(String(raw.inputSnapshot.rootJobId ?? raw._id), context);
+      const rootJobId = String(raw.inputSnapshot.rootJobId ?? raw._id);
+      await this.input.jobs.aggregateRoot(rootJobId, context);
+      await this.completeConnectorRoot(rootJobId, context);
       return { outcome: 'retry', jobId };
     }
     const claimedRaw = await this.input.jobs.getRaw(jobId, context);
@@ -184,7 +215,9 @@ export class S06ProcessingApplication {
           context,
         );
       }
-      await this.input.jobs.aggregateRoot(String(job.inputSnapshot.rootJobId ?? job._id), context);
+      const rootJobId = String(job.inputSnapshot.rootJobId ?? job._id);
+      await this.input.jobs.aggregateRoot(rootJobId, context);
+      await this.completeConnectorRoot(rootJobId, context);
       return { outcome: 'succeeded', jobId, value: completed.value };
     } catch (error) {
       const failed = await this.input.jobs.fail(
@@ -208,7 +241,9 @@ export class S06ProcessingApplication {
           // Preserve the original fenced Job failure when status projection fails.
         }
       }
-      await this.input.jobs.aggregateRoot(String(raw.inputSnapshot.rootJobId ?? raw._id), context);
+      const rootJobId = String(raw.inputSnapshot.rootJobId ?? raw._id);
+      await this.input.jobs.aggregateRoot(rootJobId, context);
+      await this.completeConnectorRoot(rootJobId, context);
       return {
         outcome: failed.status === 'dead_letter' ? 'dead_letter' : 'retry',
         jobId,
@@ -858,16 +893,40 @@ export class S06ProcessingApplication {
   }
 
   private async processSync(job: S6JobRecord, context: TenantContext) {
-    if (!Array.isArray(job.inputSnapshot.sourceIds)) {
-      throw createKnowledgeError({
-        code: 'KNOWLEDGE_CURSOR_INVALID',
-        requestId: context.requestId,
-        traceId: context.traceId,
-        retryable: false,
-        details: { reason: 'change_set_required', connectorId: job.inputSnapshot.connectorId },
-      });
+    let discovered:
+      | {
+          sourceIds: string[];
+          sourceVersions: Record<string, number>;
+          cursorVersion: number;
+          sourceCount: number;
+          changeSetHash: string;
+          replayed: boolean;
+        }
+      | undefined;
+    let sourceIds: string[];
+    if (Array.isArray(job.inputSnapshot.sourceIds)) {
+      sourceIds = [...new Set(job.inputSnapshot.sourceIds.map(String))];
+    } else {
+      const connectorId = String(job.inputSnapshot.connectorId ?? '');
+      if (!connectorId || !this.input.sync) {
+        throw createKnowledgeError({
+          code: 'KNOWLEDGE_CURSOR_INVALID',
+          requestId: context.requestId,
+          traceId: context.traceId,
+          retryable: false,
+          details: { reason: 'change_set_required', connectorId },
+        });
+      }
+      discovered = await this.input.sync.discover(
+        {
+          jobId: String(job._id),
+          connectorId,
+          full: job.inputSnapshot.full === true,
+        },
+        context,
+      );
+      sourceIds = discovered.sourceIds;
     }
-    const sourceIds = [...new Set(job.inputSnapshot.sourceIds.map(String))];
     if (sourceIds.length === 0) {
       await this.input.jobs.setStep(
         {
@@ -877,7 +936,9 @@ export class S06ProcessingApplication {
           idempotencyKey: `sync-batch:${job._id}:empty`,
           evidence: {
             sourceCount: 0,
-            cursorVersion: job.inputSnapshot.cursorVersion ?? null,
+            cursorVersion: discovered?.cursorVersion ?? job.inputSnapshot.cursorVersion ?? null,
+            changeSetHash: discovered?.changeSetHash ?? null,
+            replayed: discovered?.replayed ?? false,
           },
         },
         context,
@@ -885,8 +946,10 @@ export class S06ProcessingApplication {
       return {
         result: {
           childJobIds: [],
-          cursorVersion: job.inputSnapshot.cursorVersion ?? null,
+          cursorVersion: discovered?.cursorVersion ?? job.inputSnapshot.cursorVersion ?? null,
           sourceCount: 0,
+          changeSetHash: discovered?.changeSetHash ?? null,
+          replayed: discovered?.replayed ?? false,
         },
         value: [],
       };
@@ -928,17 +991,24 @@ export class S06ProcessingApplication {
         idempotencyKey: `sync-batch:${job._id}:${sourceIds.join(',')}`,
         evidence: {
           sourceCount: sourceIds.length,
-          sourceVersions: job.inputSnapshot.sourceVersions ?? {},
-          cursorVersion: job.inputSnapshot.cursorVersion ?? null,
+          sourceVersions: discovered?.sourceVersions ?? job.inputSnapshot.sourceVersions ?? {},
+          cursorVersion: discovered?.cursorVersion ?? job.inputSnapshot.cursorVersion ?? null,
+          changeSetHash: discovered?.changeSetHash ?? null,
+          replayed: discovered?.replayed ?? false,
         },
       },
       context,
     );
     await this.input.jobs.releaseWaitingForChildren(String(job._id), childJobIds, context, {
-      cursorVersion: job.inputSnapshot.cursorVersion ?? null,
+      cursorVersion: discovered?.cursorVersion ?? job.inputSnapshot.cursorVersion ?? null,
+      changeSetHash: discovered?.changeSetHash ?? null,
     });
     return {
-      result: { childJobIds, cursorVersion: job.inputSnapshot.cursorVersion ?? null },
+      result: {
+        childJobIds,
+        cursorVersion: discovered?.cursorVersion ?? job.inputSnapshot.cursorVersion ?? null,
+        changeSetHash: discovered?.changeSetHash ?? null,
+      },
       value: childJobIds,
       waitingForChildren: true,
     };

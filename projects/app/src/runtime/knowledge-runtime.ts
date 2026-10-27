@@ -19,6 +19,7 @@ import {
   KnowledgeIngestionContentAdapter,
   KnowledgeJobExecutionRepository,
   KnowledgeSegmentIndexRepository,
+  KnowledgeConnectorSyncApplication,
   KnowledgeFullTextRepository,
   KnowledgeVectorRepository,
   KnowledgeUrlImportAdapter,
@@ -74,6 +75,7 @@ import {
   tenantContextOf,
   type KnowledgeRuntimeConfig,
   type S5ArtifactStorePort,
+  type TenantContext,
 } from '@kb/service';
 import { FileTicketService } from '../../../../sdk/storage/src/file-ticket';
 import { MinioKnowledgeObjectStore } from '../../../../sdk/storage/src/providers/minio';
@@ -398,6 +400,61 @@ async function bootstrapRuntime(): Promise<TelemetryKnowledgeApiRuntime> {
   const fullTextRepository = new KnowledgeFullTextRepository(mongo);
   const processingStore = new S6ProcessingRepository(mongo);
   const segmentIndexes = new KnowledgeSegmentIndexRepository(mongo, jobExecution, s5Catalog);
+  const credentialCipher = new KnowledgeCredentialCipher(
+    resolveSecretRef(config.credentialEncryptionKeyRef),
+  );
+  const ingestionContent = new KnowledgeIngestionContentAdapter(objectStore);
+  const connectorClients = {
+    feishu: new FeishuConnectorClient(),
+    yuque: new YuqueConnectorClient(),
+    dingtalk: new DingtalkConnectorClient(),
+  };
+  const connectorGateway = {
+    async catalog(input: {
+      provider: 'feishu' | 'yuque' | 'dingtalk';
+      config: Record<string, unknown>;
+      credentials: Record<string, unknown>;
+      rootId: string;
+      cursor?: string;
+      context: TenantContext;
+    }) {
+      const request = {
+        config: input.config,
+        credentials: input.credentials,
+        rootId: input.rootId,
+        ...(input.cursor ? { cursor: input.cursor } : {}),
+        context: input.context,
+      };
+      if (input.provider === 'feishu') return connectorClients.feishu.catalog(request);
+      if (input.provider === 'yuque') return connectorClients.yuque.catalog(request);
+      return connectorClients.dingtalk.catalog(request);
+    },
+    async content(input: {
+      provider: 'feishu' | 'yuque' | 'dingtalk';
+      config: Record<string, unknown>;
+      credentials: Record<string, unknown>;
+      externalIds: readonly string[];
+      context: TenantContext;
+    }) {
+      const request = {
+        config: input.config,
+        credentials: input.credentials,
+        externalIds: input.externalIds,
+        context: input.context,
+      };
+      if (input.provider === 'feishu') return connectorClients.feishu.content(request);
+      if (input.provider === 'yuque') return connectorClients.yuque.content(request);
+      return connectorClients.dingtalk.content(request);
+    },
+  };
+  const importRepository = new KnowledgeImportRepository(mongo);
+  const connectorRepository = new KnowledgeConnectorRepository(mongo, credentialCipher);
+  const connectorSync = new KnowledgeConnectorSyncApplication({
+    connectors: connectorRepository,
+    gateway: connectorGateway,
+    content: ingestionContent,
+    imports: importRepository,
+  });
   const s6Processing = new S06ProcessingApplication({
     jobs: jobExecution,
     store: processingStore,
@@ -407,6 +464,7 @@ async function bootstrapRuntime(): Promise<TelemetryKnowledgeApiRuntime> {
     fulltext: fullTextRepository,
     models: s5Catalog,
     bindings: s5BindingRepository,
+    sync: connectorSync,
     port: {
       async parse(input, context) {
         const objectRef = await objectRefs.findObjectRef(input.blobRefId, context);
@@ -472,22 +530,14 @@ async function bootstrapRuntime(): Promise<TelemetryKnowledgeApiRuntime> {
     },
   });
   const s06Jobs = new S06JobApplication(jobExecution, segmentIndexes, catalog, access);
-  const credentialCipher = new KnowledgeCredentialCipher(
-    resolveSecretRef(config.credentialEncryptionKeyRef),
-  );
-  const ingestionContent = new KnowledgeIngestionContentAdapter(objectStore);
   const ingestion = new S04IngestionApplication({
-    imports: new KnowledgeImportRepository(mongo),
-    connectors: new KnowledgeConnectorRepository(mongo, credentialCipher),
+    imports: importRepository,
+    connectors: connectorRepository,
     objectRefs,
     content: ingestionContent,
     urlImport: new KnowledgeUrlImportAdapter(),
     customApi: new CustomApiLibraryClient(),
-    providers: {
-      feishu: new FeishuConnectorClient(),
-      yuque: new YuqueConnectorClient(),
-      dingtalk: new DingtalkConnectorClient(),
-    },
+    providers: connectorClients,
     access,
     scopedAuth: new FixtureScopedAuthPort(),
     quotaGate: new FixtureQuotaGatePort(),

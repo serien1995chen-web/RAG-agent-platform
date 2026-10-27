@@ -191,10 +191,14 @@ describe('TEST-ING-007-BLOCK connector state', () => {
     expect(sync.connector.cursorVersion).toBe(enabled.cursorVersion);
     const syncJob = await connection.models.KnowledgeJob.findById(sync.job.jobId).lean();
     expect(syncJob?.inputSnapshot).toMatchObject({
-      sourceIds: [String(sourceId)],
-      sourceVersions: { [String(sourceId)]: 4 },
+      connectorId: connected.id,
+      full: false,
       cursorVersion: enabled.cursorVersion,
     });
+    expect(syncJob?.inputSnapshot).not.toHaveProperty('sourceIds');
+    expect((await connection.models.KnowledgeSource.findById(sourceId).lean())?.sourceVersion).toBe(
+      4,
+    );
     const outbox = await connection.models.KnowledgeOutboxEvent.find({ workspaceId }).lean();
     expect(outbox.some((event) => event.eventType === 'connector.sync')).toBe(true);
   });

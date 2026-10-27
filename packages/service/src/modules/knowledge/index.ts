@@ -121,8 +121,15 @@ export { S5ModelGateway, createS5ModelGateway } from './application/s5-model-gat
 export { S5ProcessingApplication } from './application/s5-processing.application';
 export { S06ProcessingApplication } from './application/s06-processing.application';
 export type { S6ProcessingPort } from './application/s06-processing.application';
+export { KnowledgeConnectorSyncApplication } from './application/s06-connector-sync.application';
+export type {
+  ConnectorChangeSetApplyInput,
+  ConnectorChangeSetApplyResult,
+} from './application/s06-connector-sync.application';
 export type {
   S6ArtifactPort,
+  S6ConnectorSyncPort,
+  S6ConnectorSyncResult,
   S6ExternalProcessingPort,
   S6FullTextPort,
   S6JobPort,

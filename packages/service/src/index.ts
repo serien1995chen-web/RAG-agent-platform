@@ -107,6 +107,7 @@ export {
   S5ArtifactRepository,
   S5ProcessingApplication,
   S06ProcessingApplication,
+  KnowledgeConnectorSyncApplication,
   S06JobApplication,
   S06_OPERATION_IDS,
   isS06Operation,
