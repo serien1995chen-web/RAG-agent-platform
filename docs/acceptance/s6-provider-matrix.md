@@ -1,0 +1,70 @@
+# S6 Provider Matrix
+
+## Candidate
+
+- Candidate SHA: `868c819b25d7493a1e6ccf6d87837f9728b499cd`.
+- Branch: `feat/kb-s06-job-index`.
+- Conclusion scope: S6 branch only.
+
+## Matrix
+
+| Dependency or capability                           | Status                | Evidence boundary                                              |
+| -------------------------------------------------- | --------------------- | -------------------------------------------------------------- |
+| MongoDB replica-set transaction and tenant filters | `REAL_VERIFIED`       | integration, tenant, concurrency and fault suites              |
+| Redis and BullMQ                                   | `REAL_VERIFIED`       | real Outbox -> import/parse/index workers; 13 ready consumers  |
+| PostgreSQL / pgvector                              | `REAL_VERIFIED`       | 768, 1024, 1536 and 3072 profiles; 3072 uses `halfvec`         |
+| MinIO source artifacts                             | `REAL_VERIFIED`       | S2/S3/S5 suites and S6 parse artifact materialization          |
+| S5 parse / chunk / QA code path                    | `FIXTURE_VERIFIED`    | deterministic local parse fixture, existing S5 functions       |
+| S5 embedding gateway                               | `MOCK_PASS`           | deterministic mock embedding, real normalization and PG writes |
+| External OCR provider                              | `EXTERNAL_UNVERIFIED` | no production credentials or provider response                 |
+| External LLM / embedding provider                  | `EXTERNAL_UNVERIFIED` | mock model catalog and gateway only                            |
+| External connector providers                       | `EXTERNAL_UNVERIFIED` | deterministic provider fixture only                            |
+| S4 connector sync submission                       | `FIXTURE_VERIFIED`    | existing Source batch in Job snapshot, no cursor advancement   |
+| S6 sync worker fan-out                             | `FIXTURE_VERIFIED`    | idempotent parse child fan-out and duplicate-delivery check    |
+| S8 caption executor                                | `OUT_OF_SCOPE`        | controlled dependency failure, never fake success              |
+| S7 search, RRF, rerank, citation                   | `DEFERRED`            | runtime remains `0` in the S6 branch                           |
+| Compose app/worker image release                   | `NOT_RELEASED`        | local build and local worker smoke only                        |
+
+## Worker Smoke
+
+The final bundled worker was started against real Mongo, Redis, PostgreSQL and
+MinIO. It produced the readiness marker only after all 13 consumers were ready.
+
+```text
+knowledge-caption
+knowledge-cleanup
+knowledge-delete
+knowledge-embed
+knowledge-import
+knowledge-index
+knowledge-ocr
+knowledge-outbox
+knowledge-parse
+knowledge-qa
+knowledge-rebuild
+knowledge-segment
+knowledge-sync
+```
+
+Observed results:
+
+- Redis meta keys: `13 / 13`.
+- Readiness marker: `ready`.
+- `SIGTERM`: marker removed and process exited `0`.
+- Missing required secret configuration: process exited non-zero and readiness
+  marker stayed absent.
+
+## Caveats
+
+- Connector remote change discovery and real provider credentials were not
+  available. S6 verifies the existing-Source batch path and S4 handoff only.
+- Optional PDF canvas warnings were emitted by the bundled worker, but worker
+  readiness, shutdown and all required gates passed.
+- Five license release blockers remain pending legal review as documented in
+  `s6-dependency-ledger.md`.
+
+## Conclusion
+
+Provider state is suitable for an S6 branch gate with explicit mock and external
+boundaries. It is not evidence of production provider availability or W2 final
+completion.
