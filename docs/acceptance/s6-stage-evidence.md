@@ -5,7 +5,7 @@
 - Wave: `W2`.
 - Stage: `S6 / personB`.
 - Branch: `feat/kb-s06-job-index`.
-- Candidate SHA: `e8df687c671fe880a72dd2f1e66eee8ddfcd6202`.
+- Candidate SHA: `cb9df7db4cf8de29bec26849c3ebbe2a3a19073c`.
 - Evidence commit SHA: `EVIDENCE_DOCS_ONLY_COMMIT`, recorded exactly in the final
   delivery report.
 - W2 baseline: `87ba3bdea3d7daf3e738a04998b80b49cbf7a77b`.
@@ -75,7 +75,7 @@ operations were not implemented.
 ## Command Matrix
 
 All commands were run on candidate SHA
-`e8df687c671fe880a72dd2f1e66eee8ddfcd6202` with the real local infrastructure
+`cb9df7db4cf8de29bec26849c3ebbe2a3a19073c` with the real local infrastructure
 environment and exited `0`.
 
 | Gate                           | Result                                        |
@@ -87,7 +87,7 @@ environment and exited `0`.
 | `pnpm forbidden-files:check`   | PASS, 413 files                               |
 | `pnpm test:unit`               | PASS, Turbo 21/21                             |
 | `pnpm test:contract`           | PASS, 79 tests                                |
-| `pnpm test:integration`        | PASS, Turbo 21/21; service 112 tests          |
+| `pnpm test:integration`        | PASS, Turbo 21/21; service 113 tests          |
 | `pnpm test:tenant`             | PASS, 12 tests                                |
 | `pnpm test:concurrency`        | PASS, 13 tests                                |
 | `pnpm test:fault`              | PASS, 25 tests                                |
@@ -159,6 +159,9 @@ C3:
 - Duplicate sync delivery replays the same cursor run without another Source,
   ObjectRef or parse child.
 - A changed external document increments its Source `sourceVersion`.
+- A failed sync connector returns to `syncing` in the same transaction as Job
+  retry/replay; terminal success clears the prior error and returns it to
+  `active` without duplicating provider artifacts.
 - Sync creates one parse child per Source and only marks the connector active
   after the sync root reaches a terminal state.
 - Duplicate sync delivery does not create another Source or child.
@@ -190,15 +193,15 @@ question/answer after both pointer and keyboard submission.
 
 | Screenshot                 | SHA-256                                                            |
 | -------------------------- | ------------------------------------------------------------------ |
-| `s6-jobs-360.png`          | `9ea955032d29bc3595f4da49340ae02d5e965d103ffc374a2c2cc65b0af9a335` |
-| `s6-jobs-768.png`          | `80a2fd481411425f466e9513c1488d08fc75f63e2221f9138d76e2cd834a5dad` |
-| `s6-jobs-1200.png`         | `f27a1d453672cb92f0990bcb231cd81b52f58a481ee9c6ae083e434773a3783c` |
-| `s6-segments-360.png`      | `2bbe3929d9282f22faba9a6e43f0ca8b5cb60a3b52d7c12c4fa4b403a380dfca` |
-| `s6-segments-768.png`      | `3198cfe95f3f4c0980f2afd3333d7eeef241873804a5c289a6762b7feec9da57` |
-| `s6-segments-1200.png`     | `98d1003bbbaedcb72ddc7a706364eabddae4232733d15365dd26c75324bc3a92` |
-| `s6-segment-edit-360.png`  | `2086f105465e351e68b7d7700082329ee92c975d2c9d3c73b7e2595da58243ea` |
-| `s6-segment-edit-768.png`  | `facd0add7177f08fe17e0e6673cfcacc8f7eb83228a973bef18ed27b6dddf9c9` |
-| `s6-segment-edit-1200.png` | `0a7ffdb2052896bb3ecbb88da232521dbe1da5784621647ca5fc22ca610bb54d` |
+| `s6-jobs-360.png`          | `8847b9fe71beaece60fbfbd3089e9dd8e6a7a11a0ff63ca6d78cb9d544cedcea` |
+| `s6-jobs-768.png`          | `9fec9610ad531d4a2502541507e9f88f68aa0a0770bb0163089656dae5d2ca22` |
+| `s6-jobs-1200.png`         | `7b9d3c8ce47ba4f53b9f17acb573ad4b4a5d9734910fd64de96025062b5cdc8e` |
+| `s6-segments-360.png`      | `7199a6fa4688d23da5bf6a0c3b1238c313baa773059c1df5e08536e6f2c91f74` |
+| `s6-segments-768.png`      | `b41977f4f3582826c21566586cf390938001e7cfe60439737626acedec30aede` |
+| `s6-segments-1200.png`     | `67b8d3315a595fd99fc67a167d8d0820ed29dd44feb4b283380c1ea77dd1e067` |
+| `s6-segment-edit-360.png`  | `879b3e755245f55623e97681eac882b3ae01496b4a2602492d2718526782c538` |
+| `s6-segment-edit-768.png`  | `eda33844ffd23d7c04f42a52d83171a468ef341f5118433b1eb3189132fb0bb6` |
+| `s6-segment-edit-1200.png` | `c5c59acf8b950ef33b3d6b53a749460a4d77a49d3abdeed59f68dc71db7c61ea` |
 
 ## Review Remediation
 
@@ -213,6 +216,10 @@ question/answer after both pointer and keyboard submission.
 - `S6-R04`: Segment Edit E2E now performs a real stale-version UI submission,
   checks 409, trace/request evidence, input preservation, keyboard submission,
   axe, overflow, console and network behavior.
+- `S6-R05`: failed sync connector state is restored to `syncing` in the Job
+  retry/replay transaction, the same Job then recovers to `active`, and the
+  regression proves cursor stability with no duplicate Source, ObjectRef or
+  parse child.
 
 ## Evidence And Hygiene
 

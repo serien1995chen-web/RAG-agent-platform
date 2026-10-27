@@ -2,7 +2,7 @@
 
 ## Candidate
 
-- Candidate SHA: `e8df687c671fe880a72dd2f1e66eee8ddfcd6202`.
+- Candidate SHA: `cb9df7db4cf8de29bec26849c3ebbe2a3a19073c`.
 - Branch: `feat/kb-s06-job-index`.
 - Conclusion scope: S6 branch only.
 
@@ -22,6 +22,7 @@
 | S4 connector sync submission                       | `FIXTURE_VERIFIED`    | connector Job handoff without pre-created Source payload       |
 | S6 connector sync discovery                        | `FIXTURE_VERIFIED`    | deterministic provider pagination/content, real Mongo/MinIO    |
 | S6 connector cursor and completion CAS             | `REAL_VERIFIED`       | cursorVersion/changeSet checkpoint and terminal root handoff   |
+| S6 connector failure retry/replay                  | `REAL_VERIFIED`       | failed -> syncing Job CAS and active terminal recovery         |
 | S8 caption executor                                | `OUT_OF_SCOPE`        | controlled dependency failure, never fake success              |
 | S7 search, RRF, rerank, citation                   | `DEFERRED`            | runtime remains `0` in the S6 branch                           |
 | Compose app/worker image release                   | `NOT_RELEASED`        | local build and local worker smoke only                        |
