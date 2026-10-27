@@ -37,7 +37,7 @@ PersonA:
   integration, tenant, concurrency, fault, build, worker build, E2E, license,
   SBOM, Compose and AIProxy smoke gates exited `0`.
 - PersonA evidence SHA-256:
-  `40fc15b6eb30d0790da0520f8e121248e3efdd12a6d6450db66fffd601d2d1f8`.
+  `8a30dc7d850b782ed79cce1cb3b38e9018ac8da852ff288a2c53efcdd1dca849`.
 
 PersonB:
 
@@ -46,7 +46,7 @@ PersonB:
 - 32 recorded commands, all with exit code `0`.
 - Complete read-only dependency view consumed without `pnpm install`.
 - PersonB evidence SHA-256:
-  `66728066509ecc3a7a91ef7908e1f4d6f78c5825f046da41b27407beb622e841`.
+  `62f7175c3bb7e2fd52bbc4074dc8dfec2ce1e6e8c6dfe4f2fd3014c9a81a4464`.
 
 ## Contract And Runtime
 
@@ -236,10 +236,10 @@ pnpm-lock.yaml
 3b0cea949ba6285d572aa0541fe83c1d91fcbb98eac5dc25eae24dfdd438ba13
 
 personB gate
-66728066509ecc3a7a91ef7908e1f4d6f78c5825f046da41b27407beb622e841
+62f7175c3bb7e2fd52bbc4074dc8dfec2ce1e6e8c6dfe4f2fd3014c9a81a4464
 
 personA gate
-40fc15b6eb30d0790da0520f8e121248e3efdd12a6d6450db66fffd601d2d1f8
+8a30dc7d850b782ed79cce1cb3b38e9018ac8da852ff288a2c53efcdd1dca849
 
 full dependency view
 6aca2e41368388232a0242f94a3b6b24849e3efaeeb0567b3f3e969816172a8f

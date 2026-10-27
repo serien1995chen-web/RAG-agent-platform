@@ -17,8 +17,8 @@
 
 Evidence SHA-256:
 
-- PersonA: `40fc15b6eb30d0790da0520f8e121248e3efdd12a6d6450db66fffd601d2d1f8`.
-- PersonB: `66728066509ecc3a7a91ef7908e1f4d6f78c5825f046da41b27407beb622e841`.
+- PersonA: `8a30dc7d850b782ed79cce1cb3b38e9018ac8da852ff288a2c53efcdd1dca849`.
+- PersonB: `62f7175c3bb7e2fd52bbc4074dc8dfec2ce1e6e8c6dfe4f2fd3014c9a81a4464`.
 
 This document records the S5 stage result at the frozen candidate. It does not
 substitute for the independent personB gate. Both owner gates PASS; final CI and

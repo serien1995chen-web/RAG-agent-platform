@@ -11,7 +11,7 @@
 - Candidate SHA: `d20da2511b185f9274bd7520d4fb935d68593f44`.
 - PersonB gate: `PASS` on the same candidate.
 - PersonB evidence SHA-256:
-  `66728066509ecc3a7a91ef7908e1f4d6f78c5825f046da41b27407beb622e841`.
+  `62f7175c3bb7e2fd52bbc4074dc8dfec2ce1e6e8c6dfe4f2fd3014c9a81a4464`.
 - Evidence commit SHA: `SELF_DOCS_ONLY_COMMIT` (exact SHA recorded in the final
   delivery report).
 - Wave W1: `PASS_PENDING_FINAL_CI_AND_REVIEW_BINDING`.
