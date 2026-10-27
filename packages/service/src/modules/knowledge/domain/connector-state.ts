@@ -7,7 +7,7 @@ const CONNECTOR_TRANSITIONS: Readonly<Record<ConnectorState, readonly ConnectorS
   active: ['syncing', 'paused', 'failed', 'deleting'],
   syncing: ['active', 'failed', 'deleting'],
   paused: ['active', 'deleting'],
-  failed: ['active', 'paused', 'deleting'],
+  failed: ['active', 'syncing', 'paused', 'deleting'],
   deleting: ['deleted'],
   deleted: [],
 };

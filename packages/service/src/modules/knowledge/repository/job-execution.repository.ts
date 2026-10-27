@@ -8,6 +8,7 @@ import type {
   KnowledgeOutboxEventDoc,
 } from '../../../shared/persistence/schemas/knowledge-job.schemas';
 import type { KnowledgeSourceDoc } from '../../../shared/persistence/schemas/knowledge-catalog.schemas';
+import type { KnowledgeConnectorDoc } from '../../../shared/persistence/schemas/knowledge-connector.schemas';
 import { createKnowledgeOutboxEvent } from '../../../shared/persistence/knowledge/outbox';
 import { withMongoTransaction } from '../../../shared/persistence/with-mongo-transaction';
 import {
@@ -16,6 +17,7 @@ import {
   type TenantContext,
 } from '../../../shared/persistence/knowledge/tenant';
 import { assertJobTransition, type JobState } from '../domain/job-state';
+import { assertConnectorTransition } from '../domain/connector-state';
 
 type Plain<T> = T & { _id: Types.ObjectId; version: number; createdAt: Date; updatedAt: Date };
 type JobKind = KnowledgeJobDoc['kind'];
@@ -114,6 +116,7 @@ export class KnowledgeJobExecutionRepository {
   private readonly steps: Model<KnowledgeJobStepDoc>;
   private readonly outbox: Model<KnowledgeOutboxEventDoc>;
   private readonly sources: Model<KnowledgeSourceDoc>;
+  private readonly connectors: Model<KnowledgeConnectorDoc>;
 
   constructor(private readonly connection: Connection) {
     const models = registerKnowledgeModels(connection);
@@ -121,6 +124,7 @@ export class KnowledgeJobExecutionRepository {
     this.steps = models.KnowledgeJobStep;
     this.outbox = models.KnowledgeOutboxEvent;
     this.sources = models.KnowledgeSource;
+    this.connectors = models.KnowledgeConnector;
   }
 
   private async createWithSession(
@@ -832,6 +836,59 @@ export class KnowledgeJobExecutionRepository {
         replay: ['dead_letter'],
       };
       const now = new Date();
+      if (
+        (action === 'retry' || action === 'replay') &&
+        root.kind === 'sync' &&
+        root.resourceType === 'connector'
+      ) {
+        const connector = await this.connectors
+          .findOne({
+            _id: root.resourceId,
+            workspaceId: root.workspaceId,
+            deletedAt: null,
+          })
+          .session(session);
+        if (!connector) {
+          throw tenantError(context, 'KNOWLEDGE_NOT_FOUND', {
+            connectorId: root.resourceId,
+          });
+        }
+        if (connector.status === 'failed' || connector.status === 'active') {
+          assertConnectorTransition(connector.status, 'syncing', context);
+          const resumed = await this.connectors.findOneAndUpdate(
+            {
+              _id: connector._id,
+              workspaceId: connector.workspaceId,
+              version: connector.version,
+              status: connector.status,
+              deletedAt: null,
+            },
+            {
+              $set: {
+                status: 'syncing',
+                lastAttemptAt: now,
+                nextSyncAt: null,
+                lastError: null,
+                updatedByMemberId: context.memberId,
+              },
+              $inc: { version: 1 },
+            },
+            { new: true, session },
+          );
+          if (!resumed) {
+            throw conflict(context, {
+              reason: 'connector_retry_cas',
+              connectorId: root.resourceId,
+            });
+          }
+        } else if (connector.status !== 'syncing') {
+          throw conflict(context, {
+            reason: 'connector_retry_state',
+            connectorId: root.resourceId,
+            status: connector.status,
+          });
+        }
+      }
       for (const node of tree) {
         const isTarget = String(node._id) === jobId;
         const isActiveDescendant = ['queued', 'leased', 'running', 'retry_wait', 'paused'].includes(

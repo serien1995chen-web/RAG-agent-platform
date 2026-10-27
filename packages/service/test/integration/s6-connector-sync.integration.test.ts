@@ -406,4 +406,147 @@ describe('S6 connector sync discovery', () => {
       syncRunId: changed.job.jobId,
     });
   }, 60_000);
+
+  it('recovers the same failed sync Job without duplicating provider artifacts', async () => {
+    const models = registerKnowledgeModels(connection);
+    const retrySpaceId = new mongoose.Types.ObjectId();
+    await models.KnowledgeSpace.create({
+      _id: retrySpaceId,
+      workspaceId,
+      version: 1,
+      deletedAt: null,
+      createdByMemberId: context.memberId,
+      updatedByMemberId: context.memberId,
+      kind: 'space',
+      parentSpaceId: null,
+      name: `S6 connector retry ${suffix}`,
+      description: '',
+      iconKey: 'book-open',
+      ownershipMemberId: context.memberId,
+      accessMode: 'workspace',
+      sourceAclMode: 'inherited',
+      sourcePermissionEnabled: true,
+      referenceRevision: 0,
+      permissionRevision: 0,
+      modelBindings: {},
+      defaultChunking: {},
+      status: 'active',
+    });
+    const connected = await connectors.connect(
+      String(retrySpaceId),
+      {
+        provider: 'feishu',
+        name: 'S6 retry sync',
+        credentials: { provider: 'feishu', appId: 'retry-app', appSecret: 'retry-secret' },
+        config: { provider: 'feishu', folderToken: 'retry-token' },
+        syncEnabled: true,
+        syncIntervalMinutes: 60,
+      },
+      context,
+    );
+    const sync = await connectors.markSyncing(
+      connected.id,
+      {
+        full: false,
+        requestHash: `sync-retry-${suffix}`,
+        idempotencyKey: `sync-retry-${suffix}`,
+      },
+      context,
+    );
+    expect(
+      await processing.handleQueue(
+        'knowledge-sync',
+        sync.job.jobId,
+        `sync-retry-first-${suffix}`,
+        context,
+      ),
+    ).toBe('succeeded');
+    const parse = await models.KnowledgeJob.findOne({
+      workspaceId,
+      kind: 'parse',
+      'inputSnapshot.rootJobId': sync.job.jobId,
+    }).lean();
+    expect(parse).toBeTruthy();
+    await models.KnowledgeJob.updateOne(
+      { _id: parse!._id, workspaceId },
+      {
+        $set: {
+          status: 'failed',
+          error: { code: 'KNOWLEDGE_MODEL_FAILED', retryable: false },
+          progress: { stage: 'failed', completed: 1, total: 1, percent: 100 },
+        },
+      },
+    );
+    expect(
+      await processing.handleQueue(
+        'knowledge-sync',
+        sync.job.jobId,
+        `sync-retry-fail-${suffix}`,
+        context,
+      ),
+    ).toBe('retry');
+    expect((await jobs.getRaw(sync.job.jobId, context)).status).toBe('failed');
+    expect((await connectors.get(connected.id, context)).status).toBe('failed');
+
+    const failedRoot = await jobs.getRaw(sync.job.jobId, context);
+    const retried = await jobs.control('retry', sync.job.jobId, failedRoot.version, context);
+    expect(retried.status).toBe('queued');
+    expect((await connectors.get(connected.id, context)).status).toBe('syncing');
+    expect(
+      await processing.handleQueue(
+        'knowledge-sync',
+        sync.job.jobId,
+        `sync-retry-replay-${suffix}`,
+        context,
+      ),
+    ).toBe('succeeded');
+    const retriedParse = await models.KnowledgeJob.find({
+      workspaceId,
+      kind: 'parse',
+      'inputSnapshot.rootJobId': sync.job.jobId,
+    }).lean();
+    expect(retriedParse).toHaveLength(1);
+    expect(
+      await models.KnowledgeSource.countDocuments({
+        workspaceId,
+        connectorId: connected.id,
+        deletedAt: null,
+      }),
+    ).toBe(1);
+    expect(
+      await models.KnowledgeObjectRef.countDocuments({
+        workspaceId,
+        sourceId: {
+          $in: await models.KnowledgeSource.distinct('_id', {
+            workspaceId,
+            connectorId: connected.id,
+            deletedAt: null,
+          }),
+        },
+        state: 'active',
+      }),
+    ).toBe(1);
+    await models.KnowledgeJob.updateOne(
+      { _id: retriedParse[0]!._id, workspaceId },
+      {
+        $set: {
+          status: 'succeeded',
+          progress: { stage: 'succeeded', completed: 1, total: 1, percent: 100 },
+        },
+      },
+    );
+    await processing.handleQueue(
+      'knowledge-sync',
+      sync.job.jobId,
+      `sync-retry-complete-${suffix}`,
+      context,
+    );
+    expect((await jobs.getRaw(sync.job.jobId, context)).status).toBe('succeeded');
+    expect((await connectors.get(connected.id, context)).status).toBe('active');
+    expect(await connectors.getSyncCursor(connected.id, 'retry-token', context)).toMatchObject({
+      cursor: { page: 'page:2' },
+      cursorVersion: 2,
+      syncRunId: sync.job.jobId,
+    });
+  }, 60_000);
 });

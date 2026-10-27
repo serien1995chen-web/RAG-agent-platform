@@ -569,7 +569,7 @@ export class KnowledgeConnectorRepository implements ConnectorRepositoryPort {
           if (!connector) throw tenantError(context, 'KNOWLEDGE_NOT_FOUND');
           return { connector: connectorView(connector), job: jobView(existing) };
         }
-        if (!current.syncEnabled || current.status === 'paused' || current.status === 'failed') {
+        if (!current.syncEnabled || current.status === 'paused') {
           throw createKnowledgeError({
             code: 'KNOWLEDGE_CONFLICT',
             requestId: context.requestId,
