@@ -142,6 +142,13 @@ export class KnowledgeAccessRepository {
     });
     if (!doc) throw tenantError(context, 'KNOWLEDGE_NOT_FOUND');
     if (!doc.knowledgeSpaceId) throw tenantError(context, 'KNOWLEDGE_NOT_FOUND');
+    const space = await this.spaces.findOne({
+      workspaceId: context.workspaceId,
+      _id: doc.knowledgeSpaceId,
+      deletedAt: null,
+      status: 'active',
+    });
+    if (!space) throw tenantError(context, 'KNOWLEDGE_NOT_FOUND');
     return {
       resourceType,
       resourceId: id,
@@ -150,7 +157,7 @@ export class KnowledgeAccessRepository {
       ownershipMemberId: doc.ownershipMemberId,
       version: doc.version,
       permissionRevision: doc.permissionRevision,
-      permissionState: doc.permissionState,
+      permissionState: space.sourcePermissionEnabled ? doc.permissionState : 'disabled',
       parentDirectoryId: doc.directoryId,
     };
   }
@@ -286,6 +293,50 @@ export class KnowledgeAccessRepository {
       throw tenantError(context, 'KNOWLEDGE_NOT_FOUND');
     }
     return resource;
+  }
+
+  async batchAuthorizeSources(sourceIds: readonly string[], context: TenantContext) {
+    const workspaceId = requireWorkspaceId(context);
+    const uniqueIds = [...new Set(sourceIds)];
+    if (uniqueIds.length === 0) return [];
+    const objectIds = uniqueIds.map((sourceId) => objectIdOf(sourceId, context, 'sourceIds'));
+    const sourceDocuments = (await this.sources
+      .find({
+        workspaceId,
+        _id: { $in: objectIds },
+        deletedAt: null,
+      })
+      .lean()) as unknown as Array<Plain<KnowledgeSourceDoc>>;
+    const sourceById = new Map(sourceDocuments.map((source) => [String(source._id), source]));
+    const authorized = await Promise.all(
+      uniqueIds.map(async (sourceId) => {
+        const source = sourceById.get(sourceId);
+        if (!source || !source.searchEnabled) return undefined;
+        try {
+          const resource = await this.assertPermission('source', sourceId, 'read', context);
+          return {
+            sourceId,
+            knowledgeSpaceId: String(source.knowledgeSpaceId),
+            permissionRevision: resource.permissionRevision,
+            permissionState: resource.permissionState,
+            sourceVersion: source.sourceVersion,
+            sourceVersionUpdatedAt: source.updatedAt,
+            searchEnabled: true,
+            allowed: true as const,
+          };
+        } catch (error) {
+          const code =
+            typeof error === 'object' && error !== null && 'problem' in error
+              ? (error as { problem?: { error?: { code?: unknown } } }).problem?.error?.code
+              : undefined;
+          if (code === 'KNOWLEDGE_NOT_FOUND') return undefined;
+          throw error;
+        }
+      }),
+    );
+    return authorized.filter(
+      (item): item is NonNullable<(typeof authorized)[number]> => item !== undefined,
+    );
   }
 
   private stateForMode(inheritMode: 'inherit' | 'override') {

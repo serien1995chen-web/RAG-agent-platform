@@ -55,6 +55,7 @@ export const SearchRequestSchema = z.object({
   textQueries: z.array(z.string()).max(20).default([]),
   imageQueries: z.array(ImageQuerySchema).max(10).default([]),
   models: ModelSelectionSchema,
+  indexVersion: z.string().min(1).max(256).optional(),
   searchMode: SearchModeSchema.default('embedding'),
   limit: z.number().int().min(1).max(50).default(10),
   maxTokens: z.number().int().positive().default(4000),
@@ -99,6 +100,8 @@ export const SearchStatsSchema = z.object({
   rerankInputTokens: z.number().int().min(0),
   degraded: z.array(DegradedInfoSchema),
   durationMs: z.number().int().min(0),
+  partial: z.boolean().optional(),
+  rerankApplied: z.boolean().optional(),
 });
 export type SearchStats = z.infer<typeof SearchStatsSchema>;
 
@@ -107,6 +110,12 @@ export const SearchResultSchema = z.object({
   stats: SearchStatsSchema,
 });
 export type SearchResult = z.infer<typeof SearchResultSchema>;
+
+/** Internal pipeline aliases keep public wire DTOs separate from engine contracts. */
+export const SearchPipelineRequestSchema = SearchRequestSchema;
+export const SearchPipelineResultSchema = SearchResultSchema;
+export type SearchPipelineRequest = SearchRequest;
+export type SearchPipelineResult = SearchResult;
 
 /** indexVersion = <embeddingModelId>:<dimension>:<schemaVersion>（设计文档 11.0）。 */
 export function buildIndexVersion(

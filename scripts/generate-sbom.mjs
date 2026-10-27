@@ -321,6 +321,10 @@ export function detectBsdVariant(text) {
 export function normalizeLicense(declared, packageDir) {
   const raw = String(declared ?? '').trim();
   if (raw.length === 0 || raw === 'UNKNOWN') {
+    const text = readLicenseText(packageDir);
+    if (/^The MIT License(?: \(MIT\))?/im.test(text)) {
+      return { declared: 'UNKNOWN', normalized: 'MIT', resolution: 'license-text' };
+    }
     return { declared: 'UNKNOWN', normalized: 'UNKNOWN', resolution: 'unknown' };
   }
   const evaluation = evaluateLicense(raw);

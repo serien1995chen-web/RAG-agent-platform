@@ -113,7 +113,7 @@ describe('P5-06 candidate counts / RRF / rerank merge', () => {
     expect(merged.ignored).toBe(1);
   });
 
-  it('defaults rerank r to 0.5 in the engine', async () => {
+  it('fuses the original and rerank ranked lists with RRF', async () => {
     const baselineDeps: SearchEngineDeps = {
       vectors: {
         embRecall: async () => [{ segmentId: 'd1', sourceId: 'src-1', indexId: 'i1', score: 0.9 }],
@@ -121,9 +121,6 @@ describe('P5-06 candidate counts / RRF / rerank merge', () => {
       embedding: { embed: async ({ texts }) => texts.map(() => [0.1]) },
       resolveTexts: async (candidates) => new Map(candidates.map((item) => [item.docId, 'text'])),
     };
-    const baseline = await createSearchEngine(baselineDeps).search(request(), context);
-    const base = baseline.citations[0]?.scores.find((score) => score.type === 'rrf')?.value ?? 0;
-
     const reranked = await createSearchEngine({
       ...baselineDeps,
       rerank: { rerank: async ({ items }) => items.map((item) => ({ id: item.id, score: 1 })) },
@@ -131,6 +128,7 @@ describe('P5-06 candidate counts / RRF / rerank merge', () => {
 
     expect(reranked.stats.usingReRank).toBe(true);
     const blended = reranked.citations[0]?.scores.find((score) => score.type === 'rrf')?.value ?? 0;
-    expect(blended).toBeCloseTo(0.5 * base + 0.5 * 1, 8);
+    expect(blended).toBeCloseTo(0.5 / 61 + 0.5 / 61, 8);
+    expect(reranked.citations[0]?.scores.find((score) => score.type === 'reRank')?.value).toBe(1);
   });
 });

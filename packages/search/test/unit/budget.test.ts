@@ -47,9 +47,9 @@ describe('P5-06 token budget (TEST-SEARCH-BUDGET-001 / ACC-SEARCH-006)', () => {
     expect(countTokens('hello world')).toBeGreaterThan(0);
   });
 
-  it('always keeps the first candidate even when it exceeds the budget', () => {
+  it('drops a candidate when no token prefix fits the remaining budget', () => {
     const items = [candidate('a', 'aaaa'), candidate('b', 'bbbb')];
-    expect(applyTokenBudget(items, 1, () => 100).map((item) => item.docId)).toEqual(['a']);
+    expect(applyTokenBudget(items, 1, () => 100).map((item) => item.docId)).toEqual([]);
   });
 
   it('stops before exceeding the budget', () => {

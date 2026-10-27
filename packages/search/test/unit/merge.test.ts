@@ -76,9 +76,9 @@ describe('search fusion', () => {
     expect(duplicate).toEqual([first]);
   });
 
-  it('keeps the first item when the token budget is already exceeded', () => {
+  it('never emits text beyond the token budget', () => {
     const items = [candidate('a', 1), candidate('b', 0.5)];
-    expect(applyTokenBudget(items, 0, () => 100)).toEqual([items[0]]);
+    expect(applyTokenBudget(items, 0, () => 100)).toEqual([]);
     expect(applyTokenBudget(items, 100, () => 100)).toHaveLength(1);
     expect(applyTokenBudget(items, 200, () => 100)).toHaveLength(2);
   });

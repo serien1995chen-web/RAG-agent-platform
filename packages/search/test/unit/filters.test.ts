@@ -1,6 +1,7 @@
 import type { SearchRequest } from '@kb/contracts';
+import { SearchFilterApiSchema } from '@kb/contracts';
 import { describe, expect, it } from 'vitest';
-import { createSearchEngine, parseTagFilterMatch } from '../../src/index';
+import { compileSearchFilter, createSearchEngine } from '../../src/index';
 import type { SearchEngineDeps } from '../../src/index';
 
 const context = { requestId: 'req-filters', workspaceId: 'ws-a' };
@@ -32,42 +33,79 @@ const deps: SearchEngineDeps = {
 };
 
 describe('P5-06 collection filter / batch (TEST-SEARCH-FILTER-001 / ACC-SEARCH-006)', () => {
-  it('maps tags.$and / tags.$or to tagIds', () => {
-    expect(parseTagFilterMatch("{tags:{$and:['t1','t2']}}")).toEqual({
-      matched: true,
-      tagsAnd: ['t1', 't2'],
-      tagsOr: [],
+  it('compiles typed tag conditions to a source allowlist', () => {
+    const filter = SearchFilterApiSchema.parse({
+      logic: 'AND',
+      conditions: [
+        {
+          tagId: '65f1e5b2a1c9d4b7e8f0aaaa',
+          tagType: 'string',
+          operator: '$eq',
+          value: 'support',
+        },
+      ],
     });
-    expect(parseTagFilterMatch("{tags:{$or:['t1','t2']}}")).toEqual({
-      matched: true,
-      tagsAnd: [],
-      tagsOr: ['t1', 't2'],
-    });
+    const result = compileSearchFilter(
+      filter,
+      [
+        {
+          sourceId: '65f1e5b2a1c9d4b7e8f01111',
+          knowledgeSpaceId: '65f1e5b2a1c9d4b7e8f01234',
+          directoryId: null,
+          directoryPath: [],
+          createdAt: new Date('2026-01-01T00:00:00Z'),
+          tagValues: [
+            {
+              tagId: '65f1e5b2a1c9d4b7e8f0aaaa',
+              valueKey: 'support',
+              value: 'support',
+            },
+          ],
+        },
+      ],
+      [
+        {
+          tagId: '65f1e5b2a1c9d4b7e8f0aaaa',
+          knowledgeSpaceId: '65f1e5b2a1c9d4b7e8f01234',
+          tagType: 'string',
+          status: 'active',
+        },
+      ],
+    );
+    expect(result.allowedSourceIds).toEqual(['65f1e5b2a1c9d4b7e8f01111']);
   });
 
-  it('treats null in $and as matched=false and drops null from $or', () => {
-    expect(parseTagFilterMatch("{tags:{$and:['t1',null]}}")).toEqual({
-      matched: false,
-      tagsAnd: [],
-      tagsOr: [],
-    });
-    expect(parseTagFilterMatch("{tags:{$or:['t1',null,'t2']}}")).toEqual({
-      matched: true,
-      tagsAnd: [],
-      tagsOr: ['t1', 't2'],
-    });
+  it('rejects unsupported attribute values without coercion', () => {
+    expect(
+      SearchFilterApiSchema.safeParse({
+        logic: 'AND',
+        conditions: [
+          {
+            tagId: '65f1e5b2a1c9d4b7e8f0aaaa',
+            tagType: 'number',
+            operator: '$contains',
+            value: '1',
+          },
+        ],
+      }).success,
+    ).toBe(false);
   });
 
-  it('rejects illegal keys/operators with a validation problem', () => {
-    expect(() => parseTagFilterMatch("{tags:{$not:['t1']}}")).toThrowError();
-    expect(() => parseTagFilterMatch('{other:1}')).toThrowError();
-    try {
-      parseTagFilterMatch("{tags:{$not:['t1']}}");
-    } catch (error) {
-      expect((error as { problem: { error: { code: string } } }).problem.error.code).toBe(
-        'KNOWLEDGE_VALIDATION_FAILED',
-      );
-    }
+  it('rejects unknown filter fields and legacy free-form objects', () => {
+    expect(
+      SearchFilterApiSchema.safeParse({
+        logic: 'AND',
+        conditions: [],
+        tagFilterMatch: "{tags:{$and:['t1']}}",
+      }).success,
+    ).toBe(false);
+    expect(
+      SearchFilterApiSchema.safeParse({
+        logic: 'AND',
+        conditions: [],
+        nested: { tags: ['t1'] },
+      }).success,
+    ).toBe(false);
   });
 
   it('rejects searchBatch over ten requests with a validation problem', async () => {

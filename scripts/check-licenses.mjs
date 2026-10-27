@@ -28,6 +28,7 @@ export const NPM_LICENSE_WHITELIST = [
   '0BSD',
   'OFL-1.1',
   'BlueOak-1.0.0',
+  'CC0-1.0',
   'Unlicense',
 ];
 
