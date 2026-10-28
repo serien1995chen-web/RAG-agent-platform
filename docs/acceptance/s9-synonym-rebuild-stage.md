@@ -12,10 +12,12 @@
   `1c55abb2fa1ecc5bdafaa2d3d3a26f05df24f4c`.
 - Candidate SHA: the commit containing this report; the exact SHA is recorded
   in the handoff because a commit cannot include its own object ID.
+- Superseded candidate SHA: `03fc6f0a47d4aa9328cd78d54baea4fa3b05913b`.
+- Superseded personB result: `FAIL`, worker startup could not resolve `yauzl`.
 - Evidence commit SHA: not created. It requires personA and personB evidence
-  from the same frozen candidate.
-- W3 conclusion: `NOT_COMPLETE`. PersonB independently executed evidence has
-  not been received.
+  from the new frozen candidate.
+- W3 conclusion: `NOT_COMPLETE`. The worker packaging blocker is fixed in this
+  candidate, but both personA and personB must rerun at its exact SHA.
 
 This report records post-rebase S9 implementation and local gate results. It
 does not claim that W3 is complete and does not claim a final CI or Review
@@ -136,6 +138,21 @@ All eight Operations are runtime. S8 `API-SEARCH-IMAGE` and
 - Failure preserves the prior published version and compensates staged vectors.
 - Old vector cleanup candidates are no earlier than 30 days after switch.
 
+### Worker Packaging Remediation
+
+- PersonB reproduced `Cannot find module 'yauzl'` with the
+  deployment-equivalent command
+  `node projects/app/dist/workers/worker.mjs` on candidate `03fc6f0`.
+- The worker banner now derives the workspace root from the generated
+  `worker.mjs` location rather than the caller's cwd.
+- Formal `NODE_PATH` resolution includes package dependency views,
+  `node_modules/.pnpm/node_modules` and root `node_modules`.
+- The Docker runner also declares
+  `/app/node_modules/.pnpm/node_modules:/app/node_modules`.
+- A contract assertion binds both runtime layers.
+- The rebuilt worker reached readiness without a manual `NODE_PATH` variable and
+  created 13 `knowledge-*` queue meta keys plus 13 stalled-check keys.
+
 ### T06: Synonyms UI
 
 - Independent state, request client and workbench are wired to the real page.
@@ -222,7 +239,7 @@ AIProxy fixture; external cloud Providers remain `EXTERNAL_UNVERIFIED`.
 | Gate                    | Result                                              |
 | ----------------------- | --------------------------------------------------- |
 | `pnpm test:unit`        | PASS, Turbo `22 / 22`                               |
-| `pnpm test:contract`    | PASS, 20 files / 95 tests                           |
+| `pnpm test:contract`    | PASS, 20 files / 96 tests                           |
 | `pnpm test:integration` | PASS, Turbo `22 / 22`; service 29 files / 163 tests |
 | `pnpm test:tenant`      | PASS, 8 files / 17 tests                            |
 | `pnpm test:concurrency` | PASS, 8 files / 16 tests                            |
@@ -246,6 +263,7 @@ S9-specific coverage includes:
 - Query expansion, 4096 fallback, cache revalidation, Space ordering and ACL
   safety.
 - Rebuild stage/finalize ordering, retry evidence, rollback and 30-day cleanup.
+- Deployment worker startup with 13 queues and no manual dependency path.
 - Real Synonyms page at 360/768/1200, axe serious/critical `0`, keyboard,
   no horizontal overflow and rebuild progress.
 
@@ -296,9 +314,11 @@ Compose config SHA-256:
 
 ## Risks And Open Items
 
-- PersonB evidence is not present. W3 cannot be marked complete.
-- Candidate and evidenceCommit SHA values must be frozen after this report is
-  committed.
+- PersonB's `03fc6f0` evidence is `FAIL` because the exact worker command exited
+  before readiness with missing `yauzl`; it cannot be reused for this candidate.
+- The worker dependency-resolution fix is present locally, but personA and
+  personB evidence must both be rerun at the new frozen SHA.
+- EvidenceCommit SHA remains uncreated.
 - CI, Review and PR Review have not run.
 - The five license items remain release blockers, not CI blockers.
 - External cloud Providers and FastGPT Cloud behavior remain
@@ -309,9 +329,11 @@ Compose config SHA-256:
 
 Next authorized steps:
 
-1. Commit the current S9/S8 union and lockfile to freeze `candidateSha`.
+1. Commit the worker packaging fix and this report to freeze the new
+   `candidateSha`.
 2. Run personA gates in a clean worktree at that SHA and write
    `docs/acceptance/w3-personA-gate.md`.
-3. Notify the user to push the A branch and provide the same SHA to personB.
-4. Accept personB's evidence unchanged, then create the acceptance-only evidence
+3. Push the new candidate and provide the same SHA to personB.
+4. Accept personB's new same-SHA evidence unchanged, then create the
+   acceptance-only evidence
    commit and wave report.

@@ -130,4 +130,17 @@ describe('S6 Job and index contract', () => {
       expect(workerEntry).toContain(`'${queue}'`);
     }
   });
+
+  it('keeps deployment worker dependency resolution explicit', () => {
+    const workerBuild = readFileSync(
+      join(root, 'projects', 'app', 'tsdown.workers.config.ts'),
+      'utf8',
+    );
+    const dockerfile = readFileSync(join(root, 'deploy', 'Dockerfile'), 'utf8');
+    expect(workerBuild).toContain('node_modules/.pnpm/node_modules');
+    expect(workerBuild).toContain("__kbJoin(__dirname, '../../../..')");
+    expect(dockerfile).toContain(
+      'ENV NODE_PATH=/app/node_modules/.pnpm/node_modules:/app/node_modules',
+    );
+  });
 });

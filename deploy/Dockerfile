@@ -16,6 +16,7 @@ RUN pnpm build && pnpm build:workers
 
 FROM base AS runner
 ENV NODE_ENV=production
+ENV NODE_PATH=/app/node_modules/.pnpm/node_modules:/app/node_modules
 WORKDIR /app
 COPY --from=build /app ./
 EXPOSE 3010
