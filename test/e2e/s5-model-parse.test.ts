@@ -307,10 +307,16 @@ describe('TEST-MODEL-001 / TEST-KB-002 / TEST-X-FRONTEND-IMPORT', () => {
         await session.page.addStyleTag({
           content: '.skip-link { display: none !important; }',
         });
-        await session.page.screenshot({
-          path: join(root, 'docs', 'acceptance', 's5-ui', `s5-model-parse-${viewport.width}.png`),
-          fullPage: true,
-        });
+        const screenshotPath = join(
+          root,
+          'docs',
+          'acceptance',
+          's5-ui',
+          `s5-model-parse-${viewport.width}.png`,
+        );
+        if (!existsSync(screenshotPath)) {
+          await session.page.screenshot({ path: screenshotPath, fullPage: true });
+        }
         await session.close();
       }
     } finally {

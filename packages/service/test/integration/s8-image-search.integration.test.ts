@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { AuthorizedCandidate, Candidate } from '@kb/search';
+import { createKnowledgeError } from '@kb/contracts';
 import { S8ImageSearchApplication } from '../../src/modules/knowledge/application/s8-image-search.application';
 import type { TenantContext } from '../../src/shared/persistence/knowledge/tenant';
 
@@ -107,6 +108,8 @@ function application(
     reauthorized?: boolean;
     objectSpaceId?: string;
     objectPurpose?: 'source' | 'image';
+    filterMatch?: boolean;
+    failImageVector?: boolean;
   } = {},
 ) {
   const issue = vi.fn(async (input: { candidates: readonly AuthorizedCandidate[] }) => {
@@ -143,7 +146,7 @@ function application(
         }),
       },
       models: {
-        resolve: async () => {
+        resolveVlm: async () => {
           throw new Error('not used');
         },
         resolveVisionEmbedding: async () => ({
@@ -200,6 +203,34 @@ function application(
           },
         ],
       },
+      filters: {
+        listFilterFacts: async () => ({
+          facts: [
+            {
+              sourceId,
+              knowledgeSpaceId: spaceId,
+              directoryId: null,
+              directoryPath: [],
+              createdAt: new Date('2026-01-01T00:00:00.000Z'),
+              tagValues: [
+                {
+                  tagId: '65f1e5b2a1c9d4b7e8f03000',
+                  valueKey: options.filterMatch === false ? 'silver' : 'gold',
+                  value: options.filterMatch === false ? 'silver' : 'gold',
+                },
+              ],
+            },
+          ],
+          definitions: [
+            {
+              tagId: '65f1e5b2a1c9d4b7e8f03000',
+              knowledgeSpaceId: spaceId,
+              tagType: 'string' as const,
+              status: 'active' as const,
+            },
+          ],
+        }),
+      },
       authorization: {
         async hydrate(candidates: readonly Candidate[]) {
           return { items: candidates.map(() => authorized()), rejected: 0 };
@@ -211,18 +242,27 @@ function application(
       citations: { issueWithAudit: issue, findCurrent: async () => null },
       audits: { appendSearch: async () => undefined },
       vectors: {
-        recall: async () => [
-          {
-            vectorId: '00000000-0000-4000-8000-000000000001',
-            workspaceId: context.workspaceId,
-            knowledgeSpaceId: spaceId,
-            sourceId,
-            segmentId,
-            indexId: 'image',
-            version: 1,
-            score: 1,
-          },
-        ],
+        recall: async () => {
+          if (options.failImageVector) {
+            throw createKnowledgeError({
+              code: 'KNOWLEDGE_DEPENDENCY_TIMEOUT',
+              requestId: context.requestId,
+              traceId: context.traceId,
+            });
+          }
+          return [
+            {
+              vectorId: '00000000-0000-4000-8000-000000000001',
+              workspaceId: context.workspaceId,
+              knowledgeSpaceId: spaceId,
+              sourceId,
+              segmentId,
+              indexId: 'image',
+              version: 1,
+              score: 1,
+            },
+          ];
+        },
       },
       searchIdFactory: () => 'search_s8_fixture',
     }),
@@ -251,7 +291,7 @@ describe('TEST-SEARCH-006-BLOCK / TEST-MULTI-001-BLOCK image search', () => {
   });
 
   it('returns 207 with degraded image channels without raw provider errors', async () => {
-    const { instance } = application();
+    const { instance } = application({ failImageVector: true });
     const result = await instance.search(
       {
         knowledgeSpaceId: spaceId,
@@ -261,8 +301,38 @@ describe('TEST-SEARCH-006-BLOCK / TEST-MULTI-001-BLOCK image search', () => {
       },
       { ...context, scopes: ['knowledge:search'] },
     );
-    expect(result.degraded).toEqual([]);
-    expect(result.partial).toBe(false);
+    expect(result.degraded).toContain('image_vector_recall_failed');
+    expect(result.partial).toBe(true);
+    expect(JSON.stringify(result)).not.toContain('provider');
+  });
+
+  it('applies non-source filters to both image recall channels', async () => {
+    const { instance, issue } = application({ filterMatch: false });
+    await expect(
+      instance.search(
+        {
+          knowledgeSpaceId: spaceId,
+          query: 'refund diagram',
+          tokenBudget: 5_000,
+          imageUploadIds: [imageId],
+          filters: {
+            logic: 'AND',
+            conditions: [
+              {
+                tagId: '65f1e5b2a1c9d4b7e8f03000',
+                tagType: 'string',
+                operator: '$eq',
+                value: 'gold',
+              },
+            ],
+          },
+        },
+        context,
+      ),
+    ).rejects.toMatchObject({
+      problem: { error: { code: 'KNOWLEDGE_NOT_FOUND' } },
+    });
+    expect(issue).not.toHaveBeenCalled();
   });
 
   it('drops candidates rejected by final ACL and never returns a preview citation', async () => {

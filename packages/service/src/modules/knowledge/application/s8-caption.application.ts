@@ -118,6 +118,7 @@ export class S8CaptionApplication implements S8CaptionExecutorPort {
       knowledgeSpaceId: string;
       modelId: string;
       imageUrl: string;
+      imageBytes: number;
     },
     context: TenantContext,
   ): Promise<{ caption: string; usage: { inputTokens: number; outputTokens: number } }> {
@@ -138,6 +139,12 @@ export class S8CaptionApplication implements S8CaptionExecutorPort {
       resourceType: 'source',
       resourceId: input.sourceId,
       operation: `s8.caption:${input.sourceVersion}`,
+      audit: {
+        promptVersion: S8_CAPTION_PROMPT_VERSION,
+        mediaItemCount: 1,
+        totalBytes: input.imageBytes,
+        sourceVersion: input.sourceVersion,
+      },
       requestId: context.requestId,
       traceId: context.traceId,
       context,
@@ -157,6 +164,7 @@ export class S8CaptionApplication implements S8CaptionExecutorPort {
       dimension: 768 | 1024 | 1536 | 3072;
       caption: string | null;
       imageUrl: string;
+      imageBytes: number;
     },
     context: TenantContext,
   ): Promise<{
@@ -178,6 +186,12 @@ export class S8CaptionApplication implements S8CaptionExecutorPort {
       resourceType: 'source',
       resourceId: input.sourceId,
       operation: `s8.vision-embedding:${input.sourceVersion}`,
+      audit: {
+        promptVersion: S8_CAPTION_PROMPT_VERSION,
+        mediaItemCount: 1,
+        totalBytes: input.imageBytes,
+        sourceVersion: input.sourceVersion,
+      },
       requestId: context.requestId,
       traceId: context.traceId,
       context,
@@ -208,6 +222,7 @@ export class S8CaptionApplication implements S8CaptionExecutorPort {
       imageBlobRefId: string;
       order: number;
       metadata: Record<string, unknown>;
+      updateSourceStatus?: boolean;
     },
     context: TenantContext,
   ): Promise<{ partial: boolean; result: Record<string, unknown>; segmentId: string }> {
@@ -227,7 +242,26 @@ export class S8CaptionApplication implements S8CaptionExecutorPort {
         reason: 'active_bound_image_required',
       });
     }
-    const models = await this.input.models.resolve(source.knowledgeSpaceId, context);
+    const [vlmResult, embeddingResult] = await Promise.allSettled([
+      this.input.models.resolveVlm(source.knowledgeSpaceId, context),
+      this.input.models.resolveVisionEmbedding(source.knowledgeSpaceId, context),
+    ]);
+    if (vlmResult.status === 'rejected' && embeddingResult.status === 'rejected') {
+      throw createKnowledgeError({
+        code: 'KNOWLEDGE_VALIDATION_FAILED',
+        requestId: context.requestId,
+        traceId: context.traceId,
+        details: {
+          reason: 'vision_models_unavailable',
+          fields: ['modelBindings.vlm', 'modelBindings.visionEmbedding'],
+        },
+      });
+    }
+    const vlm = vlmResult.status === 'fulfilled' ? vlmResult.value : null;
+    const visionEmbedding = embeddingResult.status === 'fulfilled' ? embeddingResult.value : null;
+    const vlmResolutionFailure = vlmResult.status === 'rejected' ? vlmResult.reason : undefined;
+    const embeddingResolutionFailure =
+      embeddingResult.status === 'rejected' ? embeddingResult.reason : undefined;
     const segment = await this.input.indexes.ensureImageSegment(
       {
         source,
@@ -249,53 +283,59 @@ export class S8CaptionApplication implements S8CaptionExecutorPort {
       sourceId,
       segmentId: segment.id,
       imageBlobRefId,
-      vlmModelId: models.vlm.modelId,
+      vlmModelId: vlm?.modelId ?? 'unavailable',
       promptVersion: S8_CAPTION_PROMPT_VERSION,
     });
     let caption: string | null = null;
-    let captionFailure: unknown;
+    let captionFailure: unknown = vlmResolutionFailure;
     let captionUsage = { inputTokens: 0, outputTokens: 0 };
-    try {
-      const generated = await this.caption(
-        {
-          sourceId,
-          sourceVersion,
-          knowledgeSpaceId: source.knowledgeSpaceId,
-          modelId: models.vlm.modelId,
-          imageUrl: ticket.url,
-        },
-        context,
-      );
-      caption = generated.caption;
-      captionUsage = generated.usage;
-    } catch (error) {
-      if (!partialFailure(error)) throw error;
-      captionFailure = error;
+    if (vlm) {
+      try {
+        const generated = await this.caption(
+          {
+            sourceId,
+            sourceVersion,
+            knowledgeSpaceId: source.knowledgeSpaceId,
+            modelId: vlm.modelId,
+            imageUrl: ticket.url,
+            imageBytes: object.sizeBytes,
+          },
+          context,
+        );
+        caption = generated.caption;
+        captionUsage = generated.usage;
+      } catch (error) {
+        if (!partialFailure(error)) throw error;
+        captionFailure = error;
+      }
     }
 
     let vectors: number[][] = [];
     let embeddingInput: S5EmbeddingInputItem[] = [];
-    let embeddingFailure: unknown;
+    let embeddingFailure: unknown = embeddingResolutionFailure;
     let embeddingUsage = { inputTokens: 0, outputTokens: 0 };
-    try {
-      const generated = await this.embed(
-        {
-          sourceId,
-          knowledgeSpaceId: source.knowledgeSpaceId,
-          sourceVersion,
-          modelId: models.visionEmbedding.modelId,
-          dimension: models.visionEmbedding.dimension,
-          caption,
-          imageUrl: ticket.url,
-        },
-        context,
-      );
-      vectors = generated.vectors;
-      embeddingInput = generated.input;
-      embeddingUsage = generated.usage;
-    } catch (error) {
-      if (!partialFailure(error)) throw error;
-      embeddingFailure = error;
+    if (visionEmbedding) {
+      try {
+        const generated = await this.embed(
+          {
+            sourceId,
+            knowledgeSpaceId: source.knowledgeSpaceId,
+            sourceVersion,
+            modelId: visionEmbedding.modelId,
+            dimension: visionEmbedding.dimension,
+            caption,
+            imageUrl: ticket.url,
+            imageBytes: object.sizeBytes,
+          },
+          context,
+        );
+        vectors = generated.vectors;
+        embeddingInput = generated.input;
+        embeddingUsage = generated.usage;
+      } catch (error) {
+        if (!partialFailure(error)) throw error;
+        embeddingFailure = error;
+      }
     }
 
     const captionIndexed = caption !== null;
@@ -332,7 +372,7 @@ export class S8CaptionApplication implements S8CaptionExecutorPort {
       if (!imageVector) throw outputInvalid(context, 'image_vector_missing');
       const profile = this.input.vectors
         .listProfiles()
-        .find((item) => item.dimension === models.visionEmbedding.dimension);
+        .find((item) => item.dimension === visionEmbedding?.dimension);
       if (!profile) {
         throw createKnowledgeError({
           code: 'KNOWLEDGE_INTERNAL_ERROR',
@@ -340,7 +380,7 @@ export class S8CaptionApplication implements S8CaptionExecutorPort {
           traceId: context.traceId,
           details: {
             reason: 'vector_profile_missing',
-            dimension: models.visionEmbedding.dimension,
+            dimension: visionEmbedding?.dimension ?? 0,
           },
         });
       }
@@ -352,8 +392,8 @@ export class S8CaptionApplication implements S8CaptionExecutorPort {
           sourceId,
           segmentId: segment.id,
           indexId: 'image_caption',
-          embeddingModelId: models.visionEmbedding.modelId,
-          dimension: models.visionEmbedding.dimension,
+          embeddingModelId: visionEmbedding!.modelId,
+          dimension: visionEmbedding!.dimension,
           vector: captionVector,
           searchEnabled: source.searchEnabled,
           contentHash: hash(caption ?? ''),
@@ -366,8 +406,8 @@ export class S8CaptionApplication implements S8CaptionExecutorPort {
         sourceId,
         segmentId: segment.id,
         indexId: 'image',
-        embeddingModelId: models.visionEmbedding.modelId,
-        dimension: models.visionEmbedding.dimension,
+        embeddingModelId: visionEmbedding!.modelId,
+        dimension: visionEmbedding!.dimension,
         vector: imageVector,
         searchEnabled: source.searchEnabled,
         contentHash: hash(`${caption ?? ''}\n${imageBlobRefId}`),
@@ -382,8 +422,8 @@ export class S8CaptionApplication implements S8CaptionExecutorPort {
         indexes.push({
           indexId: 'image_caption',
           type: 'image_caption',
-          modelId: models.visionEmbedding.modelId,
-          dimension: models.visionEmbedding.dimension,
+          modelId: visionEmbedding!.modelId,
+          dimension: visionEmbedding!.dimension,
           storageType: profile.storageType,
           vectorProfile: profile.tableName,
           vectorId: written.vectorIds[vectorIndex++]!,
@@ -394,8 +434,8 @@ export class S8CaptionApplication implements S8CaptionExecutorPort {
       indexes.push({
         indexId: 'image',
         type: 'image',
-        modelId: models.visionEmbedding.modelId,
-        dimension: models.visionEmbedding.dimension,
+        modelId: visionEmbedding!.modelId,
+        dimension: visionEmbedding!.dimension,
         storageType: profile.storageType,
         vectorProfile: profile.tableName,
         vectorId: written.vectorIds[vectorIndex]!,
@@ -414,7 +454,7 @@ export class S8CaptionApplication implements S8CaptionExecutorPort {
         captionStatus: captionIndexed ? 'indexed' : 'error',
         vectorStatus: vectorIndexed ? 'indexed' : 'error',
         captionPromptVersion: S8_CAPTION_PROMPT_VERSION,
-        visionEmbeddingModelId: models.visionEmbedding.modelId,
+        visionEmbeddingModelId: visionEmbedding?.modelId ?? 'unavailable',
         captionKey,
         indexes,
       },
@@ -426,12 +466,14 @@ export class S8CaptionApplication implements S8CaptionExecutorPort {
         expectedVersion: projectedVersion,
       });
     }
-    await this.input.store.updateSourceStatus(
-      sourceId,
-      captionIndexed && vectorIndexed ? 'ready' : 'partial',
-      context,
-      sourceVersion,
-    );
+    if (input.updateSourceStatus !== false) {
+      await this.input.store.updateSourceStatus(
+        sourceId,
+        captionIndexed && vectorIndexed ? 'ready' : 'partial',
+        context,
+        sourceVersion,
+      );
+    }
 
     return {
       partial: captionIndexed !== vectorIndexed,
@@ -440,7 +482,7 @@ export class S8CaptionApplication implements S8CaptionExecutorPort {
         captionStatus: captionIndexed ? 'indexed' : 'error',
         vectorStatus: vectorIndexed ? 'indexed' : 'error',
         captionPromptVersion: S8_CAPTION_PROMPT_VERSION,
-        visionEmbeddingModelId: models.visionEmbedding.modelId,
+        visionEmbeddingModelId: visionEmbedding?.modelId ?? 'unavailable',
         captionKey,
         sourceVersion,
         usage: {
@@ -491,6 +533,7 @@ export class S8CaptionApplication implements S8CaptionExecutorPort {
         ...input,
         order: 0,
         metadata: { imageSource: true },
+        updateSourceStatus: true,
       },
       context,
     );
@@ -523,6 +566,7 @@ export class S8CaptionApplication implements S8CaptionExecutorPort {
         imageBlobRefId: input.imageBlobRefId,
         order: input.order,
         metadata: input.metadata,
+        updateSourceStatus: false,
       },
       context,
     );

@@ -69,22 +69,106 @@ export class S8ImageIndexRepository implements S8ImageIndexStorePort {
     },
     context: TenantContext,
   ): Promise<S8ImageSegmentRecord> {
-    if (input.source.kind !== 'image') {
+    if (input.source.kind !== 'image' && input.source.kind !== 'file') {
       throw createKnowledgeError({
         code: 'KNOWLEDGE_VALIDATION_FAILED',
         requestId: context.requestId,
         traceId: context.traceId,
-        details: { field: 'source.kind', expected: 'image', actual: input.source.kind },
+        details: {
+          field: 'source.kind',
+          expected: ['image', 'file'],
+          actual: input.source.kind,
+        },
+      });
+    }
+    if (input.source.kind === 'file' && !input.metadata?.imageAssetId) {
+      throw createKnowledgeError({
+        code: 'KNOWLEDGE_VALIDATION_FAILED',
+        requestId: context.requestId,
+        traceId: context.traceId,
+        details: { field: 'metadata.imageAssetId', reason: 'required_for_file_asset' },
       });
     }
     const sourceId = new Types.ObjectId(input.source.id);
     const knowledgeSpaceId = new Types.ObjectId(input.source.knowledgeSpaceId);
     const imageBlobRefId = new Types.ObjectId(input.imageBlobRefId);
     const order = input.order ?? 0;
+    const workspaceId = requireWorkspaceId(context);
+    const current = await this.segments
+      .findOne({
+        workspaceId,
+        knowledgeSpaceId,
+        sourceId,
+        order,
+        deletedAt: null,
+      })
+      .lean<KnowledgeSegmentDoc & { _id: Types.ObjectId }>();
+    if (current) {
+      const sameVersion =
+        current.sourceVersion === input.source.sourceVersion &&
+        String(current.imageBlobRefId) === input.imageBlobRefId;
+      const document = await this.segments
+        .findOneAndUpdate(
+          {
+            _id: current._id,
+            workspaceId,
+            version: current.version,
+            deletedAt: null,
+          },
+          sameVersion
+            ? {
+                $set: {
+                  sourceVersion: input.source.sourceVersion,
+                  searchEnabled: input.source.searchEnabled,
+                  imageBlobRefId,
+                  metadata: {
+                    ...current.metadata,
+                    ...(input.metadata ?? {}),
+                  },
+                  updatedByMemberId: context.memberId,
+                },
+                $inc: { version: 1 },
+              }
+            : {
+                $set: {
+                  sourceVersion: input.source.sourceVersion,
+                  searchEnabled: input.source.searchEnabled,
+                  imageBlobRefId,
+                  question: '',
+                  answer: '',
+                  content: '',
+                  fullTextTokens: '',
+                  fullTextVersion: 0,
+                  indexes: [],
+                  indexStatus: 'pending',
+                  indexErrorCode: null,
+                  imageDescription: null,
+                  metadata: {
+                    captionStatus: 'pending',
+                    vectorStatus: 'pending',
+                    ...(input.metadata ?? {}),
+                  },
+                  updatedByMemberId: context.memberId,
+                },
+                $inc: { version: 1 },
+              },
+          { new: true },
+        )
+        .lean<KnowledgeSegmentDoc & { _id: Types.ObjectId }>();
+      if (!document) {
+        throw createKnowledgeError({
+          code: 'KNOWLEDGE_CONFLICT',
+          requestId: context.requestId,
+          traceId: context.traceId,
+          details: { reason: 'image_segment_version_changed', sourceId: input.source.id },
+        });
+      }
+      return segmentRecord(document);
+    }
     const document = await this.segments
       .findOneAndUpdate(
         {
-          workspaceId: requireWorkspaceId(context),
+          workspaceId,
           knowledgeSpaceId,
           sourceId,
           order,
@@ -95,16 +179,15 @@ export class S8ImageIndexRepository implements S8ImageIndexStorePort {
             sourceVersion: input.source.sourceVersion,
             searchEnabled: input.source.searchEnabled,
             imageBlobRefId,
-            ...(input.metadata
-              ? {
-                  'metadata.imageAssetId': input.metadata.imageAssetId,
-                  'metadata.page': input.metadata.page,
-                }
-              : {}),
+            metadata: {
+              captionStatus: 'pending',
+              vectorStatus: 'pending',
+              ...(input.metadata ?? {}),
+            },
             updatedByMemberId: context.memberId,
           },
           $setOnInsert: {
-            workspaceId: requireWorkspaceId(context),
+            workspaceId,
             knowledgeSpaceId,
             version: 1,
             deletedAt: null,
@@ -122,11 +205,6 @@ export class S8ImageIndexRepository implements S8ImageIndexStorePort {
             indexErrorCode: null,
             imageDescription: null,
             synonymVersion: 0,
-            metadata: {
-              captionStatus: 'pending',
-              vectorStatus: 'pending',
-              ...(input.metadata ?? {}),
-            },
           },
         },
         { upsert: true, new: true, setDefaultsOnInsert: true },

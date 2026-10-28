@@ -26,16 +26,21 @@ export interface S8ImageGalleryLabels {
   close: string;
 }
 
+export interface S8ImagePreview {
+  url: string;
+  expiresAt: string;
+}
+
 export interface S8ImageGalleryProps {
   items: readonly S8ImageGalleryItem[];
   labels: S8ImageGalleryLabels;
-  onPreview: (item: S8ImageGalleryItem) => Promise<string>;
+  onPreview: (item: S8ImageGalleryItem) => Promise<S8ImagePreview>;
 }
 
 export function S8ImageGallery(props: S8ImageGalleryProps) {
   const [active, setActive] = useState<number | null>(null);
   const [url, setUrl] = useState<string | null>(null);
-  const [previews, setPreviews] = useState<Record<string, string>>({});
+  const [previews, setPreviews] = useState<Record<string, S8ImagePreview>>({});
   const [loading, setLoading] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
@@ -53,7 +58,9 @@ export function S8ImageGallery(props: S8ImageGalleryProps) {
     ).then((entries) => {
       if (!active) return;
       const next = Object.fromEntries(entries.filter((entry) => entry !== null));
-      setPreviews(next);
+      if (Object.keys(next).length > 0) {
+        setPreviews((current) => ({ ...current, ...next }));
+      }
     });
     return () => {
       active = false;
@@ -74,8 +81,13 @@ export function S8ImageGallery(props: S8ImageGalleryProps) {
     setLoading(item.id);
     setFailed(false);
     try {
-      const nextUrl = previews[item.id] ?? (await props.onPreview(item));
-      setUrl(nextUrl);
+      const cached = previews[item.id];
+      const preview =
+        cached && Date.parse(cached.expiresAt) > Date.now() + 5_000
+          ? cached
+          : await props.onPreview(item);
+      setPreviews((current) => ({ ...current, [item.id]: preview }));
+      setUrl(preview.url);
       setActive(index);
     } catch {
       setFailed(true);
@@ -124,14 +136,21 @@ export function S8ImageGallery(props: S8ImageGalleryProps) {
               color="kn.inkMuted"
               fontSize="sm"
             >
-              {previews[item.id] ? (
+              {previews[item.id]?.url ? (
                 <Box
                   as="img"
-                  src={previews[item.id]}
+                  src={previews[item.id]!.url}
                   alt={item.alt}
                   width="100%"
                   height="100%"
                   objectFit="cover"
+                  onError={() =>
+                    setPreviews((current) => {
+                      const next = { ...current };
+                      delete next[item.id];
+                      return next;
+                    })
+                  }
                 />
               ) : (
                 item.alt

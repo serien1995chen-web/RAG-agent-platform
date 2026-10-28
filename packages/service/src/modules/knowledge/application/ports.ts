@@ -603,6 +603,9 @@ export type FileTicketDisposition = 'inline' | 'attachment';
 
 export interface FileTicketClaims {
   workspaceId: string;
+  memberId: string;
+  isWorkspaceOwner: boolean;
+  scopes: string[];
   blobId: string;
   sourceId: string | null;
   knowledgeSpaceId: string | null;
@@ -615,6 +618,9 @@ export interface FileTicketPort {
   issue(
     input: {
       workspaceId: string;
+      memberId: string;
+      isWorkspaceOwner: boolean;
+      scopes: string[];
       blobId: string;
       sourceId: string | null;
       knowledgeSpaceId: string | null;

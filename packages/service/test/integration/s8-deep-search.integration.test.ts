@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { AuthorizedCandidate } from '@kb/search';
+import { createKnowledgeError } from '@kb/contracts';
 import { S8DeepSearchApplication } from '../../src/modules/knowledge/application/s8-deep-search.application';
 import { S5ModelTransportError } from '../../src/modules/knowledge/application/s5-model-gateway.port';
 import type { TenantContext } from '../../src/shared/persistence/knowledge/tenant';
@@ -57,8 +58,18 @@ function authorized(): AuthorizedCandidate {
   };
 }
 
-function application(options: { failRound?: number; finalAclRevoked?: boolean } = {}) {
+function application(
+  options: {
+    failRound?: number;
+    finalAclRevoked?: boolean;
+    deniedSpaceId?: string;
+    plannerUsage?: { inputTokens: number; outputTokens: number };
+    searchUsage?: { inputTokens: number; outputTokens: number };
+    queries?: string[];
+  } = {},
+) {
   let plannerCalls = 0;
+  const collectBudgets: number[] = [];
   const issue = vi.fn(
     async (input: { candidates: readonly AuthorizedCandidate[] }) =>
       new Map(
@@ -81,7 +92,14 @@ function application(options: { failRound?: number; finalAclRevoked?: boolean } 
   const instance = new S8DeepSearchApplication({
     access: {
       assertSearchScope() {},
-      async getAuthorizedSpace() {
+      async getAuthorizedSpace(requestedSpaceId: string) {
+        if (requestedSpaceId === options.deniedSpaceId) {
+          throw createKnowledgeError({
+            code: 'KNOWLEDGE_NOT_FOUND',
+            requestId: context.requestId,
+            traceId: context.traceId,
+          });
+        }
         return {
           spaceId,
           workspaceId: context.workspaceId,
@@ -122,7 +140,7 @@ function application(options: { failRound?: number; finalAclRevoked?: boolean } 
               {
                 message: {
                   content: JSON.stringify({
-                    queries: ['refund timing'],
+                    queries: options.queries ?? ['refund timing'],
                     sufficient: false,
                   }),
                 },
@@ -133,18 +151,25 @@ function application(options: { failRound?: number; finalAclRevoked?: boolean } 
           attempts: 1,
           fallbackUsed: false,
           degraded: false,
-          usage: { inputTokens: 10, outputTokens: 2, quantity: 12 },
+          usage: {
+            inputTokens: options.plannerUsage?.inputTokens ?? 10,
+            outputTokens: options.plannerUsage?.outputTokens ?? 2,
+            quantity: 12,
+          },
         };
       },
     },
     search: {
-      collectCandidates: async () => ({
-        candidates: [authorized()],
-        partial: false,
-        degradedCodes: [],
-        rerankApplied: false,
-        usage: { inputTokens: 1, outputTokens: 0 },
-      }),
+      collectCandidates: async (input) => {
+        collectBudgets.push(input.request.tokenBudget);
+        return {
+          candidates: [authorized()],
+          partial: false,
+          degradedCodes: [],
+          rerankApplied: false,
+          usage: options.searchUsage ?? { inputTokens: 1, outputTokens: 0 },
+        };
+      },
     },
     authorization: {
       reauthorizeCitation: async () => (options.finalAclRevoked ? undefined : authorized()),
@@ -153,7 +178,13 @@ function application(options: { failRound?: number; finalAclRevoked?: boolean } 
     audits: { appendSearch: async () => undefined },
     searchIdFactory: () => 'search_deep_fixture',
   });
-  return { instance, issue, appendRound };
+  return {
+    instance,
+    issue,
+    appendRound,
+    collectBudgets,
+    plannerCalls: () => plannerCalls,
+  };
 }
 
 describe('TEST-SEARCH-008-BLOCK / TEST-X-DEEP-BUDGET deep search', () => {
@@ -218,5 +249,50 @@ describe('TEST-SEARCH-008-BLOCK / TEST-X-DEEP-BUDGET deep search', () => {
       problem: { error: { code: 'KNOWLEDGE_FORBIDDEN' } },
     });
     expect(issue).not.toHaveBeenCalled();
+  });
+
+  it('recomputes the per-query budget from actual usage and stops before overspend', async () => {
+    const { instance, collectBudgets } = application({
+      plannerUsage: { inputTokens: 4_500, outputTokens: 0 },
+      searchUsage: { inputTokens: 1_500, outputTokens: 0 },
+      queries: ['first query', 'second query'],
+    });
+    const result = await instance.search(
+      {
+        knowledgeSpaceId: spaceId,
+        knowledgeSpaceIds: [spaceId],
+        query: 'budget test',
+        tokenBudget: 6_000,
+        maxRounds: 1,
+        roundTokenBudget: 5_000,
+        stopWhenNoNewEvidence: false,
+      },
+      context,
+    );
+    expect(collectBudgets).toEqual([1_500]);
+    expect(result.stopReason).toBe('token_budget');
+    expect(result.usage).toEqual({ inputTokens: 6_000, outputTokens: 0 });
+  });
+
+  it('authorizes every requested Space before invoking the planner', async () => {
+    const deniedSpaceId = '65f1e5b2a1c9d4b7e8f01235';
+    const { instance, plannerCalls } = application({ deniedSpaceId });
+    await expect(
+      instance.search(
+        {
+          knowledgeSpaceId: spaceId,
+          knowledgeSpaceIds: [spaceId, deniedSpaceId],
+          query: 'cross tenant',
+          tokenBudget: 12_000,
+          maxRounds: 3,
+          roundTokenBudget: 5_000,
+          stopWhenNoNewEvidence: true,
+        },
+        context,
+      ),
+    ).rejects.toMatchObject({
+      problem: { error: { code: 'KNOWLEDGE_NOT_FOUND' } },
+    });
+    expect(plannerCalls()).toBe(0);
   });
 });

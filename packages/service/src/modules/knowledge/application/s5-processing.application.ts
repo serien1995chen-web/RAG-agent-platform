@@ -228,6 +228,12 @@ export class S5ProcessingApplication {
           context: input.context,
         })
       : undefined;
+    const autoIndexPartial =
+      input.settings.autoIndexes === true &&
+      (autoIndexes.fallbackUsed ||
+        autoIndexes.diagnostics.some(
+          (diagnostic) => diagnostic.severity === 'warning' || diagnostic.severity === 'error',
+        ));
     return {
       sourceVersion: input.sourceVersion,
       rawText: enhanced.markdown,
@@ -264,7 +270,7 @@ export class S5ProcessingApplication {
           ...autoIndexes.diagnostics,
           ...(imageIndex?.diagnostics ?? []),
         ],
-        partial: imageIndex?.partial ?? false,
+        partial: autoIndexPartial || (imageIndex?.partial ?? false),
       },
     };
   }

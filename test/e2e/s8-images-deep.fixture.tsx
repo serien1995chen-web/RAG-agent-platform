@@ -163,7 +163,10 @@ function ImagesFixture() {
       partial
       searchResults={results}
       onUpload={async () => [imageOne]}
-      onPreview={async () => png}
+      onPreview={async () => ({
+        url: png,
+        expiresAt: new Date(Date.now() + 300_000).toISOString(),
+      })}
       onSearch={async () => {
         setResults([
           {

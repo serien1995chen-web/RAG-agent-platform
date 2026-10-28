@@ -24,25 +24,24 @@ export class S8ModelResolver implements S8ImageModelResolverPort {
     private readonly catalog: ModelCatalogPort,
   ) {}
 
-  async resolve(spaceId: string, context: TenantContext): Promise<S8ImageModels> {
+  async resolveVlm(spaceId: string, context: TenantContext): Promise<ModelCatalogItem> {
     const models = registerKnowledgeModels(this.connection);
-    const bindings = (await models.KnowledgeModelBinding.find({
+    const binding = await models.KnowledgeModelBinding.findOne({
       workspaceId: requireWorkspaceId(context),
       knowledgeSpaceId: new Types.ObjectId(spaceId),
+      modelType: 'vlm',
       status: 'active',
       deletedAt: null,
-    }).lean()) as unknown as KnowledgeModelBindingDoc[];
+    }).lean<KnowledgeModelBindingDoc>();
     const catalog = await this.catalog.listModels({
       workspaceId: context.workspaceId,
       requestId: context.requestId,
       traceId: context.traceId,
     });
-    const vlmBinding = bindings.find((binding) => binding.modelType === 'vlm');
-    const embeddingBinding = bindings.find((binding) => binding.modelType === 'embedding');
-    const vlm = vlmBinding
+    const vlm = binding
       ? catalog.find(
           (item): item is ModelCatalogItem =>
-            item.modelId === vlmBinding.modelId &&
+            item.modelId === binding.modelId &&
             item.type === 'vlm' &&
             item.authorized &&
             item.capabilities.includes('vision'),
@@ -51,31 +50,7 @@ export class S8ModelResolver implements S8ImageModelResolverPort {
     if (!vlm) {
       throw missingBinding(context, 'modelBindings.vlm', 'active_vision_binding_required');
     }
-    const visionEmbedding = embeddingBinding
-      ? catalog.find(
-          (item): item is ModelCatalogItem =>
-            item.modelId === embeddingBinding.modelId &&
-            item.type === 'embedding' &&
-            item.authorized &&
-            item.capabilities.includes('vision') &&
-            item.dimension !== null &&
-            VISION_DIMENSIONS.has(item.dimension),
-        )
-      : undefined;
-    if (!visionEmbedding || visionEmbedding.dimension === null) {
-      throw missingBinding(
-        context,
-        'modelBindings.visionEmbedding',
-        'active_vision_embedding_binding_required',
-      );
-    }
-    return {
-      vlm,
-      visionEmbedding: {
-        ...visionEmbedding,
-        dimension: visionEmbedding.dimension as 768 | 1024 | 1536 | 3072,
-      },
-    };
+    return vlm;
   }
 
   async resolveVisionEmbedding(

@@ -764,6 +764,9 @@ export class FileApplication {
     const issued = this.tickets.issue(
       {
         workspaceId: ref.workspaceId,
+        memberId: context.memberId,
+        isWorkspaceOwner: context.isWorkspaceOwner === true,
+        scopes: [...context.scopes],
         blobId: ref.blobId,
         sourceId: ref.sourceId,
         knowledgeSpaceId:
@@ -854,7 +857,9 @@ export class FileApplication {
       effectiveContext = {
         ...context,
         workspaceId: claims.workspaceId,
-        memberId: 'file-ticket',
+        memberId: claims.memberId,
+        isWorkspaceOwner: claims.isWorkspaceOwner,
+        scopes: [...claims.scopes],
       };
       disposition = claims.disposition;
     }
@@ -880,11 +885,7 @@ export class FileApplication {
         });
       }
     }
-    if (!ticket) {
-      await this.assertFileReadable(ref, effectiveContext);
-    } else if (ref.state !== 'active') {
-      throw notFound(effectiveContext);
-    }
+    await this.assertFileReadable(ref, effectiveContext);
     const object = await this.objectStore.getObject(
       this.objectStore.bucket,
       ref.objectKey,

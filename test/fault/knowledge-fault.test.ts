@@ -236,6 +236,9 @@ describe('knowledge fault contracts', () => {
     const issued = tickets.issue(
       {
         workspaceId,
+        memberId: context.memberId,
+        isWorkspaceOwner: false,
+        scopes: ['knowledge:read'],
         blobId,
         sourceId: null,
         knowledgeSpaceId: spaceId,

@@ -7,6 +7,7 @@ import {
   S8ImageGallery,
   type S8ImageGalleryItem,
   type S8ImageGalleryLabels,
+  type S8ImagePreview,
 } from './s8-image-gallery';
 
 export interface S8ImagesWorkbenchLabels extends S8ImageGalleryLabels {
@@ -50,7 +51,7 @@ export interface S8ImagesWorkbenchProps {
   error?: unknown;
   searchResults?: readonly S8ImageSearchResultItem[];
   onUpload: (files: readonly File[]) => Promise<readonly string[]>;
-  onPreview: (item: S8ImageGalleryItem) => Promise<string>;
+  onPreview: (item: S8ImageGalleryItem) => Promise<S8ImagePreview>;
   onSearch: (input: { query: string; imageUploadIds: readonly string[] }) => Promise<void>;
   onRetry?: () => void;
 }

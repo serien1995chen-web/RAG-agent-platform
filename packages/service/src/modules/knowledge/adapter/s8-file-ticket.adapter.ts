@@ -17,6 +17,9 @@ export class S8FileTicketAdapter implements S8ImageTicketPort {
     return this.tickets.issue(
       {
         workspaceId: input.workspaceId,
+        memberId: input.context.memberId,
+        isWorkspaceOwner: input.context.isWorkspaceOwner === true,
+        scopes: [...input.context.scopes],
         blobId: input.blobId,
         sourceId: input.sourceId,
         knowledgeSpaceId: input.knowledgeSpaceId,

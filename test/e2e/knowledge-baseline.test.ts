@@ -1899,10 +1899,10 @@ describe.sequential('knowledge architecture baseline E2E', () => {
             if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
           });
           await page.waitForTimeout(100);
-          await page.screenshot({
-            path: join(screenshotDirectory, `s3-overview-${viewport.width}.png`),
-            fullPage: true,
-          });
+          const screenshotPath = join(screenshotDirectory, `s3-overview-${viewport.width}.png`);
+          if (!existsSync(screenshotPath)) {
+            await page.screenshot({ path: screenshotPath, fullPage: true });
+          }
 
           await page.getByRole('button', { name: '导出空间 ZIP' }).click();
           await page.getByText('失败', { exact: true }).waitFor({ timeout: 10_000 });

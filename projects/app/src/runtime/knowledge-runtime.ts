@@ -586,10 +586,11 @@ async function bootstrapRuntime(): Promise<TelemetryKnowledgeApiRuntime> {
     resolveSecretRef(s7CitationConfig.citationSigningSecretRef),
   );
   const s7Citations = new S7CitationRepository(mongo, s7Signer);
+  const s7Filters = new S7FilterSourceRepository(mongo);
   const s7Search = new S7SearchApplication({
     access: s7Authorization,
     models: s7SearchRepository,
-    filters: new S7FilterSourceRepository(mongo),
+    filters: s7Filters,
     fullText: s7SearchRepository,
     authorization: s7Authorization,
     pipeline: s7Pipeline,
@@ -611,6 +612,7 @@ async function bootstrapRuntime(): Promise<TelemetryKnowledgeApiRuntime> {
     tickets: imageTickets,
     search: s7Search,
     fullText: s7SearchRepository,
+    filters: s7Filters,
     authorization: s7Authorization,
     citations: s7Citations,
     audits: s7Citations,

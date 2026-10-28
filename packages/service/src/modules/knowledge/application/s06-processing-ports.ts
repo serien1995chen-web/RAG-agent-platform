@@ -251,7 +251,13 @@ export interface S6ProcessingStorePort {
     input: {
       source: S6SourceRecord;
       sourceVersion: number;
-      rows: ReadonlyArray<{ order: number; question: string; answer: string; content: string }>;
+      rows: ReadonlyArray<{
+        order: number;
+        question: string;
+        answer: string;
+        content: string;
+        metadata?: Record<string, unknown>;
+      }>;
     },
     context: TenantContext,
   ): Promise<string[]>;

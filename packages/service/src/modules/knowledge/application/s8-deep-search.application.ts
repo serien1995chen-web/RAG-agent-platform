@@ -193,6 +193,11 @@ export class S8DeepSearchApplication {
       resourceType: 'space',
       resourceId: input.request.knowledgeSpaceId,
       operation: 's8.deep.planner',
+      audit: {
+        promptVersion: 's8.deep.planner.v1',
+        mediaItemCount: 0,
+        totalBytes: Buffer.byteLength(`${evidence}\n${input.request.query}`, 'utf8'),
+      },
       requestId: `${input.searchId}:round:${input.round}`,
       traceId: input.context.traceId,
       context: input.context,
@@ -203,11 +208,15 @@ export class S8DeepSearchApplication {
     };
   }
 
-  private searchRequest(request: DeepSearchApiRequest, query: string): SearchApiRequest {
+  private searchRequest(
+    request: DeepSearchApiRequest,
+    query: string,
+    tokenBudget: number,
+  ): SearchApiRequest {
     return {
       knowledgeSpaceId: request.knowledgeSpaceId,
       query,
-      tokenBudget: Math.min(request.roundTokenBudget, request.tokenBudget),
+      tokenBudget,
       similarity: request.similarity,
       embeddingWeight: request.embeddingWeight,
       usingRerank: request.usingRerank,
@@ -281,6 +290,11 @@ export class S8DeepSearchApplication {
   async search(body: unknown, context: TenantContext): Promise<DeepSearchApiResponse> {
     const request = this.parse(body, context);
     this.input.access.assertSearchScope(context);
+    await Promise.all(
+      [...new Set(request.knowledgeSpaceIds)].map((spaceId) =>
+        this.input.access.getAuthorizedSpace(spaceId, context),
+      ),
+    );
     if (request.tokenBudget < 500) {
       throw createKnowledgeError({
         code: 'KNOWLEDGE_QUOTA_EXCEEDED',
@@ -335,10 +349,24 @@ export class S8DeepSearchApplication {
         let roundCandidates = 0;
         let roundPartial = false;
         let roundUsage = { inputTokens: 0, outputTokens: 0 };
+        let budgetExhausted = false;
         for (const query of planner.queries) {
+          const remaining = deepBudgetOf(
+            request,
+            usage.inputTokens +
+              usage.outputTokens +
+              planner.usage.inputTokens +
+              planner.usage.outputTokens +
+              roundUsage.inputTokens +
+              roundUsage.outputTokens,
+          );
+          if (remaining.roundTokens < 1) {
+            budgetExhausted = true;
+            break;
+          }
           try {
             const result = await this.input.search.collectCandidates({
-              request: this.searchRequest(request, query),
+              request: this.searchRequest(request, query, remaining.roundTokens),
               knowledgeSpaceIds: request.knowledgeSpaceIds,
               mode: 'hybrid',
               context,
@@ -380,16 +408,18 @@ export class S8DeepSearchApplication {
             sufficient: planner.sufficient,
           }),
         );
-        stopReason = deepStopReason({
-          round,
-          maxRounds: request.maxRounds,
-          sufficient: planner.sufficient,
-          hasNewEvidence,
-          stopWhenNoNewEvidence: request.stopWhenNoNewEvidence,
-          remainingTokens,
-          dependencyFailed,
-          hasEvidence: confirmed.size > 0,
-        });
+        stopReason = budgetExhausted
+          ? 'token_budget'
+          : deepStopReason({
+              round,
+              maxRounds: request.maxRounds,
+              sufficient: planner.sufficient,
+              hasNewEvidence,
+              stopWhenNoNewEvidence: request.stopWhenNoNewEvidence,
+              remainingTokens,
+              dependencyFailed,
+              hasEvidence: confirmed.size > 0,
+            });
         await this.input.repository.appendRound(
           {
             searchId,

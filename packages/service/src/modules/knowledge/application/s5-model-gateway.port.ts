@@ -59,6 +59,12 @@ export type S5ModelGatewayRequest = S5ModelInvocation & {
   resourceType?: 'space' | 'source';
   resourceId?: string;
   operation?: string;
+  audit?: {
+    promptVersion?: string;
+    mediaItemCount?: number;
+    totalBytes?: number;
+    sourceVersion?: number;
+  };
 };
 
 export type S5UsageUnit = 'token' | 'request' | 'second' | 'page' | 'image';
@@ -80,6 +86,11 @@ export interface S5GatewayUsageFact {
   provider: string;
   resourceType: 'space' | 'source';
   resourceId: string;
+  intent?: boolean;
+  promptVersion?: string;
+  mediaItemCount?: number;
+  totalBytes?: number;
+  sourceVersion?: number;
 }
 
 export interface S5UsageRecorderPort {

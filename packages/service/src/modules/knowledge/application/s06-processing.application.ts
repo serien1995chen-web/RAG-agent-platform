@@ -153,7 +153,8 @@ export class S06ProcessingApplication {
             (segment) =>
               ['error', 'rebuild_failed'].includes(segment.indexStatus) ||
               segment.metadata.captionStatus === 'error' ||
-              segment.metadata.vectorStatus === 'error',
+              segment.metadata.vectorStatus === 'error' ||
+              segment.metadata.enhancementPartial === true,
           )
         ? 'partial'
         : segments.length > 0 && segments.every((segment) => segment.indexStatus === 'indexed')
@@ -457,8 +458,16 @@ export class S06ProcessingApplication {
       context,
     });
     const qaByHash = new Map(processed.qaItems.map((item) => [item.sourceChunkHash, item]));
-    const rows: Array<{ order: number; question: string; answer: string; content: string }> = [];
+    const rows: Array<{
+      order: number;
+      question: string;
+      answer: string;
+      content: string;
+      metadata?: Record<string, unknown>;
+    }> = [];
     const chunking = job.inputSnapshot.chunking as ChunkingSettings | undefined;
+    const enhancementMetadata =
+      processed.evidence.partial === true ? { enhancementPartial: true } : undefined;
     for (const chunk of processed.chunks) {
       const qaItems = processed.qaItems.filter(
         (item) => item.sourceChunkHash === chunk.contentHash,
@@ -469,6 +478,7 @@ export class S06ProcessingApplication {
           question: chunk.text,
           answer: chunk.text,
           content: chunk.text,
+          ...(enhancementMetadata ? { metadata: enhancementMetadata } : {}),
         });
       }
       if (qaItems.length > 0) {
@@ -478,6 +488,7 @@ export class S06ProcessingApplication {
             question: item.q,
             answer: item.a,
             content: `${item.q}\n${item.a}`.trim(),
+            ...(enhancementMetadata ? { metadata: enhancementMetadata } : {}),
           });
         }
       }

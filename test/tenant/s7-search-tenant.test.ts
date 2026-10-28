@@ -145,6 +145,7 @@ describe('TEST-X-SEARCH-REAUTH tenant isolation', () => {
       tickets: {} as never,
       search: {} as never,
       fullText: {} as never,
+      filters: {} as never,
       authorization: {} as never,
       citations: { issueWithAudit: issue } as never,
       audits: {} as never,

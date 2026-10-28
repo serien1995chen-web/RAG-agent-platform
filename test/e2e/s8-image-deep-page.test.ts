@@ -1,4 +1,8 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { join, resolve } from 'node:path';
+import AxeBuilder from '@axe-core/playwright';
+import { chromium, expect as playwrightExpect } from '@playwright/test';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
   createKnowledgeConnections,
@@ -19,8 +23,17 @@ import {
   type KnowledgeConnections,
   type TenantContext,
 } from '../../packages/service/src/index';
-import { FileTicketService } from '../../sdk/storage/src/file-ticket';
-import { apiHeaders, createSpace, startS4App, type S4AppHarness } from './s4-app-harness';
+import { FileTicketService, MinioKnowledgeObjectStore } from '../../sdk/storage/src/index';
+import {
+  apiHeaders,
+  consoleCookie,
+  createSpace,
+  startS4App,
+  type S4AppHarness,
+} from './s4-app-harness';
+
+const root = resolve(import.meta.dirname, '../..');
+const screenshotDir = join(root, 'docs/acceptance/s8-ui');
 
 const suffix = randomUUID().replaceAll('-', '').slice(0, 12);
 const workspaceId = `ws_s8_e2e_${suffix}`;
@@ -187,6 +200,10 @@ async function seedTextIndex(context: TenantContext) {
 
 async function seedImage(context: TenantContext) {
   const models = registerKnowledgeModels(connection);
+  const imageBytes = Buffer.from(
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
+    'base64',
+  );
   const source = await models.KnowledgeSource.create({
     workspaceId,
     knowledgeSpaceId: new connection.base.Types.ObjectId(spaceId),
@@ -212,7 +229,12 @@ async function seedImage(context: TenantContext) {
   imageSourceId = String(source._id);
   const object = new connection.base.Types.ObjectId();
   imageBlobRefId = String(object);
+  await models.KnowledgeSource.updateOne(
+    { workspaceId, _id: source._id },
+    { $set: { blobRefId: object }, $inc: { version: 1 } },
+  );
   const now = new Date();
+  const objectKey = `ws/${workspaceId}/space/${spaceId}/source/${String(source._id)}/refund-flow.png`;
   await models.KnowledgeObjectRef.create({
     _id: object,
     workspaceId,
@@ -223,11 +245,11 @@ async function seedImage(context: TenantContext) {
     updatedByMemberId: memberId,
     provider: 'minio',
     bucket: requiredEnv('KB_TEST_S3_BUCKET'),
-    objectKey: `ws/${workspaceId}/space/${spaceId}/refund-flow.png`,
+    objectKey,
     purpose: 'image',
     sourceId: source._id,
     mimeType: 'image/png',
-    sizeBytes: 128,
+    sizeBytes: imageBytes.byteLength,
     etag: 'etag',
     sha256: 'sha256',
     state: 'active',
@@ -237,10 +259,10 @@ async function seedImage(context: TenantContext) {
       status: 'completed',
       providerUploadId: null,
       pendingObjectKey: null,
-      finalObjectKey: `ws/${workspaceId}/space/${spaceId}/refund-flow.png`,
+      finalObjectKey: objectKey,
       finalizedAt: now,
       pendingUrlExpiresAt: null,
-      partSizeBytes: 128,
+      partSizeBytes: imageBytes.byteLength,
       partCount: 1,
       parts: [],
       originalName: 'refund-flow.png',
@@ -248,6 +270,39 @@ async function seedImage(context: TenantContext) {
       abortedAt: null,
     },
   });
+  const endpoint = new URL(requiredEnv('KB_TEST_S3_ENDPOINT'));
+  const objectStore = new MinioKnowledgeObjectStore({
+    provider: 'minio',
+    endPoint: endpoint.hostname,
+    port: Number(endpoint.port || (endpoint.protocol === 'https:' ? 443 : 80)),
+    useSSL: endpoint.protocol === 'https:',
+    accessKey: requiredEnv('KB_TEST_S3_ACCESS_KEY'),
+    secretKey: requiredEnv('KB_TEST_S3_SECRET_KEY'),
+    region: process.env.KB_TEST_S3_REGION ?? 'us-east-1',
+    bucket: requiredEnv('KB_TEST_S3_BUCKET'),
+  });
+  await objectStore.ensureBucket({
+    workspaceId,
+    knowledgeSpaceId: spaceId,
+    requestId: context.requestId,
+    traceId: context.traceId,
+  });
+  await objectStore.putObject(
+    {
+      key: objectKey,
+      body: imageBytes,
+      sizeBytes: imageBytes.byteLength,
+      contentType: 'image/png',
+      workspaceId,
+      knowledgeSpaceId: spaceId,
+    },
+    {
+      workspaceId,
+      knowledgeSpaceId: spaceId,
+      requestId: context.requestId,
+      traceId: context.traceId,
+    },
+  );
   const catalog = new S5MockModelCatalog();
   const indexes = new S8ImageIndexRepository(connection);
   const caption = new S8CaptionApplication({
@@ -455,4 +510,142 @@ describe('S8 real app image and deep search routes', () => {
       },
     });
   });
+
+  it('renders real Images and Deep pages and rechecks ticket ACL on content', async () => {
+    mkdirSync(screenshotDir, { recursive: true });
+    const imageSources = await request(
+      `/v1/knowledge/spaces/${spaceId}/sources?kind=image&limit=100`,
+    );
+    expect(imageSources.response.status).toBe(200);
+    expect(imageSources.payload.data.items).toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: imageSourceId })]),
+    );
+    const cookie = await consoleCookie({ baseUrl: app.baseUrl, authToken, workspaceId });
+    const browser = await chromium.launch({ headless: true });
+    try {
+      for (const viewport of [
+        { name: '360', width: 360, height: 900 },
+        { name: '768', width: 768, height: 1_000 },
+        { name: '1200', width: 1_200, height: 1_000 },
+      ]) {
+        const browserContext = await browser.newContext({
+          viewport: { width: viewport.width, height: viewport.height },
+        });
+        await browserContext.addCookies([cookie]);
+        const page = await browserContext.newPage();
+        const consoleErrors: string[] = [];
+        const pageErrors: string[] = [];
+        const failedRequests: string[] = [];
+        page.on('console', (message) => {
+          if (message.type() === 'error') consoleErrors.push(message.text());
+        });
+        page.on('pageerror', (error) => pageErrors.push(error.message));
+        page.on('requestfailed', (request) => {
+          if (request.url().includes('/v1/knowledge/')) failedRequests.push(request.url());
+        });
+
+        await page.goto(`${app.baseUrl}/spaces/${spaceId}/images`, {
+          waitUntil: 'networkidle',
+        });
+        await playwrightExpect(
+          page.getByRole('heading', { level: 1, name: '图片知识' }),
+        ).toBeVisible();
+        await playwrightExpect(
+          page.getByText('refund-flow.png', { exact: false }).first(),
+        ).toBeVisible();
+        await page.getByRole('button', { name: '预览' }).first().click();
+        await playwrightExpect(page.getByRole('dialog')).toBeVisible();
+        await page.keyboard.press('Escape');
+        await playwrightExpect(page.getByRole('dialog')).toHaveCount(0);
+        const imagesOverflow = await page.evaluate(
+          () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+        );
+        expect(imagesOverflow).toBeLessThanOrEqual(0);
+        const imagesAccessibility = await new AxeBuilder({ page }).analyze();
+        expect(
+          imagesAccessibility.violations.filter(
+            (violation) => violation.impact === 'serious' || violation.impact === 'critical',
+          ),
+        ).toEqual([]);
+        const imagesShot = await page.screenshot({
+          fullPage: true,
+          path: join(screenshotDir, `s8-images-${viewport.name}.png`),
+        });
+        writeFileSync(
+          join(screenshotDir, `s8-images-${viewport.name}.sha256`),
+          `${createHash('sha256').update(imagesShot).digest('hex')}\n`,
+        );
+
+        await page.goto(
+          `${app.baseUrl}/spaces/${spaceId}/search?mode=deep&query=refunds&budget=12000`,
+          { waitUntil: 'networkidle' },
+        );
+        await playwrightExpect(
+          page.getByRole('heading', { level: 1, name: '深度检索' }),
+        ).toBeVisible();
+        const deepResponsePromise = page.waitForResponse(
+          (response) =>
+            response.request().method() === 'POST' &&
+            new URL(response.url()).pathname === '/v1/knowledge/search/deep',
+        );
+        await page.getByRole('button', { name: '运行深度检索' }).click();
+        const deepResponse = await deepResponsePromise;
+        expect(deepResponse.status(), await deepResponse.text()).toBe(200);
+        await playwrightExpect(page.getByText('停止原因:', { exact: false })).toBeVisible({
+          timeout: 20_000,
+        });
+        const deepOverflow = await page.evaluate(
+          () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+        );
+        expect(deepOverflow).toBeLessThanOrEqual(0);
+        const deepAccessibility = await new AxeBuilder({ page }).analyze();
+        expect(
+          deepAccessibility.violations.filter(
+            (violation) => violation.impact === 'serious' || violation.impact === 'critical',
+          ),
+        ).toEqual([]);
+        const deepShot = await page.screenshot({
+          fullPage: true,
+          path: join(screenshotDir, `s8-deep-${viewport.name}.png`),
+        });
+        writeFileSync(
+          join(screenshotDir, `s8-deep-${viewport.name}.sha256`),
+          `${createHash('sha256').update(deepShot).digest('hex')}\n`,
+        );
+        expect(consoleErrors).toEqual([]);
+        expect(pageErrors).toEqual([]);
+        expect(failedRequests).toEqual([]);
+        await browserContext.close();
+      }
+    } finally {
+      await browser.close();
+    }
+
+    const preview = await request(`/v1/knowledge/files/${imageBlobRefId}/preview`, {
+      method: 'POST',
+      idempotencyKey: `s8-preview-revoke-${suffix}`,
+      body: { ttlSeconds: 300 },
+    });
+    expect(preview.response.status).toBe(200);
+    const previewUrl = String(preview.payload.data.url);
+    await connection.models.KnowledgeSource.updateOne(
+      { workspaceId, _id: imageSourceId },
+      { $set: { deletedAt: new Date() } },
+    );
+    try {
+      const revokedContent = await fetch(previewUrl);
+      expect(revokedContent.status).toBe(404);
+      const revokedRetry = await request(`/v1/knowledge/files/${imageBlobRefId}/preview`, {
+        method: 'POST',
+        idempotencyKey: `s8-preview-revoke-retry-${suffix}`,
+        body: { ttlSeconds: 300 },
+      });
+      expect(revokedRetry.response.status).toBe(404);
+    } finally {
+      await connection.models.KnowledgeSource.updateOne(
+        { workspaceId, _id: imageSourceId },
+        { $set: { deletedAt: null } },
+      );
+    }
+  }, 240_000);
 });

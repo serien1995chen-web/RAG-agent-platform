@@ -285,4 +285,97 @@ describe('TEST-X-IMAGE-CAPTION / TEST-TRAIN-003-BLOCK image index', () => {
     expect(rows.rows.map((row) => row.index_id)).toEqual(['image', 'image_caption']);
     expect(segment?.fullTextVersion).toBeGreaterThan(0);
   }, 60_000);
+
+  it('clears the previous searchable pointers atomically when sourceVersion advances', async () => {
+    const models = registerKnowledgeModels(connection);
+    const source = await models.KnowledgeSource.findById(sourceId).lean();
+    if (!source) throw new Error('source missing');
+    const indexes = new S8ImageIndexRepository(connection);
+    await indexes.ensureImageSegment(
+      {
+        source: {
+          id: String(source._id),
+          workspaceId,
+          knowledgeSpaceId: String(source.knowledgeSpaceId),
+          kind: 'image',
+          sourceVersion: 1,
+          blobRefId: imageBlobRefId,
+          name: source.name,
+          mimeType: source.mimeType,
+          parseProvider: source.parseProvider,
+          searchEnabled: source.searchEnabled,
+          processingStatus: source.processingStatus,
+          version: source.version,
+        },
+        imageBlobRefId,
+      },
+      context,
+    );
+    await models.KnowledgeSegment.updateOne(
+      { workspaceId, sourceId },
+      {
+        $set: {
+          indexes: [
+            {
+              indexId: 'image',
+              type: 'image',
+              modelId: 'mock-embedding-1536',
+              dimension: 1536,
+              storageType: 'vector',
+              vectorProfile: 'knowledge_segment_vectors_1536',
+              vectorId: '00000000-0000-4000-8000-000000000001',
+              text: 'old caption',
+              version: 1,
+            },
+          ],
+          fullTextTokens: 'old caption',
+          fullTextVersion: 4,
+          imageDescription: 'old caption',
+          metadata: {
+            captionStatus: 'indexed',
+            vectorStatus: 'indexed',
+            imageSourceVersion: 1,
+          },
+        },
+      },
+    );
+    const nextBlob = new mongoose.Types.ObjectId().toString();
+    await models.KnowledgeSource.updateOne(
+      { workspaceId, _id: sourceId },
+      {
+        $set: { sourceVersion: 2, blobRefId: new mongoose.Types.ObjectId(nextBlob) },
+        $inc: { version: 1 },
+      },
+    );
+    const reset = await indexes.ensureImageSegment(
+      {
+        source: {
+          id: sourceId,
+          workspaceId,
+          knowledgeSpaceId: String(source.knowledgeSpaceId),
+          kind: 'image',
+          sourceVersion: 2,
+          blobRefId: nextBlob,
+          name: source.name,
+          mimeType: source.mimeType,
+          parseProvider: source.parseProvider,
+          searchEnabled: source.searchEnabled,
+          processingStatus: source.processingStatus,
+          version: source.version + 1,
+        },
+        imageBlobRefId: nextBlob,
+      },
+      context,
+    );
+    expect(reset).toMatchObject({
+      sourceVersion: 2,
+      indexes: [],
+      fullTextVersion: 0,
+      imageDescription: null,
+      metadata: {
+        captionStatus: 'pending',
+        vectorStatus: 'pending',
+      },
+    });
+  });
 });

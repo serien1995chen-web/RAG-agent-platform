@@ -5,6 +5,9 @@ export type FileTicketDisposition = 'inline' | 'attachment';
 
 export interface FileTicketClaims {
   workspaceId: string;
+  memberId: string;
+  isWorkspaceOwner: boolean;
+  scopes: string[];
   blobId: string;
   sourceId: string | null;
   knowledgeSpaceId: string | null;
@@ -72,6 +75,9 @@ export class FileTicketService {
     }
     const claims: FileTicketClaims = {
       workspaceId: input.workspaceId,
+      memberId: input.memberId,
+      isWorkspaceOwner: input.isWorkspaceOwner,
+      scopes: [...input.scopes],
       blobId: input.blobId,
       sourceId: input.sourceId,
       knowledgeSpaceId: input.knowledgeSpaceId,
@@ -119,6 +125,10 @@ export class FileTicketService {
     }
     if (
       typeof claims.workspaceId !== 'string' ||
+      typeof claims.memberId !== 'string' ||
+      typeof claims.isWorkspaceOwner !== 'boolean' ||
+      !Array.isArray(claims.scopes) ||
+      claims.scopes.some((scope) => typeof scope !== 'string') ||
       typeof claims.blobId !== 'string' ||
       (claims.sourceId !== null && typeof claims.sourceId !== 'string') ||
       (claims.knowledgeSpaceId !== null && typeof claims.knowledgeSpaceId !== 'string') ||

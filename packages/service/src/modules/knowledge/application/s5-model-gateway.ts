@@ -254,6 +254,7 @@ export class S5ModelGateway implements S5ModelGatewayPort {
           modelId: candidate.modelId,
         } as S5ModelInvocation;
         try {
+          await this.recordUsage(request, candidate, attempt, 0, null, fallbackUsed, true);
           const parsed = await this.input.adapter.invoke<unknown>(currentInvocation, {
             workspaceId: request.workspaceId,
             requestId: request.requestId,
@@ -266,6 +267,7 @@ export class S5ModelGateway implements S5ModelGatewayPort {
             parsed.quantity,
             parsed.status,
             fallbackUsed,
+            false,
           );
           inputTokens += parsed.usage.inputTokens;
           outputTokens += parsed.usage.outputTokens;
@@ -279,9 +281,12 @@ export class S5ModelGateway implements S5ModelGatewayPort {
             usage: { inputTokens, outputTokens, quantity },
           };
         } catch (error) {
-          if (!(error instanceof TransportError)) throw error;
+          if (!(error instanceof TransportError)) {
+            await this.recordUsage(request, candidate, attempt, 0, null, fallbackUsed, false);
+            throw error;
+          }
           lastError = error;
-          await this.recordUsage(request, candidate, attempt, 0, error.status, fallbackUsed);
+          await this.recordUsage(request, candidate, attempt, 0, error.status, fallbackUsed, false);
           if (!transportRetryable(error.kind)) {
             throw transportFailure(error, request, { actualModelId: candidate.modelId });
           }
@@ -316,7 +321,9 @@ export class S5ModelGateway implements S5ModelGatewayPort {
     quantity: number,
     status: number | null,
     fallbackUsed: boolean,
+    intent: boolean,
   ): Promise<void> {
+    const eventSequence = attempt * 2 - (intent ? 1 : 0);
     const fact: S5GatewayUsageFact = {
       workspaceId: request.workspaceId,
       knowledgeSpaceId: request.knowledgeSpaceId,
@@ -326,7 +333,7 @@ export class S5ModelGateway implements S5ModelGatewayPort {
       modelId: candidate.modelId,
       kind: request.kind,
       attempt,
-      eventSequence: attempt,
+      eventSequence,
       quantity: Math.max(0, quantity),
       unit: usageUnit(request.kind),
       status,
@@ -334,6 +341,15 @@ export class S5ModelGateway implements S5ModelGatewayPort {
       provider: 'aiproxy',
       resourceType: request.resourceType ?? 'space',
       resourceId: request.resourceId ?? request.knowledgeSpaceId ?? request.workspaceId,
+      intent,
+      ...(request.audit?.promptVersion ? { promptVersion: request.audit.promptVersion } : {}),
+      ...(request.audit?.mediaItemCount !== undefined
+        ? { mediaItemCount: request.audit.mediaItemCount }
+        : {}),
+      ...(request.audit?.totalBytes !== undefined ? { totalBytes: request.audit.totalBytes } : {}),
+      ...(request.audit?.sourceVersion !== undefined
+        ? { sourceVersion: request.audit.sourceVersion }
+        : {}),
     };
     await this.input.usage.recordInvocationUsage(fact, request.context);
   }

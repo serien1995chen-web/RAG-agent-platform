@@ -97,10 +97,19 @@ const catalog = {
     return { id, knowledgeSpaceId: id };
   },
 } as unknown as CatalogPort;
+const deniedSources = new Set<string>();
+const assertPermission = vi.fn(async (resourceType: string, resourceId: string) => {
+  if (resourceType === 'source' && deniedSources.has(resourceId)) {
+    throw createKnowledgeError({
+      code: 'KNOWLEDGE_FORBIDDEN',
+      requestId: context.requestId,
+      traceId: context.traceId,
+    });
+  }
+  return { allowed: true };
+});
 const access = {
-  async assertPermission() {
-    return { allowed: true };
-  },
+  assertPermission,
 } as unknown as AccessPort;
 
 function errorCode(error: unknown): string {
@@ -610,6 +619,17 @@ describe('TEST-FILE-001-BLOCK upload session', () => {
     const ticketChunks: Buffer[] = [];
     for await (const chunk of ticketed.body) ticketChunks.push(Buffer.from(chunk));
     expect(Buffer.concat(ticketChunks)).toEqual(original);
+    deniedSources.add(String(source._id));
+    const revokedTicket = await files
+      .content(completed.blobId, null, ticket, {
+        ...context,
+        workspaceId: 'ticket',
+        memberId: 'file-ticket',
+      })
+      .catch((error: unknown) => error);
+    expect(errorCode(revokedTicket)).toBe('KNOWLEDGE_FORBIDDEN');
+    expect(assertPermission).toHaveBeenCalled();
+    deniedSources.delete(String(source._id));
 
     await connection.models.KnowledgeObjectRef.updateOne(
       {

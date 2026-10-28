@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { createKnowledgeError } from '@kb/contracts';
 import { S8CaptionApplication } from '../../src/modules/knowledge/application/s8-caption.application';
 import type {
   S6JobRecord,
@@ -40,7 +41,11 @@ const job = {
   },
 } as unknown as S6JobRecord;
 
-function application(input?: { failEmbedding?: boolean }) {
+function application(input?: {
+  failEmbedding?: boolean;
+  failVlmResolution?: boolean;
+  failEmbeddingResolution?: boolean;
+}) {
   const commit = vi.fn(async (value: { indexes: unknown[] }) => ({
     id: '65f1e5b2a1c9d4b7e8f02222',
     workspaceId: context.workspaceId,
@@ -100,32 +105,40 @@ function application(input?: { failEmbedding?: boolean }) {
       }),
     },
     models: {
-      resolve: async () => ({
-        vlm: {
+      resolveVlm: async () => {
+        if (input?.failVlmResolution) {
+          throw createKnowledgeError({
+            code: 'KNOWLEDGE_VALIDATION_FAILED',
+            requestId: context.requestId,
+            traceId: context.traceId,
+          });
+        }
+        return {
           modelId: 'mock-vlm',
           displayName: 'VLM',
           type: 'vlm',
           capabilities: ['vision'],
           dimension: null,
           authorized: true,
-        },
-        visionEmbedding: {
+        };
+      },
+      resolveVisionEmbedding: async () => {
+        if (input?.failEmbeddingResolution) {
+          throw createKnowledgeError({
+            code: 'KNOWLEDGE_VALIDATION_FAILED',
+            requestId: context.requestId,
+            traceId: context.traceId,
+          });
+        }
+        return {
           modelId: 'mock-embedding-1536',
           displayName: 'Vision embedding',
           type: 'embedding',
           capabilities: ['vision', 'dimension:1536'],
           dimension: 1536,
           authorized: true,
-        },
-      }),
-      resolveVisionEmbedding: async () => ({
-        modelId: 'mock-embedding-1536',
-        displayName: 'Vision embedding',
-        type: 'embedding',
-        capabilities: ['vision', 'dimension:1536'],
-        dimension: 1536,
-        authorized: true,
-      }),
+        };
+      },
       resolveLlm: async () => {
         throw new Error('not used');
       },
@@ -151,18 +164,13 @@ function application(input?: { failEmbedding?: boolean }) {
         if (input?.failEmbedding) {
           throw new S5ModelTransportError('provider', 502);
         }
+        const count = invocation.input?.length ?? 0;
         return {
           data: {
-            data: [
-              {
-                index: 0,
-                embedding: Array.from({ length: 1536 }, (_, index) => (index === 0 ? 1 : 0)),
-              },
-              {
-                index: 1,
-                embedding: Array.from({ length: 1536 }, (_, index) => (index === 1 ? 1 : 0)),
-              },
-            ],
+            data: Array.from({ length: count }, (_, itemIndex) => ({
+              index: itemIndex,
+              embedding: Array.from({ length: 1536 }, (_, index) => (index === itemIndex ? 1 : 0)),
+            })),
           },
           actualModelId: invocation.modelId,
           attempts: 1,
@@ -258,5 +266,30 @@ describe('TEST-X-IMAGE-CAPTION executor', () => {
       embeddingFailureCode: 'KNOWLEDGE_MODEL_FAILED',
     });
     expect(updateStatus).toHaveBeenCalledWith(source.id, 'partial', context, 2);
+  });
+
+  it('keeps the vector path available when the VLM binding is missing', async () => {
+    const { instance, commit, updateStatus } = application({ failVlmResolution: true });
+    const result = await instance.execute(job, context);
+    expect(result.result).toMatchObject({
+      captionStatus: 'error',
+      vectorStatus: 'indexed',
+      visionEmbeddingModelId: 'mock-embedding-1536',
+    });
+    expect(
+      commit.mock.calls[0]?.[0].indexes.map((index: { indexId: string }) => index.indexId),
+    ).toEqual(['image']);
+    expect(updateStatus).toHaveBeenCalledWith(source.id, 'partial', context, 2);
+  });
+
+  it('fails with 422 when both media model paths are unavailable', async () => {
+    const { instance, commit } = application({
+      failVlmResolution: true,
+      failEmbeddingResolution: true,
+    });
+    await expect(instance.execute(job, context)).rejects.toMatchObject({
+      problem: { error: { code: 'KNOWLEDGE_VALIDATION_FAILED' } },
+    });
+    expect(commit).not.toHaveBeenCalled();
   });
 });

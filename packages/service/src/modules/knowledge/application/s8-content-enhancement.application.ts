@@ -102,6 +102,12 @@ export class S8ContentEnhancementApplication {
       resourceType: 'source',
       resourceId: input.sourceId,
       operation: `s8.paragraph-enhance:${input.sourceVersion}`,
+      audit: {
+        promptVersion: S8_PARAGRAPH_PROMPT_VERSION,
+        mediaItemCount: 0,
+        totalBytes: Buffer.byteLength(input.rawText, 'utf8'),
+        sourceVersion: input.sourceVersion,
+      },
       requestId: input.context.requestId,
       traceId: input.context.traceId,
       context: input.context,
@@ -182,7 +188,18 @@ export class S8ContentEnhancementApplication {
             path: asset.assetId,
           });
         }
-      } catch {
+      } catch (error) {
+        if (
+          typeof error === 'object' &&
+          error !== null &&
+          'problem' in error &&
+          (error as { problem?: { error?: { code?: unknown; details?: { reason?: unknown } } } })
+            .problem?.error?.code === 'KNOWLEDGE_VALIDATION_FAILED' &&
+          (error as { problem?: { error?: { details?: { reason?: unknown } } } }).problem?.error
+            ?.details?.reason === 'vision_models_unavailable'
+        ) {
+          throw error;
+        }
         diagnostics.push({
           severity: 'warning',
           code: 'image_asset_index_failed',

@@ -133,6 +133,7 @@ export type {
   S8ImageGalleryItem,
   S8ImageGalleryLabels,
   S8ImageGalleryProps,
+  S8ImagePreview,
 } from './components/s8-image-gallery';
 export { S8ImagesWorkbench } from './components/s8-images-workbench';
 export type {

@@ -155,7 +155,13 @@ export class S6ProcessingRepository implements S6ProcessingStorePort {
     input: {
       source: S6SourceRecord;
       sourceVersion: number;
-      rows: ReadonlyArray<{ order: number; question: string; answer: string; content: string }>;
+      rows: ReadonlyArray<{
+        order: number;
+        question: string;
+        answer: string;
+        content: string;
+        metadata?: Record<string, unknown>;
+      }>;
     },
     context: TenantContext,
   ) {
@@ -178,7 +184,7 @@ export class S6ProcessingRepository implements S6ProcessingStorePort {
             question: row.question,
             answer: row.answer,
             content: row.content,
-            metadata: {},
+            metadata: input.rows.find((row) => row.order === segmentIds.length)?.metadata ?? {},
             indexStatus: 'pending',
             indexErrorCode: null,
             updatedByMemberId: context.memberId,

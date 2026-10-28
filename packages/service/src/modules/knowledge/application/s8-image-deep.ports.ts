@@ -17,6 +17,7 @@ import type {
   S7CitationPersistencePort,
   S7FullTextSearchPort,
   S7SearchAuditPort,
+  S7FilterSourcePort,
 } from './s7-search.ports';
 
 export type S8CaptionStatus = 'pending' | 'indexed' | 'error';
@@ -35,7 +36,7 @@ export interface S8ImageModels {
 }
 
 export interface S8ImageModelResolverPort {
-  resolve(spaceId: string, context: TenantContext): Promise<S8ImageModels>;
+  resolveVlm(spaceId: string, context: TenantContext): Promise<ModelCatalogItem>;
   resolveVisionEmbedding(
     spaceId: string,
     context: TenantContext,
@@ -145,6 +146,7 @@ export interface S8ImageSearchDependencies {
     }>;
   };
   fullText: S7FullTextSearchPort;
+  filters: S7FilterSourcePort;
   authorization: S7CandidateAuthorizationPort;
   citations: S7CitationPersistencePort;
   audits: S7SearchAuditPort;

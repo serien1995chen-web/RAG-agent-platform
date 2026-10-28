@@ -132,7 +132,7 @@ export default function ImagesPage() {
         body: { ttlSeconds: 300 },
       },
     );
-    return ticket.url;
+    return { url: ticket.url, expiresAt: ticket.expiresAt };
   };
 
   const search = async (input: { query: string; imageUploadIds: readonly string[] }) => {

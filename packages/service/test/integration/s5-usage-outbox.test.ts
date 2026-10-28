@@ -131,6 +131,55 @@ describe('TEST-MODEL-003-BLOCK usage event and outbox transaction', () => {
     expect(event?.modelId).toBe('rerank-primary');
   });
 
+  it('records a deterministic zero-quantity intent before the actual usage event', async () => {
+    const base = {
+      workspaceId,
+      knowledgeSpaceId,
+      operation: 's8.caption:2',
+      requestId: context.requestId,
+      traceId: context.traceId,
+      modelId: 'vlm-primary',
+      kind: 'vlm' as const,
+      attempt: 1,
+      unit: 'token' as const,
+      fallbackUsed: false,
+      provider: 'aiproxy',
+      resourceType: 'source' as const,
+      resourceId: '65f1e5b2a1c9d4b7e8f05678',
+      promptVersion: 's8.image-caption.v1',
+      mediaItemCount: 1,
+      totalBytes: 128,
+      sourceVersion: 2,
+    };
+    const intent = { ...base, eventSequence: 1, quantity: 0, status: null, intent: true };
+    expect(await repository.recordInvocationUsage(intent, context)).toBe(true);
+    expect(await repository.recordInvocationUsage(intent, context)).toBe(false);
+    await repository.recordInvocationUsage(
+      { ...base, eventSequence: 2, quantity: 4, status: 200, intent: false },
+      context,
+    );
+    const models = registerKnowledgeModels(connection);
+    expect(await models.KnowledgeUsageEvent.countDocuments({ workspaceId })).toBe(2);
+    expect(
+      await models.KnowledgeUsageEvent.aggregate([
+        { $match: { workspaceId } },
+        { $group: { _id: null, quantity: { $sum: '$quantity' } } },
+      ]),
+    ).toEqual([{ _id: null, quantity: 4 }]);
+    const intentAudit = await models.KnowledgeAuditEvent.findOne({
+      workspaceId,
+      outcome: 'allowed',
+    }).lean();
+    expect(intentAudit?.safeDiff).toMatchObject({
+      intent: true,
+      promptVersion: 's8.image-caption.v1',
+      mediaItemCount: 1,
+      totalBytes: 128,
+      sourceVersion: 2,
+    });
+    expect(JSON.stringify(intentAudit)).not.toMatch(/(objectKey|ticket=|caption":)/i);
+  });
+
   it('records OCR provider facts with a source resource and pending outbox', async () => {
     const sourceId = `65f1e5b2a1c9d4b7e8f1${suffix.slice(0, 4)}`;
     expect(

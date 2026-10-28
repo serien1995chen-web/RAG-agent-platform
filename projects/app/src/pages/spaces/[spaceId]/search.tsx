@@ -216,7 +216,12 @@ export default function SearchPage() {
     setDeepValue((current) => ({
       ...current,
       knowledgeSpaceId: spaceId,
-      knowledgeSpaceIds: [...new Set([spaceId, ...current.knowledgeSpaceIds])],
+      knowledgeSpaceIds: [
+        ...new Set([
+          spaceId,
+          ...current.knowledgeSpaceIds.filter((id) => /^[a-f0-9]{24}$/.test(id)),
+        ]),
+      ],
       query: queryString(router.query.query) ?? current.query,
     }));
     setFilters(next.filters);

@@ -11,6 +11,7 @@ const context: TenantContext = {
   scopes: ['knowledge:search'],
 };
 const spaceId = '65f1e5b2a1c9d4b7e8f01234';
+const sourceId = '65f1e5b2a1c9d4b7e8f05678';
 const imageId = '65f1e5b2a1c9d4b7e8f09999';
 
 function error(
@@ -64,7 +65,7 @@ function application() {
       }),
     },
     models: {
-      resolve: async () => {
+      resolveVlm: async () => {
         throw new Error('unused');
       },
       resolveVisionEmbedding: async () => ({
@@ -99,6 +100,21 @@ function application() {
       search: async () => {
         throw error('KNOWLEDGE_RATE_LIMITED');
       },
+    },
+    filters: {
+      listFilterFacts: async () => ({
+        facts: [
+          {
+            sourceId,
+            knowledgeSpaceId: spaceId,
+            directoryId: null,
+            directoryPath: [],
+            createdAt: new Date('2026-01-01T00:00:00.000Z'),
+            tagValues: [],
+          },
+        ],
+        definitions: [],
+      }),
     },
     authorization: {
       hydrate: async () => ({ items: [], rejected: 0 }),

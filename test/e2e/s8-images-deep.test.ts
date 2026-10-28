@@ -1,6 +1,5 @@
-import { createHash } from 'node:crypto';
 import { createServer, type Server } from 'node:http';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import AxeBuilder from '@axe-core/playwright';
@@ -9,13 +8,11 @@ import { build } from 'esbuild';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 const root = resolve(import.meta.dirname, '../..');
-const screenshotDir = join(root, 'docs/acceptance/s8-ui');
 let browser: Browser;
 let server: Server;
 let baseUrl = '';
 
 beforeAll(async () => {
-  mkdirSync(screenshotDir, { recursive: true });
   const bundlePath = join(mkdtempSync(join(tmpdir(), 'kb-s8-ui-')), 'bundle.js');
   await build({
     entryPoints: [join(root, 'test/e2e/s8-images-deep.fixture.tsx')],
@@ -116,14 +113,6 @@ describe('TEST-X-FRONTEND-A11Y S8 Images and Deep UI', () => {
         expect(consoleErrors).toEqual([]);
         expect(pageErrors).toEqual([]);
         expect(failedRequests).toEqual([]);
-        const screenshot = await page.screenshot({
-          fullPage: true,
-          path: join(screenshotDir, `s8-${panel}-${viewport.name}.png`),
-        });
-        writeFileSync(
-          join(screenshotDir, `s8-${panel}-${viewport.name}.sha256`),
-          `${createHash('sha256').update(screenshot).digest('hex')}\n`,
-        );
         await context.close();
       }
     }

@@ -9,6 +9,7 @@ import {
   type SearchApiResponse,
 } from '@kb/contracts';
 import {
+  compileSearchFilter,
   finalizeSearchCandidates,
   fuseImageChannels,
   fuseTextAndImageBlocks,
@@ -166,6 +167,10 @@ export class S8ImageSearchApplication {
       resourceType: 'space',
       resourceId: request.knowledgeSpaceId,
       operation: 's8.image-query-embedding',
+      audit: {
+        mediaItemCount: input.length,
+        totalBytes: objects.reduce((total, object) => total + object.sizeBytes, 0),
+      },
       requestId: context.requestId,
       traceId: context.traceId,
       context,
@@ -200,8 +205,10 @@ export class S8ImageSearchApplication {
   private async recallImageDescendants(
     candidates: readonly Candidate[],
     request: ImageSearchApiRequest,
+    allowedSourceIds: readonly string[],
     context: TenantContext,
   ): Promise<AuthorizedCandidate[]> {
+    const allowed = new Set(allowedSourceIds);
     const hydrated = await this.input.authorization.hydrate(candidates, {
       requestId: context.requestId,
       workspaceId: context.workspaceId,
@@ -213,19 +220,22 @@ export class S8ImageSearchApplication {
     });
     return hydrated.items
       .filter((candidate) => candidate.knowledgeSpaceId === request.knowledgeSpaceId)
+      .filter((candidate) => allowed.has(candidate.sourceId))
       .filter((candidate) => Boolean(candidate.segment.imageBlobRefId))
       .map((candidate) => candidateWithImageIdentity(candidate) as AuthorizedCandidate);
   }
 
   private async captionCandidates(
     request: ImageSearchApiRequest,
+    allowedSourceIds: readonly string[],
     context: TenantContext,
   ): Promise<{ candidates: AuthorizedCandidate[]; failed: boolean; error?: unknown }> {
+    if (allowedSourceIds.length === 0) return { candidates: [], failed: false };
     try {
       const hits = await this.input.fullText.search(
         {
           knowledgeSpaceId: request.knowledgeSpaceId,
-          ...(request.filters?.sourceIds ? { sourceIds: request.filters.sourceIds } : {}),
+          sourceIds: [...allowedSourceIds],
           text: request.query,
           limit: 100,
           options: { timeoutMs: 5_000 },
@@ -245,7 +255,12 @@ export class S8ImageSearchApplication {
           text: '',
         }),
       );
-      const hydrated = await this.recallImageDescendants(candidates, request, context);
+      const hydrated = await this.recallImageDescendants(
+        candidates,
+        request,
+        allowedSourceIds,
+        context,
+      );
       return {
         candidates: hydrated.filter(
           (candidate) =>
@@ -262,8 +277,10 @@ export class S8ImageSearchApplication {
 
   private async imageVectorCandidates(
     request: ImageSearchApiRequest,
+    allowedSourceIds: readonly string[],
     context: TenantContext,
   ): Promise<{ candidates: AuthorizedCandidate[]; failed: boolean; error?: unknown }> {
+    if (allowedSourceIds.length === 0) return { candidates: [], failed: false };
     try {
       const query = await this.queryVectors(request, context);
       const raw: Candidate[] = [];
@@ -272,7 +289,7 @@ export class S8ImageSearchApplication {
           {
             workspaceId: context.workspaceId,
             knowledgeSpaceId: request.knowledgeSpaceId,
-            ...(request.filters?.sourceIds ? { sourceIds: request.filters.sourceIds } : {}),
+            sourceIds: allowedSourceIds,
             dimension: query.dimension,
             embeddingModelId: query.modelId,
             vector,
@@ -295,7 +312,7 @@ export class S8ImageSearchApplication {
           });
         });
       }
-      const hydrated = await this.recallImageDescendants(raw, request, context);
+      const hydrated = await this.recallImageDescendants(raw, request, allowedSourceIds, context);
       return {
         candidates: hydrated.filter((candidate) =>
           candidate.segment.indexes.some((index) => index.type === 'image'),
@@ -386,38 +403,57 @@ export class S8ImageSearchApplication {
     const request = this.parse(body, context);
     this.input.access.assertSearchScope(context);
     await this.input.access.getAuthorizedSpace(request.knowledgeSpaceId, context);
+    const filterFacts = await this.input.filters.listFilterFacts(
+      request.knowledgeSpaceId,
+      request.filters?.sourceIds,
+      context,
+    );
+    const compiled = compileSearchFilter(
+      request.filters,
+      filterFacts.facts,
+      filterFacts.definitions,
+      { requestId: context.requestId, traceId: context.traceId },
+    );
     const startedAt = Date.now();
     const searchId = this.input.searchIdFactory?.() ?? `search_${randomUUID()}`;
     const degraded: string[] = [];
     try {
       const [caption, imageVectors, text] = await Promise.all([
-        this.captionCandidates(request, context),
-        this.imageVectorCandidates(request, context),
-        this.input.search
-          .collectCandidates({
-            request: {
-              knowledgeSpaceId: request.knowledgeSpaceId,
-              query: request.query,
-              tokenBudget: request.tokenBudget,
-              similarity: request.similarity,
-              embeddingWeight: request.embeddingWeight,
-              usingRerank: request.usingRerank,
-              rerankWeight: request.rerankWeight,
-              ...(request.filters ? { filters: request.filters } : {}),
-            },
-            knowledgeSpaceIds: [request.knowledgeSpaceId],
-            mode: 'hybrid',
-            context,
-            limit: 20,
-          })
-          .catch((error: unknown) => ({
-            candidates: [],
-            partial: true,
-            degradedCodes: ['text_recall_failed'],
-            rerankApplied: false,
-            usage: { inputTokens: 0, outputTokens: 0 },
-            error,
-          })),
+        this.captionCandidates(request, compiled.allowedSourceIds, context),
+        this.imageVectorCandidates(request, compiled.allowedSourceIds, context),
+        compiled.emptyMatch
+          ? Promise.resolve({
+              candidates: [],
+              partial: false,
+              degradedCodes: [],
+              rerankApplied: false,
+              usage: { inputTokens: 0, outputTokens: 0 },
+            })
+          : this.input.search
+              .collectCandidates({
+                request: {
+                  knowledgeSpaceId: request.knowledgeSpaceId,
+                  query: request.query,
+                  tokenBudget: request.tokenBudget,
+                  similarity: request.similarity,
+                  embeddingWeight: request.embeddingWeight,
+                  usingRerank: request.usingRerank,
+                  rerankWeight: request.rerankWeight,
+                  ...(request.filters ? { filters: request.filters } : {}),
+                },
+                knowledgeSpaceIds: [request.knowledgeSpaceId],
+                mode: 'hybrid',
+                context,
+                limit: 20,
+              })
+              .catch((error: unknown) => ({
+                candidates: [],
+                partial: true,
+                degradedCodes: ['text_recall_failed'],
+                rerankApplied: false,
+                usage: { inputTokens: 0, outputTokens: 0 },
+                error,
+              })),
       ]);
       if (caption.failed) degraded.push('image_caption_recall_failed');
       if (imageVectors.failed) degraded.push('image_vector_recall_failed');
