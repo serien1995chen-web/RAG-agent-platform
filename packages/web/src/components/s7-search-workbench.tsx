@@ -102,7 +102,12 @@ function DegradedCodes(props: { codes: readonly string[]; labels: S7SearchWorkbe
 }
 
 export function S7SearchWorkbench(props: S7SearchWorkbenchProps) {
-  const result = props.result ?? ('result' in props.state ? props.state.result : undefined);
+  const result =
+    props.state.kind === 'ready' ||
+    props.state.kind === 'partial' ||
+    props.state.kind === 'degraded'
+      ? (props.result ?? props.state.result)
+      : undefined;
   const [draft, setDraft] = useState(props.value);
   const [draftFilters, setDraftFilters] = useState(props.filters);
   useEffect(() => {
@@ -241,7 +246,9 @@ export function S7SearchWorkbench(props: S7SearchWorkbenchProps) {
               >
                 <S7CitationView
                   citation={item.citation}
-                  content={item.segment.content}
+                  content={[item.segment.question, item.segment.answer, item.segment.content]
+                    .filter((value) => value.length > 0)
+                    .join('\n')}
                   labels={props.labels.citation}
                 />
               </Box>

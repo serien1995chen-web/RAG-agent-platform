@@ -139,6 +139,7 @@ describe('TEST-X-FRONTEND-A11Y S7 test-only Search UI harness', () => {
     await page.goto(`${baseUrl}/?state=error`, { waitUntil: 'networkidle' });
     await playwrightExpect(page.getByText('KNOWLEDGE_INTERNAL_ERROR')).toBeVisible();
     await playwrightExpect(page.getByText('trace-fixture')).toBeVisible();
+    await playwrightExpect(page.getByText('Support playbook')).toHaveCount(0);
     await finalContext.close();
   }, 120_000);
 });
