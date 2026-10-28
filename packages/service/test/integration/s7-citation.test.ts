@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import mongoose, { type Types } from 'mongoose';
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AuthorizedCandidate } from '@kb/search';
 import { S7CitationApplication } from '../../src/modules/knowledge/application/s7-citation.application';
 import { S7CitationSigner } from '../../src/modules/knowledge/adapter/s7-citation-signer';
@@ -366,5 +366,54 @@ describe('TEST-SEARCH-009-BLOCK real Mongo citation lifecycle', () => {
     const models = registerKnowledgeModels(connection);
     expect(await models.KnowledgeCitation.countDocuments({ workspaceId })).toBe(0);
     expect(await models.KnowledgeAuditEvent.countDocuments({ workspaceId })).toBe(0);
+  });
+
+  it('aborts a delayed commit and never persists success facts after timeout', async () => {
+    const controller = new AbortController();
+    const abortTimer = setTimeout(() => controller.abort('deadline'), 20);
+    const originalCommit = mongoose.mongo.ClientSession.prototype.commitTransaction;
+    const commitSpy = vi
+      .spyOn(mongoose.mongo.ClientSession.prototype, 'commitTransaction')
+      .mockImplementation(async function (
+        this: mongoose.mongo.ClientSession,
+        options?: { timeoutMS?: number },
+      ) {
+        await new Promise((resolve) => setTimeout(resolve, 120));
+        return originalCommit.call(this, options);
+      });
+    const startedAt = Date.now();
+    try {
+      await expect(
+        citations.issueWithAudit(
+          {
+            searchId: 'search_citation_delayed_commit',
+            searchMode: 'semantic',
+            spaceId: String(spaceId),
+            candidates: [candidate()],
+            partial: false,
+            durationMs: 10,
+            degradedCodes: [],
+            deadlineAt: Date.now() + 20,
+            signal: controller.signal,
+            now,
+          },
+          context,
+        ),
+      ).rejects.toMatchObject({
+        problem: { error: { code: 'KNOWLEDGE_DEPENDENCY_TIMEOUT' } },
+      });
+      expect(Date.now() - startedAt).toBeGreaterThanOrEqual(100);
+      const models = registerKnowledgeModels(connection);
+      expect(await models.KnowledgeCitation.countDocuments({ workspaceId })).toBe(0);
+      expect(
+        await models.KnowledgeAuditEvent.countDocuments({
+          workspaceId,
+          outcome: 'succeeded',
+        }),
+      ).toBe(0);
+    } finally {
+      clearTimeout(abortTimer);
+      commitSpy.mockRestore();
+    }
   });
 });

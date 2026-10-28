@@ -376,6 +376,38 @@ export class S7SearchApplication {
     );
   }
 
+  private async persistWithDeadline(
+    input: {
+      searchId: string;
+      mode: SearchApiMode | 'multi_space';
+      spaceId: string;
+      candidates: readonly AuthorizedCandidate[];
+      partial: boolean;
+      durationMs: number;
+      degradedCodes: string[];
+      filterSummary?: SearchFilterSummary;
+      deadlineAt: number;
+    },
+    context: TenantContext,
+  ): Promise<ReadonlyMap<string, CitationApi>> {
+    const abort = new AbortController();
+    const timer = setTimeout(
+      () => abort.abort(searchTimeout(context, Math.max(1, input.deadlineAt - Date.now()))),
+      Math.max(1, input.deadlineAt - Date.now()),
+    );
+    try {
+      return await this.persist(
+        {
+          ...input,
+          signal: abort.signal,
+        },
+        context,
+      );
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
   private async auditFailure(
     input: {
       searchId: string;
@@ -444,26 +476,19 @@ export class S7SearchApplication {
       const durationMs = Date.now() - startedAt;
       const remainingMs = timeoutMs - (Date.now() - startedAt);
       if (remainingMs < 1) throw searchTimeout(context, timeoutMs);
-      const persistenceAbort = new AbortController();
-      const citations = await withDeadline(
-        this.persist(
-          {
-            searchId,
-            mode,
-            spaceId: space.spaceId,
-            candidates: execution.candidates,
-            partial,
-            durationMs,
-            degradedCodes: execution.degradedCodes,
-            deadlineAt: startedAt + timeoutMs,
-            signal: persistenceAbort.signal,
-            ...(execution.filterSummary ? { filterSummary: execution.filterSummary } : {}),
-          },
-          context,
-        ),
-        remainingMs,
+      const citations = await this.persistWithDeadline(
+        {
+          searchId,
+          mode,
+          spaceId: space.spaceId,
+          candidates: execution.candidates,
+          partial,
+          durationMs,
+          degradedCodes: execution.degradedCodes,
+          deadlineAt: startedAt + timeoutMs,
+          ...(execution.filterSummary ? { filterSummary: execution.filterSummary } : {}),
+        },
         context,
-        () => persistenceAbort.abort(searchTimeout(context, timeoutMs)),
       );
       return this.response({
         searchId,
@@ -594,26 +619,19 @@ export class S7SearchApplication {
         .filterSummary;
       const remainingMs = timeoutMs - (Date.now() - startedAt);
       if (remainingMs < 1) throw searchTimeout(context, timeoutMs);
-      const persistenceAbort = new AbortController();
-      const citations = await withDeadline(
-        this.persist(
-          {
-            searchId,
-            mode: 'multi_space',
-            spaceId: request.knowledgeSpaceId,
-            candidates: finalized.items,
-            partial,
-            durationMs,
-            degradedCodes,
-            deadlineAt: startedAt + timeoutMs,
-            signal: persistenceAbort.signal,
-            ...(filterSummary ? { filterSummary } : {}),
-          },
-          context,
-        ),
-        remainingMs,
+      const citations = await this.persistWithDeadline(
+        {
+          searchId,
+          mode: 'multi_space',
+          spaceId: request.knowledgeSpaceId,
+          candidates: finalized.items,
+          partial,
+          durationMs,
+          degradedCodes,
+          deadlineAt: startedAt + timeoutMs,
+          ...(filterSummary ? { filterSummary } : {}),
+        },
         context,
-        () => persistenceAbort.abort(searchTimeout(context, timeoutMs)),
       );
       return this.response({
         searchId,
