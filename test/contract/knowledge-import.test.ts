@@ -30,9 +30,9 @@ const IMPORT_OPERATIONS = [
 ];
 
 describe('S4 import contract', () => {
-  it('keeps exactly the seven import operations in the W1 runtime', () => {
-    expect(runtime.count).toBe(95);
-    expect(deferred.count).toBe(25);
+  it('keeps exactly the seven import operations in the W2 runtime', () => {
+    expect(runtime.count).toBe(100);
+    expect(deferred.count).toBe(20);
     const runtimeIds = new Set(runtime.operations.map((entry) => entry.operationId));
     const deferredIds = new Set(deferred.operations.map((entry) => entry.operationId));
     for (const operationId of IMPORT_OPERATIONS) {

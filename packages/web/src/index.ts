@@ -5,6 +5,16 @@ export {
   KnowledgeRequestError,
 } from './client/knowledge-client';
 export {
+  S7DownstreamKnowledgeClient,
+  S7DownstreamKnowledgeError,
+  S7DownstreamNetworkError,
+} from './client/s7-downstream-knowledge-client';
+export type {
+  S7DownstreamKnowledgeClientOptions,
+  S7DownstreamRequestOptions,
+  S7DownstreamResult,
+} from './client/s7-downstream-knowledge-client';
+export {
   clearKnowledgeUpload,
   knowledgeBinaryUpload,
   knowledgeMultipartUpload,
@@ -93,6 +103,31 @@ export type {
   S6SegmentIndexView,
   S6SegmentView,
 } from './components/s6-segment-index-editor';
+export { S7CitationView } from './components/s7-citation-view';
+export type { S7CitationViewLabels } from './components/s7-citation-view';
+export {
+  S7MarkdownRenderer,
+  S7MermaidBlock,
+  sanitizeMermaidSvg,
+} from './components/s7-markdown-renderer';
+export {
+  S7SearchFilters,
+  type S7SearchFiltersLabels,
+  type S7SearchFormValue,
+  type S7SpaceChoice,
+  type S7TagChoice,
+} from './components/s7-search-filters';
+export {
+  classifyS7SearchState,
+  safeDegradedCode,
+  similarityControlEnabled,
+  type S7SearchUiState,
+} from './components/s7-search-state';
+export { S7SearchWorkbench } from './components/s7-search-workbench';
+export type {
+  S7SearchWorkbenchLabels,
+  S7SearchWorkbenchProps,
+} from './components/s7-search-workbench';
 export type {
   Column,
   Density,
@@ -101,6 +136,19 @@ export type {
 } from './components/data-table';
 export { KnowledgeAppShell } from './components/knowledge-shell';
 export type { ShellLocation } from './components/knowledge-shell';
+export {
+  S7_SEARCH_MODES,
+  S7_TAG_OPERATORS,
+  S7_TAG_TYPES,
+  S7SearchFormSchema,
+  addTagCondition,
+  buildS7SearchFilters,
+  buildS7SearchRequest,
+  defaultS7SearchForm,
+  patchTagCondition,
+  tagConditionFromDraft,
+} from './forms/s7-search-form';
+export type { S7SearchFormValues, S7SearchMode, S7TagType } from './forms/s7-search-form';
 export {
   collaboratorFormSchema,
   fieldErrorsFromProblem,

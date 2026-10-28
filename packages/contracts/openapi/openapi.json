@@ -13709,6 +13709,9 @@
           "502": {
             "$ref": "#/components/responses/Problem502"
           },
+          "503": {
+            "$ref": "#/components/responses/Problem503"
+          },
           "504": {
             "$ref": "#/components/responses/Problem504"
           }
@@ -13985,6 +13988,9 @@
           },
           "500": {
             "$ref": "#/components/responses/Problem500"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem503"
           },
           "504": {
             "$ref": "#/components/responses/Problem504"
@@ -14265,6 +14271,9 @@
           },
           "502": {
             "$ref": "#/components/responses/Problem502"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem503"
           },
           "504": {
             "$ref": "#/components/responses/Problem504"
@@ -14814,6 +14823,9 @@
           "502": {
             "$ref": "#/components/responses/Problem502"
           },
+          "503": {
+            "$ref": "#/components/responses/Problem503"
+          },
           "504": {
             "$ref": "#/components/responses/Problem504"
           }
@@ -15202,6 +15214,9 @@
           },
           "502": {
             "$ref": "#/components/responses/Problem502"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem503"
           },
           "504": {
             "$ref": "#/components/responses/Problem504"
@@ -21914,6 +21929,17 @@
             "examples": [
               412
             ]
+          },
+          "degraded": {
+            "type": "array",
+            "maxItems": 64,
+            "items": {
+              "type": "string",
+              "maxLength": 64
+            }
+          },
+          "rerankApplied": {
+            "type": "boolean"
           }
         }
       },
@@ -25860,8 +25886,8 @@
     "operations": 120,
     "schemas": 139,
     "parameters": 8,
-    "runtimeOperations": 95,
-    "deferredOperations": 25,
+    "runtimeOperations": 100,
+    "deferredOperations": 20,
     "canonicalCollections": 23,
     "vectorProfiles": 4,
     "canonicalQueues": 13

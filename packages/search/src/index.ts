@@ -30,23 +30,56 @@ export function rrfFuse(
 
 export { SEARCH_BATCH_LIMIT, buildIndexVersion };
 export type { SearchRequest, SearchResult };
-export { createSearchEngine } from './engine';
+export { createSearchEngine, finalizeSearchCandidates } from './engine';
 export {
   applyTokenBudget,
+  compareCandidates,
   dedupeCandidates,
   filterBySimilarity,
   fuseCandidates,
+  mergeChannelCandidates,
   mergeReranked,
+  mergeRerankRankedLists,
   minMaxNormalize,
+  stableSortCandidates,
+  trimCandidateText,
   truncateByLimit,
 } from './fusion';
-export { parseTagFilterMatch, recallCandidates } from './recall';
+export {
+  assertSafeTagRegex,
+  compileDirectorySubtree,
+  compileSearchFilter,
+  evaluateTagCondition,
+  evaluateTagConditions,
+  normalizedDedupeText,
+} from './filter';
+export type {
+  CompiledSearchFilter,
+  FilterTagDefinition,
+  FilterTagValue,
+  SearchFilterSummary,
+  SourceFilterFacts,
+  TagType,
+} from './filter';
+export { mergeMultiSpaceCitations } from './multi';
+export type { MultiSpaceMergeResult, MultiSpaceSearchSlice } from './multi';
+export { recallCandidates } from './recall';
 export { DEFAULT_RRF_K, rrfFuseWeighted } from './rrf';
 export type {
   Candidate,
+  AuthorizedCandidate,
+  AuthorizedSegmentSnapshot,
+  AuthorizedSourceSnapshot,
+  ChannelFailure,
+  ChannelFailureKind,
+  ChannelOutcome,
+  SearchCandidateHydratorPort,
   RankedEntry,
   RecallOutcome,
   SearchEngineDeps,
+  SearchEngineContext,
   SearchEngineOptions,
+  SearchHydrationResult,
+  SearchPipelineResult,
   SearchPipelinePort,
 } from './types';

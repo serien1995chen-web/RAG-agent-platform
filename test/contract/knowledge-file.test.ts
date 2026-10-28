@@ -44,7 +44,7 @@ describe('FILE OpenAPI and runtime contract', () => {
     expect(Object.keys(openapi.paths)).toHaveLength(92);
     expect(operations).toHaveLength(120);
     expect(Object.keys(openapi.components.schemas)).toHaveLength(139);
-    expect(runtime.count).toBe(95);
+    expect(runtime.count).toBe(100);
     expect(runtime.operations.map((operation) => operation.operationId)).toEqual(
       expect.arrayContaining(S2_OPERATIONS),
     );

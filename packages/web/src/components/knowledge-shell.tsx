@@ -66,6 +66,7 @@ export function KnowledgeAppShell(props: { location: ShellLocation; children: Re
         ['05', 'nav.tags', `/spaces/${spaceId}/tags`],
         ['06', 'nav.access', `/spaces/${spaceId}/access`],
         ['07', 'nav.jobs', `/spaces/${spaceId}/jobs`],
+        ['08', 'nav.search', `/spaces/${spaceId}/search`],
       ]
     : [];
 

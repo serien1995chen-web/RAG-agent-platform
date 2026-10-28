@@ -17,9 +17,12 @@
   },
   "dependencies": {
     "@kb/chunk": "workspace:*",
-    "@kb/contracts": "workspace:*"
+    "@kb/contracts": "workspace:*",
+    "lodash-es": "catalog:",
+    "safe-regex": "catalog:"
   },
   "devDependencies": {
+    "@types/lodash-es": "catalog:",
     "@types/node": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"

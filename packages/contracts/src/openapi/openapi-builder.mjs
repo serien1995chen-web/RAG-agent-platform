@@ -108,6 +108,11 @@ export const RUNTIME_OPERATION_IDS = Object.freeze([
   'API-SEGMENT-INDEX-DELETE',
   'API-SEGMENT-HISTORY',
   'API-SEGMENT-REINDEX',
+  'API-SEARCH-SEMANTIC',
+  'API-SEARCH-FULLTEXT',
+  'API-SEARCH-HYBRID',
+  'API-SEARCH-MULTI',
+  'API-CITATION-GET',
 ]);
 
 const HTTP_METHODS = new Set(['get', 'post', 'put', 'patch', 'delete', 'options', 'head', 'trace']);

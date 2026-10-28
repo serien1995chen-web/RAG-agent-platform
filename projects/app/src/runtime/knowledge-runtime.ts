@@ -47,10 +47,20 @@ import {
   S06JobApplication,
   S06ProcessingApplication,
   S6ProcessingRepository,
+  S7SearchApplication,
+  S7CitationApplication,
+  S7SearchOperationApplication,
+  S7SearchAuthorizationAdapter,
+  S7SearchPipelineFactory,
+  S7CitationSigner,
+  S7CitationRepository,
+  S7FilterSourceRepository,
+  S7SearchRepository,
   AxiosS5HttpTransport,
   AxiosS5OcrHttpTransport,
   loadS5AiproxyConfig,
   loadS5RuntimeEnvironment,
+  loadS7CitationConfig,
   createS5ModelGateway,
   FixtureScopedAuthPort,
   FixtureQuotaGatePort,
@@ -530,6 +540,36 @@ async function bootstrapRuntime(): Promise<TelemetryKnowledgeApiRuntime> {
     },
   });
   const s06Jobs = new S06JobApplication(jobExecution, segmentIndexes, catalog, access);
+  const s7Authorization = new S7SearchAuthorizationAdapter(mongo, access);
+  const s7SearchRepository = new S7SearchRepository(mongo, s5Catalog);
+  const s7Pipeline = new S7SearchPipelineFactory({
+    vectors: vectorRepository,
+    modelGateway: s5Gateway,
+    fullText: s7SearchRepository,
+    authorization: s7Authorization,
+  });
+  const s7CitationConfig = loadS7CitationConfig();
+  const s7Signer = new S7CitationSigner(
+    resolveSecretRef(s7CitationConfig.citationSigningSecretRef),
+  );
+  const s7Citations = new S7CitationRepository(mongo, s7Signer);
+  const s7Search = new S7SearchApplication({
+    access: s7Authorization,
+    models: s7SearchRepository,
+    filters: new S7FilterSourceRepository(mongo),
+    fullText: s7SearchRepository,
+    authorization: s7Authorization,
+    pipeline: s7Pipeline,
+    citations: s7Citations,
+    audits: s7Citations,
+  });
+  const s7Citation = new S7CitationApplication({
+    access: s7Authorization,
+    authorizations: s7Authorization,
+    citations: s7Citations,
+    signer: s7Signer,
+  });
+  const s7Operations = new S7SearchOperationApplication(s7Search, s7Citation);
   const ingestion = new S04IngestionApplication({
     imports: importRepository,
     connectors: connectorRepository,
@@ -584,6 +624,7 @@ async function bootstrapRuntime(): Promise<TelemetryKnowledgeApiRuntime> {
     s5Models,
     s5ModelBindings,
     s06Jobs,
+    s7Operations,
   );
   const queues = new Map(
     KNOWLEDGE_QUEUE_NAMES.map((name) => [name, new Queue(name, { connection: redis })]),

@@ -170,4 +170,15 @@ export const knowledgeQueryKeys = {
       'model-bindings',
     ],
   },
+  search: {
+    result: (spaceId: string, params: QueryParams = {}): QueryKey => [
+      'knowledge',
+      VERSION,
+      'spaces',
+      spaceId,
+      'search',
+      stableParams(params),
+    ],
+    citation: (citationId: string): QueryKey => ['knowledge', VERSION, 'citations', citationId],
+  },
 };

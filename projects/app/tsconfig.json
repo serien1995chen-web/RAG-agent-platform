@@ -13,6 +13,7 @@
     "src/**/*.tsx",
     "next-env.d.ts",
     ".next/types/**/*.ts",
-    "../../packages/service/src/types/pg.d.ts"
+    "../../packages/service/src/types/pg.d.ts",
+    "../../packages/web/src/vendor/react-syntax-highlighter.d.ts"
   ]
 }

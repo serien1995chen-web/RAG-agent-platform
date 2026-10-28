@@ -147,6 +147,8 @@ beforeAll(async () => {
       KB_S5_E2E_TICKET_SECRET: `s5-e2e-ticket-secret-${suffix}-value`,
       KB_CREDENTIAL_ENCRYPTION_KEY_REF: 'env:KB_S5_E2E_CREDENTIAL_KEY',
       KB_S5_E2E_CREDENTIAL_KEY: `s5-e2e-credential-key-${suffix}-value`,
+      KB_CITATION_SIGNING_SECRET_REF: 'env:KB_S5_E2E_CITATION_SECRET',
+      KB_S5_E2E_CITATION_SECRET: `s5-e2e-citation-${suffix}-fixed-secret-value`,
       KB_AUTH_MODE: 'mock',
       KB_MOCK_AUTH_TOKEN: authToken,
       KB_MOCK_WORKSPACE_ID: workspaceId,

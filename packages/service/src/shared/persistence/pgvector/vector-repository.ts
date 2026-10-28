@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { createKnowledgeError } from '@kb/contracts';
-import type { Pool } from 'pg';
+import type { Pool, PoolClient } from 'pg';
 import type { TenantContext } from '../knowledge/tenant';
 import { KNOWLEDGE_VECTOR_PROFILES, vectorProfileOfDimension, type VectorProfile } from './ddl';
 
@@ -93,7 +93,11 @@ export function stableKnowledgeVectorId(
 
 function vectorError(
   context: TenantContext,
-  code: 'KNOWLEDGE_VALIDATION_FAILED' | 'KNOWLEDGE_CONFLICT' | 'KNOWLEDGE_DEPENDENCY_UNAVAILABLE',
+  code:
+    | 'KNOWLEDGE_VALIDATION_FAILED'
+    | 'KNOWLEDGE_CONFLICT'
+    | 'KNOWLEDGE_DEPENDENCY_UNAVAILABLE'
+    | 'KNOWLEDGE_DEPENDENCY_TIMEOUT',
   details: Record<string, unknown>,
 ) {
   return createKnowledgeError({
@@ -230,8 +234,12 @@ export class KnowledgeVectorRepository {
     }
     values.push(Math.max(1, Math.min(input.limit, 200)));
     const limitParameter = values.length;
+    let client: PoolClient | undefined;
     try {
-      const result = await this.pool.query<{
+      client = await this.pool.connect();
+      await client.query('BEGIN');
+      await client.query('SET LOCAL hnsw.ef_search = 100');
+      const result = await client.query<{
         id: string;
         workspace_id: string;
         knowledge_space_id: string;
@@ -256,6 +264,7 @@ export class KnowledgeVectorRepository {
         LIMIT $${limitParameter}`,
         values,
       );
+      await client.query('COMMIT');
       return result.rows.map((row) => ({
         vectorId: row.id,
         workspaceId: row.workspace_id,
@@ -266,11 +275,27 @@ export class KnowledgeVectorRepository {
         version: Number(row.version),
         score: Number(row.score),
       }));
-    } catch {
+    } catch (error) {
+      if (client) {
+        try {
+          await client.query('ROLLBACK');
+        } catch {
+          // The original dependency error is the actionable failure.
+        }
+      }
+      if ((error as { code?: string }).code === '57014') {
+        throw vectorError(context, 'KNOWLEDGE_DEPENDENCY_TIMEOUT', {
+          dependency: 'postgres',
+          operation: 'vector_recall',
+          reason: 'timeout',
+        });
+      }
       throw vectorError(context, 'KNOWLEDGE_DEPENDENCY_UNAVAILABLE', {
         dependency: 'postgres',
         operation: 'vector_recall',
       });
+    } finally {
+      client?.release();
     }
   }
 
