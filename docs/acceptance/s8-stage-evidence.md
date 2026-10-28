@@ -2,16 +2,18 @@
 
 ## Status
 
-- Status: `S8_REVIEW_FIX_LOCAL_PASS_PENDING_CI`.
+- Status: `S8_REVIEW_FIX_2_LOCAL_PASS_PENDING_PUSH_CI`.
 - Wave / stage / owner: `W3 / S8 / personB`.
 - Base SHA: `13fa0e9be84edd33ea5cc5413d64282c126dd117`.
 - Implementation candidate SHA: `9ed48366872bfa35271a4d3ce77f1ef84de06eec`.
-- Review remediation candidate SHA: `4e4a0be8aba3b716a984ca41f1c25fb4f04f1701`.
+- First review remediation candidate SHA: `4e4a0be8aba3b716a984ca41f1c25fb4f04f1701`.
+- Second review remediation candidate SHA:
+  `b621bca052fc748e22e70dc6d99b57da1e790319`.
 - Branch: `feat/kb-s08-image-deep-rag`.
 - Worktree: `/home/archer/RAG-agent-platform-w3-s8-personB`.
 - PR: `#32` (`feat/kb-s08-image-deep-rag` to `main`).
-- Remote state: PR #32 previously contained `03e2362`; the review remediation
-  commits are local and were not pushed by the Coding Agent.
+- Remote state: PR #32 currently contains `d1c20f5`; the second review
+  remediation and this evidence update are local pending user push.
 - W3 final status: not claimed. PersonA candidate and S9 rebase are still required.
 
 ## Inputs And Environment
@@ -39,8 +41,34 @@
 
 ## Final Gate Matrix
 
-All listed commands exited `0`. Logs are under
-`/home/archer/w3-s8-evidence-20261028/`; hashes bind the final run.
+All listed final commands exited `0`. Logs are under
+`/home/archer/w3-s8-rr-evidence-20261029/`; hashes bind the final reruns.
+
+| Command group                                              | Exit | Key result                                                   | Log SHA-256                                                        |
+| ---------------------------------------------------------- | ---: | ------------------------------------------------------------ | ------------------------------------------------------------------ |
+| `pnpm openapi:check` / inventory / runtime                 |    0 | `92/120/139/8`, runtime `102/18`, union `120`                | `a912d2f832d56ca59ed2e7781e0add1d7cc9718a1244c0f73b444c443281790f` |
+| lint / format / typecheck / architecture / forbidden-files |    0 | `12/12` packages, `123` service files, no forbidden source   | `b8d14249885e2bbc39f880dde60b67b9e83ed85c70565e8f2e27955bb396c186` |
+| `pnpm test:unit --force`                                   |    0 | `22/22` tasks; service `84` tests                            | `a72a8c431bd41132fc1eb0dc276040297babb1a4f0f7604c1c9ce85f0f737b31` |
+| `pnpm test:contract`                                       |    0 | `19` files, `93` tests                                       | `0f92dd97ead64262c9f974a7d018ba3438d44d2c42872668f9efca21c216c3f3` |
+| `pnpm test:integration --force`                            |    0 | `28` files, `158` tests                                      | `9f4601c44a2d1542145896e307e4d812752f0d09f38ac1cfd61b01ae2cb028b0` |
+| `pnpm test:tenant`                                         |    0 | `7` files, `16` tests                                        | `dee5a14c8afa918111752afc4ba59d12e51f6bac965c8332a855afd189953bfb` |
+| `pnpm test:concurrency`                                    |    0 | `7` files, `14` tests                                        | `c1ff6c0ff885dd46db71b87086856ba48441704f10511bd1fa4e88e445f7f97e` |
+| `pnpm test:fault`                                          |    0 | `9` files, `33` tests                                        | `995b84334a0e0bbe8a156953a5361fc61f0879880a9bed276a60da505e24b8c4` |
+| `pnpm test:e2e`                                            |    0 | `11` files, `54` tests                                       | `0597cb64386752b70034dfaf5403cf8be5642120e65a3fdad94c481cf6a39f7d` |
+| `pnpm build --force`                                       |    0 | `12/12` packages; Images/Search routes built                 | `b619b2062a81a28baf9e1425c5d5a8c699f3905c026135356a579b0e9aa5951e` |
+| `pnpm build:workers --force`                               |    0 | worker bundle built; `knowledge-caption` remains registered  | `7e76ad4af4f997eb3d71798dea4b32d12c8963a695ba0956dbe36946e635be0e` |
+| Compose default/AIProxy config and healthy services        |    0 | Mongo, Redis, pgvector, MinIO healthy                        | `93e89b0f069f481fffc7a483c8866559d12e542d0458c8973b707bcd7e661080` |
+| `pnpm sbom:generate` / `pnpm license:check`                |    0 | `160` direct, `1639` transitive, `950` production components | `72d9bab03c7d12f4886e378e981768961c89a97fba0e5f1f8e46b65e82d6dc56` |
+
+Early reporting attempts omitted required CI environment variables for
+tenant/concurrency/fault, and integration initially used a fixture missing the
+new ObjectRef creator field. Those attempts did not support a passing claim.
+The final reruns above use the corrected environment and fixtures; no test was
+skipped or weakened.
+
+## Previous Review Gate Matrix (superseded)
+
+The table below is retained for the first review remediation only.
 
 | Command                                               | Exit | Key result                                                  | Log SHA-256                                                        |
 | ----------------------------------------------------- | ---: | ----------------------------------------------------------- | ------------------------------------------------------------------ |
@@ -68,10 +96,8 @@ All listed commands exited `0`. Logs are under
 | `pnpm sbom:generate`                                  |    0 | `160` direct, `1639` transitive, `12` workspaces            | `bbf252e81cafe277fa9156dd32e4179988eadc3e8bd36fa382ef1d44505c22f4` |
 | `pnpm license:check`                                  |    0 | `160` catalog, `950` production components                  | `0d4d67e1a0cae29e5ec2bdd82e0eba7bb36dff15e13e75619711e2a9ee314623` |
 
-The first integration attempt used the CI URI without `directConnection=true`
-and failed during Mongo topology discovery before tests ran. The same command
-then passed with the local direct-connection adjustment; no test was skipped or
-weakened.
+That earlier run also used the CI URI with a local direct-connection
+adjustment; no test was skipped or weakened.
 
 ## Review Remediation
 
@@ -90,6 +116,20 @@ weakened.
 The real-page suite covers `54` E2E tests and includes
 `test/e2e/s8-image-deep-page.test.ts`, with real Mongo/Postgres/MinIO object
 content, browser requests, ticket revocation, axe and overflow checks.
+
+## Second Review Remediation
+
+| Finding    | Resolution                                                                                                                                     |
+| ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `S8-RR-01` | A signed, active, same-workspace/space/member unbound `purpose=image` object can return content; bound images still recheck Source ACL         |
+| `S8-RR-02` | S7 records actual gateway usage in `SearchPipelineResult.modelUsage`, returns it through `collectCandidates`, and Deep budgets from that value |
+| `S8-RR-03` | Skip links use accessible clip-path hiding, appear on keyboard focus only, and E2E verifies viewport geometry plus heading/nav non-overlap     |
+| `S8-RR-04` | This evidence and the stage report are updated after the second review candidate and final local gate reruns                                   |
+
+The new real content test is `TEST-MULTI-001-RR01`. The Deep budget regression
+checks provider usage that differs from local token estimates, and the real-page
+E2E covers keyboard-focus visibility, hidden-state screenshots, axe and overlap
+for Images/Deep at 360/768/1200.
 
 ## Contract, Runtime And Capabilities
 
@@ -127,9 +167,24 @@ Key test IDs exercised:
 `TEST-MULTI-001-BLOCK`, `TEST-TRAIN-001-BLOCK`, `TEST-TRAIN-003-BLOCK`,
 `TEST-X-IMAGE-CAPTION`, `TEST-SEARCH-006-BLOCK`, `TEST-SEARCH-008-BLOCK`,
 `TEST-PARSE-005-BLOCK`, `TEST-AUTH-003-BLOCK`, `TEST-X-DEEP-BUDGET`,
-`TEST-X-FRONTEND-A11Y`, `ACC-UI-01...07`.
+`TEST-X-FRONTEND-A11Y`, `TEST-MULTI-001-RR01`, `ACC-UI-01...07`.
 
 ## UI Evidence
+
+| Viewport    | PNG                  |      Size | SHA-256                                                            |
+| ----------- | -------------------- | --------: | ------------------------------------------------------------------ |
+| Images 360  | `s8-images-360.png`  |  74,001 B | `ab6d9a67aa9a680e915e3e1f061f598d0d78eba28407e668e8c3325cab6d9a07` |
+| Images 768  | `s8-images-768.png`  |  80,866 B | `63e7c920f9564fc7acdf89d287aa2bbb9f91676db310626315696a25b69180f1` |
+| Images 1200 | `s8-images-1200.png` |  94,227 B | `eb4df426268e2d595bd577e51d8c8baf7eeb58874e44a6133bf83039568410e9` |
+| Deep 360    | `s8-deep-360.png`    |  97,518 B | `a17262e2393e12fb6b1d2ad0fd69eb982c22b9da80357cfd8636050d46dc819e` |
+| Deep 768    | `s8-deep-768.png`    | 106,048 B | `4e41e264b70d3381456273237e6798649cbae10bc8243ed8a6814e1ed96533c1` |
+| Deep 1200   | `s8-deep-1200.png`   | 118,631 B | `ca186bd0b371fdec7067ef15803965eec7b83fe51b77b0603ac9df419c52e889` |
+
+Each viewport passed axe serious/critical `0`, horizontal overflow `<= 0`,
+console errors `0`, page errors `0`, failed runtime requests `0`, hidden
+skip-link geometry and heading/navigation overlap checks.
+
+## Previous UI Evidence (superseded)
 
 | Viewport    | PNG                  |      Size | SHA-256                                                            |
 | ----------- | -------------------- | --------: | ------------------------------------------------------------------ |
@@ -144,6 +199,17 @@ Each viewport passed axe serious/critical `0`, horizontal overflow `<= 0`,
 console errors `0`, page errors `0` and failed runtime requests `0`.
 
 ## Generated Artifact Hashes
+
+| Artifact                      | SHA-256                                                            |
+| ----------------------------- | ------------------------------------------------------------------ |
+| `pnpm-lock.yaml`              | `a12d7b5430abfb013b6af52dbabc6d6a30c0b96b4f6f48d1a4d0454b3a691e7f` |
+| `openapi.json`                | `acf90409c5cba841e5672acb2c5b9ea3891879d61f56d7c6335d66660cd2b456` |
+| `runtime-registry.data.json`  | `9308cebbfe79500c7a4c79332871419a82340920ef41999e7550ef1619ee09bc` |
+| `deferred-manifest.data.json` | `aeef9a15cecfefca6d19bd10fca59192ecdbba5bc1a74cd89ac9d2ff576f07af` |
+| `artifacts/sbom.json`         | `6d825a06e5cebd062d268bcac470f53c4a376fa25737a2e16899152c870ca733` |
+| `NOTICE`                      | `f84b717ac3281cf18f0d616ab2547d9afc62f4448f345f66720039e24a9ca4f2` |
+
+## Previous Generated Artifact Hashes (superseded)
 
 | Artifact                      | SHA-256                                                            |
 | ----------------------------- | ------------------------------------------------------------------ |
@@ -188,5 +254,6 @@ See `docs/acceptance/s8-provider-matrix.md`.
   block this branch gate and require S11/legal disposition.
 - W3 is not complete: PersonA candidate SHA, S9 rebase, same-SHA personA/personB
   gates and runtime `110/10`, capability `53/49` are still outstanding.
-- The review-fix commit is local; PR #32 CI must run again after the user pushes
-  the new commit.
+- Second review remediation candidate `b621bca` and this evidence update are
+  local; PR #32 remote head remains `d1c20f5` until the user pushes and CI binds
+  the final head.

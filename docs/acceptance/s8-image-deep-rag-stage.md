@@ -2,13 +2,15 @@
 
 ## Status
 
-- Stage result: `S8_REVIEW_FIX_LOCAL_PASS_PENDING_CI`.
+- Stage result: `S8_REVIEW_FIX_2_LOCAL_PASS_PENDING_PUSH_CI`.
 - Wave / stage / owner: `W3 / S8 / personB`.
 - W3 base: `origin/main@13fa0e9be84edd33ea5cc5413d64282c126dd117`.
 - S8 implementation candidate: `9ed48366872bfa35271a4d3ce77f1ef84de06eec`.
 - Original branch evidence commit: `ae80ba26e0664cdd928a48359ec16f9b3d3c4c4c`.
-- Review remediation candidate: `4e4a0be8aba3b716a984ca41f1c25fb4f04f1701`.
-- PR: `#32`; remote PR head remains `03e2362` until the user pushes remediation.
+- First review remediation candidate: `4e4a0be8aba3b716a984ca41f1c25fb4f04f1701`.
+- Second review remediation candidate:
+  `b621bca052fc748e22e70dc6d99b57da1e790319`.
+- PR: `#32`; remote PR head is `d1c20f5` until the user pushes this remediation.
 - PersonA candidate SHA: `NOT_PROVIDED`.
 - Pushed personA branch: `NOT_PROVIDED`.
 - S8 merge SHA: `NOT_PROVIDED`.
@@ -21,10 +23,10 @@
 | -------- | ------ | ----------------------------------------------------------------------------------- |
 | `S8-T01` | PASS   | Image Source and `purpose=image` ObjectRef integration, caption child, image policy |
 | `S8-T02` | PASS   | Caption/vision embedding unit and real pgvector/Mongo integration                   |
-| `S8-T03` | PASS   | Image search fusion, ACL, ticket and citation tests                                 |
+| `S8-T03` | PASS   | Image fusion, final ACL, signed creator-bound query image content and citation      |
 | `S8-T04` | PASS   | Chunking settings, paragraph enhancement and auto/image index tests                 |
-| `S8-T05` | PASS   | Deep budget, rounds, stop reasons, ACL and citation tests                           |
-| `S8-T06` | PASS   | Images/Deep UI, three viewports, axe, overflow and safe errors                      |
+| `S8-T05` | PASS   | Deep budget from actual search-provider usage, rounds, stop reasons and citation    |
+| `S8-T06` | PASS   | Images/Deep UI, stable skip-link, three viewports, axe, overlap and safe errors     |
 | `S8-T07` | PASS   | Full final gate matrix and acceptance evidence                                      |
 
 ## Contract And Runtime
@@ -47,13 +49,13 @@ S8 closes `MULTI-001`, `SEARCH-006`, `SEARCH-008` and `PARSE-005`.
 
 | Gate                                         | Result                     |
 | -------------------------------------------- | -------------------------- |
-| OpenAPI generate/check                       | PASS                       |
+| OpenAPI check                                | PASS                       |
 | Inventory/runtime                            | PASS                       |
 | Lint/format/typecheck                        | PASS                       |
 | Architecture/forbidden files                 | PASS                       |
 | Unit                                         | PASS, 22 tasks             |
 | Contract                                     | PASS, 19 files / 93 tests  |
-| Integration                                  | PASS, 28 files / 155 tests |
+| Integration                                  | PASS, 28 files / 158 tests |
 | Tenant                                       | PASS, 7 files / 16 tests   |
 | Concurrency                                  | PASS, 7 files / 14 tests   |
 | Fault                                        | PASS, 9 files / 33 tests   |
@@ -111,5 +113,5 @@ W3 PASS.
 - The local Mongo test URI requires `directConnection=true` because of the
   replica set's Compose-hostname advertisement.
 - Five pre-existing release-legal blockers remain for S11/legal disposition.
-- The review remediation commit is local and has not been pushed by the Coding
-  Agent; PR #32 CI must be rerun on the new head.
+- The second review remediation commit is local and has not been pushed; PR #32
+  CI must run on the final evidence head before review can close.
