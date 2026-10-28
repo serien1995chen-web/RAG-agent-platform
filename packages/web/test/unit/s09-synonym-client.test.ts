@@ -104,4 +104,19 @@ describe('S9 synonym client', () => {
     expect(requests[4]?.url).toContain('limit=20');
     expect(requests[4]?.url).toContain('search=');
   });
+
+  it('keeps the global fetch receiver bound when no fetch implementation is injected', async () => {
+    const fetchMock = vi.fn(function (this: unknown) {
+      expect(this).toBe(globalThis);
+      return Promise.resolve(jsonResponse(config));
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    try {
+      const client = new S09SynonymClient({ workspaceId: 'ws_fixture' });
+      await expect(client.get(spaceId)).resolves.toEqual(config);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
 });

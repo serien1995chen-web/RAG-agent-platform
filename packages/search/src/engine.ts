@@ -68,6 +68,7 @@ function emptyResult(request: SearchRequest, degraded: DegradedInfo[] = []): Sea
       rerankApplied: false,
     },
     modelUsage: { inputTokens: 0, outputTokens: 0 },
+    queryExpansions: [],
   };
 }
 
@@ -424,7 +425,13 @@ export function createSearchEngine(
           }
         : finalizeSearchCandidates(request, candidates, rerankApplied);
     const modelUsage = deps.modelUsage ?? {
-      inputTokens: countTokens(request.textQueries.join(' ')) + rerankInputTokens,
+      inputTokens:
+        countTokens(
+          (recall.queryExpansions.length > 0
+            ? recall.queryExpansions.map((expansion) => expansion.expandedQuery)
+            : request.textQueries
+          ).join(' '),
+        ) + rerankInputTokens,
       outputTokens: 0,
     };
 
@@ -447,6 +454,7 @@ export function createSearchEngine(
         rerankApplied,
       },
       modelUsage: { ...modelUsage },
+      queryExpansions: recall.queryExpansions,
     };
   };
 

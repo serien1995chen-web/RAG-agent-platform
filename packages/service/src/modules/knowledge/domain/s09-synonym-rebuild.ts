@@ -33,6 +33,39 @@ export interface SynonymStagedRebuild {
   indexedSegmentVersions: Record<string, number>;
   reusedVectorCount: number;
   rebuiltCount: number;
+  segments?: Array<{
+    segmentId: string;
+    sourceId: string;
+    expectedVersion: number;
+    nextVersion: number;
+    index: {
+      indexId: string;
+      type: string;
+      modelId: string;
+      dimension: 768 | 1024 | 1536 | 3072;
+      storageType: 'vector' | 'halfvec';
+      vectorProfile: string;
+      vectorId: string;
+      text: string;
+      version: number;
+    };
+    indexes: Array<{
+      indexId: string;
+      type: string;
+      modelId: string;
+      dimension: 768 | 1024 | 1536 | 3072;
+      storageType: 'vector' | 'halfvec';
+      vectorProfile: string;
+      vectorId: string;
+      text: string;
+      version: number;
+    }>;
+    fullTextTokens: string;
+    fullTextVersion: number;
+    oldVectorId: string | null;
+    oldVectorDimension: 768 | 1024 | 1536 | 3072 | null;
+    vectorWritten?: boolean;
+  }>;
   cleanupCandidates: Array<{
     vectorId: string;
     dimension: 768 | 1024 | 1536 | 3072;

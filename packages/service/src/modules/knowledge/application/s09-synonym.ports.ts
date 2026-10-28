@@ -138,6 +138,7 @@ export interface S09SynonymRepositoryPort {
     spaceId: string,
     context: TenantContext,
   ): Promise<S09PublishedSynonymSnapshot | null>;
+  getPublishedFileVersion(spaceId: string, context: TenantContext): Promise<number>;
   assertPublishedVersion(
     spaceId: string,
     fileVersion: number,
@@ -180,6 +181,7 @@ export interface S09SynonymRepositoryPort {
     staged: SynonymStagedRebuild,
     result: SynonymRebuildResult,
     context: TenantContext,
+    finalize?: (session: unknown) => Promise<void>,
   ): Promise<void>;
   failRebuild(
     plan: SynonymRebuildPlan,
@@ -278,6 +280,12 @@ export interface S09S6RebuildIndexPort {
     indexedSegmentVersions: Record<string, number>;
     cleanupCandidates: SynonymStagedRebuild['cleanupCandidates'];
   }>;
+  finalizeInSession(input: {
+    plan: SynonymRebuildPlan;
+    staged: SynonymStagedRebuild;
+    context: TenantContext;
+    session: unknown;
+  }): Promise<SynonymStagedRebuild>;
   rollback(input: { stagingId: string; context: TenantContext }): Promise<void>;
 }
 
@@ -292,6 +300,12 @@ export interface S09S6RebuildPort {
     plan: SynonymRebuildPlan,
     staged: SynonymStagedRebuild,
     context: TenantContext,
+  ): Promise<SynonymStagedRebuild>;
+  finalizeInSession(
+    plan: SynonymRebuildPlan,
+    staged: SynonymStagedRebuild,
+    context: TenantContext,
+    session: unknown,
   ): Promise<SynonymStagedRebuild>;
   rollback(stagingId: string, context: TenantContext): Promise<void>;
 }

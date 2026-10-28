@@ -7,14 +7,19 @@
 - Branch: `feat/kb-s09-synonym-rebuild`.
 - Worktree: `/home/serien/RAG-agent-platform-s09`.
 - W3 baseline: `13fa0e9be84edd33ea5cc5413d64282c126dd117`.
-- S8 merge SHA: `PENDING_USER_CONFIRMATION`.
-- Candidate SHA: `PENDING_POST_REBASE`.
-- Evidence commit SHA: `PENDING_POST_REBASE`.
-- Phase 1 conclusion: `PHASE1_PASS_WAITING_FOR_S8_MERGE_SHA`.
-- W3 conclusion: `NOT_RUN`.
+- S8 merge SHA: `9839b2a1005ce7fdf4558ea8d002ae1ab6dcadbd`.
+- S8 merge parents: `13fa0e9be84edd33ea5cc5413d64282c126dd117` and
+  `1c55abb2fa1ecc5bdafaa2d3d3a26f05df24f4c`.
+- Candidate SHA: the commit containing this report; the exact SHA is recorded
+  in the handoff because a commit cannot include its own object ID.
+- Evidence commit SHA: not created. It requires personA and personB evidence
+  from the same frozen candidate.
+- W3 conclusion: `NOT_COMPLETE`. PersonB independently executed evidence has
+  not been received.
 
-No rebase, dependency installation, push, PR creation, merge or wave-level
-candidate freeze was performed. This document does not claim S9 or W3 complete.
+This report records post-rebase S9 implementation and local gate results. It
+does not claim that W3 is complete and does not claim a final CI or Review
+result.
 
 ## Inputs
 
@@ -25,30 +30,31 @@ candidate freeze was performed. This document does not claim S9 or W3 complete.
 | `知识库平台分阶段任务拆解-继续开发版.md` | `11aa3693599759ef969c9f6ad85ae61da8fd925940baacfb17a1c5c389e2fb6e` |
 | `coding.md`                              | `6160d409fa57ea0de6bef24777979492f0ed10520070032ac5df578211ef8cc9` |
 
-The implementation standard contains seven Tasks, each with the required
-twelve fields, atomic steps with the required nine fields, eight Operations,
-C5/C6, and the shared-file ownership matrix. No unresolved baseline conflict was
-found.
+The Plan has seven Tasks with the required twelve fields, atomic steps with the
+required nine fields, eight Operations, C5/C6 and the shared-file ownership
+rules. No unresolved documentation or baseline conflict was found.
 
 ## Scope
 
-Tasks implemented through the phase 1 boundary:
+Implemented Tasks:
 
 ```text
 S9-T01 S9-T02 S9-T03 S9-T04 S9-T05 S9-T06 S9-T07
 ```
 
-Capabilities touched but not closed:
+Capabilities implemented by this stage:
 
 ```text
 SEARCH-003
 TRAIN-006
 ```
 
-The branch remains at the W3 start capability ledger. `SEARCH-003` and
-`TRAIN-006` remain `DATA`; the W3 target `53 / 49` was not claimed.
+The canonical manifest still stores its historical `DATA` lifecycle value.
+This stage records the W3 post-rebase implementation count as
+`53 implemented / 49 closed`. `DOWN-001...004` remain `DATA`; no W4 work was
+implemented.
 
-The eight existing Operations remain in the OpenAPI target and deferred manifest:
+Registered Operations:
 
 ```text
 API-SYNONYM-GET
@@ -61,196 +67,199 @@ API-SYNONYM-ENABLE
 API-SYNONYM-REBUILD
 ```
 
-Phase 1 did not add these operations to the public runtime, create a public page
-route, expose navigation, or modify generated OpenAPI/client registry files.
+All eight Operations are runtime. S8 `API-SEARCH-IMAGE` and
+`API-SEARCH-DEEP` remain runtime.
 
 ## Implemented Behavior
 
 ### T01 / T02: Immutable Files and Validation
 
-- S9-specific CSV/XLS/XLSX parser.
+- CSV, XLS and XLSX use a stage-specific parser.
 - CSV is fatal UTF-8; BOM and CRLF are accepted.
-- Only the first XLS/XLSX worksheet is read.
-- XLS/OLE and XLSX/ZIP container signatures are checked.
-- Files above `10 MiB` fail with `KNOWLEDGE_PAYLOAD_TOO_LARGE`.
-- Header aliases cover standard and synonym forms from the Plan.
-- Limits cover `10,000` mappings, `50,000` terms, `128` code points per term and
-  `500,000` total code points.
-- Diagnostics carry source row/column, stable code and message key without file
-  text.
-- Duplicate terms, self-reference, cascade, cycle and cross-standard conflicts
-  are classified.
-- Mapping order, logical IDs and fingerprints are deterministic.
+- XLS/XLSX read only the first worksheet and validate container signatures.
+- File limits are 10 MiB, 10,000 mappings, 50,000 terms, 128 code points per
+  term and 500,000 total code points.
+- Header aliases and deterministic row-level diagnostics follow the Plan.
+- Duplicate, self-reference, cascade, cycle and cross-standard conflicts return
+  structured `KNOWLEDGE_SYNONYM_INVALID` diagnostics without file text.
+- Mapping fingerprints, logical IDs and ordering are deterministic.
 
 ### T03: Version, CAS, Delete and Download
 
 - `activeFileVersion` is never nullable.
-- `publishedFileVersion` is the only query/expansion/new-index source.
-- New checksums receive monotonic immutable versions.
-- Full retained history is reused by checksum.
-- Upload/update creates pending config, mappings, ObjectRef, Job, Outbox and
+- Only `publishedFileVersion` participates in query expansion and new index
+  versions.
+- Checksum history is reused across retained versions.
+- Upload/update writes config, immutable mappings, ObjectRef, Job, Outbox and
   Audit in one Mongo transaction.
-- Idempotency-Key and SHA-256 are recorded; mismatched idempotent bodies return
-  `409`.
-- Enable/disable/delete use config version CAS.
-- Delete is fixed to `enabled=false`, `status=disabled`, clears pending and
-  published state, and preserves the last `activeFileVersion` plus historical
-  mappings.
-- Mapping pages use stable cursor ordering and bounded `1...200` limits.
-- Download returns canonical UTF-8 BOM CSV with CRLF and RFC 4180 quoting.
+- Idempotency-Key and SHA-256 are persisted; changed bodies conflict.
+- Enable/disable/delete use config-version CAS.
+- Delete is fixed to `enabled=false` and `status=disabled`.
+- Delete clears pending and published state but retains `activeFileVersion` and
+  historical mappings.
+- Mapping pagination is stable and bounded to `1...200`.
+- Download returns canonical UTF-8 BOM CSV using CRLF and RFC 4180 quoting.
+- Synonym ObjectRef keys use the tenant-scoped
+  `ws/{workspaceId}/space/{spaceId}/synonym/...` template.
 
 ### T04: Query Extension
 
-- Pure synonym matcher lives in `packages/search/src/synonym-expansion.ts`.
-- Original query remains the prefix; standard terms are appended at stable
-  matched order.
-- ASCII is case-normalized only; internal whitespace, Unicode and punctuation
-  remain significant.
-- Longest synonym and Latin/digit/underscore boundaries are enforced.
-- Standard terms are protected as no-op spans.
-- Multiple authorized Spaces retain request order and append all distinct
-  standards without overwriting.
-- Same-Space mappings sort by normalized standard and logical mapping ID.
-- Expansion above `4096` code points falls back to the original query.
+- The pure matcher lives in `packages/search/src/synonym-expansion.ts`.
+- Original query text is retained and standards are appended deterministically.
+- ASCII case normalization, internal whitespace, Unicode and punctuation follow
+  the Plan.
+- Longest matching and Latin/digit/underscore boundaries are enforced.
+- Multiple Spaces combine in request order without one Space overwriting
+  another.
+- The 4096-code-point limit falls back to the original query.
 - Cache keys include workspace, Space and fileVersion.
-- Every cache hit still performs a direct Mongo published-version check.
-- Disabled, version-change, cache-mismatch and repository failures fall back to
+- Every cache hit revalidates the published version directly in Mongo.
+- Disabled, changed-version, cache-mismatch and repository failures fall back to
   the original query.
-- Audit summaries contain Space IDs, fileVersions and mapping IDs only.
+- Embedding and full-text recall receive the same expanded text.
+- Audit summaries contain only Space IDs, versions and mapping IDs.
 
-Phase 1 intentionally does not export or attach this module to the public
-`@kb/search` barrel or S7 engine.
+### T05: Synonym, Model and Source Rebuild
 
-### T05: Synonym Rebuild
-
-- Internal `synonym_rebuild` Job kind is used with the existing
-  `knowledge-rebuild` queue.
-- Queue handler contract is implemented in the stage-specific rebuild
-  application.
-- Rebuild stages through an S6 rebuild/index Port; S9 never writes pgvector or
-  full-text projections directly.
-- S6 adapter exposes `stageProfile`, `reuseOrBuildVector`, `finalize` and
-  `rollback`.
-- Rebuild result records source IDs, Segment versions, old/new file versions,
-  old/new query model profile, failure evidence and cleanup candidates.
-- Final config/model switch requires the current Job version, lease owner,
-  fencing token and attempt epoch; a stale worker cannot publish.
-- Failure before finalization preserves the prior published fileVersion.
-- Partial finalization invokes staged-index compensation.
+- `synonym_rebuild` uses the existing `knowledge-rebuild` queue.
+- Upload/update and manual rebuild create the existing Job DTO.
+- Embedding binding changes create a model-change rebuild in the same Mongo
+  transaction as the binding update.
+- Search resolves the internal `activeQueryModelId` and
+  `activeQueryDimension`, not the public target binding.
+- Rebuild staging and vector writes use the S6 Ports.
+- Full-text and Segment pointer switch use the S6 store Port.
+- Source/index rebuild writes the current published `synonymVersion`.
+- Final Job, Segment pointers, config and internal model profile switch in one
+  Mongo transaction.
+- Finalization checks Job version, lease owner, fencing token and attempt epoch.
+- Failure preserves the prior published version and compensates staged vectors.
 - Old vector cleanup candidates are no earlier than 30 days after switch.
 
-The shared S6 worker dispatch, real staging implementation and atomic shared
-Mongo finalization remain post-rebase work because they modify S8-owned runtime
-and worker files.
+### T06: Synonyms UI
 
-### T06: Independent UI
-
-- Independent state machine, request client and `S09SynonymsWorkbench` exist.
-- Controls cover upload, update, mapping pagination, enable/disable, delete,
-  historical download and rebuild.
-- Read/manage capability gating is represented.
-- Errors expose messageKey/code/traceId and row diagnostics, not file text.
-- No public route, navigation, i18n key, web/app barrel or shared runtime entry
-  was added in phase 1.
+- Independent state, request client and workbench are wired to the real page.
+- The page supports GET, upload, update, enable/disable, delete, download,
+  mapping pagination and rebuild.
+- Rebuild progress reads the existing Job list and polls while rebuilding.
+- `fetch` is bound to `globalThis`, preventing browser `Illegal invocation`.
+- Read/manage controls are permission-gated.
+- Errors expose code, message key, trace ID and row diagnostics.
+- Navigation, app page, i18n, query keys, web barrel and runtime registration
+  are complete after S8 merge.
+- Images, Deep/Search and Synonyms entries remain present together.
 
 ## C5 / C6
 
 C5:
 
-- S9 uses S6 rebuild/index Ports and an injected search expansion function.
-- No direct pgvector, full-text, S7 candidate or Segment pointer write exists in
-  the phase 1 S9 application.
-- Published version remains the only query target before successful switch.
-- Rebuild failure retains old published state and records failure evidence.
+- S9 calls S6 rebuild/index Ports and S7 query expansion; it does not write
+  pgvector, full-text or S7 candidates directly.
+- The published version remains the query target until successful finalization.
+- Rebuild failure retains the old target and records failure evidence.
 
 C6:
 
-- Every synonym repository query includes `workspaceId`.
-- Cross-tenant config and mapping access returns `404`.
-- Read/manage permission checks are applied before application methods.
-- Audit records contain checksums, versions, counts, Job IDs and error codes,
-  never complete synonym files or term lists.
-- Job, Outbox and Audit facts can be consumed by S10.
+- Every repository predicate includes `workspaceId`; cross-tenant access returns
+  `404`.
+- Space read/manage permissions and final ACL checks remain authoritative.
+- Audit and Job evidence contain versions, counts, IDs and safe error codes,
+  never synonym file contents or complete term lists.
+- Job, Outbox and Audit facts remain consumable by S10.
 
 ## Shared Files
 
-Phase 1 minimal shared-file changes:
+The post-rebase union touches the Plan-authorized shared surfaces:
 
-- `packages/service/src/shared/persistence/schemas/knowledge-governance.schemas.ts`
-- `packages/service/src/shared/persistence/schemas/knowledge-operations.schemas.ts`
-- `packages/service/src/modules/knowledge/application/ports.ts`
-- `packages/service/src/modules/knowledge/application/s06-processing-ports.ts`
-- `packages/service/src/modules/knowledge/repository/s06-processing.repository.ts`
-- `packages/service/src/modules/knowledge/repository/job-execution.repository.ts`
-- `packages/service/src/modules/knowledge/repository/s5-model-binding.repository.ts`
+- OpenAPI builder and generated runtime/deferred/route/client artifacts.
+- S5 model binding repository, S6 processing Ports/repository/worker dispatch.
+- S7 search application, Ports, pipeline factory and repository.
+- knowledge application/runtime/barrels and the API handler.
+- web shell, i18n, query keys, web/app barrels and route page.
+- Queue/Job dispatch and pgvector/full-text shared Ports.
 
-No public DTO, Schema name, route, collection or queue was added. Internal query
-model fields keep the last successful embedding profile while the public binding
-moves to the requested target model.
+No S8 vision embedding, caption, Deep, Images, dependency, test, registry or
+generated artifact was removed or rewritten.
 
 ## Contract And Runtime
 
-| Check                           | Result  |
-| ------------------------------- | ------- |
-| Paths                           | `92`    |
-| Operations                      | `120`   |
-| Schemas                         | `139`   |
-| Parameters                      | `8`     |
-| Runtime                         | `100`   |
-| Deferred                        | `20`    |
-| Runtime / deferred intersection | `0`     |
-| Runtime / deferred union        | `120`   |
-| S9 operations runtime           | `0 / 8` |
-| S9 operations deferred          | `8 / 8` |
-| Mongo collections               | `23`    |
-| Vector profiles                 | `4`     |
-| Canonical queues                | `13`    |
-| Old page route                  | `0`     |
+| Check                           | Result    |
+| ------------------------------- | --------- |
+| Paths                           | `92`      |
+| Operations                      | `120`     |
+| Schemas                         | `139`     |
+| Parameters                      | `8`       |
+| Runtime                         | `110`     |
+| Deferred                        | `10`      |
+| Runtime / deferred intersection | `0`       |
+| Runtime / deferred union        | `120`     |
+| S8 runtime Operations           | `2 / 2`   |
+| S9 runtime Operations           | `8 / 8`   |
+| Mongo collections               | `23`      |
+| Vector profiles                 | `4`       |
+| Canonical queues                | `13`      |
+| W3 Capability target            | `53 / 49` |
+| DOWN-001...004                  | `DATA`    |
 
-`pnpm openapi:check`, `pnpm knowledge:inventory` and
-`pnpm knowledge:check-runtime` pass. W3 target `110 / 10` is explicitly not
-claimed in phase 1.
+`pnpm openapi:generate`, `pnpm openapi:check`, `pnpm knowledge:inventory` and
+`pnpm knowledge:check-runtime` pass.
+
+## Installation
+
+- Coding Agent executions of `pnpm install/add/update/remove`: `0`.
+- User installation 1: S8 dependency pause, recorded in S8 evidence.
+- User installation 2: post-S9-rebase, `pnpm install`, exit `0`, lockfile up to
+  date, one package added.
+- Final `pnpm-lock.yaml` SHA-256:
+  `a12d7b5430abfb013b6af52dbabc6d6a30c0b96b4f6f48d1a4d0454b3a691e7f`.
 
 ## Test Evidence
 
-Commands were run from the WSL worktree. Infrastructure tests used the real
-local Mongo replica set, Redis, PostgreSQL/pgvector and MinIO. The local
-replica-set member advertises `mongo:27017`, so commands used
-`directConnection=true` without changing tests or timeouts.
+All commands ran from the WSL worktree with real local Mongo replica set,
+Redis, PostgreSQL/pgvector and MinIO. Provider mode was the repository's mock
+AIProxy fixture; external cloud Providers remain `EXTERNAL_UNVERIFIED`.
 
-| Gate                    | Result                                     |
-| ----------------------- | ------------------------------------------ |
-| `pnpm test:unit`        | PASS, Turbo `22 / 22`; 323 tests           |
-| `pnpm test:contract`    | PASS, `93 / 93`                            |
-| `pnpm test:integration` | PASS, Turbo `22 / 22`; service `142 / 142` |
-| `pnpm test:tenant`      | PASS, `16 / 16`                            |
-| `pnpm test:concurrency` | PASS, `15 / 15`                            |
-| `pnpm test:fault`       | PASS, `33 / 33`                            |
-| `pnpm test:e2e`         | PASS, `51 / 51` in ten files               |
+| Gate                    | Result                                              |
+| ----------------------- | --------------------------------------------------- |
+| `pnpm test:unit`        | PASS, Turbo `22 / 22`                               |
+| `pnpm test:contract`    | PASS, 20 files / 95 tests                           |
+| `pnpm test:integration` | PASS, Turbo `22 / 22`; service 29 files / 163 tests |
+| `pnpm test:tenant`      | PASS, 8 files / 17 tests                            |
+| `pnpm test:concurrency` | PASS, 8 files / 16 tests                            |
+| `pnpm test:fault`       | PASS, 10 files / 34 tests                           |
+| `pnpm test:e2e`         | PASS, 14 files / 58 tests                           |
+| `pnpm test`             | PASS, exit `0`                                      |
 
-S9-specific coverage:
+The full `pnpm test` log is `/tmp/s9-pnpm-test.log` with SHA-256
+`583a077696946a6644b56b59e31ee8a8f8eb710fd18d0ef33dd5439a52c011d5`.
 
-- Parser: CSV/XLS/XLSX, first worksheet, UTF-8/BOM, forged signatures, extension
-  and 10 MiB boundary.
-- Domain: header/schema diagnostics, duplicate/self/cascade/cycle/cross-standard
-  conflicts, 128 code points, mapping/term/total-length limits.
-- Repository: immutable versions, checksum replay, idempotency conflict, published
-  snapshot, CAS pagination and delete history.
-- Query extension: original-query preservation, longest match, boundaries,
-  standard no-op, multi-Space order, cache revalidation, mismatch/disabled
-  fallback and 4096 limit.
-- Rebuild: stage/finalize ordering, retry evidence, rollback, queue contract,
-  Port-only S6 usage and 30-day cleanup candidate.
-- UI: 360/768/1200 overflow, axe serious/critical `0`, keyboard focus and
-  409/413/422/429 error states.
+S9-specific coverage includes:
+
+- CSV/XLS/XLSX, first worksheet, UTF-8/BOM, forged container signatures and 10
+  MiB boundaries.
+- `10 MiB`, `10 MiB + 1 byte` and `11 MiB + 1 byte` real HTTP multipart cases.
+- Header/schema diagnostics, all conflict classes, codepoint and length limits.
+- Immutable versions, checksum replay, idempotency conflict, CAS, delete history,
+  mapping pagination and BOM CSV.
+- Active query profile before and after model-change rebuild.
+- Source/index published synonymVersion propagation.
+- Query expansion, 4096 fallback, cache revalidation, Space ordering and ACL
+  safety.
+- Rebuild stage/finalize ordering, retry evidence, rollback and 30-day cleanup.
+- Real Synonyms page at 360/768/1200, axe serious/critical `0`, keyboard,
+  no horizontal overflow and rebuild progress.
 
 Test IDs exercised include:
 
 ```text
 TEST-SEARCH-003-BLOCK
 TEST-TRAIN-001-BLOCK
+TEST-TRAIN-003-BLOCK
 TEST-TRAIN-006-BLOCK
+TEST-MODEL-002-BLOCK
 TEST-AUTH-001-BLOCK
+TEST-AUTH-003-BLOCK
+TEST-X-SYNONYM-REBUILD
 TEST-X-PGVECTOR-PARTIAL
 TEST-X-FRONTEND-A11Y
 ACC-UI-01...07
@@ -258,102 +267,51 @@ ACC-UI-01...07
 
 ### Screenshots
 
+The real page screenshots remain under ignored
+`test-results/s09-synonyms-real-ui/`.
+
 | Screenshot    | SHA-256                                                            |
 | ------------- | ------------------------------------------------------------------ |
-| `mobile.png`  | `f6ed2c3f70483305bfb52043f9f208445088a9abce63c7bf8fb5c60aec526a90` |
-| `tablet.png`  | `d98d1f8ec1edd8efcd4463035ea7d3fa55d40673f619dce5c6ab2c3934ad0afc` |
-| `desktop.png` | `3d88c6c360d6720d4a6c030d77693d653cb607f32fae1632089dfb410906f913` |
-
-Screenshots and full browser logs remain under ignored `test-results/`; they are
-not committed.
+| `mobile.png`  | `bd07dafe409a069e99e5bed592998ec4c2490ef10cf0035458f362fefcd933e0` |
+| `tablet.png`  | `84c0c80a8d51487e11e425d9bd16d2c3431181250519bdd3206fcf40636cb7a8` |
+| `desktop.png` | `45ecc872c402f4d5c3a7478994be1e5effe4d65f6ff63a9c4aee58dd970ef73d` |
 
 ## Static And Build Gates
 
-| Command                                                      | Result                                           |
-| ------------------------------------------------------------ | ------------------------------------------------ |
-| `pnpm lint`                                                  | PASS                                             |
-| `pnpm format:check`                                          | PASS                                             |
-| `pnpm typecheck`                                             | PASS, 12 packages                                |
-| `pnpm architecture:check`                                    | PASS, 121 service sources                        |
-| `pnpm forbidden-files:check`                                 | PASS                                             |
-| `pnpm license:check`                                         | PASS; five release blockers pending legal review |
-| `pnpm sbom:generate`                                         | PASS                                             |
-| `pnpm build`                                                 | PASS, 12 packages                                |
-| `pnpm build:workers`                                         | PASS                                             |
-| `docker compose -f deploy/docker-compose.yml config --quiet` | PASS                                             |
+| Command                      | Result                                                  |
+| ---------------------------- | ------------------------------------------------------- |
+| `pnpm lint`                  | PASS                                                    |
+| `pnpm format:check`          | PASS                                                    |
+| `pnpm typecheck`             | PASS, 12 packages                                       |
+| `pnpm architecture:check`    | PASS, 133 service sources and 12 packages               |
+| `pnpm forbidden-files:check` | PASS, 544 files                                         |
+| `pnpm license:check`         | PASS; five release blockers remain pending legal review |
+| `pnpm sbom:generate`         | PASS                                                    |
+| `pnpm build`                 | PASS, 12 packages                                       |
+| `pnpm build:workers`         | PASS; worker bundle and assets generated                |
+| `docker compose ... config`  | PASS, 342 lines / 13 queues                             |
 
-## Dependencies And Installation
+Compose config SHA-256:
+`bf10017c84ec56a1c8b3307c182102414855af41ed874bab1bebc9dff9eb8435`.
 
-- New dependencies: none.
-- Agent installs: none.
-- Phase 1 install record: `NOT_REQUIRED`; the clean baseline dependency mirror
-  was reused and no lockfile changed.
-- User install 1 after S8 rebase: `PENDING_USER_ACTION`.
-- User install 2 final candidate install: `PENDING_USER_ACTION`.
-- `pnpm-lock.yaml` was not edited.
-- OpenAPI generated artifacts were not edited.
+## Risks And Open Items
 
-The W3 two-install requirement cannot be completed until the S8 merge SHA and
-latest `origin/main` are supplied.
+- PersonB evidence is not present. W3 cannot be marked complete.
+- Candidate and evidenceCommit SHA values must be frozen after this report is
+  committed.
+- CI, Review and PR Review have not run.
+- The five license items remain release blockers, not CI blockers.
+- External cloud Providers and FastGPT Cloud behavior remain
+  `EXTERNAL_UNVERIFIED`.
+- One parallel integration run exposed a transient archive retry timing failure;
+  the failed file passed standalone and the subsequent complete integration run
+  passed 163/163. It remains a residual flake risk.
 
-## Real / Mock / External
+Next authorized steps:
 
-Real verified:
-
-- Mongo replica-set transactions for synonym config, mappings, ObjectRef, Job,
-  Outbox, Audit, CAS and idempotency.
-- Redis/pgvector/MinIO/Next build and regression E2E from the existing W3
-  baseline.
-- Browser rendering, axe, keyboard and responsive geometry for the S9 test-only
-  workbench.
-
-Contract-tested only in phase 1:
-
-- S6 rebuild/index Port staging and finalization.
-- S7 integration of query expansion.
-- Shared worker dispatch for `synonym_rebuild`.
-
-External unverified:
-
-- Real embedding model/profile switching through a production provider.
-- Production object storage and IAM.
-- W3 candidate CI and personA/personB evidence.
-
-## Post-Rebase Work Still Required
-
-- Fetch and rebase only after the user supplies the S8 merge SHA and latest
-  `origin/main`.
-- Preserve S8 vision embedding, caption, Deep, Images/Search UI, dependencies,
-  tests, registries and generated artifacts.
-- User installs dependencies after rebase; Coding commits only pnpm's final
-  lockfile.
-- Generate OpenAPI with `pnpm openapi:generate` and register the eight S9
-  operations.
-- Wire query expansion into the existing S7 embedding/full-text path so both
-  recall channels receive identical expanded text.
-- Wire `synonym_rebuild` into the shared S6 `knowledge-rebuild` handler and
-  complete shared staging/finalization.
-- Add Synonyms route, navigation, i18n, query keys, web/app barrels and shared
-  shell integration.
-- Reach runtime `110 / deferred 10` and capability `53 / 49`.
-- Freeze `candidateSha`, run full S9/W3 gates, notify the user to push and hand
-  the SHA to personB, then collect both same-SHA evidence files.
-
-## Known Risks
-
-- The generated deferred route metadata currently reports multipart synonym
-  upload/update `idempotent=false` because the builder only inspects inline
-  parameters, while the source OpenAPI references the required
-  `IdempotencyHeader`. The S9 operation handler itself validates the header.
-  This must be rechecked and corrected through authorized generated-contract
-  work after rebase; generated files were not manually edited here.
-- The real shared S6 staging/finalization implementation is not wired in phase 1;
-  tests prove the Port contract, failure ordering and compensation boundary.
-- S7 has not yet received the query extension hook; tests prove the pure module
-  and service cache/version behavior.
-- Five production dependency-license blockers remain pending legal review.
-- No production external model credentials were available.
-
-## Conclusion
-
-`PHASE1_PASS_WAITING_FOR_S8_MERGE_SHA`
+1. Commit the current S9/S8 union and lockfile to freeze `candidateSha`.
+2. Run personA gates in a clean worktree at that SHA and write
+   `docs/acceptance/w3-personA-gate.md`.
+3. Notify the user to push the A branch and provide the same SHA to personB.
+4. Accept personB's evidence unchanged, then create the acceptance-only evidence
+   commit and wave report.

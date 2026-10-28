@@ -53,7 +53,17 @@ describe('TEST-X-PGVECTOR-PARTIAL S9 synonym rebuild fault', () => {
     };
     const rollback = vi.fn(async () => undefined);
     const failRebuild = vi.fn(async () => undefined);
-    const completeRebuild = vi.fn(async () => undefined);
+    const completeRebuild = vi.fn(
+      async (
+        _plan: unknown,
+        _staged: SynonymStagedRebuild,
+        _result: unknown,
+        _context: TenantContext,
+        finalize?: (session: unknown) => Promise<void>,
+      ) => {
+        if (finalize) await finalize('session');
+      },
+    );
     const app = new S09RebuildApplication({
       repository: {
         async getRebuildPlan() {
@@ -70,6 +80,14 @@ describe('TEST-X-PGVECTOR-PARTIAL S9 synonym rebuild fault', () => {
           return value;
         },
         async finalize() {
+          throw createKnowledgeError({
+            code: 'KNOWLEDGE_INTERNAL_ERROR',
+            requestId: context.requestId,
+            traceId: context.traceId,
+            details: { reason: 'unexpected_standalone_finalize' },
+          });
+        },
+        async finalizeInSession() {
           throw createKnowledgeError({
             code: 'KNOWLEDGE_DEPENDENCY_TIMEOUT',
             requestId: context.requestId,
@@ -105,7 +123,7 @@ describe('TEST-X-PGVECTOR-PARTIAL S9 synonym rebuild fault', () => {
     });
     await expect(app.handleQueue(jobId, 'worker-fault', context)).resolves.toBe('retry');
     expect(rollback).toHaveBeenCalledWith(staged.stagingId, context);
-    expect(completeRebuild).not.toHaveBeenCalled();
+    expect(completeRebuild).toHaveBeenCalledTimes(1);
     expect(failRebuild).toHaveBeenCalledWith(
       expect.objectContaining({ oldPublishedFileVersion: 2 }),
       expect.objectContaining({

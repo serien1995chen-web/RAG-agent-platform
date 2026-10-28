@@ -17,6 +17,7 @@ import { tenantError } from '../../../shared/persistence/knowledge/tenant';
 import type { S5ProcessingApplication } from './s5-processing.application';
 import type { ModelBindingRepositoryPort, ModelCatalogPort } from './s5-model-ports';
 import type { S8CaptionExecutorPort } from './s8-image-deep.ports';
+import type { S09RebuildApplication } from './s09-rebuild.application';
 
 export type S6ProcessingPort = S6ExternalProcessingPort;
 
@@ -103,6 +104,10 @@ export class S06ProcessingApplication {
       port: S6ProcessingPort;
       sync?: S6ConnectorSyncPort;
       caption?: S8CaptionExecutorPort;
+      synonymRebuild?: Pick<S09RebuildApplication, 'handleQueue'>;
+      synonymVersion?: {
+        getPublishedFileVersion(spaceId: string, context: TenantContext): Promise<number>;
+      };
     },
   ) {}
 
@@ -141,6 +146,10 @@ export class S06ProcessingApplication {
 
   requeueDueRetries(context: TenantContext) {
     return this.input.jobs.requeueDueRetries(context);
+  }
+
+  embedForIndex(input: Parameters<S6ExternalProcessingPort['embed']>[0], context: TenantContext) {
+    return this.input.port.embed(input, context);
   }
 
   private async refreshSourceIndexStatus(sourceId: string, context: TenantContext) {
@@ -734,12 +743,18 @@ export class S06ProcessingApplication {
       ...segment.indexes.filter((candidate) => candidate.indexId !== indexId),
       nextIndex,
     ];
+    const synonymVersion =
+      (await this.input.synonymVersion?.getPublishedFileVersion(
+        segment.knowledgeSpaceId,
+        context,
+      )) ?? segment.synonymVersion;
     const switched = await this.input.store.switchSegmentIndex(
       {
         segmentId,
         expectedVersion: projected.segmentVersion,
         fullTextVersion: indexVersion,
         indexes,
+        synonymVersion,
       },
       context,
     );
@@ -1054,6 +1069,21 @@ export class S06ProcessingApplication {
     workerId: string,
     context: TenantContext,
   ): Promise<'succeeded' | 'retry' | 'dead_letter'> {
+    if (queue === 'knowledge-rebuild') {
+      const raw = await this.input.jobs.getRaw(jobId, context);
+      if (raw.kind === 'synonym_rebuild') {
+        if (!this.input.synonymRebuild) {
+          throw createKnowledgeError({
+            code: 'KNOWLEDGE_DEPENDENCY_UNAVAILABLE',
+            requestId: context.requestId,
+            traceId: context.traceId,
+            retryable: false,
+            details: { queue, reason: 's09_rebuild_executor_missing' },
+          });
+        }
+        return this.input.synonymRebuild.handleQueue(jobId, workerId, context);
+      }
+    }
     return this.withJob<unknown>(queue, jobId, workerId, context, async (job) => {
       if (queue === 'knowledge-caption') {
         if (!this.input.caption) {

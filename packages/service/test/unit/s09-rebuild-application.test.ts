@@ -81,7 +81,7 @@ function jobRaw(status: string = 'queued'): S6JobRecord {
 function fixture(
   s6Overrides: {
     stage?: () => Promise<SynonymStagedRebuild>;
-    finalize?: () => Promise<SynonymStagedRebuild>;
+    finalizeInSession?: () => Promise<SynonymStagedRebuild>;
   } = {},
 ) {
   let status = 'queued';
@@ -96,15 +96,26 @@ function fixture(
     return { version: 3, attemptEpoch: 1 };
   });
   const setStep = vi.fn(async () => undefined);
-  const completeRebuild = vi.fn(async () => undefined);
+  const completeRebuild = vi.fn(
+    async (
+      _plan: SynonymRebuildPlan,
+      _staged: SynonymStagedRebuild,
+      _result: unknown,
+      _context: TenantContext,
+      finalize?: (session: unknown) => Promise<void>,
+    ) => {
+      if (finalize) await finalize('session');
+    },
+  );
   const failRebuild = vi.fn(async () => undefined);
   const stageProfile = vi.fn(
     s6Overrides.stage ?? (async (value: SynonymRebuildPlan) => staged(value)),
   );
   const reuseOrBuildVector = vi.fn(async (_value, value) => value);
-  const finalize = vi.fn(
-    s6Overrides.finalize ?? (async (value: SynonymRebuildPlan) => staged(value)),
+  const finalizeInSession = vi.fn(
+    s6Overrides.finalizeInSession ?? (async (value: SynonymRebuildPlan) => staged(value)),
   );
+  const finalize = vi.fn(async (value: SynonymRebuildPlan) => staged(value));
   const rollback = vi.fn(async () => undefined);
   const application = new S09RebuildApplication({
     repository: {
@@ -118,6 +129,7 @@ function fixture(
       stageProfile,
       reuseOrBuildVector,
       finalize,
+      finalizeInSession,
       rollback,
     },
     jobs: { getRaw, claimById, start, setStep },
@@ -128,6 +140,7 @@ function fixture(
     failRebuild,
     stageProfile,
     reuseOrBuildVector,
+    finalizeInSession,
     finalize,
     rollback,
     setStep,
@@ -142,7 +155,12 @@ describe('S9 synonym rebuild application', () => {
     );
     expect(state.stageProfile).toHaveBeenCalledWith(expect.objectContaining({ jobId }), context);
     expect(state.reuseOrBuildVector).toHaveBeenCalledTimes(1);
-    expect(state.finalize).toHaveBeenCalledTimes(1);
+    expect(state.finalizeInSession).toHaveBeenCalledWith(
+      expect.objectContaining({ jobId }),
+      expect.objectContaining({ stagingId: 'staging-1' }),
+      context,
+      'session',
+    );
     expect(state.failRebuild).not.toHaveBeenCalled();
     expect(state.completeRebuild).toHaveBeenCalledWith(
       expect.objectContaining({ jobId }),
@@ -159,6 +177,7 @@ describe('S9 synonym rebuild application', () => {
         },
       }),
       context,
+      expect.any(Function),
     );
   });
 
@@ -190,7 +209,7 @@ describe('S9 synonym rebuild application', () => {
 
   it('TEST-X-PGVECTOR-PARTIAL rolls back staged vectors after finalize failure', async () => {
     const state = fixture({
-      finalize: async () => {
+      finalizeInSession: async () => {
         throw createKnowledgeError({
           code: 'KNOWLEDGE_INTERNAL_ERROR',
           requestId: context.requestId,
@@ -204,7 +223,7 @@ describe('S9 synonym rebuild application', () => {
       'dead_letter',
     );
     expect(state.rollback).toHaveBeenCalledWith('staging-1', context);
-    expect(state.completeRebuild).not.toHaveBeenCalled();
+    expect(state.completeRebuild).toHaveBeenCalledTimes(1);
     expect(state.failRebuild).toHaveBeenCalledWith(
       expect.objectContaining({ oldPublishedFileVersion: 1 }),
       expect.objectContaining({

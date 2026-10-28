@@ -180,6 +180,24 @@ export { S7FullTextSearchAdapter } from './adapter/s7-fulltext-search.adapter';
 export { S7ModelGatewaySearchAdapter } from './adapter/s7-model-gateway-search.adapter';
 export { S7VectorSearchAdapter } from './adapter/s7-vector-search.adapter';
 export { S7SearchPipelineFactory } from './adapter/s7-search-pipeline.factory';
+export {
+  S09SynonymOperationApplication,
+  S09_SYNONYM_OPERATION_IDS,
+  isS09SynonymOperation,
+} from './application/operations/s09-synonyms';
+export { S09SynonymApplication } from './application/s09-synonym.application';
+export { S09QueryExpansionApplication } from './application/s09-query-expansion.application';
+export { S09RebuildApplication } from './application/s09-rebuild.application';
+export { S09SynonymQueryExpansionAdapter } from './adapter/s09-synonym-query-expansion.adapter';
+export { S09S6RebuildIndexAdapter, S09SynonymS6Adapter } from './adapter/s09-synonym-s6.adapter';
+export { KnowledgeSynonymRepository } from './repository/s09-synonym.repository';
+export type {
+  S09QueryExpansionPort,
+  S09QueryExpansionResult,
+  S09S6RebuildPort,
+  S09SynonymConfigView,
+  S09SynonymRepositoryPort,
+} from './application/s09-synonym.ports';
 export { S7CitationSigner } from './adapter/s7-citation-signer';
 export { S7CitationRepository } from './repository/s7-citation.repository';
 export { S7FilterSourceRepository } from './repository/s7-filter-source.repository';

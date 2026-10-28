@@ -53,6 +53,14 @@ import {
   S8ImageSearchApplication,
   S8ModelResolver,
   S8SearchOperationApplication,
+  S09SynonymOperationApplication,
+  S09SynonymApplication,
+  S09QueryExpansionApplication,
+  S09RebuildApplication,
+  S09SynonymQueryExpansionAdapter,
+  S09S6RebuildIndexAdapter,
+  S09SynonymS6Adapter,
+  KnowledgeSynonymRepository,
   S06JobApplication,
   S06ProcessingApplication,
   S6ProcessingRepository,
@@ -96,9 +104,15 @@ import {
   type S5ArtifactStorePort,
   type TenantContext,
 } from '@kb/service';
+import { mergeExpansions } from '@kb/search';
 import { FileTicketService } from '../../../../sdk/storage/src/file-ticket';
 import { MinioKnowledgeObjectStore } from '../../../../sdk/storage/src/providers/minio';
-import { createDefaultDocumentParser, parseImportTemplate, parseWithLiteParse } from '@kb/parse';
+import {
+  createDefaultDocumentParser,
+  parseImportTemplate,
+  parseSynonymFileBuffer,
+  parseWithLiteParse,
+} from '@kb/parse';
 import { Queue } from 'bullmq';
 import { ObjectStoreArchiveSafetyAdapter } from './archive-safety.adapter';
 import type {
@@ -329,7 +343,8 @@ async function bootstrapRuntime(): Promise<TelemetryKnowledgeApiRuntime> {
     limiter: new S5KeyedSemaphore(10),
   });
   const s5Models = new S5ModelApplication(s5Catalog);
-  const s5BindingRepository = new S5ModelBindingRepository(mongo);
+  const synonymRepository = new KnowledgeSynonymRepository(mongo);
+  const s5BindingRepository = new S5ModelBindingRepository(mongo, synonymRepository);
   const s5ModelBindings = new S5ModelBindingApplication(s5BindingRepository, s5Catalog, access);
   const s5Artifacts = new S5ArtifactRepository(mongo, s5ArtifactStore);
   const s5Qa = new S5QaPipelineAdapter({
@@ -496,6 +511,9 @@ async function bootstrapRuntime(): Promise<TelemetryKnowledgeApiRuntime> {
     content: ingestionContent,
     imports: importRepository,
   });
+  const s09RebuildRef: { current: S09RebuildApplication | undefined } = {
+    current: undefined,
+  };
   const s6Processing = new S06ProcessingApplication({
     jobs: jobExecution,
     store: processingStore,
@@ -507,6 +525,20 @@ async function bootstrapRuntime(): Promise<TelemetryKnowledgeApiRuntime> {
     bindings: s5BindingRepository,
     sync: connectorSync,
     caption: s8Caption,
+    synonymRebuild: {
+      async handleQueue(jobId, workerId, context) {
+        if (!s09RebuildRef.current) {
+          throw createKnowledgeError({
+            code: 'KNOWLEDGE_DEPENDENCY_UNAVAILABLE',
+            requestId: context.requestId,
+            traceId: context.traceId,
+            details: { reason: 's09_rebuild_bootstrap_incomplete' },
+          });
+        }
+        return s09RebuildRef.current.handleQueue(jobId, workerId, context);
+      },
+    },
+    synonymVersion: synonymRepository,
     port: {
       async parse(input, context) {
         const objectRef = await objectRefs.findObjectRef(input.blobRefId, context);
@@ -571,6 +603,82 @@ async function bootstrapRuntime(): Promise<TelemetryKnowledgeApiRuntime> {
       },
     },
   });
+  const synonymRawFiles = {
+    async store(
+      input: {
+        workspaceId: string;
+        knowledgeSpaceId: string;
+        fileName: string;
+        mimeType: string;
+        bytes: Uint8Array;
+        sha256: string;
+      },
+      context: TenantContext,
+    ) {
+      const extension = input.fileName.split('.').at(-1)?.toLowerCase() || 'csv';
+      const objectKey = `ws/${context.workspaceId}/space/${input.knowledgeSpaceId}/synonym/${input.sha256}.${extension}`;
+      const stored = await objectStore.putObject(
+        {
+          key: objectKey,
+          body: input.bytes,
+          sizeBytes: input.bytes.byteLength,
+          contentType: input.mimeType,
+          metadata: { purpose: 'synonym', sha256: input.sha256 },
+          workspaceId: context.workspaceId,
+          knowledgeSpaceId: input.knowledgeSpaceId,
+        },
+        {
+          workspaceId: context.workspaceId,
+          knowledgeSpaceId: input.knowledgeSpaceId,
+          requestId: context.requestId,
+          traceId: context.traceId,
+        },
+      );
+      return {
+        blobId: 'pending-object-ref',
+        provider: objectStore.provider,
+        bucket: objectStore.bucket,
+        objectKey: stored.key,
+        mimeType: input.mimeType,
+        sizeBytes: stored.size,
+        etag: stored.etag,
+        sha256: stored.sha256,
+        originalName: input.fileName,
+      };
+    },
+  };
+  const synonymApplication = new S09SynonymApplication({
+    repository: synonymRepository,
+    parser: { parse: parseSynonymFileBuffer },
+    rawFiles: synonymRawFiles,
+    access,
+  });
+  const s09Operations = new S09SynonymOperationApplication(synonymApplication);
+  const s09Expansion = new S09QueryExpansionApplication(
+    new S09SynonymQueryExpansionAdapter({
+      repository: synonymRepository,
+      mergeExpansions,
+    }),
+  );
+  const s09S6 = new S09SynonymS6Adapter(
+    new S09S6RebuildIndexAdapter({
+      connection: mongo,
+      store: processingStore,
+      vectors: vectorRepository,
+      fulltext: fullTextRepository,
+      processing: {
+        embed(input, context) {
+          return s6Processing.embedForIndex(input, context);
+        },
+      },
+      models: s5Catalog,
+    }),
+  );
+  s09RebuildRef.current = new S09RebuildApplication({
+    repository: synonymRepository,
+    s6: s09S6,
+    jobs: jobExecution,
+  });
   const s06Jobs = new S06JobApplication(jobExecution, segmentIndexes, catalog, access);
   const s7Authorization = new S7SearchAuthorizationAdapter(mongo, access);
   const s7SearchRepository = new S7SearchRepository(mongo, s5Catalog);
@@ -596,6 +704,7 @@ async function bootstrapRuntime(): Promise<TelemetryKnowledgeApiRuntime> {
     pipeline: s7Pipeline,
     citations: s7Citations,
     audits: s7Citations,
+    synonymExpansion: s09Expansion,
   });
   const s7Citation = new S7CitationApplication({
     access: s7Authorization,
@@ -680,6 +789,7 @@ async function bootstrapRuntime(): Promise<TelemetryKnowledgeApiRuntime> {
     s06Jobs,
     s7Operations,
     s8Operations,
+    s09Operations,
   );
   const queues = new Map(
     KNOWLEDGE_QUEUE_NAMES.map((name) => [name, new Queue(name, { connection: redis })]),

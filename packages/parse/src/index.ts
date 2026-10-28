@@ -66,6 +66,19 @@ export {
 export type { LiteParseLoader, S5LiteParseConfig } from './s5/liteparse-provider';
 export { detectAnyDocExtension } from './s5/anydoc-detector';
 export { parseOfd } from './s5/ofd-parser';
+export {
+  SYNONYM_FILE_MAX_BYTES,
+  parseSynonymFileBuffer,
+  readSynonymRows,
+} from './s9/synonym-file.parser';
+export type {
+  ParsedSynonymFile,
+  ParseSynonymFileInput,
+  SynonymFileDiagnostic,
+  SynonymFileFormat,
+  SynonymRawCell,
+  SynonymRawRow,
+} from './s9/synonym-file.parser';
 
 /**
  * 解析所需上下文：兼容既有 DocumentParserPort.parse(request) 调用面。

@@ -1,4 +1,4 @@
-import type { Connection, Model, Types } from 'mongoose';
+import type { ClientSession, Connection, Model, Types } from 'mongoose';
 import { registerKnowledgeModels } from '../../../shared/persistence/schemas/knowledge-index';
 import type {
   KnowledgeSegmentDoc,
@@ -7,6 +7,7 @@ import type {
 import {
   objectIdOf,
   requireWorkspaceId,
+  tenantError,
   type TenantContext,
 } from '../../../shared/persistence/knowledge/tenant';
 import type {
@@ -281,6 +282,7 @@ export class S6ProcessingRepository implements S6ProcessingStorePort {
       expectedVersion: number;
       fullTextVersion: number;
       indexes: KnowledgeSegmentDoc['indexes'];
+      synonymVersion?: number;
     },
     context: TenantContext,
   ) {
@@ -295,6 +297,7 @@ export class S6ProcessingRepository implements S6ProcessingStorePort {
       {
         $set: {
           indexes: input.indexes,
+          ...(input.synonymVersion === undefined ? {} : { synonymVersion: input.synonymVersion }),
           indexStatus: 'indexed',
           indexErrorCode: null,
           updatedByMemberId: context.memberId,
@@ -357,5 +360,56 @@ export class S6ProcessingRepository implements S6ProcessingStorePort {
       },
     );
     return result.modifiedCount;
+  }
+
+  async finalizeSynonymIndexesInSession(
+    input: {
+      segments: ReadonlyArray<{
+        segmentId: string;
+        expectedVersion: number;
+        indexes: KnowledgeSegmentDoc['indexes'];
+        fullTextTokens: string;
+        fullTextVersion: number;
+        synonymVersion: number;
+      }>;
+    },
+    context: TenantContext,
+    session: unknown,
+  ): Promise<Record<string, number>> {
+    const versions: Record<string, number> = {};
+    for (const segment of input.segments) {
+      const updated = await this.segments
+        .findOneAndUpdate(
+          {
+            _id: objectIdOf(segment.segmentId, context, 'segmentId'),
+            workspaceId: requireWorkspaceId(context),
+            version: segment.expectedVersion,
+            indexStatus: 'indexed',
+            deletedAt: null,
+          },
+          {
+            $set: {
+              indexes: segment.indexes,
+              fullTextTokens: segment.fullTextTokens,
+              fullTextVersion: segment.fullTextVersion,
+              synonymVersion: segment.synonymVersion,
+              indexStatus: 'indexed',
+              indexErrorCode: null,
+              updatedByMemberId: context.memberId,
+            },
+            $inc: { version: 1 },
+          },
+          { new: true, session: session as ClientSession },
+        )
+        .lean();
+      if (!updated) {
+        throw tenantError(context, 'KNOWLEDGE_CONFLICT', {
+          segmentId: segment.segmentId,
+          expectedVersion: segment.expectedVersion,
+        });
+      }
+      versions[segment.segmentId] = updated.version;
+    }
+    return versions;
   }
 }

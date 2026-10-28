@@ -55,7 +55,7 @@ export interface S6SegmentRecord {
   indexErrorCode: string | null;
   imageBlobRefId?: string | null;
   imageDescription?: string | null;
-  synonymVersion: number;
+  synonymVersion?: number;
   version: number;
 }
 
@@ -208,9 +208,32 @@ export interface S6VectorPort {
     },
     context: TenantContext,
   ): Promise<{ deleted: number; byProfile: Record<string, number> }>;
+  deleteByIds?(
+    input: {
+      workspaceId: string;
+      dimension: 768 | 1024 | 1536 | 3072;
+      vectorIds: readonly string[];
+    },
+    context: TenantContext,
+  ): Promise<{ deleted: number }>;
 }
 
 export interface S6FullTextPort {
+  prepare?(input: {
+    segmentId: string;
+    sourceVersion: number;
+    indexVersion: number;
+    question: string;
+    answer: string;
+    content: string;
+    title?: string;
+    searchEnabled: boolean;
+  }): {
+    fullTextTokens: string;
+    fullTextVersion: number;
+    tokenizerVersion: string;
+    tokensHash: string;
+  };
   project(
     input: {
       segmentId: string;
@@ -280,6 +303,7 @@ export interface S6ProcessingStorePort {
       expectedVersion: number;
       fullTextVersion: number;
       indexes: SegmentIndexValue[];
+      synonymVersion?: number;
     },
     context: TenantContext,
   ): Promise<S6SegmentRecord | null>;
@@ -293,6 +317,20 @@ export interface S6ProcessingStorePort {
     filter: { resourceType: 'source' | 'segment'; resourceId: string },
     context: TenantContext,
   ): Promise<number>;
+  finalizeSynonymIndexesInSession?(
+    input: {
+      segments: ReadonlyArray<{
+        segmentId: string;
+        expectedVersion: number;
+        indexes: SegmentIndexValue[];
+        fullTextTokens: string;
+        fullTextVersion: number;
+        synonymVersion: number;
+      }>;
+    },
+    context: TenantContext,
+    session: unknown,
+  ): Promise<Record<string, number>>;
 }
 
 export type KnowledgeSourceStatus =

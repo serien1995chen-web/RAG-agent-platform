@@ -16,11 +16,15 @@ export class KnowledgeFullTextRepository {
     this.segments = registerKnowledgeModels(connection).KnowledgeSegment;
   }
 
+  prepare(input: FullTextProjectionInput) {
+    return projectFullText(input);
+  }
+
   async project(
     input: FullTextProjectionInput & { expectedVersion: number },
     context: TenantContext,
   ) {
-    const projection = projectFullText(input);
+    const projection = this.prepare(input);
     const updated = await this.segments.findOneAndUpdate(
       {
         _id: objectIdOf(input.segmentId, context, 'segmentId'),

@@ -17,6 +17,8 @@ import {
   type SynonymStagedRebuild,
 } from '../../src/modules/knowledge/domain/s09-synonym-rebuild';
 import { KnowledgeSynonymRepository } from '../../src/modules/knowledge/repository/s09-synonym.repository';
+import { S7SearchRepository } from '../../src/modules/knowledge/repository/s7-search.repository';
+import { S5MockModelCatalog } from '../../src/modules/knowledge/adapter/s5-aiproxy-catalog.adapter';
 import type { S09CreatePendingVersionInput } from '../../src/modules/knowledge/application/s09-synonym.ports';
 
 function requiredEnv(name: string): string {
@@ -189,7 +191,7 @@ async function createSourceAndBinding() {
     createdByMemberId: context.memberId,
     updatedByMemberId: context.memberId,
     modelType: 'embedding',
-    modelId: 'embedding-768',
+    modelId: 'mock-embedding-768',
     displayName: 'Embedding 768',
     requiredCapabilities: ['text-embedding', 'dimension:768'],
     status: 'active',
@@ -302,6 +304,67 @@ describe('S9 synonym repository', () => {
         context,
       ),
     ).rejects.toMatchObject({ problem: { error: { code: 'KNOWLEDGE_CONFLICT' } } });
+  }, 60_000);
+
+  it('TEST-MODEL-002-BLOCK creates a model-change rebuild and switches the query profile atomically', async () => {
+    const checksum = createHash('sha256').update('model-change').digest('hex');
+    const first = await repository.createPendingVersion(
+      String(knowledgeSpaceId),
+      pendingInput({
+        checksum,
+        idempotencyKey: `model-change-initial-${suffix}`,
+      }),
+      context,
+    );
+    await completeJob(first.job!.jobId);
+    const models = registerKnowledgeModels(connection);
+    await models.KnowledgeModelBinding.updateOne(
+      {
+        workspaceId,
+        knowledgeSpaceId,
+        modelType: 'embedding',
+      },
+      {
+        $set: {
+          modelId: 'mock-embedding-1024',
+          displayName: 'Embedding 1024',
+          requiredCapabilities: ['text-embedding', 'dimension:1024'],
+          activeQueryModelId: 'mock-embedding-768',
+          activeQueryDimension: 768,
+        },
+      },
+    );
+    const job = await connection.transaction((session) =>
+      repository.requestModelChangeRebuildInSession(
+        {
+          spaceId: String(knowledgeSpaceId),
+          targetModelId: 'mock-embedding-1024',
+          targetDimension: 1024,
+        },
+        context,
+        session,
+      ),
+    );
+    expect(job).toMatchObject({
+      kind: 'synonym_rebuild',
+      status: 'queued',
+      inputSnapshot: {
+        reason: 'model_change',
+        fileVersion: 1,
+      },
+    });
+    const search = new S7SearchRepository(connection, new S5MockModelCatalog());
+    await expect(
+      search.resolveModels(String(knowledgeSpaceId), false, context),
+    ).resolves.toMatchObject({
+      embedding: { modelId: 'mock-embedding-768', dimension: 768 },
+    });
+    await completeJob(job!.jobId);
+    await expect(
+      search.resolveModels(String(knowledgeSpaceId), false, context),
+    ).resolves.toMatchObject({
+      embedding: { modelId: 'mock-embedding-1024', dimension: 1024 },
+    });
   }, 60_000);
 
   it('TEST-SEARCH-003-BLOCK reuses checksum history and rejects idempotency body conflicts', async () => {

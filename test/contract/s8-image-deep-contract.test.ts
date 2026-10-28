@@ -21,7 +21,7 @@ const S9_OPERATIONS = [
 ] as const;
 
 describe('S8 contract and runtime closure', () => {
-  it('promotes only the two S8 operations and leaves all S9 synonyms deferred', () => {
+  it('retains the two S8 operations in the final S8 and S9 runtime union', () => {
     const runtime = new Set(RUNTIME_ROUTE_REGISTRY.map((route) => route.operationId));
     const deferred = new Set(DEFERRED_OPERATION_MANIFEST.map((route) => route.operationId));
     for (const operationId of S8_OPERATIONS) {
@@ -29,11 +29,11 @@ describe('S8 contract and runtime closure', () => {
       expect(deferred.has(operationId), operationId).toBe(false);
     }
     for (const operationId of S9_OPERATIONS) {
-      expect(runtime.has(operationId), operationId).toBe(false);
-      expect(deferred.has(operationId), operationId).toBe(true);
+      expect(runtime.has(operationId), operationId).toBe(true);
+      expect(deferred.has(operationId), operationId).toBe(false);
     }
-    expect(RUNTIME_ROUTE_REGISTRY).toHaveLength(102);
-    expect(DEFERRED_OPERATION_MANIFEST).toHaveLength(18);
+    expect(RUNTIME_ROUTE_REGISTRY).toHaveLength(110);
+    expect(DEFERRED_OPERATION_MANIFEST).toHaveLength(10);
     expect(TARGET_CONTRACT_COUNTS).toEqual({
       paths: 92,
       operations: 120,

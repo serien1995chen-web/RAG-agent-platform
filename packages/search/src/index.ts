@@ -65,6 +65,20 @@ export { mergeMultiSpaceCitations } from './multi';
 export type { MultiSpaceMergeResult, MultiSpaceSearchSlice } from './multi';
 export { recallCandidates } from './recall';
 export {
+  SYNONYM_QUERY_MAX_CODE_POINTS,
+  expandQuery,
+  fallbackSynonymExpansion,
+  mergeExpansions,
+  normalizeSynonymTerm,
+  protectStandardTerms,
+} from './synonym-expansion';
+export type {
+  SynonymExpansionContext,
+  SynonymExpansionHit,
+  SynonymExpansionMapping,
+  SynonymExpansionResult,
+} from './synonym-expansion';
+export {
   IMAGE_BLOCK_MIXED_WEIGHT,
   IMAGE_CAPTION_WEIGHT,
   IMAGE_VECTOR_WEIGHT,
@@ -92,4 +106,6 @@ export type {
   SearchHydrationResult,
   SearchPipelineResult,
   SearchPipelinePort,
+  SearchQueryExpansionHit,
+  SearchQueryExpansionResult,
 } from './types';

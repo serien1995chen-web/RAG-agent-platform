@@ -852,6 +852,19 @@ export class KnowledgeSynonymRepository implements S09SynonymRepositoryPort {
       : null;
   }
 
+  async getPublishedFileVersion(spaceId: string, context: TenantContext): Promise<number> {
+    const config = await this.configs
+      .findOne({
+        workspaceId: requireWorkspaceId(context),
+        knowledgeSpaceId: objectIdOf(spaceId, context, 'spaceId'),
+        deletedAt: null,
+      })
+      .select({ publishedFileVersion: 1 })
+      .lean<{ publishedFileVersion: number | null }>()
+      .exec();
+    return config?.publishedFileVersion ?? 0;
+  }
+
   async assertPublishedVersion(
     spaceId: string,
     fileVersion: number,
@@ -1150,6 +1163,127 @@ export class KnowledgeSynonymRepository implements S09SynonymRepositoryPort {
     return jobView(created.toObject() as unknown as KnowledgeJobDoc & { _id: Types.ObjectId });
   }
 
+  async requestModelChangeRebuildInSession(
+    input: {
+      spaceId: string;
+      targetModelId: string;
+      targetDimension: 768 | 1024 | 1536 | 3072;
+    },
+    context: TenantContext,
+    session: ClientSession,
+  ): Promise<S09SynonymJobView | null> {
+    const workspaceId = requireWorkspaceId(context);
+    const spaceObjectId = objectIdOf(input.spaceId, context, 'spaceId');
+    const current = await this.configs
+      .findOne({
+        workspaceId,
+        knowledgeSpaceId: spaceObjectId,
+        deletedAt: null,
+      })
+      .session(session)
+      .lean<Plain<KnowledgeSynonymConfigDoc>>()
+      .exec();
+    if (
+      !current ||
+      !current.enabled ||
+      current.status === 'disabled' ||
+      current.publishedFileVersion === null
+    ) {
+      return null;
+    }
+    if (current.status === 'rebuilding' || current.pendingJobId) {
+      throw conflict(context, {
+        reason: 'synonym_rebuild_in_progress',
+        spaceId: input.spaceId,
+      });
+    }
+    const sourceIds = (
+      await this.sources
+        .find({
+          workspaceId,
+          knowledgeSpaceId: spaceObjectId,
+          searchEnabled: true,
+          processingStatus: { $in: ['ready', 'partial'] },
+          deletedAt: null,
+        })
+        .sort({ _id: 1 })
+        .select({ _id: 1 })
+        .session(session)
+        .lean<Array<{ _id: Types.ObjectId }>>()
+        .exec()
+    ).map((source) => String(source._id));
+    const updated = await this.configs
+      .findOneAndUpdate(
+        {
+          _id: current._id,
+          workspaceId,
+          version: current.version,
+          deletedAt: null,
+          status: { $ne: 'rebuilding' },
+        },
+        {
+          $set: {
+            status: 'rebuilding',
+            pendingFileVersion: current.publishedFileVersion,
+            pendingReason: 'model_change',
+            pendingStartedAt: new Date(),
+            pendingSourceIds: sourceIds,
+            lastError: null,
+            updatedByMemberId: context.memberId,
+          },
+          $inc: { version: 1 },
+        },
+        { new: true, session },
+      )
+      .lean<Plain<KnowledgeSynonymConfigDoc>>()
+      .exec();
+    if (!updated) {
+      throw conflict(context, {
+        reason: 'config_cas',
+        spaceId: input.spaceId,
+      });
+    }
+    const job = await this.createRebuildJobInSession({
+      config: updated,
+      reason: 'model_change',
+      fileVersion: current.publishedFileVersion,
+      sourceIds,
+      expectedActiveFileVersion: current.activeFileVersion,
+      context,
+      session,
+    });
+    await this.configs.updateOne(
+      { _id: current._id, workspaceId, version: updated.version },
+      {
+        $set: { pendingJobId: job.jobId, updatedByMemberId: context.memberId },
+        $inc: { version: 1 },
+      },
+      { session },
+    );
+    await this.audits.create(
+      [
+        auditDocument({
+          workspaceId,
+          knowledgeSpaceId: spaceObjectId,
+          context,
+          action: 'synonym.rebuild.request',
+          resourceId: input.spaceId,
+          outcome: 'succeeded',
+          safeDiff: {
+            reason: 'model_change',
+            fileVersion: current.publishedFileVersion,
+            sourceCount: sourceIds.length,
+            jobId: job.jobId,
+            targetModelId: input.targetModelId,
+            targetDimension: input.targetDimension,
+          },
+        }),
+      ],
+      { session },
+    );
+    return job;
+  }
+
   async createManualRebuild(
     spaceId: string,
     input: { version: number },
@@ -1339,6 +1473,7 @@ export class KnowledgeSynonymRepository implements S09SynonymRepositoryPort {
     staged: SynonymStagedRebuild,
     result: SynonymRebuildResult,
     context: TenantContext,
+    finalize?: (session: unknown) => Promise<void>,
   ): Promise<void> {
     const workspaceId = requireWorkspaceId(context);
     const spaceObjectId = objectIdOf(plan.knowledgeSpaceId, context, 'spaceId');
@@ -1377,6 +1512,7 @@ export class KnowledgeSynonymRepository implements S09SynonymRepositoryPort {
         .lean<KnowledgeJobDoc>()
         .exec();
       if (!job) throw conflict(context, { reason: 'synonym_job_commit_cas', jobId: plan.jobId });
+      if (finalize) await finalize(session);
       const currentConfig = await this.configs
         .findOne({
           workspaceId,
@@ -1461,24 +1597,6 @@ export class KnowledgeSynonymRepository implements S09SynonymRepositoryPort {
           }),
         ],
         { session },
-      );
-      await createKnowledgeOutboxEvent(
-        this.connection,
-        {
-          workspaceId,
-          knowledgeSpaceId: plan.knowledgeSpaceId,
-          eventType: 'synonym_rebuild.cleanup_candidates',
-          aggregateType: 'job',
-          aggregateId: plan.jobId,
-          queue: 'knowledge-cleanup',
-          payload: {
-            jobId: plan.jobId,
-            retentionDays: 30,
-            cleanupCandidates: result.cleanupCandidates,
-          },
-        },
-        context,
-        session,
       );
     });
   }

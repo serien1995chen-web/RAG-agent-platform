@@ -346,6 +346,45 @@ export class KnowledgeVectorRepository {
     return { deleted: result.rowCount ?? 0 };
   }
 
+  async deleteByIds(
+    input: {
+      workspaceId: string;
+      dimension: 768 | 1024 | 1536 | 3072;
+      vectorIds: readonly string[];
+    },
+    context: TenantContext,
+  ): Promise<{ deleted: number }> {
+    if (input.workspaceId !== context.workspaceId) {
+      throw vectorError(context, 'KNOWLEDGE_VALIDATION_FAILED', {
+        field: 'workspaceId',
+        reason: 'tenant_mismatch',
+      });
+    }
+    if (input.vectorIds.length === 0) return { deleted: 0 };
+    const profile = vectorProfileOfDimension(input.dimension);
+    if (!profile) {
+      throw vectorError(context, 'KNOWLEDGE_VALIDATION_FAILED', {
+        field: 'dimension',
+        actual: input.dimension,
+      });
+    }
+    try {
+      const result = await this.pool.query(
+        `DELETE FROM ${profile.tableName}
+         WHERE workspace_id = $1
+           AND id = ANY($2::uuid[])`,
+        [input.workspaceId, [...input.vectorIds]],
+      );
+      return { deleted: result.rowCount ?? 0 };
+    } catch {
+      throw vectorError(context, 'KNOWLEDGE_DEPENDENCY_UNAVAILABLE', {
+        dependency: 'postgres',
+        operation: 'vector_delete_by_ids',
+        profile: profile.tableName,
+      });
+    }
+  }
+
   async cleanupUnreferenced(
     input: {
       workspaceId: string;

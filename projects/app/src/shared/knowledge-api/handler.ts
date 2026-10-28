@@ -11,12 +11,14 @@ import type { SafeAttributes, SafeLogFields } from '@kb/otel';
 import type { NextApiHandler, NextApiRequest, NextApiResponse } from 'next';
 import { bodyByteLength, requestHash } from './serialize';
 import { requestPathname, resolveRequestIdentity } from './request-meta';
+import { resolveSynonymMultipart, SYNONYM_MULTIPART_MAX_BYTES } from './s09-synonym-multipart';
 import type { KnowledgeApiRuntime, KnowledgeAuthSubject, KnowledgeDispatchResult } from './types';
 
 const PUBLIC_OPERATIONS = new Set(['API-OPENAPI']);
 const WRITE_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 const MAX_REQUEST_BODY_BYTES = 10 * 1024 * 1024;
 const MAX_UPLOAD_PART_BYTES = 8 * 1024 * 1024;
+const SYNONYM_MULTIPART_OPERATIONS = new Set(['API-SYNONYM-UPLOAD', 'API-SYNONYM-UPDATE']);
 
 type TelemetryKnowledgeApiRuntime = KnowledgeApiRuntime & {
   withSpan<T>(name: string, attributes: SafeAttributes, fn: () => Promise<T> | T): Promise<T>;
@@ -132,9 +134,13 @@ async function readStreamBody(
 async function resolveRequestBody(
   request: NextApiRequest,
   rawBinary: boolean,
+  operationId: string,
   requestId: string,
   traceId: string,
 ): Promise<unknown> {
+  if (SYNONYM_MULTIPART_OPERATIONS.has(operationId)) {
+    return resolveSynonymMultipart(request, requestId, traceId);
+  }
   if (request.body !== undefined && !(request.body instanceof Uint8Array)) {
     return request.body;
   }
@@ -277,12 +283,20 @@ export function createKnowledgeApiHandler(): NextApiHandler {
       const requestBody = await resolveRequestBody(
         request,
         route.operationId === 'API-UPLOAD-PART',
+        route.operationId,
         requestId,
         traceId,
       );
       const maxBodyBytes =
-        route.operationId === 'API-UPLOAD-PART' ? MAX_UPLOAD_PART_BYTES : MAX_REQUEST_BODY_BYTES;
-      if (bodyByteLength(requestBody) > maxBodyBytes) {
+        route.operationId === 'API-UPLOAD-PART'
+          ? MAX_UPLOAD_PART_BYTES
+          : SYNONYM_MULTIPART_OPERATIONS.has(route.operationId)
+            ? SYNONYM_MULTIPART_MAX_BYTES
+            : MAX_REQUEST_BODY_BYTES;
+      if (
+        !SYNONYM_MULTIPART_OPERATIONS.has(route.operationId) &&
+        bodyByteLength(requestBody) > maxBodyBytes
+      ) {
         throw createKnowledgeError({
           code: 'KNOWLEDGE_PAYLOAD_TOO_LARGE',
           requestId,

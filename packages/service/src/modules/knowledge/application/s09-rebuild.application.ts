@@ -67,22 +67,31 @@ export class S09RebuildApplication {
         },
         context,
       );
-      staged = await this.input.s6.finalize(plan, staged, context);
-      await this.input.jobs.setStep(
-        {
-          jobId: plan.jobId,
-          stepKey: 'switch-synonym-index',
-          status: 'succeeded',
-          idempotencyKey: `s9-switch:${plan.jobId}:${plan.candidateFileVersion}`,
-          evidence: {
-            indexedSegmentVersions: staged.indexedSegmentVersions,
-            cleanupCandidateCount: staged.cleanupCandidates.length,
-          },
-        },
-        context,
-      );
       const result = rebuildResult(plan, staged);
-      await this.input.repository.completeRebuild(plan, staged, result, context);
+      await this.input.repository.completeRebuild(
+        plan,
+        staged,
+        result,
+        context,
+        async (session) => {
+          staged = await this.input.s6.finalizeInSession(plan, staged!, context, session);
+        },
+      );
+      await this.input.jobs
+        .setStep(
+          {
+            jobId: plan.jobId,
+            stepKey: 'switch-synonym-index',
+            status: 'succeeded',
+            idempotencyKey: `s9-switch:${plan.jobId}:${plan.candidateFileVersion}`,
+            evidence: {
+              indexedSegmentVersions: staged.indexedSegmentVersions,
+              cleanupCandidateCount: staged.cleanupCandidates.length,
+            },
+          },
+          context,
+        )
+        .catch(() => undefined);
       return 'succeeded';
     } catch (error) {
       const evidence = failureEvidence(error, staged ? 'finalize' : 'stage');

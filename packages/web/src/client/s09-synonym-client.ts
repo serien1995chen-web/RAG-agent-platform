@@ -73,7 +73,7 @@ export class S09SynonymClient {
 
   constructor(private readonly options: S09SynonymClientOptions) {
     this.baseUrl = (options.baseUrl ?? '').replace(/\/$/, '');
-    this.fetchImpl = options.fetchImpl ?? fetch;
+    this.fetchImpl = options.fetchImpl ?? globalThis.fetch.bind(globalThis);
     this.keyFactory = options.idempotencyKeyFactory ?? (() => crypto.randomUUID());
   }
 
