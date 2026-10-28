@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "count": 25,
+  "count": 20,
   "status": "DEFERRED",
   "operations": [
     {
@@ -153,31 +153,6 @@
       "reason": "OUT_OF_ARCHITECTURE_BASELINE_RUNTIME_SCOPE"
     },
     {
-      "operationId": "API-CITATION-GET",
-      "method": "GET",
-      "path": "/v1/knowledge/citations/{citationId}",
-      "group": "citation",
-      "requestSchema": null,
-      "responseSchema": "Citation",
-      "scopes": [
-        "knowledge:search"
-      ],
-      "idempotent": false,
-      "rateLimit": "100 QPS/workspace",
-      "timeoutMs": 5000,
-      "audit": false,
-      "downstreamAllowed": true,
-      "runtime": false,
-      "stage": "F3",
-      "targetSection": "9.2",
-      "accId": "ACC-CAP-SEARCH-009",
-      "capabilityIds": [
-        "SEARCH-009",
-        "DOWN-003"
-      ],
-      "reason": "OUT_OF_ARCHITECTURE_BASELINE_RUNTIME_SCOPE"
-    },
-    {
       "operationId": "API-OPS-CLEANUP",
       "method": "POST",
       "path": "/v1/knowledge/operations/cleanup",
@@ -277,59 +252,6 @@
       "reason": "OUT_OF_ARCHITECTURE_BASELINE_RUNTIME_SCOPE"
     },
     {
-      "operationId": "API-SEARCH-FULLTEXT",
-      "method": "POST",
-      "path": "/v1/knowledge/search/full-text",
-      "group": "search",
-      "requestSchema": "SearchRequest",
-      "responseSchema": "SearchResponse",
-      "scopes": [
-        "knowledge:search"
-      ],
-      "idempotent": true,
-      "rateLimit": "50 QPS/workspace",
-      "timeoutMs": 30000,
-      "audit": true,
-      "downstreamAllowed": true,
-      "runtime": false,
-      "stage": "F3",
-      "targetSection": "9.2",
-      "accId": "ACC-CAP-SEARCH-002",
-      "capabilityIds": [
-        "SEARCH-002",
-        "SEARCH-005"
-      ],
-      "reason": "OUT_OF_ARCHITECTURE_BASELINE_RUNTIME_SCOPE"
-    },
-    {
-      "operationId": "API-SEARCH-HYBRID",
-      "method": "POST",
-      "path": "/v1/knowledge/search/hybrid",
-      "group": "search",
-      "requestSchema": "SearchRequest",
-      "responseSchema": "SearchResponse",
-      "scopes": [
-        "knowledge:search"
-      ],
-      "idempotent": true,
-      "rateLimit": "50 QPS/workspace",
-      "timeoutMs": 30000,
-      "audit": true,
-      "downstreamAllowed": true,
-      "runtime": false,
-      "stage": "F3",
-      "targetSection": "9.2",
-      "accId": "ACC-CAP-SEARCH-002",
-      "capabilityIds": [
-        "SEARCH-002",
-        "SEARCH-005",
-        "SEARCH-004",
-        "DOWN-001",
-        "DOWN-003"
-      ],
-      "reason": "OUT_OF_ARCHITECTURE_BASELINE_RUNTIME_SCOPE"
-    },
-    {
       "operationId": "API-SEARCH-IMAGE",
       "method": "POST",
       "path": "/v1/knowledge/search/image",
@@ -351,57 +273,6 @@
       "capabilityIds": [
         "SEARCH-006",
         "MULTI-001",
-        "DOWN-002"
-      ],
-      "reason": "OUT_OF_ARCHITECTURE_BASELINE_RUNTIME_SCOPE"
-    },
-    {
-      "operationId": "API-SEARCH-MULTI",
-      "method": "POST",
-      "path": "/v1/knowledge/search/multi-space",
-      "group": "search",
-      "requestSchema": "MultiSpaceSearchRequest",
-      "responseSchema": "SearchResponse",
-      "scopes": [
-        "knowledge:search"
-      ],
-      "idempotent": true,
-      "rateLimit": "30 QPS/workspace",
-      "timeoutMs": 60000,
-      "audit": true,
-      "downstreamAllowed": true,
-      "runtime": false,
-      "stage": "F3",
-      "targetSection": "9.2",
-      "accId": "ACC-CAP-SEARCH-005",
-      "capabilityIds": [
-        "SEARCH-005",
-        "SEARCH-007",
-        "DOWN-001"
-      ],
-      "reason": "OUT_OF_ARCHITECTURE_BASELINE_RUNTIME_SCOPE"
-    },
-    {
-      "operationId": "API-SEARCH-SEMANTIC",
-      "method": "POST",
-      "path": "/v1/knowledge/search/semantic",
-      "group": "search",
-      "requestSchema": "SearchRequest",
-      "responseSchema": "SearchResponse",
-      "scopes": [
-        "knowledge:search"
-      ],
-      "idempotent": true,
-      "rateLimit": "50 QPS/workspace",
-      "timeoutMs": 30000,
-      "audit": true,
-      "downstreamAllowed": true,
-      "runtime": false,
-      "stage": "F3",
-      "targetSection": "9.2",
-      "accId": "ACC-CAP-SEARCH-001",
-      "capabilityIds": [
-        "SEARCH-001",
         "DOWN-002"
       ],
       "reason": "OUT_OF_ARCHITECTURE_BASELINE_RUNTIME_SCOPE"

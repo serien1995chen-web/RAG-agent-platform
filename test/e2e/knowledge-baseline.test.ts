@@ -515,6 +515,8 @@ beforeAll(async () => {
     KB_E2E_FILE_TICKET_SECRET: `file-ticket-${suffix}-fixed-secret-value`,
     KB_CREDENTIAL_ENCRYPTION_KEY_REF: 'env:KB_E2E_CREDENTIAL_KEY',
     KB_E2E_CREDENTIAL_KEY: `credential-key-${suffix}-fixed-value-32-bytes`,
+    KB_CITATION_SIGNING_SECRET_REF: 'env:KB_E2E_CITATION_SECRET',
+    KB_E2E_CITATION_SECRET: `e2e-citation-${suffix}-fixed-secret-value`,
     KB_AUTH_MODE: 'mock',
     KB_MOCK_AUTH_TOKEN: authToken,
     KB_MOCK_WORKSPACE_ID: workspaceId,
@@ -2154,7 +2156,7 @@ describe.sequential('knowledge architecture baseline E2E', () => {
                     '系统状态',
                     '连接器',
                     ...(hasSpaceNavigation
-                      ? ['概览', '来源', '导入', '分段', '标签', '访问权限', '任务']
+                      ? ['概览', '来源', '导入', '分段', '标签', '访问权限', '任务', '搜索']
                       : []),
                   ]
                 : [
@@ -2162,7 +2164,16 @@ describe.sequential('knowledge architecture baseline E2E', () => {
                     'System status',
                     'Connectors',
                     ...(hasSpaceNavigation
-                      ? ['Overview', 'Sources', 'Import', 'Segments', 'Tags', 'Access', 'Jobs']
+                      ? [
+                          'Overview',
+                          'Sources',
+                          'Import',
+                          'Segments',
+                          'Tags',
+                          'Access',
+                          'Jobs',
+                          'Search',
+                        ]
                       : []),
                   ];
             const navigationLabels = await primaryNavigation.locator('a').evaluateAll((links) =>
@@ -2509,7 +2520,7 @@ describe.sequential('knowledge architecture baseline E2E', () => {
       },
     });
 
-    expect(runtimeRegistry.count).toBe(95);
+    expect(runtimeRegistry.count).toBe(100);
     const runtimeIds = new Set(
       runtimeRegistry.operations.map((operation) => operation.operationId),
     );

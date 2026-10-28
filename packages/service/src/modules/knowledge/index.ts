@@ -143,6 +143,28 @@ export {
   S06_OPERATION_IDS,
   isS06Operation,
 } from './application/operations/s06-jobs';
+export {
+  S7SearchOperationApplication,
+  S7_OPERATION_IDS,
+  isS7Operation,
+} from './application/s7-search-operation.application';
+export { S7SearchApplication } from './application/s7-search.application';
+export { S7CitationApplication } from './application/s7-citation.application';
+export type {
+  S7BoundModel,
+  S7CitationIssueInput,
+  S7ResolvedModels,
+  S7SearchApplicationDependencies,
+} from './application/s7-search.ports';
+export { S7SearchAuthorizationAdapter } from './adapter/s7-search-authorization.adapter';
+export { S7FullTextSearchAdapter } from './adapter/s7-fulltext-search.adapter';
+export { S7ModelGatewaySearchAdapter } from './adapter/s7-model-gateway-search.adapter';
+export { S7VectorSearchAdapter } from './adapter/s7-vector-search.adapter';
+export { S7SearchPipelineFactory } from './adapter/s7-search-pipeline.factory';
+export { S7CitationSigner } from './adapter/s7-citation-signer';
+export { S7CitationRepository } from './repository/s7-citation.repository';
+export { S7FilterSourceRepository } from './repository/s7-filter-source.repository';
+export { S7SearchRepository } from './repository/s7-search.repository';
 export { S5QaPipelineAdapter } from './application/s5-qa-pipeline';
 export { S5OcrApplication } from './application/s5-ocr.application';
 export { S5ArtifactRepository } from './repository/s5-artifact.repository';

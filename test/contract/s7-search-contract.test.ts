@@ -22,25 +22,27 @@ const S7_OPERATIONS = [
 ] as const;
 
 describe('TEST-SEARCH-001/002/004/005/007/009-BLOCK S7 contract gate', () => {
-  it('keeps all five operations deferred and absent from public runtime/navigation', () => {
+  it('registers all five operations in runtime and exposes the Search route', () => {
     const runtime = JSON.parse(
       readFileSync(
         resolve(root, 'packages/contracts/src/openapi/runtime-registry.data.json'),
         'utf8',
       ),
-    ) as { operations?: string[] } | string[];
+    ) as { operations?: Array<{ operationId: string }> } | string[];
     const deferred = DEFERRED_OPERATION_MANIFEST.map((entry) => entry.operationId);
-    const runtimeIds = Array.isArray(runtime) ? runtime : (runtime.operations ?? []);
-    expect(runtimeIds).not.toEqual(expect.arrayContaining([...S7_OPERATIONS]));
-    expect(deferred).toEqual(expect.arrayContaining([...S7_OPERATIONS]));
+    const runtimeIds = Array.isArray(runtime)
+      ? runtime
+      : (runtime.operations ?? []).map((entry) => entry.operationId);
+    expect(runtimeIds).toEqual(expect.arrayContaining([...S7_OPERATIONS]));
+    expect(deferred).not.toEqual(expect.arrayContaining([...S7_OPERATIONS]));
     expect(existsSync(resolve(root, 'projects/app/src/pages/spaces/[spaceId]/search.tsx'))).toBe(
-      false,
+      true,
     );
     const shell = readFileSync(
       resolve(root, 'packages/web/src/components/knowledge-shell.tsx'),
       'utf8',
     );
-    expect(shell).not.toContain('/search');
+    expect(shell).toContain('/search');
   });
 
   it('keeps route mode, body mode and strict public fields closed', () => {

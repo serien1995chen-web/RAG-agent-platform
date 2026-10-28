@@ -64,6 +64,7 @@ export interface S7SearchWorkbenchProps {
   onRetry: () => void;
   onValueChange?: (value: S7SearchFormValue) => void;
   onFiltersChange?: (filter: SearchFilterApi) => void;
+  rerankAvailable?: boolean;
 }
 
 function ResultMeta(props: { result: SearchApiResponse; labels: S7SearchWorkbenchLabels }) {
@@ -134,6 +135,7 @@ export function S7SearchWorkbench(props: S7SearchWorkbenchProps) {
         spaces={props.spaces}
         labels={props.labels}
         busy={props.state.kind === 'loading'}
+        rerankAvailable={props.rerankAvailable}
         onValueChange={(value) => {
           setDraft(value);
           if (value.mode !== props.mode) props.onModeChange(value.mode);

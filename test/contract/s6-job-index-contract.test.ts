@@ -32,7 +32,7 @@ const S7_OPERATIONS = [
 const S8_OPERATIONS = ['API-SEARCH-IMAGE', 'API-SEARCH-DEEP'] as const;
 
 describe('S6 Job and index contract', () => {
-  it('promotes exactly the 12 S6 operations and keeps S7 deferred', () => {
+  it('retains the 12 S6 operations and registers S7 in phase2', () => {
     const runtimeIds = new Set(RUNTIME_ROUTE_REGISTRY.map((operation) => operation.operationId));
     for (const operationId of S6_OPERATIONS) {
       expect(runtimeIds.has(operationId), operationId).toBe(true);
@@ -41,15 +41,15 @@ describe('S6 Job and index contract', () => {
       DEFERRED_OPERATION_MANIFEST.map((operation) => operation.operationId),
     );
     for (const operationId of S7_OPERATIONS) {
-      expect(runtimeIds.has(operationId), operationId).toBe(false);
-      expect(deferredIds.has(operationId), operationId).toBe(true);
+      expect(runtimeIds.has(operationId), operationId).toBe(true);
+      expect(deferredIds.has(operationId), operationId).toBe(false);
     }
     for (const operationId of S8_OPERATIONS) {
       expect(runtimeIds.has(operationId), operationId).toBe(false);
       expect(deferredIds.has(operationId), operationId).toBe(true);
     }
-    expect(RUNTIME_ROUTE_REGISTRY).toHaveLength(95);
-    expect(DEFERRED_OPERATION_MANIFEST).toHaveLength(25);
+    expect(RUNTIME_ROUTE_REGISTRY).toHaveLength(100);
+    expect(DEFERRED_OPERATION_MANIFEST).toHaveLength(20);
     expect(TARGET_CONTRACT_COUNTS).toEqual({
       paths: 92,
       operations: 120,

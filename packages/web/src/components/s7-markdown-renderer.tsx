@@ -1,10 +1,12 @@
 'use client';
 
+/// <reference path="../vendor/react-syntax-highlighter.d.ts" />
+
 import { Box, Code, Text } from '@chakra-ui/react';
 import { useEffect, useId, useState, type ReactNode } from 'react';
 import ReactMarkdown, { type Components } from 'react-markdown';
-import SyntaxHighlighter from 'react-syntax-highlighter/dist/esm/prism';
-import { vs } from 'react-syntax-highlighter/dist/esm/styles/prism';
+import SyntaxHighlighter from 'react-syntax-highlighter/dist/cjs/prism';
+import { vs } from 'react-syntax-highlighter/dist/cjs/styles/prism';
 import rehypeExternalLinks from 'rehype-external-links';
 import rehypeKatex from 'rehype-katex';
 import rehypeRaw from 'rehype-raw';

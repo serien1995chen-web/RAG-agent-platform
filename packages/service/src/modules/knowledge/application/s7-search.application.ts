@@ -24,7 +24,7 @@ import {
   type SearchFilterSummary,
 } from '@kb/search';
 import type { TenantContext } from '../../../shared/persistence/knowledge/tenant';
-import type { KnowledgeOperationInput, KnowledgeOperationResult } from './knowledge.application';
+import type { KnowledgeOperationInput, KnowledgeOperationResult } from './operation-types';
 import type { S7AuthorizedSpace, S7SearchApplicationDependencies } from './s7-search.ports';
 
 interface SpaceExecution {

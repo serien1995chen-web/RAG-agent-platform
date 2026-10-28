@@ -7,7 +7,7 @@ NOTICE
 生成脚本: scripts/generate-sbom.mjs（禁止手工维护本文件）
 SBOM 产物: artifacts/sbom.json
 
-一、直接依赖（138）
+一、直接依赖（159）
 名称@版本 | 许可证 | scope | 来源 workspace
 @apidevtools/json-schema-ref-parser@11.7.2 | MIT | production | packages/service
 @apidevtools/swagger-parser@10.1.1 | MIT | production | packages/contracts
@@ -50,6 +50,7 @@ SBOM 产物: artifacts/sbom.json
 @types/async-retry@1.4.9 | MIT | development | packages/service
 @types/js-yaml@4.0.9 | MIT | development | packages/contracts
 @types/jsdom@21.1.7 | MIT | development | .
+@types/lodash-es@4.17.12 | MIT | development | packages/search
 @types/mime-types@3.0.1 | MIT | development | packages/parse
 @types/multer@1.4.12 | MIT | development | packages/service
 @types/node-cron@3.0.11 | MIT | development | packages/service
@@ -85,6 +86,7 @@ file-type@21.3.0 | MIT | production | packages/parse
 form-data@4.0.4 | MIT | production | packages/service
 framer-motion@9.1.7 | MIT | production | packages/web
 gpt-tokenizer@3.4.0 | MIT | production | packages/chunk
+hast-util-to-jsx-runtime@2.3.6 | MIT | production | packages/web
 http-proxy-agent@7.0.2 | MIT | production | packages/service
 https-proxy-agent@7.0.6 | MIT | production | packages/service
 husky@8.0.3 | MIT | development | .
@@ -99,8 +101,12 @@ json5@2.2.3 | MIT | development | .
 jsonpath-plus@10.3.0 | MIT | production | packages/service
 jsonrepair@3.13.2 | ISC | production | packages/qa
 jszip@3.10.1 | MIT | production | projects/app
+katex@0.18.2 | MIT | production | packages/web
 lint-staged@16.4.0 | MIT | development | .
+lodash-es@4.18.1 | MIT | production | packages/search
 mammoth@1.11.0 | BSD-2-Clause | production | packages/parse
+marked@18.0.9 | MIT | production | packages/web
+mermaid@11.16.1 | MIT | production | packages/web
 mime-types@3.0.2 | MIT | production | packages/parse
 mime@4.1.0 | MIT | production | sdk/storage
 minio@8.0.7 | Apache-2.0 | production | sdk/storage
@@ -127,8 +133,21 @@ react-day-picker@9.14.0 | MIT | production | packages/web
 react-dom@18.3.1 | MIT | production | projects/app
 react-hook-form@7.43.1 | MIT | production | packages/web
 react-i18next@14.1.2 | MIT | production | packages/web
+react-markdown@9.1.0 | MIT | production | packages/web
+react-syntax-highlighter@15.6.1 | MIT | production | packages/web
 react-textarea-autosize@8.5.8 | MIT | production | packages/web
 react@18.3.1 | MIT | production | packages/web,projects/app
+rehype-external-links@3.0.0 | MIT | production | packages/web
+rehype-katex@7.0.1 | MIT | production | packages/web
+rehype-raw@7.0.0 | MIT | production | packages/web
+rehype-sanitize@6.0.0 | MIT | production | packages/web
+remark-breaks@4.0.0 | MIT | production | packages/web
+remark-gfm@4.0.1 | MIT | production | packages/web
+remark-math@6.0.0 | MIT | production | packages/web
+remark-parse@11.0.0 | MIT | production | packages/web
+remark-rehype@11.1.1 | MIT | production | packages/web
+remend@1.3.0 | Apache-2.0 | production | packages/web
+safe-regex@2.1.1 | MIT | production | packages/search
 sass@1.85.1 | MIT | development | .
 tailwindcss@3.4.18 | MIT | development | .
 tsdown@0.21.10 | MIT | development | .
@@ -138,7 +157,9 @@ turndown@7.2.0 | MIT | production | packages/parse
 typescript-eslint@8.71.0 | MIT | development | .
 typescript@6.0.3 | Apache-2.0 | development | .,packages/acl,packages/chunk,packages/contracts,packages/dal,packages/parse,packages/qa,packages/search,packages/service,packages/web,projects/app,sdk/otel,sdk/storage
 undici@7.29.0 | MIT | production | packages/service
+unified@11.0.5 | MIT | production | packages/web
 use-context-selector@1.4.4 | MIT | production | packages/web
+vfile@6.0.3 | MIT | production | packages/web
 vite@6.4.3 | MIT | development | .
 vitest@4.1.11 | MIT | development | .,packages/acl,packages/chunk,packages/contracts,packages/dal,packages/parse,packages/qa,packages/search,packages/service,packages/web,projects/app,sdk/otel,sdk/storage
 winston@3.17.0 | MIT | production | sdk/otel
@@ -148,7 +169,7 @@ zod-openapi@5.4.6 | MIT | production | packages/contracts
 zod@4.1.12 | MIT | production | packages/contracts,packages/service,packages/web
 zustand@4.5.6 | MIT | production | packages/web
 
-二、传递依赖（1407）
+二、传递依赖（1639）
 名称@版本 | 许可证 | scope | 依赖父链
 @ai-sdk/anthropic@3.0.135 | Apache-2.0 | development | . → @chakra-ui/cli@2.5.8 → cli-welcome@2.2.3 → clear-any-console@1.16.4 → command-code@1.88.0 → @ai-sdk/anthropic@3.0.135
 @ai-sdk/gateway@3.0.221 | Apache-2.0 | development | . → @chakra-ui/cli@2.5.8 → cli-welcome@2.2.3 → clear-any-console@1.16.4 → command-code@1.88.0 → ai@6.0.315 → @ai-sdk/gateway@3.0.221
@@ -158,6 +179,7 @@ zustand@4.5.6 | MIT | production | packages/web
 @ai-sdk/provider@3.0.19 | Apache-2.0 | development | . → @chakra-ui/cli@2.5.8 → cli-welcome@2.2.3 → clear-any-console@1.16.4 → command-code@1.88.0 → @ai-sdk/provider@3.0.19
 @alcalzone/ansi-tokenize@0.3.1 | MIT | development | . → @chakra-ui/cli@2.5.8 → cli-welcome@2.2.3 → clear-any-console@1.16.4 → command-code@1.88.0 → ink@7.1.0 → @alcalzone/ansi-tokenize@0.3.1
 @alloc/quick-lru@5.3.0 | MIT | development | . → tailwindcss@3.4.18 → @alloc/quick-lru@5.3.0
+@antfu/install-pkg@2.1.0 | MIT | production | packages/web → mermaid@11.16.1 → @iconify/utils@3.1.7 → @antfu/install-pkg@2.1.0
 @apidevtools/openapi-schemas@2.1.0 | MIT | production | packages/contracts → @apidevtools/swagger-parser@10.1.1 → @apidevtools/openapi-schemas@2.1.0
 @apidevtools/swagger-methods@3.0.2 | MIT | production | packages/contracts → @apidevtools/swagger-parser@10.1.1 → @apidevtools/swagger-methods@3.0.2
 @asamuzakjp/css-color@3.2.0 | MIT | development | packages/web → jsdom@26.1.0 → cssstyle@4.6.0 → @asamuzakjp/css-color@3.2.0
@@ -289,6 +311,7 @@ zustand@4.5.6 | MIT | production | packages/web
 @babel/types@8.0.6 | MIT | development | . → tsdown@0.21.10 → rolldown-plugin-dts@0.23.2 → ast-kit@3.0.0 → @babel/parser@8.0.6 → @babel/types@8.0.6
 @bcoe/v8-coverage@1.0.2 | MIT | development | . → @vitest/coverage-v8@4.1.11 → @bcoe/v8-coverage@1.0.2
 @borewit/text-codec@0.2.2 | MIT | production | packages/parse → file-type@21.3.0 → token-types@6.1.2 → @borewit/text-codec@0.2.2
+@braintree/sanitize-url@7.1.2 | MIT | production | packages/web → mermaid@11.16.1 → @braintree/sanitize-url@7.1.2
 @chakra-ui/anatomy@2.2.1 | MIT | production | packages/web → @chakra-ui/system@2.6.1 → @chakra-ui/theme-utils@2.0.20 → @chakra-ui/theme@3.3.0 → @chakra-ui/anatomy@2.2.1
 @chakra-ui/color-mode@2.2.0 | MIT | production | packages/web → @chakra-ui/system@2.6.1 → @chakra-ui/color-mode@2.2.0
 @chakra-ui/hooks@2.4.4 | MIT | production | packages/web → @chakra-ui/react@2.10.7 → @chakra-ui/hooks@2.4.4
@@ -305,6 +328,7 @@ zustand@4.5.6 | MIT | production | packages/web
 @chakra-ui/theme@3.4.8 | MIT | production | packages/web → @chakra-ui/react@2.10.7 → @chakra-ui/theme@3.4.8
 @chakra-ui/utils@2.0.15 | MIT | production | packages/web → @chakra-ui/system@2.6.1 → @chakra-ui/utils@2.0.15
 @chakra-ui/utils@2.2.4 | MIT | production | packages/web → @chakra-ui/react@2.10.7 → @chakra-ui/utils@2.2.4
+@chevrotain/types@11.1.2 | Apache-2.0 | production | packages/web → mermaid@11.16.1 → @mermaid-js/parser@1.2.1 → @chevrotain/types@11.1.2
 @clack/core@1.5.1 | MIT | development | . → @chakra-ui/cli@2.5.8 → cli-welcome@2.2.3 → clear-any-console@1.16.4 → command-code@1.88.0 → @clack/prompts@1.8.1 → @clack/core@1.5.1
 @clack/prompts@1.8.1 | MIT | development | . → @chakra-ui/cli@2.5.8 → cli-welcome@2.2.3 → clear-any-console@1.16.4 → command-code@1.88.0 → @clack/prompts@1.8.1
 @colors/colors@1.6.0 | MIT | production | sdk/otel → winston@3.17.0 → logform@2.7.0 → @colors/colors@1.6.0
@@ -346,6 +370,8 @@ zustand@4.5.6 | MIT | production | packages/web
 @humanfs/types@0.15.0 | Apache-2.0 | development | . → eslint@9.39.4 → @humanfs/node@0.16.8 → @humanfs/types@0.15.0
 @humanwhocodes/module-importer@1.0.1 | Apache-2.0 | development | . → eslint@9.39.4 → @humanwhocodes/module-importer@1.0.1
 @humanwhocodes/retry@0.4.3 | Apache-2.0 | development | . → eslint@9.39.4 → @humanwhocodes/retry@0.4.3
+@iconify/types@2.0.0 | MIT | production | packages/web → mermaid@11.16.1 → @iconify/utils@3.1.7 → @iconify/types@2.0.0
+@iconify/utils@3.1.7 | MIT | production | packages/web → mermaid@11.16.1 → @iconify/utils@3.1.7
 @ioredis/commands@1.10.0 | MIT | production | packages/dal → ioredis@5.11.1 → @ioredis/commands@1.10.0
 @isaacs/cliui@8.0.2 | ISC | production | projects/app → archiver@7.0.1 → archiver-utils@5.0.2 → glob@10.4.5 → jackspeak@3.4.3 → @isaacs/cliui@8.0.2
 @jimp/core@1.6.1 | MIT | development | . → @chakra-ui/cli@2.5.8 → cli-welcome@2.2.3 → clear-any-console@1.16.4 → command-code@1.88.0 → jimp@1.6.1 → @jimp/core@1.6.1
@@ -387,6 +413,7 @@ zustand@4.5.6 | MIT | production | packages/web
 @jsdevtools/ono@7.1.3 | MIT | production | packages/contracts → @apidevtools/swagger-parser@10.1.1 → @jsdevtools/ono@7.1.3
 @jsep-plugin/assignment@1.4.0 | MIT | production | packages/service → jsonpath-plus@10.3.0 → @jsep-plugin/assignment@1.4.0
 @jsep-plugin/regex@1.1.0 | MIT | production | packages/service → jsonpath-plus@10.3.0 → @jsep-plugin/regex@1.1.0
+@mermaid-js/parser@1.2.1 | MIT | production | packages/web → mermaid@11.16.1 → @mermaid-js/parser@1.2.1
 @mixmark-io/domino@2.2.0 | BSD-2-Clause | production | packages/parse → turndown@7.2.0 → @mixmark-io/domino@2.2.0
 @mongodb-js/saslprep@1.5.5 | MIT | production | packages/service → mongoose@8.24.5 → mongodb@6.20.0 → @mongodb-js/saslprep@1.5.5
 @next/env@16.3.0 | MIT | production | projects/app → next@16.3.0 → @next/env@16.3.0
@@ -482,10 +509,46 @@ zustand@4.5.6 | MIT | production | packages/web
 @types/body-parser@1.19.6 | MIT | development | packages/service → @types/multer@1.4.12 → @types/express@5.0.6 → @types/body-parser@1.19.6
 @types/chai@5.2.3 | MIT | development | . → vitest@4.1.11 → @vitest/expect@4.1.11 → @types/chai@5.2.3
 @types/connect@3.4.38 | MIT | development | packages/service → @types/multer@1.4.12 → @types/express@5.0.6 → @types/body-parser@1.19.6 → @types/connect@3.4.38
+@types/d3-array@3.2.2 | MIT | production | packages/web → mermaid@11.16.1 → @types/d3@7.4.3 → @types/d3-array@3.2.2
+@types/d3-axis@3.0.6 | MIT | production | packages/web → mermaid@11.16.1 → @types/d3@7.4.3 → @types/d3-axis@3.0.6
+@types/d3-brush@3.0.6 | MIT | production | packages/web → mermaid@11.16.1 → @types/d3@7.4.3 → @types/d3-brush@3.0.6
+@types/d3-chord@3.0.6 | MIT | production | packages/web → mermaid@11.16.1 → @types/d3@7.4.3 → @types/d3-chord@3.0.6
+@types/d3-color@3.1.3 | MIT | production | packages/web → mermaid@11.16.1 → @types/d3@7.4.3 → @types/d3-color@3.1.3
+@types/d3-contour@3.0.6 | MIT | production | packages/web → mermaid@11.16.1 → @types/d3@7.4.3 → @types/d3-contour@3.0.6
+@types/d3-delaunay@6.0.4 | MIT | production | packages/web → mermaid@11.16.1 → @types/d3@7.4.3 → @types/d3-delaunay@6.0.4
+@types/d3-dispatch@3.0.7 | MIT | production | packages/web → mermaid@11.16.1 → @types/d3@7.4.3 → @types/d3-dispatch@3.0.7
+@types/d3-drag@3.0.7 | MIT | production | packages/web → mermaid@11.16.1 → @types/d3@7.4.3 → @types/d3-drag@3.0.7
+@types/d3-dsv@3.0.7 | MIT | production | packages/web → mermaid@11.16.1 → @types/d3@7.4.3 → @types/d3-dsv@3.0.7
+@types/d3-ease@3.0.2 | MIT | production | packages/web → mermaid@11.16.1 → @types/d3@7.4.3 → @types/d3-ease@3.0.2
+@types/d3-fetch@3.0.7 | MIT | production | packages/web → mermaid@11.16.1 → @types/d3@7.4.3 → @types/d3-fetch@3.0.7
+@types/d3-force@3.0.10 | MIT | production | packages/web → mermaid@11.16.1 → @types/d3@7.4.3 → @types/d3-force@3.0.10
+@types/d3-format@3.0.4 | MIT | production | packages/web → mermaid@11.16.1 → @types/d3@7.4.3 → @types/d3-format@3.0.4
+@types/d3-geo@3.1.1 | MIT | production | packages/web → mermaid@11.16.1 → @types/d3@7.4.3 → @types/d3-geo@3.1.1
+@types/d3-hierarchy@3.1.7 | MIT | production | packages/web → mermaid@11.16.1 → @types/d3@7.4.3 → @types/d3-hierarchy@3.1.7
+@types/d3-interpolate@3.0.4 | MIT | production | packages/web → mermaid@11.16.1 → @types/d3@7.4.3 → @types/d3-interpolate@3.0.4
+@types/d3-path@3.1.1 | MIT | production | packages/web → mermaid@11.16.1 → @types/d3@7.4.3 → @types/d3-path@3.1.1
+@types/d3-polygon@3.0.2 | MIT | production | packages/web → mermaid@11.16.1 → @types/d3@7.4.3 → @types/d3-polygon@3.0.2
+@types/d3-quadtree@3.0.6 | MIT | production | packages/web → mermaid@11.16.1 → @types/d3@7.4.3 → @types/d3-quadtree@3.0.6
+@types/d3-random@3.0.4 | MIT | production | packages/web → mermaid@11.16.1 → @types/d3@7.4.3 → @types/d3-random@3.0.4
+@types/d3-scale-chromatic@3.1.0 | MIT | production | packages/web → mermaid@11.16.1 → @types/d3@7.4.3 → @types/d3-scale-chromatic@3.1.0
+@types/d3-scale@4.0.9 | MIT | production | packages/web → mermaid@11.16.1 → @types/d3@7.4.3 → @types/d3-scale@4.0.9
+@types/d3-selection@3.0.12 | MIT | production | packages/web → mermaid@11.16.1 → @types/d3@7.4.3 → @types/d3-selection@3.0.12
+@types/d3-shape@3.2.0 | MIT | production | packages/web → mermaid@11.16.1 → @types/d3@7.4.3 → @types/d3-shape@3.2.0
+@types/d3-time-format@4.0.3 | MIT | production | packages/web → mermaid@11.16.1 → @types/d3@7.4.3 → @types/d3-time-format@4.0.3
+@types/d3-time@3.0.4 | MIT | production | packages/web → mermaid@11.16.1 → @types/d3@7.4.3 → @types/d3-time@3.0.4
+@types/d3-timer@3.0.2 | MIT | production | packages/web → mermaid@11.16.1 → @types/d3@7.4.3 → @types/d3-timer@3.0.2
+@types/d3-transition@3.0.9 | MIT | production | packages/web → mermaid@11.16.1 → @types/d3@7.4.3 → @types/d3-transition@3.0.9
+@types/d3-zoom@3.0.9 | MIT | production | packages/web → mermaid@11.16.1 → @types/d3@7.4.3 → @types/d3-zoom@3.0.9
+@types/d3@7.4.3 | MIT | production | packages/web → mermaid@11.16.1 → @types/d3@7.4.3
+@types/debug@4.1.13 | MIT | production | packages/web → remark-parse@11.0.0 → mdast-util-from-markdown@2.1.0 → micromark@4.0.3 → @types/debug@4.1.13
 @types/deep-eql@4.0.2 | MIT | development | . → vitest@4.1.11 → @vitest/expect@4.1.11 → @types/chai@5.2.3 → @types/deep-eql@4.0.2
-@types/estree@1.0.9 | MIT | development | . → eslint@9.39.4 → @types/estree@1.0.9
+@types/estree-jsx@1.0.5 | MIT | production | packages/web → hast-util-to-jsx-runtime@2.3.6 → mdast-util-mdx-expression@2.0.1 → @types/estree-jsx@1.0.5
+@types/estree@1.0.9 | MIT | production | packages/web → hast-util-to-jsx-runtime@2.3.6 → @types/estree@1.0.9
 @types/express-serve-static-core@5.1.3 | MIT | development | packages/service → @types/multer@1.4.12 → @types/express@5.0.6 → @types/express-serve-static-core@5.1.3
 @types/express@5.0.6 | MIT | development | packages/service → @types/multer@1.4.12 → @types/express@5.0.6
+@types/geojson@7946.0.16 | MIT | production | packages/web → mermaid@11.16.1 → @types/d3@7.4.3 → @types/d3-contour@3.0.6 → @types/geojson@7946.0.16
+@types/hast@2.3.10 | MIT | production | packages/web → react-syntax-highlighter@15.6.1 → refractor@3.6.0 → hastscript@6.0.0 → @types/hast@2.3.10
+@types/hast@3.0.5 | MIT | production | packages/web → hast-util-to-jsx-runtime@2.3.6 → @types/hast@3.0.5
 @types/hoist-non-react-statics@3.3.7 | MIT | production | projects/app → next-i18next@15.4.2 → @types/hoist-non-react-statics@3.3.7
 @types/http-cache-semantics@4.2.0 | MIT | development | . → @chakra-ui/cli@2.5.8 → update-notifier@6.0.2 → latest-version@7.0.0 → package-json@8.1.1 → got@12.6.1 → cacheable-request@10.2.14 → @types/http-cache-semantics@4.2.0
 @types/http-errors@2.0.5 | MIT | development | packages/service → @types/multer@1.4.12 → @types/express@5.0.6 → @types/serve-static@2.2.0 → @types/http-errors@2.0.5
@@ -493,14 +556,17 @@ zustand@4.5.6 | MIT | production | packages/web
 @types/jsesc@2.5.1 | MIT | development | . → tsdown@0.21.10 → rolldown-plugin-dts@0.23.2 → @babel/generator@8.0.0-rc.3 → @types/jsesc@2.5.1
 @types/json-schema@7.0.15 | MIT | production | packages/service → @apidevtools/json-schema-ref-parser@11.7.2 → @types/json-schema@7.0.15
 @types/json5@0.0.29 | MIT | development | . → eslint-config-next@16.3.6 → eslint-plugin-import@2.32.0 → tsconfig-paths@3.15.0 → @types/json5@0.0.29
+@types/katex@0.16.8 | MIT | production | packages/web → rehype-katex@7.0.1 → @types/katex@0.16.8
 @types/lodash.mergewith@4.6.7 | MIT | production | packages/web → @chakra-ui/system@2.6.1 → @chakra-ui/utils@2.0.15 → @types/lodash.mergewith@4.6.7
 @types/lodash.mergewith@4.6.9 | MIT | production | packages/web → @chakra-ui/react@2.10.7 → @chakra-ui/utils@2.2.4 → @types/lodash.mergewith@4.6.9
 @types/lodash@4.17.27 | MIT | production | packages/web → @chakra-ui/react@2.10.7 → @chakra-ui/utils@2.2.4 → @types/lodash.mergewith@4.6.9 → @types/lodash@4.17.27
+@types/mdast@4.0.4 | MIT | production | packages/web → react-markdown@9.1.0 → @types/mdast@4.0.4
+@types/ms@2.1.0 | MIT | production | packages/web → remark-parse@11.0.0 → mdast-util-from-markdown@2.1.0 → micromark@4.0.3 → @types/debug@4.1.13 → @types/ms@2.1.0
 @types/node-fetch@2.6.13 | MIT | development | . → @chakra-ui/cli@2.5.8 → cli-welcome@2.2.3 → clear-any-console@1.16.4 → langbase@1.2.4 → openai@4.104.0 → @types/node-fetch@2.6.13
 @types/node@16.9.1 | MIT | development | . → @chakra-ui/cli@2.5.8 → cli-welcome@2.2.3 → clear-any-console@1.16.4 → command-code@1.88.0 → jimp@1.6.1 → @jimp/plugin-quantize@1.6.1 → image-q@4.0.0 → @types/node@16.9.1
 @types/node@18.19.130 | MIT | development | . → @chakra-ui/cli@2.5.8 → cli-welcome@2.2.3 → clear-any-console@1.16.4 → langbase@1.2.4 → openai@4.104.0 → @types/node@18.19.130
 @types/parse-json@4.0.2 | MIT | production | packages/web → @emotion/react@11.11.1 → @emotion/babel-plugin@11.13.5 → babel-plugin-macros@3.1.0 → cosmiconfig@7.1.0 → @types/parse-json@4.0.2
-@types/prop-types@15.7.15 | MIT | production | projects/app → next-i18next@15.4.2 → @types/hoist-non-react-statics@3.3.7 → @types/react@18.3.31 → @types/prop-types@15.7.15
+@types/prop-types@15.7.15 | MIT | production | packages/web → react-markdown@9.1.0 → @types/react@18.3.31 → @types/prop-types@15.7.15
 @types/qs@6.15.1 | MIT | development | packages/service → @types/multer@1.4.12 → @types/express@5.0.6 → @types/express-serve-static-core@5.1.3 → @types/qs@6.15.1
 @types/range-parser@1.2.7 | MIT | development | packages/service → @types/multer@1.4.12 → @types/express@5.0.6 → @types/express-serve-static-core@5.1.3 → @types/range-parser@1.2.7
 @types/readdir-glob@1.1.5 | MIT | development | projects/app → @types/archiver@6.0.4 → @types/readdir-glob@1.1.5
@@ -509,6 +575,8 @@ zustand@4.5.6 | MIT | production | packages/web
 @types/serve-static@2.2.0 | MIT | development | packages/service → @types/multer@1.4.12 → @types/express@5.0.6 → @types/serve-static@2.2.0
 @types/tough-cookie@4.0.5 | MIT | development | . → @types/jsdom@21.1.7 → @types/tough-cookie@4.0.5
 @types/triple-beam@1.3.5 | MIT | production | sdk/otel → winston@3.17.0 → logform@2.7.0 → @types/triple-beam@1.3.5
+@types/unist@2.0.11 | MIT | production | packages/web → hast-util-to-jsx-runtime@2.3.6 → mdast-util-mdx-jsx@3.2.0 → parse-entities@4.0.2 → @types/unist@2.0.11
+@types/unist@3.0.3 | MIT | production | packages/web → hast-util-to-jsx-runtime@2.3.6 → @types/unist@3.0.3
 @types/webidl-conversions@7.0.3 | MIT | production | packages/service → mongoose@8.24.5 → mongodb@6.20.0 → mongodb-connection-string-url@3.0.2 → @types/whatwg-url@11.0.5 → @types/webidl-conversions@7.0.3
 @types/whatwg-url@11.0.5 | MIT | production | packages/service → mongoose@8.24.5 → mongodb@6.20.0 → mongodb-connection-string-url@3.0.2 → @types/whatwg-url@11.0.5
 @typescript-eslint/eslint-plugin@8.71.0 | MIT | development | . → typescript-eslint@8.71.0 → @typescript-eslint/eslint-plugin@8.71.0
@@ -521,6 +589,8 @@ zustand@4.5.6 | MIT | production | packages/web
 @typescript-eslint/typescript-estree@8.71.0 | MIT | development | . → typescript-eslint@8.71.0 → @typescript-eslint/typescript-estree@8.71.0
 @typescript-eslint/utils@8.71.0 | MIT | development | . → typescript-eslint@8.71.0 → @typescript-eslint/utils@8.71.0
 @typescript-eslint/visitor-keys@8.71.0 | MIT | development | . → typescript-eslint@8.71.0 → @typescript-eslint/eslint-plugin@8.71.0 → @typescript-eslint/visitor-keys@8.71.0
+@ungap/structured-clone@1.4.0 | ISC | production | packages/web → rehype-external-links@3.0.0 → @ungap/structured-clone@1.4.0
+@upsetjs/venn.js@2.0.0 | MIT | production | packages/web → mermaid@11.16.1 → @upsetjs/venn.js@2.0.0
 @vercel/oidc@3.2.0 | Apache-2.0 | development | . → @chakra-ui/cli@2.5.8 → cli-welcome@2.2.3 → clear-any-console@1.16.4 → command-code@1.88.0 → ai@6.0.315 → @ai-sdk/gateway@3.0.221 → @vercel/oidc@3.2.0
 @vitest/expect@4.1.11 | MIT | development | . → vitest@4.1.11 → @vitest/expect@4.1.11
 @vitest/mocker@4.1.11 | MIT | development | . → vitest@4.1.11 → @vitest/mocker@4.1.11
@@ -595,6 +665,7 @@ babel-plugin-macros@3.1.0 | MIT | production | packages/web → @emotion/react@1
 babel-plugin-polyfill-corejs2@0.4.17 | MIT | development | . → @svgr/webpack@6.5.1 → @babel/preset-env@7.29.7 → babel-plugin-polyfill-corejs2@0.4.17
 babel-plugin-polyfill-corejs3@0.14.2 | MIT | development | . → @svgr/webpack@6.5.1 → @babel/preset-env@7.29.7 → babel-plugin-polyfill-corejs3@0.14.2
 babel-plugin-polyfill-regenerator@0.6.8 | MIT | development | . → @svgr/webpack@6.5.1 → @babel/preset-env@7.29.7 → babel-plugin-polyfill-regenerator@0.6.8
+bail@2.0.2 | MIT | production | packages/web → unified@11.0.5 → bail@2.0.2
 balanced-match@1.0.2 | MIT | production | projects/app → archiver@7.0.1 → readdir-glob@1.1.3 → minimatch@5.1.9 → brace-expansion@2.1.7 → balanced-match@1.0.2
 balanced-match@4.0.4 | MIT | development | . → typescript-eslint@8.71.0 → @typescript-eslint/typescript-estree@8.71.0 → minimatch@10.2.6 → brace-expansion@5.0.12 → balanced-match@4.0.4
 bare-events@2.9.2 | Apache-2.0 | production | projects/app → archiver@7.0.1 → tar-stream@3.2.2 → bare-fs@4.8.2 → bare-events@2.9.2
@@ -645,12 +716,20 @@ camelcase@7.0.1 | MIT | development | . → @chakra-ui/cli@2.5.8 → update-noti
 caniuse-lite@1.0.30001814 | CC-BY-4.0 | production | projects/app → next@16.3.0 → caniuse-lite@1.0.30001814
 caniuse-lite@1.0.30001819 | CC-BY-4.0 | development | . → @svgr/webpack@6.5.1 → @babel/core@7.29.7 → @babel/helper-compilation-targets@7.29.7 → browserslist@4.29.4 → caniuse-lite@1.0.30001819
 caseless@0.12.0 | Apache-2.0 | production | sdk/storage → cos-nodejs-sdk-v5@3.0.0 → cos-request@1.3.3 → caseless@0.12.0
+ccount@2.0.1 | MIT | production | packages/web → hast-util-to-jsx-runtime@2.3.6 → mdast-util-mdx-jsx@3.2.0 → ccount@2.0.1
 cfb@1.2.2 | Apache-2.0 | production | packages/parse → xlsx@0.18.5 → cfb@1.2.2
 chai@6.3.0 | MIT | development | . → vitest@4.1.11 → @vitest/expect@4.1.11 → chai@6.3.0
 chalk@2.4.2 | MIT | development | . → @chakra-ui/cli@2.5.8 → cli-welcome@2.2.3 → chalk@2.4.2
 chalk@4.1.2 | MIT | development | . → eslint@9.39.4 → chalk@4.1.2
 chalk@5.6.2 | MIT | development | . → @chakra-ui/cli@2.5.8 → ora@7.0.1 → chalk@5.6.2
 char-regex@1.0.2 | MIT | development | . → @chakra-ui/cli@2.5.8 → cli-welcome@2.2.3 → clear-any-console@1.16.4 → command-code@1.88.0 → marked-terminal@7.3.0 → node-emoji@2.2.0 → char-regex@1.0.2
+character-entities-html4@2.1.0 | MIT | production | packages/web → hast-util-to-jsx-runtime@2.3.6 → mdast-util-mdx-jsx@3.2.0 → stringify-entities@4.0.4 → character-entities-html4@2.1.0
+character-entities-legacy@1.1.4 | MIT | production | packages/web → react-syntax-highlighter@15.6.1 → refractor@3.6.0 → parse-entities@2.0.0 → character-entities-legacy@1.1.4
+character-entities-legacy@3.0.0 | MIT | production | packages/web → hast-util-to-jsx-runtime@2.3.6 → mdast-util-mdx-jsx@3.2.0 → parse-entities@4.0.2 → character-entities-legacy@3.0.0
+character-entities@1.2.4 | MIT | production | packages/web → react-syntax-highlighter@15.6.1 → refractor@3.6.0 → parse-entities@2.0.0 → character-entities@1.2.4
+character-entities@2.0.2 | MIT | production | packages/web → remark-parse@11.0.0 → mdast-util-from-markdown@2.1.0 → decode-named-character-reference@1.3.0 → character-entities@2.0.2
+character-reference-invalid@1.1.4 | MIT | production | packages/web → react-syntax-highlighter@15.6.1 → refractor@3.6.0 → parse-entities@2.0.0 → character-reference-invalid@1.1.4
+character-reference-invalid@2.0.1 | MIT | production | packages/web → hast-util-to-jsx-runtime@2.3.6 → mdast-util-mdx-jsx@3.2.0 → parse-entities@4.0.2 → character-reference-invalid@2.0.1
 cheerio-select@2.1.0 | BSD-2-Clause | production | packages/parse → cheerio@1.0.0-rc.12 → cheerio-select@2.1.0
 chokidar@3.6.0 | MIT | development | . → @chakra-ui/cli@2.5.8 → chokidar@3.6.0
 chokidar@4.0.3 | MIT | development | . → sass@1.85.1 → chokidar@4.0.3
@@ -684,11 +763,14 @@ color@5.0.3 | MIT | production | sdk/otel → winston@3.17.0 → @dabh/diagnosti
 color2k@2.0.4 | MIT | production | packages/web → @chakra-ui/react@2.10.7 → @chakra-ui/theme@3.4.8 → @chakra-ui/theme-tools@2.2.8 → color2k@2.0.4
 colorette@2.0.20 | MIT | development | . → lint-staged@16.4.0 → listr2@9.0.5 → colorette@2.0.20
 combined-stream@1.0.8 | MIT | production | packages/service → form-data@4.0.4 → combined-stream@1.0.8
+comma-separated-tokens@1.0.8 | MIT | production | packages/web → react-syntax-highlighter@15.6.1 → refractor@3.6.0 → hastscript@6.0.0 → comma-separated-tokens@1.0.8
+comma-separated-tokens@2.0.3 | MIT | production | packages/web → hast-util-to-jsx-runtime@2.3.6 → comma-separated-tokens@2.0.3
 command-code@1.88.0 | UNLICENSED | development | . → @chakra-ui/cli@2.5.8 → cli-welcome@2.2.3 → clear-any-console@1.16.4 → command-code@1.88.0
 commander@11.1.0 | MIT | development | . → @chakra-ui/cli@2.5.8 → commander@11.1.0
 commander@14.0.3 | MIT | development | . → lint-staged@16.4.0 → commander@14.0.3
 commander@4.1.1 | MIT | development | . → tailwindcss@3.4.18 → sucrase@3.35.1 → commander@4.1.1
-commander@7.2.0 | MIT | development | . → @svgr/webpack@6.5.1 → @svgr/plugin-svgo@6.5.1 → svgo@2.8.4 → commander@7.2.0
+commander@7.2.0 | MIT | production | packages/web → mermaid@11.16.1 → d3@7.9.0 → d3-dsv@3.0.1 → commander@7.2.0
+commander@8.3.0 | MIT | production | packages/web → katex@0.18.2 → commander@8.3.0
 commondir@1.0.1 | MIT | development | packages/service → mongodb-memory-server@10.4.3 → mongodb-memory-server-core@10.4.3 → find-cache-dir@3.3.2 → commondir@1.0.1
 compress-commons@6.0.2 | MIT | production | projects/app → archiver@7.0.1 → zip-stream@6.0.1 → compress-commons@6.0.2
 concat-map@0.0.1 | MIT | development | . → eslint@9.39.4 → minimatch@3.1.5 → brace-expansion@1.1.21 → concat-map@0.0.1
@@ -706,6 +788,8 @@ core-util-is@1.0.2 | MIT | production | sdk/storage → cos-nodejs-sdk-v5@3.0.0 
 core-util-is@1.0.3 | MIT | production | projects/app → jszip@3.10.1 → readable-stream@2.3.8 → core-util-is@1.0.3
 cos-fast-xml-parser@1.0.0 | MIT | production | sdk/storage → cos-nodejs-sdk-v5@3.0.0 → cos-fast-xml-parser@1.0.0
 cos-request@1.3.3 | Apache-2.0 | production | sdk/storage → cos-nodejs-sdk-v5@3.0.0 → cos-request@1.3.3
+cose-base@1.0.3 | MIT | production | packages/web → mermaid@11.16.1 → cytoscape-cose-bilkent@4.1.0 → cose-base@1.0.3
+cose-base@2.2.0 | MIT | production | packages/web → mermaid@11.16.1 → cytoscape-fcose@2.2.0 → cose-base@2.2.0
 cosmiconfig@7.1.0 | MIT | production | packages/web → @emotion/react@11.11.1 → @emotion/babel-plugin@11.13.5 → babel-plugin-macros@3.1.0 → cosmiconfig@7.1.0
 crc-32@1.2.2 | Apache-2.0 | production | packages/parse → xlsx@0.18.5 → crc-32@1.2.2
 crc32-stream@6.0.0 | MIT | production | projects/app → archiver@7.0.1 → zip-stream@6.0.1 → compress-commons@6.0.2 → crc32-stream@6.0.0
@@ -720,6 +804,45 @@ cssesc@3.0.0 | MIT | development | . → tailwindcss@3.4.18 → postcss-selector
 csso@4.2.0 | MIT | development | . → @svgr/webpack@6.5.1 → @svgr/plugin-svgo@6.5.1 → svgo@2.8.4 → csso@4.2.0
 cssstyle@4.6.0 | MIT | development | packages/web → jsdom@26.1.0 → cssstyle@4.6.0
 csstype@3.2.3 | MIT | production | packages/web → @chakra-ui/styled-system@2.12.2 → csstype@3.2.3
+cytoscape-cose-bilkent@4.1.0 | MIT | production | packages/web → mermaid@11.16.1 → cytoscape-cose-bilkent@4.1.0
+cytoscape-fcose@2.2.0 | MIT | production | packages/web → mermaid@11.16.1 → cytoscape-fcose@2.2.0
+cytoscape@3.34.4 | MIT | production | packages/web → mermaid@11.16.1 → cytoscape@3.34.4
+d3-array@2.12.1 | BSD-3-Clause | production | packages/web → mermaid@11.16.1 → d3-sankey@0.12.3 → d3-array@2.12.1
+d3-array@3.2.4 | ISC | production | packages/web → mermaid@11.16.1 → d3@7.9.0 → d3-array@3.2.4
+d3-axis@3.0.0 | ISC | production | packages/web → mermaid@11.16.1 → d3@7.9.0 → d3-axis@3.0.0
+d3-brush@3.0.0 | ISC | production | packages/web → mermaid@11.16.1 → d3@7.9.0 → d3-brush@3.0.0
+d3-chord@3.0.1 | ISC | production | packages/web → mermaid@11.16.1 → d3@7.9.0 → d3-chord@3.0.1
+d3-color@3.1.0 | ISC | production | packages/web → mermaid@11.16.1 → d3@7.9.0 → d3-color@3.1.0
+d3-contour@4.0.2 | ISC | production | packages/web → mermaid@11.16.1 → d3@7.9.0 → d3-contour@4.0.2
+d3-delaunay@6.0.4 | ISC | production | packages/web → mermaid@11.16.1 → d3@7.9.0 → d3-delaunay@6.0.4
+d3-dispatch@3.0.1 | ISC | production | packages/web → mermaid@11.16.1 → d3@7.9.0 → d3-dispatch@3.0.1
+d3-drag@3.0.0 | ISC | production | packages/web → mermaid@11.16.1 → d3@7.9.0 → d3-drag@3.0.0
+d3-dsv@3.0.1 | ISC | production | packages/web → mermaid@11.16.1 → d3@7.9.0 → d3-dsv@3.0.1
+d3-ease@3.0.1 | BSD-3-Clause | production | packages/web → mermaid@11.16.1 → d3@7.9.0 → d3-ease@3.0.1
+d3-fetch@3.0.1 | ISC | production | packages/web → mermaid@11.16.1 → d3@7.9.0 → d3-fetch@3.0.1
+d3-force@3.0.0 | ISC | production | packages/web → mermaid@11.16.1 → d3@7.9.0 → d3-force@3.0.0
+d3-format@3.1.2 | ISC | production | packages/web → mermaid@11.16.1 → d3@7.9.0 → d3-format@3.1.2
+d3-geo@3.1.1 | ISC | production | packages/web → mermaid@11.16.1 → d3@7.9.0 → d3-geo@3.1.1
+d3-hierarchy@3.1.2 | ISC | production | packages/web → mermaid@11.16.1 → d3@7.9.0 → d3-hierarchy@3.1.2
+d3-interpolate@3.0.1 | ISC | production | packages/web → mermaid@11.16.1 → d3@7.9.0 → d3-interpolate@3.0.1
+d3-path@1.0.9 | BSD-3-Clause | production | packages/web → mermaid@11.16.1 → d3-sankey@0.12.3 → d3-shape@1.3.7 → d3-path@1.0.9
+d3-path@3.1.0 | ISC | production | packages/web → mermaid@11.16.1 → d3@7.9.0 → d3-path@3.1.0
+d3-polygon@3.0.1 | ISC | production | packages/web → mermaid@11.16.1 → d3@7.9.0 → d3-polygon@3.0.1
+d3-quadtree@3.0.1 | ISC | production | packages/web → mermaid@11.16.1 → d3@7.9.0 → d3-quadtree@3.0.1
+d3-random@3.0.1 | ISC | production | packages/web → mermaid@11.16.1 → d3@7.9.0 → d3-random@3.0.1
+d3-sankey@0.12.3 | BSD-3-Clause | production | packages/web → mermaid@11.16.1 → d3-sankey@0.12.3
+d3-scale-chromatic@3.1.0 | ISC | production | packages/web → mermaid@11.16.1 → d3@7.9.0 → d3-scale-chromatic@3.1.0
+d3-scale@4.0.2 | ISC | production | packages/web → mermaid@11.16.1 → d3@7.9.0 → d3-scale@4.0.2
+d3-selection@3.0.0 | ISC | production | packages/web → mermaid@11.16.1 → d3@7.9.0 → d3-selection@3.0.0
+d3-shape@1.3.7 | BSD-3-Clause | production | packages/web → mermaid@11.16.1 → d3-sankey@0.12.3 → d3-shape@1.3.7
+d3-shape@3.2.0 | ISC | production | packages/web → mermaid@11.16.1 → d3@7.9.0 → d3-shape@3.2.0
+d3-time-format@4.1.0 | ISC | production | packages/web → mermaid@11.16.1 → d3@7.9.0 → d3-time-format@4.1.0
+d3-time@3.1.0 | ISC | production | packages/web → mermaid@11.16.1 → d3@7.9.0 → d3-time@3.1.0
+d3-timer@3.0.1 | ISC | production | packages/web → mermaid@11.16.1 → d3@7.9.0 → d3-timer@3.0.1
+d3-transition@3.0.1 | ISC | production | packages/web → mermaid@11.16.1 → d3@7.9.0 → d3-transition@3.0.1
+d3-zoom@3.0.0 | ISC | production | packages/web → mermaid@11.16.1 → d3@7.9.0 → d3-zoom@3.0.0
+d3@7.9.0 | ISC | production | packages/web → mermaid@11.16.1 → d3@7.9.0
+dagre-d3-es@7.0.14 | MIT | production | packages/web → mermaid@11.16.1 → dagre-d3-es@7.0.14
 damerau-levenshtein@1.0.8 | BSD-2-Clause | development | . → eslint-config-next@16.3.6 → eslint-plugin-jsx-a11y@6.10.2 → damerau-levenshtein@1.0.8
 dashdash@1.14.1 | MIT | production | sdk/storage → cos-nodejs-sdk-v5@3.0.0 → cos-request@1.3.3 → http-signature@1.2.0 → sshpk@1.18.0 → dashdash@1.14.1
 data-uri-to-buffer@6.0.2 | MIT | production | packages/service → proxy-agent@6.5.0 → pac-proxy-agent@7.2.0 → get-uri@6.0.5 → data-uri-to-buffer@6.0.2
@@ -730,9 +853,11 @@ data-view-byte-offset@1.0.1 | MIT | development | . → eslint-config-next@16.3.
 date-fns-jalali@4.1.0-0 | MIT | production | packages/web → react-day-picker@9.14.0 → date-fns-jalali@4.1.0-0
 date-fns@4.4.0 | MIT | production | packages/web → react-day-picker@9.14.0 → date-fns@4.4.0
 dateformat@2.2.0 | MIT | production | sdk/storage → ali-oss@6.23.0 → dateformat@2.2.0
+dayjs@1.11.23 | MIT | production | packages/web → mermaid@11.16.1 → dayjs@1.11.23
 debug@3.2.7 | MIT | development | . → eslint-config-next@16.3.6 → eslint-import-resolver-node@0.3.10 → debug@3.2.7
 debug@4.4.3 | MIT | production | packages/dal → ioredis@5.11.1 → debug@4.4.3
 decimal.js@10.6.0 | MIT | development | packages/web → jsdom@26.1.0 → decimal.js@10.6.0
+decode-named-character-reference@1.3.0 | MIT | production | packages/web → remark-parse@11.0.0 → mdast-util-from-markdown@2.1.0 → decode-named-character-reference@1.3.0
 decode-uri-component@0.2.2 | MIT | production | sdk/storage → minio@8.0.7 → query-string@7.1.3 → decode-uri-component@0.2.2
 decompress-response@6.0.0 | MIT | development | . → @chakra-ui/cli@2.5.8 → update-notifier@6.0.2 → latest-version@7.0.0 → package-json@8.1.1 → got@12.6.1 → decompress-response@6.0.0
 dedent@1.7.2 | MIT | development | . → @chakra-ui/cli@2.5.8 → cli-welcome@2.2.3 → clear-any-console@1.16.4 → command-code@1.88.0 → dedent@1.7.2
@@ -748,10 +873,13 @@ define-lazy-prop@3.0.0 | MIT | development | . → @chakra-ui/cli@2.5.8 → cli-
 define-properties@1.2.1 | MIT | development | . → eslint-config-next@16.3.6 → eslint-plugin-import@2.32.0 → array-includes@3.2.0 → define-properties@1.2.1
 defu@6.1.7 | MIT | development | . → tsdown@0.21.10 → defu@6.1.7
 degenerator@5.0.1 | MIT | production | packages/service → proxy-agent@6.5.0 → pac-proxy-agent@7.2.0 → pac-resolver@7.0.1 → degenerator@5.0.1
+delaunator@5.1.0 | ISC | production | packages/web → mermaid@11.16.1 → d3@7.9.0 → d3-delaunay@6.0.4 → delaunator@5.1.0
 delayed-stream@1.0.0 | MIT | production | packages/service → form-data@4.0.4 → combined-stream@1.0.8 → delayed-stream@1.0.0
 denque@2.1.0 | Apache-2.0 | production | packages/dal → ioredis@5.11.1 → denque@2.1.0
+dequal@2.0.3 | MIT | production | packages/web → hast-util-to-jsx-runtime@2.3.6 → devlop@1.1.0 → dequal@2.0.3
 destroy@1.2.0 | MIT | production | sdk/storage → ali-oss@6.23.0 → destroy@1.2.0
 detect-node-es@1.1.0 | MIT | production | packages/web → @chakra-ui/react@2.10.7 → react-focus-lock@2.13.7 → use-sidecar@1.1.3 → detect-node-es@1.1.0
+devlop@1.1.0 | MIT | production | packages/web → hast-util-to-jsx-runtime@2.3.6 → devlop@1.1.0
 didyoumean@1.2.2 | Apache-2.0 | development | . → tailwindcss@3.4.18 → didyoumean@1.2.2
 diff@8.0.4 | BSD-3-Clause | development | . → @chakra-ui/cli@2.5.8 → cli-welcome@2.2.3 → clear-any-console@1.16.4 → command-code@1.88.0 → diff@8.0.4
 digest-header@1.1.0 | MIT | production | sdk/storage → ali-oss@6.23.0 → urllib@2.44.1 → digest-header@1.1.0
@@ -763,6 +891,7 @@ dom-serializer@2.0.0 | MIT | production | packages/parse → cheerio@1.0.0-rc.12
 domelementtype@2.3.0 | BSD-2-Clause | production | packages/parse → cheerio@1.0.0-rc.12 → cheerio-select@2.1.0 → domelementtype@2.3.0
 domhandler@4.3.1 | BSD-2-Clause | development | . → @svgr/webpack@6.5.1 → @svgr/plugin-svgo@6.5.1 → svgo@2.8.4 → css-select@4.3.0 → domhandler@4.3.1
 domhandler@5.0.3 | BSD-2-Clause | production | packages/parse → cheerio@1.0.0-rc.12 → domhandler@5.0.3
+dompurify@3.4.17 | Apache-2.0 | production | packages/web → mermaid@11.16.1 → dompurify@3.4.17
 domutils@2.8.0 | BSD-2-Clause | development | . → @svgr/webpack@6.5.1 → @svgr/plugin-svgo@6.5.1 → svgo@2.8.4 → css-select@4.3.0 → domutils@2.8.0
 domutils@3.2.2 | BSD-2-Clause | production | packages/parse → cheerio@1.0.0-rc.12 → domutils@3.2.2
 dot-prop@6.0.1 | MIT | development | . → @chakra-ui/cli@2.5.8 → update-notifier@6.0.2 → configstore@6.0.0 → dot-prop@6.0.1
@@ -800,7 +929,7 @@ es-object-atoms@1.1.2 | MIT | production | packages/service → form-data@4.0.4 
 es-set-tostringtag@2.1.0 | MIT | production | packages/service → form-data@4.0.4 → es-set-tostringtag@2.1.0
 es-shim-unscopables@1.1.0 | MIT | development | . → eslint-config-next@16.3.6 → eslint-plugin-import@2.32.0 → array-includes@3.2.0 → es-shim-unscopables@1.1.0
 es-to-primitive@1.3.4 | MIT | development | . → eslint-config-next@16.3.6 → eslint-plugin-import@2.32.0 → array-includes@3.2.0 → es-abstract@1.24.2 → es-to-primitive@1.3.4
-es-toolkit@1.53.0 | MIT | development | . → @chakra-ui/cli@2.5.8 → cli-welcome@2.2.3 → clear-any-console@1.16.4 → command-code@1.88.0 → ink@7.1.0 → es-toolkit@1.53.0
+es-toolkit@1.53.0 | MIT | production | packages/web → mermaid@11.16.1 → es-toolkit@1.53.0
 esbuild@0.28.2 | MIT | development | . → tsx@4.23.15 → esbuild@0.28.2
 escalade@3.2.0 | MIT | production | sdk/otel → pino-opentelemetry-transport@1.0.1 → otlp-logger@1.1.13 → @opentelemetry/exporter-logs-otlp-grpc@0.206.0 → @grpc/grpc-js@1.14.6 → @grpc/proto-loader@0.8.1 → yargs@17.7.3 → escalade@3.2.0
 escape-goat@4.0.0 | MIT | development | . → @chakra-ui/cli@2.5.8 → update-notifier@6.0.2 → pupa@3.3.0 → escape-goat@4.0.0
@@ -808,7 +937,7 @@ escape-html@1.0.3 | MIT | production | sdk/storage → ali-oss@6.23.0 → utilit
 escape-string-regexp@1.0.5 | MIT | development | . → @chakra-ui/cli@2.5.8 → cli-welcome@2.2.3 → chalk@2.4.2 → escape-string-regexp@1.0.5
 escape-string-regexp@2.0.0 | MIT | development | . → @chakra-ui/cli@2.5.8 → cli-welcome@2.2.3 → clear-any-console@1.16.4 → command-code@1.88.0 → ink@7.1.0 → stack-utils@2.0.6 → escape-string-regexp@2.0.0
 escape-string-regexp@4.0.0 | MIT | production | packages/web → @emotion/react@11.11.1 → @emotion/babel-plugin@11.13.5 → escape-string-regexp@4.0.0
-escape-string-regexp@5.0.0 | MIT | development | . → @chakra-ui/cli@2.5.8 → cli-welcome@2.2.3 → clear-any-console@1.16.4 → command-code@1.88.0 → @sindresorhus/slugify@2.2.1 → escape-string-regexp@5.0.0
+escape-string-regexp@5.0.0 | MIT | production | packages/web → remark-breaks@4.0.0 → mdast-util-newline-to-break@2.0.0 → mdast-util-find-and-replace@3.0.4 → escape-string-regexp@5.0.0
 escodegen@2.1.0 | BSD-2-Clause | production | packages/service → proxy-agent@6.5.0 → pac-proxy-agent@7.2.0 → pac-resolver@7.0.1 → degenerator@5.0.1 → escodegen@2.1.0
 eslint-import-resolver-node@0.3.10 | MIT | development | . → eslint-config-next@16.3.6 → eslint-import-resolver-node@0.3.10
 eslint-import-resolver-typescript@3.10.1 | ISC | development | . → eslint-config-next@16.3.6 → eslint-import-resolver-typescript@3.10.1
@@ -826,6 +955,7 @@ esprima@4.0.1 | BSD-2-Clause | production | packages/service → proxy-agent@6.5
 esquery@1.7.0 | BSD-3-Clause | development | . → eslint@9.39.4 → esquery@1.7.0
 esrecurse@4.3.0 | BSD-2-Clause | development | . → eslint@9.39.4 → eslint-scope@8.4.0 → esrecurse@4.3.0
 estraverse@5.3.0 | BSD-2-Clause | production | packages/service → proxy-agent@6.5.0 → pac-proxy-agent@7.2.0 → pac-resolver@7.0.1 → degenerator@5.0.1 → escodegen@2.1.0 → estraverse@5.3.0
+estree-util-is-identifier-name@3.0.0 | MIT | production | packages/web → hast-util-to-jsx-runtime@2.3.6 → estree-util-is-identifier-name@3.0.0
 estree-walker@3.0.3 | MIT | development | . → @vitest/coverage-v8@4.1.11 → ast-v8-to-istanbul@1.0.7 → estree-walker@3.0.3
 esutils@2.0.3 | BSD-2-Clause | production | packages/service → proxy-agent@6.5.0 → pac-proxy-agent@7.2.0 → pac-resolver@7.0.1 → degenerator@5.0.1 → escodegen@2.1.0 → esutils@2.0.3
 event-target-shim@5.0.1 | MIT | production | projects/app → archiver@7.0.1 → readable-stream@4.8.0 → abort-controller@3.0.0 → event-target-shim@5.0.1
@@ -834,10 +964,10 @@ events-universal@1.0.1 | Apache-2.0 | production | projects/app → archiver@7.0
 events@3.3.0 | MIT | production | sdk/storage → @aws-sdk/lib-storage@3.1113.0 → events@3.3.0
 eventsource-parser@3.1.1 | MIT | development | . → @chakra-ui/cli@2.5.8 → cli-welcome@2.2.3 → clear-any-console@1.16.4 → command-code@1.88.0 → @ai-sdk/anthropic@3.0.135 → @ai-sdk/provider-utils@4.0.62 → eventsource-parser@3.1.1
 execa@9.6.1 | MIT | development | . → @chakra-ui/cli@2.5.8 → cli-welcome@2.2.3 → clear-any-console@1.16.4 → command-code@1.88.0 → open-editor@5.1.0 → execa@9.6.1
-exif-parser@0.1.12 | UNKNOWN | development | . → @chakra-ui/cli@2.5.8 → cli-welcome@2.2.3 → clear-any-console@1.16.4 → command-code@1.88.0 → jimp@1.6.1 → @jimp/core@1.6.1 → exif-parser@0.1.12
+exif-parser@0.1.12 | MIT | development | . → @chakra-ui/cli@2.5.8 → cli-welcome@2.2.3 → clear-any-console@1.16.4 → command-code@1.88.0 → jimp@1.6.1 → @jimp/core@1.6.1 → exif-parser@0.1.12
 expect-type@1.4.0 | Apache-2.0 | development | . → vitest@4.1.11 → expect-type@1.4.0
 extend-shallow@2.0.1 | MIT | production | sdk/storage → ali-oss@6.23.0 → utility@1.18.0 → unescape@1.0.1 → extend-shallow@2.0.1
-extend@3.0.2 | MIT | production | sdk/storage → cos-nodejs-sdk-v5@3.0.0 → cos-request@1.3.3 → extend@3.0.2
+extend@3.0.2 | MIT | production | packages/web → unified@11.0.5 → extend@3.0.2
 extsprintf@1.3.0 | MIT | production | sdk/storage → cos-nodejs-sdk-v5@3.0.0 → cos-request@1.3.3 → http-signature@1.2.0 → jsprim@1.4.2 → extsprintf@1.3.0
 fast-deep-equal@3.1.3 | MIT | production | packages/contracts → ajv@8.17.1 → fast-deep-equal@3.1.3
 fast-fifo@1.3.2 | MIT | production | projects/app → archiver@7.0.1 → tar-stream@3.2.2 → fast-fifo@1.3.2
@@ -852,6 +982,7 @@ fast-wrap-ansi@0.2.2 | MIT | development | . → @chakra-ui/cli@2.5.8 → cli-we
 fast-xml-builder@1.3.1 | MIT | production | sdk/storage → minio@8.0.7 → fast-xml-parser@5.11.2 → fast-xml-builder@1.3.1
 fast-xml-parser@5.11.2 | MIT | production | sdk/storage → minio@8.0.7 → fast-xml-parser@5.11.2
 fastq@1.20.3 | ISC | development | . → tailwindcss@3.4.18 → fast-glob@3.3.3 → @nodelib/fs.walk@1.2.8 → fastq@1.20.3
+fault@1.0.4 | MIT | production | packages/web → react-syntax-highlighter@15.6.1 → lowlight@1.20.0 → fault@1.0.4
 fdir@6.5.0 | MIT | development | . → vite@6.4.3 → fdir@6.5.0
 fecha@4.2.3 | MIT | production | sdk/otel → winston@3.17.0 → logform@2.7.0 → fecha@4.2.3
 figures@6.1.0 | MIT | development | . → @chakra-ui/cli@2.5.8 → cli-welcome@2.2.3 → clear-any-console@1.16.4 → command-code@1.88.0 → figures@6.1.0
@@ -875,6 +1006,7 @@ form-data-encoder@1.7.2 | MIT | development | . → @chakra-ui/cli@2.5.8 → cli
 form-data-encoder@2.1.4 | MIT | development | . → @chakra-ui/cli@2.5.8 → update-notifier@6.0.2 → latest-version@7.0.0 → package-json@8.1.1 → got@12.6.1 → form-data-encoder@2.1.4
 form-data@2.5.6 | MIT | production | sdk/storage → cos-nodejs-sdk-v5@3.0.0 → cos-request@1.3.3 → form-data@2.5.6
 form-data@4.0.6 | MIT | production | packages/service → axios@1.18.1 → form-data@4.0.6
+format@0.2.2 | MIT | production | packages/web → react-syntax-highlighter@15.6.1 → lowlight@1.20.0 → fault@1.0.4 → format@0.2.2
 formdata-node@4.4.1 | MIT | development | . → @chakra-ui/cli@2.5.8 → cli-welcome@2.2.3 → clear-any-console@1.16.4 → langbase@1.2.4 → openai@4.104.0 → formdata-node@4.4.1
 formstream@1.5.2 | MIT | production | sdk/storage → ali-oss@6.23.0 → urllib@2.44.1 → formstream@1.5.2
 forwarded@0.2.0 | MIT | production | packages/service → proxy-addr@2.0.7 → forwarded@0.2.0
@@ -911,6 +1043,7 @@ gopd@1.2.0 | MIT | production | packages/service → form-data@4.0.4 → es-set-
 got@12.6.1 | MIT | development | . → @chakra-ui/cli@2.5.8 → update-notifier@6.0.2 → latest-version@7.0.0 → package-json@8.1.1 → got@12.6.1
 graceful-fs@4.2.10 | ISC | development | . → @chakra-ui/cli@2.5.8 → update-notifier@6.0.2 → latest-version@7.0.0 → package-json@8.1.1 → registry-auth-token@5.1.1 → @pnpm/npm-conf@3.0.3 → @pnpm/network.ca-file@1.0.2 → graceful-fs@4.2.10
 graceful-fs@4.2.11 | ISC | production | projects/app → archiver@7.0.1 → archiver-utils@5.0.2 → graceful-fs@4.2.11
+hachure-fill@0.5.2 | MIT | production | packages/web → mermaid@11.16.1 → roughjs@4.6.6 → hachure-fill@0.5.2
 has-bigints@1.1.0 | MIT | development | . → eslint-config-next@16.3.6 → eslint-plugin-import@2.32.0 → array-includes@3.2.0 → es-abstract@1.24.2 → unbox-primitive@1.1.0 → has-bigints@1.1.0
 has-flag@3.0.0 | MIT | development | . → @chakra-ui/cli@2.5.8 → cli-welcome@2.2.3 → chalk@2.4.2 → supports-color@5.5.0 → has-flag@3.0.0
 has-flag@4.0.0 | MIT | development | . → @vitest/coverage-v8@4.1.11 → istanbul-lib-report@3.0.1 → supports-color@7.2.0 → has-flag@4.0.0
@@ -921,14 +1054,31 @@ has-symbols@1.1.0 | MIT | production | packages/service → form-data@4.0.4 → 
 has-tostringtag@1.0.2 | MIT | production | packages/service → form-data@4.0.4 → es-set-tostringtag@2.1.0 → has-tostringtag@1.0.2
 has-yarn@3.0.0 | MIT | development | . → @chakra-ui/cli@2.5.8 → update-notifier@6.0.2 → has-yarn@3.0.0
 hasown@2.0.4 | MIT | production | packages/service → form-data@4.0.4 → hasown@2.0.4
+hast-util-from-dom@5.0.1 | ISC | production | packages/web → rehype-katex@7.0.1 → hast-util-from-html-isomorphic@2.0.0 → hast-util-from-dom@5.0.1
+hast-util-from-html-isomorphic@2.0.0 | MIT | production | packages/web → rehype-katex@7.0.1 → hast-util-from-html-isomorphic@2.0.0
+hast-util-from-html@2.0.3 | MIT | production | packages/web → rehype-katex@7.0.1 → hast-util-from-html-isomorphic@2.0.0 → hast-util-from-html@2.0.3
+hast-util-from-parse5@8.0.3 | MIT | production | packages/web → rehype-raw@7.0.0 → hast-util-raw@9.1.0 → hast-util-from-parse5@8.0.3
+hast-util-is-element@3.0.0 | MIT | production | packages/web → rehype-external-links@3.0.0 → hast-util-is-element@3.0.0
+hast-util-parse-selector@2.2.5 | MIT | production | packages/web → react-syntax-highlighter@15.6.1 → refractor@3.6.0 → hastscript@6.0.0 → hast-util-parse-selector@2.2.5
+hast-util-parse-selector@4.0.0 | MIT | production | packages/web → rehype-katex@7.0.1 → hast-util-from-html-isomorphic@2.0.0 → hast-util-from-dom@5.0.1 → hastscript@9.0.1 → hast-util-parse-selector@4.0.0
+hast-util-raw@9.1.0 | MIT | production | packages/web → rehype-raw@7.0.0 → hast-util-raw@9.1.0
+hast-util-sanitize@5.0.2 | MIT | production | packages/web → rehype-sanitize@6.0.0 → hast-util-sanitize@5.0.2
+hast-util-to-parse5@8.0.1 | MIT | production | packages/web → rehype-raw@7.0.0 → hast-util-raw@9.1.0 → hast-util-to-parse5@8.0.1
+hast-util-to-text@4.0.3 | MIT | production | packages/web → rehype-katex@7.0.1 → hast-util-to-text@4.0.3
+hast-util-whitespace@3.0.0 | MIT | production | packages/web → hast-util-to-jsx-runtime@2.3.6 → hast-util-whitespace@3.0.0
+hastscript@6.0.0 | MIT | production | packages/web → react-syntax-highlighter@15.6.1 → refractor@3.6.0 → hastscript@6.0.0
+hastscript@9.0.1 | MIT | production | packages/web → rehype-katex@7.0.1 → hast-util-from-html-isomorphic@2.0.0 → hast-util-from-dom@5.0.1 → hastscript@9.0.1
 hermes-estree@0.25.1 | MIT | development | . → eslint-config-next@16.3.6 → eslint-plugin-react-hooks@7.1.1 → hermes-parser@0.25.1 → hermes-estree@0.25.1
 hermes-parser@0.25.1 | MIT | development | . → eslint-config-next@16.3.6 → eslint-plugin-react-hooks@7.1.1 → hermes-parser@0.25.1
-highlight.js@10.7.3 | BSD-3-Clause | development | . → @chakra-ui/cli@2.5.8 → cli-welcome@2.2.3 → clear-any-console@1.16.4 → command-code@1.88.0 → marked-terminal@7.3.0 → cli-highlight@2.1.11 → highlight.js@10.7.3
+highlight.js@10.7.3 | BSD-3-Clause | production | packages/web → react-syntax-highlighter@15.6.1 → highlight.js@10.7.3
+highlightjs-vue@1.0.0 | CC0-1.0 | production | packages/web → react-syntax-highlighter@15.6.1 → highlightjs-vue@1.0.0
 hoist-non-react-statics@3.3.2 | BSD-3-Clause | production | packages/web → @emotion/react@11.11.1 → hoist-non-react-statics@3.3.2
 hookable@6.1.2 | MIT | development | . → tsdown@0.21.10 → hookable@6.1.2
 html-encoding-sniffer@4.0.0 | MIT | development | packages/web → jsdom@26.1.0 → html-encoding-sniffer@4.0.0
 html-escaper@2.0.2 | MIT | development | . → @vitest/coverage-v8@4.1.11 → istanbul-reports@3.2.0 → html-escaper@2.0.2
 html-parse-stringify@3.1.0 | MIT | production | packages/web → react-i18next@14.1.2 → html-parse-stringify@3.1.0
+html-url-attributes@3.0.1 | MIT | production | packages/web → react-markdown@9.1.0 → html-url-attributes@3.0.1
+html-void-elements@3.0.0 | MIT | production | packages/web → rehype-raw@7.0.0 → hast-util-raw@9.1.0 → html-void-elements@3.0.0
 htmlparser2@8.0.2 | MIT | production | packages/parse → cheerio@1.0.0-rc.12 → htmlparser2@8.0.2
 http-cache-semantics@4.3.0 | BSD-2-Clause | development | . → @chakra-ui/cli@2.5.8 → update-notifier@6.0.2 → latest-version@7.0.0 → package-json@8.1.1 → got@12.6.1 → cacheable-request@10.2.14 → http-cache-semantics@4.3.0
 http-signature@1.2.0 | MIT | production | sdk/storage → cos-nodejs-sdk-v5@3.0.0 → cos-request@1.3.3 → http-signature@1.2.0
@@ -946,6 +1096,7 @@ immediate@3.0.6 | MIT | production | projects/app → jszip@3.10.1 → lie@3.3.0
 immutable@5.1.9 | MIT | development | . → sass@1.85.1 → immutable@5.1.9
 import-fresh@3.3.1 | MIT | production | packages/web → @emotion/react@11.11.1 → @emotion/babel-plugin@11.13.5 → babel-plugin-macros@3.1.0 → cosmiconfig@7.1.0 → import-fresh@3.3.1
 import-lazy@4.0.0 | MIT | development | . → @chakra-ui/cli@2.5.8 → update-notifier@6.0.2 → import-lazy@4.0.0
+import-meta-resolve@4.2.0 | MIT | production | packages/web → mermaid@11.16.1 → @iconify/utils@3.1.7 → import-meta-resolve@4.2.0
 import-without-cache@0.3.3 | MIT | development | . → tsdown@0.21.10 → import-without-cache@0.3.3
 imurmurhash@0.1.4 | MIT | development | . → eslint@9.39.4 → imurmurhash@0.1.4
 indent-string@5.0.0 | MIT | development | . → @chakra-ui/cli@2.5.8 → cli-welcome@2.2.3 → clear-any-console@1.16.4 → command-code@1.88.0 → ink@7.1.0 → indent-string@5.0.0
@@ -954,11 +1105,19 @@ ini@1.3.8 | ISC | development | . → @chakra-ui/cli@2.5.8 → update-notifier@6
 ini@2.0.0 | ISC | development | . → @chakra-ui/cli@2.5.8 → update-notifier@6.0.2 → is-installed-globally@0.4.0 → global-dirs@3.0.1 → ini@2.0.0
 ink-spinner@5.0.0 | MIT | development | . → @chakra-ui/cli@2.5.8 → cli-welcome@2.2.3 → clear-any-console@1.16.4 → command-code@1.88.0 → ink-spinner@5.0.0
 ink@7.1.0 | MIT | development | . → @chakra-ui/cli@2.5.8 → cli-welcome@2.2.3 → clear-any-console@1.16.4 → command-code@1.88.0 → ink@7.1.0
+inline-style-parser@0.2.7 | MIT | production | packages/web → hast-util-to-jsx-runtime@2.3.6 → style-to-js@1.1.21 → style-to-object@1.0.14 → inline-style-parser@0.2.7
 internal-slot@1.1.0 | MIT | development | . → eslint-config-next@16.3.6 → eslint-plugin-react@7.37.5 → es-iterator-helpers@1.4.0 → internal-slot@1.1.0
+internmap@1.0.1 | ISC | production | packages/web → mermaid@11.16.1 → d3-sankey@0.12.3 → d3-array@2.12.1 → internmap@1.0.1
+internmap@2.0.3 | ISC | production | packages/web → mermaid@11.16.1 → d3@7.9.0 → d3-array@3.2.4 → internmap@2.0.3
 intersection-observer@0.12.2 | Apache-2.0 | production | packages/web → ahooks@3.9.5 → intersection-observer@0.12.2
 ip-address@10.7.5 | MIT | production | packages/service → proxy-agent@6.5.0 → socks-proxy-agent@8.0.5 → socks@2.8.10 → ip-address@10.7.5
 ipaddr.js@1.9.1 | MIT | production | packages/service → proxy-addr@2.0.7 → ipaddr.js@1.9.1
 ipaddr.js@2.5.0 | MIT | production | sdk/storage → minio@8.0.7 → ipaddr.js@2.5.0
+is-absolute-url@4.0.1 | MIT | production | packages/web → rehype-external-links@3.0.0 → is-absolute-url@4.0.1
+is-alphabetical@1.0.4 | MIT | production | packages/web → react-syntax-highlighter@15.6.1 → refractor@3.6.0 → parse-entities@2.0.0 → is-alphanumerical@1.0.4 → is-alphabetical@1.0.4
+is-alphabetical@2.0.1 | MIT | production | packages/web → hast-util-to-jsx-runtime@2.3.6 → mdast-util-mdx-jsx@3.2.0 → parse-entities@4.0.2 → is-alphanumerical@2.0.1 → is-alphabetical@2.0.1
+is-alphanumerical@1.0.4 | MIT | production | packages/web → react-syntax-highlighter@15.6.1 → refractor@3.6.0 → parse-entities@2.0.0 → is-alphanumerical@1.0.4
+is-alphanumerical@2.0.1 | MIT | production | packages/web → hast-util-to-jsx-runtime@2.3.6 → mdast-util-mdx-jsx@3.2.0 → parse-entities@4.0.2 → is-alphanumerical@2.0.1
 is-array-buffer@3.0.5 | MIT | development | . → eslint-config-next@16.3.6 → eslint-plugin-import@2.32.0 → array-includes@3.2.0 → es-abstract@1.24.2 → is-array-buffer@3.0.5
 is-arrayish@0.2.1 | MIT | production | packages/web → @emotion/react@11.11.1 → @emotion/babel-plugin@11.13.5 → babel-plugin-macros@3.1.0 → cosmiconfig@7.1.0 → parse-json@5.2.0 → error-ex@1.3.4 → is-arrayish@0.2.1
 is-async-function@2.1.1 | MIT | development | . → eslint-config-next@16.3.6 → eslint-plugin-import@2.32.0 → array-includes@3.2.0 → es-abstract@1.24.2 → typed-array-byte-offset@1.0.5 → reflect.getprototypeof@1.0.10 → which-builtin-type@1.2.1 → is-async-function@2.1.1
@@ -972,6 +1131,8 @@ is-class-hotfix@0.0.6 | MIT | production | sdk/storage → ali-oss@6.23.0 → is
 is-core-module@2.17.0 | MIT | production | packages/web → @emotion/react@11.11.1 → @emotion/babel-plugin@11.13.5 → babel-plugin-macros@3.1.0 → resolve@1.22.13 → is-core-module@2.17.0
 is-data-view@1.0.2 | MIT | development | . → eslint-config-next@16.3.6 → eslint-plugin-import@2.32.0 → array-includes@3.2.0 → es-abstract@1.24.2 → is-data-view@1.0.2
 is-date-object@1.1.0 | MIT | development | . → eslint-config-next@16.3.6 → eslint-plugin-import@2.32.0 → array-includes@3.2.0 → es-abstract@1.24.2 → es-to-primitive@1.3.4 → is-date-object@1.1.0
+is-decimal@1.0.4 | MIT | production | packages/web → react-syntax-highlighter@15.6.1 → refractor@3.6.0 → parse-entities@2.0.0 → is-decimal@1.0.4
+is-decimal@2.0.1 | MIT | production | packages/web → hast-util-to-jsx-runtime@2.3.6 → mdast-util-mdx-jsx@3.2.0 → parse-entities@4.0.2 → is-decimal@2.0.1
 is-docker@3.0.0 | MIT | development | . → @chakra-ui/cli@2.5.8 → cli-welcome@2.2.3 → clear-any-console@1.16.4 → command-code@1.88.0 → open@10.2.0 → is-inside-container@1.0.0 → is-docker@3.0.0
 is-document.all@1.0.0 | MIT | development | . → eslint-config-next@16.3.6 → eslint-plugin-import@2.32.0 → array-includes@3.2.0 → es-abstract@1.24.2 → function.prototype.name@1.2.0 → is-document.all@1.0.0
 is-extendable@0.1.1 | MIT | production | sdk/storage → ali-oss@6.23.0 → utility@1.18.0 → unescape@1.0.1 → extend-shallow@2.0.1 → is-extendable@0.1.1
@@ -981,6 +1142,8 @@ is-fullwidth-code-point@3.0.0 | MIT | production | sdk/otel → pino-opentelemet
 is-fullwidth-code-point@5.1.0 | MIT | development | . → lint-staged@16.4.0 → listr2@9.0.5 → cli-truncate@5.2.0 → slice-ansi@8.0.0 → is-fullwidth-code-point@5.1.0
 is-generator-function@1.1.2 | MIT | development | . → eslint-config-next@16.3.6 → eslint-plugin-import@2.32.0 → array-includes@3.2.0 → es-abstract@1.24.2 → typed-array-byte-offset@1.0.5 → reflect.getprototypeof@1.0.10 → which-builtin-type@1.2.1 → is-generator-function@1.1.2
 is-glob@4.0.3 | MIT | development | . → eslint@9.39.4 → is-glob@4.0.3
+is-hexadecimal@1.0.4 | MIT | production | packages/web → react-syntax-highlighter@15.6.1 → refractor@3.6.0 → parse-entities@2.0.0 → is-hexadecimal@1.0.4
+is-hexadecimal@2.0.1 | MIT | production | packages/web → hast-util-to-jsx-runtime@2.3.6 → mdast-util-mdx-jsx@3.2.0 → parse-entities@4.0.2 → is-hexadecimal@2.0.1
 is-in-ci@2.0.0 | MIT | development | . → @chakra-ui/cli@2.5.8 → cli-welcome@2.2.3 → clear-any-console@1.16.4 → command-code@1.88.0 → ink@7.1.0 → is-in-ci@2.0.0
 is-inside-container@1.0.0 | MIT | development | . → @chakra-ui/cli@2.5.8 → cli-welcome@2.2.3 → clear-any-console@1.16.4 → command-code@1.88.0 → open@10.2.0 → is-inside-container@1.0.0
 is-installed-globally@0.4.0 | MIT | development | . → @chakra-ui/cli@2.5.8 → update-notifier@6.0.2 → is-installed-globally@0.4.0
@@ -992,7 +1155,7 @@ is-number-object@1.1.1 | MIT | development | . → eslint-config-next@16.3.6 →
 is-number@7.0.0 | MIT | development | . → @chakra-ui/cli@2.5.8 → chokidar@3.6.0 → braces@3.0.3 → fill-range@7.1.1 → to-regex-range@5.0.1 → is-number@7.0.0
 is-obj@2.0.0 | MIT | development | . → @chakra-ui/cli@2.5.8 → update-notifier@6.0.2 → configstore@6.0.0 → dot-prop@6.0.1 → is-obj@2.0.0
 is-path-inside@3.0.3 | MIT | development | . → @chakra-ui/cli@2.5.8 → update-notifier@6.0.2 → is-installed-globally@0.4.0 → is-path-inside@3.0.3
-is-plain-obj@4.1.0 | MIT | development | . → @chakra-ui/cli@2.5.8 → cli-welcome@2.2.3 → clear-any-console@1.16.4 → command-code@1.88.0 → open-editor@5.1.0 → execa@9.6.1 → is-plain-obj@4.1.0
+is-plain-obj@4.1.0 | MIT | production | packages/web → unified@11.0.5 → is-plain-obj@4.1.0
 is-potential-custom-element-name@1.0.1 | MIT | development | packages/web → jsdom@26.1.0 → is-potential-custom-element-name@1.0.1
 is-regex@1.2.1 | MIT | development | . → eslint-config-next@16.3.6 → eslint-plugin-jsx-a11y@6.10.2 → safe-regex-test@1.1.0 → is-regex@1.2.1
 is-set@2.0.3 | MIT | development | . → eslint-config-next@16.3.6 → eslint-plugin-import@2.32.0 → array-includes@3.2.0 → es-abstract@1.24.2 → is-set@2.0.3
@@ -1046,12 +1209,16 @@ jstoxml@2.2.9 | MIT | production | sdk/storage → ali-oss@6.23.0 → jstoxml@2.
 jsx-ast-utils@3.3.5 | MIT | development | . → eslint-config-next@16.3.6 → eslint-plugin-jsx-a11y@6.10.2 → jsx-ast-utils@3.3.5
 jszip@3.10.2 | MIT | production | packages/parse → mammoth@1.11.0 → jszip@3.10.2
 kareem@2.6.3 | Apache-2.0 | production | packages/service → mongoose@8.24.5 → kareem@2.6.3
+katex@0.16.47 | MIT | production | packages/web → mermaid@11.16.1 → katex@0.16.47
 keyv@4.5.4 | MIT | development | . → eslint@9.39.4 → file-entry-cache@8.0.0 → flat-cache@4.0.1 → keyv@4.5.4
+khroma@2.1.0 | MIT | production | packages/web → mermaid@11.16.1 → khroma@2.1.0
 kuler@2.0.0 | MIT | production | sdk/otel → winston@3.17.0 → @dabh/diagnostics@2.0.9 → kuler@2.0.0
 langbase@1.2.4 | Apache-2.0 | development | . → @chakra-ui/cli@2.5.8 → cli-welcome@2.2.3 → clear-any-console@1.16.4 → langbase@1.2.4
 language-subtag-registry@0.3.23 | CC0-1.0 | development | . → eslint-config-next@16.3.6 → eslint-plugin-jsx-a11y@6.10.2 → language-tags@1.0.9 → language-subtag-registry@0.3.23
 language-tags@1.0.9 | MIT | development | . → eslint-config-next@16.3.6 → eslint-plugin-jsx-a11y@6.10.2 → language-tags@1.0.9
 latest-version@7.0.0 | MIT | development | . → @chakra-ui/cli@2.5.8 → update-notifier@6.0.2 → latest-version@7.0.0
+layout-base@1.0.2 | MIT | production | packages/web → mermaid@11.16.1 → cytoscape-cose-bilkent@4.1.0 → cose-base@1.0.3 → layout-base@1.0.2
+layout-base@2.0.1 | MIT | production | packages/web → mermaid@11.16.1 → cytoscape-fcose@2.2.0 → cose-base@2.2.0 → layout-base@2.0.1
 lazystream@1.0.1 | MIT | production | projects/app → archiver@7.0.1 → archiver-utils@5.0.2 → lazystream@1.0.1
 levn@0.4.1 | MIT | development | . → eslint@9.39.4 → @eslint/plugin-kit@0.4.1 → levn@0.4.1
 lie@3.3.0 | MIT | production | projects/app → jszip@3.10.1 → lie@3.3.0
@@ -1071,9 +1238,11 @@ log-symbols@7.0.1 | MIT | development | . → @chakra-ui/cli@2.5.8 → cli-welco
 log-update@6.1.0 | MIT | development | . → lint-staged@16.4.0 → listr2@9.0.5 → log-update@6.1.0
 logform@2.7.0 | MIT | production | sdk/otel → winston@3.17.0 → logform@2.7.0
 long@5.3.2 | Apache-2.0 | production | sdk/otel → @opentelemetry/exporter-logs-otlp-http@0.203.0 → @opentelemetry/otlp-transformer@0.203.0 → protobufjs@7.6.6 → long@5.3.2
+longest-streak@3.1.0 | MIT | production | packages/web → remark-math@6.0.0 → mdast-util-math@3.0.0 → longest-streak@3.1.0
 loose-envify@1.4.0 | MIT | production | packages/web → react@18.3.1 → loose-envify@1.4.0
 lop@0.4.2 | BSD-2-Clause | production | packages/parse → mammoth@1.11.0 → lop@0.4.2
 lowercase-keys@3.0.0 | MIT | development | . → @chakra-ui/cli@2.5.8 → update-notifier@6.0.2 → latest-version@7.0.0 → package-json@8.1.1 → got@12.6.1 → lowercase-keys@3.0.0
+lowlight@1.20.0 | MIT | production | packages/web → react-syntax-highlighter@15.6.1 → lowlight@1.20.0
 lru-cache@10.4.3 | ISC | production | projects/app → archiver@7.0.1 → archiver-utils@5.0.2 → glob@10.4.5 → path-scurry@1.11.1 → lru-cache@10.4.3
 lru-cache@11.5.3 | BlueOak-1.0.0 | development | . → @chakra-ui/cli@2.5.8 → cli-welcome@2.2.3 → clear-any-console@1.16.4 → command-code@1.88.0 → glob@13.0.6 → path-scurry@2.0.2 → lru-cache@11.5.3
 lru-cache@5.1.1 | ISC | development | . → @svgr/webpack@6.5.1 → @babel/core@7.29.7 → @babel/helper-compilation-targets@7.29.7 → lru-cache@5.1.1
@@ -1083,14 +1252,63 @@ magic-string@0.30.21 | MIT | development | . → vitest@4.1.11 → magic-string@
 magicast@0.5.5 | MIT | development | . → @vitest/coverage-v8@4.1.11 → magicast@0.5.5
 make-dir@3.1.0 | MIT | development | packages/service → mongodb-memory-server@10.4.3 → mongodb-memory-server-core@10.4.3 → find-cache-dir@3.3.2 → make-dir@3.1.0
 make-dir@4.0.0 | MIT | development | . → @vitest/coverage-v8@4.1.11 → istanbul-lib-report@3.0.1 → make-dir@4.0.0
+markdown-table@3.0.4 | MIT | production | packages/web → remark-gfm@4.0.1 → mdast-util-gfm@3.1.0 → mdast-util-gfm-table@2.0.0 → markdown-table@3.0.4
 marked-terminal@7.3.0 | MIT | development | . → @chakra-ui/cli@2.5.8 → cli-welcome@2.2.3 → clear-any-console@1.16.4 → command-code@1.88.0 → marked-terminal@7.3.0
 marked@15.0.12 | MIT | development | . → @chakra-ui/cli@2.5.8 → cli-welcome@2.2.3 → clear-any-console@1.16.4 → command-code@1.88.0 → marked@15.0.12
+marked@16.4.2 | MIT | production | packages/web → mermaid@11.16.1 → marked@16.4.2
 math-intrinsics@1.1.0 | MIT | production | packages/service → form-data@4.0.4 → es-set-tostringtag@2.1.0 → get-intrinsic@1.3.0 → math-intrinsics@1.1.0
+mdast-util-find-and-replace@3.0.4 | MIT | production | packages/web → remark-breaks@4.0.0 → mdast-util-newline-to-break@2.0.0 → mdast-util-find-and-replace@3.0.4
+mdast-util-from-markdown@2.1.0 | MIT | production | packages/web → remark-parse@11.0.0 → mdast-util-from-markdown@2.1.0
+mdast-util-gfm-autolink-literal@2.0.1 | MIT | production | packages/web → remark-gfm@4.0.1 → mdast-util-gfm@3.1.0 → mdast-util-gfm-autolink-literal@2.0.1
+mdast-util-gfm-footnote@2.1.0 | MIT | production | packages/web → remark-gfm@4.0.1 → mdast-util-gfm@3.1.0 → mdast-util-gfm-footnote@2.1.0
+mdast-util-gfm-strikethrough@2.0.1 | MIT | production | packages/web → remark-gfm@4.0.1 → mdast-util-gfm@3.1.0 → mdast-util-gfm-strikethrough@2.0.1
+mdast-util-gfm-table@2.0.0 | MIT | production | packages/web → remark-gfm@4.0.1 → mdast-util-gfm@3.1.0 → mdast-util-gfm-table@2.0.0
+mdast-util-gfm-task-list-item@2.0.0 | MIT | production | packages/web → remark-gfm@4.0.1 → mdast-util-gfm@3.1.0 → mdast-util-gfm-task-list-item@2.0.0
+mdast-util-gfm@3.1.0 | MIT | production | packages/web → remark-gfm@4.0.1 → mdast-util-gfm@3.1.0
+mdast-util-math@3.0.0 | MIT | production | packages/web → remark-math@6.0.0 → mdast-util-math@3.0.0
+mdast-util-mdx-expression@2.0.1 | MIT | production | packages/web → hast-util-to-jsx-runtime@2.3.6 → mdast-util-mdx-expression@2.0.1
+mdast-util-mdx-jsx@3.2.0 | MIT | production | packages/web → hast-util-to-jsx-runtime@2.3.6 → mdast-util-mdx-jsx@3.2.0
+mdast-util-mdxjs-esm@2.0.1 | MIT | production | packages/web → hast-util-to-jsx-runtime@2.3.6 → mdast-util-mdxjs-esm@2.0.1
+mdast-util-newline-to-break@2.0.0 | MIT | production | packages/web → remark-breaks@4.0.0 → mdast-util-newline-to-break@2.0.0
+mdast-util-phrasing@4.1.0 | MIT | production | packages/web → hast-util-to-jsx-runtime@2.3.6 → mdast-util-mdx-expression@2.0.1 → mdast-util-to-markdown@2.2.1 → mdast-util-phrasing@4.1.0
+mdast-util-to-hast@13.2.1 | MIT | production | packages/web → react-markdown@9.1.0 → mdast-util-to-hast@13.2.1
+mdast-util-to-markdown@2.2.1 | MIT | production | packages/web → hast-util-to-jsx-runtime@2.3.6 → mdast-util-mdx-expression@2.0.1 → mdast-util-to-markdown@2.2.1
+mdast-util-to-string@4.0.0 | MIT | production | packages/web → remark-parse@11.0.0 → mdast-util-from-markdown@2.1.0 → mdast-util-to-string@4.0.0
 mdn-data@2.0.14 | CC0-1.0 | development | . → @svgr/webpack@6.5.1 → @svgr/plugin-svgo@6.5.1 → svgo@2.8.4 → css-tree@1.1.3 → mdn-data@2.0.14
 media-typer@0.3.0 | MIT | production | packages/service → multer@2.4.0 → type-is@1.6.18 → media-typer@0.3.0
 memory-pager@1.5.0 | MIT | production | packages/service → mongoose@8.24.5 → mongodb@6.20.0 → @mongodb-js/saslprep@1.5.5 → sparse-bitfield@3.0.3 → memory-pager@1.5.0
 merge-descriptors@1.0.3 | MIT | production | sdk/storage → ali-oss@6.23.0 → merge-descriptors@1.0.3
 merge2@1.4.1 | MIT | development | . → tailwindcss@3.4.18 → fast-glob@3.3.3 → merge2@1.4.1
+micromark-core-commonmark@2.0.4 | MIT | production | packages/web → remark-gfm@4.0.1 → micromark-extension-gfm@3.0.0 → micromark-extension-gfm-footnote@2.1.0 → micromark-core-commonmark@2.0.4
+micromark-extension-gfm-autolink-literal@2.1.0 | MIT | production | packages/web → remark-gfm@4.0.1 → micromark-extension-gfm@3.0.0 → micromark-extension-gfm-autolink-literal@2.1.0
+micromark-extension-gfm-footnote@2.1.0 | MIT | production | packages/web → remark-gfm@4.0.1 → micromark-extension-gfm@3.0.0 → micromark-extension-gfm-footnote@2.1.0
+micromark-extension-gfm-strikethrough@2.1.0 | MIT | production | packages/web → remark-gfm@4.0.1 → micromark-extension-gfm@3.0.0 → micromark-extension-gfm-strikethrough@2.1.0
+micromark-extension-gfm-table@2.1.2 | MIT | production | packages/web → remark-gfm@4.0.1 → micromark-extension-gfm@3.0.0 → micromark-extension-gfm-table@2.1.2
+micromark-extension-gfm-tagfilter@2.0.0 | MIT | production | packages/web → remark-gfm@4.0.1 → micromark-extension-gfm@3.0.0 → micromark-extension-gfm-tagfilter@2.0.0
+micromark-extension-gfm-task-list-item@2.1.0 | MIT | production | packages/web → remark-gfm@4.0.1 → micromark-extension-gfm@3.0.0 → micromark-extension-gfm-task-list-item@2.1.0
+micromark-extension-gfm@3.0.0 | MIT | production | packages/web → remark-gfm@4.0.1 → micromark-extension-gfm@3.0.0
+micromark-extension-math@3.1.0 | MIT | production | packages/web → remark-math@6.0.0 → micromark-extension-math@3.1.0
+micromark-factory-destination@2.0.1 | MIT | production | packages/web → remark-gfm@4.0.1 → micromark-extension-gfm@3.0.0 → micromark-extension-gfm-footnote@2.1.0 → micromark-core-commonmark@2.0.4 → micromark-factory-destination@2.0.1
+micromark-factory-label@2.0.1 | MIT | production | packages/web → remark-gfm@4.0.1 → micromark-extension-gfm@3.0.0 → micromark-extension-gfm-footnote@2.1.0 → micromark-core-commonmark@2.0.4 → micromark-factory-label@2.0.1
+micromark-factory-space@2.1.0 | MIT | production | packages/web → remark-math@6.0.0 → micromark-extension-math@3.1.0 → micromark-factory-space@2.1.0
+micromark-factory-title@2.0.1 | MIT | production | packages/web → remark-gfm@4.0.1 → micromark-extension-gfm@3.0.0 → micromark-extension-gfm-footnote@2.1.0 → micromark-core-commonmark@2.0.4 → micromark-factory-title@2.0.1
+micromark-factory-whitespace@2.0.1 | MIT | production | packages/web → remark-gfm@4.0.1 → micromark-extension-gfm@3.0.0 → micromark-extension-gfm-footnote@2.1.0 → micromark-core-commonmark@2.0.4 → micromark-factory-whitespace@2.0.1
+micromark-util-character@2.1.1 | MIT | production | packages/web → remark-math@6.0.0 → micromark-extension-math@3.1.0 → micromark-util-character@2.1.1
+micromark-util-chunked@2.0.1 | MIT | production | packages/web → remark-gfm@4.0.1 → micromark-extension-gfm@3.0.0 → micromark-extension-gfm-strikethrough@2.1.0 → micromark-util-chunked@2.0.1
+micromark-util-classify-character@2.0.1 | MIT | production | packages/web → hast-util-to-jsx-runtime@2.3.6 → mdast-util-mdx-expression@2.0.1 → mdast-util-to-markdown@2.2.1 → micromark-util-classify-character@2.0.1
+micromark-util-combine-extensions@2.0.1 | MIT | production | packages/web → remark-gfm@4.0.1 → micromark-extension-gfm@3.0.0 → micromark-util-combine-extensions@2.0.1
+micromark-util-decode-numeric-character-reference@2.0.2 | MIT | production | packages/web → remark-parse@11.0.0 → mdast-util-from-markdown@2.1.0 → micromark-util-decode-numeric-character-reference@2.0.2
+micromark-util-decode-string@2.0.1 | MIT | production | packages/web → remark-parse@11.0.0 → mdast-util-from-markdown@2.1.0 → micromark-util-decode-string@2.0.1
+micromark-util-edit-map@1.0.0 | MIT | production | packages/web → remark-parse@11.0.0 → mdast-util-from-markdown@2.1.0 → micromark@4.0.3 → micromark-util-edit-map@1.0.0
+micromark-util-encode@2.0.1 | MIT | production | packages/web → react-markdown@9.1.0 → mdast-util-to-hast@13.2.1 → micromark-util-sanitize-uri@2.0.1 → micromark-util-encode@2.0.1
+micromark-util-html-tag-name@2.0.1 | MIT | production | packages/web → hast-util-to-jsx-runtime@2.3.6 → mdast-util-mdx-expression@2.0.1 → mdast-util-to-markdown@2.2.1 → micromark-util-html-tag-name@2.0.1
+micromark-util-normalize-identifier@2.0.1 | MIT | production | packages/web → remark-parse@11.0.0 → mdast-util-from-markdown@2.1.0 → micromark-util-normalize-identifier@2.0.1
+micromark-util-resolve-all@2.0.1 | MIT | production | packages/web → remark-gfm@4.0.1 → micromark-extension-gfm@3.0.0 → micromark-extension-gfm-strikethrough@2.1.0 → micromark-util-resolve-all@2.0.1
+micromark-util-sanitize-uri@2.0.1 | MIT | production | packages/web → react-markdown@9.1.0 → mdast-util-to-hast@13.2.1 → micromark-util-sanitize-uri@2.0.1
+micromark-util-subtokenize@2.1.0 | MIT | production | packages/web → remark-parse@11.0.0 → mdast-util-from-markdown@2.1.0 → micromark@4.0.3 → micromark-util-subtokenize@2.1.0
+micromark-util-symbol@2.0.1 | MIT | production | packages/web → remark-math@6.0.0 → micromark-extension-math@3.1.0 → micromark-util-symbol@2.0.1
+micromark-util-types@2.0.3 | MIT | production | packages/web → remark-parse@11.0.0 → micromark-util-types@2.0.3
+micromark@4.0.3 | MIT | production | packages/web → remark-parse@11.0.0 → mdast-util-from-markdown@2.1.0 → micromark@4.0.3
 micromatch@4.0.8 | MIT | development | . → tailwindcss@3.4.18 → micromatch@4.0.8
 mime-db@1.52.0 | MIT | production | packages/service → form-data@4.0.4 → mime-types@2.1.35 → mime-db@1.52.0
 mime-db@1.54.0 | MIT | production | packages/parse → mime-types@3.0.2 → mime-db@1.54.0
@@ -1173,11 +1391,14 @@ pac-proxy-agent@7.2.0 | MIT | production | packages/service → proxy-agent@6.5.
 pac-resolver@7.0.1 | MIT | production | packages/service → proxy-agent@6.5.0 → pac-proxy-agent@7.2.0 → pac-resolver@7.0.1
 package-json-from-dist@1.0.1 | BlueOak-1.0.0 | production | projects/app → archiver@7.0.1 → archiver-utils@5.0.2 → glob@10.4.5 → package-json-from-dist@1.0.1
 package-json@8.1.1 | MIT | development | . → @chakra-ui/cli@2.5.8 → update-notifier@6.0.2 → latest-version@7.0.0 → package-json@8.1.1
+package-manager-detector@1.9.0 | MIT | production | packages/web → mermaid@11.16.1 → @iconify/utils@3.1.7 → @antfu/install-pkg@2.1.0 → package-manager-detector@1.9.0
 pako@1.0.11 | MIT AND Zlib | production | projects/app → jszip@3.10.1 → pako@1.0.11
 parent-module@1.0.1 | MIT | production | packages/web → @emotion/react@11.11.1 → @emotion/babel-plugin@11.13.5 → babel-plugin-macros@3.1.0 → cosmiconfig@7.1.0 → import-fresh@3.3.1 → parent-module@1.0.1
 parse-bmfont-ascii@1.0.6 | MIT | development | . → @chakra-ui/cli@2.5.8 → cli-welcome@2.2.3 → clear-any-console@1.16.4 → command-code@1.88.0 → jimp@1.6.1 → @jimp/plugin-print@1.6.1 → parse-bmfont-ascii@1.0.6
 parse-bmfont-binary@1.0.6 | MIT | development | . → @chakra-ui/cli@2.5.8 → cli-welcome@2.2.3 → clear-any-console@1.16.4 → command-code@1.88.0 → jimp@1.6.1 → @jimp/plugin-print@1.6.1 → parse-bmfont-binary@1.0.6
 parse-bmfont-xml@1.1.6 | MIT | development | . → @chakra-ui/cli@2.5.8 → cli-welcome@2.2.3 → clear-any-console@1.16.4 → command-code@1.88.0 → jimp@1.6.1 → @jimp/plugin-print@1.6.1 → parse-bmfont-xml@1.1.6
+parse-entities@2.0.0 | MIT | production | packages/web → react-syntax-highlighter@15.6.1 → refractor@3.6.0 → parse-entities@2.0.0
+parse-entities@4.0.2 | MIT | production | packages/web → hast-util-to-jsx-runtime@2.3.6 → mdast-util-mdx-jsx@3.2.0 → parse-entities@4.0.2
 parse-json@5.2.0 | MIT | production | packages/web → @emotion/react@11.11.1 → @emotion/babel-plugin@11.13.5 → babel-plugin-macros@3.1.0 → cosmiconfig@7.1.0 → parse-json@5.2.0
 parse-ms@4.0.0 | MIT | development | . → @chakra-ui/cli@2.5.8 → cli-welcome@2.2.3 → clear-any-console@1.16.4 → command-code@1.88.0 → open-editor@5.1.0 → execa@9.6.1 → pretty-ms@9.3.1 → parse-ms@4.0.0
 parse5-htmlparser2-tree-adapter@6.0.1 | MIT | development | . → @chakra-ui/cli@2.5.8 → cli-welcome@2.2.3 → clear-any-console@1.16.4 → command-code@1.88.0 → marked-terminal@7.3.0 → cli-highlight@2.1.11 → parse5-htmlparser2-tree-adapter@6.0.1
@@ -1186,6 +1407,7 @@ parse5@5.1.1 | MIT | development | . → @chakra-ui/cli@2.5.8 → cli-welcome@2.
 parse5@6.0.1 | MIT | development | . → @chakra-ui/cli@2.5.8 → cli-welcome@2.2.3 → clear-any-console@1.16.4 → command-code@1.88.0 → marked-terminal@7.3.0 → cli-highlight@2.1.11 → parse5-htmlparser2-tree-adapter@6.0.1 → parse5@6.0.1
 parse5@7.3.0 | MIT | production | packages/parse → cheerio@1.0.0-rc.12 → parse5@7.3.0
 patch-console@2.0.0 | MIT | development | . → @chakra-ui/cli@2.5.8 → cli-welcome@2.2.3 → clear-any-console@1.16.4 → command-code@1.88.0 → ink@7.1.0 → patch-console@2.0.0
+path-data-parser@0.1.0 | MIT | production | packages/web → mermaid@11.16.1 → roughjs@4.6.6 → path-data-parser@0.1.0
 path-exists@4.0.0 | MIT | development | . → eslint@9.39.4 → find-up@5.0.0 → path-exists@4.0.0
 path-expression-matcher@1.6.2 | MIT | production | sdk/storage → minio@8.0.7 → fast-xml-parser@5.11.2 → path-expression-matcher@1.6.2
 path-is-absolute@1.0.1 | MIT | production | packages/parse → mammoth@1.11.0 → path-is-absolute@1.0.1
@@ -1196,7 +1418,7 @@ path-scurry@1.11.1 | BlueOak-1.0.0 | production | projects/app → archiver@7.0.
 path-scurry@2.0.2 | BlueOak-1.0.0 | development | . → @chakra-ui/cli@2.5.8 → cli-welcome@2.2.3 → clear-any-console@1.16.4 → command-code@1.88.0 → glob@13.0.6 → path-scurry@2.0.2
 path-type@4.0.0 | MIT | production | packages/web → @emotion/react@11.11.1 → @emotion/babel-plugin@11.13.5 → babel-plugin-macros@3.1.0 → cosmiconfig@7.1.0 → path-type@4.0.0
 pathe@2.0.3 | MIT | development | . → vitest@4.1.11 → pathe@2.0.3
-pause-stream@0.0.11 | UNKNOWN | production | sdk/storage → ali-oss@6.23.0 → urllib@2.44.1 → formstream@1.5.2 → pause-stream@0.0.11
+pause-stream@0.0.11 | MIT | production | sdk/storage → ali-oss@6.23.0 → urllib@2.44.1 → formstream@1.5.2 → pause-stream@0.0.11
 pend@1.2.0 | MIT | production | packages/parse → yauzl@3.4.0 → pend@1.2.0
 performance-now@2.1.0 | MIT | production | sdk/storage → cos-nodejs-sdk-v5@3.0.0 → cos-request@1.3.3 → performance-now@2.1.0
 pg-connection-string@2.14.1 | MIT | production | packages/service → pg@8.23.1 → pg-connection-string@2.14.1
@@ -1220,6 +1442,8 @@ playwright-core@1.64.1 | Apache-2.0 | development | . → @axe-core/playwright@4
 playwright@1.64.1 | Apache-2.0 | development | . → @playwright/test@1.64.1 → playwright@1.64.1
 pngjs@6.0.0 | MIT | development | . → @chakra-ui/cli@2.5.8 → cli-welcome@2.2.3 → clear-any-console@1.16.4 → command-code@1.88.0 → jimp@1.6.1 → @jimp/diff@1.6.1 → pixelmatch@5.3.0 → pngjs@6.0.0
 pngjs@7.0.0 | MIT | development | . → @chakra-ui/cli@2.5.8 → cli-welcome@2.2.3 → clear-any-console@1.16.4 → command-code@1.88.0 → jimp@1.6.1 → @jimp/js-png@1.6.1 → pngjs@7.0.0
+points-on-curve@0.2.0 | MIT | production | packages/web → mermaid@11.16.1 → roughjs@4.6.6 → points-on-curve@0.2.0
+points-on-path@0.2.1 | MIT | production | packages/web → mermaid@11.16.1 → roughjs@4.6.6 → points-on-path@0.2.1
 possible-typed-array-names@1.1.0 | MIT | development | . → eslint-config-next@16.3.6 → eslint-plugin-import@2.32.0 → array-includes@3.2.0 → es-abstract@1.24.2 → available-typed-arrays@1.0.7 → possible-typed-array-names@1.1.0
 postcss-import@15.1.0 | MIT | development | . → tailwindcss@3.4.18 → postcss-import@15.1.0
 postcss-js@4.1.0 | MIT | development | . → tailwindcss@3.4.18 → postcss-js@4.1.0
@@ -1241,10 +1465,14 @@ postgres-range@1.1.4 | MIT | development | packages/service → @types/pg@8.11.1
 postgres@3.4.9 | Unlicense | development | . → @chakra-ui/cli@2.5.8 → cli-welcome@2.2.3 → clear-any-console@1.16.4 → command-code@1.88.0 → postgres@3.4.9
 prelude-ls@1.2.1 | MIT | development | . → eslint@9.39.4 → optionator@0.9.4 → prelude-ls@1.2.1
 pretty-ms@9.3.1 | MIT | development | . → @chakra-ui/cli@2.5.8 → cli-welcome@2.2.3 → clear-any-console@1.16.4 → command-code@1.88.0 → open-editor@5.1.0 → execa@9.6.1 → pretty-ms@9.3.1
+prismjs@1.27.0 | MIT | production | packages/web → react-syntax-highlighter@15.6.1 → refractor@3.6.0 → prismjs@1.27.0
+prismjs@1.30.0 | MIT | production | packages/web → react-syntax-highlighter@15.6.1 → prismjs@1.30.0
 process-nextick-args@2.0.1 | MIT | production | projects/app → jszip@3.10.1 → readable-stream@2.3.8 → process-nextick-args@2.0.1
 process-warning@5.1.0 | MIT | production | sdk/otel → pino@9.14.0 → process-warning@5.1.0
 process@0.11.10 | MIT | production | projects/app → archiver@7.0.1 → readable-stream@4.8.0 → process@0.11.10
 prop-types@15.8.1 | MIT | production | packages/web → @chakra-ui/react@2.10.7 → react-focus-lock@2.13.7 → prop-types@15.8.1
+property-information@5.6.0 | MIT | production | packages/web → react-syntax-highlighter@15.6.1 → refractor@3.6.0 → hastscript@6.0.0 → property-information@5.6.0
+property-information@7.2.0 | MIT | production | packages/web → hast-util-to-jsx-runtime@2.3.6 → property-information@7.2.0
 proto-list@1.2.4 | ISC | development | . → @chakra-ui/cli@2.5.8 → update-notifier@6.0.2 → latest-version@7.0.0 → package-json@8.1.1 → registry-auth-token@5.1.1 → @pnpm/npm-conf@3.0.3 → config-chain@1.1.13 → proto-list@1.2.4
 protobufjs@7.6.6 | BSD-3-Clause | production | sdk/otel → @opentelemetry/exporter-logs-otlp-http@0.203.0 → @opentelemetry/otlp-transformer@0.203.0 → protobufjs@7.6.6
 proxy-from-env@2.1.0 | MIT | production | packages/service → axios@1.18.1 → proxy-from-env@2.1.0
@@ -1282,14 +1510,17 @@ real-require@0.2.0 | MIT | production | sdk/otel → pino@9.14.0 → real-requir
 redis-errors@1.2.0 | MIT | production | packages/dal → ioredis@5.11.1 → redis-errors@1.2.0
 redis-parser@3.0.0 | MIT | production | packages/dal → ioredis@5.11.1 → redis-parser@3.0.0
 reflect.getprototypeof@1.0.10 | MIT | development | . → eslint-config-next@16.3.6 → eslint-plugin-import@2.32.0 → array-includes@3.2.0 → es-abstract@1.24.2 → typed-array-byte-offset@1.0.5 → reflect.getprototypeof@1.0.10
+refractor@3.6.0 | MIT | production | packages/web → react-syntax-highlighter@15.6.1 → refractor@3.6.0
 regenerate-unicode-properties@10.3.0 | MIT | development | . → @svgr/webpack@6.5.1 → @babel/preset-env@7.29.7 → @babel/plugin-syntax-unicode-sets-regex@7.18.6 → @babel/helper-create-regexp-features-plugin@7.29.10 → regexpu-core@6.5.3 → regenerate-unicode-properties@10.3.0
 regenerate@1.5.0 | MIT | development | . → @svgr/webpack@6.5.1 → @babel/preset-env@7.29.7 → @babel/plugin-syntax-unicode-sets-regex@7.18.6 → @babel/helper-create-regexp-features-plugin@7.29.10 → regexpu-core@6.5.3 → regenerate@1.5.0
+regexp-tree@0.1.27 | MIT | production | packages/search → safe-regex@2.1.1 → regexp-tree@0.1.27
 regexp.prototype.flags@1.5.4 | MIT | development | . → eslint-config-next@16.3.6 → eslint-plugin-react@7.37.5 → string.prototype.matchall@4.1.0 → regexp.prototype.flags@1.5.4
 regexpu-core@6.5.3 | MIT | development | . → @svgr/webpack@6.5.1 → @babel/preset-env@7.29.7 → @babel/plugin-syntax-unicode-sets-regex@7.18.6 → @babel/helper-create-regexp-features-plugin@7.29.10 → regexpu-core@6.5.3
 registry-auth-token@5.1.1 | MIT | development | . → @chakra-ui/cli@2.5.8 → update-notifier@6.0.2 → latest-version@7.0.0 → package-json@8.1.1 → registry-auth-token@5.1.1
 registry-url@6.0.1 | MIT | development | . → @chakra-ui/cli@2.5.8 → update-notifier@6.0.2 → latest-version@7.0.0 → package-json@8.1.1 → registry-url@6.0.1
 regjsgen@0.8.0 | MIT | development | . → @svgr/webpack@6.5.1 → @babel/preset-env@7.29.7 → @babel/plugin-syntax-unicode-sets-regex@7.18.6 → @babel/helper-create-regexp-features-plugin@7.29.10 → regexpu-core@6.5.3 → regjsgen@0.8.0
 regjsparser@0.13.4 | BSD-2-Clause | development | . → @svgr/webpack@6.5.1 → @babel/preset-env@7.29.7 → @babel/plugin-syntax-unicode-sets-regex@7.18.6 → @babel/helper-create-regexp-features-plugin@7.29.10 → regexpu-core@6.5.3 → regjsparser@0.13.4
+remark-stringify@11.0.0 | MIT | production | packages/web → remark-gfm@4.0.1 → remark-stringify@11.0.0
 require-directory@2.1.1 | MIT | production | sdk/otel → pino-opentelemetry-transport@1.0.1 → otlp-logger@1.1.13 → @opentelemetry/exporter-logs-otlp-grpc@0.206.0 → @grpc/grpc-js@1.14.6 → @grpc/proto-loader@0.8.1 → yargs@17.7.3 → require-directory@2.1.1
 require-from-string@2.0.2 | MIT | production | packages/contracts → ajv@8.17.1 → require-from-string@2.0.2
 requires-port@1.0.0 | MIT | production | sdk/storage → cos-nodejs-sdk-v5@3.0.0 → cos-request@1.3.3 → tough-cookie@4.1.4 → url-parse@1.5.10 → requires-port@1.0.0
@@ -1304,12 +1535,15 @@ restore-cursor@4.0.0 | MIT | development | . → @chakra-ui/cli@2.5.8 → ora@7.
 restore-cursor@5.1.0 | MIT | development | . → lint-staged@16.4.0 → listr2@9.0.5 → log-update@6.1.0 → cli-cursor@5.0.0 → restore-cursor@5.1.0
 reusify@1.1.0 | MIT | development | . → tailwindcss@3.4.18 → fast-glob@3.3.3 → @nodelib/fs.walk@1.2.8 → fastq@1.20.3 → reusify@1.1.0
 rfdc@1.4.1 | MIT | development | . → lint-staged@16.4.0 → listr2@9.0.5 → rfdc@1.4.1
+robust-predicates@3.0.3 | Unlicense | production | packages/web → mermaid@11.16.1 → d3@7.9.0 → d3-delaunay@6.0.4 → delaunator@5.1.0 → robust-predicates@3.0.3
 rolldown-plugin-dts@0.23.2 | MIT | development | . → tsdown@0.21.10 → rolldown-plugin-dts@0.23.2
 rolldown@1.0.0-rc.17 | MIT | development | . → tsdown@0.21.10 → rolldown@1.0.0-rc.17
 rollup@4.65.0 | MIT | development | . → vite@6.4.3 → rollup@4.65.0
+roughjs@4.6.6 | MIT | production | packages/web → mermaid@11.16.1 → roughjs@4.6.6
 rrweb-cssom@0.8.0 | MIT | development | packages/web → jsdom@26.1.0 → rrweb-cssom@0.8.0
 run-applescript@7.1.0 | MIT | development | . → @chakra-ui/cli@2.5.8 → cli-welcome@2.2.3 → clear-any-console@1.16.4 → command-code@1.88.0 → open@10.2.0 → default-browser@5.5.1 → bundle-name@4.1.1 → run-applescript@7.1.0
 run-parallel@1.2.0 | MIT | development | . → tailwindcss@3.4.18 → fast-glob@3.3.3 → @nodelib/fs.walk@1.2.8 → @nodelib/fs.scandir@2.1.5 → run-parallel@1.2.0
+rw@1.3.3 | BSD-3-Clause | production | packages/web → mermaid@11.16.1 → d3@7.9.0 → d3-dsv@3.0.1 → rw@1.3.3
 safe-array-concat@1.1.4 | MIT | development | . → eslint-config-next@16.3.6 → eslint-plugin-import@2.32.0 → array-includes@3.2.0 → es-abstract@1.24.2 → safe-array-concat@1.1.4
 safe-buffer@5.1.2 | MIT | production | projects/app → jszip@3.10.1 → readable-stream@2.3.8 → safe-buffer@5.1.2
 safe-buffer@5.2.1 | MIT | production | sdk/storage → cos-nodejs-sdk-v5@3.0.0 → cos-request@1.3.3 → safe-buffer@5.2.1
@@ -1355,6 +1589,8 @@ sonic-boom@4.2.1 | MIT | production | sdk/otel → pino@9.14.0 → sonic-boom@4.
 source-map-js@1.2.2 | BSD-3-Clause | production | projects/app → next@16.3.0 → postcss@8.5.23 → source-map-js@1.2.2
 source-map@0.5.7 | BSD-3-Clause | production | packages/web → @emotion/react@11.11.1 → @emotion/babel-plugin@11.13.5 → source-map@0.5.7
 source-map@0.6.1 | BSD-3-Clause | development | . → @svgr/webpack@6.5.1 → @svgr/plugin-svgo@6.5.1 → svgo@2.8.4 → css-tree@1.1.3 → source-map@0.6.1
+space-separated-tokens@1.1.5 | MIT | production | packages/web → react-syntax-highlighter@15.6.1 → refractor@3.6.0 → hastscript@6.0.0 → space-separated-tokens@1.1.5
+space-separated-tokens@2.0.2 | MIT | production | packages/web → hast-util-to-jsx-runtime@2.3.6 → space-separated-tokens@2.0.2
 sparse-bitfield@3.0.3 | MIT | production | packages/service → mongoose@8.24.5 → mongodb@6.20.0 → @mongodb-js/saslprep@1.5.5 → sparse-bitfield@3.0.3
 split-on-first@1.1.0 | MIT | production | sdk/storage → minio@8.0.7 → query-string@7.1.3 → split-on-first@1.1.0
 split2@4.2.0 | ISC | production | packages/service → pg@8.23.1 → pgpass@1.0.5 → split2@4.2.0
@@ -1395,6 +1631,7 @@ string.prototype.repeat@1.0.0 | MIT | development | . → eslint-config-next@16.
 string.prototype.trim@1.2.11 | MIT | development | . → eslint-config-next@16.3.6 → eslint-plugin-import@2.32.0 → array-includes@3.2.0 → es-abstract@1.24.2 → string.prototype.trim@1.2.11
 string.prototype.trimend@1.0.10 | MIT | development | . → eslint-config-next@16.3.6 → eslint-plugin-import@2.32.0 → string.prototype.trimend@1.0.10
 string.prototype.trimstart@1.0.8 | MIT | development | . → eslint-config-next@16.3.6 → eslint-plugin-import@2.32.0 → array-includes@3.2.0 → es-abstract@1.24.2 → string.prototype.trimstart@1.0.8
+stringify-entities@4.0.4 | MIT | production | packages/web → hast-util-to-jsx-runtime@2.3.6 → mdast-util-mdx-jsx@3.2.0 → stringify-entities@4.0.4
 strip-ansi-cjs@strip-ansi@6.0.1 | UNKNOWN | production | projects/app → archiver@7.0.1 → archiver-utils@5.0.2 → glob@10.4.5 → jackspeak@3.4.3 → @isaacs/cliui@8.0.2 → strip-ansi-cjs@strip-ansi@6.0.1
 strip-ansi@6.0.1 | MIT | production | sdk/otel → pino-opentelemetry-transport@1.0.1 → otlp-logger@1.1.13 → @opentelemetry/exporter-logs-otlp-grpc@0.206.0 → @grpc/grpc-js@1.14.6 → @grpc/proto-loader@0.8.1 → yargs@17.7.3 → cliui@8.0.1 → strip-ansi@6.0.1
 strip-ansi@7.2.0 | MIT | production | projects/app → archiver@7.0.1 → archiver-utils@5.0.2 → glob@10.4.5 → jackspeak@3.4.3 → @isaacs/cliui@8.0.2 → strip-ansi@7.2.0
@@ -1405,8 +1642,11 @@ strip-json-comments@3.1.1 | MIT | development | . → eslint@9.39.4 → @eslint/
 strnum@1.1.2 | MIT | production | sdk/storage → cos-nodejs-sdk-v5@3.0.0 → cos-fast-xml-parser@1.0.0 → strnum@1.1.2
 strnum@2.4.2 | MIT | production | sdk/storage → minio@8.0.7 → fast-xml-parser@5.11.2 → strnum@2.4.2
 strtok3@10.3.5 | MIT | production | packages/parse → file-type@21.3.0 → strtok3@10.3.5
+style-to-js@1.1.21 | MIT | production | packages/web → hast-util-to-jsx-runtime@2.3.6 → style-to-js@1.1.21
+style-to-object@1.0.14 | MIT | production | packages/web → hast-util-to-jsx-runtime@2.3.6 → style-to-js@1.1.21 → style-to-object@1.0.14
 styled-jsx@5.1.6 | MIT | production | projects/app → next@16.3.0 → styled-jsx@5.1.6
 stylis@4.2.0 | MIT | production | packages/web → @emotion/react@11.11.1 → @emotion/babel-plugin@11.13.5 → stylis@4.2.0
+stylis@4.4.0 | MIT | production | packages/web → mermaid@11.16.1 → stylis@4.4.0
 sucrase@3.35.1 | MIT | development | . → tailwindcss@3.4.18 → sucrase@3.35.1
 supports-color@10.2.2 | MIT | development | . → @chakra-ui/cli@2.5.8 → cli-welcome@2.2.3 → clear-any-console@1.16.4 → command-code@1.88.0 → terminal-link@5.0.0 → supports-hyperlinks@4.6.0 → supports-color@10.2.2
 supports-color@5.5.0 | MIT | development | . → @chakra-ui/cli@2.5.8 → cli-welcome@2.2.3 → chalk@2.4.2 → supports-color@5.5.0
@@ -1432,7 +1672,7 @@ through2@4.0.2 | MIT | production | sdk/storage → minio@8.0.7 → through2@4.0
 tiny-invariant@1.3.3 | MIT | production | packages/web → @chakra-ui/system@2.6.1 → @chakra-ui/utils@2.0.15 → css-box-model@1.2.1 → tiny-invariant@1.3.3
 tinybench@2.9.0 | MIT | development | . → vitest@4.1.11 → tinybench@2.9.0
 tinycolor2@1.6.0 | MIT | development | . → @chakra-ui/cli@2.5.8 → cli-welcome@2.2.3 → clear-any-console@1.16.4 → command-code@1.88.0 → jimp@1.6.1 → @jimp/plugin-color@1.6.1 → tinycolor2@1.6.0
-tinyexec@1.3.1 | MIT | development | . → lint-staged@16.4.0 → tinyexec@1.3.1
+tinyexec@1.3.1 | MIT | production | packages/web → mermaid@11.16.1 → @iconify/utils@3.1.7 → @antfu/install-pkg@2.1.0 → tinyexec@1.3.1
 tinyglobby@0.2.17 | MIT | development | . → tsdown@0.21.10 → tinyglobby@0.2.17
 tinyrainbow@3.2.0 | MIT | development | . → @vitest/coverage-v8@4.1.11 → tinyrainbow@3.2.0
 tldts-core@6.1.86 | MIT | development | packages/web → jsdom@26.1.0 → tough-cookie@5.1.2 → tldts@6.1.86 → tldts-core@6.1.86
@@ -1446,8 +1686,11 @@ tough-cookie@5.1.2 | BSD-3-Clause | development | packages/web → jsdom@26.1.0 
 tr46@0.0.3 | MIT | development | . → @chakra-ui/cli@2.5.8 → cli-welcome@2.2.3 → clear-any-console@1.16.4 → langbase@1.2.4 → openai@4.104.0 → node-fetch@2.7.0 → whatwg-url@5.0.0 → tr46@0.0.3
 tr46@5.1.1 | MIT | production | packages/service → mongoose@8.24.5 → mongodb@6.20.0 → mongodb-connection-string-url@3.0.2 → whatwg-url@14.2.0 → tr46@5.1.1
 tree-kill@1.2.2 | MIT | development | . → tsdown@0.21.10 → tree-kill@1.2.2
+trim-lines@3.0.1 | MIT | production | packages/web → react-markdown@9.1.0 → mdast-util-to-hast@13.2.1 → trim-lines@3.0.1
 triple-beam@1.4.1 | MIT | production | sdk/otel → winston@3.17.0 → triple-beam@1.4.1
+trough@2.2.0 | MIT | production | packages/web → unified@11.0.5 → trough@2.2.0
 ts-api-utils@2.5.0 | MIT | development | . → typescript-eslint@8.71.0 → @typescript-eslint/eslint-plugin@8.71.0 → ts-api-utils@2.5.0
+ts-dedent@2.3.0 | MIT | production | packages/web → mermaid@11.16.1 → ts-dedent@2.3.0
 ts-interface-checker@0.1.13 | Apache-2.0 | development | . → tailwindcss@3.4.18 → sucrase@3.35.1 → ts-interface-checker@0.1.13
 tsconfig-paths@3.15.0 | MIT | development | . → eslint-config-next@16.3.6 → eslint-plugin-import@2.32.0 → tsconfig-paths@3.15.0
 tslib@2.4.0 | 0BSD | production | packages/web → @chakra-ui/react@2.10.7 → @chakra-ui/hooks@2.4.4 → framesync@6.1.2 → tslib@2.4.0
@@ -1479,6 +1722,12 @@ unicode-match-property-value-ecmascript@2.2.1 | MIT | development | . → @svgr/
 unicode-property-aliases-ecmascript@2.2.0 | MIT | development | . → @svgr/webpack@6.5.1 → @babel/preset-env@7.29.7 → @babel/plugin-syntax-unicode-sets-regex@7.18.6 → @babel/helper-create-regexp-features-plugin@7.29.10 → regexpu-core@6.5.3 → unicode-match-property-ecmascript@2.0.0 → unicode-property-aliases-ecmascript@2.2.0
 unicorn-magic@0.3.0 | MIT | development | . → @chakra-ui/cli@2.5.8 → cli-welcome@2.2.3 → clear-any-console@1.16.4 → command-code@1.88.0 → open-editor@5.1.0 → execa@9.6.1 → npm-run-path@6.0.0 → unicorn-magic@0.3.0
 unique-string@3.0.0 | MIT | development | . → @chakra-ui/cli@2.5.8 → update-notifier@6.0.2 → configstore@6.0.0 → unique-string@3.0.0
+unist-util-is@6.0.1 | MIT | production | packages/web → react-markdown@9.1.0 → unist-util-visit@5.2.0 → unist-util-is@6.0.1
+unist-util-position@5.0.0 | MIT | production | packages/web → hast-util-to-jsx-runtime@2.3.6 → unist-util-position@5.0.0
+unist-util-remove-position@5.0.0 | MIT | production | packages/web → rehype-katex@7.0.1 → hast-util-from-html-isomorphic@2.0.0 → unist-util-remove-position@5.0.0
+unist-util-stringify-position@4.0.0 | MIT | production | packages/web → hast-util-to-jsx-runtime@2.3.6 → mdast-util-mdx-jsx@3.2.0 → unist-util-stringify-position@4.0.0
+unist-util-visit-parents@6.1.0 | MIT | production | packages/web → rehype-katex@7.0.1 → unist-util-visit-parents@6.1.0
+unist-util-visit@5.2.0 | MIT | production | packages/web → react-markdown@9.1.0 → unist-util-visit@5.2.0
 universalify@0.2.0 | MIT | production | sdk/storage → cos-nodejs-sdk-v5@3.0.0 → cos-request@1.3.3 → tough-cookie@4.1.4 → universalify@0.2.0
 unrs-resolver@1.12.2 | MIT | development | . → eslint-config-next@16.3.6 → eslint-import-resolver-typescript@3.10.1 → unrs-resolver@1.12.2
 unrun@0.2.39 | MIT | development | . → tsdown@0.21.10 → unrun@0.2.39
@@ -1496,12 +1745,15 @@ use-sync-external-store@1.7.0 | MIT | production | packages/web → @tanstack/re
 utif2@4.1.0 | MIT | development | . → @chakra-ui/cli@2.5.8 → cli-welcome@2.2.3 → clear-any-console@1.16.4 → command-code@1.88.0 → jimp@1.6.1 → @jimp/js-tiff@1.6.1 → utif2@4.1.0
 util-deprecate@1.0.2 | MIT | production | projects/app → jszip@3.10.1 → readable-stream@2.3.8 → util-deprecate@1.0.2
 utility@1.18.0 | MIT | production | sdk/storage → ali-oss@6.23.0 → utility@1.18.0
-uuid@14.0.3 | MIT | development | . → @chakra-ui/cli@2.5.8 → cli-welcome@2.2.3 → clear-any-console@1.16.4 → command-code@1.88.0 → uuid@14.0.3
+uuid@14.0.3 | MIT | production | packages/web → mermaid@11.16.1 → uuid@14.0.3
 uuid@8.3.2 | MIT | production | packages/service → node-cron@3.0.3 → uuid@8.3.2
 uuid@9.0.1 | MIT | production | packages/dal → bullmq@5.52.2 → uuid@9.0.1
 verror@1.10.0 | MIT | production | sdk/storage → cos-nodejs-sdk-v5@3.0.0 → cos-request@1.3.3 → http-signature@1.2.0 → jsprim@1.4.2 → verror@1.10.0
+vfile-location@5.0.3 | MIT | production | packages/web → rehype-raw@7.0.0 → hast-util-raw@9.1.0 → hast-util-from-parse5@8.0.3 → vfile-location@5.0.3
+vfile-message@4.0.3 | MIT | production | packages/web → hast-util-to-jsx-runtime@2.3.6 → vfile-message@4.0.3
 void-elements@3.1.0 | MIT | production | packages/web → react-i18next@14.1.2 → html-parse-stringify@3.1.0 → void-elements@3.1.0
 w3c-xmlserializer@5.0.0 | MIT | development | packages/web → jsdom@26.1.0 → w3c-xmlserializer@5.0.0
+web-namespaces@2.0.1 | MIT | production | packages/web → rehype-raw@7.0.0 → hast-util-raw@9.1.0 → web-namespaces@2.0.1
 web-streams-polyfill@4.0.0-beta.3 | MIT | development | . → @chakra-ui/cli@2.5.8 → cli-welcome@2.2.3 → clear-any-console@1.16.4 → langbase@1.2.4 → openai@4.104.0 → formdata-node@4.4.1 → web-streams-polyfill@4.0.0-beta.3
 webidl-conversions@3.0.1 | BSD-2-Clause | development | . → @chakra-ui/cli@2.5.8 → cli-welcome@2.2.3 → clear-any-console@1.16.4 → langbase@1.2.4 → openai@4.104.0 → node-fetch@2.7.0 → whatwg-url@5.0.0 → webidl-conversions@3.0.1
 webidl-conversions@7.0.0 | BSD-2-Clause | production | packages/service → mongoose@8.24.5 → mongodb@6.20.0 → mongodb-connection-string-url@3.0.2 → whatwg-url@14.2.0 → webidl-conversions@7.0.0
@@ -1557,6 +1809,7 @@ zip-stream@6.0.1 | MIT | production | projects/app → archiver@7.0.1 → zip-st
 zod-validation-error@3.5.4 | MIT | development | . → @chakra-ui/cli@2.5.8 → cli-welcome@2.2.3 → clear-any-console@1.16.4 → langbase@1.2.4 → zod-validation-error@3.5.4
 zod-validation-error@4.0.2 | MIT | development | . → eslint-config-next@16.3.6 → eslint-plugin-react-hooks@7.1.1 → zod-validation-error@4.0.2
 zod@3.25.76 | MIT | development | . → @chakra-ui/cli@2.5.8 → cli-welcome@2.2.3 → clear-any-console@1.16.4 → langbase@1.2.4 → zod@3.25.76
+zwitch@2.0.4 | MIT | production | packages/web → rehype-raw@7.0.0 → hast-util-raw@9.1.0 → zwitch@2.0.4
 
 三、workspace 内部包（12）
 名称@版本 | 路径 | private

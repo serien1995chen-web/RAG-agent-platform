@@ -12,6 +12,8 @@ export type {
   KnowledgeRuntimeConfig,
 } from './shared/config/knowledge-runtime-config';
 export { resolveSecretRef } from './shared/config/secret-ref';
+export { loadS7CitationConfig } from './shared/config/s7-citation-config';
+export type { S7CitationConfig } from './shared/config/s7-citation-config';
 export {
   createKnowledgeConnections,
   createKnowledgeMongoConnection,
@@ -111,6 +113,20 @@ export {
   S06JobApplication,
   S06_OPERATION_IDS,
   isS06Operation,
+  S7SearchOperationApplication,
+  S7_OPERATION_IDS,
+  isS7Operation,
+  S7SearchApplication,
+  S7CitationApplication,
+  S7SearchAuthorizationAdapter,
+  S7FullTextSearchAdapter,
+  S7ModelGatewaySearchAdapter,
+  S7VectorSearchAdapter,
+  S7SearchPipelineFactory,
+  S7CitationSigner,
+  S7CitationRepository,
+  S7FilterSourceRepository,
+  S7SearchRepository,
   S5QaPipelineAdapter,
   S5OcrApplication,
   S5OcrHttpAdapter,
@@ -165,6 +181,10 @@ export type {
   S5ObjectArtifactRef,
   S5ProcessingResult,
   S6ProcessingPort,
+  S7BoundModel,
+  S7CitationIssueInput,
+  S7ResolvedModels,
+  S7SearchApplicationDependencies,
 } from './modules/knowledge';
 export {
   KnowledgeMockAuthProvider,

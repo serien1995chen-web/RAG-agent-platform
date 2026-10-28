@@ -14,6 +14,7 @@ import type {
 import type { FileApplication } from './file.application';
 import type { SourceFileApplication } from './source-preview';
 import { isS06Operation } from './operations/s06-jobs';
+import { isS7Operation } from './s7-search-operation.application';
 import type { KnowledgeOperationInput, KnowledgeOperationResult } from './operation-types';
 
 export type { KnowledgeOperationInput, KnowledgeOperationResult } from './operation-types';
@@ -23,6 +24,10 @@ interface S5OperationApplication {
 }
 
 interface S6OperationApplication {
+  dispatch(input: KnowledgeOperationInput): Promise<KnowledgeOperationResult>;
+}
+
+interface S7OperationApplication {
   dispatch(input: KnowledgeOperationInput): Promise<KnowledgeOperationResult>;
 }
 
@@ -80,6 +85,7 @@ export class KnowledgeApplication {
     private readonly s5Models?: S5OperationApplication,
     private readonly s5ModelBindings?: S5OperationApplication,
     private readonly s06?: S6OperationApplication,
+    private readonly s7?: S7OperationApplication,
   ) {}
 
   private async requireExistingPermission(
@@ -173,6 +179,17 @@ export class KnowledgeApplication {
 
   async dispatch(input: KnowledgeOperationInput): Promise<KnowledgeOperationResult> {
     const { context, params } = input;
+    if (isS7Operation(input.operationId)) {
+      if (!this.s7) {
+        throw createKnowledgeError({
+          code: 'KNOWLEDGE_INTERNAL_ERROR',
+          requestId: context.requestId,
+          traceId: context.traceId,
+          details: { operationId: input.operationId, reason: 's7_application_missing' },
+        });
+      }
+      return this.s7.dispatch(input);
+    }
     if (isS06Operation(input.operationId)) {
       if (!this.s06) {
         throw createKnowledgeError({

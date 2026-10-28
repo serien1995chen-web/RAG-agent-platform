@@ -1,4 +1,4 @@
-declare module 'react-syntax-highlighter/dist/esm/prism' {
+declare module 'react-syntax-highlighter/dist/cjs/prism' {
   import type { ComponentType, CSSProperties, ElementType } from 'react';
 
   interface SyntaxHighlighterProps {
@@ -14,7 +14,7 @@ declare module 'react-syntax-highlighter/dist/esm/prism' {
   export default SyntaxHighlighter;
 }
 
-declare module 'react-syntax-highlighter/dist/esm/styles/prism' {
+declare module 'react-syntax-highlighter/dist/cjs/styles/prism' {
   import type { CSSProperties } from 'react';
 
   export const vs: Record<string, CSSProperties>;

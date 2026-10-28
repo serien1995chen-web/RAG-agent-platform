@@ -302,6 +302,8 @@ beforeAll(async () => {
       KB_FILE_E2E_TICKET_SECRET: `file-e2e-ticket-secret-${suffix}-value`,
       KB_CREDENTIAL_ENCRYPTION_KEY_REF: 'env:KB_FILE_E2E_CREDENTIAL_KEY',
       KB_FILE_E2E_CREDENTIAL_KEY: `file-e2e-credential-key-${suffix}-value`,
+      KB_CITATION_SIGNING_SECRET_REF: 'env:KB_FILE_E2E_CITATION_SECRET',
+      KB_FILE_E2E_CITATION_SECRET: `file-e2e-citation-${suffix}-fixed-secret-value`,
       KB_AUTH_MODE: 'mock',
       KB_MOCK_AUTH_TOKEN: authToken,
       KB_MOCK_WORKSPACE_ID: workspaceId,

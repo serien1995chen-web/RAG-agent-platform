@@ -1,6 +1,4 @@
 import type { SearchApiResponse } from '@kb/contracts';
-import { S7DownstreamKnowledgeError } from '../client/s7-downstream-knowledge-client';
-
 export type S7SearchUiState =
   | { kind: 'idle' }
   | { kind: 'loading' }
@@ -22,8 +20,20 @@ export function classifyS7SearchState(input: {
 }): S7SearchUiState {
   if (input.loading) return { kind: 'loading' };
   if (input.error) {
-    if (input.error instanceof S7DownstreamKnowledgeError) {
+    if (
+      typeof input.error === 'object' &&
+      input.error !== null &&
+      'status' in input.error &&
+      typeof input.error.status === 'number' &&
+      'problem' in input.error
+    ) {
       const status = input.error.status;
+      const problem = input.error.problem as {
+        error?: { code?: unknown; retryable?: unknown };
+        traceId?: unknown;
+      };
+      const code =
+        typeof problem?.error?.code === 'string' ? problem.error.code : 'KNOWLEDGE_INTERNAL_ERROR';
       return {
         kind:
           status === 401 || status === 403 || status === 404
@@ -33,9 +43,9 @@ export function classifyS7SearchState(input: {
               : status === 504
                 ? 'timeout'
                 : 'error',
-        code: input.error.problem.error.code,
-        traceId: input.error.problem.traceId,
-        retryable: input.error.problem.error.retryable,
+        code,
+        ...(typeof problem?.traceId === 'string' ? { traceId: problem.traceId } : {}),
+        retryable: problem?.error?.retryable === true,
       };
     }
     return {

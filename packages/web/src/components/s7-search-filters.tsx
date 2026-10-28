@@ -118,6 +118,7 @@ export function S7SearchFilters(props: {
   spaces: readonly S7SpaceChoice[];
   labels: S7SearchFiltersLabels;
   busy?: boolean;
+  rerankAvailable?: boolean;
   onValueChange: (value: S7SearchFormValue) => void;
   onFiltersChange: (filter: SearchFilterApi) => void;
   onSubmit: () => void;
@@ -304,6 +305,7 @@ export function S7SearchFilters(props: {
             <Switch
               id="s7-using-rerank"
               isChecked={props.value.usingRerank}
+              isDisabled={props.rerankAvailable === false}
               onChange={(event) => setValue('usingRerank', event.target.checked)}
             />
             <FormLabel htmlFor="s7-using-rerank" m={0} fontSize="sm" fontWeight="700">

@@ -173,4 +173,8 @@ export class S7SearchRepository {
       });
     }
   }
+
+  search(input: Parameters<S7SearchRepository['fullTextRecall']>[0], context: TenantContext) {
+    return this.fullTextRecall(input, context);
+  }
 }

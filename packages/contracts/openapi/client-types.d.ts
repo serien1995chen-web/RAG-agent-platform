@@ -124,6 +124,7 @@ export type OperationId =
 export type RuntimeOperationId =
   | 'API-HEALTH-LIVE'
   | 'API-HEALTH-READY'
+  | 'API-CITATION-GET'
   | 'API-CONNECTOR-DELETE'
   | 'API-CONNECTOR-GET'
   | 'API-CONNECTOR-UPDATE'
@@ -151,6 +152,10 @@ export type RuntimeOperationId =
   | 'API-ACL-UPDATE'
   | 'API-RESOURCE-OWNERSHIP-TRANSFER'
   | 'API-ACL-RESUME'
+  | 'API-SEARCH-FULLTEXT'
+  | 'API-SEARCH-HYBRID'
+  | 'API-SEARCH-MULTI'
+  | 'API-SEARCH-SEMANTIC'
   | 'API-SEGMENT-DELETE'
   | 'API-SEGMENT-GET'
   | 'API-SEGMENT-UPDATE'
@@ -225,16 +230,11 @@ export type DeferredOperationId =
   | 'API-APIKEY-UPDATE'
   | 'API-APIKEY-ROTATE'
   | 'API-AUDIT-LIST'
-  | 'API-CITATION-GET'
   | 'API-OPS-CLEANUP'
   | 'API-OPS-OUTBOX-REPLAY'
   | 'API-OPS-RECONCILE'
   | 'API-SEARCH-DEEP'
-  | 'API-SEARCH-FULLTEXT'
-  | 'API-SEARCH-HYBRID'
   | 'API-SEARCH-IMAGE'
-  | 'API-SEARCH-MULTI'
-  | 'API-SEARCH-SEMANTIC'
   | 'API-SYNONYM-DELETE'
   | 'API-SYNONYM-GET'
   | 'API-SYNONYM-ENABLE'
@@ -484,7 +484,7 @@ export interface SchemaPropertyMap {
   "SangforParseConfig": "allowedExtensions" | "chartAnalysis" | "credentialProfileId" | "fallbackProvider" | "imageAnalysis" | "imageHandling" | "keepAppendix" | "keepHeaderFooter" | "provider" | "timeoutMs";
   "SearchFilter": "conditions" | "createdAt" | "directoryIds" | "logic" | "sourceIds";
   "SearchRequest": "embeddingWeight" | "filters" | "knowledgeSpaceId" | "query" | "rerankWeight" | "searchMode" | "similarity" | "tokenBudget" | "usingRerank";
-  "SearchResponse": "durationMs" | "items" | "mode" | "partial" | "searchId";
+  "SearchResponse": "degraded" | "durationMs" | "items" | "mode" | "partial" | "rerankApplied" | "searchId";
   "Segment": "answer" | "content" | "fullTextTokens" | "fullTextVersion" | "id" | "imageBlobRefId" | "indexErrorCode" | "indexStatus" | "indexes" | "knowledgeSpaceId" | "metadata" | "order" | "question" | "searchEnabled" | "sourceId" | "sourceVersion" | "version" | "workspaceId";
   "SegmentBatchAction": "action" | "items";
   "SegmentCreate": "answer" | "indexes" | "metadata" | "question" | "searchEnabled";
@@ -673,6 +673,7 @@ export interface RequiredSchemaPropertyMap {
 export interface RuntimeRouteMethodPathMap {
   'API-HEALTH-LIVE': 'GET /healthz';
   'API-HEALTH-READY': 'GET /readyz';
+  'API-CITATION-GET': 'GET /v1/knowledge/citations/{citationId}';
   'API-CONNECTOR-DELETE': 'DELETE /v1/knowledge/connectors/{connectorId}';
   'API-CONNECTOR-GET': 'GET /v1/knowledge/connectors/{connectorId}';
   'API-CONNECTOR-UPDATE': 'PATCH /v1/knowledge/connectors/{connectorId}';
@@ -700,6 +701,10 @@ export interface RuntimeRouteMethodPathMap {
   'API-ACL-UPDATE': 'PUT /v1/knowledge/resources/{resourceType}/{resourceId}/acl';
   'API-RESOURCE-OWNERSHIP-TRANSFER': 'POST /v1/knowledge/resources/{resourceType}/{resourceId}/ownership-transfer';
   'API-ACL-RESUME': 'POST /v1/knowledge/resources/{resourceType}/{resourceId}/resume-inheritance';
+  'API-SEARCH-FULLTEXT': 'POST /v1/knowledge/search/full-text';
+  'API-SEARCH-HYBRID': 'POST /v1/knowledge/search/hybrid';
+  'API-SEARCH-MULTI': 'POST /v1/knowledge/search/multi-space';
+  'API-SEARCH-SEMANTIC': 'POST /v1/knowledge/search/semantic';
   'API-SEGMENT-DELETE': 'DELETE /v1/knowledge/segments/{segmentId}';
   'API-SEGMENT-GET': 'GET /v1/knowledge/segments/{segmentId}';
   'API-SEGMENT-UPDATE': 'PATCH /v1/knowledge/segments/{segmentId}';
@@ -775,16 +780,11 @@ export interface DeferredRouteMethodPathMap {
   'API-APIKEY-UPDATE': 'PATCH /v1/knowledge/api-keys/{keyId}';
   'API-APIKEY-ROTATE': 'POST /v1/knowledge/api-keys/{keyId}/rotate';
   'API-AUDIT-LIST': 'GET /v1/knowledge/audit-events';
-  'API-CITATION-GET': 'GET /v1/knowledge/citations/{citationId}';
   'API-OPS-CLEANUP': 'POST /v1/knowledge/operations/cleanup';
   'API-OPS-OUTBOX-REPLAY': 'POST /v1/knowledge/operations/outbox/{eventId}/replay';
   'API-OPS-RECONCILE': 'POST /v1/knowledge/operations/reconcile';
   'API-SEARCH-DEEP': 'POST /v1/knowledge/search/deep';
-  'API-SEARCH-FULLTEXT': 'POST /v1/knowledge/search/full-text';
-  'API-SEARCH-HYBRID': 'POST /v1/knowledge/search/hybrid';
   'API-SEARCH-IMAGE': 'POST /v1/knowledge/search/image';
-  'API-SEARCH-MULTI': 'POST /v1/knowledge/search/multi-space';
-  'API-SEARCH-SEMANTIC': 'POST /v1/knowledge/search/semantic';
   'API-SYNONYM-DELETE': 'DELETE /v1/knowledge/spaces/{spaceId}/synonyms';
   'API-SYNONYM-GET': 'GET /v1/knowledge/spaces/{spaceId}/synonyms';
   'API-SYNONYM-ENABLE': 'PATCH /v1/knowledge/spaces/{spaceId}/synonyms';

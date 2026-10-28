@@ -201,7 +201,7 @@ function Harness() {
         filters={filters}
         tags={tags}
         spaces={spaces}
-        result={result}
+        result={'result' in state ? state.result : undefined}
         state={state}
         labels={labels}
         onModeChange={(mode) => setForm((current) => ({ ...current, mode }))}

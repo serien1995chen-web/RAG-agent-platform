@@ -131,6 +131,7 @@ async function seed() {
         type: 'default',
         modelId: 'mock-embedding-1536',
         dimension: 1536,
+        storageType: 'vector',
         vectorProfile: 'knowledge_segment_vectors_1536',
         vectorId: '00000000-0000-5000-8000-000000000001',
         text: 'Refunds take five business days.',
