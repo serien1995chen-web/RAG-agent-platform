@@ -55,6 +55,7 @@ export interface S6SegmentRecord {
   indexErrorCode: string | null;
   imageBlobRefId?: string | null;
   imageDescription?: string | null;
+  synonymVersion: number;
   version: number;
 }
 

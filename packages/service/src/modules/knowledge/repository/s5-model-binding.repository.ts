@@ -53,6 +53,13 @@ function mirrorOf(bindings: readonly ModelBindingInput[]): Record<string, unknow
   );
 }
 
+function dimensionOfCapabilities(capabilities: readonly string[]): 768 | 1024 | 1536 | 3072 | null {
+  const value = capabilities.find((capability) =>
+    /^dimension:(768|1024|1536|3072)$/.test(capability),
+  );
+  return value ? (Number(value.split(':')[1]) as 768 | 1024 | 1536 | 3072) : null;
+}
+
 export class S5ModelBindingRepository implements ModelBindingRepositoryPort {
   private readonly spaces: Model<KnowledgeSpaceDoc>;
   private readonly bindings: Model<KnowledgeModelBindingDoc>;
@@ -87,6 +94,15 @@ export class S5ModelBindingRepository implements ModelBindingRepositoryPort {
     const workspaceId = requireWorkspaceId(context);
     const spaceObjectId = objectIdOf(spaceId, context, 'spaceId');
     return withMongoTransaction(this.connection, async (session) => {
+      const existingEmbedding = await this.bindings
+        .findOne({
+          workspaceId,
+          knowledgeSpaceId: spaceObjectId,
+          modelType: 'embedding',
+          deletedAt: null,
+        })
+        .session(session)
+        .lean<BindingDocument>();
       const space = await this.spaces
         .findOneAndUpdate(
           {
@@ -143,6 +159,17 @@ export class S5ModelBindingRepository implements ModelBindingRepositoryPort {
             displayName: binding.displayName,
             requiredCapabilities: [...binding.requiredCapabilities].sort(),
             status: binding.status,
+            activeQueryModelId:
+              binding.modelType === 'embedding'
+                ? (existingEmbedding?.activeQueryModelId ?? binding.modelId)
+                : null,
+            activeQueryDimension:
+              binding.modelType === 'embedding'
+                ? (existingEmbedding?.activeQueryDimension ??
+                  dimensionOfCapabilities(
+                    existingEmbedding?.requiredCapabilities ?? binding.requiredCapabilities,
+                  ))
+                : null,
             authorizedAt: now,
           })),
           { session, ordered: true },

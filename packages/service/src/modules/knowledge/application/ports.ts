@@ -389,7 +389,13 @@ export interface ReferencePort extends ReferenceEventPort {
 }
 
 export type KnowledgeObjectProvider = 'minio' | 'aws-s3' | 'r2' | 'cos' | 'oss';
-export type KnowledgeObjectPurpose = 'source' | 'image' | 'export' | 'preview' | 'avatar';
+export type KnowledgeObjectPurpose =
+  | 'source'
+  | 'image'
+  | 'export'
+  | 'preview'
+  | 'avatar'
+  | 'synonym';
 export type UploadMode = 'single' | 'multipart';
 export type UploadStatus =
   | 'pending'

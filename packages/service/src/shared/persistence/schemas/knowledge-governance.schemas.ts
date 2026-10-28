@@ -8,12 +8,21 @@ export interface KnowledgeSynonymConfigDoc extends WorkspaceFields {
   sizeBytes: number;
   checksumSha256: string;
   activeFileVersion: number;
+  publishedFileVersion: number | null;
+  lastFileVersion: number;
+  pendingFileVersion: number | null;
+  pendingJobId: string | null;
+  pendingReason: 'synonym_change' | 'model_change' | 'source_rebuild' | 'manual' | null;
+  pendingStartedAt: Date | null;
+  pendingSourceIds: string[];
   enabled: boolean;
   schemaVersion: number;
   status: 'active' | 'disabled' | 'rebuilding' | 'failed';
   uploadTime: Date;
   uploadedByMemberId: string;
   lastError: Record<string, unknown> | null;
+  activeQueryModelId: string | null;
+  activeQueryDimension: 768 | 1024 | 1536 | 3072 | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -25,6 +34,17 @@ export const KnowledgeSynonymConfigSchema = new Schema(
     sizeBytes: { type: Number, required: true, min: 0, max: 10 * 1024 * 1024 },
     checksumSha256: { type: String, required: true },
     activeFileVersion: { type: Number, required: true, min: 1 },
+    publishedFileVersion: { type: Number, default: null, min: 1 },
+    lastFileVersion: { type: Number, required: true, min: 1, default: 1 },
+    pendingFileVersion: { type: Number, default: null, min: 1 },
+    pendingJobId: { type: String, default: null },
+    pendingReason: {
+      type: String,
+      enum: ['synonym_change', 'model_change', 'source_rebuild', 'manual'],
+      default: null,
+    },
+    pendingStartedAt: { type: Date, default: null },
+    pendingSourceIds: { type: [String], required: true, default: [] },
     enabled: { type: Boolean, required: true, default: true },
     schemaVersion: { type: Number, required: true, min: 2, default: 2 },
     status: {
@@ -36,6 +56,12 @@ export const KnowledgeSynonymConfigSchema = new Schema(
     uploadTime: { type: Date, required: true },
     uploadedByMemberId: { type: String, required: true },
     lastError: { type: Schema.Types.Mixed, default: null },
+    activeQueryModelId: { type: String, default: null },
+    activeQueryDimension: {
+      type: Number,
+      enum: [768, 1024, 1536, 3072, null],
+      default: null,
+    },
   },
   knowledgeSchemaOptions('knowledge_synonym_configs'),
 );
@@ -108,6 +134,8 @@ export interface KnowledgeModelBindingDoc extends WorkspaceFields {
   displayName: string;
   requiredCapabilities: string[];
   status: 'active' | 'disabled';
+  activeQueryModelId: string | null;
+  activeQueryDimension: 768 | 1024 | 1536 | 3072 | null;
   authorizedAt: Date;
   createdAt: Date;
   updatedAt: Date;
@@ -129,6 +157,12 @@ export const KnowledgeModelBindingSchema = new Schema(
       enum: ['active', 'disabled'],
       required: true,
       default: 'active',
+    },
+    activeQueryModelId: { type: String, default: null },
+    activeQueryDimension: {
+      type: Number,
+      enum: [768, 1024, 1536, 3072, null],
+      default: null,
     },
     authorizedAt: { type: Date, required: true },
   },

@@ -58,6 +58,7 @@ function segmentRecord(
     indexErrorCode: document.indexErrorCode,
     imageBlobRefId: document.imageBlobRefId ? String(document.imageBlobRefId) : null,
     imageDescription: document.imageDescription,
+    synonymVersion: document.synonymVersion,
     version: document.version,
   };
 }
