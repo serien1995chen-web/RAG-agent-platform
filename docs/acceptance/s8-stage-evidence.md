@@ -47,7 +47,7 @@ All listed final commands exited `0`. Logs are under
 | Command group                                              | Exit | Key result                                                   | Log SHA-256                                                        |
 | ---------------------------------------------------------- | ---: | ------------------------------------------------------------ | ------------------------------------------------------------------ |
 | `pnpm openapi:check` / inventory / runtime                 |    0 | `92/120/139/8`, runtime `102/18`, union `120`                | `a912d2f832d56ca59ed2e7781e0add1d7cc9718a1244c0f73b444c443281790f` |
-| lint / format / typecheck / architecture / forbidden-files |    0 | `12/12` packages, `123` service files, no forbidden source   | `b8d14249885e2bbc39f880dde60b67b9e83ed85c70565e8f2e27955bb396c186` |
+| lint / format / typecheck / architecture / forbidden-files |    0 | `12/12` packages, `123` service files, no forbidden source   | `15b4856e94068e08c8420117d8d48dc879671acecadb4a5bb09006d1866d5566` |
 | `pnpm test:unit --force`                                   |    0 | `22/22` tasks; service `84` tests                            | `a72a8c431bd41132fc1eb0dc276040297babb1a4f0f7604c1c9ce85f0f737b31` |
 | `pnpm test:contract`                                       |    0 | `19` files, `93` tests                                       | `0f92dd97ead64262c9f974a7d018ba3438d44d2c42872668f9efca21c216c3f3` |
 | `pnpm test:integration --force`                            |    0 | `28` files, `158` tests                                      | `9f4601c44a2d1542145896e307e4d812752f0d09f38ac1cfd61b01ae2cb028b0` |
