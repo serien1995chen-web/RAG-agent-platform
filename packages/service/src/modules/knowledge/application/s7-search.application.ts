@@ -354,18 +354,6 @@ export class S7SearchApplication {
     },
     context: TenantContext,
   ): Promise<ReadonlyMap<string, CitationApi>> {
-    if (input.candidates.length === 0) {
-      await this.input.audits.appendSearch(
-        {
-          ...input,
-          searchMode: input.mode,
-          outcome: 'succeeded',
-          resultCount: 0,
-        },
-        context,
-      );
-      return new Map();
-    }
     return this.input.citations.issueWithAudit(
       {
         ...input,
@@ -391,21 +379,19 @@ export class S7SearchApplication {
     context: TenantContext,
   ): Promise<ReadonlyMap<string, CitationApi>> {
     const abort = new AbortController();
-    const timer = setTimeout(
-      () => abort.abort(searchTimeout(context, Math.max(1, input.deadlineAt - Date.now()))),
-      Math.max(1, input.deadlineAt - Date.now()),
-    );
-    try {
-      return await this.persist(
+    const timeoutMs = Math.max(1, input.deadlineAt - Date.now());
+    return withDeadline(
+      this.persist(
         {
           ...input,
           signal: abort.signal,
         },
         context,
-      );
-    } finally {
-      clearTimeout(timer);
-    }
+      ),
+      timeoutMs,
+      context,
+      () => abort.abort(searchTimeout(context, timeoutMs)),
+    );
   }
 
   private async auditFailure(

@@ -338,6 +338,26 @@ describe('S7 search application integration fixture', () => {
     expect(counts()).toEqual({ pipelineCreations: 0, modelResolutions: 0 });
   });
 
+  it('enforces the total deadline for empty-success audit persistence', async () => {
+    const { application, citationState } = fixture({
+      emptySources: true,
+      citationDelayMs: 300,
+      totalTimeoutMs: 50,
+    });
+    const startedAt = Date.now();
+    await expect(
+      application.searchSemantic(
+        body({ filters: { logic: 'AND', conditions: [], sourceIds: [] } }),
+        context,
+      ),
+    ).rejects.toMatchObject({
+      problem: { error: { code: 'KNOWLEDGE_DEPENDENCY_TIMEOUT' } },
+    });
+    expect(Date.now() - startedAt).toBeLessThan(250);
+    await new Promise((resolve) => setTimeout(resolve, 350));
+    expect(citationState()).toEqual({ attempts: 1, commits: 0 });
+  });
+
   it('TEST-SEARCH-002-BLOCK returns 207-compatible response for one failed hybrid channel', async () => {
     const { application } = fixture({
       fullTextError: createKnowledgeError({
