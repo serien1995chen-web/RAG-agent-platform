@@ -468,7 +468,11 @@ describe('C3 real S6 Job/Index output consumed by S7 recall', () => {
         const vector = Array.from({ length: 768 }, (_, index) => (index === 0 ? 1 : 0));
         const data =
           request.kind === 'embedding'
-            ? { data: request.texts.map(() => ({ embedding: vector })) }
+            ? {
+                data: Array.from({
+                  length: request.input?.length ?? request.texts?.length ?? 0,
+                }).map(() => ({ embedding: vector })),
+              }
             : { data: null };
         return {
           data: data as T,

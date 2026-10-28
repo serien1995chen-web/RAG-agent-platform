@@ -110,6 +110,11 @@ export { OPENAPI_DOCUMENT } from './openapi/document';
 
 export {
   CitationApiSchema,
+  DeepSearchApiRequestSchema,
+  DeepSearchApiResponseSchema,
+  DeepSearchRoundSchema,
+  DeepPlannerOutputSchema,
+  ImageSearchApiRequestSchema,
   MultiSpaceSearchApiRequestSchema,
   SearchApiItemSchema,
   SearchApiRequestSchema,
@@ -125,9 +130,15 @@ export {
   citationRangeSchema,
   isRe2CompatibleRegexSubset,
   toPipelineSearchRequest,
+  withPipelineImageQueries,
 } from './search/api-types';
 export type {
   CitationApi,
+  DeepSearchApiRequest,
+  DeepSearchApiResponse,
+  DeepSearchRound,
+  DeepPlannerOutput,
+  ImageSearchApiRequest,
   MultiSpaceSearchApiRequest,
   PipelineSearchContext,
   SearchApiItem,

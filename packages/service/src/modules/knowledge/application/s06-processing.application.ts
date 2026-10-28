@@ -16,6 +16,7 @@ import type {
 import { tenantError } from '../../../shared/persistence/knowledge/tenant';
 import type { S5ProcessingApplication } from './s5-processing.application';
 import type { ModelBindingRepositoryPort, ModelCatalogPort } from './s5-model-ports';
+import type { S8CaptionExecutorPort } from './s8-image-deep.ports';
 
 export type S6ProcessingPort = S6ExternalProcessingPort;
 
@@ -101,6 +102,7 @@ export class S06ProcessingApplication {
       bindings: Pick<ModelBindingRepositoryPort, 'list'>;
       port: S6ProcessingPort;
       sync?: S6ConnectorSyncPort;
+      caption?: S8CaptionExecutorPort;
     },
   ) {}
 
@@ -147,7 +149,12 @@ export class S06ProcessingApplication {
       ['pending', 'indexing', 'rebuilding'].includes(segment.indexStatus),
     )
       ? 'indexing'
-      : segments.some((segment) => ['error', 'rebuild_failed'].includes(segment.indexStatus))
+      : segments.some(
+            (segment) =>
+              ['error', 'rebuild_failed'].includes(segment.indexStatus) ||
+              segment.metadata.captionStatus === 'error' ||
+              segment.metadata.vectorStatus === 'error',
+          )
         ? 'partial'
         : segments.length > 0 && segments.every((segment) => segment.indexStatus === 'indexed')
           ? 'ready'
@@ -230,6 +237,9 @@ export class S06ProcessingApplication {
         errorCode(error),
         context,
       );
+      if (queue === 'knowledge-caption' && failed.status !== 'retry_wait' && this.input.caption) {
+        await this.input.caption.markFinalFailure(raw, context).catch(() => undefined);
+      }
       if (queue === 'knowledge-index' && failed.status !== 'retry_wait') {
         try {
           const segment = await this.input.store.getSegment(jobId, context);
@@ -317,18 +327,22 @@ export class S06ProcessingApplication {
         context,
       );
       const childJobIds: string[] = [];
+      const parseSourceIds: string[] = [];
+      const imageSourceIds: string[] = [];
       for (const sourceId of sourceIds) {
         const source = await this.input.store.getSource(sourceId, context);
         if (!source) throw tenantError(context, 'KNOWLEDGE_NOT_FOUND', { sourceId });
+        const image = source.kind === 'image';
         const child = await this.input.jobs.createChild(
           {
-            kind: 'parse',
+            kind: image ? 'caption' : 'parse',
             resourceType: 'source',
             resourceId: sourceId,
             knowledgeSpaceId: source.knowledgeSpaceId,
             inputSnapshot: {
               sourceId,
               sourceVersion: source.sourceVersion,
+              imageBlobRefId: image ? source.blobRefId : null,
               parseProvider: source.parseProvider,
               configHash: String(job.inputSnapshot.configurationHash ?? ''),
               chunking: job.inputSnapshot.chunking ?? {
@@ -341,20 +355,26 @@ export class S06ProcessingApplication {
             rootJobId: parentJobId,
             parentJobId,
             priority: job.priority,
-            idempotencyKey: `${parentJobId}:${sourceId}:${source.sourceVersion}:parse`,
+            idempotencyKey: `${parentJobId}:${sourceId}:${source.sourceVersion}:${image ? 'caption' : 'parse'}`,
           },
           context,
         );
         childJobIds.push(child.jobId);
+        (image ? imageSourceIds : parseSourceIds).push(sourceId);
       }
-      await this.input.store.updateSourcesStatus(sourceIds, 'parsing', context);
+      if (parseSourceIds.length > 0) {
+        await this.input.store.updateSourcesStatus(parseSourceIds, 'parsing', context);
+      }
+      if (imageSourceIds.length > 0) {
+        await this.input.store.updateSourcesStatus(imageSourceIds, 'indexing', context);
+      }
       await this.input.jobs.setStep(
         {
           jobId: parentJobId,
           stepKey: 'fan-out',
           status: 'succeeded',
           idempotencyKey: `fan-out:${parentJobId}`,
-          evidence: { childJobIds },
+          evidence: { childJobIds, imageSourceIds, parseSourceIds },
         },
         context,
       );
@@ -429,6 +449,7 @@ export class S06ProcessingApplication {
       workspaceId: context.workspaceId,
       knowledgeSpaceId: source.knowledgeSpaceId,
       sourceId,
+      sourceName: source.name,
       sourceVersion: artifact.sourceVersion,
       rawText: parsed.rawText,
       artifact,
@@ -437,18 +458,20 @@ export class S06ProcessingApplication {
     });
     const qaByHash = new Map(processed.qaItems.map((item) => [item.sourceChunkHash, item]));
     const rows: Array<{ order: number; question: string; answer: string; content: string }> = [];
+    const chunking = job.inputSnapshot.chunking as ChunkingSettings | undefined;
     for (const chunk of processed.chunks) {
       const qaItems = processed.qaItems.filter(
         (item) => item.sourceChunkHash === chunk.contentHash,
       );
-      if (qaItems.length === 0) {
+      if (qaItems.length === 0 || chunking?.trainingType === 'chunk') {
         rows.push({
           order: rows.length,
           question: chunk.text,
           answer: chunk.text,
           content: chunk.text,
         });
-      } else {
+      }
+      if (qaItems.length > 0) {
         for (const item of qaItems) {
           rows.push({
             order: rows.length,
@@ -1020,48 +1043,18 @@ export class S06ProcessingApplication {
     workerId: string,
     context: TenantContext,
   ): Promise<'succeeded' | 'retry' | 'dead_letter'> {
-    if (queue === 'knowledge-caption') {
-      const claimed = await this.input.jobs.claimById(
-        { jobId, kinds: ['caption'], workerId },
-        context,
-      );
-      if (!claimed) return 'retry';
-      const raw = await this.input.jobs.getRaw(jobId, context);
-      await this.input.jobs.start(
-        jobId,
-        claimed.version,
-        claimed.attemptEpoch,
-        String(raw.fencingToken),
-        workerId,
-        context,
-      );
-      await this.input.jobs.setStep(
-        {
-          jobId,
-          stepKey: 'caption',
-          status: 'failed',
-          idempotencyKey: `caption:${jobId}`,
-          error: {
-            code: 'KNOWLEDGE_DEPENDENCY_UNAVAILABLE',
-            reason: 's8_caption_executor_missing',
-          },
-          compensationState: 'required',
-        },
-        context,
-      );
-      const failed = await this.input.jobs.fail(
-        jobId,
-        claimed.version + 1,
-        claimed.attemptEpoch,
-        String(raw.fencingToken),
-        workerId,
-        true,
-        'KNOWLEDGE_DEPENDENCY_UNAVAILABLE',
-        context,
-      );
-      return failed.status === 'dead_letter' ? 'dead_letter' : 'retry';
-    }
     return this.withJob<unknown>(queue, jobId, workerId, context, async (job) => {
+      if (queue === 'knowledge-caption') {
+        if (!this.input.caption) {
+          throw createKnowledgeError({
+            code: 'KNOWLEDGE_DEPENDENCY_UNAVAILABLE',
+            requestId: context.requestId,
+            traceId: context.traceId,
+            details: { queue, reason: 'caption_executor_missing' },
+          });
+        }
+        return this.input.caption.execute(job, context);
+      }
       if (queue === 'knowledge-parse') return this.processParse(job, context);
       if (queue === 'knowledge-segment' || queue === 'knowledge-ocr') {
         return this.processParse(job, context);

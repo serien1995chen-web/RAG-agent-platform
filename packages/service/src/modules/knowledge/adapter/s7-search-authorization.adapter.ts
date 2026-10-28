@@ -77,6 +77,7 @@ function toSegment(document: Plain<KnowledgeSegmentDoc>): AuthorizedSegmentSnaps
     indexStatus: document.indexStatus,
     indexErrorCode: document.indexErrorCode,
     imageBlobRefId: document.imageBlobRefId ? String(document.imageBlobRefId) : null,
+    imageDescription: document.imageDescription,
     version: document.version,
     updatedAt: document.updatedAt.toISOString(),
   };

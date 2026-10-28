@@ -42,8 +42,8 @@ const S3_OPERATIONS = [
 
 describe('S3 catalog governance contract', () => {
   it('keeps the seven S3 operations in the W2 runtime', () => {
-    expect(runtime.count).toBe(100);
-    expect(deferred.count).toBe(20);
+    expect(runtime.count).toBe(102);
+    expect(deferred.count).toBe(18);
     const runtimeIds = new Set(runtime.operations.map((operation) => operation.operationId));
     const deferredIds = new Set(deferred.operations.map((operation) => operation.operationId));
     for (const operationId of S3_OPERATIONS) {

@@ -40,7 +40,15 @@ const JOB_QUEUE = {
   outbox: 'knowledge-outbox',
 } as const;
 
-export type PublicJobKind = 'parse' | 'segment' | 'qa' | 'embed' | 'index' | 'fulltext' | 'rebuild';
+export type PublicJobKind =
+  | 'parse'
+  | 'segment'
+  | 'qa'
+  | 'caption'
+  | 'embed'
+  | 'index'
+  | 'fulltext'
+  | 'rebuild';
 
 export interface CreateJobInput {
   kind: PublicJobKind;
@@ -652,7 +660,7 @@ export class KnowledgeJobExecutionRepository {
 
       const subtree = [node, ...descendantsOf(jobId)];
       const sources = subtree
-        .filter((candidate) => candidate.kind === 'parse')
+        .filter((candidate) => candidate.kind === 'parse' || candidate.kind === 'caption')
         .map((candidate) => {
           const candidateId = String(candidate._id);
           const status = finalStatuses.get(candidateId) ?? candidate.status;
@@ -681,7 +689,15 @@ export class KnowledgeJobExecutionRepository {
           .filter((candidate) => String(candidate._id) !== jobId)
           .map((candidate) => String(candidate._id)),
         sources,
-        partial: failed > 0 || dead > 0,
+        partial:
+          failed > 0 ||
+          dead > 0 ||
+          subtree.some(
+            (candidate) =>
+              typeof candidate.result === 'object' &&
+              candidate.result !== null &&
+              candidate.result.partial === true,
+          ),
         completedAt: new Date().toISOString(),
       };
       const updated = await this.jobs.findOneAndUpdate(

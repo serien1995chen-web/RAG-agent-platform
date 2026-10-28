@@ -55,6 +55,7 @@ export interface AuthorizedSegmentSnapshot {
   indexStatus: 'pending' | 'indexing' | 'indexed' | 'error' | 'rebuilding' | 'rebuild_failed';
   indexErrorCode: string | null;
   imageBlobRefId: string | null;
+  imageDescription?: string | null;
   version: number;
   updatedAt?: string;
 }

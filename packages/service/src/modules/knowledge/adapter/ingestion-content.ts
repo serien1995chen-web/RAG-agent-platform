@@ -10,6 +10,7 @@ import type {
   ProviderContent,
   UrlSnapshot,
 } from '../application/ingestion.ports';
+import { assertS8ImageMedia, isS8KnowledgeImage } from '../application/s8-image-policy';
 import { sha256Of } from '../domain/import-submission';
 
 function safeName(value: string): string {
@@ -222,9 +223,26 @@ export class KnowledgeIngestionContentAdapter {
     parseProvider: ImportSourceDraft['parseProvider'];
     metadata?: Record<string, unknown>;
   }): ImportSourceDraft {
+    const image = isS8KnowledgeImage({
+      mimeType: input.object.mimeType,
+      fileName: input.object.originalName,
+    });
+    if (image) {
+      assertS8ImageMedia(
+        {
+          mimeType: input.object.mimeType,
+          fileName: input.object.originalName,
+          sizeBytes: input.object.sizeBytes,
+        },
+        {
+          requestId: 'ingestion-content',
+          traceId: 'ingestion-content',
+        },
+      );
+    }
     return {
       id: id(),
-      kind: 'file',
+      kind: image ? 'image' : 'file',
       name: input.object.originalName,
       directoryId: input.directoryId,
       blobRefId: input.object.blobId,
@@ -236,6 +254,12 @@ export class KnowledgeIngestionContentAdapter {
       parseProvider: input.parseProvider,
       metadata: {
         importedFrom: 'upload',
+        ...(image
+          ? {
+              imageMimeType: input.object.mimeType,
+              imageSizeBytes: input.object.sizeBytes,
+            }
+          : {}),
         ...(input.metadata ?? {}),
       },
     };

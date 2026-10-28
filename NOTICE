@@ -7,7 +7,7 @@ NOTICE
 生成脚本: scripts/generate-sbom.mjs（禁止手工维护本文件）
 SBOM 产物: artifacts/sbom.json
 
-一、直接依赖（159）
+一、直接依赖（160）
 名称@版本 | 许可证 | scope | 来源 workspace
 @apidevtools/json-schema-ref-parser@11.7.2 | MIT | production | packages/service
 @apidevtools/swagger-parser@10.1.1 | MIT | production | packages/contracts
@@ -134,6 +134,7 @@ react-dom@18.3.1 | MIT | production | projects/app
 react-hook-form@7.43.1 | MIT | production | packages/web
 react-i18next@14.1.2 | MIT | production | packages/web
 react-markdown@9.1.0 | MIT | production | packages/web
+react-photo-view@1.2.7 | Apache-2.0 | production | packages/web
 react-syntax-highlighter@15.6.1 | MIT | production | packages/web
 react-textarea-autosize@8.5.8 | MIT | production | packages/web
 react@18.3.1 | MIT | production | packages/web,projects/app

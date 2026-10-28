@@ -152,8 +152,10 @@ export type RuntimeOperationId =
   | 'API-ACL-UPDATE'
   | 'API-RESOURCE-OWNERSHIP-TRANSFER'
   | 'API-ACL-RESUME'
+  | 'API-SEARCH-DEEP'
   | 'API-SEARCH-FULLTEXT'
   | 'API-SEARCH-HYBRID'
+  | 'API-SEARCH-IMAGE'
   | 'API-SEARCH-MULTI'
   | 'API-SEARCH-SEMANTIC'
   | 'API-SEGMENT-DELETE'
@@ -233,8 +235,6 @@ export type DeferredOperationId =
   | 'API-OPS-CLEANUP'
   | 'API-OPS-OUTBOX-REPLAY'
   | 'API-OPS-RECONCILE'
-  | 'API-SEARCH-DEEP'
-  | 'API-SEARCH-IMAGE'
   | 'API-SYNONYM-DELETE'
   | 'API-SYNONYM-GET'
   | 'API-SYNONYM-ENABLE'
@@ -701,8 +701,10 @@ export interface RuntimeRouteMethodPathMap {
   'API-ACL-UPDATE': 'PUT /v1/knowledge/resources/{resourceType}/{resourceId}/acl';
   'API-RESOURCE-OWNERSHIP-TRANSFER': 'POST /v1/knowledge/resources/{resourceType}/{resourceId}/ownership-transfer';
   'API-ACL-RESUME': 'POST /v1/knowledge/resources/{resourceType}/{resourceId}/resume-inheritance';
+  'API-SEARCH-DEEP': 'POST /v1/knowledge/search/deep';
   'API-SEARCH-FULLTEXT': 'POST /v1/knowledge/search/full-text';
   'API-SEARCH-HYBRID': 'POST /v1/knowledge/search/hybrid';
+  'API-SEARCH-IMAGE': 'POST /v1/knowledge/search/image';
   'API-SEARCH-MULTI': 'POST /v1/knowledge/search/multi-space';
   'API-SEARCH-SEMANTIC': 'POST /v1/knowledge/search/semantic';
   'API-SEGMENT-DELETE': 'DELETE /v1/knowledge/segments/{segmentId}';
@@ -783,8 +785,6 @@ export interface DeferredRouteMethodPathMap {
   'API-OPS-CLEANUP': 'POST /v1/knowledge/operations/cleanup';
   'API-OPS-OUTBOX-REPLAY': 'POST /v1/knowledge/operations/outbox/{eventId}/replay';
   'API-OPS-RECONCILE': 'POST /v1/knowledge/operations/reconcile';
-  'API-SEARCH-DEEP': 'POST /v1/knowledge/search/deep';
-  'API-SEARCH-IMAGE': 'POST /v1/knowledge/search/image';
   'API-SYNONYM-DELETE': 'DELETE /v1/knowledge/spaces/{spaceId}/synonyms';
   'API-SYNONYM-GET': 'GET /v1/knowledge/spaces/{spaceId}/synonyms';
   'API-SYNONYM-ENABLE': 'PATCH /v1/knowledge/spaces/{spaceId}/synonyms';

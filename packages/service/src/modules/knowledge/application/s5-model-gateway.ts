@@ -3,6 +3,7 @@ import type { ModelCatalogItem, ModelCatalogPort, S5ModelType } from './s5-model
 import type {
   S5GatewayResult,
   S5GatewayUsageFact,
+  S5EmbeddingInputItem,
   S5KeyedLimiterPort,
   S5ModelGatewayPort,
   S5ModelGatewayRequest,
@@ -47,6 +48,14 @@ function approximateTokens(text: string | undefined): number {
   return Math.max(1, Math.ceil([...text].length / 4));
 }
 
+export function embeddingInputItems(invocation: {
+  input?: readonly S5EmbeddingInputItem[];
+  texts?: readonly string[];
+}): S5EmbeddingInputItem[] {
+  if (invocation.input !== undefined) return [...invocation.input];
+  return (invocation.texts ?? []).map((text) => ({ type: 'text', text }));
+}
+
 function validateBudget(invocation: S5ModelInvocation, requestId: string, traceId: string): void {
   const fail = (details: Record<string, unknown>) => {
     throw createKnowledgeError({
@@ -82,17 +91,30 @@ function validateBudget(invocation: S5ModelInvocation, requestId: string, traceI
         fail({ field: 'maxOutputTokens', min: 1, max: MAX_OUTPUT_TOKENS });
       }
       break;
-    case 'embedding':
-      if (invocation.texts.length < 1 || invocation.texts.length > MAX_EMBEDDING_TEXTS) {
-        fail({ field: 'texts', min: 1, max: MAX_EMBEDDING_TEXTS });
+    case 'embedding': {
+      const items = embeddingInputItems(invocation);
+      if (items.length < 1 || items.length > MAX_EMBEDDING_TEXTS) {
+        fail({ field: 'input', min: 1, max: MAX_EMBEDDING_TEXTS });
       }
       if (
-        invocation.texts.reduce((sum, textItem) => sum + approximateTokens(textItem), 0) >
-        MAX_EMBEDDING_TOKENS
+        items.some((item) =>
+          item.type === 'text'
+            ? item.text.trim().length === 0
+            : !/^https?:\/\//i.test(item.image_url.url),
+        )
       ) {
-        fail({ field: 'texts', maxTokens: MAX_EMBEDDING_TOKENS });
+        fail({ field: 'input', reason: 'invalid_embedding_input_item' });
+      }
+      if (
+        items.reduce(
+          (sum, item) => sum + (item.type === 'text' ? approximateTokens(item.text) : 0),
+          0,
+        ) > MAX_EMBEDDING_TOKENS
+      ) {
+        fail({ field: 'input', maxTokens: MAX_EMBEDDING_TOKENS });
       }
       break;
+    }
     case 'rerank':
       if (
         invocation.candidates.length < 1 ||

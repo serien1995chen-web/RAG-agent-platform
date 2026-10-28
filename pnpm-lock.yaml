@@ -384,6 +384,9 @@ catalogs:
     react-markdown:
       specifier: 9.1.0
       version: 9.1.0
+    react-photo-view:
+      specifier: 1.2.7
+      version: 1.2.7
     react-syntax-highlighter:
       specifier: 15.6.1
       version: 15.6.1
@@ -970,6 +973,9 @@ importers:
       react-markdown:
         specifier: 'catalog:'
         version: 9.1.0(@types/react@18.3.31)(react@18.3.1)
+      react-photo-view:
+        specifier: 'catalog:'
+        version: 1.2.7(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       react-syntax-highlighter:
         specifier: 'catalog:'
         version: 15.6.1(react@18.3.1)
@@ -8688,6 +8694,12 @@ packages:
     peerDependencies:
       '@types/react': '>=18'
       react: '>=18'
+
+  react-photo-view@1.2.7:
+    resolution: {integrity: sha512-MfOWVPxuibncRLaycZUNxqYU8D9IA+rbGDDaq6GM8RIoGJal592hEJoRAyRSI7ZxyyJNJTLMUWWL3UIXHJJOpw==}
+    peerDependencies:
+      react: '>=16.8.0'
+      react-dom: '>=16.8.0'
 
   react-reconciler@0.33.0:
     resolution: {integrity: sha512-KetWRytFv1epdpJc3J4G75I4WrplZE5jOL7Yq0p34+OVOKF4Se7WrdIdVC45XsSSmUTlht2FM/fM1FZb1mfQeA==}
@@ -18547,6 +18559,11 @@ snapshots:
       vfile: 6.0.3
     transitivePeerDependencies:
       - supports-color
+
+  react-photo-view@1.2.7(react-dom@18.3.1(react@18.3.1))(react@18.3.1):
+    dependencies:
+      react: 18.3.1
+      react-dom: 18.3.1(react@18.3.1)
 
   react-reconciler@0.33.0(react@19.3.1):
     dependencies:

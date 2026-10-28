@@ -13,6 +13,7 @@ describe('TEST-PARSE-003-BLOCK deterministic chunk settings', () => {
     const intelligent = toChunkPolicy({
       trainingType: 'qa',
       chunkSettingMode: 'intelligent',
+      chunkSplitMode: 'paragraph',
       paragraphChunkDeep: 3,
       paragraphChunkMinSize: 200,
     });

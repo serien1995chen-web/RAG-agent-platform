@@ -65,7 +65,7 @@ export class S7ModelGatewaySearchAdapter {
         {
           kind: 'embedding',
           modelId: this.input.embedding.modelId,
-          texts: input.texts,
+          input: input.texts.map((text) => ({ type: 'text' as const, text })),
           dimension: this.input.embedding.dimension,
         },
         context,

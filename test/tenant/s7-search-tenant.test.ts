@@ -1,7 +1,8 @@
 import { createKnowledgeError, type SearchRequest } from '../../packages/contracts/src/index';
 import { createSearchEngine } from '../../packages/search/src/index';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { S7SearchApplication } from '../../packages/service/src/modules/knowledge/application/s7-search.application';
+import { S8ImageSearchApplication } from '../../packages/service/src/modules/knowledge/application/s8-image-search.application';
 import type { S7SearchApplicationDependencies } from '../../packages/service/src/modules/knowledge/application/s7-search.ports';
 
 const context = {
@@ -121,5 +122,47 @@ describe('TEST-X-SEARCH-REAUTH tenant isolation', () => {
         requestId: context.requestId,
       },
     });
+  });
+
+  it('TEST-AUTH-003-BLOCK maps cross-tenant Image search to 404 before tickets or citations', async () => {
+    const error = createKnowledgeError({
+      code: 'KNOWLEDGE_NOT_FOUND',
+      requestId: context.requestId,
+      traceId: context.traceId,
+      details: {},
+    });
+    const issue = vi.fn();
+    const application = new S8ImageSearchApplication({
+      access: {
+        assertSearchScope() {},
+        async getAuthorizedSpace() {
+          throw error;
+        },
+      },
+      objects: {} as never,
+      models: {} as never,
+      gateway: {} as never,
+      tickets: {} as never,
+      search: {} as never,
+      fullText: {} as never,
+      authorization: {} as never,
+      citations: { issueWithAudit: issue } as never,
+      audits: {} as never,
+      vectors: {} as never,
+    });
+    await expect(
+      application.search(
+        {
+          knowledgeSpaceId: '65f1e5b2a1c9d4b7e8f01234',
+          query: 'refund',
+          tokenBudget: 5_000,
+          imageUploadIds: ['65f1e5b2a1c9d4b7e8f09999'],
+        },
+        context,
+      ),
+    ).rejects.toMatchObject({
+      problem: { error: { code: 'KNOWLEDGE_NOT_FOUND' } },
+    });
+    expect(issue).not.toHaveBeenCalled();
   });
 });

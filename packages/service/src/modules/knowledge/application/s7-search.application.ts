@@ -25,7 +25,12 @@ import {
 } from '@kb/search';
 import type { TenantContext } from '../../../shared/persistence/knowledge/tenant';
 import type { KnowledgeOperationInput, KnowledgeOperationResult } from './operation-types';
-import type { S7AuthorizedSpace, S7SearchApplicationDependencies } from './s7-search.ports';
+import type {
+  S7AuthorizedSpace,
+  S7CandidateCollection,
+  S7SearchPersistenceMode,
+  S7SearchApplicationDependencies,
+} from './s7-search.ports';
 
 interface SpaceExecution {
   candidates: AuthorizedCandidate[];
@@ -34,6 +39,7 @@ interface SpaceExecution {
   partial: boolean;
   rerankApplied: boolean;
   filterSummary?: SearchFilterSummary;
+  usage: { inputTokens: number; outputTokens: number };
 }
 
 function citationKey(knowledgeSpaceId: string, segmentId: string): string {
@@ -227,6 +233,7 @@ export class S7SearchApplication {
         partial: false,
         rerankApplied: false,
         filterSummary: compiled.summary,
+        usage: { inputTokens: 0, outputTokens: 0 },
       };
     }
     const models = await this.input.models.resolveModels(
@@ -267,6 +274,10 @@ export class S7SearchApplication {
       partial: result.stats.partial ?? false,
       rerankApplied: result.stats.rerankApplied ?? false,
       filterSummary: compiled.summary,
+      usage: {
+        inputTokens: (result.stats.embeddingTokens ?? 0) + (result.stats.rerankInputTokens ?? 0),
+        outputTokens: 0,
+      },
     };
   }
 
@@ -342,7 +353,7 @@ export class S7SearchApplication {
   private async persist(
     input: {
       searchId: string;
-      mode: SearchApiMode | 'multi_space';
+      mode: S7SearchPersistenceMode;
       spaceId: string;
       candidates: readonly AuthorizedCandidate[];
       partial: boolean;
@@ -367,7 +378,7 @@ export class S7SearchApplication {
   private async persistWithDeadline(
     input: {
       searchId: string;
-      mode: SearchApiMode | 'multi_space';
+      mode: S7SearchPersistenceMode;
       spaceId: string;
       candidates: readonly AuthorizedCandidate[];
       partial: boolean;
@@ -397,7 +408,7 @@ export class S7SearchApplication {
   private async auditFailure(
     input: {
       searchId: string;
-      mode: SearchApiMode | 'multi_space';
+      mode: S7SearchPersistenceMode;
       spaceId: string;
       durationMs: number;
       degradedCodes: string[];
@@ -643,6 +654,116 @@ export class S7SearchApplication {
       );
       throw error;
     }
+  }
+
+  async collectCandidates(input: {
+    request: SearchApiRequest | MultiSpaceSearchApiRequest;
+    knowledgeSpaceIds: readonly string[];
+    mode: SearchApiMode;
+    context: TenantContext;
+    limit?: number;
+  }): Promise<S7CandidateCollection> {
+    this.input.access.assertSearchScope(input.context);
+    const knowledgeSpaceIds = [...new Set(input.knowledgeSpaceIds)];
+    if (knowledgeSpaceIds.length < 1 || knowledgeSpaceIds.length > 20) {
+      throw createKnowledgeError({
+        code: 'KNOWLEDGE_VALIDATION_FAILED',
+        requestId: input.context.requestId,
+        traceId: input.context.traceId,
+        details: { field: 'knowledgeSpaceIds', min: 1, max: 20 },
+      });
+    }
+    const spaces = await Promise.all(
+      knowledgeSpaceIds.map((spaceId) =>
+        this.input.access.getAuthorizedSpace(spaceId, input.context),
+      ),
+    );
+    const outcomes = await Promise.all(
+      spaces.map(async (space) => {
+        try {
+          return {
+            space,
+            execution: await this.executeSpace(
+              input.request,
+              space,
+              input.mode,
+              input.context,
+              'defer',
+            ),
+          };
+        } catch (error) {
+          if (statusOf(error) === 400) throw error;
+          return { space, error };
+        }
+      }),
+    );
+    const succeeded = outcomes.filter(
+      (
+        entry,
+      ): entry is {
+        space: S7AuthorizedSpace;
+        execution: SpaceExecution;
+      } => entry.execution !== undefined,
+    );
+    const failed = outcomes.filter(
+      (entry): entry is { space: S7AuthorizedSpace; error: unknown } => entry.error !== undefined,
+    );
+    if (succeeded.length === 0) {
+      const status = highestPriorityStatus(failed.map((entry) => statusOf(entry.error)));
+      throw createKnowledgeError({
+        code: codeForStatus(status),
+        requestId: input.context.requestId,
+        traceId: input.context.traceId,
+        details: { failedSpaceCount: failed.length },
+      });
+    }
+    const slices = outcomes.map((entry) =>
+      entry.execution
+        ? {
+            knowledgeSpaceId: entry.space.spaceId,
+            candidates: entry.execution.candidates,
+            partial: entry.execution.partial,
+            failedChannels: entry.execution.failedChannels,
+          }
+        : {
+            knowledgeSpaceId: entry.space.spaceId,
+            failure: failureOf(entry.error, input.mode),
+          },
+    );
+    const merged = mergeMultiSpaceCitations(slices);
+    const internalRequest = toPipelineSearchRequest(input.request, {
+      requestId: input.context.requestId,
+      workspaceId: input.context.workspaceId,
+      memberId: input.context.memberId,
+      models: { embeddingModel: 'multi-space' },
+      mode: input.mode,
+      limit: input.limit ?? 10,
+      knowledgeSpaceIds,
+    });
+    const rerankApplied = succeeded.some((entry) => entry.execution.rerankApplied);
+    const finalized = finalizeSearchCandidates(internalRequest, merged.candidates, rerankApplied);
+    return {
+      candidates: finalized.items,
+      partial: merged.partial,
+      degradedCodes: [
+        ...succeeded.flatMap((entry) => entry.execution.degradedCodes),
+        ...merged.degraded.map((entry) => entry.reason),
+      ],
+      rerankApplied,
+      usage: succeeded.reduce(
+        (total, entry) => ({
+          inputTokens: total.inputTokens + entry.execution.usage.inputTokens,
+          outputTokens: total.outputTokens + entry.execution.usage.outputTokens,
+        }),
+        { inputTokens: 0, outputTokens: 0 },
+      ),
+      ...(succeeded.find((entry) => entry.execution.filterSummary)
+        ? {
+            filterSummary: succeeded.find((entry) => entry.execution.filterSummary)!.execution
+              .filterSummary!,
+          }
+        : {}),
+    };
   }
 
   async dispatch(input: KnowledgeOperationInput): Promise<KnowledgeOperationResult> {

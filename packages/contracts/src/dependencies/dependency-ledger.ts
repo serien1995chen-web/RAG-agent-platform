@@ -63,7 +63,7 @@ export const DEPENDENCY_LEDGER_TOTALS = {
   total: 166,
   design: 164,
   testOnlySupplements: 2,
-  catalog: 159,
+  catalog: 160,
 } as const;
 
 export const DEPENDENCY_OWNER_STAGE_COUNTS: Readonly<Record<DependencyStage, number>> = {
@@ -123,7 +123,7 @@ const CATALOG_ONLY_LATER_STAGE_DEPENDENCIES = new Set([
   '@llamaindex/liteparse-wasm',
   '@types/turndown',
 ]);
-const CATALOG_DECLARED_STAGES = new Set<DependencyStage>(['S1', 'S2', 'S4', 'S6', 'S7']);
+const CATALOG_DECLARED_STAGES = new Set<DependencyStage>(['S1', 'S2', 'S4', 'S6', 'S7', 'S8']);
 
 const ALLOWED_ENVIRONMENTS = new Set([
   'APP_RUNTIME',

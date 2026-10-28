@@ -6,6 +6,7 @@ import type {
   S5ModelType,
 } from '../application/s5-model-gateway.port';
 import { S5ModelTransportError } from '../application/s5-model-gateway.port';
+import { embeddingInputItems } from '../application/s5-model-gateway';
 import { parseModelResponse } from './s5-model-response.schema';
 
 export interface S5HttpResponse<T = unknown> {
@@ -141,7 +142,7 @@ function bodyOf(input: S5ModelInvocation): unknown {
         ...(input.maxOutputTokens === undefined ? {} : { max_tokens: input.maxOutputTokens }),
       };
     case 'embedding':
-      return { model: input.modelId, input: input.texts };
+      return { model: input.modelId, input: embeddingInputItems(input) };
     case 'rerank':
       return {
         model: input.modelId,
@@ -249,7 +250,7 @@ export class S5AiproxyHttpAdapter implements S5ModelInvocationAdapterPort {
     } catch (error) {
       const kind =
         error instanceof Error && error.message === 'embedding_dimension_mismatch'
-          ? 'validation'
+          ? 'contract'
           : 'contract';
       throw new S5ModelTransportError(
         kind,
@@ -265,26 +266,46 @@ export class S5MockAiproxyTransport implements S5HttpTransportPort {
   async request<T = unknown>(input: S5HttpRequest): Promise<S5HttpResponse<T>> {
     const path = new URL(input.url).pathname;
     if (path.endsWith('/embeddings')) {
-      const body = input.body as { model: string; input: string[] };
+      const body = input.body as { model: string; input: Array<Record<string, unknown>> };
       const dimension = Number(/-(\d+)$/.exec(body.model)?.[1] ?? 0);
       return {
         status: 200,
         headers: {},
         data: {
-          data: body.input.map((_, index) => ({
+          data: body.input.map((item, index) => ({
             index,
-            embedding: Array.from({ length: dimension }, (_, index) => (index === 0 ? 1 : 0)),
+            embedding: Array.from({ length: dimension }, (_, vectorIndex) => {
+              const stable = JSON.stringify(item) || 'item';
+              const byte = Buffer.from(stable, 'utf8')[(index + vectorIndex) % stable.length] ?? 0;
+              return vectorIndex === 0 ? 1 : ((byte - 127.5) / 127.5) * 0.01;
+            }),
           })),
           usage: { prompt_tokens: 0, total_tokens: 0 },
         } as T,
       };
     }
     if (path.endsWith('/chat/completions')) {
+      const body = input.body as { messages?: unknown[] };
+      const content = JSON.stringify(body.messages ?? []);
+      const imageInput = content.includes('"image_url"');
+      const plannerInput = content.includes('Return only a JSON object with queries');
       return {
         status: 200,
         headers: {},
         data: {
-          choices: [{ message: { content: 'mock response' } }],
+          choices: [
+            {
+              message: {
+                content: imageInput
+                  ? JSON.stringify({
+                      caption: `mock caption ${Buffer.from(content).toString('base64url').slice(0, 12)}`,
+                    })
+                  : plannerInput
+                    ? JSON.stringify({ queries: ['mock deep query'], sufficient: true })
+                    : 'mock response',
+              },
+            },
+          ],
           usage: { prompt_tokens: 0, completion_tokens: 0 },
         } as T,
       };

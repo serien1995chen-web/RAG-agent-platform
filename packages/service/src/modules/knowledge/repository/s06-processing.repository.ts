@@ -23,6 +23,7 @@ function sourceRecord(
     id: String(document._id),
     workspaceId: document.workspaceId,
     knowledgeSpaceId: String(document.knowledgeSpaceId),
+    kind: document.kind,
     sourceVersion: document.sourceVersion,
     blobRefId: document.blobRefId ? String(document.blobRefId) : null,
     name: document.name,
@@ -55,6 +56,8 @@ function segmentRecord(
     indexes: document.indexes,
     indexStatus: document.indexStatus,
     indexErrorCode: document.indexErrorCode,
+    imageBlobRefId: document.imageBlobRefId ? String(document.imageBlobRefId) : null,
+    imageDescription: document.imageDescription,
     version: document.version,
   };
 }
@@ -209,6 +212,7 @@ export class S6ProcessingRepository implements S6ProcessingStorePort {
         workspaceId: requireWorkspaceId(context),
         sourceId,
         order: { $gte: order },
+        imageBlobRefId: null,
         deletedAt: null,
       },
       {

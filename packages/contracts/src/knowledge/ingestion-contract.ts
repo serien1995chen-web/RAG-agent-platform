@@ -22,11 +22,67 @@ export const JsonObjectSchema = z.record(z.string(), z.unknown());
 export const ChunkingSettingsSchema = z
   .object({
     trainingType: z.enum(['chunk', 'qa', 'imageParse', 'backup', 'template']),
+    chunkTriggerType: z.enum(['minSize', 'forceChunk', 'maxSize']).optional(),
+    chunkTriggerMinSize: z.number().int().min(1).max(8_000).optional(),
     chunkSettingMode: z.enum(['auto', 'custom', 'intelligent']),
+    chunkSplitMode: z.enum(['paragraph', 'size', 'char']).optional(),
+    paragraphChunkAIMode: z.enum(['auto', 'force', 'forbid']).optional(),
+    paragraphChunkDeep: z.number().int().min(0).max(5).optional(),
+    paragraphChunkMinSize: z.number().int().min(1).max(8_000).optional(),
     chunkSize: z.number().int().min(64).max(8000).optional(),
-    overlap: z.number().int().min(0).max(8000).optional(),
+    chunkSplitter: z.string().max(1_000).optional(),
+    indexSize: z.number().int().min(1).max(8_000).optional(),
+    dataEnhanceCollectionName: z.boolean().optional(),
+    imageIndex: z.boolean().optional(),
+    autoIndexes: z.boolean().optional(),
+    indexPrefixTitle: z.boolean().optional(),
+    qaPrompt: z.string().max(20_000).optional(),
   })
-  .strict();
+  .strict()
+  .superRefine((value, context) => {
+    const issue = (path: string, message: string) =>
+      context.addIssue({ code: 'custom', path: [path], message });
+    if (value.chunkSettingMode === 'custom' && value.chunkSize === undefined) {
+      issue('chunkSize', 'required in custom mode');
+    }
+    if (
+      value.chunkSize !== undefined &&
+      ((value.chunkTriggerMinSize ?? 0) > value.chunkSize ||
+        (value.paragraphChunkMinSize ?? 0) > value.chunkSize)
+    ) {
+      issue('chunkSize', 'must be greater than or equal to min size');
+    }
+    const paragraphFields = [
+      value.paragraphChunkAIMode,
+      value.paragraphChunkDeep,
+      value.paragraphChunkMinSize,
+    ];
+    if (
+      value.chunkSplitMode !== 'paragraph' &&
+      paragraphFields.some((entry) => entry !== undefined)
+    ) {
+      issue('chunkSplitMode', 'paragraph-only fields require paragraph mode');
+    }
+    if (
+      value.paragraphChunkAIMode !== undefined &&
+      value.paragraphChunkAIMode !== 'forbid' &&
+      value.trainingType !== 'chunk'
+    ) {
+      issue('paragraphChunkAIMode', 'AI paragraph enhancement requires trainingType=chunk');
+    }
+    if (value.autoIndexes === true && value.trainingType !== 'chunk') {
+      issue('autoIndexes', 'requires trainingType=chunk');
+    }
+    if (value.imageIndex === true && value.trainingType !== 'chunk') {
+      issue('imageIndex', 'requires trainingType=chunk');
+    }
+    if (value.dataEnhanceCollectionName === true && value.trainingType !== 'chunk') {
+      issue('dataEnhanceCollectionName', 'requires trainingType=chunk');
+    }
+    if (value.qaPrompt !== undefined && value.trainingType !== 'qa') {
+      issue('qaPrompt', 'requires trainingType=qa');
+    }
+  });
 
 export const CustomApiConnectorConfigSchema = z
   .object({

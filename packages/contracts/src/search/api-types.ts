@@ -201,6 +201,35 @@ export const MultiSpaceSearchApiRequestSchema = SearchRequestObject.extend({
     }
   });
 
+export const ImageSearchApiRequestSchema = SearchRequestObject.extend({
+  imageUploadIds: z.array(z.string().min(1).max(64)).min(1).max(10),
+}).strict();
+
+const DeepStopReasonSchema = z.enum([
+  'sufficient',
+  'round_limit',
+  'token_budget',
+  'no_new_evidence',
+  'dependency_failure',
+]);
+
+export const DeepSearchApiRequestSchema = SearchRequestObject.extend({
+  knowledgeSpaceIds: z.array(SearchObjectIdSchema).min(1).max(20),
+  maxRounds: z.number().int().min(1).max(3).default(3),
+  roundTokenBudget: z.number().int().min(500).max(20_000).default(5_000),
+  stopWhenNoNewEvidence: z.boolean().default(true),
+})
+  .strict()
+  .superRefine((request, context) => {
+    if (!request.knowledgeSpaceIds.includes(request.knowledgeSpaceId)) {
+      context.addIssue({
+        code: 'custom',
+        path: ['knowledgeSpaceIds'],
+        message: 'knowledgeSpaceIds must include knowledgeSpaceId',
+      });
+    }
+  });
+
 export const SegmentIndexApiSchema = z
   .object({
     indexId: z.string().min(1),
@@ -308,12 +337,57 @@ export const SearchApiResponseSchema = z
   })
   .strict();
 
+export const DeepSearchRoundSchema = z
+  .object({
+    round: z.number().int().min(1).max(3),
+    queries: z.array(z.string().min(1)).min(1).max(5),
+    candidateCount: z.number().int().min(0),
+    sufficient: z.boolean(),
+  })
+  .strict();
+
+export const DeepSearchApiResponseSchema = SearchApiResponseSchema.extend({
+  mode: z.literal('multi_space'),
+  rounds: z.array(DeepSearchRoundSchema).min(1).max(3),
+  stopReason: DeepStopReasonSchema,
+  usage: z
+    .object({
+      inputTokens: z.number().int().min(0),
+      outputTokens: z.number().int().min(0),
+    })
+    .strict(),
+}).strict();
+
+export const DeepPlannerOutputSchema = z
+  .object({
+    queries: z
+      .array(z.string().refine((value) => value.trim().length > 0, 'query must not be blank'))
+      .min(1)
+      .max(5),
+    sufficient: z.boolean(),
+  })
+  .strict()
+  .superRefine((value, context) => {
+    if (value.queries.reduce((total, query) => total + [...query].length, 0) > 20_000) {
+      context.addIssue({
+        code: 'custom',
+        path: ['queries'],
+        message: 'total query length must be <= 20000 code points',
+      });
+    }
+  });
+
 export type SearchApiMode = (typeof SEARCH_MODES)[number];
 export type SearchFilterApi = z.infer<typeof SearchFilterApiSchema>;
 export type TagFilterCondition = z.infer<typeof TagFilterConditionSchema>;
 export type SearchApiRequest = z.infer<typeof SearchApiRequestSchema>;
 export type MultiSpaceSearchApiRequest = z.infer<typeof MultiSpaceSearchApiRequestSchema>;
+export type ImageSearchApiRequest = z.infer<typeof ImageSearchApiRequestSchema>;
+export type DeepSearchApiRequest = z.infer<typeof DeepSearchApiRequestSchema>;
+export type DeepSearchRound = z.infer<typeof DeepSearchRoundSchema>;
+export type DeepPlannerOutput = z.infer<typeof DeepPlannerOutputSchema>;
 export type SearchApiResponse = z.infer<typeof SearchApiResponseSchema>;
+export type DeepSearchApiResponse = z.infer<typeof DeepSearchApiResponseSchema>;
 export type SearchApiItem = z.infer<typeof SearchApiItemSchema>;
 export type CitationApi = z.infer<typeof CitationApiSchema>;
 export type SearchSegmentApi = z.infer<typeof SearchSegmentApiSchema>;
@@ -375,6 +449,21 @@ export function toPipelineSearchRequest(
       rerank: request.rerankWeight,
     },
   };
+}
+
+export function withPipelineImageQueries(
+  request: SearchRequest,
+  imageQueries: NonNullable<SearchRequest['imageQueries']>,
+): SearchRequest {
+  if (imageQueries.length < 1 || imageQueries.length > 10) {
+    throw createKnowledgeError({
+      code: 'KNOWLEDGE_VALIDATION_FAILED',
+      requestId: request.requestId,
+      traceId: request.requestId,
+      details: { field: 'imageQueries', min: 1, max: 10 },
+    });
+  }
+  return { ...request, imageQueries };
 }
 
 export function citationRangeSchema() {

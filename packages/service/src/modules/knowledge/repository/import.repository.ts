@@ -284,7 +284,7 @@ export class KnowledgeImportRepository implements ImportSubmissionPort {
           provider: draft.object.provider,
           bucket: draft.object.bucket,
           objectKey: draft.object.objectKey,
-          purpose: 'source',
+          purpose: draft.kind === 'image' ? 'image' : 'source',
           sourceId: objectIdOfDraft(draft.id, context, 'sourceId'),
           mimeType: draft.object.mimeType,
           sizeBytes: draft.object.sizeBytes,
@@ -333,6 +333,7 @@ export class KnowledgeImportRepository implements ImportSubmissionPort {
       {
         $set: {
           sourceId: objectIdOf(draft.id, context, 'sourceId'),
+          ...(draft.kind === 'image' ? { purpose: 'image' } : {}),
           updatedByMemberId: context.memberId,
         },
         $inc: { version: 1 },

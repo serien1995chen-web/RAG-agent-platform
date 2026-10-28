@@ -37,7 +37,8 @@ export interface ImportSourceDraft {
     | 'api_library'
     | 'feishu'
     | 'yuque'
-    | 'dingtalk';
+    | 'dingtalk'
+    | 'image';
   name: string;
   directoryId: string | null;
   blobRefId: string | null;

@@ -983,8 +983,8 @@
       "timeoutMs": 120000,
       "audit": true,
       "downstreamAllowed": true,
-      "runtime": false,
-      "stage": "F3",
+      "runtime": true,
+      "stage": "BASE",
       "targetSection": "9.2",
       "accId": "ACC-CAP-SEARCH-008",
       "capabilityIds": [
@@ -1057,8 +1057,8 @@
       "timeoutMs": 60000,
       "audit": true,
       "downstreamAllowed": true,
-      "runtime": false,
-      "stage": "F3",
+      "runtime": true,
+      "stage": "BASE",
       "targetSection": "9.2",
       "accId": "ACC-CAP-SEARCH-006",
       "capabilityIds": [

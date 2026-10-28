@@ -64,7 +64,17 @@ export type {
 export { mergeMultiSpaceCitations } from './multi';
 export type { MultiSpaceMergeResult, MultiSpaceSearchSlice } from './multi';
 export { recallCandidates } from './recall';
+export {
+  IMAGE_BLOCK_MIXED_WEIGHT,
+  IMAGE_CAPTION_WEIGHT,
+  IMAGE_VECTOR_WEIGHT,
+  TEXT_BLOCK_WEIGHT,
+  fuseImageChannels,
+  fuseTextAndImageBlocks,
+} from './image';
 export { DEFAULT_RRF_K, rrfFuseWeighted } from './rrf';
+export { deepBudgetOf, deepRoundSummary, deepStopReason } from './deep';
+export type { DeepBudgetState, DeepStopInput, DeepStopReason } from './deep';
 export type {
   Candidate,
   AuthorizedCandidate,
