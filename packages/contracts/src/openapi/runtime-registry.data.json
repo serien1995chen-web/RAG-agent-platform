@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "count": 83,
+  "count": 95,
   "operations": [
     {
       "operationId": "API-HEALTH-LIVE",
@@ -342,6 +342,31 @@
       ]
     },
     {
+      "operationId": "API-JOB-CREATE",
+      "method": "POST",
+      "path": "/v1/knowledge/jobs",
+      "group": "job",
+      "requestSchema": "JobCreate",
+      "responseSchema": "Job",
+      "scopes": [
+        "knowledge:write"
+      ],
+      "idempotent": true,
+      "rateLimit": "30 QPS/workspace",
+      "timeoutMs": 15000,
+      "audit": true,
+      "downstreamAllowed": false,
+      "runtime": true,
+      "stage": "BASE",
+      "targetSection": "9.2",
+      "accId": "ACC-CAP-TRAIN-001",
+      "capabilityIds": [
+        "TRAIN-001",
+        "TRAIN-005",
+        "TRAIN-007"
+      ]
+    },
+    {
       "operationId": "API-JOB-GET",
       "method": "GET",
       "path": "/v1/knowledge/jobs/{jobId}",
@@ -355,6 +380,131 @@
       "rateLimit": "100 QPS/workspace",
       "timeoutMs": 5000,
       "audit": false,
+      "downstreamAllowed": false,
+      "runtime": true,
+      "stage": "BASE",
+      "targetSection": "9.2",
+      "accId": "ACC-CAP-TRAIN-001",
+      "capabilityIds": [
+        "TRAIN-001",
+        "TRAIN-005",
+        "TRAIN-007"
+      ]
+    },
+    {
+      "operationId": "API-JOB-CANCEL",
+      "method": "POST",
+      "path": "/v1/knowledge/jobs/{jobId}/cancel",
+      "group": "job",
+      "requestSchema": "VersionedMutation",
+      "responseSchema": "Job",
+      "scopes": [
+        "knowledge:write"
+      ],
+      "idempotent": true,
+      "rateLimit": "30 QPS/workspace",
+      "timeoutMs": 15000,
+      "audit": true,
+      "downstreamAllowed": false,
+      "runtime": true,
+      "stage": "BASE",
+      "targetSection": "9.2",
+      "accId": "ACC-CAP-TRAIN-001",
+      "capabilityIds": [
+        "TRAIN-001",
+        "TRAIN-005",
+        "TRAIN-007"
+      ]
+    },
+    {
+      "operationId": "API-JOB-PAUSE",
+      "method": "POST",
+      "path": "/v1/knowledge/jobs/{jobId}/pause",
+      "group": "job",
+      "requestSchema": "VersionedMutation",
+      "responseSchema": "Job",
+      "scopes": [
+        "knowledge:write"
+      ],
+      "idempotent": true,
+      "rateLimit": "30 QPS/workspace",
+      "timeoutMs": 15000,
+      "audit": true,
+      "downstreamAllowed": false,
+      "runtime": true,
+      "stage": "BASE",
+      "targetSection": "9.2",
+      "accId": "ACC-CAP-TRAIN-001",
+      "capabilityIds": [
+        "TRAIN-001",
+        "TRAIN-005",
+        "TRAIN-007"
+      ]
+    },
+    {
+      "operationId": "API-JOB-REPLAY",
+      "method": "POST",
+      "path": "/v1/knowledge/jobs/{jobId}/replay",
+      "group": "job",
+      "requestSchema": "VersionedMutation",
+      "responseSchema": "Job",
+      "scopes": [
+        "knowledge:admin"
+      ],
+      "idempotent": true,
+      "rateLimit": "30 QPS/workspace",
+      "timeoutMs": 15000,
+      "audit": true,
+      "downstreamAllowed": false,
+      "runtime": true,
+      "stage": "BASE",
+      "targetSection": "9.2",
+      "accId": "ACC-CAP-TRAIN-001",
+      "capabilityIds": [
+        "TRAIN-001",
+        "TRAIN-005",
+        "TRAIN-007"
+      ]
+    },
+    {
+      "operationId": "API-JOB-RESUME",
+      "method": "POST",
+      "path": "/v1/knowledge/jobs/{jobId}/resume",
+      "group": "job",
+      "requestSchema": "VersionedMutation",
+      "responseSchema": "Job",
+      "scopes": [
+        "knowledge:write"
+      ],
+      "idempotent": true,
+      "rateLimit": "30 QPS/workspace",
+      "timeoutMs": 15000,
+      "audit": true,
+      "downstreamAllowed": false,
+      "runtime": true,
+      "stage": "BASE",
+      "targetSection": "9.2",
+      "accId": "ACC-CAP-TRAIN-001",
+      "capabilityIds": [
+        "TRAIN-001",
+        "TRAIN-005",
+        "TRAIN-007"
+      ]
+    },
+    {
+      "operationId": "API-JOB-RETRY",
+      "method": "POST",
+      "path": "/v1/knowledge/jobs/{jobId}/retry",
+      "group": "job",
+      "requestSchema": "VersionedMutation",
+      "responseSchema": "Job",
+      "scopes": [
+        "knowledge:write"
+      ],
+      "idempotent": true,
+      "rateLimit": "30 QPS/workspace",
+      "timeoutMs": 15000,
+      "audit": true,
       "downstreamAllowed": false,
       "runtime": true,
       "stage": "BASE",
@@ -641,6 +791,173 @@
       "accId": "ACC-CAP-DATA-001",
       "capabilityIds": [
         "DATA-001"
+      ]
+    },
+    {
+      "operationId": "API-SEGMENT-HISTORY",
+      "method": "GET",
+      "path": "/v1/knowledge/segments/{segmentId}/history",
+      "group": "segment",
+      "requestSchema": null,
+      "responseSchema": "SegmentHistoryList",
+      "scopes": [
+        "knowledge:read"
+      ],
+      "idempotent": false,
+      "rateLimit": "100 QPS/workspace",
+      "timeoutMs": 5000,
+      "audit": false,
+      "downstreamAllowed": false,
+      "runtime": true,
+      "stage": "BASE",
+      "targetSection": "9.2",
+      "accId": "ACC-CAP-DATA-001",
+      "capabilityIds": [
+        "DATA-001",
+        "DATA-002",
+        "DATA-003",
+        "TRAIN-002",
+        "TRAIN-003",
+        "TRAIN-004"
+      ]
+    },
+    {
+      "operationId": "API-SEGMENT-INDEX-CREATE",
+      "method": "POST",
+      "path": "/v1/knowledge/segments/{segmentId}/indexes",
+      "group": "segment",
+      "requestSchema": "SegmentIndexUpsert",
+      "responseSchema": "Segment",
+      "scopes": [
+        "knowledge:write"
+      ],
+      "idempotent": true,
+      "rateLimit": "30 QPS/workspace",
+      "timeoutMs": 15000,
+      "audit": true,
+      "downstreamAllowed": false,
+      "runtime": true,
+      "stage": "BASE",
+      "targetSection": "9.2",
+      "accId": "ACC-CAP-DATA-001",
+      "capabilityIds": [
+        "DATA-001",
+        "DATA-002",
+        "DATA-003",
+        "DATA-004",
+        "TRAIN-002",
+        "TRAIN-003",
+        "TRAIN-004"
+      ]
+    },
+    {
+      "operationId": "API-SEGMENT-INDEX-DELETE",
+      "method": "DELETE",
+      "path": "/v1/knowledge/segments/{segmentId}/indexes/{indexId}",
+      "group": "segment",
+      "requestSchema": "VersionedMutation",
+      "responseSchema": "OperationResult",
+      "scopes": [
+        "knowledge:manage"
+      ],
+      "idempotent": true,
+      "rateLimit": "30 QPS/workspace",
+      "timeoutMs": 15000,
+      "audit": true,
+      "downstreamAllowed": false,
+      "runtime": true,
+      "stage": "BASE",
+      "targetSection": "9.2",
+      "accId": "ACC-CAP-DATA-001",
+      "capabilityIds": [
+        "DATA-001",
+        "DATA-002",
+        "DATA-003",
+        "TRAIN-002",
+        "TRAIN-003",
+        "TRAIN-004"
+      ]
+    },
+    {
+      "operationId": "API-SEGMENT-INDEX-UPDATE",
+      "method": "PATCH",
+      "path": "/v1/knowledge/segments/{segmentId}/indexes/{indexId}",
+      "group": "segment",
+      "requestSchema": "SegmentIndexUpsert",
+      "responseSchema": "Segment",
+      "scopes": [
+        "knowledge:write"
+      ],
+      "idempotent": true,
+      "rateLimit": "30 QPS/workspace",
+      "timeoutMs": 15000,
+      "audit": true,
+      "downstreamAllowed": false,
+      "runtime": true,
+      "stage": "BASE",
+      "targetSection": "9.2",
+      "accId": "ACC-CAP-DATA-001",
+      "capabilityIds": [
+        "DATA-001",
+        "DATA-002",
+        "DATA-003",
+        "TRAIN-002",
+        "TRAIN-003",
+        "TRAIN-004"
+      ]
+    },
+    {
+      "operationId": "API-SEGMENT-REINDEX",
+      "method": "POST",
+      "path": "/v1/knowledge/segments/{segmentId}/reindex",
+      "group": "segment",
+      "requestSchema": "ReindexRequest",
+      "responseSchema": "Job",
+      "scopes": [
+        "knowledge:write"
+      ],
+      "idempotent": true,
+      "rateLimit": "30 QPS/workspace",
+      "timeoutMs": 15000,
+      "audit": true,
+      "downstreamAllowed": false,
+      "runtime": true,
+      "stage": "BASE",
+      "targetSection": "9.2",
+      "accId": "ACC-CAP-DATA-001",
+      "capabilityIds": [
+        "DATA-001",
+        "DATA-002",
+        "DATA-003",
+        "TRAIN-002",
+        "TRAIN-003",
+        "TRAIN-004"
+      ]
+    },
+    {
+      "operationId": "API-SEGMENT-BATCH",
+      "method": "POST",
+      "path": "/v1/knowledge/segments/batch-actions",
+      "group": "segment",
+      "requestSchema": "SegmentBatchAction",
+      "responseSchema": "BatchResult",
+      "scopes": [
+        "knowledge:write"
+      ],
+      "idempotent": true,
+      "rateLimit": "30 QPS/workspace",
+      "timeoutMs": 15000,
+      "audit": true,
+      "downstreamAllowed": false,
+      "runtime": true,
+      "stage": "BASE",
+      "targetSection": "9.2",
+      "accId": "ACC-CAP-DATA-001",
+      "capabilityIds": [
+        "DATA-001",
+        "DATA-002",
+        "DATA-003",
+        "DATA-004"
       ]
     },
     {

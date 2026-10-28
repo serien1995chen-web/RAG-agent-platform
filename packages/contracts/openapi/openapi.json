@@ -5528,7 +5528,17 @@
               "knowledge:manage"
             ]
           }
-        ]
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VersionedMutation"
+              }
+            }
+          }
+        }
       }
     },
     "/v1/knowledge/segments/{segmentId}/history": {
@@ -20319,6 +20329,7 @@
               "queued",
               "parsing",
               "indexing",
+              "rebuilding",
               "ready",
               "partial",
               "failed",
@@ -20386,7 +20397,8 @@
             "type": "string",
             "examples": [
               "default"
-            ]
+            ],
+            "pattern": "^[a-zA-Z0-9_-]{1,64}$"
           },
           "type": {
             "type": "string",
@@ -20394,9 +20406,7 @@
               "default",
               "custom",
               "question",
-              "summary",
-              "image",
-              "image_caption"
+              "summary"
             ],
             "examples": [
               "default"
@@ -20503,7 +20513,10 @@
           "content",
           "indexes",
           "indexStatus",
-          "version"
+          "version",
+          "sourceVersion",
+          "fullTextTokens",
+          "fullTextVersion"
         ],
         "properties": {
           "id": {
@@ -20623,6 +20636,17 @@
             "examples": [
               9
             ]
+          },
+          "sourceVersion": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "fullTextTokens": {
+            "type": "string"
+          },
+          "fullTextVersion": {
+            "type": "integer",
+            "minimum": 0
           }
         }
       },
@@ -20745,7 +20769,10 @@
           "maxAttempts",
           "progress",
           "createdAt",
-          "updatedAt"
+          "updatedAt",
+          "resourceType",
+          "resourceId",
+          "version"
         ],
         "properties": {
           "jobId": {
@@ -20940,6 +20967,34 @@
                         }
                       }
                     }
+                  },
+                  "childJobIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "pattern": "^[a-f0-9]{24}$"
+                    }
+                  },
+                  "partial": {
+                    "type": "boolean"
+                  },
+                  "sources": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "additionalProperties": true
+                    }
+                  },
+                  "completedAt": {
+                    "type": "string",
+                    "format": "date-time"
+                  },
+                  "replayHistory": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "additionalProperties": true
+                    }
                   }
                 }
               },
@@ -20961,6 +21016,75 @@
             "examples": [
               "2026-10-21T10:00:00+08:00"
             ]
+          },
+          "resourceType": {
+            "type": "string",
+            "enum": [
+              "workspace",
+              "space",
+              "directory",
+              "source",
+              "segment",
+              "job",
+              "connector",
+              "api_key",
+              "synonym",
+              "system"
+            ]
+          },
+          "resourceId": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{24}$"
+          },
+          "inputSnapshot": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "leaseOwner": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "leaseExpiresAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "heartbeatAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "attemptEpoch": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "availableAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "cancelRequestedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "pausedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1
           }
         }
       },
@@ -22653,7 +22777,8 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/SegmentHistory"
-            }
+            },
+            "maxItems": 20
           }
         }
       },
@@ -23494,9 +23619,7 @@
               "default",
               "custom",
               "question",
-              "summary",
-              "image",
-              "image_caption"
+              "summary"
             ]
           },
           "text": {
@@ -23510,12 +23633,14 @@
             "type": "integer",
             "minimum": 1
           }
-        }
+        },
+        "additionalProperties": false
       },
       "ReindexRequest": {
         "type": "object",
         "required": [
-          "reason"
+          "reason",
+          "version"
         ],
         "properties": {
           "reason": {
@@ -23529,8 +23654,13 @@
           },
           "modelId": {
             "type": "string"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1
           }
-        }
+        },
+        "additionalProperties": false
       },
       "TagCreate": {
         "type": "object",
@@ -23777,7 +23907,8 @@
             "type": "integer",
             "minimum": 1
           }
-        }
+        },
+        "additionalProperties": false
       },
       "CollaboratorCreate": {
         "type": "object",
@@ -25085,21 +25216,13 @@
           "kind": {
             "type": "string",
             "enum": [
-              "import",
               "parse",
               "segment",
               "qa",
-              "ocr",
-              "caption",
               "embed",
               "index",
               "fulltext",
-              "rebuild",
-              "sync",
-              "delete",
-              "export",
-              "cleanup",
-              "reconcile"
+              "rebuild"
             ]
           },
           "resourceType": {
@@ -25128,7 +25251,8 @@
             "maximum": 9,
             "default": 5
           }
-        }
+        },
+        "additionalProperties": false
       },
       "SearchRequest": {
         "type": "object",
@@ -25736,8 +25860,8 @@
     "operations": 120,
     "schemas": 139,
     "parameters": 8,
-    "runtimeOperations": 83,
-    "deferredOperations": 37,
+    "runtimeOperations": 95,
+    "deferredOperations": 25,
     "canonicalCollections": 23,
     "vectorProfiles": 4,
     "canonicalQueues": 13

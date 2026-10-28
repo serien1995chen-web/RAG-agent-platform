@@ -14,6 +14,7 @@ describe('S4 ingestion domain', () => {
   it('enforces connector state transitions without undocumented shortcuts', () => {
     expect(canTransitionConnector('active', 'syncing')).toBe(true);
     expect(canTransitionConnector('syncing', 'active')).toBe(true);
+    expect(canTransitionConnector('failed', 'syncing')).toBe(true);
     expect(canTransitionConnector('active', 'deleted')).toBe(false);
     expect(() =>
       assertConnectorTransition('active', 'deleted', {

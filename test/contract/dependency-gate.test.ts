@@ -57,6 +57,8 @@ const workspaceManifestExtras: Record<
     dependencies: {
       archiver: 'catalog:',
       jszip: 'catalog:',
+      nanoid: 'catalog:',
+      'p-limit': 'catalog:',
     },
     devDependencies: {
       '@types/archiver': 'catalog:',
@@ -66,6 +68,8 @@ const workspaceManifestExtras: Record<
     dependencies: {
       '@apidevtools/swagger-parser': 'catalog:',
       ajv: 'catalog:',
+      'cron-parser': 'catalog:',
+      nanoid: 'catalog:',
       'openapi-types': 'catalog:',
     },
     devDependencies: {
@@ -95,6 +99,8 @@ const workspaceManifestExtras: Record<
       'ipaddr.js': 'catalog:',
       'jsonpath-plus': 'catalog:',
       multer: 'catalog:',
+      'node-cron': 'catalog:',
+      'p-limit': 'catalog:',
       'proxy-addr': 'catalog:',
       'proxy-agent': 'catalog:',
       'proxy-from-env': 'catalog:',
@@ -102,6 +108,8 @@ const workspaceManifestExtras: Record<
     devDependencies: {
       '@types/async-retry': 'catalog:',
       '@types/multer': 'catalog:',
+      '@types/node-cron': 'catalog:',
+      '@types/pg': 'catalog:',
       '@types/proxy-from-env': 'catalog:',
       '@types/tunnel': 'catalog:',
     },

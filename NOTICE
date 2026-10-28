@@ -7,7 +7,7 @@ NOTICE
 生成脚本: scripts/generate-sbom.mjs（禁止手工维护本文件）
 SBOM 产物: artifacts/sbom.json
 
-一、直接依赖（132）
+一、直接依赖（138）
 名称@版本 | 许可证 | scope | 来源 workspace
 @apidevtools/json-schema-ref-parser@11.7.2 | MIT | production | packages/service
 @apidevtools/swagger-parser@10.1.1 | MIT | production | packages/contracts
@@ -52,8 +52,10 @@ SBOM 产物: artifacts/sbom.json
 @types/jsdom@21.1.7 | MIT | development | .
 @types/mime-types@3.0.1 | MIT | development | packages/parse
 @types/multer@1.4.12 | MIT | development | packages/service
+@types/node-cron@3.0.11 | MIT | development | packages/service
 @types/node@24.19.1 | MIT | development | .,packages/acl,packages/chunk,packages/contracts,packages/dal,packages/parse,packages/qa,packages/search,packages/service,packages/web,projects/app,sdk/otel,sdk/storage
 @types/papaparse@5.3.7 | MIT | development | packages/parse
+@types/pg@8.11.11 | MIT | development | packages/service
 @types/proxy-from-env@1.0.4 | MIT | development | packages/service
 @types/react-dom@18.3.7 | MIT | development | packages/web,projects/app
 @types/react@18.3.31 | MIT | development | packages/web,projects/app
@@ -70,6 +72,7 @@ axios@1.18.1 | MIT | production | packages/service
 bullmq@5.52.2 | MIT | production | packages/dal,packages/service,projects/app
 cheerio@1.0.0-rc.12 | MIT | production | packages/parse
 cos-nodejs-sdk-v5@3.0.0 | ISC | production | sdk/storage
+cron-parser@4.9.0 | MIT | production | packages/contracts
 date-fns@3.6.0 | MIT | production | packages/web
 dayjs@1.11.19 | MIT | production | packages/web
 domino-ext@2.1.4 | BSD-2-Clause | production | packages/parse
@@ -104,10 +107,13 @@ minio@8.0.7 | Apache-2.0 | production | sdk/storage
 mongodb-memory-server@10.4.3 | MIT | development | packages/service
 mongoose@8.24.5 | MIT | production | packages/service
 multer@2.4.0 | MIT | production | packages/service
+nanoid@5.1.5 | MIT | production | packages/contracts,projects/app
 next-i18next@15.4.2 | MIT | production | projects/app
 next@16.3.0 | MIT | production | projects/app
+node-cron@3.0.3 | ISC | production | packages/service
 openai@6.34.0 | Apache-2.0 | production | packages/qa,packages/service
 openapi-types@12.1.3 | MIT | production | packages/contracts
+p-limit@7.2.0 | MIT | production | packages/service,projects/app
 papaparse@5.4.1 | MIT | production | packages/parse
 pdfjs-dist@4.10.38 | Apache-2.0 | production | packages/parse
 pg@8.23.1 | MIT | production | packages/service
@@ -142,7 +148,7 @@ zod-openapi@5.4.6 | MIT | production | packages/contracts
 zod@4.1.12 | MIT | production | packages/contracts,packages/service,packages/web
 zustand@4.5.6 | MIT | production | packages/web
 
-二、传递依赖（1398）
+二、传递依赖（1407）
 名称@版本 | 许可证 | scope | 依赖父链
 @ai-sdk/anthropic@3.0.135 | Apache-2.0 | development | . → @chakra-ui/cli@2.5.8 → cli-welcome@2.2.3 → clear-any-console@1.16.4 → command-code@1.88.0 → @ai-sdk/anthropic@3.0.135
 @ai-sdk/gateway@3.0.221 | Apache-2.0 | development | . → @chakra-ui/cli@2.5.8 → cli-welcome@2.2.3 → clear-any-console@1.16.4 → command-code@1.88.0 → ai@6.0.315 → @ai-sdk/gateway@3.0.221
@@ -703,7 +709,6 @@ cos-request@1.3.3 | Apache-2.0 | production | sdk/storage → cos-nodejs-sdk-v5@
 cosmiconfig@7.1.0 | MIT | production | packages/web → @emotion/react@11.11.1 → @emotion/babel-plugin@11.13.5 → babel-plugin-macros@3.1.0 → cosmiconfig@7.1.0
 crc-32@1.2.2 | Apache-2.0 | production | packages/parse → xlsx@0.18.5 → crc-32@1.2.2
 crc32-stream@6.0.0 | MIT | production | projects/app → archiver@7.0.1 → zip-stream@6.0.1 → compress-commons@6.0.2 → crc32-stream@6.0.0
-cron-parser@4.9.0 | MIT | production | packages/dal → bullmq@5.52.2 → cron-parser@4.9.0
 cross-spawn@7.0.6 | MIT | production | projects/app → archiver@7.0.1 → archiver-utils@5.0.2 → glob@10.4.5 → foreground-child@3.3.1 → cross-spawn@7.0.6
 crypto-random-string@4.0.0 | MIT | development | . → @chakra-ui/cli@2.5.8 → update-notifier@6.0.2 → configstore@6.0.0 → unique-string@3.0.0 → crypto-random-string@4.0.0
 css-box-model@1.2.1 | MIT | production | packages/web → @chakra-ui/system@2.6.1 → @chakra-ui/utils@2.0.15 → css-box-model@1.2.1
@@ -1073,7 +1078,7 @@ lru-cache@10.4.3 | ISC | production | projects/app → archiver@7.0.1 → archiv
 lru-cache@11.5.3 | BlueOak-1.0.0 | development | . → @chakra-ui/cli@2.5.8 → cli-welcome@2.2.3 → clear-any-console@1.16.4 → command-code@1.88.0 → glob@13.0.6 → path-scurry@2.0.2 → lru-cache@11.5.3
 lru-cache@5.1.1 | ISC | development | . → @svgr/webpack@6.5.1 → @babel/core@7.29.7 → @babel/helper-compilation-targets@7.29.7 → lru-cache@5.1.1
 lru-cache@7.18.3 | ISC | production | packages/service → proxy-agent@6.5.0 → lru-cache@7.18.3
-luxon@3.7.2 | MIT | production | packages/dal → bullmq@5.52.2 → cron-parser@4.9.0 → luxon@3.7.2
+luxon@3.7.2 | MIT | production | packages/contracts → cron-parser@4.9.0 → luxon@3.7.2
 magic-string@0.30.21 | MIT | development | . → vitest@4.1.11 → magic-string@0.30.21
 magicast@0.5.5 | MIT | development | . → @vitest/coverage-v8@4.1.11 → magicast@0.5.5
 make-dir@3.1.0 | MIT | development | packages/service → mongodb-memory-server@10.4.3 → mongodb-memory-server-core@10.4.3 → find-cache-dir@3.3.2 → make-dir@3.1.0
@@ -1139,6 +1144,7 @@ object.entries@1.1.9 | MIT | development | . → eslint-config-next@16.3.6 → e
 object.fromentries@2.0.8 | MIT | development | . → eslint-config-next@16.3.6 → eslint-plugin-import@2.32.0 → object.fromentries@2.0.8
 object.groupby@1.0.3 | MIT | development | . → eslint-config-next@16.3.6 → eslint-plugin-import@2.32.0 → object.groupby@1.0.3
 object.values@1.2.1 | MIT | development | . → eslint-config-next@16.3.6 → eslint-plugin-import@2.32.0 → object.values@1.2.1
+obuf@1.1.2 | MIT | development | packages/service → @types/pg@8.11.11 → pg-types@4.1.0 → postgres-bytea@3.0.0 → obuf@1.1.2
 obug@2.2.1 | MIT | development | . → @vitest/coverage-v8@4.1.11 → obug@2.2.1
 omggif@1.0.10 | MIT | development | . → @chakra-ui/cli@2.5.8 → cli-welcome@2.2.3 → clear-any-console@1.16.4 → command-code@1.88.0 → jimp@1.6.1 → @jimp/js-gif@1.6.1 → omggif@1.0.10
 on-exit-leak-free@2.1.2 | MIT | production | sdk/otel → pino@9.14.0 → on-exit-leak-free@2.1.2
@@ -1195,9 +1201,11 @@ pend@1.2.0 | MIT | production | packages/parse → yauzl@3.4.0 → pend@1.2.0
 performance-now@2.1.0 | MIT | production | sdk/storage → cos-nodejs-sdk-v5@3.0.0 → cos-request@1.3.3 → performance-now@2.1.0
 pg-connection-string@2.14.1 | MIT | production | packages/service → pg@8.23.1 → pg-connection-string@2.14.1
 pg-int8@1.0.1 | ISC | production | packages/service → pg@8.23.1 → pg-types@2.2.0 → pg-int8@1.0.1
+pg-numeric@1.0.2 | ISC | development | packages/service → @types/pg@8.11.11 → pg-types@4.1.0 → pg-numeric@1.0.2
 pg-pool@3.14.0 | MIT | production | packages/service → pg@8.23.1 → pg-pool@3.14.0
 pg-protocol@1.16.1 | MIT | production | packages/service → pg@8.23.1 → pg-protocol@1.16.1
 pg-types@2.2.0 | MIT | production | packages/service → pg@8.23.1 → pg-types@2.2.0
+pg-types@4.1.0 | MIT | development | packages/service → @types/pg@8.11.11 → pg-types@4.1.0
 pgpass@1.0.5 | MIT | production | packages/service → pg@8.23.1 → pgpass@1.0.5
 picocolors@1.1.1 | ISC | production | projects/app → next@16.3.0 → postcss@8.5.23 → picocolors@1.1.1
 picomatch@2.3.2 | MIT | development | . → tailwindcss@3.4.18 → micromatch@4.0.8 → picomatch@2.3.2
@@ -1222,9 +1230,14 @@ postcss-value-parser@4.2.0 | MIT | development | . → tailwindcss@3.4.18 → po
 postcss@8.5.23 | MIT | production | projects/app → next@16.3.0 → postcss@8.5.23
 postcss@8.5.29 | MIT | development | . → tailwindcss@3.4.18 → postcss@8.5.29
 postgres-array@2.0.0 | MIT | production | packages/service → pg@8.23.1 → pg-types@2.2.0 → postgres-array@2.0.0
+postgres-array@3.0.4 | MIT | development | packages/service → @types/pg@8.11.11 → pg-types@4.1.0 → postgres-array@3.0.4
 postgres-bytea@1.0.1 | MIT | production | packages/service → pg@8.23.1 → pg-types@2.2.0 → postgres-bytea@1.0.1
+postgres-bytea@3.0.0 | MIT | development | packages/service → @types/pg@8.11.11 → pg-types@4.1.0 → postgres-bytea@3.0.0
 postgres-date@1.0.7 | MIT | production | packages/service → pg@8.23.1 → pg-types@2.2.0 → postgres-date@1.0.7
+postgres-date@2.1.0 | MIT | development | packages/service → @types/pg@8.11.11 → pg-types@4.1.0 → postgres-date@2.1.0
 postgres-interval@1.2.0 | MIT | production | packages/service → pg@8.23.1 → pg-types@2.2.0 → postgres-interval@1.2.0
+postgres-interval@3.0.0 | MIT | development | packages/service → @types/pg@8.11.11 → pg-types@4.1.0 → postgres-interval@3.0.0
+postgres-range@1.1.4 | MIT | development | packages/service → @types/pg@8.11.11 → pg-types@4.1.0 → postgres-range@1.1.4
 postgres@3.4.9 | Unlicense | development | . → @chakra-ui/cli@2.5.8 → cli-welcome@2.2.3 → clear-any-console@1.16.4 → command-code@1.88.0 → postgres@3.4.9
 prelude-ls@1.2.1 | MIT | development | . → eslint@9.39.4 → optionator@0.9.4 → prelude-ls@1.2.1
 pretty-ms@9.3.1 | MIT | development | . → @chakra-ui/cli@2.5.8 → cli-welcome@2.2.3 → clear-any-console@1.16.4 → command-code@1.88.0 → open-editor@5.1.0 → execa@9.6.1 → pretty-ms@9.3.1
@@ -1484,6 +1497,7 @@ utif2@4.1.0 | MIT | development | . → @chakra-ui/cli@2.5.8 → cli-welcome@2.2
 util-deprecate@1.0.2 | MIT | production | projects/app → jszip@3.10.1 → readable-stream@2.3.8 → util-deprecate@1.0.2
 utility@1.18.0 | MIT | production | sdk/storage → ali-oss@6.23.0 → utility@1.18.0
 uuid@14.0.3 | MIT | development | . → @chakra-ui/cli@2.5.8 → cli-welcome@2.2.3 → clear-any-console@1.16.4 → command-code@1.88.0 → uuid@14.0.3
+uuid@8.3.2 | MIT | production | packages/service → node-cron@3.0.3 → uuid@8.3.2
 uuid@9.0.1 | MIT | production | packages/dal → bullmq@5.52.2 → uuid@9.0.1
 verror@1.10.0 | MIT | production | sdk/storage → cos-nodejs-sdk-v5@3.0.0 → cos-request@1.3.3 → http-signature@1.2.0 → jsprim@1.4.2 → verror@1.10.0
 void-elements@3.1.0 | MIT | production | packages/web → react-i18next@14.1.2 → html-parse-stringify@3.1.0 → void-elements@3.1.0
@@ -1536,6 +1550,7 @@ yargs-parser@21.1.1 | ISC | production | sdk/otel → pino-opentelemetry-transpo
 yargs@16.2.2 | MIT | development | . → @chakra-ui/cli@2.5.8 → cli-welcome@2.2.3 → clear-any-console@1.16.4 → command-code@1.88.0 → marked-terminal@7.3.0 → cli-highlight@2.1.11 → yargs@16.2.2
 yargs@17.7.3 | MIT | production | sdk/otel → pino-opentelemetry-transport@1.0.1 → otlp-logger@1.1.13 → @opentelemetry/exporter-logs-otlp-grpc@0.206.0 → @grpc/grpc-js@1.14.6 → @grpc/proto-loader@0.8.1 → yargs@17.7.3
 yocto-queue@0.1.0 | MIT | development | . → eslint@9.39.4 → find-up@5.0.0 → locate-path@6.0.0 → p-locate@5.0.0 → p-limit@3.1.0 → yocto-queue@0.1.0
+yocto-queue@1.2.2 | MIT | production | packages/service → p-limit@7.2.0 → yocto-queue@1.2.2
 yoctocolors@2.2.0 | MIT | development | . → @chakra-ui/cli@2.5.8 → cli-welcome@2.2.3 → clear-any-console@1.16.4 → command-code@1.88.0 → log-symbols@7.0.1 → yoctocolors@2.2.0
 yoga-layout@3.2.1 | MIT | development | . → @chakra-ui/cli@2.5.8 → cli-welcome@2.2.3 → clear-any-console@1.16.4 → command-code@1.88.0 → ink@7.1.0 → yoga-layout@3.2.1
 zip-stream@6.0.1 | MIT | production | projects/app → archiver@7.0.1 → zip-stream@6.0.1

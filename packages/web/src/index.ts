@@ -85,6 +85,14 @@ export type {
   S5ModelView,
   S5ProblemView,
 } from './components/s5-model-parse-state';
+export { S6JobsPanel, jobActionsFor } from './components/s6-jobs-panel';
+export type { S6JobAction, S6JobView } from './components/s6-jobs-panel';
+export { S6SegmentIndexEditor } from './components/s6-segment-index-editor';
+export type {
+  S6SegmentHistoryView,
+  S6SegmentIndexView,
+  S6SegmentView,
+} from './components/s6-segment-index-editor';
 export type {
   Column,
   Density,

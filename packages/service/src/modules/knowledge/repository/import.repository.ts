@@ -16,6 +16,10 @@ import type {
   KnowledgeSpaceDoc,
 } from '../../../shared/persistence/schemas/knowledge-catalog.schemas';
 import type { KnowledgeJobDoc } from '../../../shared/persistence/schemas/knowledge-job.schemas';
+import type {
+  KnowledgeConnectorCursorDoc,
+  KnowledgeConnectorDoc,
+} from '../../../shared/persistence/schemas/knowledge-connector.schemas';
 import type { KnowledgeObjectRefDoc } from '../../../shared/persistence/schemas/knowledge-operations.schemas';
 import type { TenantContext } from '../../../shared/persistence/knowledge/tenant';
 import type {
@@ -25,6 +29,11 @@ import type {
   ImportSubmissionResult,
   JobView,
 } from '../application/ingestion.ports';
+import type {
+  ConnectorChangeSetApplyInput,
+  ConnectorChangeSetApplyResult,
+} from '../application/s06-connector-sync.application';
+import type { S6ConnectorSyncResult } from '../application/s06-processing-ports';
 
 type Plain<T> = T & { _id: Types.ObjectId; createdAt: Date; updatedAt: Date };
 
@@ -89,6 +98,8 @@ export class KnowledgeImportRepository implements ImportSubmissionPort {
   private readonly sources: Model<KnowledgeSourceDoc>;
   private readonly jobs: Model<KnowledgeJobDoc>;
   private readonly objects: Model<KnowledgeObjectRefDoc>;
+  private readonly connectors: Model<KnowledgeConnectorDoc>;
+  private readonly cursors: Model<KnowledgeConnectorCursorDoc>;
   private readonly audit: KnowledgeAuditRepository;
 
   constructor(
@@ -101,6 +112,8 @@ export class KnowledgeImportRepository implements ImportSubmissionPort {
     this.sources = models.KnowledgeSource as Model<KnowledgeSourceDoc>;
     this.jobs = models.KnowledgeJob as Model<KnowledgeJobDoc>;
     this.objects = models.KnowledgeObjectRef as Model<KnowledgeObjectRefDoc>;
+    this.connectors = models.KnowledgeConnector as Model<KnowledgeConnectorDoc>;
+    this.cursors = models.KnowledgeConnectorCursor as Model<KnowledgeConnectorCursorDoc>;
     this.audit = new KnowledgeAuditRepository(connection);
   }
 
@@ -405,6 +418,237 @@ export class KnowledgeImportRepository implements ImportSubmissionPort {
     }
     const existing = await this.existingJob(command, context);
     return existing ? this.replay(existing, command.requestHash, context) : null;
+  }
+
+  async replayConnectorSync(
+    input: {
+      connectorId: string;
+      knowledgeSpaceId: string;
+      syncRunId: string;
+    },
+    context: TenantContext,
+  ): Promise<S6ConnectorSyncResult | null> {
+    const workspaceId = requireWorkspaceId(context);
+    const syncRunId = objectIdOfDraft(input.syncRunId, context, 'syncRunId');
+    const cursor = await this.cursors
+      .findOne({
+        workspaceId,
+        connectorId: objectIdOf(input.connectorId, context, 'connectorId'),
+        syncRunId,
+      })
+      .lean<KnowledgeConnectorCursorDoc & { _id: Types.ObjectId }>();
+    if (!cursor) return null;
+    const connector = await this.connectors
+      .findOne({
+        workspaceId,
+        _id: cursor.connectorId,
+        deletedAt: null,
+      })
+      .lean<KnowledgeConnectorDoc & { _id: Types.ObjectId }>();
+    if (!connector) throw tenantError(context, 'KNOWLEDGE_NOT_FOUND');
+    const sources = await this.sources
+      .find({
+        workspaceId,
+        knowledgeSpaceId: cursor.knowledgeSpaceId,
+        connectorId: cursor.connectorId,
+        deletedAt: null,
+      })
+      .select({ _id: 1, sourceVersion: 1 })
+      .lean<Array<{ _id: Types.ObjectId; sourceVersion: number }>>();
+    return {
+      sourceIds: sources.map((source) => String(source._id)),
+      sourceVersions: Object.fromEntries(
+        sources.map((source) => [String(source._id), source.sourceVersion]),
+      ),
+      cursorVersion: connector.cursorVersion,
+      sourceCount: sources.length,
+      changeSetHash: cursor.lastChangeSetHash,
+      replayed: true,
+    };
+  }
+
+  async applyConnectorChangeSet(
+    input: ConnectorChangeSetApplyInput,
+    context: TenantContext,
+  ): Promise<ConnectorChangeSetApplyResult> {
+    const workspaceId = requireWorkspaceId(context);
+    const connectorObjectId = objectIdOf(input.connectorId, context, 'connectorId');
+    const spaceObjectId = objectIdOf(input.knowledgeSpaceId, context, 'knowledgeSpaceId');
+    const syncRunId = objectIdOfDraft(input.syncRunId, context, 'syncRunId');
+    const command: ImportSubmissionCommand = {
+      workspaceId,
+      knowledgeSpaceId: input.knowledgeSpaceId,
+      directoryId: null,
+      importKind: input.provider,
+      idempotencyKey: `connector-sync:${input.syncRunId}`,
+      requestHash: input.changeSetHash,
+      configurationHash: input.changeSetHash,
+      sourceDrafts: [],
+      parseConfigSnapshot: { provider: 'liteparse' },
+      chunkingConfigSnapshot: { trainingType: 'chunk', chunkSettingMode: 'auto' },
+      qaConfigSnapshot: {},
+    };
+    return withMongoTransaction(this.connection, async (session) => {
+      const { space } = await this.validateTarget(command, context, session);
+      const connector = await this.connectors
+        .findOne({
+          workspaceId,
+          _id: connectorObjectId,
+          deletedAt: null,
+        })
+        .session(session)
+        .lean<KnowledgeConnectorDoc & { _id: Types.ObjectId }>();
+      if (!connector) throw tenantError(context, 'KNOWLEDGE_NOT_FOUND');
+      const existingCursor = await this.cursors
+        .findOne({
+          workspaceId,
+          connectorId: connectorObjectId,
+          externalRootId: input.externalRootId,
+        })
+        .session(session)
+        .lean<KnowledgeConnectorCursorDoc & { _id: Types.ObjectId }>();
+      if (existingCursor?.syncRunId && String(existingCursor.syncRunId) === input.syncRunId) {
+        const replay = await this.replayConnectorSync(
+          {
+            connectorId: input.connectorId,
+            knowledgeSpaceId: input.knowledgeSpaceId,
+            syncRunId: input.syncRunId,
+          },
+          context,
+        );
+        if (replay) return { ...replay, obsoleteObjectKeys: [] };
+      }
+      if (
+        connector.status !== 'syncing' ||
+        connector.cursorVersion !== input.expectedCursorVersion
+      ) {
+        throw tenantError(context, 'KNOWLEDGE_CONFLICT', {
+          connectorId: input.connectorId,
+          reason: 'connector_cursor_cas',
+          expected: input.expectedCursorVersion,
+          actual: connector.cursorVersion,
+        });
+      }
+
+      const sourceIds: string[] = [];
+      const sourceVersions: Record<string, number> = {};
+      const obsoleteObjectKeys: string[] = [];
+      const drafts: ImportSourceDraft[] = [];
+      for (const material of input.sources) {
+        const draft: ImportSourceDraft = {
+          ...material.source,
+          connectorId: input.connectorId,
+          directoryId: null,
+        };
+        if (!draft.externalId) {
+          throw createKnowledgeError({
+            code: 'KNOWLEDGE_VALIDATION_FAILED',
+            requestId: context.requestId,
+            traceId: context.traceId,
+            details: { field: 'externalId', reason: 'required_for_connector_sync' },
+          });
+        }
+        const existing = await this.sources
+          .findOne({
+            workspaceId,
+            knowledgeSpaceId: spaceObjectId,
+            connectorId: connectorObjectId,
+            externalId: draft.externalId,
+            deletedAt: null,
+          })
+          .session(session)
+          .lean<KnowledgeSourceDoc & { _id: Types.ObjectId }>();
+        if (
+          existing &&
+          existing.contentHash === draft.contentHash &&
+          existing.name === draft.name
+        ) {
+          if (material.createdObjectKey) obsoleteObjectKeys.push(material.createdObjectKey);
+          sourceIds.push(String(existing._id));
+          sourceVersions[String(existing._id)] = existing.sourceVersion;
+          continue;
+        }
+        if (existing) {
+          draft.id = String(existing._id);
+          draft.replaceSourceId = String(existing._id);
+          draft.replaceSourceVersion = existing.version;
+        }
+        drafts.push(draft);
+        const sourceVersion = await this.replaceSource(draft, command, space, session, context);
+        if (!existing) {
+          await this.sources.create([this.sourceDocument(draft, command, space, context)], {
+            session,
+            ordered: true,
+          });
+        }
+        await this.bindExistingObject(draft, space._id, session, context);
+        await this.createObjectRef(draft, space._id, session, context);
+        sourceIds.push(draft.id);
+        sourceVersions[draft.id] = sourceVersion;
+      }
+      command.sourceDrafts = drafts;
+      const cursorVersion = input.expectedCursorVersion + 1;
+      const now = new Date();
+      await this.cursors.findOneAndUpdate(
+        {
+          workspaceId,
+          connectorId: connectorObjectId,
+          externalRootId: input.externalRootId,
+        },
+        {
+          $set: {
+            cursor: input.cursor,
+            cursorVersion,
+            syncRunId,
+            checkpointAt: now,
+            lastChangeSetHash: input.changeSetHash,
+            updatedByMemberId: context.memberId,
+          },
+          $setOnInsert: {
+            workspaceId,
+            version: 1,
+            deletedAt: null,
+            createdByMemberId: context.memberId,
+            connectorId: connectorObjectId,
+            externalRootId: input.externalRootId,
+          },
+        },
+        { upsert: true, new: true, session, setDefaultsOnInsert: true },
+      );
+      const updatedConnector = await this.connectors.findOneAndUpdate(
+        {
+          _id: connectorObjectId,
+          workspaceId,
+          cursorVersion: input.expectedCursorVersion,
+          status: 'syncing',
+          deletedAt: null,
+        },
+        {
+          $set: {
+            cursorVersion,
+            lastSuccessAt: now,
+            updatedByMemberId: context.memberId,
+          },
+          $inc: { version: 1 },
+        },
+        { new: true, session },
+      );
+      if (!updatedConnector) {
+        throw tenantError(context, 'KNOWLEDGE_CONFLICT', {
+          connectorId: input.connectorId,
+          reason: 'connector_cursor_cas',
+        });
+      }
+      return {
+        sourceIds: [...new Set(sourceIds)],
+        sourceVersions,
+        cursorVersion,
+        sourceCount: new Set(sourceIds).size,
+        changeSetHash: input.changeSetHash,
+        replayed: false,
+        obsoleteObjectKeys,
+      };
+    });
   }
 
   async submit(

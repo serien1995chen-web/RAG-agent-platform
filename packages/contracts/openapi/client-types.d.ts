@@ -136,7 +136,13 @@ export type RuntimeOperationId =
   | 'API-FILE-DOWNLOAD'
   | 'API-FILE-PREVIEW'
   | 'API-JOB-LIST'
+  | 'API-JOB-CREATE'
   | 'API-JOB-GET'
+  | 'API-JOB-CANCEL'
+  | 'API-JOB-PAUSE'
+  | 'API-JOB-REPLAY'
+  | 'API-JOB-RESUME'
+  | 'API-JOB-RETRY'
   | 'API-MODEL-BINDING-VALIDATE'
   | 'API-MODEL-LIST'
   | 'API-OPENAPI'
@@ -148,6 +154,12 @@ export type RuntimeOperationId =
   | 'API-SEGMENT-DELETE'
   | 'API-SEGMENT-GET'
   | 'API-SEGMENT-UPDATE'
+  | 'API-SEGMENT-HISTORY'
+  | 'API-SEGMENT-INDEX-CREATE'
+  | 'API-SEGMENT-INDEX-DELETE'
+  | 'API-SEGMENT-INDEX-UPDATE'
+  | 'API-SEGMENT-REINDEX'
+  | 'API-SEGMENT-BATCH'
   | 'API-SOURCE-DELETE'
   | 'API-SOURCE-GET'
   | 'API-SOURCE-UPDATE'
@@ -214,12 +226,6 @@ export type DeferredOperationId =
   | 'API-APIKEY-ROTATE'
   | 'API-AUDIT-LIST'
   | 'API-CITATION-GET'
-  | 'API-JOB-CREATE'
-  | 'API-JOB-CANCEL'
-  | 'API-JOB-PAUSE'
-  | 'API-JOB-REPLAY'
-  | 'API-JOB-RESUME'
-  | 'API-JOB-RETRY'
   | 'API-OPS-CLEANUP'
   | 'API-OPS-OUTBOX-REPLAY'
   | 'API-OPS-RECONCILE'
@@ -229,12 +235,6 @@ export type DeferredOperationId =
   | 'API-SEARCH-IMAGE'
   | 'API-SEARCH-MULTI'
   | 'API-SEARCH-SEMANTIC'
-  | 'API-SEGMENT-HISTORY'
-  | 'API-SEGMENT-INDEX-CREATE'
-  | 'API-SEGMENT-INDEX-DELETE'
-  | 'API-SEGMENT-INDEX-UPDATE'
-  | 'API-SEGMENT-REINDEX'
-  | 'API-SEGMENT-BATCH'
   | 'API-SYNONYM-DELETE'
   | 'API-SYNONYM-GET'
   | 'API-SYNONYM-ENABLE'
@@ -445,7 +445,7 @@ export interface SchemaPropertyMap {
   "ImportTemplate": "directoryId" | "uploadId";
   "ImportText": "chunking" | "directoryId" | "name" | "text";
   "ImportUrl": "directoryId" | "selector" | "url";
-  "Job": "attempts" | "createdAt" | "error" | "jobId" | "kind" | "knowledgeSpaceId" | "maxAttempts" | "priority" | "progress" | "result" | "status" | "steps" | "updatedAt" | "workspaceId";
+  "Job": "attemptEpoch" | "attempts" | "availableAt" | "cancelRequestedAt" | "createdAt" | "error" | "heartbeatAt" | "inputSnapshot" | "jobId" | "kind" | "knowledgeSpaceId" | "leaseExpiresAt" | "leaseOwner" | "maxAttempts" | "pausedAt" | "priority" | "progress" | "resourceId" | "resourceType" | "result" | "status" | "steps" | "updatedAt" | "version" | "workspaceId";
   "JobCreate": "inputSnapshot" | "kind" | "priority" | "resourceId" | "resourceType";
   "JobList": "items" | "pageInfo";
   "JobStatus": never;
@@ -480,12 +480,12 @@ export interface SchemaPropertyMap {
   "PreviewResult": "contentType" | "sections" | "sourceId" | "title";
   "Problem": "error" | "requestId" | "success" | "traceId";
   "ReconcileCreate": "repair" | "scope";
-  "ReindexRequest": "modelId" | "reason";
+  "ReindexRequest": "modelId" | "reason" | "version";
   "SangforParseConfig": "allowedExtensions" | "chartAnalysis" | "credentialProfileId" | "fallbackProvider" | "imageAnalysis" | "imageHandling" | "keepAppendix" | "keepHeaderFooter" | "provider" | "timeoutMs";
   "SearchFilter": "conditions" | "createdAt" | "directoryIds" | "logic" | "sourceIds";
   "SearchRequest": "embeddingWeight" | "filters" | "knowledgeSpaceId" | "query" | "rerankWeight" | "searchMode" | "similarity" | "tokenBudget" | "usingRerank";
   "SearchResponse": "durationMs" | "items" | "mode" | "partial" | "searchId";
-  "Segment": "answer" | "content" | "id" | "imageBlobRefId" | "indexErrorCode" | "indexStatus" | "indexes" | "knowledgeSpaceId" | "metadata" | "order" | "question" | "searchEnabled" | "sourceId" | "version" | "workspaceId";
+  "Segment": "answer" | "content" | "fullTextTokens" | "fullTextVersion" | "id" | "imageBlobRefId" | "indexErrorCode" | "indexStatus" | "indexes" | "knowledgeSpaceId" | "metadata" | "order" | "question" | "searchEnabled" | "sourceId" | "sourceVersion" | "version" | "workspaceId";
   "SegmentBatchAction": "action" | "items";
   "SegmentCreate": "answer" | "indexes" | "metadata" | "question" | "searchEnabled";
   "SegmentHistory": "answer" | "changedAt" | "changedByMemberId" | "question" | "version";
@@ -587,7 +587,7 @@ export interface RequiredSchemaPropertyMap {
   "ImportTemplate": "uploadId";
   "ImportText": "chunking" | "knowledgeSpaceId" | "name" | "text";
   "ImportUrl": "selector" | "url";
-  "Job": "attempts" | "createdAt" | "jobId" | "kind" | "knowledgeSpaceId" | "maxAttempts" | "priority" | "progress" | "status" | "updatedAt" | "workspaceId";
+  "Job": "attempts" | "createdAt" | "jobId" | "kind" | "knowledgeSpaceId" | "maxAttempts" | "priority" | "progress" | "resourceId" | "resourceType" | "status" | "updatedAt" | "version" | "workspaceId";
   "JobCreate": "inputSnapshot" | "kind" | "resourceId" | "resourceType";
   "JobList": "items" | "pageInfo";
   "JobStatus": never;
@@ -622,12 +622,12 @@ export interface RequiredSchemaPropertyMap {
   "PreviewResult": "contentType" | "sections" | "sourceId" | "title";
   "Problem": "error" | "requestId" | "success" | "traceId";
   "ReconcileCreate": "scope";
-  "ReindexRequest": "reason";
+  "ReindexRequest": "reason" | "version";
   "SangforParseConfig": "chartAnalysis" | "credentialProfileId" | "fallbackProvider" | "imageAnalysis" | "keepAppendix" | "keepHeaderFooter" | "provider";
   "SearchFilter": never;
   "SearchRequest": "knowledgeSpaceId" | "query" | "tokenBudget";
   "SearchResponse": "durationMs" | "items" | "mode" | "partial" | "searchId";
-  "Segment": "answer" | "content" | "id" | "indexStatus" | "indexes" | "knowledgeSpaceId" | "order" | "question" | "searchEnabled" | "sourceId" | "version" | "workspaceId";
+  "Segment": "answer" | "content" | "fullTextTokens" | "fullTextVersion" | "id" | "indexStatus" | "indexes" | "knowledgeSpaceId" | "order" | "question" | "searchEnabled" | "sourceId" | "sourceVersion" | "version" | "workspaceId";
   "SegmentBatchAction": "action" | "items";
   "SegmentCreate": "answer" | "question";
   "SegmentHistory": "answer" | "changedAt" | "changedByMemberId" | "question" | "version";
@@ -685,7 +685,13 @@ export interface RuntimeRouteMethodPathMap {
   'API-FILE-DOWNLOAD': 'POST /v1/knowledge/files/{blobId}/download';
   'API-FILE-PREVIEW': 'POST /v1/knowledge/files/{blobId}/preview';
   'API-JOB-LIST': 'GET /v1/knowledge/jobs';
+  'API-JOB-CREATE': 'POST /v1/knowledge/jobs';
   'API-JOB-GET': 'GET /v1/knowledge/jobs/{jobId}';
+  'API-JOB-CANCEL': 'POST /v1/knowledge/jobs/{jobId}/cancel';
+  'API-JOB-PAUSE': 'POST /v1/knowledge/jobs/{jobId}/pause';
+  'API-JOB-REPLAY': 'POST /v1/knowledge/jobs/{jobId}/replay';
+  'API-JOB-RESUME': 'POST /v1/knowledge/jobs/{jobId}/resume';
+  'API-JOB-RETRY': 'POST /v1/knowledge/jobs/{jobId}/retry';
   'API-MODEL-BINDING-VALIDATE': 'POST /v1/knowledge/model-bindings/validate';
   'API-MODEL-LIST': 'GET /v1/knowledge/models';
   'API-OPENAPI': 'GET /v1/knowledge/openapi.json';
@@ -697,6 +703,12 @@ export interface RuntimeRouteMethodPathMap {
   'API-SEGMENT-DELETE': 'DELETE /v1/knowledge/segments/{segmentId}';
   'API-SEGMENT-GET': 'GET /v1/knowledge/segments/{segmentId}';
   'API-SEGMENT-UPDATE': 'PATCH /v1/knowledge/segments/{segmentId}';
+  'API-SEGMENT-HISTORY': 'GET /v1/knowledge/segments/{segmentId}/history';
+  'API-SEGMENT-INDEX-CREATE': 'POST /v1/knowledge/segments/{segmentId}/indexes';
+  'API-SEGMENT-INDEX-DELETE': 'DELETE /v1/knowledge/segments/{segmentId}/indexes/{indexId}';
+  'API-SEGMENT-INDEX-UPDATE': 'PATCH /v1/knowledge/segments/{segmentId}/indexes/{indexId}';
+  'API-SEGMENT-REINDEX': 'POST /v1/knowledge/segments/{segmentId}/reindex';
+  'API-SEGMENT-BATCH': 'POST /v1/knowledge/segments/batch-actions';
   'API-SOURCE-DELETE': 'DELETE /v1/knowledge/sources/{sourceId}';
   'API-SOURCE-GET': 'GET /v1/knowledge/sources/{sourceId}';
   'API-SOURCE-UPDATE': 'PATCH /v1/knowledge/sources/{sourceId}';
@@ -764,12 +776,6 @@ export interface DeferredRouteMethodPathMap {
   'API-APIKEY-ROTATE': 'POST /v1/knowledge/api-keys/{keyId}/rotate';
   'API-AUDIT-LIST': 'GET /v1/knowledge/audit-events';
   'API-CITATION-GET': 'GET /v1/knowledge/citations/{citationId}';
-  'API-JOB-CREATE': 'POST /v1/knowledge/jobs';
-  'API-JOB-CANCEL': 'POST /v1/knowledge/jobs/{jobId}/cancel';
-  'API-JOB-PAUSE': 'POST /v1/knowledge/jobs/{jobId}/pause';
-  'API-JOB-REPLAY': 'POST /v1/knowledge/jobs/{jobId}/replay';
-  'API-JOB-RESUME': 'POST /v1/knowledge/jobs/{jobId}/resume';
-  'API-JOB-RETRY': 'POST /v1/knowledge/jobs/{jobId}/retry';
   'API-OPS-CLEANUP': 'POST /v1/knowledge/operations/cleanup';
   'API-OPS-OUTBOX-REPLAY': 'POST /v1/knowledge/operations/outbox/{eventId}/replay';
   'API-OPS-RECONCILE': 'POST /v1/knowledge/operations/reconcile';
@@ -779,12 +785,6 @@ export interface DeferredRouteMethodPathMap {
   'API-SEARCH-IMAGE': 'POST /v1/knowledge/search/image';
   'API-SEARCH-MULTI': 'POST /v1/knowledge/search/multi-space';
   'API-SEARCH-SEMANTIC': 'POST /v1/knowledge/search/semantic';
-  'API-SEGMENT-HISTORY': 'GET /v1/knowledge/segments/{segmentId}/history';
-  'API-SEGMENT-INDEX-CREATE': 'POST /v1/knowledge/segments/{segmentId}/indexes';
-  'API-SEGMENT-INDEX-DELETE': 'DELETE /v1/knowledge/segments/{segmentId}/indexes/{indexId}';
-  'API-SEGMENT-INDEX-UPDATE': 'PATCH /v1/knowledge/segments/{segmentId}/indexes/{indexId}';
-  'API-SEGMENT-REINDEX': 'POST /v1/knowledge/segments/{segmentId}/reindex';
-  'API-SEGMENT-BATCH': 'POST /v1/knowledge/segments/batch-actions';
   'API-SYNONYM-DELETE': 'DELETE /v1/knowledge/spaces/{spaceId}/synonyms';
   'API-SYNONYM-GET': 'GET /v1/knowledge/spaces/{spaceId}/synonyms';
   'API-SYNONYM-ENABLE': 'PATCH /v1/knowledge/spaces/{spaceId}/synonyms';

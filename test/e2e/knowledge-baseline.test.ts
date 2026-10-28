@@ -1014,7 +1014,12 @@ describe.sequential('knowledge architecture baseline E2E', () => {
       ['/spaces/new', '新建知识空间'],
       [`/spaces/${requiredId(scenario.spaceId, 'spaceId')}/overview`, '空间概览'],
       [`/spaces/${requiredId(scenario.spaceId, 'spaceId')}/sources`, '来源'],
+      [`/spaces/${requiredId(scenario.spaceId, 'spaceId')}/import`, '导入'],
       [`/spaces/${requiredId(scenario.spaceId, 'spaceId')}/segments`, '分段'],
+      [
+        `/spaces/${requiredId(scenario.spaceId, 'spaceId')}/segments/${requiredId(scenario.segmentId, 'segmentId')}`,
+        '编辑分段',
+      ],
       [`/spaces/${requiredId(scenario.spaceId, 'spaceId')}/tags`, '标签'],
       [`/spaces/${requiredId(scenario.spaceId, 'spaceId')}/access`, '访问权限'],
       [`/spaces/${requiredId(scenario.spaceId, 'spaceId')}/jobs`, '任务'],
@@ -1041,7 +1046,7 @@ describe.sequential('knowledge architecture baseline E2E', () => {
     }
   });
 
-  it('renders ten pages at three viewports with accessible shell geometry and axe', async () => {
+  it('renders eleven pages at three viewports with accessible shell geometry and axe', async () => {
     const cookie = await consoleCookie();
     const separator = cookie.indexOf('=');
     const cookieName = separator > 0 ? cookie.slice(0, separator) : '';
@@ -1060,6 +1065,7 @@ describe.sequential('knowledge architecture baseline E2E', () => {
       `/spaces/${requiredId(scenario.spaceId, 'spaceId')}/sources`,
       `/spaces/${requiredId(scenario.spaceId, 'spaceId')}/import`,
       `/spaces/${requiredId(scenario.spaceId, 'spaceId')}/segments`,
+      `/spaces/${requiredId(scenario.spaceId, 'spaceId')}/segments/${requiredId(scenario.segmentId, 'segmentId')}`,
       `/spaces/${requiredId(scenario.spaceId, 'spaceId')}/tags`,
       `/spaces/${requiredId(scenario.spaceId, 'spaceId')}/access`,
       `/spaces/${requiredId(scenario.spaceId, 'spaceId')}/jobs`,
@@ -2010,9 +2016,10 @@ describe.sequential('knowledge architecture baseline E2E', () => {
     }
   });
 
-  it('renders all ten routes in zh-CN and en with exact titles and form labels', async () => {
+  it('renders all eleven routes in zh-CN and en with exact titles and form labels', async () => {
     const spaceId = requiredId(scenario.spaceId, 'spaceId');
     const sourceId = requiredId(scenario.sourceId, 'sourceId');
+    const segmentId = requiredId(scenario.segmentId, 'segmentId');
     const space = asObject(await callApi('API-SPACE-GET', { params: { spaceId } }));
     const spaceName = asString(space.name, 'space.name');
     const routes = [
@@ -2057,6 +2064,11 @@ describe.sequential('knowledge architecture baseline E2E', () => {
           labels: ['Question', 'Answer'],
           button: 'Create Segment',
         },
+      },
+      {
+        path: `/spaces/${spaceId}/segments/${segmentId}`,
+        zh: { title: '编辑分段', h1: '编辑分段' },
+        en: { title: 'Edit segment', h1: 'Edit segment' },
       },
       {
         path: `/spaces/${spaceId}/tags`,
@@ -2497,7 +2509,7 @@ describe.sequential('knowledge architecture baseline E2E', () => {
       },
     });
 
-    expect(runtimeRegistry.count).toBe(83);
+    expect(runtimeRegistry.count).toBe(95);
     const runtimeIds = new Set(
       runtimeRegistry.operations.map((operation) => operation.operationId),
     );

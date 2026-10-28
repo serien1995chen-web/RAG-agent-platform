@@ -22,6 +22,7 @@ function realCatalog(): Map<string, string> {
         entry.ownerStage === 'S1' ||
         entry.ownerStage === 'S2' ||
         entry.ownerStage === 'S4' ||
+        entry.ownerStage === 'S6' ||
         entry.name === '@llamaindex/liteparse-wasm' ||
         entry.name === '@types/turndown',
     ).map((entry) => [entry.name, entry.version]),
@@ -53,7 +54,7 @@ describe('npm dependency ledger', () => {
     );
     expect(counts).toEqual(DEPENDENCY_OWNER_STAGE_COUNTS);
     expect(NPM_DEPENDENCY_BASELINE.find((entry) => entry.name === 'ajv')?.ownerStage).toBe('S4');
-    expect(DEPENDENCY_LEDGER_TOTALS.catalog).toBe(132);
+    expect(DEPENDENCY_LEDGER_TOTALS.catalog).toBe(138);
     expect(NPM_DEPENDENCY_BASELINE.filter((entry) => entry.ownerStage === 'S2')).toHaveLength(13);
     expect(
       NPM_DEPENDENCY_BASELINE.find((entry) => entry.name === '@llamaindex/liteparse-wasm')
@@ -61,7 +62,21 @@ describe('npm dependency ledger', () => {
     ).toBe('S5');
   });
 
-  it('matches all S1, S2, S4 and catalog-only entries in the catalog', () => {
+  it('matches all S1, S2, S4, S6 and catalog-only entries in the catalog', () => {
+    const s6Versions = Object.fromEntries(
+      NPM_DEPENDENCY_BASELINE.filter((entry) => entry.ownerStage === 'S6').map((entry) => [
+        entry.name,
+        entry.version,
+      ]),
+    );
+    expect(s6Versions).toEqual({
+      '@types/node-cron': '3.0.11',
+      '@types/pg': '8.11.11',
+      'cron-parser': '4.9.0',
+      nanoid: '5.1.5',
+      'node-cron': '3.0.3',
+      'p-limit': '7.2.0',
+    });
     expect(validateDependencyCatalog(NPM_DEPENDENCY_BASELINE, realCatalog())).toEqual([]);
   });
 

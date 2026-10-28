@@ -18,6 +18,8 @@
   "dependencies": {
     "@apidevtools/swagger-parser": "catalog:",
     "ajv": "catalog:",
+    "cron-parser": "catalog:",
+    "nanoid": "catalog:",
     "openapi-types": "catalog:",
     "zod": "catalog:",
     "zod-openapi": "catalog:"

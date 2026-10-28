@@ -6,7 +6,6 @@ import type {
   AccessPort,
   AuditPort,
   CatalogPort,
-  FileBinaryResult,
   JobPort,
   ReferencePort,
   SourceView,
@@ -14,24 +13,16 @@ import type {
 } from './ports';
 import type { FileApplication } from './file.application';
 import type { SourceFileApplication } from './source-preview';
+import { isS06Operation } from './operations/s06-jobs';
+import type { KnowledgeOperationInput, KnowledgeOperationResult } from './operation-types';
 
-export interface KnowledgeOperationInput {
-  operationId: string;
-  params: Readonly<Record<string, string>>;
-  query: Readonly<Record<string, string | string[] | undefined>>;
-  headers?: Readonly<Record<string, string | string[] | undefined>>;
-  body: unknown;
-  context: TenantContext;
-}
-
-export interface KnowledgeOperationResult {
-  status: number;
-  data: unknown;
-  headers?: Readonly<Record<string, string>>;
-  binary?: FileBinaryResult;
-}
+export type { KnowledgeOperationInput, KnowledgeOperationResult } from './operation-types';
 
 interface S5OperationApplication {
+  dispatch(input: KnowledgeOperationInput): Promise<KnowledgeOperationResult>;
+}
+
+interface S6OperationApplication {
   dispatch(input: KnowledgeOperationInput): Promise<KnowledgeOperationResult>;
 }
 
@@ -61,6 +52,8 @@ function pageQuery(query: KnowledgeOperationInput['query']) {
     cursor: firstQuery(query, 'cursor'),
     limit: firstQuery(query, 'limit'),
     sort: firstQuery(query, 'sort'),
+    kind: firstQuery(query, 'kind'),
+    status: firstQuery(query, 'status'),
   };
 }
 
@@ -86,6 +79,7 @@ export class KnowledgeApplication {
     private readonly audits?: AuditPort,
     private readonly s5Models?: S5OperationApplication,
     private readonly s5ModelBindings?: S5OperationApplication,
+    private readonly s06?: S6OperationApplication,
   ) {}
 
   private async requireExistingPermission(
@@ -179,6 +173,17 @@ export class KnowledgeApplication {
 
   async dispatch(input: KnowledgeOperationInput): Promise<KnowledgeOperationResult> {
     const { context, params } = input;
+    if (isS06Operation(input.operationId)) {
+      if (!this.s06) {
+        throw createKnowledgeError({
+          code: 'KNOWLEDGE_INTERNAL_ERROR',
+          requestId: context.requestId,
+          traceId: context.traceId,
+          details: { operationId: input.operationId, reason: 's06_application_missing' },
+        });
+      }
+      return this.s06.dispatch(input);
+    }
     if (
       input.operationId === 'API-MODEL-LIST' ||
       input.operationId === 'API-MODEL-BINDING-VALIDATE'

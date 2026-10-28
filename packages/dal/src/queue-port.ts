@@ -5,6 +5,10 @@ export interface EnqueueOptions {
   weight?: number;
   delayMs?: number;
   attempts?: number;
+  backoff?: {
+    type: 'exponential';
+    delay: number;
+  };
 }
 
 export interface EnqueueResult {

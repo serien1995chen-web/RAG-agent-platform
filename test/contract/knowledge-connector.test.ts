@@ -22,7 +22,7 @@ const CONNECTOR_OPERATIONS = [
 
 describe('S4 connector contract', () => {
   it('registers all seven connector operations', () => {
-    expect(runtime.count).toBe(83);
+    expect(runtime.count).toBe(95);
     const ids = new Set(runtime.operations.map((entry) => entry.operationId));
     for (const operationId of CONNECTOR_OPERATIONS) {
       expect(ids.has(operationId), operationId).toBe(true);

@@ -36,7 +36,7 @@ function objectKeyOf(input: {
   assetId?: string;
 }): string {
   return [
-    'workspace',
+    'ws',
     safeSegment(input.workspaceId),
     'space',
     safeSegment(input.knowledgeSpaceId),

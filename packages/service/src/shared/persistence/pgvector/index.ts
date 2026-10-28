@@ -5,7 +5,7 @@ export {
   vectorProfileOfDimension,
 } from './ddl';
 export type { VectorDimension, VectorProfile, VectorStorageType } from './ddl';
-export { KnowledgeVectorRepository } from './vector-repository';
+export { KnowledgeVectorRepository, stableKnowledgeVectorId } from './vector-repository';
 export type {
   KnowledgeVectorHit,
   KnowledgeVectorRecordInput,
