@@ -2,13 +2,16 @@
 
 ## Status
 
-- Status: `S8_BRANCH_PASS_PENDING_S9_REBASE`.
+- Status: `S8_REVIEW_FIX_LOCAL_PASS_PENDING_CI`.
 - Wave / stage / owner: `W3 / S8 / personB`.
 - Base SHA: `13fa0e9be84edd33ea5cc5413d64282c126dd117`.
 - Implementation candidate SHA: `9ed48366872bfa35271a4d3ce77f1ef84de06eec`.
+- Review remediation candidate SHA: `4e4a0be8aba3b716a984ca41f1c25fb4f04f1701`.
 - Branch: `feat/kb-s08-image-deep-rag`.
 - Worktree: `/home/archer/RAG-agent-platform-w3-s8-personB`.
-- Local commit policy: local commit only; not pushed and no PR created.
+- PR: `#32` (`feat/kb-s08-image-deep-rag` to `main`).
+- Remote state: PR #32 previously contained `03e2362`; the review remediation
+  commits are local and were not pushed by the Coding Agent.
 - W3 final status: not claimed. PersonA candidate and S9 rebase are still required.
 
 ## Inputs And Environment
@@ -47,18 +50,18 @@ All listed commands exited `0`. Logs are under
 | `pnpm knowledge:check-runtime`                        |    0 | intersection `0`, union `120`, old page route `0`           | `1db7b402a19e866980996ba8ccb2ff1925221630cc81f9349bee6d489e8ae0e3` |
 | `pnpm lint`                                           |    0 | ESLint passed                                               | `f744a702bab6367029ba9637d5f23714c5a0fc4b9de1ba6bf924791088988022` |
 | `pnpm format:check`                                   |    0 | Prettier passed                                             | `dd3bbf892dd33686f22acfd9d12c3b75cfc8b086504ec7933a363152741298c9` |
-| `pnpm typecheck --force`                              |    0 | `12/12` packages                                            | `2cf7fdc948ca8e269f97cb8f92166f1d0d2aa8ffcd272f45ea2df1aaf8237e52` |
+| `pnpm typecheck --force`                              |    0 | `12/12` packages                                            | `18c7119e944205ea0c79d450a5c13def66d9f70ff68a4c42a18b2f2dc5c2a8ae` |
 | `pnpm architecture:check`                             |    0 | `123` service files, `12` packages                          | `9813d1dbc44482ec1676d0d94d1fb31c01fbbe91da60a94bc5bbeed5bfca5273` |
 | `pnpm forbidden-files:check`                          |    0 | `508` files, no forbidden source                            | `818832b8d110aef664a5be108116eddb01a54038caa39438fb229a8e08b928f3` |
-| `pnpm test:unit --force`                              |    0 | `22/22` tasks                                               | `f263913552cf34d0a06986d57d872d62359fe26ee53130dbf6b966512365bcae` |
-| `pnpm test:contract`                                  |    0 | `19` files, `93` tests                                      | `f68ef1830eb4ddeafccb2aeebd28f5c2d529c511c99ad6e2631c6d78bcde01a3` |
-| `pnpm test:integration --force`                       |    0 | `27` files, `149` tests                                     | `de810fe4efb4dd3b67d12e3344ecc87fcab55661e3a0248cc8a9077b00f7984f` |
-| `pnpm test:tenant`                                    |    0 | `7` files, `16` tests                                       | `c473aad0d8c32651a7fef1c3155d684aaf6e6bb2cbefadd45562490d09b42bd4` |
-| `pnpm test:concurrency`                               |    0 | `7` files, `14` tests                                       | `b51759f20463213b3441e68eb0817e7cd7822fab63c7416f7c8831a300847b19` |
-| `pnpm test:fault`                                     |    0 | `9` files, `33` tests                                       | `bd2fac608bada825b888a8b75246092d963bccb5df01da210ba2d4d1c2eef885` |
-| `pnpm test:e2e`                                       |    0 | `11` files, `53` tests                                      | `397f936e12fa1a5d612dd5c14758b412fa31577287041b9fe05f817553cac2b2` |
-| `pnpm build --force`                                  |    0 | `12/12` packages; Images/Search routes built                | `3c10b1f736db371833e67c770f3f4cab2aa4afa15ff18798c421aaebce316381` |
-| `pnpm build:workers --force`                          |    0 | worker bundle built; `knowledge-caption` remains registered | `f81413a5d83feb897f8aba3b58ca7a4be3b1281adec2e860438d618558d9fc1d` |
+| `pnpm test:unit --force`                              |    0 | `22/22` tasks                                               | `e46fe1ee176e31cd548b53b9a85acc19bd2f6a9b0136674b2e94a137c8d1ff66` |
+| `pnpm test:contract`                                  |    0 | `19` files, `93` tests                                      | `8de2ff798b4c5c0125cfa2494421880fa004aeb3ab0779e2abf16b32c7ecb273` |
+| `pnpm test:integration --force`                       |    0 | `28` files, `155` tests                                     | `11d8549404da35dc89650ad991002b4c7dddae7d2a563f3e75d8cc94fd96e7aa` |
+| `pnpm test:tenant`                                    |    0 | `7` files, `16` tests                                       | `0976e33c60ac791387f13c7394528c40ff282562de9d463b5f6dd3dc46c4b981` |
+| `pnpm test:concurrency`                               |    0 | `7` files, `14` tests                                       | `e53199c1f767e953cfb553f6a6719b66fb4b809f4ea4d9319a9e323c1955d40f` |
+| `pnpm test:fault`                                     |    0 | `9` files, `33` tests                                       | `69ce511a51c0498a042010cb6b5d68d41e1d49313a34bad48ef4f5cc3eaf3da0` |
+| `pnpm test:e2e`                                       |    0 | `11` files, `54` tests                                      | `2d37560454d8ad9e1b5a8e9c22f49850b71f9e96a79259d4f0208731c5572859` |
+| `pnpm build --force`                                  |    0 | `12/12` packages; Images/Search routes built                | `2e18c2380015c81450a7073bc4d94813dfe7b22b66bdd7c555aa6528ad1b5374` |
+| `pnpm build:workers --force`                          |    0 | worker bundle built; `knowledge-caption` remains registered | `8e6d9296de7a7ff93fe20598e2cd6737bd013165ba6de40c2b78ac08d7524b2e` |
 | `docker compose ... config --quiet`                   |    0 | default profile valid                                       | `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855` |
 | `docker compose --profile aiproxy ... config --quiet` |    0 | AIProxy profile valid                                       | `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855` |
 | Compose `up -d --wait --pull never`                   |    0 | Mongo, Redis, pgvector, MinIO healthy                       | `485f4833c697b3d86c67e72e580dd3e915432677078f19eaf64ebfa2aaf8802b` |
@@ -69,6 +72,24 @@ The first integration attempt used the CI URI without `directConnection=true`
 and failed during Mongo topology discovery before tests ran. The same command
 then passed with the local direct-connection adjustment; no test was skipped or
 weakened.
+
+## Review Remediation
+
+| Finding    | Resolution                                                                                                                                                                  |
+| ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `S8-RV-01` | Every Deep query now recomputes the remaining total/round budget and does not call retrieval when exhausted; actual gateway/search usage is propagated                      |
+| `S8-RV-02` | Every requested Space is authorized before model resolution or planner invocation                                                                                           |
+| `S8-RV-03` | Preview tickets carry signed member/owner/scopes and content rechecks Source ACL; cached previews are refreshed after expiry                                                |
+| `S8-RV-04` | Image Segment source-version switch atomically clears old indexes/fullText/status before new CAS publication                                                                |
+| `S8-RV-05` | S5 writes deterministic zero-quantity intent before each provider call and actual usage after; S8 supplies safe audit metadata                                              |
+| `S8-RV-06` | Caption and vision embedding resolve independently; one missing path is partial, both missing is 422; document image orchestration preserves partial evidence               |
+| `S8-RV-07` | Image caption/vector recall uses the complete S7 compiled Source filter and rechecks the allowed Source set after hydration                                                 |
+| `S8-RV-08` | Images/Deep acceptance now runs against real Next routes; ticket revocation is exercised; fixture screenshots no longer write acceptance files; old S3/S5 PNGs are restored |
+| `S8-RV-09` | This evidence and the stage report use the review-fix candidate, actual PR/local state, final gate counts and hashes                                                        |
+
+The real-page suite covers `54` E2E tests and includes
+`test/e2e/s8-image-deep-page.test.ts`, with real Mongo/Postgres/MinIO object
+content, browser requests, ticket revocation, axe and overflow checks.
 
 ## Contract, Runtime And Capabilities
 
@@ -110,14 +131,14 @@ Key test IDs exercised:
 
 ## UI Evidence
 
-| Viewport    | PNG                  |     Size | SHA-256                                                            |
-| ----------- | -------------------- | -------: | ------------------------------------------------------------------ |
-| Images 360  | `s8-images-360.png`  | 63,266 B | `104af941fe011a21eebe5319bec8bd94df7566eb8928e09fc67a1e86aad19514` |
-| Images 768  | `s8-images-768.png`  | 59,560 B | `cbadd25d69f33b0654622c87d2a8b24fc55ad878d2f754d73a7b03ab0218d27d` |
-| Images 1200 | `s8-images-1200.png` | 63,545 B | `63b4ab2baa274683afab48cc96ca2f78e2c88a30593c113ec5cb5787657489c0` |
-| Deep 360    | `s8-deep-360.png`    | 63,770 B | `3a13448620e1e9eeb0eb0ab8fca302a037c8afd1437db3a3c4a66db9f2edfed1` |
-| Deep 768    | `s8-deep-768.png`    | 65,975 B | `38e7d70366e0507eed86628071e0fa7cc445dc9b2f5bfa62eb8cd5e96e3e75a8` |
-| Deep 1200   | `s8-deep-1200.png`   | 68,648 B | `e875e848741255d929261e21881dc54f7fab10fca3280dae1dfeb5fb7df63bce` |
+| Viewport    | PNG                  |      Size | SHA-256                                                            |
+| ----------- | -------------------- | --------: | ------------------------------------------------------------------ |
+| Images 360  | `s8-images-360.png`  |  74,470 B | `f319b805c17234b42c67f493a7d465485bb8deabc1637425798116902ed40319` |
+| Images 768  | `s8-images-768.png`  |  83,359 B | `cc582b3c3042be3b3ee4830f939cf1c50b986084d884884546185aa61474a410` |
+| Images 1200 | `s8-images-1200.png` |  94,662 B | `bc5fc8e04b12116bd6107eb7eeda8b148fef80f7ebf6ed243c6919e95ec97447` |
+| Deep 360    | `s8-deep-360.png`    |  98,842 B | `7880c7bf7854d9e02040094a232be65bd90ed328c77cec55773e760fde64383a` |
+| Deep 768    | `s8-deep-768.png`    | 105,917 B | `d1863ce66d2fabacf61ac2be8fd43e2bf90f2cf01dcb5447d70aaace2a28e3d3` |
+| Deep 1200   | `s8-deep-1200.png`   | 118,395 B | `89f712e3cc918a9a893fec15126ee606a508fda28bdd3747ef704c643d3814e3` |
 
 Each viewport passed axe serious/critical `0`, horizontal overflow `<= 0`,
 console errors `0`, page errors `0` and failed runtime requests `0`.
@@ -167,3 +188,5 @@ See `docs/acceptance/s8-provider-matrix.md`.
   block this branch gate and require S11/legal disposition.
 - W3 is not complete: PersonA candidate SHA, S9 rebase, same-SHA personA/personB
   gates and runtime `110/10`, capability `53/49` are still outstanding.
+- The review-fix commit is local; PR #32 CI must run again after the user pushes
+  the new commit.

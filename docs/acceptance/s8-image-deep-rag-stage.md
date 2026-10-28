@@ -2,11 +2,13 @@
 
 ## Status
 
-- Stage result: `S8_BRANCH_PASS_PENDING_S9_REBASE`.
+- Stage result: `S8_REVIEW_FIX_LOCAL_PASS_PENDING_CI`.
 - Wave / stage / owner: `W3 / S8 / personB`.
 - W3 base: `origin/main@13fa0e9be84edd33ea5cc5413d64282c126dd117`.
 - S8 implementation candidate: `9ed48366872bfa35271a4d3ce77f1ef84de06eec`.
-- Evidence commit: `ae80ba26e0664cdd928a48359ec16f9b3d3c4c4c`.
+- Original branch evidence commit: `ae80ba26e0664cdd928a48359ec16f9b3d3c4c4c`.
+- Review remediation candidate: `4e4a0be8aba3b716a984ca41f1c25fb4f04f1701`.
+- PR: `#32`; remote PR head remains `03e2362` until the user pushes remediation.
 - PersonA candidate SHA: `NOT_PROVIDED`.
 - Pushed personA branch: `NOT_PROVIDED`.
 - S8 merge SHA: `NOT_PROVIDED`.
@@ -51,11 +53,11 @@ S8 closes `MULTI-001`, `SEARCH-006`, `SEARCH-008` and `PARSE-005`.
 | Architecture/forbidden files                 | PASS                       |
 | Unit                                         | PASS, 22 tasks             |
 | Contract                                     | PASS, 19 files / 93 tests  |
-| Integration                                  | PASS, 27 files / 149 tests |
+| Integration                                  | PASS, 28 files / 155 tests |
 | Tenant                                       | PASS, 7 files / 16 tests   |
 | Concurrency                                  | PASS, 7 files / 14 tests   |
 | Fault                                        | PASS, 9 files / 33 tests   |
-| E2E                                          | PASS, 11 files / 53 tests  |
+| E2E                                          | PASS, 11 files / 54 tests  |
 | Application build                            | PASS                       |
 | Worker build                                 | PASS                       |
 | Default / AIProxy Compose config             | PASS                       |
@@ -109,4 +111,5 @@ W3 PASS.
 - The local Mongo test URI requires `directConnection=true` because of the
   replica set's Compose-hostname advertisement.
 - Five pre-existing release-legal blockers remain for S11/legal disposition.
-- This branch is local only and has not been pushed or opened as a PR.
+- The review remediation commit is local and has not been pushed by the Coding
+  Agent; PR #32 CI must be rerun on the new head.
