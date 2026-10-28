@@ -71,6 +71,13 @@ export interface S5ProcessingResult {
     chunkingConfigHash: string;
     qaPromptVersion: string | null;
     fallbackUsed: boolean;
+    paragraphEnhancementApplied?: boolean;
+    paragraphPromptVersion?: string | null;
+    autoIndexPromptVersion?: string | null;
+    autoIndexCount?: number;
+    imageIndexCount?: number;
+    enhancementDiagnostics?: S5ParseDiagnostic[];
+    partial?: boolean;
   };
 }
 

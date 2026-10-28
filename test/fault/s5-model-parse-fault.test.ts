@@ -54,6 +54,10 @@ const catalog: ModelCatalogPort = {
 class ModelUsage implements S5UsageRecorderPort {
   facts: S5GatewayUsageFact[] = [];
 
+  get actualFacts() {
+    return this.facts.filter((fact) => fact.intent !== true);
+  }
+
   async recordInvocationUsage(fact: S5GatewayUsageFact) {
     this.facts.push(fact);
     return true;
@@ -95,7 +99,8 @@ describe('S5 model and parse fault gates', () => {
       problem: { error: { code: 'KNOWLEDGE_MODEL_FAILED', retryable: false } },
     });
     expect(calls).toBe(1);
-    expect(usage.facts).toHaveLength(1);
+    expect(usage.actualFacts).toHaveLength(1);
+    expect(usage.facts).toHaveLength(2);
   });
 
   it('TEST-MODEL-003-BLOCK bounds 429/503 attempts at three and records each actual call', async () => {
@@ -114,7 +119,8 @@ describe('S5 model and parse fault gates', () => {
     });
     await expect(gateway.invoke(modelRequest())).rejects.toBeTruthy();
     expect(calls).toBe(3);
-    expect(usage.facts).toHaveLength(3);
+    expect(usage.actualFacts).toHaveLength(3);
+    expect(usage.facts).toHaveLength(6);
     expect(usage.facts.every((fact) => fact.quantity === 0)).toBe(true);
   });
 

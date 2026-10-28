@@ -77,6 +77,7 @@ function objectRefDto(document: PlainObjectRef): ObjectRefView {
   return {
     blobId: String(document._id),
     workspaceId: document.workspaceId,
+    createdByMemberId: document.createdByMemberId,
     knowledgeSpaceId: document.knowledgeSpaceId ? String(document.knowledgeSpaceId) : '',
     provider: document.provider,
     bucket: document.bucket,

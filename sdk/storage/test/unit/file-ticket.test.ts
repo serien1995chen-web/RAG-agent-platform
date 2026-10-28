@@ -10,6 +10,9 @@ describe('file ticket service', () => {
     const issued = service.issue(
       {
         workspaceId: 'ws_ticket',
+        memberId: 'mem_ticket',
+        isWorkspaceOwner: false,
+        scopes: ['knowledge:read'],
         blobId: '65f1e5b2a1c9d4b7e8f09abc',
         sourceId: '65f1e5b2a1c9d4b7e8f05678',
         knowledgeSpaceId: null,
@@ -24,6 +27,9 @@ describe('file ticket service', () => {
     );
     expect(service.verify(issued.ticket, 'request-ticket', 'trace-ticket')).toMatchObject({
       workspaceId: 'ws_ticket',
+      memberId: 'mem_ticket',
+      isWorkspaceOwner: false,
+      scopes: ['knowledge:read'],
       blobId: '65f1e5b2a1c9d4b7e8f09abc',
       sourceId: '65f1e5b2a1c9d4b7e8f05678',
       disposition: 'inline',
@@ -40,6 +46,9 @@ describe('file ticket service', () => {
     const issued = service.issue(
       {
         workspaceId: 'ws_ticket',
+        memberId: 'mem_ticket',
+        isWorkspaceOwner: false,
+        scopes: ['knowledge:read'],
         blobId: '65f1e5b2a1c9d4b7e8f09abc',
         sourceId: null,
         knowledgeSpaceId: '65f1e5b2a1c9d4b7e8f01234',

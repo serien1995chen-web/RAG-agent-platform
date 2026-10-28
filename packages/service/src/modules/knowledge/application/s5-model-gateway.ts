@@ -3,6 +3,7 @@ import type { ModelCatalogItem, ModelCatalogPort, S5ModelType } from './s5-model
 import type {
   S5GatewayResult,
   S5GatewayUsageFact,
+  S5EmbeddingInputItem,
   S5KeyedLimiterPort,
   S5ModelGatewayPort,
   S5ModelGatewayRequest,
@@ -47,6 +48,14 @@ function approximateTokens(text: string | undefined): number {
   return Math.max(1, Math.ceil([...text].length / 4));
 }
 
+export function embeddingInputItems(invocation: {
+  input?: readonly S5EmbeddingInputItem[];
+  texts?: readonly string[];
+}): S5EmbeddingInputItem[] {
+  if (invocation.input !== undefined) return [...invocation.input];
+  return (invocation.texts ?? []).map((text) => ({ type: 'text', text }));
+}
+
 function validateBudget(invocation: S5ModelInvocation, requestId: string, traceId: string): void {
   const fail = (details: Record<string, unknown>) => {
     throw createKnowledgeError({
@@ -82,17 +91,30 @@ function validateBudget(invocation: S5ModelInvocation, requestId: string, traceI
         fail({ field: 'maxOutputTokens', min: 1, max: MAX_OUTPUT_TOKENS });
       }
       break;
-    case 'embedding':
-      if (invocation.texts.length < 1 || invocation.texts.length > MAX_EMBEDDING_TEXTS) {
-        fail({ field: 'texts', min: 1, max: MAX_EMBEDDING_TEXTS });
+    case 'embedding': {
+      const items = embeddingInputItems(invocation);
+      if (items.length < 1 || items.length > MAX_EMBEDDING_TEXTS) {
+        fail({ field: 'input', min: 1, max: MAX_EMBEDDING_TEXTS });
       }
       if (
-        invocation.texts.reduce((sum, textItem) => sum + approximateTokens(textItem), 0) >
-        MAX_EMBEDDING_TOKENS
+        items.some((item) =>
+          item.type === 'text'
+            ? item.text.trim().length === 0
+            : !/^https?:\/\//i.test(item.image_url.url),
+        )
       ) {
-        fail({ field: 'texts', maxTokens: MAX_EMBEDDING_TOKENS });
+        fail({ field: 'input', reason: 'invalid_embedding_input_item' });
+      }
+      if (
+        items.reduce(
+          (sum, item) => sum + (item.type === 'text' ? approximateTokens(item.text) : 0),
+          0,
+        ) > MAX_EMBEDDING_TOKENS
+      ) {
+        fail({ field: 'input', maxTokens: MAX_EMBEDDING_TOKENS });
       }
       break;
+    }
     case 'rerank':
       if (
         invocation.candidates.length < 1 ||
@@ -232,6 +254,7 @@ export class S5ModelGateway implements S5ModelGatewayPort {
           modelId: candidate.modelId,
         } as S5ModelInvocation;
         try {
+          await this.recordUsage(request, candidate, attempt, 0, null, fallbackUsed, true);
           const parsed = await this.input.adapter.invoke<unknown>(currentInvocation, {
             workspaceId: request.workspaceId,
             requestId: request.requestId,
@@ -244,6 +267,7 @@ export class S5ModelGateway implements S5ModelGatewayPort {
             parsed.quantity,
             parsed.status,
             fallbackUsed,
+            false,
           );
           inputTokens += parsed.usage.inputTokens;
           outputTokens += parsed.usage.outputTokens;
@@ -257,9 +281,12 @@ export class S5ModelGateway implements S5ModelGatewayPort {
             usage: { inputTokens, outputTokens, quantity },
           };
         } catch (error) {
-          if (!(error instanceof TransportError)) throw error;
+          if (!(error instanceof TransportError)) {
+            await this.recordUsage(request, candidate, attempt, 0, null, fallbackUsed, false);
+            throw error;
+          }
           lastError = error;
-          await this.recordUsage(request, candidate, attempt, 0, error.status, fallbackUsed);
+          await this.recordUsage(request, candidate, attempt, 0, error.status, fallbackUsed, false);
           if (!transportRetryable(error.kind)) {
             throw transportFailure(error, request, { actualModelId: candidate.modelId });
           }
@@ -294,7 +321,9 @@ export class S5ModelGateway implements S5ModelGatewayPort {
     quantity: number,
     status: number | null,
     fallbackUsed: boolean,
+    intent: boolean,
   ): Promise<void> {
+    const eventSequence = attempt * 2 - (intent ? 1 : 0);
     const fact: S5GatewayUsageFact = {
       workspaceId: request.workspaceId,
       knowledgeSpaceId: request.knowledgeSpaceId,
@@ -304,7 +333,7 @@ export class S5ModelGateway implements S5ModelGatewayPort {
       modelId: candidate.modelId,
       kind: request.kind,
       attempt,
-      eventSequence: attempt,
+      eventSequence,
       quantity: Math.max(0, quantity),
       unit: usageUnit(request.kind),
       status,
@@ -312,6 +341,15 @@ export class S5ModelGateway implements S5ModelGatewayPort {
       provider: 'aiproxy',
       resourceType: request.resourceType ?? 'space',
       resourceId: request.resourceId ?? request.knowledgeSpaceId ?? request.workspaceId,
+      intent,
+      ...(request.audit?.promptVersion ? { promptVersion: request.audit.promptVersion } : {}),
+      ...(request.audit?.mediaItemCount !== undefined
+        ? { mediaItemCount: request.audit.mediaItemCount }
+        : {}),
+      ...(request.audit?.totalBytes !== undefined ? { totalBytes: request.audit.totalBytes } : {}),
+      ...(request.audit?.sourceVersion !== undefined
+        ? { sourceVersion: request.audit.sourceVersion }
+        : {}),
     };
     await this.input.usage.recordInvocationUsage(fact, request.context);
   }

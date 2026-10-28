@@ -51,6 +51,14 @@ const models: ModelCatalogItem[] = [
     dimension: 768,
     authorized: true,
   },
+  {
+    modelId: 'vlm-primary',
+    displayName: 'VLM',
+    type: 'vlm',
+    capabilities: ['vision'],
+    dimension: null,
+    authorized: true,
+  },
 ];
 
 const catalog: ModelCatalogPort = {
@@ -61,6 +69,10 @@ const catalog: ModelCatalogPort = {
 
 class RecordingUsage implements S5UsageRecorderPort {
   readonly facts: S5GatewayUsageFact[] = [];
+
+  get actualFacts(): S5GatewayUsageFact[] {
+    return this.facts.filter((fact) => fact.intent !== true);
+  }
 
   async recordInvocationUsage(fact: S5GatewayUsageFact): Promise<boolean> {
     this.facts.push(fact);
@@ -126,9 +138,10 @@ describe('TEST-MODEL-002/003/006-BLOCK model gateway', () => {
       fallbackUsed: true,
       usage: { inputTokens: 7, outputTokens: 3 },
     });
-    expect(usage.facts.map((fact) => fact.modelId)).toEqual(['llm-primary', 'llm-fallback']);
-    expect(usage.facts.map((fact) => fact.attempt)).toEqual([1, 2]);
-    expect(usage.facts.map((fact) => fact.quantity)).toEqual([0, 10]);
+    expect(usage.facts.map((fact) => fact.intent)).toEqual([true, false, true, false]);
+    expect(usage.actualFacts.map((fact) => fact.modelId)).toEqual(['llm-primary', 'llm-fallback']);
+    expect(usage.actualFacts.map((fact) => fact.attempt)).toEqual([1, 2]);
+    expect(usage.actualFacts.map((fact) => fact.quantity)).toEqual([0, 10]);
   });
 
   it('does not retry or fallback after upstream authentication rejection', async () => {
@@ -160,7 +173,56 @@ describe('TEST-MODEL-002/003/006-BLOCK model gateway', () => {
       },
     });
     expect(calls).toBe(1);
-    expect(usage.facts).toHaveLength(1);
+    expect(usage.facts).toHaveLength(2);
+    expect(usage.facts[0]).toMatchObject({ intent: true, quantity: 0, status: null });
+    expect(usage.actualFacts).toHaveLength(1);
+  });
+
+  it('writes a safe S8 intent before provider invocation and actual usage afterwards', async () => {
+    const usage = new RecordingUsage();
+    const client = gateway(
+      () => ({
+        status: 200,
+        data: { choices: [{ message: { content: '{"caption":"safe"}' } }] },
+        quantity: 4,
+        usage: { inputTokens: 3, outputTokens: 1 },
+      }),
+      usage,
+    );
+    await client.invoke({
+      kind: 'vlm',
+      modelId: 'vlm-primary',
+      messages: [{ role: 'user', content: 'caption' }],
+      imageUrls: ['https://files.example.invalid/content?ticket=secret'],
+      workspaceId: context.workspaceId,
+      knowledgeSpaceId: 'space-1',
+      requestId: context.requestId,
+      traceId: context.traceId,
+      context,
+      operation: 's8.caption:2',
+      audit: {
+        promptVersion: 's8.image-caption.v1',
+        mediaItemCount: 1,
+        totalBytes: 128,
+        sourceVersion: 2,
+      },
+    });
+    expect(usage.facts).toHaveLength(2);
+    expect(usage.facts[0]).toMatchObject({
+      intent: true,
+      quantity: 0,
+      status: null,
+      promptVersion: 's8.image-caption.v1',
+      mediaItemCount: 1,
+      totalBytes: 128,
+      sourceVersion: 2,
+    });
+    expect(usage.facts[1]).toMatchObject({
+      intent: false,
+      quantity: 4,
+      status: 200,
+    });
+    expect(JSON.stringify(usage.facts)).not.toContain('ticket=secret');
   });
 
   it('retries timeout and 429 up to three total attempts', async () => {
@@ -186,7 +248,8 @@ describe('TEST-MODEL-002/003/006-BLOCK model gateway', () => {
       problem: { error: { code: 'KNOWLEDGE_RATE_LIMITED', retryable: true } },
     });
     expect(calls).toBe(3);
-    expect(usage.facts).toHaveLength(3);
+    expect(usage.facts).toHaveLength(6);
+    expect(usage.actualFacts).toHaveLength(3);
   });
 
   it('rejects embedding dimension mismatches without retry', async () => {

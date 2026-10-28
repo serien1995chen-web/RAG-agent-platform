@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "count": 20,
+  "count": 18,
   "status": "DEFERRED",
   "operations": [
     {
@@ -224,56 +224,6 @@
       "capabilityIds": [
         "OPS-004",
         "FILE-005"
-      ],
-      "reason": "OUT_OF_ARCHITECTURE_BASELINE_RUNTIME_SCOPE"
-    },
-    {
-      "operationId": "API-SEARCH-DEEP",
-      "method": "POST",
-      "path": "/v1/knowledge/search/deep",
-      "group": "search",
-      "requestSchema": "DeepSearchRequest",
-      "responseSchema": "DeepSearchResponse",
-      "scopes": [
-        "knowledge:search"
-      ],
-      "idempotent": true,
-      "rateLimit": "10 QPS/workspace",
-      "timeoutMs": 120000,
-      "audit": true,
-      "downstreamAllowed": true,
-      "runtime": false,
-      "stage": "F3",
-      "targetSection": "9.2",
-      "accId": "ACC-CAP-SEARCH-008",
-      "capabilityIds": [
-        "SEARCH-008"
-      ],
-      "reason": "OUT_OF_ARCHITECTURE_BASELINE_RUNTIME_SCOPE"
-    },
-    {
-      "operationId": "API-SEARCH-IMAGE",
-      "method": "POST",
-      "path": "/v1/knowledge/search/image",
-      "group": "search",
-      "requestSchema": "ImageSearchRequest",
-      "responseSchema": "SearchResponse",
-      "scopes": [
-        "knowledge:search"
-      ],
-      "idempotent": true,
-      "rateLimit": "20 QPS/workspace",
-      "timeoutMs": 60000,
-      "audit": true,
-      "downstreamAllowed": true,
-      "runtime": false,
-      "stage": "F3",
-      "targetSection": "9.2",
-      "accId": "ACC-CAP-SEARCH-006",
-      "capabilityIds": [
-        "SEARCH-006",
-        "MULTI-001",
-        "DOWN-002"
       ],
       "reason": "OUT_OF_ARCHITECTURE_BASELINE_RUNTIME_SCOPE"
     },

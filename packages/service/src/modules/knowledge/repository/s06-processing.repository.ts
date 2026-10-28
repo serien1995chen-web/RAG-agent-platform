@@ -23,6 +23,7 @@ function sourceRecord(
     id: String(document._id),
     workspaceId: document.workspaceId,
     knowledgeSpaceId: String(document.knowledgeSpaceId),
+    kind: document.kind,
     sourceVersion: document.sourceVersion,
     blobRefId: document.blobRefId ? String(document.blobRefId) : null,
     name: document.name,
@@ -55,6 +56,8 @@ function segmentRecord(
     indexes: document.indexes,
     indexStatus: document.indexStatus,
     indexErrorCode: document.indexErrorCode,
+    imageBlobRefId: document.imageBlobRefId ? String(document.imageBlobRefId) : null,
+    imageDescription: document.imageDescription,
     version: document.version,
   };
 }
@@ -152,7 +155,13 @@ export class S6ProcessingRepository implements S6ProcessingStorePort {
     input: {
       source: S6SourceRecord;
       sourceVersion: number;
-      rows: ReadonlyArray<{ order: number; question: string; answer: string; content: string }>;
+      rows: ReadonlyArray<{
+        order: number;
+        question: string;
+        answer: string;
+        content: string;
+        metadata?: Record<string, unknown>;
+      }>;
     },
     context: TenantContext,
   ) {
@@ -175,7 +184,7 @@ export class S6ProcessingRepository implements S6ProcessingStorePort {
             question: row.question,
             answer: row.answer,
             content: row.content,
-            metadata: {},
+            metadata: input.rows.find((row) => row.order === segmentIds.length)?.metadata ?? {},
             indexStatus: 'pending',
             indexErrorCode: null,
             updatedByMemberId: context.memberId,
@@ -209,6 +218,7 @@ export class S6ProcessingRepository implements S6ProcessingStorePort {
         workspaceId: requireWorkspaceId(context),
         sourceId,
         order: { $gte: order },
+        imageBlobRefId: null,
         deletedAt: null,
       },
       {

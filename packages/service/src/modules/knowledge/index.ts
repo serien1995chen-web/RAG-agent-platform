@@ -119,6 +119,19 @@ export { S5ModelApplication } from './application/s5-model.application';
 export { S5ModelBindingApplication } from './application/s5-model-binding.application';
 export { S5ModelGateway, createS5ModelGateway } from './application/s5-model-gateway';
 export { S5ProcessingApplication } from './application/s5-processing.application';
+export { S8CaptionApplication } from './application/s8-caption.application';
+export { S8ContentEnhancementApplication } from './application/s8-content-enhancement.application';
+export { S8DeepSearchApplication } from './application/s8-deep-search.application';
+export { S8ModelResolver } from './adapter/s8-model-resolver';
+export { S8FileTicketAdapter } from './adapter/s8-file-ticket.adapter';
+export { S8ImageIndexRepository } from './repository/s8-image-index.repository';
+export { S8DeepSearchRepository } from './repository/s8-deep-search.repository';
+export type {
+  S8CaptionDependencies,
+  S8CaptionExecutorPort,
+  S8ImageIndexStorePort,
+  S8ImageModelResolverPort,
+} from './application/s8-image-deep.ports';
 export { S06ProcessingApplication } from './application/s06-processing.application';
 export type { S6ProcessingPort } from './application/s06-processing.application';
 export { KnowledgeConnectorSyncApplication } from './application/s06-connector-sync.application';
@@ -149,6 +162,12 @@ export {
   isS7Operation,
 } from './application/s7-search-operation.application';
 export { S7SearchApplication } from './application/s7-search.application';
+export {
+  S8SearchOperationApplication,
+  S8_OPERATION_IDS,
+  isS8Operation,
+} from './application/s8-search-operation.application';
+export { S8ImageSearchApplication } from './application/s8-image-search.application';
 export { S7CitationApplication } from './application/s7-citation.application';
 export type {
   S7BoundModel,

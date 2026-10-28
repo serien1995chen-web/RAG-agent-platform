@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "count": 100,
+  "count": 102,
   "operations": [
     {
       "operationId": "API-HEALTH-LIVE",
@@ -749,6 +749,29 @@
       ]
     },
     {
+      "operationId": "API-SEARCH-DEEP",
+      "method": "POST",
+      "path": "/v1/knowledge/search/deep",
+      "group": "search",
+      "requestSchema": "DeepSearchRequest",
+      "responseSchema": "DeepSearchResponse",
+      "scopes": [
+        "knowledge:search"
+      ],
+      "idempotent": true,
+      "rateLimit": "10 QPS/workspace",
+      "timeoutMs": 120000,
+      "audit": true,
+      "downstreamAllowed": true,
+      "runtime": true,
+      "stage": "BASE",
+      "targetSection": "9.2",
+      "accId": "ACC-CAP-SEARCH-008",
+      "capabilityIds": [
+        "SEARCH-008"
+      ]
+    },
+    {
       "operationId": "API-SEARCH-FULLTEXT",
       "method": "POST",
       "path": "/v1/knowledge/search/full-text",
@@ -797,6 +820,31 @@
         "SEARCH-004",
         "DOWN-001",
         "DOWN-003"
+      ]
+    },
+    {
+      "operationId": "API-SEARCH-IMAGE",
+      "method": "POST",
+      "path": "/v1/knowledge/search/image",
+      "group": "search",
+      "requestSchema": "ImageSearchRequest",
+      "responseSchema": "SearchResponse",
+      "scopes": [
+        "knowledge:search"
+      ],
+      "idempotent": true,
+      "rateLimit": "20 QPS/workspace",
+      "timeoutMs": 60000,
+      "audit": true,
+      "downstreamAllowed": true,
+      "runtime": true,
+      "stage": "BASE",
+      "targetSection": "9.2",
+      "accId": "ACC-CAP-SEARCH-006",
+      "capabilityIds": [
+        "SEARCH-006",
+        "MULTI-001",
+        "DOWN-002"
       ]
     },
     {

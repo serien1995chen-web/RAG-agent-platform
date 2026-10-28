@@ -25407,7 +25407,7 @@
               "maxRounds": {
                 "type": "integer",
                 "minimum": 1,
-                "maximum": 4,
+                "maximum": 3,
                 "default": 3
               },
               "roundTokenBudget": {
@@ -25886,8 +25886,8 @@
     "operations": 120,
     "schemas": 139,
     "parameters": 8,
-    "runtimeOperations": 100,
-    "deferredOperations": 20,
+    "runtimeOperations": 102,
+    "deferredOperations": 18,
     "canonicalCollections": 23,
     "vectorProfiles": 4,
     "canonicalQueues": 13

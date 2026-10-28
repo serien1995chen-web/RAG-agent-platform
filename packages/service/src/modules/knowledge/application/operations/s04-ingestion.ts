@@ -40,6 +40,7 @@ import {
   requestHashOf,
   sha256Of,
 } from '../../domain/import-submission';
+import { assertS8ImageCount, isS8KnowledgeImage } from '../s8-image-policy';
 
 type ImportRepository = ImportPlanningPort;
 type ConnectorRepository = ConnectorRepositoryPort;
@@ -350,6 +351,7 @@ async function fileDrafts(
   parseProvider: ImportSourceDraft['parseProvider'],
 ): Promise<ImportSourceDraft[]> {
   const drafts: ImportSourceDraft[] = [];
+  let imageCount = 0;
   for (const uploadId of assertUniqueIds(ids, 'uploadIds', input.context)) {
     const object = await dependencies.objectRefs.findObjectRef(uploadId, input.context);
     if (
@@ -367,6 +369,15 @@ async function fileDrafts(
         details: { field: 'uploadIds', uploadId },
       });
     }
+    if (
+      isS8KnowledgeImage({
+        mimeType: object.mimeType,
+        fileName: object.originalName,
+      })
+    ) {
+      imageCount += 1;
+      assertS8ImageCount(imageCount, input.context);
+    }
     drafts.push(
       dependencies.content.fileDraft({
         object,
@@ -374,6 +385,9 @@ async function fileDrafts(
         parseProvider,
       }),
     );
+  }
+  if (drafts.length > 0 && imageCount === drafts.length) {
+    assertS8ImageCount(imageCount, input.context);
   }
   return drafts;
 }

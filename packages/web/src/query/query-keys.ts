@@ -170,6 +170,31 @@ export const knowledgeQueryKeys = {
       'model-bindings',
     ],
   },
+  imageSources: {
+    list: (spaceId: string, params: QueryParams = { limit: 100 }): QueryKey => [
+      'knowledge',
+      VERSION,
+      'spaces',
+      spaceId,
+      'images',
+      'sources',
+      stableParams(params),
+    ],
+  },
+  imageSegments: {
+    list: (sourceId: string, params: QueryParams = { limit: 100 }): QueryKey => [
+      'knowledge',
+      VERSION,
+      'images',
+      'sources',
+      sourceId,
+      'segments',
+      stableParams(params),
+    ],
+  },
+  deepSearch: {
+    result: (requestHash: string): QueryKey => ['knowledge', VERSION, 'deep-search', requestHash],
+  },
   search: {
     result: (spaceId: string, params: QueryParams = {}): QueryKey => [
       'knowledge',

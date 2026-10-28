@@ -679,7 +679,7 @@ describe('S6 rebuild, sync and cleanup', () => {
     ).toBe(1);
   }, 60_000);
 
-  it('fails caption explicitly when the S8 executor is unavailable', async () => {
+  it('does not create the removed caption placeholder step when the executor is unavailable', async () => {
     const models = registerKnowledgeModels(connection);
     const sourceId = new mongoose.Types.ObjectId();
     const captionJobId = await createRawJob({
@@ -711,14 +711,7 @@ describe('S6 rebuild, sync and cleanup', () => {
       jobId: captionJobId,
       stepKey: 'caption',
     }).lean();
-    expect(step).toMatchObject({
-      status: 'failed',
-      compensationState: 'required',
-      error: {
-        code: 'KNOWLEDGE_DEPENDENCY_UNAVAILABLE',
-        reason: 's8_caption_executor_missing',
-      },
-    });
+    expect(step).toBeNull();
     const vectorRows = await pool.query(
       'SELECT id FROM knowledge_segment_vectors_768 WHERE workspace_id = $1 AND source_id = $2',
       [workspaceId, String(sourceId)],

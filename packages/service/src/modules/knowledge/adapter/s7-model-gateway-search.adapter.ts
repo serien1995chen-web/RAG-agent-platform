@@ -52,20 +52,23 @@ export class S7ModelGatewaySearchAdapter {
     };
   }
 
-  async embed(
+  async embedWithUsage(
     input: {
       models: { embeddingModel: string };
       texts: string[];
       options: { timeoutMs: number };
     },
     context: TenantContext,
-  ): Promise<number[][]> {
+  ): Promise<{
+    vectors: number[][];
+    usage: { inputTokens: number; outputTokens: number };
+  }> {
     const result = await this.input.gateway.invoke<EmbeddingEnvelope>(
       this.invocation(
         {
           kind: 'embedding',
           modelId: this.input.embedding.modelId,
-          texts: input.texts,
+          input: input.texts.map((text) => ({ type: 'text' as const, text })),
           dimension: this.input.embedding.dimension,
         },
         context,
@@ -83,10 +86,27 @@ export class S7ModelGatewaySearchAdapter {
     ) {
       throw outputInvalid(context, 'invalid_embedding_output');
     }
-    return result.data.data.map((item) => item.embedding);
+    return {
+      vectors: result.data.data.map((item) => item.embedding),
+      usage: {
+        inputTokens: result.usage.inputTokens,
+        outputTokens: result.usage.outputTokens,
+      },
+    };
   }
 
-  async rerank(
+  async embed(
+    input: {
+      models: { embeddingModel: string };
+      texts: string[];
+      options: { timeoutMs: number };
+    },
+    context: TenantContext,
+  ): Promise<number[][]> {
+    return (await this.embedWithUsage(input, context)).vectors;
+  }
+
+  async rerankWithUsage(
     input: {
       model: string;
       query: string;
@@ -94,7 +114,10 @@ export class S7ModelGatewaySearchAdapter {
       options: { timeoutMs: number };
     },
     context: TenantContext,
-  ): Promise<Array<{ id: string; score: number }>> {
+  ): Promise<{
+    ranked: Array<{ id: string; score: number }>;
+    usage: { inputTokens: number; outputTokens: number };
+  }> {
     if (!this.input.rerank) {
       throw createKnowledgeError({
         code: 'KNOWLEDGE_VALIDATION_FAILED',
@@ -130,6 +153,24 @@ export class S7ModelGatewaySearchAdapter {
     if (ranked.length !== result.data.results.length) {
       throw outputInvalid(context, 'invalid_rerank_candidate_reference');
     }
-    return ranked;
+    return {
+      ranked,
+      usage: {
+        inputTokens: result.usage.inputTokens,
+        outputTokens: result.usage.outputTokens,
+      },
+    };
+  }
+
+  async rerank(
+    input: {
+      model: string;
+      query: string;
+      items: Array<{ id: string; text: string; score: number }>;
+      options: { timeoutMs: number };
+    },
+    context: TenantContext,
+  ): Promise<Array<{ id: string; score: number }>> {
+    return (await this.rerankWithUsage(input, context)).ranked;
   }
 }

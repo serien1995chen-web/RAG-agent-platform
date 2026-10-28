@@ -55,6 +55,7 @@ export interface AuthorizedSegmentSnapshot {
   indexStatus: 'pending' | 'indexing' | 'indexed' | 'error' | 'rebuilding' | 'rebuild_failed';
   indexErrorCode: string | null;
   imageBlobRefId: string | null;
+  imageDescription?: string | null;
   version: number;
   updatedAt?: string;
 }
@@ -126,6 +127,10 @@ export interface RecallOutcome {
 }
 
 export interface SearchEngineDeps {
+  modelUsage?: {
+    inputTokens: number;
+    outputTokens: number;
+  };
   vectors: {
     embRecall(
       input: {
@@ -199,6 +204,10 @@ export interface SearchPipelineResult extends SearchResult {
   authorizedCandidates: AuthorizedCandidate[];
   failedChannels: ChannelFailure[];
   status: 200 | 207;
+  modelUsage: {
+    inputTokens: number;
+    outputTokens: number;
+  };
 }
 
 export interface SearchPipelinePort {

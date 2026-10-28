@@ -140,6 +140,39 @@ export function validateChunkingSettings(
       issues.push({ path: 'qaPrompt', message: 'must be at most 20000 characters' });
     }
   }
+  if (
+    input.chunkSplitMode !== 'paragraph' &&
+    (input.paragraphChunkAIMode !== undefined ||
+      input.paragraphChunkDeep !== undefined ||
+      input.paragraphChunkMinSize !== undefined)
+  ) {
+    issues.push({
+      path: 'chunkSplitMode',
+      message: 'paragraph-only fields require paragraph mode',
+    });
+  }
+  if (
+    input.paragraphChunkAIMode !== undefined &&
+    input.paragraphChunkAIMode !== 'forbid' &&
+    input.trainingType !== 'chunk'
+  ) {
+    issues.push({
+      path: 'paragraphChunkAIMode',
+      message: 'AI paragraph enhancement requires trainingType=chunk',
+    });
+  }
+  if (input.autoIndexes === true && input.trainingType !== 'chunk') {
+    issues.push({ path: 'autoIndexes', message: 'requires trainingType=chunk' });
+  }
+  if (input.imageIndex === true && input.trainingType !== 'chunk') {
+    issues.push({ path: 'imageIndex', message: 'requires trainingType=chunk' });
+  }
+  if (input.dataEnhanceCollectionName === true && input.trainingType !== 'chunk') {
+    issues.push({
+      path: 'dataEnhanceCollectionName',
+      message: 'requires trainingType=chunk',
+    });
+  }
   for (const key of [
     'dataEnhanceCollectionName',
     'imageIndex',

@@ -7,6 +7,7 @@ import type {
   S7CitationPersistencePort,
   S7CitationReaderRecord,
   S7CitationSignerPort,
+  S7SearchPersistenceMode,
   S7SearchAuditPort,
 } from '../application/s7-search.ports';
 import { KnowledgeAuditRepository } from '../../../shared/persistence/knowledge/audit';
@@ -266,7 +267,7 @@ export class S7CitationRepository implements S7CitationPersistencePort, S7Search
   async appendSearch(
     input: {
       searchId: string;
-      searchMode: 'semantic' | 'fulltext' | 'hybrid' | 'multi_space';
+      searchMode: S7SearchPersistenceMode;
       spaceId: string;
       outcome: 'succeeded' | 'failed';
       partial: boolean;

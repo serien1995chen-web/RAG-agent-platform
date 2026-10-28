@@ -4,6 +4,10 @@ import { S5_MODEL_TYPES, type S5ModelType, type S5VectorDimension } from './s5-m
 export { S5_MODEL_TYPES };
 export type { S5ModelType, S5VectorDimension };
 
+export type S5EmbeddingInputItem =
+  | { type: 'text'; text: string }
+  | { type: 'image_url'; image_url: { url: string } };
+
 export type S5ModelInvocation =
   | {
       kind: 'llm';
@@ -21,7 +25,9 @@ export type S5ModelInvocation =
   | {
       kind: 'embedding';
       modelId: string;
-      texts: string[];
+      input?: S5EmbeddingInputItem[];
+      /** @deprecated Use ordered input items. */
+      texts?: string[];
       dimension: S5VectorDimension;
     }
   | {
@@ -53,6 +59,12 @@ export type S5ModelGatewayRequest = S5ModelInvocation & {
   resourceType?: 'space' | 'source';
   resourceId?: string;
   operation?: string;
+  audit?: {
+    promptVersion?: string;
+    mediaItemCount?: number;
+    totalBytes?: number;
+    sourceVersion?: number;
+  };
 };
 
 export type S5UsageUnit = 'token' | 'request' | 'second' | 'page' | 'image';
@@ -74,6 +86,11 @@ export interface S5GatewayUsageFact {
   provider: string;
   resourceType: 'space' | 'source';
   resourceId: string;
+  intent?: boolean;
+  promptVersion?: string;
+  mediaItemCount?: number;
+  totalBytes?: number;
+  sourceVersion?: number;
 }
 
 export interface S5UsageRecorderPort {

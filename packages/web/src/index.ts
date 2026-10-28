@@ -128,6 +128,24 @@ export type {
   S7SearchWorkbenchLabels,
   S7SearchWorkbenchProps,
 } from './components/s7-search-workbench';
+export { S8ImageGallery } from './components/s8-image-gallery';
+export type {
+  S8ImageGalleryItem,
+  S8ImageGalleryLabels,
+  S8ImageGalleryProps,
+  S8ImagePreview,
+} from './components/s8-image-gallery';
+export { S8ImagesWorkbench } from './components/s8-images-workbench';
+export type {
+  S8ImageSearchResultItem,
+  S8ImagesWorkbenchLabels,
+  S8ImagesWorkbenchProps,
+} from './components/s8-images-workbench';
+export { S8DeepSearchPanel } from './components/s8-deep-search-panel';
+export type {
+  S8DeepSearchPanelLabels,
+  S8DeepSearchPanelProps,
+} from './components/s8-deep-search-panel';
 export type {
   Column,
   Density,
@@ -149,6 +167,15 @@ export {
   tagConditionFromDraft,
 } from './forms/s7-search-form';
 export type { S7SearchFormValues, S7SearchMode, S7TagType } from './forms/s7-search-form';
+export {
+  IdempotencyKeyBuffer,
+  S8SearchFormSchema,
+  buildS8DeepRequest,
+  buildS8ImageRequest,
+  defaultS8SearchForm,
+  s8RequestHash,
+} from './forms/s8-search-form';
+export type { S8SearchFormValues } from './forms/s8-search-form';
 export {
   collaboratorFormSchema,
   fieldErrorsFromProblem,
@@ -206,7 +233,7 @@ export { knowledgeQueryKeys } from './query/query-keys';
 export { loadCompleteModelCatalog, useKnowledgeModelCatalog } from './query/model-catalog';
 export type { ModelCatalogPage, ModelPageInfo } from './query/model-catalog';
 export { useKnowledgeMutation } from './query/use-knowledge-mutation';
-export { useKnowledgeQuery } from './query/use-knowledge-query';
+export { useKnowledgeQueries, useKnowledgeQuery } from './query/use-knowledge-query';
 export { knowledgeGlobalStyles, knowledgeTheme, KnowledgeUiProvider } from './theme';
 export { knowledgeThemeTokens } from './theme';
 export type { KnowledgeThemeTokens } from './theme';

@@ -289,8 +289,32 @@ describe('TEST-MODEL-001 / TEST-KB-002 / TEST-X-FRONTEND-IMPORT', () => {
           if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
         });
         await session.page.waitForTimeout(250);
-        const skipBox = await session.page.locator('.skip-link').boundingBox();
-        expect(skipBox === null || skipBox.y + skipBox.height <= 1).toBe(true);
+        const skipState = await session.page.evaluate(() => {
+          const skip = document.querySelector<HTMLElement>('.skip-link');
+          const heading = document.querySelector<HTMLElement>('h1');
+          if (!skip) return { present: false, visible: false, overlapsHeading: false };
+          const skipBox = skip.getBoundingClientRect();
+          const headingBox = heading?.getBoundingClientRect();
+          const style = getComputedStyle(skip);
+          const visible =
+            style.display !== 'none' &&
+            style.visibility !== 'hidden' &&
+            style.opacity !== '0' &&
+            style.clipPath !== 'inset(50%)' &&
+            skipBox.width > 1 &&
+            skipBox.height > 1;
+          const overlapsHeading =
+            visible &&
+            headingBox !== undefined &&
+            !(
+              skipBox.right <= headingBox.left ||
+              headingBox.right <= skipBox.left ||
+              skipBox.bottom <= headingBox.top ||
+              headingBox.bottom <= skipBox.top
+            );
+          return { present: true, visible, overlapsHeading };
+        });
+        expect(skipState).toEqual({ present: true, visible: false, overlapsHeading: false });
         expect(
           await session.page.evaluate(
             () => document.documentElement.scrollWidth > window.innerWidth + 1,
@@ -307,10 +331,16 @@ describe('TEST-MODEL-001 / TEST-KB-002 / TEST-X-FRONTEND-IMPORT', () => {
         await session.page.addStyleTag({
           content: '.skip-link { display: none !important; }',
         });
-        await session.page.screenshot({
-          path: join(root, 'docs', 'acceptance', 's5-ui', `s5-model-parse-${viewport.width}.png`),
-          fullPage: true,
-        });
+        const screenshotPath = join(
+          root,
+          'docs',
+          'acceptance',
+          's5-ui',
+          `s5-model-parse-${viewport.width}.png`,
+        );
+        if (!existsSync(screenshotPath)) {
+          await session.page.screenshot({ path: screenshotPath, fullPage: true });
+        }
         await session.close();
       }
     } finally {

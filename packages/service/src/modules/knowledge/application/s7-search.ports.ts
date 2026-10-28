@@ -9,6 +9,8 @@ import type {
 } from '@kb/search';
 import type { TenantContext } from '../../../shared/persistence/knowledge/tenant';
 
+export type S7SearchPersistenceMode = SearchApiMode | 'multi_space' | 'image' | 'deep';
+
 export interface S7AuthorizedSpace {
   spaceId: string;
   workspaceId: string;
@@ -95,7 +97,7 @@ export interface S7SearchPipelineFactoryPort {
 
 export interface S7CitationIssueInput {
   searchId: string;
-  searchMode: SearchApiMode | 'multi_space';
+  searchMode: S7SearchPersistenceMode;
   spaceId: string;
   candidates: readonly AuthorizedCandidate[];
   partial: boolean;
@@ -133,7 +135,7 @@ export interface S7SearchAuditPort {
   appendSearch(
     input: {
       searchId: string;
-      searchMode: SearchApiMode | 'multi_space';
+      searchMode: S7SearchPersistenceMode;
       spaceId: string;
       outcome: 'succeeded' | 'failed';
       partial: boolean;
@@ -162,6 +164,15 @@ export interface S7SearchApplicationDependencies {
     single?: number;
     multi?: number;
   };
+}
+
+export interface S7CandidateCollection {
+  candidates: AuthorizedCandidate[];
+  partial: boolean;
+  degradedCodes: string[];
+  rerankApplied: boolean;
+  filterSummary?: SearchFilterSummary;
+  usage: { inputTokens: number; outputTokens: number };
 }
 
 export interface S7CitationSignerPort {

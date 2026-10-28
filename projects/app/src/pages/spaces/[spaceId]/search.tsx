@@ -1,4 +1,5 @@
 import {
+  type DeepSearchApiResponse,
   SearchFilterApiSchema,
   type MultiSpaceSearchApiRequest,
   type SearchApiRequest,
@@ -7,11 +8,17 @@ import {
 } from '@kb/contracts';
 import {
   S7_SEARCH_MODES,
+  IdempotencyKeyBuffer,
+  Button,
+  S8DeepSearchPanel,
+  S8SearchFormSchema,
   S7SearchFormSchema,
   S7SearchWorkbench,
   buildS7SearchRequest,
+  buildS8DeepRequest,
   classifyS7SearchState,
   defaultS7SearchForm,
+  defaultS8SearchForm,
   knowledgeQueryKeys,
   knowledgeRequest,
   useKnowledgeQuery,
@@ -22,6 +29,8 @@ import {
   type S7SearchWorkbenchLabels,
   type S7SpaceChoice,
   type S7TagChoice,
+  type S8DeepSearchPanelLabels,
+  type S8SearchFormValues,
 } from '@kb/web';
 import Head from 'next/head';
 import { useRouter } from 'next/router';
@@ -56,6 +65,12 @@ function finiteNumber(value: string | undefined, fallback: number): number {
 
 function parseMode(value: string | undefined): S7SearchMode {
   return S7_SEARCH_MODES.includes(value as S7SearchMode) ? (value as S7SearchMode) : 'hybrid';
+}
+
+type SearchPageMode = S7SearchMode | 'deep';
+
+function parsePageMode(value: string | undefined): SearchPageMode {
+  return value === 'deep' ? 'deep' : parseMode(value);
 }
 
 function parseFilters(value: string | undefined): SearchFilterApi | undefined {
@@ -152,6 +167,14 @@ export default function SearchPage() {
     conditions: [],
   });
   const [state, setState] = useState<S7SearchUiState>({ kind: 'idle' });
+  const [pageMode, setPageMode] = useState<SearchPageMode>('hybrid');
+  const [deepValue, setDeepValue] = useState<S8SearchFormValues>(() =>
+    defaultS8SearchForm(spaceId),
+  );
+  const [deepState, setDeepState] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
+  const [deepResult, setDeepResult] = useState<DeepSearchApiResponse>();
+  const [deepError, setDeepError] = useState<unknown>();
+  const deepKeys = useRef(new IdempotencyKeyBuffer());
   const initialized = useRef(false);
 
   const spaces = useKnowledgeQuery<SpaceListResponse>(
@@ -171,12 +194,12 @@ export default function SearchPage() {
     if (!router.isReady || !spaceId || initialized.current) return;
     initialized.current = true;
     const rawFilters = parseFilters(queryString(router.query.filters));
-    const nextMode = parseMode(queryString(router.query.mode));
+    const nextMode = parsePageMode(queryString(router.query.mode));
     const defaults = defaultS7SearchForm(spaceId);
     const next = S7SearchFormSchema.parse({
       ...defaults,
       query: queryString(router.query.query) ?? '',
-      mode: nextMode,
+      mode: nextMode === 'deep' ? 'hybrid' : nextMode,
       tokenBudget: finiteNumber(queryString(router.query.budget), defaults.tokenBudget),
       similarity: finiteNumber(queryString(router.query.similarity), defaults.similarity),
       embeddingWeight: finiteNumber(
@@ -189,6 +212,18 @@ export default function SearchPage() {
       filters: rawFilters ?? defaults.filters,
     });
     setValue(next);
+    setPageMode(nextMode);
+    setDeepValue((current) => ({
+      ...current,
+      knowledgeSpaceId: spaceId,
+      knowledgeSpaceIds: [
+        ...new Set([
+          spaceId,
+          ...current.knowledgeSpaceIds.filter((id) => /^[a-f0-9]{24}$/.test(id)),
+        ]),
+      ],
+      query: queryString(router.query.query) ?? current.query,
+    }));
     setFilters(next.filters);
   }, [router.isReady, router.query, spaceId]);
 
@@ -206,7 +241,7 @@ export default function SearchPage() {
   useEffect(() => {
     if (!router.isReady || !spaceId || !initialized.current) return;
     const query: Record<string, string> = {
-      mode: value.mode,
+      mode: pageMode,
       budget: String(value.tokenBudget),
       similarity: String(value.similarity),
       embeddingWeight: String(value.embeddingWeight),
@@ -222,7 +257,7 @@ export default function SearchPage() {
       });
     }, 200);
     return () => clearTimeout(timer);
-  }, [filters, router, spaceId, value]);
+  }, [filters, pageMode, router, spaceId, value]);
 
   const label = useMemo(() => labelsFor(t), [t]);
   const spaceChoices: S7SpaceChoice[] = (spaces.data?.items ?? []).map((space) => ({
@@ -260,27 +295,136 @@ export default function SearchPage() {
     }
   };
 
+  const runDeep = async () => {
+    const parsed = S8SearchFormSchema.safeParse(deepValue);
+    if (!parsed.success) {
+      setDeepState('error');
+      return;
+    }
+    setDeepState('loading');
+    setDeepError(undefined);
+    try {
+      const request = buildS8DeepRequest(parsed.data);
+      const result = await knowledgeRequest<DeepSearchApiResponse>('/v1/knowledge/search/deep', {
+        method: 'POST',
+        body: request,
+        idempotencyKey: deepKeys.current.keyFor(request),
+      });
+      setDeepResult(result);
+      setDeepState('ready');
+    } catch (error) {
+      setDeepError(error);
+      setDeepState('error');
+    }
+  };
+
+  const deepLabels: S8DeepSearchPanelLabels = {
+    title: t('s8.deep.title'),
+    description: t('s8.deep.description'),
+    query: t('s8.deep.query'),
+    queryPlaceholder: t('s8.deep.queryPlaceholder'),
+    maxRounds: t('s8.deep.maxRounds'),
+    roundTokenBudget: t('s8.deep.roundTokenBudget'),
+    tokenBudget: t('s8.deep.tokenBudget'),
+    stopWhenNoNewEvidence: t('s8.deep.stopWhenNoNewEvidence'),
+    run: t('s8.deep.run'),
+    running: t('s8.deep.running'),
+    idle: t('s8.deep.idle'),
+    partial: t('s8.deep.partial'),
+    rounds: t('s8.deep.rounds'),
+    round: t('s8.deep.round'),
+    candidateCount: t('s8.deep.candidateCount'),
+    sufficient: t('s8.deep.sufficient'),
+    stopReason: t('s8.deep.stopReason'),
+    usage: t('s8.deep.usage'),
+    error: t('s8.deep.error'),
+    retry: t('s8.deep.retry'),
+    citation: {
+      citation: t('search.citation'),
+      source: t('search.citationSource'),
+      range: t('search.citationRange'),
+      version: t('search.citationVersion'),
+    },
+  };
+
   return (
     <>
       <Head>
         <title>{t('search.title')}</title>
       </Head>
-      <S7SearchWorkbench
-        mode={value.mode}
-        value={value}
-        filters={filters}
-        tags={tagChoices}
-        spaces={spaceChoices}
-        result={'result' in state ? state.result : undefined}
-        state={state}
-        labels={label}
-        rerankAvailable={rerankAvailable}
-        onValueChange={(next) => setValue((current) => ({ ...current, ...next, filters }))}
-        onModeChange={(mode) => setValue((current) => ({ ...current, mode }))}
-        onFiltersChange={setFilters}
-        onSubmit={() => void run()}
-        onRetry={() => void run()}
-      />
+      <div
+        role="group"
+        aria-label={t('search.mode')}
+        style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 20 }}
+      >
+        {S7_SEARCH_MODES.map((mode) => (
+          <Button
+            key={mode}
+            size="sm"
+            tone={pageMode === mode ? 'primary' : 'secondary'}
+            onClick={() => {
+              setPageMode(mode);
+              setValue((current) => ({ ...current, mode }));
+            }}
+          >
+            {t(
+              mode === 'semantic'
+                ? 'search.semantic'
+                : mode === 'fulltext'
+                  ? 'search.fulltext'
+                  : mode === 'multi_space'
+                    ? 'search.multiSpace'
+                    : 'search.hybrid',
+            )}
+          </Button>
+        ))}
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => void router.push(`/spaces/${spaceId}/images`)}
+        >
+          {t('search.image')}
+        </Button>
+        <Button
+          size="sm"
+          tone={pageMode === 'deep' ? 'primary' : 'secondary'}
+          onClick={() => setPageMode('deep')}
+        >
+          {t('search.deep')}
+        </Button>
+      </div>
+      {pageMode === 'deep' ? (
+        <S8DeepSearchPanel
+          value={deepValue}
+          labels={deepLabels}
+          result={deepResult}
+          error={deepError}
+          state={deepState}
+          onChange={(next) => setDeepValue((current) => ({ ...current, ...next }))}
+          onSubmit={() => void runDeep()}
+          onRetry={() => void runDeep()}
+        />
+      ) : (
+        <S7SearchWorkbench
+          mode={value.mode}
+          value={value}
+          filters={filters}
+          tags={tagChoices}
+          spaces={spaceChoices}
+          result={'result' in state ? state.result : undefined}
+          state={state}
+          labels={label}
+          rerankAvailable={rerankAvailable}
+          onValueChange={(next) => setValue((current) => ({ ...current, ...next, filters }))}
+          onModeChange={(mode) => {
+            setValue((current) => ({ ...current, mode }));
+            setPageMode(mode);
+          }}
+          onFiltersChange={setFilters}
+          onSubmit={() => void run()}
+          onRetry={() => void run()}
+        />
+      )}
     </>
   );
 }

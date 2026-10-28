@@ -44,6 +44,15 @@ import {
   S5QaPipelineAdapter,
   S5RemoteAssetAdapter,
   S5UsageRepository,
+  S8CaptionApplication,
+  S8ContentEnhancementApplication,
+  S8DeepSearchApplication,
+  S8DeepSearchRepository,
+  S8FileTicketAdapter,
+  S8ImageIndexRepository,
+  S8ImageSearchApplication,
+  S8ModelResolver,
+  S8SearchOperationApplication,
   S06JobApplication,
   S06ProcessingApplication,
   S6ProcessingRepository,
@@ -347,7 +356,6 @@ async function bootstrapRuntime(): Promise<TelemetryKnowledgeApiRuntime> {
       };
     },
   });
-  const s5Processing = new S5ProcessingApplication(s5Qa);
   const s5Ocr = new S5OcrApplication({
     provider: new S5OcrHttpAdapter({
       profiles: new S5OcrCredentialProfileAdapter(s5RuntimeEnv),
@@ -409,6 +417,29 @@ async function bootstrapRuntime(): Promise<TelemetryKnowledgeApiRuntime> {
   const vectorRepository = new KnowledgeVectorRepository(pool);
   const fullTextRepository = new KnowledgeFullTextRepository(mongo);
   const processingStore = new S6ProcessingRepository(mongo);
+  const fileTickets = new FileTicketService(
+    resolveSecretRef(config.fileTicketSecretRef),
+    config.filePublicBaseUrl,
+  );
+  const imageTickets = new S8FileTicketAdapter(fileTickets);
+  const imageIndexes = new S8ImageIndexRepository(mongo);
+  const imageModels = new S8ModelResolver(mongo, s5Catalog);
+  const s8Caption = new S8CaptionApplication({
+    store: processingStore,
+    objects: objectRefs,
+    models: imageModels,
+    gateway: s5Gateway,
+    tickets: imageTickets,
+    vectors: vectorRepository,
+    fulltext: fullTextRepository,
+    indexes: imageIndexes,
+  });
+  const s8Enhancement = new S8ContentEnhancementApplication({
+    gateway: s5Gateway,
+    models: imageModels,
+    caption: s8Caption,
+  });
+  const s5Processing = new S5ProcessingApplication(s5Qa, s8Enhancement);
   const segmentIndexes = new KnowledgeSegmentIndexRepository(mongo, jobExecution, s5Catalog);
   const credentialCipher = new KnowledgeCredentialCipher(
     resolveSecretRef(config.credentialEncryptionKeyRef),
@@ -475,6 +506,7 @@ async function bootstrapRuntime(): Promise<TelemetryKnowledgeApiRuntime> {
     models: s5Catalog,
     bindings: s5BindingRepository,
     sync: connectorSync,
+    caption: s8Caption,
     port: {
       async parse(input, context) {
         const objectRef = await objectRefs.findObjectRef(input.blobRefId, context);
@@ -519,7 +551,7 @@ async function bootstrapRuntime(): Promise<TelemetryKnowledgeApiRuntime> {
         }>({
           kind: 'embedding',
           modelId: input.modelId,
-          texts: input.texts,
+          input: input.texts.map((text) => ({ type: 'text' as const, text })),
           dimension: input.dimension,
           workspaceId: context.workspaceId,
           knowledgeSpaceId: input.knowledgeSpaceId,
@@ -542,6 +574,7 @@ async function bootstrapRuntime(): Promise<TelemetryKnowledgeApiRuntime> {
   const s06Jobs = new S06JobApplication(jobExecution, segmentIndexes, catalog, access);
   const s7Authorization = new S7SearchAuthorizationAdapter(mongo, access);
   const s7SearchRepository = new S7SearchRepository(mongo, s5Catalog);
+  const s8DeepRepository = new S8DeepSearchRepository(mongo, s5Catalog);
   const s7Pipeline = new S7SearchPipelineFactory({
     vectors: vectorRepository,
     modelGateway: s5Gateway,
@@ -553,10 +586,11 @@ async function bootstrapRuntime(): Promise<TelemetryKnowledgeApiRuntime> {
     resolveSecretRef(s7CitationConfig.citationSigningSecretRef),
   );
   const s7Citations = new S7CitationRepository(mongo, s7Signer);
+  const s7Filters = new S7FilterSourceRepository(mongo);
   const s7Search = new S7SearchApplication({
     access: s7Authorization,
     models: s7SearchRepository,
-    filters: new S7FilterSourceRepository(mongo),
+    filters: s7Filters,
     fullText: s7SearchRepository,
     authorization: s7Authorization,
     pipeline: s7Pipeline,
@@ -570,6 +604,30 @@ async function bootstrapRuntime(): Promise<TelemetryKnowledgeApiRuntime> {
     signer: s7Signer,
   });
   const s7Operations = new S7SearchOperationApplication(s7Search, s7Citation);
+  const s8ImageSearch = new S8ImageSearchApplication({
+    access: s7Authorization,
+    objects: objectRefs,
+    models: imageModels,
+    gateway: s5Gateway,
+    tickets: imageTickets,
+    search: s7Search,
+    fullText: s7SearchRepository,
+    filters: s7Filters,
+    authorization: s7Authorization,
+    citations: s7Citations,
+    audits: s7Citations,
+    vectors: vectorRepository,
+  });
+  const s8DeepSearch = new S8DeepSearchApplication({
+    access: s7Authorization,
+    repository: s8DeepRepository,
+    gateway: s5Gateway,
+    search: s7Search,
+    authorization: s7Authorization,
+    citations: s7Citations,
+    audits: s7Citations,
+  });
+  const s8Operations = new S8SearchOperationApplication(s8ImageSearch, s8DeepSearch);
   const ingestion = new S04IngestionApplication({
     imports: importRepository,
     connectors: connectorRepository,
@@ -587,10 +645,6 @@ async function bootstrapRuntime(): Promise<TelemetryKnowledgeApiRuntime> {
       },
     },
   });
-  const fileTickets = new FileTicketService(
-    resolveSecretRef(config.fileTicketSecretRef),
-    config.filePublicBaseUrl,
-  );
   const archiveSafety = new ObjectStoreArchiveSafetyAdapter(objectStore);
   const files = new FileApplication(
     objectRefs,
@@ -625,6 +679,7 @@ async function bootstrapRuntime(): Promise<TelemetryKnowledgeApiRuntime> {
     s5ModelBindings,
     s06Jobs,
     s7Operations,
+    s8Operations,
   );
   const queues = new Map(
     KNOWLEDGE_QUEUE_NAMES.map((name) => [name, new Queue(name, { connection: redis })]),

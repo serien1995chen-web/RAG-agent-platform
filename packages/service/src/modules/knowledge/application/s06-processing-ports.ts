@@ -14,6 +14,7 @@ export type S6ChildJobKind =
   | 'parse'
   | 'segment'
   | 'qa'
+  | 'caption'
   | 'embed'
   | 'index'
   | 'fulltext'
@@ -23,6 +24,7 @@ export interface S6SourceRecord {
   id: string;
   workspaceId: string;
   knowledgeSpaceId: string;
+  kind: string;
   sourceVersion: number;
   blobRefId: string | null;
   name: string;
@@ -51,6 +53,8 @@ export interface S6SegmentRecord {
   indexes: SegmentIndexValue[];
   indexStatus: KnowledgeSegmentDoc['indexStatus'];
   indexErrorCode: string | null;
+  imageBlobRefId?: string | null;
+  imageDescription?: string | null;
   version: number;
 }
 
@@ -247,7 +251,13 @@ export interface S6ProcessingStorePort {
     input: {
       source: S6SourceRecord;
       sourceVersion: number;
-      rows: ReadonlyArray<{ order: number; question: string; answer: string; content: string }>;
+      rows: ReadonlyArray<{
+        order: number;
+        question: string;
+        answer: string;
+        content: string;
+        metadata?: Record<string, unknown>;
+      }>;
     },
     context: TenantContext,
   ): Promise<string[]>;

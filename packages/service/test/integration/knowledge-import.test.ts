@@ -148,6 +148,7 @@ function uploadRef(uploadId: string, fileName: string, mimeType: string): Object
   return {
     blobId: uploadId,
     workspaceId,
+    createdByMemberId: context.memberId,
     knowledgeSpaceId: spaceId,
     provider: 'minio',
     bucket: 'kb-test',

@@ -239,8 +239,8 @@ describe('S5 model and parse frozen contract', () => {
   });
 
   it('keeps S5 operation wiring separate from the S6 worker registry', () => {
-    expect(runtime.operations).toHaveLength(100);
-    expect(deferred.operations).toHaveLength(20);
+    expect(runtime.operations).toHaveLength(102);
+    expect(deferred.operations).toHaveLength(18);
     const worker = readFileSync(
       join(root, 'projects', 'app', 'src', 'runtime', 'knowledge-worker.ts'),
       'utf8',

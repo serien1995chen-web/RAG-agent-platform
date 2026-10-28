@@ -8,6 +8,7 @@ import type {
   S5ProcessingResult,
   S5QaResultItem,
 } from './s5-processing-ports';
+import type { S8ContentEnhancementApplication } from './s8-content-enhancement.application';
 
 export interface S5QaChunkResult {
   items: S5QaResultItem[];
@@ -33,6 +34,7 @@ export interface S5ProcessingInput {
   workspaceId: string;
   knowledgeSpaceId: string;
   sourceId: string;
+  sourceName?: string;
   sourceVersion: number;
   rawText: string;
   artifact: S5ArtifactMaterializeResult;
@@ -60,7 +62,10 @@ function configHashOf(value: unknown): string {
 }
 
 export class S5ProcessingApplication {
-  constructor(private readonly qa?: S5QaPipelinePort) {}
+  constructor(
+    private readonly qa?: S5QaPipelinePort,
+    private readonly enhancement?: S8ContentEnhancementApplication,
+  ) {}
 
   processChunks(input: Pick<S5ProcessingInput, 'rawText' | 'settings' | 'context'>): {
     chunks: ChunkItem[];
@@ -171,17 +176,80 @@ export class S5ProcessingApplication {
   }
 
   async process(input: S5ProcessingInput): Promise<S5ProcessingResult> {
-    const chunks = this.processChunks(input);
-    const qa = await this.generateQaForChunks({ ...input, chunks: chunks.chunks });
+    const enhanced = this.enhancement
+      ? await this.enhancement.enhanceParagraph(input)
+      : {
+          markdown: input.rawText,
+          applied: false,
+          promptVersion: null,
+          usage: { inputTokens: 0, outputTokens: 0 },
+          diagnostics: [],
+        };
+    const prefix =
+      input.settings.dataEnhanceCollectionName && input.sourceName ? `# ${input.sourceName}\n` : '';
+    const chunks = this.processChunks({ ...input, rawText: enhanced.markdown });
+    const effectiveChunks = prefix
+      ? chunks.chunks.map((chunk) => {
+          const text = `${prefix}${chunk.text}`;
+          return {
+            ...chunk,
+            text,
+            contentHash: configHashOf(text),
+          };
+        })
+      : chunks.chunks;
+    const qa = await this.generateQaForChunks({ ...input, chunks: effectiveChunks });
+    const autoIndexes =
+      input.settings.autoIndexes === true
+        ? await this.generateQaForChunks({
+            ...input,
+            settings: { ...input.settings, trainingType: 'qa' },
+            chunks: effectiveChunks,
+          })
+        : {
+            items: [],
+            fallbackUsed: false,
+            promptVersion: null,
+            diagnostics: [],
+          };
+    const autoItems = input.settings.indexPrefixTitle
+      ? autoIndexes.items.map((item) => ({
+          ...item,
+          q: `# ${input.sourceName ?? 'Source'}\n${item.q}`,
+          a: item.a,
+        }))
+      : autoIndexes.items;
+    const imageIndex = input.settings.imageIndex
+      ? await this.enhancement?.indexAssets({
+          sourceId: input.sourceId,
+          sourceVersion: input.sourceVersion,
+          assets: input.artifact.assets,
+          orderOffset: effectiveChunks.length,
+          context: input.context,
+        })
+      : undefined;
+    const autoIndexPartial =
+      input.settings.autoIndexes === true &&
+      (autoIndexes.fallbackUsed ||
+        autoIndexes.diagnostics.some(
+          (diagnostic) => diagnostic.severity === 'warning' || diagnostic.severity === 'error',
+        ));
     return {
       sourceVersion: input.sourceVersion,
-      rawText: input.rawText,
+      rawText: enhanced.markdown,
       rawTextObjectRef: input.artifact.rawTextObjectRef,
       pages: input.artifact.pages,
       assets: input.artifact.assets,
-      diagnostics: [...input.artifact.diagnostics, ...chunks.diagnostics, ...qa.diagnostics],
-      chunks: chunks.chunks,
-      qaItems: qa.items,
+      diagnostics: [
+        ...input.artifact.diagnostics,
+        ...enhanced.diagnostics,
+        ...chunks.diagnostics,
+        ...qa.diagnostics,
+        ...autoIndexes.diagnostics,
+        ...(imageIndex?.diagnostics ?? []),
+      ],
+      chunks: effectiveChunks,
+      qaItems: this.qa ? this.qa.dedupe([...qa.items, ...autoItems]) : [...qa.items, ...autoItems],
       evidence: {
         ...input.artifact.evidence,
         ocrProvider: input.ocrEvidence?.actualProvider ?? null,
@@ -190,7 +258,19 @@ export class S5ProcessingApplication {
           : null,
         chunkingConfigHash: chunks.policyHash,
         qaPromptVersion: qa.promptVersion,
-        fallbackUsed: qa.fallbackUsed || (input.ocrEvidence?.fallbackUsed ?? false),
+        fallbackUsed:
+          qa.fallbackUsed || autoIndexes.fallbackUsed || (input.ocrEvidence?.fallbackUsed ?? false),
+        paragraphEnhancementApplied: enhanced.applied,
+        paragraphPromptVersion: enhanced.promptVersion,
+        autoIndexPromptVersion: autoIndexes.promptVersion,
+        autoIndexCount: autoItems.length,
+        imageIndexCount: imageIndex?.segmentIds.length ?? 0,
+        enhancementDiagnostics: [
+          ...enhanced.diagnostics,
+          ...autoIndexes.diagnostics,
+          ...(imageIndex?.diagnostics ?? []),
+        ],
+        partial: autoIndexPartial || (imageIndex?.partial ?? false),
       },
     };
   }

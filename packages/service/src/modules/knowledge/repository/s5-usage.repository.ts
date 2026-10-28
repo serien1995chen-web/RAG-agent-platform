@@ -130,8 +130,9 @@ export class S5UsageRepository implements S5UsageRecorderPort, S5ProviderUsageRe
           action: 'model.invoke',
           resourceType: fact.resourceType,
           resourceId: fact.resourceId,
-          outcome:
-            fact.status !== null && fact.status >= 200 && fact.status < 300
+          outcome: fact.intent
+            ? 'allowed'
+            : fact.status !== null && fact.status >= 200 && fact.status < 300
               ? 'succeeded'
               : 'failed',
           safeDiff: {
@@ -143,6 +144,11 @@ export class S5UsageRepository implements S5UsageRecorderPort, S5ProviderUsageRe
             status: fact.status,
             attempt: fact.attempt,
             fallbackUsed: fact.fallbackUsed,
+            intent: fact.intent === true,
+            ...(fact.promptVersion ? { promptVersion: fact.promptVersion } : {}),
+            ...(fact.mediaItemCount !== undefined ? { mediaItemCount: fact.mediaItemCount } : {}),
+            ...(fact.totalBytes !== undefined ? { totalBytes: fact.totalBytes } : {}),
+            ...(fact.sourceVersion !== undefined ? { sourceVersion: fact.sourceVersion } : {}),
           },
         },
         context,

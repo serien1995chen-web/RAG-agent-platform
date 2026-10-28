@@ -206,6 +206,9 @@ export class SourceFileApplication {
     const issued = this.tickets.issue(
       {
         workspaceId: ref.workspaceId,
+        memberId: context.memberId,
+        isWorkspaceOwner: context.isWorkspaceOwner === true,
+        scopes: [...context.scopes],
         blobId: ref.blobId,
         sourceId: ref.sourceId,
         knowledgeSpaceId: null,

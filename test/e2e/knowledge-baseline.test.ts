@@ -1899,10 +1899,10 @@ describe.sequential('knowledge architecture baseline E2E', () => {
             if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
           });
           await page.waitForTimeout(100);
-          await page.screenshot({
-            path: join(screenshotDirectory, `s3-overview-${viewport.width}.png`),
-            fullPage: true,
-          });
+          const screenshotPath = join(screenshotDirectory, `s3-overview-${viewport.width}.png`);
+          if (!existsSync(screenshotPath)) {
+            await page.screenshot({ path: screenshotPath, fullPage: true });
+          }
 
           await page.getByRole('button', { name: '导出空间 ZIP' }).click();
           await page.getByText('失败', { exact: true }).waitFor({ timeout: 10_000 });
@@ -2156,7 +2156,7 @@ describe.sequential('knowledge architecture baseline E2E', () => {
                     '系统状态',
                     '连接器',
                     ...(hasSpaceNavigation
-                      ? ['概览', '来源', '导入', '分段', '标签', '访问权限', '任务', '搜索']
+                      ? ['概览', '来源', '导入', '分段', '标签', '访问权限', '任务', '搜索', '图片']
                       : []),
                   ]
                 : [
@@ -2173,6 +2173,7 @@ describe.sequential('knowledge architecture baseline E2E', () => {
                           'Access',
                           'Jobs',
                           'Search',
+                          'Images',
                         ]
                       : []),
                   ];
@@ -2520,7 +2521,7 @@ describe.sequential('knowledge architecture baseline E2E', () => {
       },
     });
 
-    expect(runtimeRegistry.count).toBe(100);
+    expect(runtimeRegistry.count).toBe(102);
     const runtimeIds = new Set(
       runtimeRegistry.operations.map((operation) => operation.operationId),
     );

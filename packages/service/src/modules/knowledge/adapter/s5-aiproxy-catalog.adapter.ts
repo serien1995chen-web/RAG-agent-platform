@@ -120,7 +120,7 @@ export class S5MockModelCatalog implements ModelCatalogPort {
         modelId: `mock-embedding-${dimension}`,
         displayName: `Mock embedding ${dimension}`,
         type: 'embedding' as const,
-        capabilities: ['text-embedding', `dimension:${dimension}`],
+        capabilities: ['text-embedding', 'vision', `dimension:${dimension}`],
         dimension,
         authorized: true,
       })),
