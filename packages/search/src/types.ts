@@ -35,6 +35,7 @@ export interface AuthorizedSegmentSnapshot {
   workspaceId: string;
   knowledgeSpaceId: string;
   sourceId: string;
+  sourceVersion: number;
   order: number;
   searchEnabled: boolean;
   question: string;

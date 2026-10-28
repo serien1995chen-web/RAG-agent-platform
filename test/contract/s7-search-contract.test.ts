@@ -126,4 +126,32 @@ describe('TEST-SEARCH-001/002/004/005/007/009-BLOCK S7 contract gate', () => {
     expect(citation?.operationId).toBe('API-CITATION-GET');
     expect(citation?.['x-audit']).toBe(false);
   });
+
+  it('binds every S7 503 response to Problem503 in target and generated OpenAPI', () => {
+    const routes = [
+      ['/v1/knowledge/search/semantic', 'post'],
+      ['/v1/knowledge/search/full-text', 'post'],
+      ['/v1/knowledge/search/hybrid', 'post'],
+      ['/v1/knowledge/search/multi-space', 'post'],
+      ['/v1/knowledge/citations/{citationId}', 'get'],
+    ] as const;
+    for (const file of ['knowledge-target.openapi.json', 'openapi.json']) {
+      const openapi = JSON.parse(
+        readFileSync(resolve(root, 'packages/contracts/openapi', file), 'utf8'),
+      ) as {
+        paths: Record<
+          string,
+          Record<string, { responses?: Record<string, Record<string, unknown>> }>
+        >;
+      };
+      for (const [path, method] of routes) {
+        expect(
+          openapi.paths[path]?.[method]?.responses?.['503'],
+          `${file} ${method} ${path}`,
+        ).toEqual({
+          $ref: '#/components/responses/Problem503',
+        });
+      }
+    }
+  });
 });

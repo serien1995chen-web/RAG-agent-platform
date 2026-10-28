@@ -7,6 +7,8 @@ export interface MultiSpaceSearchSlice {
   knowledgeSpaceId: string;
   candidates?: readonly AuthorizedCandidate[];
   failure?: ChannelFailure;
+  partial?: boolean;
+  failedChannels?: readonly ChannelFailure[];
 }
 
 export interface MultiSpaceMergeResult {
@@ -27,9 +29,11 @@ export function mergeMultiSpaceCitations(
   const scored: AuthorizedCandidate[] = [];
   const degraded: DegradedInfo[] = [];
   const failedSpaces: string[] = [];
+  let partial = false;
 
   for (const slice of slices) {
     if (!slice.candidates) {
+      partial = true;
       failedSpaces.push(slice.knowledgeSpaceId);
       degraded.push({
         stage: 'space',
@@ -42,6 +46,13 @@ export function mergeMultiSpaceCitations(
         });
       }
       continue;
+    }
+    if (slice.partial || (slice.failedChannels?.length ?? 0) > 0) partial = true;
+    for (const failure of slice.failedChannels ?? []) {
+      degraded.push({
+        stage: failure.channel === 'embedding' ? 'vector' : 'fullText',
+        reason: failure.degradedCode,
+      });
     }
     const ordered = stableSortCandidates(slice.candidates);
     ordered.forEach((candidate, index) => {
@@ -72,6 +83,6 @@ export function mergeMultiSpaceCitations(
     candidates: stableSortCandidates([...byKey.values()]),
     degraded,
     failedSpaces,
-    partial: failedSpaces.length > 0,
+    partial,
   };
 }

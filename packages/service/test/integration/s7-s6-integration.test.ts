@@ -22,6 +22,8 @@ import { KnowledgeSegmentIndexRepository } from '../../src/modules/knowledge/rep
 import { S5MockModelCatalog } from '../../src/modules/knowledge/adapter/s5-aiproxy-catalog.adapter';
 import { S7SearchAuthorizationAdapter } from '../../src/modules/knowledge/adapter/s7-search-authorization.adapter';
 import { S7SearchPipelineFactory } from '../../src/modules/knowledge/adapter/s7-search-pipeline.factory';
+import { S7ModelGatewaySearchAdapter } from '../../src/modules/knowledge/adapter/s7-model-gateway-search.adapter';
+import { S7VectorSearchAdapter } from '../../src/modules/knowledge/adapter/s7-vector-search.adapter';
 import { KnowledgeAccessRepository } from '../../src/modules/knowledge/repository/access.repository';
 import { S7FilterSourceRepository } from '../../src/modules/knowledge/repository/s7-filter-source.repository';
 import { S7SearchRepository } from '../../src/modules/knowledge/repository/s7-search.repository';
@@ -465,7 +467,9 @@ describe('C3 real S6 Job/Index output consumed by S7 recall', () => {
       async invoke<T>(request): Promise<S5GatewayResult<T>> {
         const vector = Array.from({ length: 768 }, (_, index) => (index === 0 ? 1 : 0));
         const data =
-          request.kind === 'embedding' ? { data: request.texts.map(() => vector) } : { data: null };
+          request.kind === 'embedding'
+            ? { data: request.texts.map(() => ({ embedding: vector })) }
+            : { data: null };
         return {
           data: data as T,
           actualModelId: request.modelId,
@@ -476,6 +480,41 @@ describe('C3 real S6 Job/Index output consumed by S7 recall', () => {
         };
       },
     };
+    const modelAdapter = new S7ModelGatewaySearchAdapter({
+      gateway,
+      knowledgeSpaceId: String(spaceId),
+      embedding: { modelId: 'mock-embedding-768', dimension: 768 },
+    });
+    const [queryEmbedding] = await modelAdapter.embed(
+      {
+        models: { embeddingModel: 'mock-embedding-768' },
+        texts: ['refund'],
+        options: { timeoutMs: 5_000 },
+      },
+      context,
+    );
+    expect(queryEmbedding).toHaveLength(768);
+    const vectorAdapter = new S7VectorSearchAdapter({
+      repository: vectors,
+      modelGateway: modelAdapter,
+      embedding: { modelId: 'mock-embedding-768', dimension: 768 },
+      knowledgeSpaceId: String(spaceId),
+      context,
+    });
+    expect(
+      await vectorAdapter.embRecall(
+        {
+          workspaceId,
+          knowledgeSpaceId: String(spaceId),
+          sourceIds: [String(sourceId)],
+          vector: queryEmbedding!,
+          limit: 10,
+          indexVersion: 'direct-check',
+          options: { timeoutMs: 5_000 },
+        },
+        context,
+      ),
+    ).toHaveLength(1);
     const application = new S7SearchApplication({
       access: multiAuthorization,
       models: repository,
@@ -534,7 +573,7 @@ describe('C3 real S6 Job/Index output consumed by S7 recall', () => {
       context,
     );
     expect(multi.mode).toBe('multi_space');
-    expect(multi.partial).toBe(false);
+    expect(multi.partial, JSON.stringify(multi.degraded)).toBe(false);
     expect(multi.items).toHaveLength(2);
     expect(new Set(multi.items.map((item) => item.segment.knowledgeSpaceId))).toEqual(
       new Set([String(spaceId), String(secondary.spaceId)]),

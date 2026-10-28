@@ -33,6 +33,7 @@ function candidate(): AuthorizedCandidate {
       workspaceId,
       knowledgeSpaceId: spaceId,
       sourceId,
+      sourceVersion: 2,
       order: 0,
       searchEnabled: true,
       question: 'Refunds take five days.',
@@ -93,7 +94,11 @@ function fixture(overrides: Partial<S7CitationReaderRecord> = {}) {
         expect(ctx.scopes).toContain('knowledge:search');
       },
       async getAuthorizedSpace() {
-        throw new Error('not used');
+        return {
+          spaceId,
+          workspaceId,
+          sourcePermissionEnabled: true,
+        };
       },
     },
     authorizations: {
@@ -147,7 +152,11 @@ describe('TEST-SEARCH-009-BLOCK citation lifecycle', () => {
       access: {
         assertSearchScope() {},
         async getAuthorizedSpace() {
-          throw new Error('not used');
+          return {
+            spaceId,
+            workspaceId,
+            sourcePermissionEnabled: true,
+          };
         },
       },
       authorizations: {

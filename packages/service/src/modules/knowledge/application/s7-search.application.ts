@@ -30,6 +30,8 @@ import type { S7AuthorizedSpace, S7SearchApplicationDependencies } from './s7-se
 interface SpaceExecution {
   candidates: AuthorizedCandidate[];
   degradedCodes: string[];
+  failedChannels: ChannelFailure[];
+  partial: boolean;
   rerankApplied: boolean;
   filterSummary?: SearchFilterSummary;
 }
@@ -89,7 +91,7 @@ function statusOf(error: unknown): 400 | 401 | 403 | 404 | 429 | 500 | 502 | 503
   return 500;
 }
 
-function failureOf(error: unknown): ChannelFailure {
+function failureOf(error: unknown, mode: SearchApiMode): ChannelFailure {
   const observedStatus = statusOf(error);
   const status: ChannelFailure['status'] =
     observedStatus === 429 ||
@@ -98,8 +100,9 @@ function failureOf(error: unknown): ChannelFailure {
     observedStatus === 504
       ? observedStatus
       : 500;
+  const channel: ChannelFailure['channel'] = mode === 'fulltext' ? 'fullText' : 'embedding';
   return {
-    channel: 'embedding',
+    channel,
     kind:
       status === 504
         ? 'timeout'
@@ -110,7 +113,7 @@ function failureOf(error: unknown): ChannelFailure {
             : status === 502
               ? 'model'
               : 'internal',
-    degradedCode: 'vector_recall_failed',
+    degradedCode: channel === 'fullText' ? 'fulltext_recall_failed' : 'vector_recall_failed',
     status,
   };
 }
@@ -138,11 +141,17 @@ function searchTimeout(context: TenantContext, timeoutMs: number) {
   });
 }
 
-function withDeadline<T>(work: Promise<T>, timeoutMs: number, context: TenantContext): Promise<T> {
+function withDeadline<T>(
+  work: Promise<T>,
+  timeoutMs: number,
+  context: TenantContext,
+  onTimeout?: () => void,
+): Promise<T> {
   let timer: NodeJS.Timeout | undefined;
   const deadline = new Promise<never>((_, reject) => {
     timer = setTimeout(
       () => {
+        onTimeout?.();
         reject(searchTimeout(context, timeoutMs));
       },
       Math.max(1, timeoutMs),
@@ -214,6 +223,8 @@ export class S7SearchApplication {
       return {
         candidates: [],
         degradedCodes: [],
+        failedChannels: [],
+        partial: false,
         rerankApplied: false,
         filterSummary: compiled.summary,
       };
@@ -252,6 +263,8 @@ export class S7SearchApplication {
     return {
       candidates: result.authorizedCandidates,
       degradedCodes: result.stats.degraded.map((entry) => entry.reason),
+      failedChannels: result.failedChannels,
+      partial: result.stats.partial ?? false,
       rerankApplied: result.stats.rerankApplied ?? false,
       filterSummary: compiled.summary,
     };
@@ -336,6 +349,8 @@ export class S7SearchApplication {
       durationMs: number;
       degradedCodes: string[];
       filterSummary?: SearchFilterSummary;
+      deadlineAt?: number;
+      signal?: AbortSignal;
     },
     context: TenantContext,
   ): Promise<ReadonlyMap<string, CitationApi>> {
@@ -429,6 +444,7 @@ export class S7SearchApplication {
       const durationMs = Date.now() - startedAt;
       const remainingMs = timeoutMs - (Date.now() - startedAt);
       if (remainingMs < 1) throw searchTimeout(context, timeoutMs);
+      const persistenceAbort = new AbortController();
       const citations = await withDeadline(
         this.persist(
           {
@@ -439,12 +455,15 @@ export class S7SearchApplication {
             partial,
             durationMs,
             degradedCodes: execution.degradedCodes,
+            deadlineAt: startedAt + timeoutMs,
+            signal: persistenceAbort.signal,
             ...(execution.filterSummary ? { filterSummary: execution.filterSummary } : {}),
           },
           context,
         ),
         remainingMs,
         context,
+        () => persistenceAbort.abort(searchTimeout(context, timeoutMs)),
       );
       return this.response({
         searchId,
@@ -538,9 +557,11 @@ export class S7SearchApplication {
           return {
             knowledgeSpaceId: entry.space.spaceId,
             candidates: entry.execution.candidates,
+            partial: entry.execution.partial,
+            failedChannels: entry.execution.failedChannels,
           };
         }
-        const failure = failureOf(entry.error);
+        const failure = failureOf(entry.error, mode);
         return {
           knowledgeSpaceId: entry.space.spaceId,
           failure,
@@ -573,6 +594,7 @@ export class S7SearchApplication {
         .filterSummary;
       const remainingMs = timeoutMs - (Date.now() - startedAt);
       if (remainingMs < 1) throw searchTimeout(context, timeoutMs);
+      const persistenceAbort = new AbortController();
       const citations = await withDeadline(
         this.persist(
           {
@@ -583,12 +605,15 @@ export class S7SearchApplication {
             partial,
             durationMs,
             degradedCodes,
+            deadlineAt: startedAt + timeoutMs,
+            signal: persistenceAbort.signal,
             ...(filterSummary ? { filterSummary } : {}),
           },
           context,
         ),
         remainingMs,
         context,
+        () => persistenceAbort.abort(searchTimeout(context, timeoutMs)),
       );
       return this.response({
         searchId,

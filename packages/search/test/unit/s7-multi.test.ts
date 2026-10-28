@@ -19,6 +19,7 @@ function authorized(spaceId: string, segmentId: string, text: string): Authorize
       workspaceId: 'ws-a',
       knowledgeSpaceId: spaceId,
       sourceId: 'source-a',
+      sourceVersion: 1,
       order: 0,
       searchEnabled: true,
       question: text,

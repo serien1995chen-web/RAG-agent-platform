@@ -50,6 +50,7 @@ function authorized(input: {
       workspaceId: context.workspaceId,
       knowledgeSpaceId: '65f1e5b2a1c9d4b7e8f01234',
       sourceId: input.sourceId,
+      sourceVersion: 1,
       order: 0,
       searchEnabled: true,
       question: input.text,

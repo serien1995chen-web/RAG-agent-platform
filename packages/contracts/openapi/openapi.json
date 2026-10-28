@@ -13710,7 +13710,7 @@
             "$ref": "#/components/responses/Problem502"
           },
           "503": {
-            "": "#/components/responses/Problem503"
+            "$ref": "#/components/responses/Problem503"
           },
           "504": {
             "$ref": "#/components/responses/Problem504"
@@ -13990,7 +13990,7 @@
             "$ref": "#/components/responses/Problem500"
           },
           "503": {
-            "": "#/components/responses/Problem503"
+            "$ref": "#/components/responses/Problem503"
           },
           "504": {
             "$ref": "#/components/responses/Problem504"
@@ -14273,7 +14273,7 @@
             "$ref": "#/components/responses/Problem502"
           },
           "503": {
-            "": "#/components/responses/Problem503"
+            "$ref": "#/components/responses/Problem503"
           },
           "504": {
             "$ref": "#/components/responses/Problem504"
@@ -14824,7 +14824,7 @@
             "$ref": "#/components/responses/Problem502"
           },
           "503": {
-            "": "#/components/responses/Problem503"
+            "$ref": "#/components/responses/Problem503"
           },
           "504": {
             "$ref": "#/components/responses/Problem504"
@@ -15216,7 +15216,7 @@
             "$ref": "#/components/responses/Problem502"
           },
           "503": {
-            "": "#/components/responses/Problem503"
+            "$ref": "#/components/responses/Problem503"
           },
           "504": {
             "$ref": "#/components/responses/Problem504"

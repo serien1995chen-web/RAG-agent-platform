@@ -103,6 +103,8 @@ export interface S7CitationIssueInput {
   degradedCodes: string[];
   filterSummary?: SearchFilterSummary;
   now: Date;
+  deadlineAt?: number;
+  signal?: AbortSignal;
 }
 
 export interface S7CitationReaderRecord {

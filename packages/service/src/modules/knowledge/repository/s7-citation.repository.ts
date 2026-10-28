@@ -58,6 +58,24 @@ function dependencyError(context: TenantContext) {
   });
 }
 
+function deadlineError(context: TenantContext) {
+  return createKnowledgeError({
+    code: 'KNOWLEDGE_DEPENDENCY_TIMEOUT',
+    requestId: context.requestId,
+    traceId: context.traceId,
+    details: { dependency: 'citation_persistence', reason: 'deadline_exceeded' },
+  });
+}
+
+function assertCitationDeadline(
+  input: { deadlineAt?: number; signal?: AbortSignal },
+  context: TenantContext,
+): void {
+  if (input.signal?.aborted || (input.deadlineAt !== undefined && Date.now() >= input.deadlineAt)) {
+    throw deadlineError(context);
+  }
+}
+
 export class S7CitationRepository implements S7CitationPersistencePort, S7SearchAuditPort {
   private readonly audits: KnowledgeAuditRepository;
 
@@ -74,7 +92,9 @@ export class S7CitationRepository implements S7CitationPersistencePort, S7Search
   ): Promise<ReadonlyMap<string, CitationApi>> {
     const citations = new Map<string, CitationApi>();
     try {
+      assertCitationDeadline(input, context);
       await withMongoTransaction(this.connection, async (session) => {
+        assertCitationDeadline(input, context);
         const models = registerKnowledgeModels(this.connection);
         const now = input.now;
         const documents = input.candidates.map((candidate: AuthorizedCandidate) => {
@@ -150,6 +170,7 @@ export class S7CitationRepository implements S7CitationPersistencePort, S7Search
           context,
           session,
         );
+        assertCitationDeadline(input, context);
       });
       return citations;
     } catch (error) {

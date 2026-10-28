@@ -57,6 +57,7 @@ function toSegment(document: Plain<KnowledgeSegmentDoc>): AuthorizedSegmentSnaps
     workspaceId: document.workspaceId,
     knowledgeSpaceId: String(document.knowledgeSpaceId),
     sourceId: String(document.sourceId),
+    sourceVersion: document.sourceVersion,
     order: document.order,
     searchEnabled: document.searchEnabled,
     question: document.question,
@@ -131,6 +132,33 @@ export class S7SearchAuthorizationAdapter
     }
   }
 
+  private async authorizedSpaceRevisions(
+    spaceIds: readonly Types.ObjectId[],
+    context: TenantContext,
+  ): Promise<Map<string, number>> {
+    const authorized = await Promise.all(
+      spaceIds.map(async (spaceId) => {
+        try {
+          const resource = await this.access.assertPermission(
+            'space',
+            String(spaceId),
+            'read',
+            context,
+          );
+          return [String(spaceId), resource.permissionRevision] as const;
+        } catch (error) {
+          const code =
+            typeof error === 'object' && error !== null && 'problem' in error
+              ? (error as { problem?: { error?: { code?: unknown } } }).problem?.error?.code
+              : undefined;
+          if (code === 'KNOWLEDGE_NOT_FOUND') return undefined;
+          throw error;
+        }
+      }),
+    );
+    return new Map(authorized.filter((entry) => entry !== undefined));
+  }
+
   private async hydrateOne(
     candidates: readonly Candidate[],
     context: TenantContext,
@@ -157,19 +185,21 @@ export class S7SearchAuthorizationAdapter
     const spaceIds = [
       ...new Set(segmentDocuments.map((segment) => String(segment.knowledgeSpaceId))),
     ].map((value) => new Types.ObjectId(value));
-    const [sourceDocuments, spaceDocuments, authorizedSources] = await Promise.all([
-      models.KnowledgeSource.find({
-        workspaceId,
-        _id: { $in: sourceIds },
-        deletedAt: null,
-      }).lean(),
-      models.KnowledgeSpace.find({
-        workspaceId,
-        _id: { $in: spaceIds },
-        deletedAt: null,
-      }).lean(),
-      this.access.batchAuthorizeSources(sourceIds.map(String), context),
-    ]);
+    const [sourceDocuments, spaceDocuments, authorizedSources, authorizedSpaceRevisions] =
+      await Promise.all([
+        models.KnowledgeSource.find({
+          workspaceId,
+          _id: { $in: sourceIds },
+          deletedAt: null,
+        }).lean(),
+        models.KnowledgeSpace.find({
+          workspaceId,
+          _id: { $in: spaceIds },
+          deletedAt: null,
+        }).lean(),
+        this.access.batchAuthorizeSources(sourceIds.map(String), context),
+        this.authorizedSpaceRevisions(spaceIds, context),
+      ]);
     const sourceById = new Map(
       (sourceDocuments as unknown as Array<Plain<KnowledgeSourceDoc>>).map((source) => [
         String(source._id),
@@ -204,11 +234,17 @@ export class S7SearchAuthorizationAdapter
         return [];
       }
       const space = spaceById.get(String(segment.knowledgeSpaceId));
+      const spacePermissionRevision = authorizedSpaceRevisions.get(
+        String(segment.knowledgeSpaceId),
+      );
       if (
         !space ||
+        spacePermissionRevision === undefined ||
+        spacePermissionRevision !== space.permissionRevision ||
         space.status !== 'active' ||
         !segment.searchEnabled ||
         segment.indexStatus !== 'indexed' ||
+        segment.sourceVersion !== source.sourceVersion ||
         !source.searchEnabled ||
         source.deletedAt !== null ||
         authorized.permissionRevision !== source.permissionRevision ||
@@ -229,9 +265,16 @@ export class S7SearchAuthorizationAdapter
       }
       const currentFullTextVersion = (segment as unknown as { fullTextVersion?: string | number })
         .fullTextVersion;
+      const isFullTextCandidate =
+        candidate.fullTextScore !== undefined ||
+        candidate.fullTextVersion !== undefined ||
+        candidate.scores.some((entry) => entry.type === 'fullText');
+      if (isFullTextCandidate && currentFullTextVersion === undefined) {
+        rejected += 1;
+        return [];
+      }
       if (
         candidate.fullTextVersion !== undefined &&
-        currentFullTextVersion !== undefined &&
         String(candidate.fullTextVersion) !== String(currentFullTextVersion)
       ) {
         rejected += 1;

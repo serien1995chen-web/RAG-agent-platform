@@ -103,6 +103,7 @@ async function seed() {
     createdByMemberId: memberId,
     updatedByMemberId: memberId,
     sourceId,
+    sourceVersion: 1,
     searchEnabled: true,
     order: 0,
     question: 'How long does a refund take?',
@@ -154,6 +155,7 @@ function candidate(): AuthorizedCandidate {
       workspaceId,
       knowledgeSpaceId: String(spaceId),
       sourceId: String(sourceId),
+      sourceVersion: 1,
       order: 0,
       searchEnabled: true,
       question: 'How long does a refund take?',
@@ -288,6 +290,25 @@ describe('TEST-SEARCH-009-BLOCK real Mongo citation lifecycle', () => {
         $inc: { version: -1 },
       },
     );
+    await models.KnowledgeSource.updateOne(
+      { workspaceId, _id: sourceId },
+      { $set: { permissionState: 'independent' } },
+    );
+    await models.KnowledgeResourcePermission.create({
+      workspaceId,
+      knowledgeSpaceId: spaceId,
+      version: 1,
+      deletedAt: null,
+      createdByMemberId: memberId,
+      updatedByMemberId: memberId,
+      resourceType: 'source',
+      resourceId: sourceId,
+      principalType: 'member',
+      principalId: memberId,
+      permission: 'read',
+      inheritMode: 'override',
+      snapshotVersion: 1,
+    });
     await models.KnowledgeResourcePermission.deleteMany({
       workspaceId,
       resourceType: 'space',
@@ -296,5 +317,54 @@ describe('TEST-SEARCH-009-BLOCK real Mongo citation lifecycle', () => {
     await expect(application.get(citationId, context)).rejects.toMatchObject({
       problem: { error: { code: 'KNOWLEDGE_NOT_FOUND' } },
     });
+  });
+
+  it('returns not found when the Segment source version is stale', async () => {
+    const issued = await citations.issueWithAudit(
+      {
+        searchId: 'search_citation_stale_version',
+        searchMode: 'semantic',
+        spaceId: String(spaceId),
+        candidates: [candidate()],
+        partial: false,
+        durationMs: 10,
+        degradedCodes: [],
+        now,
+      },
+      context,
+    );
+    const citationId = [...issued.values()][0]!.citationId;
+    const models = registerKnowledgeModels(connection);
+    await models.KnowledgeSource.updateOne(
+      { workspaceId, _id: sourceId },
+      { $set: { sourceVersion: 2 }, $inc: { version: 1, permissionRevision: 1 } },
+    );
+    await expect(application.get(citationId, context)).rejects.toMatchObject({
+      problem: { error: { code: 'KNOWLEDGE_NOT_FOUND' } },
+    });
+  });
+
+  it('aborts before persistence when the citation deadline has elapsed', async () => {
+    await expect(
+      citations.issueWithAudit(
+        {
+          searchId: 'search_citation_deadline',
+          searchMode: 'semantic',
+          spaceId: String(spaceId),
+          candidates: [candidate()],
+          partial: false,
+          durationMs: 10,
+          degradedCodes: [],
+          deadlineAt: Date.now() - 1,
+          now,
+        },
+        context,
+      ),
+    ).rejects.toMatchObject({
+      problem: { error: { code: 'KNOWLEDGE_DEPENDENCY_TIMEOUT' } },
+    });
+    const models = registerKnowledgeModels(connection);
+    expect(await models.KnowledgeCitation.countDocuments({ workspaceId })).toBe(0);
+    expect(await models.KnowledgeAuditEvent.countDocuments({ workspaceId })).toBe(0);
   });
 });

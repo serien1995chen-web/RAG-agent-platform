@@ -181,6 +181,7 @@ function syntheticSegment(candidate: Candidate, workspaceId: string): Authorized
     workspaceId,
     knowledgeSpaceId: candidate.knowledgeSpaceId,
     sourceId: candidate.sourceId ?? 'legacy-source',
+    sourceVersion: candidate.segment?.sourceVersion ?? 1,
     order: 0,
     searchEnabled: true,
     question: '',

@@ -36,6 +36,7 @@ function candidate(text = 'Refunds are processed within five business days.'): A
       workspaceId,
       knowledgeSpaceId: spaceId,
       sourceId,
+      sourceVersion: 1,
       order: 0,
       searchEnabled: true,
       question: text,
@@ -85,13 +86,17 @@ function fixture(
     text?: string;
     emptySources?: boolean;
     failVectorForSpace?: string;
+    failFullTextForSpace?: string;
     vectorDelayMs?: number;
     totalTimeoutMs?: number;
+    citationDelayMs?: number;
   } = {},
 ) {
   const audits: Array<Record<string, unknown>> = [];
   let pipelineCreations = 0;
   let modelResolutions = 0;
+  let citationAttempts = 0;
+  let citationCommits = 0;
   const authorization = {
     async hydrate(items: readonly Candidate[]) {
       return {
@@ -174,8 +179,18 @@ function fixture(
       },
     },
     fullText: {
-      async search() {
-        if (options.fullTextError) throw options.fullTextError;
+      async search(input) {
+        if (options.fullTextError || options.failFullTextForSpace === input.knowledgeSpaceId) {
+          throw (
+            options.fullTextError ??
+            createKnowledgeError({
+              code: 'KNOWLEDGE_DEPENDENCY_TIMEOUT',
+              requestId: context.requestId,
+              traceId: context.traceId,
+              details: {},
+            })
+          );
+        }
         return [{ segmentId, sourceId, score: 0.8 }];
       },
     },
@@ -216,8 +231,21 @@ function fixture(
             },
           },
           fullText: {
-            async search(_request) {
-              if (options.fullTextError) throw options.fullTextError;
+            async search(searchRequest) {
+              if (
+                options.fullTextError ||
+                options.failFullTextForSpace === searchRequest.knowledgeSpaceId
+              ) {
+                throw (
+                  options.fullTextError ??
+                  createKnowledgeError({
+                    code: 'KNOWLEDGE_DEPENDENCY_TIMEOUT',
+                    requestId: context.requestId,
+                    traceId: context.traceId,
+                    details: {},
+                  })
+                );
+              }
               return [{ segmentId, sourceId, score: 0.8 }];
             },
           },
@@ -227,6 +255,21 @@ function fixture(
     },
     citations: {
       async issueWithAudit(input) {
+        citationAttempts += 1;
+        if (options.citationDelayMs) {
+          await new Promise((resolve) => setTimeout(resolve, options.citationDelayMs));
+        }
+        if (
+          input.signal?.aborted ||
+          (input.deadlineAt !== undefined && Date.now() >= input.deadlineAt)
+        ) {
+          throw createKnowledgeError({
+            code: 'KNOWLEDGE_DEPENDENCY_TIMEOUT',
+            requestId: context.requestId,
+            traceId: context.traceId,
+            details: { dependency: 'citation_persistence' },
+          });
+        }
         const map = new Map<string, CitationApi>();
         for (const item of input.candidates) {
           map.set(
@@ -234,6 +277,7 @@ function fixture(
             citation({ candidate: item, searchId: input.searchId }),
           );
         }
+        citationCommits += 1;
         return map;
       },
       async findCurrent() {
@@ -260,6 +304,7 @@ function fixture(
     application: new S7SearchApplication(dependencies),
     audits,
     counts: () => ({ pipelineCreations, modelResolutions }),
+    citationState: () => ({ attempts: citationAttempts, commits: citationCommits }),
   };
 }
 
@@ -337,6 +382,38 @@ describe('S7 search application integration fixture', () => {
     expect(result.degraded).toContain(`space_${spaceId}_failed`);
   });
 
+  it('returns 207 when one Space loses only one hybrid channel', async () => {
+    const built = fixture({ failFullTextForSpace: otherSpaceId });
+    const result = await built.application.dispatch({
+      operationId: 'API-SEARCH-MULTI',
+      params: {},
+      query: {},
+      body: body({
+        searchMode: 'hybrid',
+        knowledgeSpaceIds: [spaceId, otherSpaceId],
+      }),
+      context,
+    });
+    expect(result.status).toBe(207);
+    expect(result.data).toMatchObject({ partial: true });
+    expect((result.data as { degraded: string[] }).degraded).toContain('fulltext_recall_failed');
+  });
+
+  it('uses the actual full-text channel for a failed full-text-only Space', async () => {
+    const built = fixture({ failFullTextForSpace: otherSpaceId });
+    const result = await built.application.searchMultiSpace(
+      body({
+        searchMode: 'fulltext',
+        knowledgeSpaceIds: [spaceId, otherSpaceId],
+      }),
+      context,
+    );
+    expect(result.partial).toBe(true);
+    expect(result.degraded).toContain(`space_${otherSpaceId}_failed`);
+    expect(result.degraded).toContain('fulltext_recall_failed');
+    expect(result.degraded).not.toContain('vector_recall_failed');
+  });
+
   it('maps missing or unauthorized Space to 404 and records failure audit', async () => {
     const { application, audits } = fixture();
     await expect(
@@ -377,5 +454,17 @@ describe('S7 search application integration fixture', () => {
       problem: { error: { code: 'KNOWLEDGE_DEPENDENCY_TIMEOUT' } },
     });
     expect(audits.at(-1)).toMatchObject({ outcome: 'failed' });
+  });
+
+  it('aborts citation persistence instead of committing after the total deadline', async () => {
+    const { application, citationState } = fixture({
+      citationDelayMs: 40,
+      totalTimeoutMs: 5,
+    });
+    await expect(application.searchSemantic(body(), context)).rejects.toMatchObject({
+      problem: { error: { code: 'KNOWLEDGE_DEPENDENCY_TIMEOUT' } },
+    });
+    await new Promise((resolve) => setTimeout(resolve, 60));
+    expect(citationState()).toEqual({ attempts: 1, commits: 0 });
   });
 });

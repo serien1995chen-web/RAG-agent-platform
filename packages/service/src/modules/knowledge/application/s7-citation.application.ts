@@ -63,6 +63,7 @@ export class S7CitationApplication {
     if (!this.input.signer.verify(citationId, context.workspaceId)) throw notFound(context);
     const record = await this.input.citations.findCurrent(citationId, context);
     if (!record) throw notFound(context);
+    await this.input.access.getAuthorizedSpace(record.knowledgeSpaceId, context);
     const now = this.input.now?.() ?? new Date();
     if (record.expiresAt.getTime() <= now.getTime()) throw notFound(context);
     const candidate = await this.input.authorizations.reauthorizeCitation(

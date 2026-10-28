@@ -18,6 +18,11 @@ import {
 } from '../../packages/service/src/index';
 import { S7DownstreamKnowledgeClient } from '../../packages/web/src/client/s7-downstream-knowledge-client';
 import {
+  AgentSemanticConsumer,
+  ChatHybridConsumer,
+  WorkflowMultiConsumer,
+} from './s7-consumer-fixtures';
+import {
   apiHeaders,
   consoleCookie,
   createSpace,
@@ -36,6 +41,7 @@ let connections: KnowledgeConnections;
 let connection: KnowledgeConnections['mongo'];
 let pool: KnowledgeConnections['pg'];
 let spaceId = '';
+let secondSpaceId = '';
 let sourceId = '';
 let segmentId = '';
 
@@ -168,6 +174,12 @@ const context: TenantContext = {
 beforeAll(async () => {
   app = await startS4App({ suffix, workspaceId, memberId, authToken });
   spaceId = await createSpace({ baseUrl: app.baseUrl, authToken, workspaceId, suffix });
+  secondSpaceId = await createSpace({
+    baseUrl: app.baseUrl,
+    authToken,
+    workspaceId,
+    suffix: `${suffix}b`,
+  });
   const source = await request(`/v1/knowledge/spaces/${spaceId}/sources`, {
     method: 'POST',
     idempotencyKey: `s7-source-${suffix}`,
@@ -259,6 +271,149 @@ describe('S7 real runtime Search page and HTTP contract', () => {
       sourceId,
       title: `Refund policy ${suffix}`,
     });
+  });
+
+  it('drives real app HTTP consumers for Chat, Agent, Workflow and citation', async () => {
+    const client = new S7DownstreamKnowledgeClient({
+      baseUrl: app.baseUrl,
+      workspaceId,
+      credential: authToken,
+      requestIdFactory: () => `s7-real-consumers-${suffix}`,
+    });
+    const chat = await new ChatHybridConsumer(client).answerInput({
+      knowledgeSpaceId: spaceId,
+      query: 'refunds',
+      tokenBudget: 5_000,
+      searchMode: 'hybrid',
+      usingRerank: false,
+    });
+    expect(chat.status).toBe(200);
+    expect(chat.data.items.length).toBeGreaterThan(0);
+
+    const agent = await new AgentSemanticConsumer(client).tool({
+      knowledgeSpaceId: spaceId,
+      query: 'refunds',
+      tokenBudget: 5_000,
+      searchMode: 'semantic',
+      usingRerank: false,
+    });
+    expect(agent.status).toBe(200);
+    expect(agent.data.items[0]?.segment.id).toBe(segmentId);
+
+    const workflow = await new WorkflowMultiConsumer(client).knowledgeNode({
+      knowledgeSpaceId: spaceId,
+      knowledgeSpaceIds: [spaceId, secondSpaceId],
+      query: 'refunds',
+      tokenBudget: 5_000,
+      searchMode: 'hybrid',
+      usingRerank: false,
+    });
+    expect(workflow.status).toBe(200);
+    expect(workflow.data.mode).toBe('multi_space');
+
+    const citation = await new AgentSemanticConsumer(client).citation(
+      agent.data.items[0]!.citation.citationId,
+    );
+    expect(citation.status).toBe(200);
+    expect(citation.data.segmentId).toBe(segmentId);
+  });
+
+  it('covers real app empty/degraded and 400/401/403/404/429 responses', async () => {
+    let requestSequence = 0;
+    const client = new S7DownstreamKnowledgeClient({
+      baseUrl: app.baseUrl,
+      workspaceId,
+      credential: authToken,
+      requestIdFactory: () => `s7-status-${suffix}-${++requestSequence}`,
+    });
+    const empty = await client.searchSemantic({
+      knowledgeSpaceId: secondSpaceId,
+      query: 'refunds',
+      tokenBudget: 5_000,
+      searchMode: 'semantic',
+      usingRerank: false,
+    });
+    expect(empty.status).toBe(200);
+    expect(empty.data.items).toEqual([]);
+    expect(empty.data.partial).toBe(false);
+
+    const degraded = await client.searchSemantic({
+      knowledgeSpaceId: spaceId,
+      query: 'refunds',
+      tokenBudget: 5_000,
+      searchMode: 'semantic',
+      usingRerank: true,
+    });
+    expect(degraded.status).toBe(200);
+    expect(degraded.data.degraded).toContain('rerank_not_configured');
+
+    const endpoint = `${app.baseUrl}/v1/knowledge/search/semantic`;
+    const requestBody = JSON.stringify({
+      knowledgeSpaceId: spaceId,
+      query: '',
+      tokenBudget: 5_000,
+    });
+    const invalid = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        ...apiHeaders({
+          authToken,
+          workspaceId,
+          idempotencyKey: `s7-invalid-${suffix}`,
+        }),
+        'content-type': 'application/json',
+      },
+      body: requestBody,
+    });
+    expect(invalid.status).toBe(400);
+
+    const unauthorized = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'x-workspace-id': workspaceId,
+        'content-type': 'application/json',
+      },
+      body: requestBody,
+    });
+    expect(unauthorized.status).toBe(401);
+
+    const forbidden = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${authToken}`,
+        'x-workspace-id': `ws_s7_other_${suffix}`,
+        'content-type': 'application/json',
+      },
+      body: requestBody,
+    });
+    expect(forbidden.status).toBe(403);
+
+    await expect(
+      client.searchSemantic({
+        knowledgeSpaceId: '65f1e5b2a1c9d4b7e8f0ffff',
+        query: 'refunds',
+        tokenBudget: 5_000,
+        searchMode: 'semantic',
+      }),
+    ).rejects.toMatchObject({ status: 404 });
+
+    const limited = await Promise.all(
+      Array.from({ length: 60 }, (_, index) =>
+        fetch(endpoint, {
+          method: 'POST',
+          headers: {
+            ...apiHeaders({
+              authToken,
+              workspaceId,
+              idempotencyKey: `s7-rate-${suffix}-${index}`,
+            }),
+            'content-type': 'application/json',
+          },
+          body: requestBody,
+        }),
+      ),
+    );
+    expect(limited.some((response) => response.status === 429)).toBe(true);
   });
 
   it('renders Search navigation and page at 360/768/1200 with axe', async () => {

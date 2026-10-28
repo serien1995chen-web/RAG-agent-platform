@@ -262,6 +262,66 @@ describe('TEST-SEARCH-001/002/005-BLOCK S7 Mongo data integration', () => {
     expect((await authorization.hydrate([candidate()], context)).items).toHaveLength(0);
   });
 
+  it('requires current Space read ACL even when the Source has independent permission', async () => {
+    const models = registerKnowledgeModels(connection);
+    await models.KnowledgeSource.updateOne(
+      { workspaceId, _id: sourceId },
+      { $set: { permissionState: 'independent' }, $inc: { version: 1 } },
+    );
+    await models.KnowledgeResourcePermission.create({
+      workspaceId,
+      knowledgeSpaceId: spaceId,
+      version: 1,
+      deletedAt: null,
+      createdByMemberId: memberId,
+      updatedByMemberId: memberId,
+      resourceType: 'source',
+      resourceId: sourceId,
+      principalType: 'member',
+      principalId: memberId,
+      permission: 'read',
+      inheritMode: 'override',
+      snapshotVersion: 1,
+    });
+    expect((await authorization.hydrate([candidate()], context)).items).toHaveLength(1);
+
+    await models.KnowledgeResourcePermission.deleteMany({
+      workspaceId,
+      resourceType: 'space',
+      resourceId: spaceId,
+    });
+    expect((await authorization.hydrate([candidate()], context)).items).toHaveLength(0);
+  });
+
+  it('rejects stale Segment source versions and missing full-text versions', async () => {
+    const models = registerKnowledgeModels(connection);
+    await models.KnowledgeSource.updateOne(
+      { workspaceId, _id: sourceId },
+      { $set: { sourceVersion: 2 }, $inc: { version: 1, permissionRevision: 1 } },
+    );
+    await models.KnowledgeSegment.updateOne(
+      { workspaceId, _id: segmentId },
+      { $set: { sourceVersion: 1, fullTextVersion: 1 } },
+    );
+    expect((await authorization.hydrate([candidate()], context)).items).toHaveLength(0);
+
+    await models.KnowledgeSource.updateOne(
+      { workspaceId, _id: sourceId },
+      { $set: { sourceVersion: 1 } },
+    );
+    await models.KnowledgeSegment.updateOne(
+      { workspaceId, _id: segmentId },
+      { $unset: { fullTextVersion: 1 } },
+    );
+    const fullTextCandidate = {
+      ...candidate({ indexId: undefined, indexVersion: undefined }),
+      scores: [{ type: 'fullText' as const, value: 1, index: 0 }],
+      fullTextScore: 1,
+      fullTextVersion: 1,
+    };
+    expect((await authorization.hydrate([fullTextCandidate], context)).items).toHaveLength(0);
+  });
+
   it('builds tag filter facts and resolves active bindings from Mongo', async () => {
     const models = registerKnowledgeModels(connection);
     const tagId = new Types.ObjectId();
