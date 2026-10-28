@@ -90,9 +90,12 @@ export function KnowledgeAppShell(props: { location: ShellLocation; children: Re
         py={2}
         bg="kn.ink"
         color="kn.surface"
+        opacity={0}
+        pointerEvents="none"
         transform="translateY(-160%)"
         borderRadius="sm"
-        _focus={{ transform: 'translateY(0)' }}
+        _focus={{ opacity: 1, pointerEvents: 'auto', transform: 'translateY(0)' }}
+        _focusVisible={{ opacity: 1, pointerEvents: 'auto', transform: 'translateY(0)' }}
       >
         {t('nav.skipToContent')}
       </Box>

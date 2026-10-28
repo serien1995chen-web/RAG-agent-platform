@@ -25,6 +25,7 @@ const context: TenantContext = {
 const ref: ObjectRefView = {
   blobId: '65f1e5b2a1c9d4b7e8f09abc',
   workspaceId: context.workspaceId,
+  createdByMemberId: context.memberId,
   knowledgeSpaceId: '65f1e5b2a1c9d4b7e8f01234',
   provider: 'minio',
   bucket: 'kb-test',

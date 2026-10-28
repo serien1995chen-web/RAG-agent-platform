@@ -76,6 +76,7 @@ function imageObject() {
   return {
     blobId: imageId,
     workspaceId: context.workspaceId,
+    createdByMemberId: context.memberId,
     knowledgeSpaceId: spaceId,
     provider: 'minio' as const,
     bucket: 'private',
@@ -107,6 +108,7 @@ function application(
   options: {
     reauthorized?: boolean;
     objectSpaceId?: string;
+    objectMemberId?: string;
     objectPurpose?: 'source' | 'image';
     filterMatch?: boolean;
     failImageVector?: boolean;
@@ -142,6 +144,7 @@ function application(
         findObjectRef: async () => ({
           ...imageObject(),
           knowledgeSpaceId: options.objectSpaceId ?? spaceId,
+          createdByMemberId: options.objectMemberId ?? context.memberId,
           purpose: options.objectPurpose ?? 'image',
         }),
       },
@@ -373,6 +376,23 @@ describe('TEST-SEARCH-006-BLOCK / TEST-MULTI-001-BLOCK image search', () => {
 
   it('returns 404 for a query ObjectRef that is not purpose=image', async () => {
     const { instance } = application({ objectPurpose: 'source' });
+    await expect(
+      instance.search(
+        {
+          knowledgeSpaceId: spaceId,
+          query: 'refund diagram',
+          tokenBudget: 5_000,
+          imageUploadIds: [imageId],
+        },
+        context,
+      ),
+    ).rejects.toMatchObject({
+      problem: { error: { code: 'KNOWLEDGE_NOT_FOUND' } },
+    });
+  });
+
+  it('returns 404 for a query ObjectRef created by another member', async () => {
+    const { instance } = application({ objectMemberId: `${context.memberId}_other` });
     await expect(
       instance.search(
         {

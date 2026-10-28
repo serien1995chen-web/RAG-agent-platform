@@ -251,10 +251,10 @@ describe('TEST-SEARCH-008-BLOCK / TEST-X-DEEP-BUDGET deep search', () => {
     expect(issue).not.toHaveBeenCalled();
   });
 
-  it('recomputes the per-query budget from actual usage and stops before overspend', async () => {
+  it('uses provider usage from the search port to stop before the next query', async () => {
     const { instance, collectBudgets } = application({
-      plannerUsage: { inputTokens: 4_500, outputTokens: 0 },
-      searchUsage: { inputTokens: 1_500, outputTokens: 0 },
+      plannerUsage: { inputTokens: 4_200, outputTokens: 0 },
+      searchUsage: { inputTokens: 1_777, outputTokens: 23 },
       queries: ['first query', 'second query'],
     });
     const result = await instance.search(
@@ -269,9 +269,9 @@ describe('TEST-SEARCH-008-BLOCK / TEST-X-DEEP-BUDGET deep search', () => {
       },
       context,
     );
-    expect(collectBudgets).toEqual([1_500]);
+    expect(collectBudgets).toEqual([1_800]);
     expect(result.stopReason).toBe('token_budget');
-    expect(result.usage).toEqual({ inputTokens: 6_000, outputTokens: 0 });
+    expect(result.usage).toEqual({ inputTokens: 5_977, outputTokens: 23 });
   });
 
   it('authorizes every requested Space before invoking the planner', async () => {

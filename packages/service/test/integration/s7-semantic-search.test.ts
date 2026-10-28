@@ -90,6 +90,7 @@ function fixture(
     vectorDelayMs?: number;
     totalTimeoutMs?: number;
     citationDelayMs?: number;
+    modelUsage?: { inputTokens: number; outputTokens: number };
   } = {},
 ) {
   const audits: Array<Record<string, unknown>> = [];
@@ -199,6 +200,7 @@ function fixture(
       create(input: S7SearchPipelineFactoryInput): SearchEngineDeps {
         pipelineCreations += 1;
         return {
+          ...(options.modelUsage ? { modelUsage: { ...options.modelUsage } } : {}),
           vectors: {
             async embRecall() {
               if (options.vectorDelayMs) {
@@ -325,6 +327,18 @@ describe('S7 search application integration fixture', () => {
     expect(result.items).toHaveLength(1);
     expect(result.items[0]?.citation.sourceId).toBe(sourceId);
     expect(result.partial).toBe(false);
+  });
+
+  it('returns actual model usage through the candidate collection port', async () => {
+    const modelUsage = { inputTokens: 7_777, outputTokens: 19 };
+    const { application } = fixture({ modelUsage });
+    const result = await application.collectCandidates({
+      request: body({ searchMode: 'semantic' }) as never,
+      knowledgeSpaceIds: [spaceId],
+      mode: 'semantic',
+      context,
+    });
+    expect(result.usage).toEqual(modelUsage);
   });
 
   it('short-circuits an empty source allowlist before model or vector work', async () => {

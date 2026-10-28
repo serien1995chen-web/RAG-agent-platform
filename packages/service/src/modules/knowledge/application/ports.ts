@@ -420,6 +420,7 @@ export interface UploadSessionView {
 export interface ObjectRefView {
   blobId: string;
   workspaceId: string;
+  createdByMemberId: string;
   knowledgeSpaceId: string;
   provider: KnowledgeObjectProvider;
   bucket: string;

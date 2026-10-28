@@ -2,7 +2,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import AxeBuilder from '@axe-core/playwright';
-import { chromium, expect as playwrightExpect } from '@playwright/test';
+import { chromium, expect as playwrightExpect, type Page } from '@playwright/test';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
   createKnowledgeConnections,
@@ -49,6 +49,69 @@ let textSourceId = '';
 let textSegmentId = '';
 let imageSourceId = '';
 let imageBlobRefId = '';
+
+async function assertSkipLinkDoesNotOverlap(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+  });
+  await page.waitForTimeout(50);
+  const geometry = await page.evaluate(() => {
+    const skip = document.querySelector<HTMLElement>('.skip-link');
+    const nav = document.querySelector<HTMLElement>('aside[aria-label="Primary navigation"]');
+    const heading = document.querySelector<HTMLElement>('h1');
+    if (!skip)
+      return { present: false, visible: false, overlapsNav: false, overlapsHeading: false };
+    const skipBox = skip.getBoundingClientRect();
+    const navBox = nav?.getBoundingClientRect();
+    const headingBox = heading?.getBoundingClientRect();
+    const style = getComputedStyle(skip);
+    const intersects = (left: DOMRect | undefined, right: DOMRect | undefined): boolean => {
+      if (!left || !right) return false;
+      return !(
+        left.right <= right.left ||
+        right.right <= left.left ||
+        left.bottom <= right.top ||
+        right.bottom <= left.top
+      );
+    };
+    const visible =
+      style.display !== 'none' &&
+      style.visibility !== 'hidden' &&
+      style.opacity !== '0' &&
+      style.clipPath !== 'inset(50%)' &&
+      skipBox.width > 1 &&
+      skipBox.height > 1 &&
+      skipBox.bottom > 0 &&
+      skipBox.right > 0;
+    return {
+      present: true,
+      visible,
+      overlapsNav: visible && intersects(skipBox, navBox),
+      overlapsHeading: visible && intersects(skipBox, headingBox),
+    };
+  });
+  expect(geometry.present).toBe(true);
+  expect(geometry.visible).toBe(false);
+  expect(geometry.overlapsNav).toBe(false);
+  expect(geometry.overlapsHeading).toBe(false);
+}
+
+async function assertSkipLinkKeyboardFocus(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+  });
+  await page.keyboard.press('Tab');
+  const state = await page.evaluate(() => {
+    const skip = document.querySelector<HTMLElement>('.skip-link');
+    if (!skip) return { focused: false, visible: false };
+    const style = getComputedStyle(skip);
+    return {
+      focused: document.activeElement === skip,
+      visible: style.opacity !== '0' && style.pointerEvents !== 'none',
+    };
+  });
+  expect(state).toEqual({ focused: true, visible: true });
+}
 
 function requiredEnv(name: string): string {
   const value = process.env[name]?.trim();
@@ -553,6 +616,7 @@ describe('S8 real app image and deep search routes', () => {
         await playwrightExpect(
           page.getByText('refund-flow.png', { exact: false }).first(),
         ).toBeVisible();
+        await assertSkipLinkKeyboardFocus(page);
         await page.getByRole('button', { name: '预览' }).first().click();
         await playwrightExpect(page.getByRole('dialog')).toBeVisible();
         await page.keyboard.press('Escape');
@@ -567,6 +631,7 @@ describe('S8 real app image and deep search routes', () => {
             (violation) => violation.impact === 'serious' || violation.impact === 'critical',
           ),
         ).toEqual([]);
+        await assertSkipLinkDoesNotOverlap(page);
         const imagesShot = await page.screenshot({
           fullPage: true,
           path: join(screenshotDir, `s8-images-${viewport.name}.png`),
@@ -594,6 +659,16 @@ describe('S8 real app image and deep search routes', () => {
         await playwrightExpect(page.getByText('停止原因:', { exact: false })).toBeVisible({
           timeout: 20_000,
         });
+        await page.mouse.move(0, 0);
+        await playwrightExpect(page.getByRole('button', { name: '运行深度检索' })).toHaveAttribute(
+          'aria-busy',
+          'false',
+        );
+        await page.waitForTimeout(250);
+        const runButtonOpacity = await page
+          .getByRole('button', { name: '运行深度检索' })
+          .evaluate((button) => getComputedStyle(button).opacity);
+        expect(runButtonOpacity).toBe('1');
         const deepOverflow = await page.evaluate(
           () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
         );
@@ -604,6 +679,7 @@ describe('S8 real app image and deep search routes', () => {
             (violation) => violation.impact === 'serious' || violation.impact === 'critical',
           ),
         ).toEqual([]);
+        await assertSkipLinkDoesNotOverlap(page);
         const deepShot = await page.screenshot({
           fullPage: true,
           path: join(screenshotDir, `s8-deep-${viewport.name}.png`),

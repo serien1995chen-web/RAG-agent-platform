@@ -885,7 +885,16 @@ export class FileApplication {
         });
       }
     }
-    await this.assertFileReadable(ref, effectiveContext);
+    const unboundQueryImage =
+      claims !== null &&
+      ref.state === 'active' &&
+      ref.purpose === 'image' &&
+      ref.sourceId === null &&
+      ref.createdByMemberId === claims.memberId &&
+      ref.knowledgeSpaceId === claims.knowledgeSpaceId;
+    if (!unboundQueryImage) {
+      await this.assertFileReadable(ref, effectiveContext);
+    }
     const object = await this.objectStore.getObject(
       this.objectStore.bucket,
       ref.objectKey,

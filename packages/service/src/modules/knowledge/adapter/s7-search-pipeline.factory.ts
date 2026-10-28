@@ -38,16 +38,30 @@ export class S7SearchPipelineFactory implements S7SearchPipelineFactoryPort {
     const fullTextAdapter = new S7FullTextSearchAdapter({
       search: (request) => this.input.fullText.search(request, input.context),
     });
+    const modelUsage = { inputTokens: 0, outputTokens: 0 };
+    const recordUsage = (usage: { inputTokens: number; outputTokens: number }) => {
+      modelUsage.inputTokens += usage.inputTokens;
+      modelUsage.outputTokens += usage.outputTokens;
+    };
     return {
+      modelUsage,
       vectors: { embRecall: vectorAdapter.embRecall },
       embedding: {
-        embed: (request) => modelAdapter.embed(request, input.context),
+        embed: async (request) => {
+          const result = await modelAdapter.embedWithUsage(request, input.context);
+          recordUsage(result.usage);
+          return result.vectors;
+        },
       },
       fullText: { search: fullTextAdapter.search },
       ...(input.usingRerank && input.models.rerank
         ? {
             rerank: {
-              rerank: (request) => modelAdapter.rerank(request, input.context),
+              rerank: async (request) => {
+                const result = await modelAdapter.rerankWithUsage(request, input.context);
+                recordUsage(result.usage);
+                return result.ranked;
+              },
             },
           }
         : {}),

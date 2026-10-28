@@ -67,6 +67,7 @@ function emptyResult(request: SearchRequest, degraded: DegradedInfo[] = []): Sea
       partial: false,
       rerankApplied: false,
     },
+    modelUsage: { inputTokens: 0, outputTokens: 0 },
   };
 }
 
@@ -422,6 +423,10 @@ export function createSearchEngine(
               request.similarity > 0 && (rerankApplied || request.searchMode === 'embedding'),
           }
         : finalizeSearchCandidates(request, candidates, rerankApplied);
+    const modelUsage = deps.modelUsage ?? {
+      inputTokens: countTokens(request.textQueries.join(' ')) + rerankInputTokens,
+      outputTokens: 0,
+    };
 
     return {
       citations: finalized.items.map((candidate, index) =>
@@ -441,6 +446,7 @@ export function createSearchEngine(
         partial,
         rerankApplied,
       },
+      modelUsage: { ...modelUsage },
     };
   };
 

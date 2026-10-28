@@ -38,6 +38,7 @@ function application() {
       findObjectRef: async () => ({
         blobId: imageId,
         workspaceId: context.workspaceId,
+        createdByMemberId: context.memberId,
         knowledgeSpaceId: spaceId,
         provider: 'minio',
         bucket: 'private',

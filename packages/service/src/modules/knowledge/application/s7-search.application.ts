@@ -274,10 +274,7 @@ export class S7SearchApplication {
       partial: result.stats.partial ?? false,
       rerankApplied: result.stats.rerankApplied ?? false,
       filterSummary: compiled.summary,
-      usage: {
-        inputTokens: (result.stats.embeddingTokens ?? 0) + (result.stats.rerankInputTokens ?? 0),
-        outputTokens: 0,
-      },
+      usage: result.modelUsage,
     };
   }
 

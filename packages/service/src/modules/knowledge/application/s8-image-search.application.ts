@@ -118,6 +118,7 @@ export class S8ImageSearchApplication {
         !object ||
         object.state !== 'active' ||
         object.workspaceId !== context.workspaceId ||
+        object.createdByMemberId !== context.memberId ||
         object.knowledgeSpaceId !== request.knowledgeSpaceId ||
         object.purpose !== 'image' ||
         (object.expiresAt !== null && Date.parse(object.expiresAt) <= Date.now())

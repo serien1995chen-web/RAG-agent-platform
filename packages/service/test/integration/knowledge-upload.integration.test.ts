@@ -6,6 +6,7 @@ import { KnowledgeApiError, createKnowledgeError } from '@kb/contracts';
 import { FileTicketService, MinioKnowledgeObjectStore } from '../../../../sdk/storage/src/index';
 import { ObjectStoreArchiveSafetyAdapter } from '../../../../projects/app/src/runtime/archive-safety.adapter';
 import { FileApplication } from '../../src/modules/knowledge/application/file.application';
+import { S8FileTicketAdapter } from '../../src/modules/knowledge/adapter/s8-file-ticket.adapter';
 import { ObjectLifecycleService } from '../../src/modules/knowledge/application/object-lifecycle';
 import { SourceFileApplication } from '../../src/modules/knowledge/application/source-preview';
 import {
@@ -121,12 +122,13 @@ async function putSingle(
   sizeBytes: number,
   name = 'upload.txt',
   body = Buffer.from('knowledge upload'),
+  mimeType = 'text/plain',
 ) {
   const session = await files.init(
     {
       knowledgeSpaceId,
       name,
-      mimeType: 'text/plain',
+      mimeType,
       sizeBytes,
     },
     context,
@@ -1020,6 +1022,73 @@ describe('TEST-FILE-001-BLOCK upload session', () => {
         kind: 'export',
       }),
     ).toBe(jobsBefore);
+  });
+
+  it('TEST-MULTI-001-RR01 serves signed unbound query images only to their creator', async () => {
+    const imageBytes = Buffer.from(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
+      'base64',
+    );
+    const { session } = await putSingle(
+      imageBytes.byteLength,
+      `query-${suffix}.png`,
+      imageBytes,
+      'image/png',
+    );
+    const completed = await files.complete({ uploadId: session.uploadId, parts: [] }, context);
+    await connection.models.KnowledgeObjectRef.updateOne(
+      {
+        workspaceId: context.workspaceId,
+        _id: new mongoose.Types.ObjectId(completed.blobId),
+      },
+      { $set: { purpose: 'image', sourceId: null } },
+    );
+
+    const tickets = new S8FileTicketAdapter(fileTickets);
+    const issued = tickets.issueImage({
+      workspaceId: context.workspaceId,
+      blobId: completed.blobId,
+      sourceId: null,
+      knowledgeSpaceId,
+      ttlSeconds: 300,
+      context,
+    });
+    const ticket = new URL(issued.url).searchParams.get('ticket');
+    expect(ticket).not.toBeNull();
+    const content = await files.content(completed.blobId, null, ticket, {
+      ...context,
+      workspaceId: 'ticket',
+      memberId: 'ticket-reader',
+    });
+    const chunks: Buffer[] = [];
+    for await (const chunk of content.body) chunks.push(Buffer.from(chunk));
+    expect(Buffer.concat(chunks)).toEqual(imageBytes);
+    expect(content.contentType).toBe('image/png');
+
+    const otherMember = fileTickets.issue(
+      {
+        workspaceId: context.workspaceId,
+        memberId: `${context.memberId}_other`,
+        isWorkspaceOwner: false,
+        scopes: ['knowledge:read'],
+        blobId: completed.blobId,
+        sourceId: null,
+        knowledgeSpaceId,
+        disposition: 'inline',
+        ttlSeconds: 300,
+      },
+      context.requestId,
+      context.traceId,
+    );
+    const otherTicket = new URL(otherMember.url).searchParams.get('ticket');
+    const denied = await files
+      .content(completed.blobId, null, otherTicket, {
+        ...context,
+        workspaceId: 'ticket',
+        memberId: 'ticket-reader',
+      })
+      .catch((error: unknown) => error);
+    expect(errorCode(denied)).toBe('KNOWLEDGE_NOT_FOUND');
   });
 
   it('TEST-FILE-003-F08 returns 403 when Source ACL denies the same workspace member', async () => {
