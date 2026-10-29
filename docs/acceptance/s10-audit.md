@@ -3,7 +3,7 @@
 ## Status
 
 - Task: `S10-T03`
-- Candidate: `c5d70d704fcdb9f29130fa64b8b027b6c24ad29f`
+- Candidate: `319dbd4bf9b5e3a956c475beb8a1c950fcb47cd2`
 - Result: `PASS`
 
 ## Delivered
@@ -29,7 +29,7 @@
 
 ## Commands
 
-- `pnpm test:integration`: exit 0, service 33 files / 176 tests.
+- `pnpm test:integration`: exit 0, service 33 files / 179 tests.
 - `pnpm test:security`: exit 0, 5 files / 9 tests.
 - `pnpm test:tenant`: exit 0, 10 files / 19 tests.
 

@@ -7,7 +7,7 @@
 | Wave / stage / owner            | `W4 / S10 / personB`                       |
 | Branch                          | `feat/kb-s10-ops-admin`                    |
 | W4 baseline                     | `14a3b9e96fcab7b6a1f1e92ccdf4dc775719ee7d` |
-| S10 source candidate            | `c5d70d704fcdb9f29130fa64b8b027b6c24ad29f` |
+| S10 source candidate            | `319dbd4bf9b5e3a956c475beb8a1c950fcb47cd2` |
 | Tasks                           | `S10-T01...T08 PASS`                       |
 | DATA Capability closure         | `57/57`                                    |
 | S10 operations                  | `10/10`                                    |
@@ -40,6 +40,7 @@ pending.
 
 - `docs/acceptance/s10-phase1-gate.md`
 - `docs/acceptance/s10-stage-evidence.md`
+- `docs/acceptance/s10-review-resolution.md`
 
 Both bind the source candidate above. S11 rebase will invalidate these SHAs and
 require a new W4 candidate.

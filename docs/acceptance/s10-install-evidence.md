@@ -8,7 +8,7 @@
 - Branch: `feat/kb-s10-ops-admin`
 - Worktree: `~/RAG-agent-platform-w4-s10-personB`
 - Base: `14a3b9e96fcab7b6a1f1e92ccdf4dc775719ee7d`
-- Source candidate: `c5d70d704fcdb9f29130fa64b8b027b6c24ad29f`
+- Source candidate: `319dbd4bf9b5e3a956c475beb8a1c950fcb47cd2`
 - Installation: `EXECUTED`
 - Install exit code: `NOT_CAPTURED`
 - Dependency gate: `PASS_FROM_INSTALLED_ARTIFACTS`

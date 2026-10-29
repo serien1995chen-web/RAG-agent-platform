@@ -3,7 +3,7 @@
 ## Candidate
 
 ```text
-candidateSha=c5d70d704fcdb9f29130fa64b8b027b6c24ad29f
+candidateSha=319dbd4bf9b5e3a956c475beb8a1c950fcb47cd2
 baseSha=14a3b9e96fcab7b6a1f1e92ccdf4dc775719ee7d
 branch=feat/kb-s10-ops-admin
 owner=personB
@@ -28,26 +28,27 @@ uiEvidence=TEST-X-FRONTEND-A11Y PASS
 The stage suite passed:
 
 ```text
-unit service 28 files / 125 tests
+unit service 28 files / 129 tests
 contract 21 files / 100 tests
 security 5 files / 9 tests
-integration service 33 files / 176 tests
+integration service 33 files / 179 tests
 tenant 10 files / 19 tests
-concurrency 10 files / 19 tests
-fault 12 files / 37 tests
+concurrency 10 files / 21 tests
+fault 12 files / 38 tests
 E2E 16 files / 67 tests
 ```
 
 ## Key Artifacts
 
 ```text
-test-results/s10-final/e2e.log
-test-results/s10-final/integration.log
-test-results/s10-final/fault.log
-test-results/s10-final/security.log
-test-results/s10-final/build.log
-test-results/s10-final/build-workers.log
-test-results/s10-final/compose-config.log
+test-results/s10-review-fix/e2e.log
+test-results/s10-review-fix/integration.log
+test-results/s10-review-fix/fault.log
+test-results/s10-review-fix/security.log
+test-results/s10-review-fix/build.log
+test-results/s10-review-fix/build-workers.log
+test-results/s10-review-fix/compose-config.log
+docs/acceptance/s10-review-resolution.md
 ```
 
 S10 screenshots use these prefixes:
