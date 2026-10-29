@@ -133,28 +133,13 @@ export class KnowledgeOutboxDispatcher {
     registerKnowledgeModels(connection);
   }
 
-  async dispatchOnce(context: TenantContext): Promise<{ dispatched: boolean; eventKey?: string }> {
+  private async deliverClaimedEvent(
+    event: KnowledgeOutboxEventDoc & { _id: Types.ObjectId },
+    context: TenantContext,
+  ): Promise<{ dispatched: boolean; eventKey?: string }> {
     const workspaceId = requireWorkspaceId(context);
     const model = this.connection.models.KnowledgeOutboxEvent;
-    if (!model) return { dispatched: false };
-    const now = new Date();
-    const stalePublishingBefore = new Date(now.getTime() - 30_000);
-    const event = await model.findOneAndUpdate(
-      {
-        workspaceId,
-        $or: [
-          { status: 'pending', availableAt: { $lte: now } },
-          { status: 'publishing', updatedAt: { $lte: stalePublishingBefore } },
-        ],
-      },
-      {
-        $set: { status: 'publishing', updatedByMemberId: context.memberId },
-        $inc: { version: 1, attempts: 1 },
-      },
-      { new: true, sort: { availableAt: 1 } },
-    );
-    if (!event) return { dispatched: false };
-
+    if (!model) return { dispatched: false, eventKey: event.eventKey };
     const queueName = String(event.payload.queue ?? '') as KnowledgeQueueName;
     if (!(KNOWLEDGE_QUEUE_NAMES as readonly string[]).includes(queueName)) {
       await model.updateOne(
@@ -220,6 +205,64 @@ export class KnowledgeOutboxDispatcher {
       );
       return { dispatched: false, eventKey: event.eventKey };
     }
+  }
+
+  async dispatchOnce(context: TenantContext): Promise<{ dispatched: boolean; eventKey?: string }> {
+    const workspaceId = requireWorkspaceId(context);
+    const model = this.connection.models.KnowledgeOutboxEvent;
+    if (!model) return { dispatched: false };
+    const now = new Date();
+    const stalePublishingBefore = new Date(now.getTime() - 30_000);
+    const event = await model.findOneAndUpdate(
+      {
+        workspaceId,
+        $or: [
+          { status: 'pending', availableAt: { $lte: now } },
+          { status: 'publishing', updatedAt: { $lte: stalePublishingBefore } },
+        ],
+      },
+      {
+        $set: { status: 'publishing', updatedByMemberId: context.memberId },
+        $inc: { version: 1, attempts: 1 },
+      },
+      { new: true, sort: { availableAt: 1 } },
+    );
+    if (!event) return { dispatched: false };
+    return this.deliverClaimedEvent(
+      event.toObject() as KnowledgeOutboxEventDoc & { _id: Types.ObjectId },
+      context,
+    );
+  }
+
+  async dispatchById(
+    eventId: string,
+    expectedVersion: number,
+    context: TenantContext,
+  ): Promise<{ dispatched: boolean; eventKey?: string }> {
+    const workspaceId = requireWorkspaceId(context);
+    const model = this.connection.models.KnowledgeOutboxEvent;
+    if (!model || !Types.ObjectId.isValid(eventId)) return { dispatched: false };
+    const now = new Date();
+    const event = await model.findOneAndUpdate(
+      {
+        _id: new Types.ObjectId(eventId),
+        workspaceId,
+        version: expectedVersion,
+        status: 'pending',
+        availableAt: { $lte: now },
+        deletedAt: null,
+      },
+      {
+        $set: { status: 'publishing', updatedByMemberId: context.memberId },
+        $inc: { version: 1, attempts: 1 },
+      },
+      { new: true },
+    );
+    if (!event) return { dispatched: false };
+    return this.deliverClaimedEvent(
+      event.toObject() as KnowledgeOutboxEventDoc & { _id: Types.ObjectId },
+      context,
+    );
   }
 
   async replay(eventId: string, context: TenantContext): Promise<boolean> {

@@ -52,6 +52,8 @@ export interface S10StatusView {
     verificationStatus: S10VerificationStatus;
     lastAttemptAt?: string | null;
   }>;
+  queueProbe: S10ProbeState;
+  connectorProbe: S10ProbeState;
   securityChecks: {
     apiKeyHmacConfigured: boolean;
     scopeEnforced: boolean;
@@ -110,6 +112,11 @@ export class S10StatusApplication {
     const connectorsVerified = view.connectorProbes.every((entry) =>
       verificationHealthy(entry.verificationStatus),
     );
+    const queueHealthy =
+      view.queueProbe.status === 'ok' && verificationHealthy(view.queueProbe.verificationStatus);
+    const connectorProbeHealthy =
+      view.connectorProbe.status === 'ok' &&
+      verificationHealthy(view.connectorProbe.verificationStatus);
     return {
       ...view,
       status:
@@ -118,6 +125,8 @@ export class S10StatusApplication {
         vectorHealthy &&
         modelHealthy &&
         connectorsVerified &&
+        queueHealthy &&
+        connectorProbeHealthy &&
         view.reconciliation.state === 'ok'
           ? 'ok'
           : 'degraded',
@@ -161,6 +170,8 @@ export class S10StatusApplication {
         latencyMs: 0,
       },
       connectorProbes: [],
+      queueProbe: down,
+      connectorProbe: down,
       securityChecks: {
         apiKeyHmacConfigured: false,
         scopeEnforced: false,

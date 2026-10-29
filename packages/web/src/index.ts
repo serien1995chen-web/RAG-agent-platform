@@ -285,6 +285,7 @@ export {
   type ProblemView,
 } from './i18n';
 export { createKnowledgeQueryClient, KnowledgeQueryProvider } from './query/knowledge-query-client';
+export { useQueryClient } from '@tanstack/react-query';
 export { knowledgeQueryKeys } from './query/query-keys';
 export { loadCompleteModelCatalog, useKnowledgeModelCatalog } from './query/model-catalog';
 export type { ModelCatalogPage, ModelPageInfo } from './query/model-catalog';

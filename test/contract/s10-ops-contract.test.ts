@@ -101,6 +101,8 @@ describe('S10 operations contract', () => {
     expect(status.properties).toHaveProperty('dependencies');
     expect(status.properties).toHaveProperty('securityChecks');
     expect(status.properties).toHaveProperty('connectorProbes');
+    expect(status.properties).toHaveProperty('queueProbe');
+    expect(status.properties).toHaveProperty('connectorProbe');
     const reconcile = target.components.schemas.ReconcileCreate as {
       properties: { scope: { enum: string[] } };
     };

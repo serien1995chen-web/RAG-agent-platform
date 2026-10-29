@@ -222,6 +222,7 @@ export class S10OperationsRepository implements S10AuditQueryPort, S10OpsReposit
       batchKey: string;
       repair?: boolean;
       outboxEventId?: string;
+      outboxVersion?: number;
     },
     context: TenantContext,
     session: ClientSession,
@@ -262,6 +263,7 @@ export class S10OperationsRepository implements S10AuditQueryPort, S10OpsReposit
             workspaceId: context.workspaceId,
             repair: input.repair ?? false,
             ...(input.outboxEventId ? { outboxEventId: input.outboxEventId } : {}),
+            ...(input.outboxVersion ? { outboxVersion: input.outboxVersion } : {}),
           },
           progress: { stage: 'queued', completed: 0, total: 1, percent: 0 },
           attempts: 0,
@@ -448,6 +450,7 @@ export class S10OperationsRepository implements S10AuditQueryPort, S10OpsReposit
             scope: input.eventId,
           }),
           outboxEventId: input.eventId,
+          outboxVersion: input.version + 1,
         },
         context,
         session,
@@ -455,6 +458,57 @@ export class S10OperationsRepository implements S10AuditQueryPort, S10OpsReposit
     });
     await this.enqueue(job, 'knowledge-outbox', context);
     return { id: input.eventId, status: 'accepted', jobId: String(job._id) };
+  }
+
+  async failOutboxDelivery(
+    input: {
+      outboxEventId: string;
+      eventId: string;
+      errorCode: string;
+      deadLetter: boolean;
+    },
+    context: TenantContext,
+  ): Promise<void> {
+    if (!Types.ObjectId.isValid(input.outboxEventId)) {
+      throw tenantError(context, 'KNOWLEDGE_VALIDATION_FAILED', {
+        field: 'outboxEventId',
+        reason: 'invalid_object_id',
+      });
+    }
+    const result = await this.outbox.updateOne(
+      {
+        workspaceId: requireWorkspaceId(context),
+        _id: new Types.ObjectId(input.outboxEventId),
+        deletedAt: null,
+        status: { $in: ['publishing', 'published'] },
+        'payload.usageEventId': input.eventId,
+      },
+      {
+        $set: {
+          status: input.deadLetter ? 'dead_letter' : 'failed',
+          availableAt: new Date(),
+          error: { code: input.errorCode, retryable: true },
+          updatedByMemberId: context.memberId,
+        },
+        $inc: { version: 1 },
+      },
+    );
+    if (result.modifiedCount === 1) return;
+    const current = await this.outbox
+      .findOne({
+        workspaceId: requireWorkspaceId(context),
+        _id: new Types.ObjectId(input.outboxEventId),
+        deletedAt: null,
+        'payload.usageEventId': input.eventId,
+      })
+      .select({ status: 1 })
+      .lean();
+    if (!current || !['failed', 'dead_letter'].includes(current.status)) {
+      throw tenantError(context, 'KNOWLEDGE_CONFLICT', {
+        reason: 'outbox_failure_cas',
+        outboxEventId: input.outboxEventId,
+      });
+    }
   }
 
   async recoverStaleJobs(context: TenantContext): Promise<number> {

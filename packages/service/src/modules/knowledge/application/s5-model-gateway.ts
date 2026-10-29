@@ -14,6 +14,8 @@ import type {
   S5UsageUnit,
   S10ModelQuotaPort,
 } from './s5-model-gateway.port';
+import { ZERO_V1_PRICING, type S10PricingProfile } from '../../../shared/config/s10-profiles';
+import { computeUsagePointsMicros } from '../domain/s10-usage';
 import { S5ModelTransportError as TransportError } from './s5-model-gateway.port';
 
 const MAX_INPUT_TOKENS = 32_000;
@@ -47,6 +49,67 @@ function usageUnit(kind: S5ModelType): S5UsageUnit {
 function approximateTokens(text: string | undefined): number {
   if (!text) return 0;
   return Math.max(1, Math.ceil([...text].length / 4));
+}
+
+export function estimateInvocationPointsMicros(
+  invocation: S5ModelInvocation,
+  pricing: S10PricingProfile,
+): number {
+  const base = { status: 200, intent: false, pricing } as const;
+  switch (invocation.kind) {
+    case 'llm':
+      return computeUsagePointsMicros({
+        ...base,
+        kind: 'llm',
+        quantity: MAX_INPUT_TOKENS + invocation.maxOutputTokens,
+        unit: 'token',
+        inputTokens: MAX_INPUT_TOKENS,
+        outputTokens: invocation.maxOutputTokens,
+      });
+    case 'vlm': {
+      const inputTokens = MAX_INPUT_TOKENS + invocation.imageUrls.length * 1_000;
+      const outputTokens =
+        invocation.maxOutputTokens === undefined ? MAX_OUTPUT_TOKENS : invocation.maxOutputTokens;
+      return computeUsagePointsMicros({
+        ...base,
+        kind: 'vlm',
+        quantity: inputTokens + outputTokens,
+        unit: 'token',
+        inputTokens,
+        outputTokens,
+      });
+    }
+    case 'embedding':
+      return computeUsagePointsMicros({
+        ...base,
+        kind: 'embedding',
+        quantity: MAX_EMBEDDING_TOKENS,
+        unit: 'token',
+        inputTokens: MAX_EMBEDDING_TOKENS,
+      });
+    case 'rerank':
+      return computeUsagePointsMicros({
+        ...base,
+        kind: 'rerank',
+        quantity: MAX_RERANK_TOKENS,
+        unit: 'token',
+        inputTokens: MAX_RERANK_TOKENS,
+      });
+    case 'stt':
+      return computeUsagePointsMicros({
+        ...base,
+        kind: 'stt',
+        quantity: Math.ceil(invocation.audio.byteLength / 16_000),
+        unit: 'second',
+      });
+    case 'tts':
+      return computeUsagePointsMicros({
+        ...base,
+        kind: 'tts',
+        quantity: Math.ceil([...invocation.text].length / 10),
+        unit: 'second',
+      });
+  }
 }
 
 export function embeddingInputItems(invocation: {
@@ -188,6 +251,7 @@ export class S5ModelGateway implements S5ModelGatewayPort {
       adapter: S5ModelInvocationAdapterPort;
       usage: S5UsageRecorderPort;
       quotaGate?: S10ModelQuotaPort;
+      pricing?: S10PricingProfile;
       limiter?: S5KeyedLimiterPort;
       maxAttempts?: number;
       sleep?: (ms: number) => Promise<void>;
@@ -338,15 +402,20 @@ export class S5ModelGateway implements S5ModelGatewayPort {
         });
       };
       if (this.input.quotaGate) {
+        const estimatedPointsMicros = estimateInvocationPointsMicros(
+          request,
+          this.input.pricing ?? ZERO_V1_PRICING,
+        );
         await this.input.quotaGate.check(
           {
             operation: 'model',
             workspaceId: request.workspaceId,
             ...(request.knowledgeSpaceId ? { knowledgeSpaceId: request.knowledgeSpaceId } : {}),
+            estimatedPointsMicros,
           },
           request.context,
         );
-        return this.input.quotaGate.withModelSlot(request.context, execute);
+        return this.input.quotaGate.withModelSlot(request.context, execute, estimatedPointsMicros);
       }
       return execute();
     });
@@ -402,6 +471,7 @@ export function createS5ModelGateway(input: {
   adapter: S5ModelInvocationAdapterPort;
   usage: S5UsageRecorderPort;
   quotaGate?: S10ModelQuotaPort;
+  pricing?: S10PricingProfile;
   limiter: S5KeyedLimiterPort;
   sleep?: (ms: number) => Promise<void>;
 }): S5ModelGateway {

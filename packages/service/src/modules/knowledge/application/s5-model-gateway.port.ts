@@ -101,10 +101,19 @@ export interface S5UsageRecorderPort {
 
 export interface S10ModelQuotaPort {
   check(
-    input: { operation: 'model'; workspaceId: string; knowledgeSpaceId?: string },
+    input: {
+      operation: 'model';
+      workspaceId: string;
+      knowledgeSpaceId?: string;
+      estimatedPointsMicros?: number;
+    },
     context: TenantContext,
   ): Promise<void>;
-  withModelSlot<T>(context: TenantContext, work: () => Promise<T>): Promise<T>;
+  withModelSlot<T>(
+    context: TenantContext,
+    work: () => Promise<T>,
+    estimatedPointsMicros?: number,
+  ): Promise<T>;
 }
 
 export interface S5GatewayResult<T> {

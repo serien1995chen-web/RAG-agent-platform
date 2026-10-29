@@ -261,4 +261,68 @@ describe('TEST-MODEL-003-BLOCK usage event and outbox transaction', () => {
     await expect(dispatcher.dispatchOnce(context)).resolves.toEqual({ dispatched: false });
     expect(enqueue).toHaveBeenCalledOnce();
   });
+
+  it('dispatches only the requested pending event by ID and version', async () => {
+    const models = registerKnowledgeModels(connection);
+    const [target, other] = await models.KnowledgeOutboxEvent.create([
+      {
+        workspaceId,
+        knowledgeSpaceId: null,
+        version: 5,
+        deletedAt: null,
+        createdByMemberId: context.memberId,
+        updatedByMemberId: context.memberId,
+        eventKey: `target-${suffix}`,
+        eventType: 'usage.recorded',
+        aggregateType: 'usage_event',
+        aggregateId: `target-${suffix}`,
+        payload: { queue: 'knowledge-outbox', usageEventId: `target-${suffix}` },
+        status: 'pending',
+        attempts: 0,
+        availableAt: new Date(Date.now() - 1_000),
+        publishedAt: null,
+        error: null,
+        expiresAt: new Date(Date.now() + 86_400_000),
+      },
+      {
+        workspaceId,
+        knowledgeSpaceId: null,
+        version: 9,
+        deletedAt: null,
+        createdByMemberId: context.memberId,
+        updatedByMemberId: context.memberId,
+        eventKey: `other-${suffix}`,
+        eventType: 'usage.recorded',
+        aggregateType: 'usage_event',
+        aggregateId: `other-${suffix}`,
+        payload: { queue: 'knowledge-outbox', usageEventId: `other-${suffix}` },
+        status: 'pending',
+        attempts: 0,
+        availableAt: new Date(Date.now() - 10_000),
+        publishedAt: null,
+        error: null,
+        expiresAt: new Date(Date.now() + 86_400_000),
+      },
+    ]);
+    const enqueue = vi.fn(async () => ({ jobId: 'k_target', enqueued: true }));
+    const dispatcher = new KnowledgeOutboxDispatcher(connection, { enqueue } as never);
+    await expect(dispatcher.dispatchById(String(target!._id), 5, context)).resolves.toMatchObject({
+      dispatched: true,
+      eventKey: target!.eventKey,
+    });
+    expect(await models.KnowledgeOutboxEvent.findById(target!._id).lean()).toMatchObject({
+      status: 'published',
+    });
+    expect(await models.KnowledgeOutboxEvent.findById(other!._id).lean()).toMatchObject({
+      status: 'pending',
+      version: 9,
+    });
+    expect(enqueue).toHaveBeenCalledWith(
+      'knowledge-outbox',
+      expect.stringMatching(/^k_[a-f0-9]{40}$/),
+      expect.objectContaining({ outboxEventId: String(target!._id) }),
+      expect.any(Object),
+    );
+    expect(enqueue).toHaveBeenCalledOnce();
+  });
 });

@@ -32,6 +32,9 @@ export class S10StatusProbesAdapter implements S10StatusProbePort {
         body: { checks: Array<{ name: string; status: string; latencyMs: number }> };
       }>;
       models: ModelCatalogPort;
+      connectors?: {
+        list(context: TenantContext): Promise<S10StatusView['connectorProbes']>;
+      };
       now?: () => Date;
     },
   ) {}
@@ -96,6 +99,7 @@ export class S10StatusProbesAdapter implements S10StatusProbePort {
   }
 
   private async connectorProbes(context: TenantContext) {
+    if (this.input.connectors) return this.input.connectors.list(context);
     const models = registerKnowledgeModels(this.input.connection);
     const connectors = await models.KnowledgeConnector.find({
       workspaceId: requireWorkspaceId(context),
@@ -155,12 +159,37 @@ export class S10StatusProbesAdapter implements S10StatusProbePort {
   }
 
   async probe(context: TenantContext): Promise<S10StatusView> {
-    const [dependencies, queueLag, modelProbe, connectorProbes, reconciliation] = await Promise.all(
-      [
+    const startedQueueProbe = Date.now();
+    const queueProbePromise = this.queueLag()
+      .then((value) => ({
+        value,
+        probe: state('ok', Date.now() - startedQueueProbe, 'REAL_VERIFIED'),
+      }))
+      .catch(() => ({
+        value: {} as S10StatusView['queueLag'],
+        probe: state('degraded', Date.now() - startedQueueProbe, 'UNKNOWN', 'queue_probe_failed'),
+      }));
+    const startedConnectorProbe = Date.now();
+    const connectorProbePromise = this.connectorProbes(context)
+      .then((value) => ({
+        value,
+        probe: state('ok', Date.now() - startedConnectorProbe, 'REAL_VERIFIED'),
+      }))
+      .catch(() => ({
+        value: [] as S10StatusView['connectorProbes'],
+        probe: state(
+          'degraded',
+          Date.now() - startedConnectorProbe,
+          'UNKNOWN',
+          'connector_probe_failed',
+        ),
+      }));
+    const [dependencies, queueResult, modelProbe, connectorResult, reconciliation] =
+      await Promise.all([
         this.dependencyProbes(context),
-        this.queueLag().catch(() => ({})),
+        queueProbePromise,
         this.modelProbe(context),
-        this.connectorProbes(context).catch(() => []),
+        connectorProbePromise,
         this.reconciliation(context).catch(() => ({
           lastRunAt: null,
           state: 'unknown' as const,
@@ -169,12 +198,11 @@ export class S10StatusProbesAdapter implements S10StatusProbePort {
           diffCount: 0,
           repairedCount: 0,
         })),
-      ],
-    );
+      ]);
     return {
       status: 'degraded',
       queueDepth: {},
-      queueLag,
+      queueLag: queueResult.value,
       storage: {
         provider: this.input.config.s3.provider,
         healthy: dependencies.s3.status === 'ok',
@@ -188,7 +216,9 @@ export class S10StatusProbesAdapter implements S10StatusProbePort {
       },
       dependencies,
       modelProbe,
-      connectorProbes,
+      connectorProbes: connectorResult.value,
+      queueProbe: queueResult.probe,
+      connectorProbe: connectorResult.probe,
       securityChecks: {
         apiKeyHmacConfigured: this.input.config.s10.apiKeyHmacConfigured,
         scopeEnforced: true,

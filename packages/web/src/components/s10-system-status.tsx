@@ -113,6 +113,31 @@ export function S10SystemStatus(props: {
           </Box>
           <Box borderWidth="1px" borderColor="kn.line" p={4} borderRadius="sm">
             <Text fontWeight="700" m={0}>
+              {t('status.queueLag')}
+            </Text>
+            <Flex mt={2} gap={2}>
+              <StatusTag value={status.queueProbe.status} tone={tone(status.queueProbe.status)} />
+              <Text m={0} fontSize="sm">
+                {status.queueProbe.verificationStatus} · {status.queueProbe.latencyMs} ms
+              </Text>
+            </Flex>
+          </Box>
+          <Box borderWidth="1px" borderColor="kn.line" p={4} borderRadius="sm">
+            <Text fontWeight="700" m={0}>
+              {t('status.connectors')}
+            </Text>
+            <Flex mt={2} gap={2}>
+              <StatusTag
+                value={status.connectorProbe.status}
+                tone={tone(status.connectorProbe.status)}
+              />
+              <Text m={0} fontSize="sm">
+                {status.connectorProbe.verificationStatus} · {status.connectorProbe.latencyMs} ms
+              </Text>
+            </Flex>
+          </Box>
+          <Box borderWidth="1px" borderColor="kn.line" p={4} borderRadius="sm">
+            <Text fontWeight="700" m={0}>
               {t('status.connectors')}
             </Text>
             {status.connectorProbes.length === 0 ? (

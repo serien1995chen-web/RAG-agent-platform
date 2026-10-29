@@ -74,6 +74,13 @@ export interface S10OpsWorkerDependencies {
     payload: Record<string, unknown>;
     context: TenantContext;
   }): Promise<void>;
+  markUsageOutboxFailed?(input: {
+    outboxEventId: string;
+    eventId: string;
+    errorCode: string;
+    deadLetter: boolean;
+    context: TenantContext;
+  }): Promise<void>;
   cleanup(input: {
     jobId: string;
     scope: string;
@@ -95,7 +102,12 @@ export interface S10OpsWorkerDependencies {
       evidence: Record<string, unknown>,
     ) => Promise<void>;
   }): Promise<S10OpsResult>;
-  replay(input: { jobId: string; context: TenantContext }): Promise<{
+  replay(input: {
+    jobId: string;
+    eventId: string;
+    expectedVersion: number;
+    context: TenantContext;
+  }): Promise<{
     diffCount: number;
     repairedCount: number;
     retryable: number;
@@ -110,6 +122,8 @@ export class S10OpsWorkerApplication {
   async handleUsageOutbox(input: {
     outboxEventId: string;
     payload: Record<string, unknown>;
+    attempt: number;
+    maxAttempts: number;
     context: TenantContext;
   }): Promise<void> {
     const eventId = input.payload.usageEventId;
@@ -130,12 +144,38 @@ export class S10OpsWorkerApplication {
         details: { dependency: 'shared_usage', reason: 'delivery_not_configured' },
       });
     }
-    await this.input.deliverUsage({
-      outboxEventId: input.outboxEventId,
-      eventId,
-      payload: input.payload,
-      context: input.context,
-    });
+    try {
+      await this.input.deliverUsage({
+        outboxEventId: input.outboxEventId,
+        eventId,
+        payload: input.payload,
+        context: input.context,
+      });
+    } catch (error) {
+      if (input.attempt >= input.maxAttempts) {
+        if (!this.input.markUsageOutboxFailed) {
+          throw createKnowledgeError({
+            code: 'KNOWLEDGE_DEPENDENCY_UNAVAILABLE',
+            requestId: input.context.requestId,
+            traceId: input.context.traceId,
+            retryable: false,
+            details: { dependency: 'outbox', reason: 'failure_marker_not_configured' },
+          });
+        }
+        const errorCode =
+          error instanceof KnowledgeApiError
+            ? error.problem.error.code
+            : 'KNOWLEDGE_INTERNAL_ERROR';
+        await this.input.markUsageOutboxFailed({
+          outboxEventId: input.outboxEventId,
+          eventId,
+          errorCode,
+          deadLetter: true,
+          context: input.context,
+        });
+      }
+      throw error;
+    }
   }
 
   async handleQueue(
@@ -206,12 +246,41 @@ export class S10OpsWorkerApplication {
           step,
         });
       } else {
-        const replay = await this.input.replay({ jobId, context });
+        const eventId = String(raw.inputSnapshot.outboxEventId ?? '');
+        const expectedVersion = Number(raw.inputSnapshot.outboxVersion);
+        if (!eventId || !Number.isInteger(expectedVersion)) {
+          throw createKnowledgeError({
+            code: 'KNOWLEDGE_CONFLICT',
+            requestId: context.requestId,
+            traceId: context.traceId,
+            details: { jobId, reason: 'outbox_replay_target_missing' },
+          });
+        }
+        const replay = await this.input.replay({
+          jobId,
+          eventId,
+          expectedVersion,
+          context,
+        });
         result = {
           ...replay,
           startedAt,
           finishedAt: new Date().toISOString(),
         };
+      }
+      if (raw.kind === 'cleanup' && (result.retryable > 0 || result.deadLetter > 0)) {
+        throw createKnowledgeError({
+          code: result.retryable > 0 ? 'KNOWLEDGE_DEPENDENCY_UNAVAILABLE' : 'KNOWLEDGE_JOB_FAILED',
+          requestId: context.requestId,
+          traceId: context.traceId,
+          retryable: result.retryable > 0,
+          details: {
+            jobId,
+            retryable: result.retryable,
+            deadLetter: result.deadLetter,
+            reason: 'cleanup_unresolved_items',
+          },
+        });
       }
       const committed = await this.input.jobs.commit(
         jobId,

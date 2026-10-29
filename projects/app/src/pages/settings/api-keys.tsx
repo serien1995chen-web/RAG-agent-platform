@@ -12,6 +12,7 @@ import {
   useKnowledgeI18n,
   useKnowledgeMutation,
   useKnowledgeQuery,
+  useQueryClient,
   type ConsoleSession,
   type S10ApiKey,
   type S10ApiKeyList,
@@ -36,8 +37,10 @@ function forbiddenProblem(): KnowledgeRequestError {
 
 export default function ApiKeysPage() {
   const { t } = useKnowledgeI18n();
+  const queryClient = useQueryClient();
   const [session, setSession] = useState<ConsoleSession | null>(null);
   const [secret, setSecret] = useState<S10ApiKeySecret | null>(null);
+  const [cacheRevision, setCacheRevision] = useState(0);
   const keys = useKnowledgeQuery<S10ApiKeyList>(
     knowledgeQueryKeys.apiKeys.list(),
     apiKeysPath({ limit: '200' }),
@@ -60,12 +63,10 @@ export default function ApiKeysPage() {
   >({
     mutationFn: (input) => createApiKey(input),
     invalidateKeys: [knowledgeQueryKeys.apiKeys.list()],
-    onSuccess: setSecret,
   });
   const rotate = useKnowledgeMutation<S10ApiKeySecret, S10ApiKey>({
     mutationFn: (key) => rotateApiKey(key.id, key.version),
     invalidateKeys: [knowledgeQueryKeys.apiKeys.list()],
-    onSuccess: setSecret,
   });
   const revoke = useKnowledgeMutation<void, S10ApiKey>({
     mutationFn: (key) => deleteApiKey(key.id, key.version),
@@ -74,8 +75,59 @@ export default function ApiKeysPage() {
 
   const authorized = session?.isWorkspaceOwner || session?.scopes.includes('knowledge:admin');
   const busy = create.isLoading || rotate.isLoading || revoke.isLoading;
+
+  const purgeSecretMutations = () => {
+    create.reset();
+    rotate.reset();
+    queryClient.getMutationCache().clear();
+    setCacheRevision((value) => value + 1);
+  };
+
+  const runCreate = async (input: {
+    name: string;
+    scopes: S10ApiKey['scopes'];
+    spaceIds: string[];
+    expiresAt: string | null;
+  }) => {
+    const result = await create.mutateAsync(input);
+    setSecret(result);
+    purgeSecretMutations();
+  };
+
+  const runRotate = async (key: S10ApiKey) => {
+    const result = await rotate.mutateAsync(key);
+    setSecret(result);
+    purgeSecretMutations();
+  };
+
+  const clearSecret = () => {
+    setSecret(null);
+    purgeSecretMutations();
+  };
+
+  useEffect(
+    () => () => {
+      create.reset();
+      rotate.reset();
+      queryClient.getMutationCache().clear();
+    },
+    [create.reset, queryClient, rotate.reset],
+  );
+
+  const mutationCache = queryClient.getMutationCache().getAll();
+  const mutationCacheHasSecret =
+    secret !== null &&
+    JSON.stringify(mutationCache.map((mutation) => mutation.state)).includes(secret.secret);
+
   return (
     <>
+      <span
+        data-testid="s10-api-key-mutation-cache"
+        data-size={mutationCache.length}
+        data-secret-present={mutationCacheHasSecret}
+        data-revision={cacheRevision}
+        hidden
+      />
       <Head>
         <title>{t('apiKeys.title')}</title>
       </Head>
@@ -93,10 +145,10 @@ export default function ApiKeysPage() {
           error={create.error ?? rotate.error ?? revoke.error ?? keys.error}
           secret={secret}
           busy={busy}
-          onCreate={(input) => void create.mutateAsync(input)}
-          onRotate={(key) => void rotate.mutateAsync(key)}
+          onCreate={(input) => void runCreate(input).catch(() => undefined)}
+          onRotate={(key) => void runRotate(key).catch(() => undefined)}
           onRevoke={(key) => void revoke.mutateAsync(key)}
-          onClearSecret={() => setSecret(null)}
+          onClearSecret={clearSecret}
           onRetry={() => void keys.refetch()}
         />
       )}

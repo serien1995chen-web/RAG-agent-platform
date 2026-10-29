@@ -319,6 +319,7 @@ async function bootstrapRuntime(): Promise<TelemetryKnowledgeApiRuntime> {
     }),
     usage: s5Usage,
     quotaGate,
+    pricing: config.s10.pricing,
     limiter: new S5KeyedSemaphore(10),
   });
   const s5Models = new S5ModelApplication(s5Catalog);
@@ -778,6 +779,10 @@ async function bootstrapRuntime(): Promise<TelemetryKnowledgeApiRuntime> {
         throw error;
       }
     },
+    async markUsageOutboxFailed({ outboxEventId, eventId, errorCode, deadLetter, context }) {
+      await s5Usage.markDelivery(eventId, 'failed', context).catch(() => undefined);
+      await s10Ops.failOutboxDelivery({ outboxEventId, eventId, errorCode, deadLetter }, context);
+    },
     async cleanup({ scope, context, step }) {
       const startedAt = new Date().toISOString();
       const scopes =
@@ -792,12 +797,32 @@ async function bootstrapRuntime(): Promise<TelemetryKnowledgeApiRuntime> {
       for (const current of scopes) {
         await step(current, 'running', { scope: current });
         if (current === 'ttl_objects' || current === 'orphan_objects') {
-          const result = await objectLifecycle.cleanup(context);
+          const result = await objectLifecycle.cleanup(context, new Date(), current);
           diffCount += result.eligible;
           repairedCount += result.deleted;
           retryable += result.retryable;
           deadLetter += result.failed;
           items.push({ scope: current, ...result });
+          if (result.retryable > 0 || result.failed > 0) {
+            await step(current, 'failed', {
+              scope: current,
+              retryable: result.retryable,
+              failed: result.failed,
+            });
+            throw createKnowledgeError({
+              code:
+                result.retryable > 0 ? 'KNOWLEDGE_DEPENDENCY_UNAVAILABLE' : 'KNOWLEDGE_JOB_FAILED',
+              requestId: context.requestId,
+              traceId: context.traceId,
+              retryable: result.retryable > 0,
+              details: {
+                operation: 'cleanup',
+                scope: current,
+                retryable: result.retryable,
+                failed: result.failed,
+              },
+            });
+          }
         } else if (current === 'orphan_vectors') {
           const activeVectorIds = await s10Inventory.listActiveVectorIds(context);
           const result = await vectorRepository.cleanupUnreferenced(
@@ -867,7 +892,7 @@ async function bootstrapRuntime(): Promise<TelemetryKnowledgeApiRuntime> {
             } catch {
               missing += 1;
               if (repair && !(await s10Inventory.activeObjectReference(object.id, context))) {
-                await registerKnowledgeModels(mongo).KnowledgeObjectRef.updateOne(
+                const updated = await registerKnowledgeModels(mongo).KnowledgeObjectRef.updateOne(
                   {
                     workspaceId: context.workspaceId,
                     _id: new mongo.base.Types.ObjectId(object.id),
@@ -882,6 +907,14 @@ async function bootstrapRuntime(): Promise<TelemetryKnowledgeApiRuntime> {
                     $inc: { version: 1 },
                   },
                 );
+                if (updated.modifiedCount !== 1) {
+                  throw createKnowledgeError({
+                    code: 'KNOWLEDGE_CONFLICT',
+                    requestId: context.requestId,
+                    traceId: context.traceId,
+                    details: { scope: current, objectId: object.id, reason: 'repair_cas' },
+                  });
+                }
                 repairedCount += 1;
               }
             }
@@ -918,6 +951,25 @@ async function bootstrapRuntime(): Promise<TelemetryKnowledgeApiRuntime> {
           const drift = await s10Inventory.fulltextDriftCount(context);
           diffCount += drift;
           items.push({ scope: current, drift });
+          if (repair && drift > 0) {
+            await step(current, 'failed', {
+              scope: current,
+              repair: true,
+              drift,
+              reason: 'fulltext_repair_not_supported',
+            });
+            throw createKnowledgeError({
+              code: 'KNOWLEDGE_VALIDATION_FAILED',
+              requestId: context.requestId,
+              traceId: context.traceId,
+              retryable: false,
+              details: {
+                operation: 'reconcile',
+                scope: current,
+                reason: 'fulltext_repair_not_supported',
+              },
+            });
+          }
         } else if (current === 'outbox') {
           const counts = await s10Inventory.outboxStatusCounts(context);
           const drift = Number(counts.failed ?? 0) + Number(counts.dead_letter ?? 0);
@@ -925,6 +977,25 @@ async function bootstrapRuntime(): Promise<TelemetryKnowledgeApiRuntime> {
           retryable += Number(counts.failed ?? 0);
           deadLetter += Number(counts.dead_letter ?? 0);
           items.push({ scope: current, counts });
+          if (repair && drift > 0) {
+            await step(current, 'failed', {
+              scope: current,
+              repair: true,
+              drift,
+              reason: 'outbox_repair_not_supported',
+            });
+            throw createKnowledgeError({
+              code: 'KNOWLEDGE_VALIDATION_FAILED',
+              requestId: context.requestId,
+              traceId: context.traceId,
+              retryable: false,
+              details: {
+                operation: 'reconcile',
+                scope: current,
+                reason: 'outbox_repair_not_supported',
+              },
+            });
+          }
         } else {
           throw createKnowledgeError({
             code: 'KNOWLEDGE_VALIDATION_FAILED',
@@ -950,8 +1021,16 @@ async function bootstrapRuntime(): Promise<TelemetryKnowledgeApiRuntime> {
         finishedAt: new Date().toISOString(),
       };
     },
-    async replay({ context }) {
-      const result = await outboxDispatcher.dispatchOnce(context);
+    async replay({ eventId, expectedVersion, context }) {
+      const result = await outboxDispatcher.dispatchById(eventId, expectedVersion, context);
+      if (!result.dispatched) {
+        throw createKnowledgeError({
+          code: 'KNOWLEDGE_CONFLICT',
+          requestId: context.requestId,
+          traceId: context.traceId,
+          details: { eventId, expectedVersion, reason: 'outbox_target_not_dispatchable' },
+        });
+      }
       return {
         diffCount: result.dispatched ? 1 : 0,
         repairedCount: result.dispatched ? 1 : 0,

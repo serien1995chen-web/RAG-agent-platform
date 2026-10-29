@@ -114,6 +114,28 @@ async function createExpiredMultipart(): Promise<{
   return { uploadId, objectKey, providerUploadId };
 }
 
+async function createActiveOrphan(): Promise<string> {
+  const uploadId = await createPending(false);
+  const updated = await connection.models.KnowledgeObjectRef.updateOne(
+    {
+      workspaceId,
+      _id: new mongoose.Types.ObjectId(uploadId),
+    },
+    {
+      $set: {
+        state: 'active',
+        sourceId: null,
+        expiresAt: null,
+        'upload.status': 'completed',
+        'upload.pendingObjectKey': null,
+        'upload.pendingUrlExpiresAt': null,
+      },
+    },
+  );
+  if (updated.modifiedCount !== 1) throw new Error('orphan fixture update failed');
+  return uploadId;
+}
+
 beforeAll(async () => {
   const mongoUri = new URL(
     process.env.KB_TEST_MONGO_URI ??
@@ -152,6 +174,22 @@ afterAll(async () => {
 });
 
 describe('TEST-FILE-005-BLOCK object lifecycle', () => {
+  it('TEST-OPS-004-SCOPE isolates TTL and orphan object cleanup', async () => {
+    const ttlOnly = await createPending(true);
+    const orphanOnly = await createActiveOrphan();
+
+    const ttlResult = await lifecycle.cleanup(context, new Date(), 'ttl_objects');
+    expect(ttlResult.deleted).toBeGreaterThanOrEqual(1);
+    expect((await repository.findObjectRef(ttlOnly, context))?.state).toBe('deleted');
+    expect((await repository.findObjectRef(orphanOnly, context))?.state).toBe('active');
+
+    const ttlRemaining = await createPending(true);
+    const orphanResult = await lifecycle.cleanup(context, new Date(), 'orphan_objects');
+    expect(orphanResult.deleted).toBeGreaterThanOrEqual(1);
+    expect((await repository.findObjectRef(orphanOnly, context))?.state).toBe('deleted');
+    expect((await repository.findObjectRef(ttlRemaining, context))?.state).toBe('pending');
+  });
+
   it('TEST-FILE-005-T01 expires pending objects into deleted', async () => {
     const uploadId = await createPending(true);
     const result = await lifecycle.cleanup(context);

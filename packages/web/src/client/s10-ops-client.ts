@@ -124,6 +124,18 @@ export interface S10Status {
     verificationStatus: string;
     lastAttemptAt?: string | null;
   }>;
+  queueProbe: {
+    status: string;
+    latencyMs: number;
+    verificationStatus: string;
+    reason?: string;
+  };
+  connectorProbe: {
+    status: string;
+    latencyMs: number;
+    verificationStatus: string;
+    reason?: string;
+  };
   securityChecks: Record<string, boolean>;
   reconciliation: {
     lastRunAt: string | null;

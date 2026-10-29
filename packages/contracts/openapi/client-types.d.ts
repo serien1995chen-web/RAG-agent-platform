@@ -471,7 +471,7 @@ export interface SchemaPropertyMap {
   "ObjectBlobReference": "blobId" | "bucket" | "etag" | "objectKey" | "sizeBytes" | "state" | "workspaceId";
   "OpenApiDocument": never;
   "OperationResult": "id" | "jobId" | "status";
-  "OpsStatus": "connectorProbes" | "dependencies" | "modelProbe" | "queueDepth" | "queueLag" | "reconciliation" | "securityChecks" | "status" | "storage" | "vector";
+  "OpsStatus": "connectorProbe" | "connectorProbes" | "dependencies" | "modelProbe" | "queueDepth" | "queueLag" | "queueProbe" | "reconciliation" | "securityChecks" | "status" | "storage" | "vector";
   "OwnershipTransfer": "targetMemberId" | "version";
   "PageInfo": "hasMore" | "nextCursor";
   "ParseProviderConfig": never;
@@ -613,7 +613,7 @@ export interface RequiredSchemaPropertyMap {
   "ObjectBlobReference": "blobId" | "bucket" | "etag" | "objectKey" | "sizeBytes" | "state" | "workspaceId";
   "OpenApiDocument": never;
   "OperationResult": "id" | "status";
-  "OpsStatus": "connectorProbes" | "dependencies" | "modelProbe" | "queueDepth" | "queueLag" | "reconciliation" | "securityChecks" | "status" | "storage" | "vector";
+  "OpsStatus": "connectorProbe" | "connectorProbes" | "dependencies" | "modelProbe" | "queueDepth" | "queueLag" | "queueProbe" | "reconciliation" | "securityChecks" | "status" | "storage" | "vector";
   "OwnershipTransfer": "targetMemberId" | "version";
   "PageInfo": "hasMore" | "nextCursor";
   "ParseProviderConfig": never;

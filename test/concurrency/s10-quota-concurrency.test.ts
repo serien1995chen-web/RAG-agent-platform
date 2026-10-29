@@ -24,6 +24,16 @@ class FakeRedis {
     this.values.set(key, next);
     return next;
   }
+  async incrby(key: string, value: number) {
+    const next = (this.values.get(key) ?? 0) + value;
+    this.values.set(key, next);
+    return next;
+  }
+  async decrby(key: string, value: number) {
+    const next = (this.values.get(key) ?? 0) - value;
+    this.values.set(key, next);
+    return next;
+  }
   async del(key: string) {
     this.values.delete(key);
     return 1;
@@ -33,48 +43,52 @@ class FakeRedis {
   }
 }
 
-function gate() {
-  return new KnowledgeQuotaGate({
-    usage: {
-      summary: async () => ({
-        period: { from: new Date().toISOString(), to: new Date().toISOString() },
-        quota: {
-          aiPointsLimit: 100,
-          aiPointsLimitMicros: 100_000_000,
-          storageBytesLimit: 10 * 1024 * 1024 * 1024,
-          maxSpaces: 3,
-          maxIndexes: 600,
-          requestsPerMinute: 30,
-          maxModelConcurrency: 10,
-          profileVersion: FREE_V1_QUOTA.version,
-        },
-        usage: {
-          aiPoints: 0,
-          aiPointsMicros: 0,
-          storageBytes: 0,
-          indexCount: 0,
-          spaceCount: 1,
-          parsePages: 0,
-          inputTokens: 0,
-          outputTokens: 0,
-          embeddingTokens: 0,
-          rerankTokens: 0,
-          modelCalls: 0,
-        },
-        delivery: { pending: 0, delivered: 0, failed: 0 },
-        series: [],
-        profileVersion: 'fixture-v1',
-      }),
-    },
-    redis: new FakeRedis() as never,
-    quota: FREE_V1_QUOTA,
-    now: () => new Date('2026-10-29T00:00:00.000Z'),
-  });
+function gate(aiPointsMicros = 0) {
+  const redis = new FakeRedis();
+  return {
+    redis,
+    quota: new KnowledgeQuotaGate({
+      usage: {
+        summary: async () => ({
+          period: { from: new Date().toISOString(), to: new Date().toISOString() },
+          quota: {
+            aiPointsLimit: 100,
+            aiPointsLimitMicros: 100_000_000,
+            storageBytesLimit: 10 * 1024 * 1024 * 1024,
+            maxSpaces: 3,
+            maxIndexes: 600,
+            requestsPerMinute: 30,
+            maxModelConcurrency: 10,
+            profileVersion: FREE_V1_QUOTA.version,
+          },
+          usage: {
+            aiPoints: aiPointsMicros / 1_000_000,
+            aiPointsMicros,
+            storageBytes: 0,
+            indexCount: 0,
+            spaceCount: 1,
+            parsePages: 0,
+            inputTokens: 0,
+            outputTokens: 0,
+            embeddingTokens: 0,
+            rerankTokens: 0,
+            modelCalls: 0,
+          },
+          delivery: { pending: 0, delivered: 0, failed: 0 },
+          series: [],
+          profileVersion: 'fixture-v1',
+        }),
+      },
+      redis: redis as never,
+      quota: FREE_V1_QUOTA,
+      now: () => new Date('2026-10-29T00:00:00.000Z'),
+    }),
+  };
 }
 
 describe('TEST-S10-QUOTA-ZERO-SIDE-EFFECT model concurrency', () => {
   it('allows ten active slots and rejects the eleventh before external work', async () => {
-    const quota = gate();
+    const { quota } = gate();
     const work = vi.fn(async () => {
       await new Promise((resolve) => setTimeout(resolve, 20));
       return 'ok';
@@ -94,5 +108,44 @@ describe('TEST-S10-QUOTA-ZERO-SIDE-EFFECT model concurrency', () => {
     expect(results.filter((value) => value === 'pass')).toHaveLength(10);
     expect(results.filter((value) => value === 'quota')).toHaveLength(1);
     expect(work).toHaveBeenCalledTimes(10);
+  });
+
+  it('rejects over-quota model calls before RPM consumption', async () => {
+    const { quota, redis } = gate(99_900_000);
+    await expect(
+      quota.check(
+        {
+          operation: 'model',
+          workspaceId: context.workspaceId,
+          estimatedPointsMicros: 10_000_000,
+        },
+        context,
+      ),
+    ).rejects.toMatchObject({
+      problem: {
+        error: {
+          code: 'KNOWLEDGE_QUOTA_EXCEEDED',
+          details: { quota: 'ai_points' },
+        },
+      },
+    });
+    expect([...redis.values.entries()]).toEqual([]);
+  });
+
+  it('releases the points reservation when provider work fails', async () => {
+    const { quota, redis } = gate();
+    await expect(
+      quota.withModelSlot(
+        context,
+        async () => {
+          expect(redis.values.get(`kb:quota:points-reserved:${context.workspaceId}`)).toBe(
+            10_000_000,
+          );
+          throw new Error('provider failed');
+        },
+        10_000_000,
+      ),
+    ).rejects.toThrow('provider failed');
+    expect(redis.values.get(`kb:quota:points-reserved:${context.workspaceId}`)).toBeUndefined();
   });
 });

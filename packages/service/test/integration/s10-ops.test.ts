@@ -156,6 +156,15 @@ describe('TEST-OPS-003-BLOCK / TEST-OPS-004-BLOCK operations', () => {
     const replayed = await models.KnowledgeOutboxEvent.findById(event!._id).lean();
     expect(replayed?.status).toBe('pending');
     expect(replayed?.version).toBe(4);
+    const replayJob = await models.KnowledgeJob.findOne({
+      workspaceId,
+      kind: 'outbox',
+      'inputSnapshot.outboxEventId': String(event!._id),
+    }).lean();
+    expect(replayJob?.inputSnapshot).toMatchObject({
+      outboxEventId: String(event!._id),
+      outboxVersion: 4,
+    });
     await expect(
       repository.replayOutbox(
         {
@@ -222,5 +231,62 @@ describe('TEST-OPS-003-BLOCK / TEST-OPS-004-BLOCK operations', () => {
         resourceId: String(event!._id),
       }),
     ).toBe(1);
+  });
+
+  it('TEST-X-OUTBOX-USAGE-FAILURE marks published usage delivery dead-letter idempotently', async () => {
+    const models = registerKnowledgeModels(connection);
+    const usageEventId = `usage-delivery-${suffix}`;
+    const [event] = await models.KnowledgeOutboxEvent.create([
+      {
+        workspaceId,
+        knowledgeSpaceId: null,
+        version: 4,
+        deletedAt: null,
+        createdByMemberId: context.memberId,
+        updatedByMemberId: context.memberId,
+        eventKey: `delivery-${suffix}`,
+        eventType: 'usage.recorded',
+        aggregateType: 'usage_event',
+        aggregateId: usageEventId,
+        payload: { queue: 'knowledge-outbox', usageEventId },
+        status: 'published',
+        attempts: 1,
+        availableAt: new Date(),
+        publishedAt: new Date(),
+        error: null,
+        expiresAt: new Date(Date.now() + 86_400_000),
+      },
+    ]);
+    await repository.failOutboxDelivery(
+      {
+        outboxEventId: String(event!._id),
+        eventId: usageEventId,
+        errorCode: 'KNOWLEDGE_DEPENDENCY_UNAVAILABLE',
+        deadLetter: true,
+      },
+      context,
+    );
+    const failed = await models.KnowledgeOutboxEvent.findById(event!._id).lean();
+    expect(failed).toMatchObject({
+      status: 'dead_letter',
+      version: 5,
+      error: {
+        code: 'KNOWLEDGE_DEPENDENCY_UNAVAILABLE',
+        retryable: true,
+      },
+    });
+    await repository.failOutboxDelivery(
+      {
+        outboxEventId: String(event!._id),
+        eventId: usageEventId,
+        errorCode: 'KNOWLEDGE_DEPENDENCY_UNAVAILABLE',
+        deadLetter: true,
+      },
+      context,
+    );
+    expect(await models.KnowledgeOutboxEvent.findById(event!._id).lean()).toMatchObject({
+      status: 'dead_letter',
+      version: 5,
+    });
   });
 });

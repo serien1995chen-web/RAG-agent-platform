@@ -196,5 +196,14 @@ export interface S10OpsRepositoryPort {
     input: { eventId: string; version: number; idempotencyKey: string },
     context: TenantContext,
   ): Promise<{ id: string; status: 'accepted'; jobId: string }>;
+  failOutboxDelivery(
+    input: {
+      outboxEventId: string;
+      eventId: string;
+      errorCode: string;
+      deadLetter: boolean;
+    },
+    context: TenantContext,
+  ): Promise<void>;
   recoverStaleJobs(context: TenantContext): Promise<number>;
 }

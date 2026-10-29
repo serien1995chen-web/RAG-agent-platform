@@ -31,6 +31,16 @@ class FakeRedis {
     this.values.set(key, next);
     return next;
   }
+  async incrby(key: string, value: number) {
+    const next = (this.values.get(key) ?? 0) + value;
+    this.values.set(key, next);
+    return next;
+  }
+  async decrby(key: string, value: number) {
+    const next = (this.values.get(key) ?? 0) - value;
+    this.values.set(key, next);
+    return next;
+  }
   async del(key: string) {
     this.values.delete(key);
     return 1;
@@ -208,9 +218,10 @@ describe('TEST-OPS-001-BLOCK / TEST-OPS-002-BLOCK usage and quota', () => {
   });
 
   it('rejects over-quota model calls before any external or database side effect', async () => {
+    const redis = new FakeRedis();
     const quota = new KnowledgeQuotaGate({
       usage,
-      redis: new FakeRedis() as never,
+      redis: redis as never,
       quota: FREE_V1_QUOTA,
     });
     const models = registerKnowledgeModels(connection);
@@ -245,5 +256,6 @@ describe('TEST-OPS-001-BLOCK / TEST-OPS-002-BLOCK usage and quota', () => {
       outbox: await models.KnowledgeOutboxEvent.countDocuments({ workspaceId }),
       sources: await models.KnowledgeSource.countDocuments({ workspaceId }),
     }).toEqual(before);
+    expect(redis.values.size).toBe(0);
   });
 });

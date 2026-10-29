@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type {
   S5HttpResponse,
   S5HttpTransportPort,
@@ -17,6 +17,7 @@ import type {
   ModelCatalogPort,
 } from '../../src/modules/knowledge/application/s5-model-ports';
 import type { TenantContext } from '../../src/shared/persistence/knowledge/tenant';
+import { FIXTURE_V1_PRICING } from '../../src/shared/config/s10-profiles';
 
 const context: TenantContext = {
   workspaceId: 'ws_gateway',
@@ -102,6 +103,56 @@ function gateway(
 }
 
 describe('TEST-MODEL-002/003/006-BLOCK model gateway', () => {
+  it('passes a conservative cost reservation to QuotaGate before provider work', async () => {
+    const usage = new RecordingUsage();
+    const calls = vi.fn();
+    const check = vi.fn(async () => {
+      throw new Error('quota rejected');
+    });
+    const client = new S5ModelGateway({
+      catalog,
+      adapter: adapter((invocation) => {
+        calls(invocation);
+        return {
+          status: 200,
+          data: null,
+          quantity: 0,
+          usage: { inputTokens: 0, outputTokens: 0 },
+        };
+      }),
+      usage,
+      pricing: FIXTURE_V1_PRICING,
+      quotaGate: {
+        check,
+        async withModelSlot(_context, work) {
+          return work();
+        },
+      },
+    });
+    await expect(
+      client.invoke({
+        kind: 'llm',
+        modelId: 'llm-primary',
+        messages: [{ role: 'user', content: 'hello' }],
+        maxOutputTokens: 100,
+        workspaceId: context.workspaceId,
+        knowledgeSpaceId: 'space-1',
+        requestId: context.requestId,
+        traceId: context.traceId,
+        context,
+      }),
+    ).rejects.toThrow('quota rejected');
+    expect(check).toHaveBeenCalledWith(
+      expect.objectContaining({
+        operation: 'model',
+        estimatedPointsMicros: expect.any(Number),
+      }),
+      context,
+    );
+    expect(check.mock.calls[0]?.[0].estimatedPointsMicros).toBeGreaterThan(0);
+    expect(calls).not.toHaveBeenCalled();
+  });
+
   it('retries, uses an authorized fallback, records each attempt and reports the actual model', async () => {
     const usage = new RecordingUsage();
     const calls: string[] = [];

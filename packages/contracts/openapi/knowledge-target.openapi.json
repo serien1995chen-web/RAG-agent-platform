@@ -22776,6 +22776,8 @@
           "dependencies",
           "modelProbe",
           "connectorProbes",
+          "queueProbe",
+          "connectorProbe",
           "securityChecks",
           "reconciliation"
         ],
@@ -23106,6 +23108,76 @@
                     }
                   ]
                 }
+              }
+            }
+          },
+          "queueProbe": {
+            "type": "object",
+            "required": [
+              "status",
+              "latencyMs",
+              "verificationStatus"
+            ],
+            "properties": {
+              "status": {
+                "type": "string",
+                "enum": [
+                  "ok",
+                  "degraded",
+                  "down",
+                  "timeout"
+                ]
+              },
+              "latencyMs": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "verificationStatus": {
+                "type": "string",
+                "enum": [
+                  "REAL_VERIFIED",
+                  "FIXTURE_VERIFIED",
+                  "EXTERNAL_UNVERIFIED",
+                  "UNKNOWN"
+                ]
+              },
+              "reason": {
+                "type": "string"
+              }
+            }
+          },
+          "connectorProbe": {
+            "type": "object",
+            "required": [
+              "status",
+              "latencyMs",
+              "verificationStatus"
+            ],
+            "properties": {
+              "status": {
+                "type": "string",
+                "enum": [
+                  "ok",
+                  "degraded",
+                  "down",
+                  "timeout"
+                ]
+              },
+              "latencyMs": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "verificationStatus": {
+                "type": "string",
+                "enum": [
+                  "REAL_VERIFIED",
+                  "FIXTURE_VERIFIED",
+                  "EXTERNAL_UNVERIFIED",
+                  "UNKNOWN"
+                ]
+              },
+              "reason": {
+                "type": "string"
               }
             }
           },

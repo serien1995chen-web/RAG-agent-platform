@@ -10,7 +10,11 @@ export interface QueueConsumerDefinition {
   timeoutMs: number;
   maxAttempts: number;
   backoffMs: readonly number[];
-  handler: (payload: S06QueuePayload, workerId: string) => Promise<KnowledgeQueueOutcome>;
+  handler: (
+    payload: S06QueuePayload,
+    workerId: string,
+    execution: { attempt: number; maxAttempts: number },
+  ) => Promise<KnowledgeQueueOutcome>;
 }
 
 export interface KnowledgeWorkerLogger {
@@ -90,7 +94,10 @@ export function startWorkerRegistry(input: {
       definition.queue,
       async (job) => {
         const outcome = await withTimeout(
-          definition.handler(job.data, input.workerId),
+          definition.handler(job.data, input.workerId, {
+            attempt: job.attemptsMade + 1,
+            maxAttempts: job.opts.attempts ?? definition.maxAttempts,
+          }),
           definition.timeoutMs,
           definition.queue,
         );

@@ -224,8 +224,13 @@ describe('TEST-X-FRONTEND-A11Y S10 ops pages', () => {
       await playwrightExpect(status).toBeVisible();
       const secret = await status.locator('code').textContent();
       expect(secret?.startsWith('kn_live_')).toBe(true);
+      const mutationCache = page.getByTestId('s10-api-key-mutation-cache');
+      await playwrightExpect(mutationCache).toHaveAttribute('data-size', '0');
+      await playwrightExpect(mutationCache).toHaveAttribute('data-secret-present', 'false');
       await page.getByRole('button', { name: '关闭并清除', exact: true }).click();
       await playwrightExpect(page.getByText(secret!, { exact: true })).toHaveCount(0);
+      await playwrightExpect(mutationCache).toHaveAttribute('data-size', '0');
+      await playwrightExpect(mutationCache).toHaveAttribute('data-secret-present', 'false');
       const storageDump = await page.evaluate(() => ({
         local: { ...localStorage },
         session: { ...sessionStorage },

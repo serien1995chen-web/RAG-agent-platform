@@ -15,7 +15,10 @@ const context: TenantContext = {
   isWorkspaceOwner: false,
 };
 
-function jobPort(kind: 'cleanup' | 'reconcile' | 'outbox' = 'cleanup') {
+function jobPort(
+  kind: 'cleanup' | 'reconcile' | 'outbox' = 'cleanup',
+  inputSnapshot: Record<string, unknown> = { scope: 'all', repair: false },
+) {
   const commit = vi.fn(async () => ({ status: 'succeeded', result: { diffCount: 1 } }));
   const fail = vi.fn(async () => undefined);
   const setStep = vi.fn(async () => undefined);
@@ -24,7 +27,7 @@ function jobPort(kind: 'cleanup' | 'reconcile' | 'outbox' = 'cleanup') {
     getRaw: async () => ({
       version: 1,
       kind,
-      inputSnapshot: { scope: 'all', repair: false },
+      inputSnapshot,
       fencingToken: 'fence',
       attemptEpoch: 1,
     }),
@@ -66,12 +69,92 @@ describe('S10 ops worker evidence', () => {
     await worker.handleUsageOutbox({
       outboxEventId: 'outbox',
       payload: { usageEventId: 'usage-event', pointsMicros: 1 },
+      attempt: 1,
+      maxAttempts: 10,
       context,
     });
     expect(deliverUsage).toHaveBeenCalledWith({
       outboxEventId: 'outbox',
       eventId: 'usage-event',
       payload: { usageEventId: 'usage-event', pointsMicros: 1 },
+      context,
+    });
+  });
+
+  it('marks the target outbox dead-letter only on the final usage delivery attempt', async () => {
+    const { port } = jobPort('outbox');
+    const markUsageOutboxFailed = vi.fn(async () => undefined);
+    const deliverUsage = vi.fn(async () => {
+      throw createKnowledgeError({
+        code: 'KNOWLEDGE_DEPENDENCY_UNAVAILABLE',
+        requestId: context.requestId,
+        traceId: context.traceId,
+        retryable: true,
+      });
+    });
+    const worker = new S10OpsWorkerApplication({
+      jobs: port,
+      deliverUsage,
+      markUsageOutboxFailed,
+      async cleanup() {
+        throw new Error('not used');
+      },
+      async reconcile() {
+        throw new Error('not used');
+      },
+      async replay() {
+        throw new Error('not used');
+      },
+    });
+    const input = {
+      outboxEventId: 'outbox',
+      payload: { usageEventId: 'usage-event' },
+      context,
+    };
+    await expect(
+      worker.handleUsageOutbox({ ...input, attempt: 9, maxAttempts: 10 }),
+    ).rejects.toMatchObject({ problem: { error: { code: 'KNOWLEDGE_DEPENDENCY_UNAVAILABLE' } } });
+    expect(markUsageOutboxFailed).not.toHaveBeenCalled();
+    await expect(
+      worker.handleUsageOutbox({ ...input, attempt: 10, maxAttempts: 10 }),
+    ).rejects.toMatchObject({ problem: { error: { code: 'KNOWLEDGE_DEPENDENCY_UNAVAILABLE' } } });
+    expect(markUsageOutboxFailed).toHaveBeenCalledWith({
+      outboxEventId: 'outbox',
+      eventId: 'usage-event',
+      errorCode: 'KNOWLEDGE_DEPENDENCY_UNAVAILABLE',
+      deadLetter: true,
+      context,
+    });
+  });
+
+  it('dispatches the outbox event recorded on the replay Job', async () => {
+    const { port } = jobPort('outbox', {
+      scope: 'outbox',
+      outboxEventId: 'event-target',
+      outboxVersion: 7,
+    });
+    const replay = vi.fn(async () => ({
+      diffCount: 1,
+      repairedCount: 1,
+      retryable: 0,
+      deadLetter: 0,
+      items: [{ eventKey: 'target' }],
+    }));
+    const worker = new S10OpsWorkerApplication({
+      jobs: port,
+      async cleanup() {
+        throw new Error('not used');
+      },
+      async reconcile() {
+        throw new Error('not used');
+      },
+      replay,
+    });
+    await worker.handleQueue('job', 'knowledge-outbox', 'worker', context);
+    expect(replay).toHaveBeenCalledWith({
+      jobId: 'job',
+      eventId: 'event-target',
+      expectedVersion: 7,
       context,
     });
   });
@@ -130,6 +213,48 @@ describe('S10 ops worker evidence', () => {
       worker.handleQueue('job', 'knowledge-cleanup', 'worker', context),
     ).rejects.toMatchObject({
       problem: { error: { code: 'KNOWLEDGE_DEPENDENCY_UNAVAILABLE' } },
+    });
+    expect(commit).not.toHaveBeenCalled();
+    expect(fail).toHaveBeenCalledWith(
+      'job',
+      2,
+      1,
+      'fence',
+      'worker',
+      true,
+      'KNOWLEDGE_DEPENDENCY_UNAVAILABLE',
+      context,
+    );
+  });
+
+  it('never commits cleanup success when unresolved items remain', async () => {
+    const { port, commit, fail } = jobPort();
+    const worker = new S10OpsWorkerApplication({
+      jobs: port,
+      async cleanup() {
+        return {
+          ...result,
+          retryable: 1,
+          items: [{ id: 'retry-me' }],
+        };
+      },
+      async reconcile() {
+        throw new Error('not used');
+      },
+      async replay() {
+        throw new Error('not used');
+      },
+    });
+    await expect(
+      worker.handleQueue('job', 'knowledge-cleanup', 'worker', context),
+    ).rejects.toMatchObject({
+      problem: {
+        error: {
+          code: 'KNOWLEDGE_DEPENDENCY_UNAVAILABLE',
+          retryable: true,
+          details: { reason: 'cleanup_unresolved_items' },
+        },
+      },
     });
     expect(commit).not.toHaveBeenCalled();
     expect(fail).toHaveBeenCalledWith(

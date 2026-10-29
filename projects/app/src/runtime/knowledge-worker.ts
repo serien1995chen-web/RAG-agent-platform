@@ -59,7 +59,11 @@ async function start(): Promise<void> {
     queue: queueName,
     ...QUEUE_SETTINGS[queueName],
     backoffMs: [1_000, 5_000, 30_000],
-    handler: async (payload: S06QueuePayload, workerId: string) => {
+    handler: async (
+      payload: S06QueuePayload,
+      workerId: string,
+      execution: { attempt: number; maxAttempts: number },
+    ) => {
       const payloadRecord =
         payload !== null && typeof payload === 'object'
           ? (payload as unknown as Record<string, unknown>)
@@ -95,6 +99,8 @@ async function start(): Promise<void> {
         await s10Ops.handleUsageOutbox({
           outboxEventId,
           payload: nestedPayload,
+          attempt: execution.attempt,
+          maxAttempts: execution.maxAttempts,
           context,
         });
         return 'succeeded';

@@ -44,11 +44,11 @@ export class KnowledgeQuotaGate implements QuotaGatePort {
     return this.input.now?.() ?? new Date();
   }
 
-  private async snapshot(context: TenantContext): Promise<S10UsageSummary> {
+  private async snapshot(context: TenantContext, fresh = false): Promise<S10UsageSummary> {
     const now = this.now();
     const key = `${context.workspaceId}:${this.input.quota.version}:local:${Math.floor(now.getTime() / 5_000)}`;
     const cached = this.cache.get(key);
-    if (cached && cached.expiresAt > now.getTime()) return cached.value;
+    if (!fresh && cached && cached.expiresAt > now.getTime()) return cached.value;
     const value = await this.input.usage.summary(
       {
         from: new Date(now.getTime() - this.input.quota.retentionDays * 86_400_000),
@@ -70,10 +70,42 @@ export class KnowledgeQuotaGate implements QuotaGatePort {
     const count = await this.input.redis.incr(key);
     if (count === 1) await this.input.redis.expire(key, 90);
     if (count > this.input.quota.requestsPerMinute) {
+      await this.input.redis.decr(key);
       quotaError(context, 'requests_per_minute', this.input.quota.version, {
         limit: this.input.quota.requestsPerMinute,
       });
     }
+  }
+
+  private async reservePoints(
+    context: TenantContext,
+    snapshot: S10UsageSummary,
+    estimatedPointsMicros: number,
+  ): Promise<{ key: string; pointsMicros: number } | null> {
+    const pointsMicros = Math.max(0, Math.trunc(estimatedPointsMicros));
+    if (pointsMicros === 0) return null;
+    const key = `kb:quota:points-reserved:${requireWorkspaceId(context)}`;
+    const reserved = Number(await this.input.redis.incrby(key, pointsMicros));
+    await this.input.redis.expire(key, 120);
+    if (snapshot.usage.aiPointsMicros + reserved > snapshot.quota.aiPointsLimit * 1_000_000) {
+      const remaining = await this.input.redis.decrby(key, pointsMicros);
+      if (remaining <= 0) await this.input.redis.del(key);
+      quotaError(context, 'ai_points', this.input.quota.version, {
+        limit: snapshot.quota.aiPointsLimit * 1_000_000,
+        used: snapshot.usage.aiPointsMicros,
+        reserved,
+        estimatedPointsMicros: pointsMicros,
+      });
+    }
+    return { key, pointsMicros };
+  }
+
+  private async releaseReservation(
+    reservation: { key: string; pointsMicros: number } | null,
+  ): Promise<void> {
+    if (!reservation) return;
+    const remaining = await this.input.redis.decrby(reservation.key, reservation.pointsMicros);
+    if (remaining <= 0) await this.input.redis.del(reservation.key);
   }
 
   async check(
@@ -92,16 +124,24 @@ export class KnowledgeQuotaGate implements QuotaGatePort {
         reason: 'workspace_mismatch',
       });
     }
-    const snapshot = await this.snapshot(context);
-    if (input.operation === 'model' || input.operation === 'import' || input.operation === 'sync') {
-      await this.consumeRpm(context);
-    }
-    if (
+    const snapshot = await this.snapshot(context, input.operation === 'model');
+    if (input.operation === 'model') {
+      if (
+        snapshot.usage.aiPointsMicros + Math.max(0, input.estimatedPointsMicros ?? 0) >
+        snapshot.quota.aiPointsLimit * 1_000_000
+      ) {
+        quotaError(context, 'ai_points', this.input.quota.version, {
+          limit: snapshot.quota.aiPointsLimit * 1_000_000,
+          used: snapshot.usage.aiPointsMicros,
+          estimatedPointsMicros: Math.max(0, input.estimatedPointsMicros ?? 0),
+        });
+      }
+    } else if (
       snapshot.usage.aiPointsMicros + Math.max(0, input.estimatedPointsMicros ?? 0) >
       snapshot.quota.aiPointsLimit * 1_000_000
     ) {
       quotaError(context, 'ai_points', this.input.quota.version, {
-        limit: this.input.quota.aiPointsLimit * 1_000_000,
+        limit: snapshot.quota.aiPointsLimit * 1_000_000,
         used: snapshot.usage.aiPointsMicros,
       });
     }
@@ -129,24 +169,43 @@ export class KnowledgeQuotaGate implements QuotaGatePort {
         used: snapshot.usage.spaceCount,
       });
     }
+    if (input.operation === 'import' || input.operation === 'sync') {
+      await this.consumeRpm(context);
+    }
   }
 
-  async withModelSlot<T>(context: TenantContext, work: () => Promise<T>): Promise<T> {
+  async withModelSlot<T>(
+    context: TenantContext,
+    work: () => Promise<T>,
+    estimatedPointsMicros = 0,
+  ): Promise<T> {
     const workspaceId = requireWorkspaceId(context);
     const key = `kb:quota:model-concurrency:${workspaceId}`;
-    const active = await this.input.redis.incr(key);
-    await this.input.redis.expire(key, 60);
-    if (active > this.input.quota.maxModelConcurrency) {
-      await this.input.redis.decr(key);
-      quotaError(context, 'model_concurrency', this.input.quota.version, {
-        limit: this.input.quota.maxModelConcurrency,
-      });
-    }
+    let slotAcquired = false;
+    let reservation: { key: string; pointsMicros: number } | null = null;
     try {
+      const active = await this.input.redis.incr(key);
+      await this.input.redis.expire(key, 60);
+      if (active > this.input.quota.maxModelConcurrency) {
+        await this.input.redis.decr(key);
+        quotaError(context, 'model_concurrency', this.input.quota.version, {
+          limit: this.input.quota.maxModelConcurrency,
+        });
+      }
+      slotAcquired = true;
+      reservation = await this.reservePoints(
+        context,
+        await this.snapshot(context, true),
+        estimatedPointsMicros,
+      );
+      await this.consumeRpm(context);
       return await work();
     } finally {
-      const remaining = await this.input.redis.decr(key);
-      if (remaining <= 0) await this.input.redis.del(key);
+      if (slotAcquired) {
+        const remaining = await this.input.redis.decr(key);
+        if (remaining <= 0) await this.input.redis.del(key);
+      }
+      await this.releaseReservation(reservation);
     }
   }
 }

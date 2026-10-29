@@ -47,6 +47,8 @@ function view(overrides: Partial<S10StatusView> = {}): S10StatusView {
       modelCount: 2,
     },
     connectorProbes: [],
+    queueProbe: dependency,
+    connectorProbe: dependency,
     securityChecks: {
       apiKeyHmacConfigured: true,
       scopeEnforced: true,
@@ -93,6 +95,22 @@ describe('S10 status aggregation', () => {
             latencyMs: 1,
             verificationStatus: 'UNKNOWN',
           },
+        },
+      }),
+      view({
+        queueProbe: {
+          status: 'degraded',
+          latencyMs: 1,
+          verificationStatus: 'UNKNOWN',
+          reason: 'queue_probe_failed',
+        },
+      }),
+      view({
+        connectorProbe: {
+          status: 'degraded',
+          latencyMs: 1,
+          verificationStatus: 'UNKNOWN',
+          reason: 'connector_probe_failed',
         },
       }),
     ]) {

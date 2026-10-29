@@ -43,6 +43,8 @@ function view(): S10StatusView {
       latencyMs: 1,
     },
     connectorProbes: [],
+    queueProbe: verified,
+    connectorProbe: verified,
     securityChecks: {
       apiKeyHmacConfigured: true,
       scopeEnforced: true,
