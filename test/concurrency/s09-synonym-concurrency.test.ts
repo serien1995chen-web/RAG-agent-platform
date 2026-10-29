@@ -195,4 +195,22 @@ describe('S9 synonym concurrency', () => {
       version: 2,
     });
   }, 60_000);
+
+  it('TEST-TRAIN-006-BLOCK allows only one concurrent manual rebuild request', async () => {
+    const results = await Promise.allSettled([
+      repository.createManualRebuild(String(knowledgeSpaceId), { version: 1 }, context),
+      repository.createManualRebuild(String(knowledgeSpaceId), { version: 1 }, context),
+    ]);
+    expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
+    expect(results.filter((result) => result.status === 'rejected')).toHaveLength(1);
+    const models = registerKnowledgeModels(connection);
+    expect(
+      await models.KnowledgeJob.countDocuments({
+        workspaceId,
+        kind: 'synonym_rebuild',
+        'inputSnapshot.reason': 'manual',
+        'inputSnapshot.fileVersion': 1,
+      }),
+    ).toBe(1);
+  }, 60_000);
 });

@@ -253,36 +253,49 @@ function findCyclicStandards(groups: readonly MappingGroup[]): Set<string> {
   const onStack = new Set<string>();
   const cyclic = new Set<string>();
 
-  const visit = (node: string) => {
-    indices.set(node, index);
-    lowLinks.set(node, index);
-    index += 1;
-    stack.push(node);
-    onStack.add(node);
-    for (const next of graph.get(node) ?? []) {
-      if (!indices.has(next)) {
-        visit(next);
-        lowLinks.set(node, Math.min(lowLinks.get(node)!, lowLinks.get(next)!));
-      } else if (onStack.has(next)) {
-        lowLinks.set(node, Math.min(lowLinks.get(node)!, indices.get(next)!));
+  for (const root of graph.keys()) {
+    if (indices.has(root)) continue;
+    const frames: Array<{ node: string; next: number }> = [];
+    const enter = (node: string) => {
+      indices.set(node, index);
+      lowLinks.set(node, index);
+      index += 1;
+      stack.push(node);
+      onStack.add(node);
+      frames.push({ node, next: 0 });
+    };
+    enter(root);
+    while (frames.length > 0) {
+      const frame = frames.at(-1)!;
+      const neighbors = graph.get(frame.node) ?? [];
+      if (frame.next < neighbors.length) {
+        const next = neighbors[frame.next]!;
+        frame.next += 1;
+        if (!indices.has(next)) {
+          enter(next);
+        } else if (onStack.has(next)) {
+          lowLinks.set(frame.node, Math.min(lowLinks.get(frame.node)!, indices.get(next)!));
+        }
+        continue;
+      }
+      frames.pop();
+      const parent = frames.at(-1);
+      if (parent) {
+        lowLinks.set(parent.node, Math.min(lowLinks.get(parent.node)!, lowLinks.get(frame.node)!));
+      }
+      if (lowLinks.get(frame.node) !== indices.get(frame.node)) continue;
+      const component: string[] = [];
+      let current: string | undefined;
+      do {
+        current = stack.pop();
+        if (!current) break;
+        onStack.delete(current);
+        component.push(current);
+      } while (current !== frame.node);
+      if (component.length > 1) {
+        for (const value of component) cyclic.add(value);
       }
     }
-    if (lowLinks.get(node) !== indices.get(node)) return;
-    const component: string[] = [];
-    let current: string | undefined;
-    do {
-      current = stack.pop();
-      if (!current) break;
-      onStack.delete(current);
-      component.push(current);
-    } while (current !== node);
-    if (component.length > 1) {
-      for (const value of component) cyclic.add(value);
-    }
-  };
-
-  for (const node of graph.keys()) {
-    if (!indices.has(node)) visit(node);
   }
   return cyclic;
 }

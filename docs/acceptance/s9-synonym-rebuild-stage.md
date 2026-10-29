@@ -10,14 +10,22 @@
 - S8 merge SHA: `9839b2a1005ce7fdf4558ea8d002ae1ab6dcadbd`.
 - S8 merge parents: `13fa0e9be84edd33ea5cc5413d64282c126dd117` and
   `1c55abb2fa1ecc5bdafaa2d3d3a26f05df24f4c`.
-- Candidate SHA: the commit containing this report; the exact SHA is recorded
-  in the handoff because a commit cannot include its own object ID.
-- Superseded candidate SHA: `03fc6f0a47d4aa9328cd78d54baea4fa3b05913b`.
-- Superseded personB result: `FAIL`, worker startup could not resolve `yauzl`.
+- Candidate SHA: the next code commit containing this report; the exact SHA is
+  recorded in the handoff because a commit cannot include its own object ID.
+- Superseded candidate SHA:
+  `03fc6f0a47d4aa9328cd78d54baea4fa3b05913b` (personB `FAIL`, worker could
+  not resolve `yauzl`).
+- Superseded candidate SHA:
+  `a5768dfa008756a2695ac148b01476e7e3d72ad6` (worker fix; personB reissued
+  `PASS`, then invalidated by the Review remediation below).
+- Superseded evidence commit:
+  `94a2e93d10f8c18b410d434aaf146d20ab392f6b`. Its three `w3-*.md` files
+  bound evidence to `a5768dfa` and were removed from the new code candidate.
 - Evidence commit SHA: not created. It requires personA and personB evidence
   from the new frozen candidate.
-- W3 conclusion: `NOT_COMPLETE`. The worker packaging blocker is fixed in this
-  candidate, but both personA and personB must rerun at its exact SHA.
+- W3 conclusion: `NOT_COMPLETE`. The worker packaging blocker and Review
+  findings are fixed locally, but both personA and personB must rerun at the
+  new exact SHA.
 
 This report records post-rebase S9 implementation and local gate results. It
 does not claim that W3 is complete and does not claim a final CI or Review
@@ -132,11 +140,15 @@ All eight Operations are runtime. S8 `API-SEARCH-IMAGE` and
 - Rebuild staging and vector writes use the S6 Ports.
 - Full-text and Segment pointer switch use the S6 store Port.
 - Source/index rebuild writes the current published `synonymVersion`.
+- Manual and model-change rebuild idempotency keys include the config version,
+  so a terminal `succeeded` or `failed` Job is never rebound to a new request.
 - Final Job, Segment pointers, config and internal model profile switch in one
   Mongo transaction.
 - Finalization checks Job version, lease owner, fencing token and attempt epoch.
 - Failure preserves the prior published version and compensates staged vectors.
-- Old vector cleanup candidates are no earlier than 30 days after switch.
+- Cleanup consumes the rebuild Job's `cleanupCandidates`, protects every
+  candidate whose `availableAt` is later than the cleanup start time, and keeps
+  switched vectors for the full 30-day retention window.
 
 ### Worker Packaging Remediation
 
@@ -152,6 +164,11 @@ All eight Operations are runtime. S8 `API-SEARCH-IMAGE` and
 - A contract assertion binds both runtime layers.
 - The rebuilt worker reached readiness without a manual `NODE_PATH` variable and
   created 13 `knowledge-*` queue meta keys plus 13 stalled-check keys.
+- The Review-remediation build was verified with
+  `node projects/app/dist/workers/worker.mjs`, `NODE_PATH` unset. It reached
+  `/tmp/knowledge-worker-ready`, exposed 13 queue meta and 13 stalled-check
+  keys, and removed the marker after SIGTERM. The worker bundle SHA-256 was
+  `75a9ab109d677aaa52a0cc43eb262735773f84bea29cdee8823ddc6fc8e01669`.
 
 ### T06: Synonyms UI
 
@@ -162,9 +179,30 @@ All eight Operations are runtime. S8 `API-SEARCH-IMAGE` and
 - `fetch` is bound to `globalThis`, preventing browser `Illegal invocation`.
 - Read/manage controls are permission-gated.
 - Errors expose code, message key, trace ID and row diagnostics.
+- A real Space with no synonym config maps matching config/mapping `404`
+  responses to the empty state rather than a permission error. The loading
+  skeleton is also exposed as a `status` landmark.
 - Navigation, app page, i18n, query keys, web barrel and runtime registration
   are complete after S8 merge.
 - Images, Deep/Search and Synonyms entries remain present together.
+
+### Review Remediation
+
+- A terminal manual rebuild Job could be reused by a later request. Manual and
+  model-change keys now append the current config version. Integration coverage
+  verifies a second request after success and after failure creates a new
+  queued Job.
+- Cleanup previously applied only the 30-day vector age and did not consume the
+  rebuild's per-vector `availableAt`. S6 cleanup now passes those candidates
+  through its Port to PGVector and protects future timestamps. Real PGVector
+  integration covers switch time, day 29, day 30 and day 31.
+- Recursive Tarjan validation overflowed on a 10,000-node cascade. Validation
+  now uses an explicit frame stack. Domain and HTTP-operation coverage verifies
+  structured `CASCADE_REFERENCE`, bounded diagnostics, `truncated=true` and no
+  file-text disclosure.
+- A missing synonym config was rendered as a permission problem. The real page
+  now treats matching config/mapping `KNOWLEDGE_NOT_FOUND` responses as empty
+  when no config exists, with a real empty-Space E2E assertion.
 
 ## C5 / C6
 
@@ -238,17 +276,22 @@ AIProxy fixture; external cloud Providers remain `EXTERNAL_UNVERIFIED`.
 
 | Gate                    | Result                                              |
 | ----------------------- | --------------------------------------------------- |
-| `pnpm test:unit`        | PASS, Turbo `22 / 22`                               |
+| `pnpm test:unit`        | PASS, Turbo `22 / 22`; service 23 files / 108 tests |
 | `pnpm test:contract`    | PASS, 20 files / 96 tests                           |
-| `pnpm test:integration` | PASS, Turbo `22 / 22`; service 29 files / 163 tests |
+| `pnpm test:integration` | PASS, Turbo `22 / 22`; service 29 files / 165 tests |
 | `pnpm test:tenant`      | PASS, 8 files / 17 tests                            |
-| `pnpm test:concurrency` | PASS, 8 files / 16 tests                            |
+| `pnpm test:concurrency` | PASS, 8 files / 17 tests                            |
 | `pnpm test:fault`       | PASS, 10 files / 34 tests                           |
-| `pnpm test:e2e`         | PASS, 14 files / 58 tests                           |
-| `pnpm test`             | PASS, exit `0`                                      |
+| `pnpm test:e2e`         | PASS, 14 files / 59 tests                           |
+| `pnpm test`             | PASS, exit `0`; Turbo `22 / 22`; service 52 / 273   |
 
-The full `pnpm test` log is `/tmp/s9-pnpm-test.log` with SHA-256
-`583a077696946a6644b56b59e31ee8a8f8eb710fd18d0ef33dd5439a52c011d5`.
+The full `pnpm test` log is `/tmp/s9-review-pnpm-test-direct.log` with SHA-256
+`5574c64c4ea339d9156de9e07204d9bbed764f8fc1a1470572315e37c4cf56eb`.
+
+The local Compose Mongo replica set advertises the container hostname
+`mongo:27017`. Host-side gate runs therefore used the documented URI with
+`directConnection=true`; this is an environment invocation correction, not a
+test or timeout change. CI's replica set advertises `127.0.0.1:27017`.
 
 S9-specific coverage includes:
 
@@ -262,7 +305,12 @@ S9-specific coverage includes:
 - Source/index published synonymVersion propagation.
 - Query expansion, 4096 fallback, cache revalidation, Space ordering and ACL
   safety.
-- Rebuild stage/finalize ordering, retry evidence, rollback and 30-day cleanup.
+- Rebuild stage/finalize ordering, retry evidence, rollback, terminal-Job
+  rekeying and 30-day cleanup.
+- Cleanup retention at switch time, day 29, day 30 and day 31.
+- 10,000-node cascade validation without recursion overflow and with bounded,
+  row-level diagnostics.
+- Empty synonym config rendering without a false permission error.
 - Deployment worker startup with 13 queues and no manual dependency path.
 - Real Synonyms page at 360/768/1200, axe serious/critical `0`, keyboard,
   no horizontal overflow and rebuild progress.
@@ -290,9 +338,9 @@ The real page screenshots remain under ignored
 
 | Screenshot    | SHA-256                                                            |
 | ------------- | ------------------------------------------------------------------ |
-| `mobile.png`  | `bd07dafe409a069e99e5bed592998ec4c2490ef10cf0035458f362fefcd933e0` |
-| `tablet.png`  | `84c0c80a8d51487e11e425d9bd16d2c3431181250519bdd3206fcf40636cb7a8` |
-| `desktop.png` | `45ecc872c402f4d5c3a7478994be1e5effe4d65f6ff63a9c4aee58dd970ef73d` |
+| `mobile.png`  | `0d7dfe2ac5507dbedf05a7fd84a1871147b53ace38c0687ecbb21e248d243602` |
+| `tablet.png`  | `368a631c7ea0b15db4d840575ab5ab297ec2d73c09995da14a9339a6b0ea4279` |
+| `desktop.png` | `36731ea3e139067b758cf6298c1e788b38ba68e8ae47a2ddc637b62ffd44ec23` |
 
 ## Static And Build Gates
 
@@ -315,9 +363,13 @@ Compose config SHA-256:
 ## Risks And Open Items
 
 - PersonB's `03fc6f0` evidence is `FAIL` because the exact worker command exited
-  before readiness with missing `yauzl`; it cannot be reused for this candidate.
-- The worker dependency-resolution fix is present locally, but personA and
-  personB evidence must both be rerun at the new frozen SHA.
+  before readiness with missing `yauzl`; it cannot be reused.
+- PersonB's reissued `a5768dfa` gate is `PASS`, but it predates the Review
+  remediation in this report and therefore cannot cover the new candidate.
+- The worker dependency-resolution fix and all Review findings are present
+  locally. PersonA and personB evidence must both be rerun at the new frozen
+  SHA.
+- The superseded `94a2e93` evidence commit is not part of the new candidate.
 - EvidenceCommit SHA remains uncreated.
 - CI, Review and PR Review have not run.
 - The five license items remain release blockers, not CI blockers.
@@ -325,15 +377,17 @@ Compose config SHA-256:
   `EXTERNAL_UNVERIFIED`.
 - One parallel integration run exposed a transient archive retry timing failure;
   the failed file passed standalone and the subsequent complete integration run
-  passed 163/163. It remains a residual flake risk.
+  passed. It remains a residual flake risk.
 
 Next authorized steps:
 
-1. Commit the worker packaging fix and this report to freeze the new
-   `candidateSha`.
+1. Commit the Review remediation, worker packaging fix and this report to freeze
+   the new `candidateSha`; do not include old or new evidence in that commit.
 2. Run personA gates in a clean worktree at that SHA and write
    `docs/acceptance/w3-personA-gate.md`.
 3. Push the new candidate and provide the same SHA to personB.
 4. Accept personB's new same-SHA evidence unchanged, then create the
    acceptance-only evidence
    commit and wave report.
+5. Re-run CI, Review and PR Review on the evidence commit before claiming W3
+   completion.

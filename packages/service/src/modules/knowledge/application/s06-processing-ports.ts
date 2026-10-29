@@ -204,6 +204,11 @@ export interface S6VectorPort {
       workspaceId: string;
       activeVectorIds: readonly string[];
       olderThan: Date;
+      retentionCandidates?: ReadonlyArray<{
+        vectorId: string;
+        availableAt: Date;
+      }>;
+      now?: Date;
       batchSize?: number;
     },
     context: TenantContext,

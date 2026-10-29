@@ -324,7 +324,7 @@ export function S09SynonymsWorkbench(props: S09SynonymsWorkbenchProps) {
         </Flex>
 
         {props.state.kind === 'loading' ? (
-          <Stack mt={5} spacing={3} aria-label={labels.loading}>
+          <Stack mt={5} spacing={3} role="status" aria-label={labels.loading}>
             <Skeleton height="36px" />
             <Skeleton height="96px" />
           </Stack>

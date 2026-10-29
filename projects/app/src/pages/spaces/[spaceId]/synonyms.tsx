@@ -97,7 +97,13 @@ export default function SynonymsPage() {
     return () => window.clearInterval(timer);
   }, [config.data?.status, config.refetch, jobs.refetch]);
 
-  const queryProblem = problemFrom(config.error) ?? problemFrom(mappings.error) ?? problem;
+  const configProblem = problemFrom(config.error);
+  const mappingsProblem = problemFrom(mappings.error);
+  const missingConfig =
+    configProblem?.error.code === 'KNOWLEDGE_NOT_FOUND' &&
+    !config.data &&
+    (!mappingsProblem || mappingsProblem.error.code === 'KNOWLEDGE_NOT_FOUND');
+  const queryProblem = missingConfig ? null : (configProblem ?? mappingsProblem ?? problem);
   const state = synonymUiState({
     loading: config.isLoading || mappings.isLoading,
     config: config.data,

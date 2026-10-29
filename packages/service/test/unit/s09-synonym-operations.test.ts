@@ -244,4 +244,43 @@ describe('S9 synonym operations', () => {
     });
     expect(state.createPendingVersion).not.toHaveBeenCalled();
   });
+
+  it('TEST-SEARCH-003-BLOCK returns bounded diagnostics for a 10,000-node cascade', async () => {
+    const state = fixture();
+    const lines = ['标准词,同义词'];
+    for (let index = 0; index < 10_000; index += 1) {
+      const standard = `standard-${String(index).padStart(5, '0')}`;
+      const synonym =
+        index + 1 < 10_000
+          ? `standard-${String(index + 1).padStart(5, '0')}`
+          : `terminal-alias-${String(index).padStart(5, '0')}`;
+      lines.push(`${standard},${synonym}`);
+    }
+    await expect(
+      state.operations.dispatch(
+        operation('API-SYNONYM-UPLOAD', {
+          body: {
+            file: {
+              name: 'large-cascade.csv',
+              mimeType: 'text/csv',
+              bytes: Buffer.from(lines.join('\n')),
+            },
+            enabled: true,
+          },
+        }),
+      ),
+    ).rejects.toMatchObject({
+      problem: {
+        error: {
+          code: 'KNOWLEDGE_SYNONYM_INVALID',
+          details: {
+            diagnostics: expect.any(Array),
+            totalDiagnostics: 9_999,
+            truncated: true,
+          },
+        },
+      },
+    });
+    expect(state.createPendingVersion).not.toHaveBeenCalled();
+  });
 });

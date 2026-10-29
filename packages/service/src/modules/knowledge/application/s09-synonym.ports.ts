@@ -64,6 +64,12 @@ export interface S09SynonymJobView {
   updatedAt: string;
 }
 
+export interface S09SynonymCleanupCandidate {
+  vectorId: string;
+  dimension: 768 | 1024 | 1536 | 3072;
+  availableAt: Date;
+}
+
 export interface S09StoredSynonymFile {
   blobId: string;
   provider: KnowledgeObjectProvider;
@@ -170,6 +176,7 @@ export interface S09SynonymRepositoryPort {
     context: TenantContext,
   ): Promise<{ id: string; status: 'disabled'; jobId: null }>;
   listActiveSourceIds(spaceId: string, context: TenantContext): Promise<string[]>;
+  listCleanupCandidates(context: TenantContext): Promise<S09SynonymCleanupCandidate[]>;
   createManualRebuild(
     spaceId: string,
     input: { version: number },

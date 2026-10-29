@@ -155,4 +155,28 @@ describe('S9 synonym domain validation', () => {
       ),
     ).toContain('TOTAL_LENGTH_EXCEEDED');
   });
+
+  it('TEST-SEARCH-003-BLOCK rejects a 10,000-node cascade without recursion overflow', () => {
+    const chain = Array.from({ length: SYNONYM_LIMITS.maxMappings }, (_, index) => [
+      `standard-${String(index).padStart(5, '0')}`,
+      index + 1 < SYNONYM_LIMITS.maxMappings
+        ? `standard-${String(index + 1).padStart(5, '0')}`
+        : `terminal-alias-${String(index).padStart(5, '0')}`,
+    ]);
+    const result = validateMappings([
+      row(1, ['标准词', '同义词']),
+      ...chain.map((values, index) => row(index + 2, values)),
+    ]);
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.totalDiagnostics).toBe(9_999);
+    expect(result.truncated).toBe(true);
+    expect(result.diagnostics).toHaveLength(SYNONYM_LIMITS.maxDiagnostics);
+    expect(
+      result.diagnostics.every(
+        (item) => item.code === 'CASCADE_REFERENCE' && item.rowNumber !== null,
+      ),
+    ).toBe(true);
+    expect(JSON.stringify(result)).not.toContain('standard-00000');
+  });
 });

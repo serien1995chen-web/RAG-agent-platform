@@ -367,6 +367,72 @@ describe('S9 synonym repository', () => {
     });
   }, 60_000);
 
+  it('TEST-TRAIN-006-BLOCK never rebinds a terminal manual rebuild job', async () => {
+    const checksum = createHash('sha256').update('manual-rebuild').digest('hex');
+    const created = await repository.createPendingVersion(
+      String(knowledgeSpaceId),
+      pendingInput({
+        checksum,
+        idempotencyKey: `manual-rebuild-initial-${suffix}`,
+      }),
+      context,
+    );
+    await completeJob(created.job!.jobId);
+
+    const firstConfig = await repository.getConfig(String(knowledgeSpaceId), context);
+    const firstManual = await repository.createManualRebuild(
+      String(knowledgeSpaceId),
+      { version: firstConfig.version },
+      context,
+    );
+    await completeJob(firstManual.jobId);
+
+    const completedConfig = await repository.getConfig(String(knowledgeSpaceId), context);
+    const secondManual = await repository.createManualRebuild(
+      String(knowledgeSpaceId),
+      { version: completedConfig.version },
+      context,
+    );
+    expect(secondManual.status).toBe('queued');
+    expect(secondManual.jobId).not.toBe(firstManual.jobId);
+
+    const models = registerKnowledgeModels(connection);
+    await models.KnowledgeJob.updateOne(
+      { _id: secondManual.jobId, workspaceId, status: 'queued' },
+      {
+        $set: {
+          status: 'running',
+          leaseOwner: 'manual-failure-worker',
+          leaseExpiresAt: new Date(Date.now() + 300_000),
+          fencingToken: randomUUID(),
+        },
+        $inc: { version: 1, attemptEpoch: 1, attempts: 1 },
+      },
+    );
+    const failedPlan = await repository.getRebuildPlan(secondManual.jobId, context);
+    await repository.failRebuild(
+      failedPlan,
+      {
+        retryable: false,
+        errorCode: 'KNOWLEDGE_INTERNAL_ERROR',
+        failureEvidence: { stage: 'test_failure' },
+      },
+      context,
+    );
+    const failedConfig = await repository.getConfig(String(knowledgeSpaceId), context);
+    expect(failedConfig).toMatchObject({ status: 'failed' });
+    const thirdManual = await repository.createManualRebuild(
+      String(knowledgeSpaceId),
+      { version: failedConfig.version },
+      context,
+    );
+    expect(thirdManual.status).toBe('queued');
+    expect(thirdManual.jobId).not.toBe(secondManual.jobId);
+    expect(await repository.getConfig(String(knowledgeSpaceId), context)).toMatchObject({
+      status: 'rebuilding',
+    });
+  }, 60_000);
+
   it('TEST-SEARCH-003-BLOCK reuses checksum history and rejects idempotency body conflicts', async () => {
     const checksum = createHash('sha256').update('checksum').digest('hex');
     const key = `checksum-key-${suffix}`;

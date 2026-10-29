@@ -41,6 +41,7 @@ let app: S4AppHarness;
 let browser: Browser;
 let connection: Awaited<ReturnType<typeof createKnowledgeMongoConnection>>;
 let spaceId = '';
+let emptySpaceId = '';
 
 async function seedSynonyms() {
   const body = new FormData();
@@ -101,6 +102,12 @@ beforeAll(async () => {
   mkdirSync(outputDir, { recursive: true });
   app = await startS4App({ suffix, workspaceId, memberId, authToken });
   spaceId = await createSpace({ baseUrl: app.baseUrl, authToken, workspaceId, suffix });
+  emptySpaceId = await createSpace({
+    baseUrl: app.baseUrl,
+    authToken,
+    workspaceId,
+    suffix: `${suffix}-empty`,
+  });
   connection = await createKnowledgeMongoConnection(process.env.KB_TEST_MONGO_URI ?? '');
   const models = registerKnowledgeModels(connection);
   await models.KnowledgeModelBinding.create({
@@ -237,4 +244,38 @@ describe('TEST-X-FRONTEND-A11Y S9 real Synonyms page', () => {
     await playwrightExpect(progressPage.getByText('重建进度', { exact: true })).toBeVisible();
     await progressContext.close();
   }, 120_000);
+
+  it('renders a real space without synonym config as empty rather than permission denied', async () => {
+    const cookie = await consoleCookie({ baseUrl: app.baseUrl, authToken, workspaceId });
+    const browserContext = await browser.newContext({ viewport: { width: 1200, height: 900 } });
+    await browserContext.addCookies([cookie]);
+    const page = await browserContext.newPage();
+    const consoleErrors: string[] = [];
+    const pageErrors: string[] = [];
+    page.on('console', (message) => {
+      if (message.type() === 'error') consoleErrors.push(message.text());
+    });
+    page.on('pageerror', (error) => pageErrors.push(error.message));
+    await page.goto(`${app.baseUrl}/spaces/${emptySpaceId}/synonyms`, {
+      waitUntil: 'networkidle',
+    });
+    await playwrightExpect(page.getByRole('heading', { level: 1, name: '同义词' })).toBeVisible();
+    await playwrightExpect(page.getByText('尚未上传同义词文件。')).toBeVisible();
+    await playwrightExpect(page.getByRole('button', { name: '上传', exact: true })).toBeVisible();
+    await playwrightExpect(page.getByText(/KNOWLEDGE_NOT_FOUND/)).toHaveCount(0);
+    const accessibility = await new AxeBuilder({ page }).analyze();
+    expect(
+      accessibility.violations.filter(
+        (violation) => violation.impact === 'serious' || violation.impact === 'critical',
+      ),
+    ).toEqual([]);
+    expect(
+      consoleErrors.filter(
+        (message) =>
+          !message.includes('Failed to load resource: the server responded with a status of 404'),
+      ),
+    ).toEqual([]);
+    expect(pageErrors).toEqual([]);
+    await browserContext.close();
+  }, 60_000);
 });

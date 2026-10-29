@@ -539,6 +539,7 @@ async function bootstrapRuntime(): Promise<TelemetryKnowledgeApiRuntime> {
       },
     },
     synonymVersion: synonymRepository,
+    synonymCleanup: synonymRepository,
     port: {
       async parse(input, context) {
         const objectRef = await objectRefs.findObjectRef(input.blobRefId, context);

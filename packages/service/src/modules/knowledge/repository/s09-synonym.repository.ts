@@ -41,6 +41,7 @@ import type {
   S09CreatePendingVersionInput,
   S09PublishedSynonymSnapshot,
   S09SynonymConfigView,
+  S09SynonymCleanupCandidate,
   S09SynonymJobView,
   S09SynonymLastError,
   S09SynonymMappingPage,
@@ -1080,6 +1081,56 @@ export class KnowledgeSynonymRepository implements S09SynonymRepositoryPort {
     return documents.map((document) => String(document._id));
   }
 
+  async listCleanupCandidates(context: TenantContext): Promise<S09SynonymCleanupCandidate[]> {
+    const documents = await this.jobs
+      .find({
+        workspaceId: requireWorkspaceId(context),
+        kind: 'synonym_rebuild',
+        status: 'succeeded',
+        deletedAt: null,
+        'result.cleanupCandidates.0': { $exists: true },
+      })
+      .select({ result: 1 })
+      .lean<Array<{ result?: { cleanupCandidates?: unknown } }>>()
+      .exec();
+    const candidates = new Map<string, S09SynonymCleanupCandidate>();
+    for (const document of documents) {
+      const values = document.result?.cleanupCandidates;
+      if (!Array.isArray(values)) continue;
+      for (const value of values) {
+        if (typeof value !== 'object' || value === null || Array.isArray(value)) continue;
+        const record = value as Record<string, unknown>;
+        const vectorId = typeof record.vectorId === 'string' ? record.vectorId : '';
+        const dimension = Number(record.dimension);
+        const availableAt = new Date(String(record.availableAt ?? ''));
+        if (
+          !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+            vectorId,
+          ) ||
+          ![768, 1024, 1536, 3072].includes(dimension) ||
+          !Number.isFinite(availableAt.getTime())
+        ) {
+          continue;
+        }
+        const candidate: S09SynonymCleanupCandidate = {
+          vectorId,
+          dimension: dimension as 768 | 1024 | 1536 | 3072,
+          availableAt,
+        };
+        const existing = candidates.get(vectorId);
+        if (!existing || existing.availableAt < availableAt) {
+          candidates.set(vectorId, candidate);
+        }
+      }
+    }
+    return [...candidates.values()].sort(
+      (left, right) =>
+        left.availableAt.getTime() - right.availableAt.getTime() ||
+        left.dimension - right.dimension ||
+        left.vectorId.localeCompare(right.vectorId),
+    );
+  }
+
   private async createRebuildJobInSession(input: {
     config: Plain<KnowledgeSynonymConfigDoc>;
     reason: SynonymRebuildReason;
@@ -1088,12 +1139,15 @@ export class KnowledgeSynonymRepository implements S09SynonymRepositoryPort {
     expectedActiveFileVersion: number;
     context: TenantContext;
     session: ClientSession;
+    idempotencyKey?: string;
   }): Promise<S09SynonymJobView> {
-    const idempotencyKey = rebuildIdempotencyKey({
-      knowledgeSpaceId: String(input.config.knowledgeSpaceId),
-      fileVersion: input.fileVersion,
-      reason: input.reason,
-    });
+    const idempotencyKey =
+      input.idempotencyKey ??
+      rebuildIdempotencyKey({
+        knowledgeSpaceId: String(input.config.knowledgeSpaceId),
+        fileVersion: input.fileVersion,
+        reason: input.reason,
+      });
     const existing = await this.jobs
       .findOne({
         workspaceId: requireWorkspaceId(input.context),
@@ -1251,6 +1305,11 @@ export class KnowledgeSynonymRepository implements S09SynonymRepositoryPort {
       expectedActiveFileVersion: current.activeFileVersion,
       context,
       session,
+      idempotencyKey: `${rebuildIdempotencyKey({
+        knowledgeSpaceId: String(current.knowledgeSpaceId),
+        fileVersion: current.publishedFileVersion,
+        reason: 'model_change',
+      })}:${current.version}`,
     });
     await this.configs.updateOne(
       { _id: current._id, workspaceId, version: updated.version },
@@ -1338,6 +1397,11 @@ export class KnowledgeSynonymRepository implements S09SynonymRepositoryPort {
         expectedActiveFileVersion: current.activeFileVersion,
         context,
         session,
+        idempotencyKey: `${rebuildIdempotencyKey({
+          knowledgeSpaceId: String(current.knowledgeSpaceId),
+          fileVersion,
+          reason: 'manual',
+        })}:${current.version}`,
       });
       await this.configs.updateOne(
         { _id: current._id, workspaceId, version: updated.version },
