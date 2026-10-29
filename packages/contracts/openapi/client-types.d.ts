@@ -211,6 +211,14 @@ export type RuntimeOperationId =
   | 'API-SOURCE-ARCHIVE'
   | 'API-SOURCE-LIST'
   | 'API-SOURCE-CREATE'
+  | 'API-SYNONYM-DELETE'
+  | 'API-SYNONYM-GET'
+  | 'API-SYNONYM-ENABLE'
+  | 'API-SYNONYM-UPLOAD'
+  | 'API-SYNONYM-UPDATE'
+  | 'API-SYNONYM-DOWNLOAD'
+  | 'API-SYNONYM-MAPPINGS'
+  | 'API-SYNONYM-REBUILD'
   | 'API-TAG-LIST'
   | 'API-TAG-CREATE'
   | 'API-SPACE-BATCH'
@@ -235,14 +243,6 @@ export type DeferredOperationId =
   | 'API-OPS-CLEANUP'
   | 'API-OPS-OUTBOX-REPLAY'
   | 'API-OPS-RECONCILE'
-  | 'API-SYNONYM-DELETE'
-  | 'API-SYNONYM-GET'
-  | 'API-SYNONYM-ENABLE'
-  | 'API-SYNONYM-UPLOAD'
-  | 'API-SYNONYM-UPDATE'
-  | 'API-SYNONYM-DOWNLOAD'
-  | 'API-SYNONYM-MAPPINGS'
-  | 'API-SYNONYM-REBUILD'
   | 'API-USAGE-GET';
 
 export type SchemaName =
@@ -760,6 +760,14 @@ export interface RuntimeRouteMethodPathMap {
   'API-SOURCE-ARCHIVE': 'POST /v1/knowledge/spaces/{spaceId}/source-archives';
   'API-SOURCE-LIST': 'GET /v1/knowledge/spaces/{spaceId}/sources';
   'API-SOURCE-CREATE': 'POST /v1/knowledge/spaces/{spaceId}/sources';
+  'API-SYNONYM-DELETE': 'DELETE /v1/knowledge/spaces/{spaceId}/synonyms';
+  'API-SYNONYM-GET': 'GET /v1/knowledge/spaces/{spaceId}/synonyms';
+  'API-SYNONYM-ENABLE': 'PATCH /v1/knowledge/spaces/{spaceId}/synonyms';
+  'API-SYNONYM-UPLOAD': 'POST /v1/knowledge/spaces/{spaceId}/synonyms/files';
+  'API-SYNONYM-UPDATE': 'PUT /v1/knowledge/spaces/{spaceId}/synonyms/files';
+  'API-SYNONYM-DOWNLOAD': 'GET /v1/knowledge/spaces/{spaceId}/synonyms/files/{fileVersion}';
+  'API-SYNONYM-MAPPINGS': 'GET /v1/knowledge/spaces/{spaceId}/synonyms/mappings';
+  'API-SYNONYM-REBUILD': 'POST /v1/knowledge/spaces/{spaceId}/synonyms/rebuild';
   'API-TAG-LIST': 'GET /v1/knowledge/spaces/{spaceId}/tags';
   'API-TAG-CREATE': 'POST /v1/knowledge/spaces/{spaceId}/tags';
   'API-SPACE-BATCH': 'POST /v1/knowledge/spaces/batch-actions';
@@ -785,13 +793,5 @@ export interface DeferredRouteMethodPathMap {
   'API-OPS-CLEANUP': 'POST /v1/knowledge/operations/cleanup';
   'API-OPS-OUTBOX-REPLAY': 'POST /v1/knowledge/operations/outbox/{eventId}/replay';
   'API-OPS-RECONCILE': 'POST /v1/knowledge/operations/reconcile';
-  'API-SYNONYM-DELETE': 'DELETE /v1/knowledge/spaces/{spaceId}/synonyms';
-  'API-SYNONYM-GET': 'GET /v1/knowledge/spaces/{spaceId}/synonyms';
-  'API-SYNONYM-ENABLE': 'PATCH /v1/knowledge/spaces/{spaceId}/synonyms';
-  'API-SYNONYM-UPLOAD': 'POST /v1/knowledge/spaces/{spaceId}/synonyms/files';
-  'API-SYNONYM-UPDATE': 'PUT /v1/knowledge/spaces/{spaceId}/synonyms/files';
-  'API-SYNONYM-DOWNLOAD': 'GET /v1/knowledge/spaces/{spaceId}/synonyms/files/{fileVersion}';
-  'API-SYNONYM-MAPPINGS': 'GET /v1/knowledge/spaces/{spaceId}/synonyms/mappings';
-  'API-SYNONYM-REBUILD': 'POST /v1/knowledge/spaces/{spaceId}/synonyms/rebuild';
   'API-USAGE-GET': 'GET /v1/knowledge/usage';
 }

@@ -6,7 +6,9 @@ import type {
   ChannelFailureKind,
   ChannelOutcome,
   RecallOutcome,
+  SearchEngineContext,
   SearchEngineDeps,
+  SearchQueryExpansionResult,
 } from './types';
 
 function validationError(request: SearchRequest, details: Record<string, unknown>) {
@@ -114,7 +116,7 @@ function degradedForFailure(failure: ChannelFailure): DegradedInfo {
 export async function recallCandidates(
   input: SearchRequest,
   deps: SearchEngineDeps,
-  context: { requestId: string; workspaceId: string },
+  context: SearchEngineContext,
 ): Promise<RecallOutcome> {
   const knowledgeSpaceId = input.knowledgeSpaceIds[0];
   if (!knowledgeSpaceId) {
@@ -126,9 +128,26 @@ export async function recallCandidates(
       reason: 'image_search_not_supported_in_s7',
     });
   }
-  const textQueries = input.textQueries.filter((query) => query.trim().length > 0);
-  if (textQueries.length === 0) {
+  const originalQueries = input.textQueries.filter((query) => query.trim().length > 0);
+  if (originalQueries.length === 0) {
     throw validationError(input, { field: 'query', reason: 'required' });
+  }
+  const queryExpansions: SearchQueryExpansionResult[] = [];
+  const textQueries: string[] = [];
+  for (const originalQuery of originalQueries) {
+    if (!deps.queryExpansion) {
+      textQueries.push(originalQuery);
+      continue;
+    }
+    try {
+      const expansion = await deps.queryExpansion.expand(originalQuery, context);
+      queryExpansions.push(expansion);
+      textQueries.push(
+        expansion.expandedQuery.trim().length > 0 ? expansion.expandedQuery : originalQuery,
+      );
+    } catch {
+      textQueries.push(originalQuery);
+    }
   }
 
   const options = { timeoutMs: input.budgets?.recallTimeoutMs ?? 5_000 };
@@ -219,5 +238,6 @@ export async function recallCandidates(
     degraded,
     outcomes,
     totalOutcomes: outcomes.length,
+    queryExpansions,
   };
 }

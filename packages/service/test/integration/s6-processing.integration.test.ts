@@ -233,6 +233,11 @@ beforeAll(async () => {
         ];
       },
     },
+    synonymVersion: {
+      async getPublishedFileVersion() {
+        return 7;
+      },
+    },
     port: {
       async parse() {
         return {
@@ -335,6 +340,7 @@ describe('S6 C1/C2/C3 processing chain', () => {
     ).toBe('succeeded');
     const segment = await models.KnowledgeSegment.findOne({ workspaceId, sourceId }).lean();
     expect(segment?.indexStatus).toBe('indexed');
+    expect(segment?.synonymVersion).toBe(7);
     expect(segment?.fullTextTokens.length).toBeGreaterThan(0);
     expect(segment?.indexes[0]).toMatchObject({
       dimension: 768,

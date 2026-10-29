@@ -48,8 +48,8 @@ describe('S6 Job and index contract', () => {
       expect(runtimeIds.has(operationId), operationId).toBe(true);
       expect(deferredIds.has(operationId), operationId).toBe(false);
     }
-    expect(RUNTIME_ROUTE_REGISTRY).toHaveLength(102);
-    expect(DEFERRED_OPERATION_MANIFEST).toHaveLength(18);
+    expect(RUNTIME_ROUTE_REGISTRY).toHaveLength(110);
+    expect(DEFERRED_OPERATION_MANIFEST).toHaveLength(10);
     expect(TARGET_CONTRACT_COUNTS).toEqual({
       paths: 92,
       operations: 120,
@@ -129,5 +129,18 @@ describe('S6 Job and index contract', () => {
     ]) {
       expect(workerEntry).toContain(`'${queue}'`);
     }
+  });
+
+  it('keeps deployment worker dependency resolution explicit', () => {
+    const workerBuild = readFileSync(
+      join(root, 'projects', 'app', 'tsdown.workers.config.ts'),
+      'utf8',
+    );
+    const dockerfile = readFileSync(join(root, 'deploy', 'Dockerfile'), 'utf8');
+    expect(workerBuild).toContain('node_modules/.pnpm/node_modules');
+    expect(workerBuild).toContain("__kbJoin(__dirname, '../../../..')");
+    expect(dockerfile).toContain(
+      'ENV NODE_PATH=/app/node_modules/.pnpm/node_modules:/app/node_modules',
+    );
   });
 });

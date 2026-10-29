@@ -346,11 +346,55 @@ export class KnowledgeVectorRepository {
     return { deleted: result.rowCount ?? 0 };
   }
 
+  async deleteByIds(
+    input: {
+      workspaceId: string;
+      dimension: 768 | 1024 | 1536 | 3072;
+      vectorIds: readonly string[];
+    },
+    context: TenantContext,
+  ): Promise<{ deleted: number }> {
+    if (input.workspaceId !== context.workspaceId) {
+      throw vectorError(context, 'KNOWLEDGE_VALIDATION_FAILED', {
+        field: 'workspaceId',
+        reason: 'tenant_mismatch',
+      });
+    }
+    if (input.vectorIds.length === 0) return { deleted: 0 };
+    const profile = vectorProfileOfDimension(input.dimension);
+    if (!profile) {
+      throw vectorError(context, 'KNOWLEDGE_VALIDATION_FAILED', {
+        field: 'dimension',
+        actual: input.dimension,
+      });
+    }
+    try {
+      const result = await this.pool.query(
+        `DELETE FROM ${profile.tableName}
+         WHERE workspace_id = $1
+           AND id = ANY($2::uuid[])`,
+        [input.workspaceId, [...input.vectorIds]],
+      );
+      return { deleted: result.rowCount ?? 0 };
+    } catch {
+      throw vectorError(context, 'KNOWLEDGE_DEPENDENCY_UNAVAILABLE', {
+        dependency: 'postgres',
+        operation: 'vector_delete_by_ids',
+        profile: profile.tableName,
+      });
+    }
+  }
+
   async cleanupUnreferenced(
     input: {
       workspaceId: string;
       activeVectorIds: readonly string[];
       olderThan: Date;
+      retentionCandidates?: ReadonlyArray<{
+        vectorId: string;
+        availableAt: Date;
+      }>;
+      now?: Date;
       batchSize?: number;
     },
     context: TenantContext,
@@ -362,23 +406,42 @@ export class KnowledgeVectorRepository {
       });
     }
     const batchSize = Math.max(1, Math.min(input.batchSize ?? 500, 500));
+    const now = input.now ?? new Date();
+    const retentionPayload = (input.retentionCandidates ?? []).map((candidate) => ({
+      vector_id: candidate.vectorId,
+      available_at: candidate.availableAt.toISOString(),
+    }));
     const byProfile: Record<string, number> = {};
     let deleted = 0;
     for (const profile of KNOWLEDGE_VECTOR_PROFILES) {
       try {
         const result = await this.pool.query(
           `WITH candidates AS (
-             SELECT id FROM ${profile.tableName}
-             WHERE workspace_id = $1
-               AND updated_at < $2
-               AND NOT (id = ANY($3::uuid[]))
-             ORDER BY updated_at
+             SELECT vector.id FROM ${profile.tableName} vector
+             WHERE vector.workspace_id = $1
+               AND vector.updated_at < $2
+               AND NOT (vector.id = ANY($3::uuid[]))
+               AND NOT EXISTS (
+                 SELECT 1
+                 FROM jsonb_to_recordset($5::jsonb)
+                   AS retained(vector_id uuid, available_at timestamptz)
+                 WHERE retained.vector_id = vector.id
+                   AND retained.available_at > $6
+               )
+             ORDER BY vector.updated_at
              LIMIT $4
            )
            DELETE FROM ${profile.tableName} target
            USING candidates
            WHERE target.id = candidates.id`,
-          [input.workspaceId, input.olderThan, [...input.activeVectorIds], batchSize],
+          [
+            input.workspaceId,
+            input.olderThan,
+            [...input.activeVectorIds],
+            batchSize,
+            JSON.stringify(retentionPayload),
+            now,
+          ],
         );
         const count = result.rowCount ?? 0;
         byProfile[profile.tableName] = count;

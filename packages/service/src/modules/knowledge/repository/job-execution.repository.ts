@@ -34,6 +34,7 @@ const JOB_QUEUE = {
   index: 'knowledge-index',
   fulltext: 'knowledge-index',
   rebuild: 'knowledge-rebuild',
+  synonym_rebuild: 'knowledge-rebuild',
   sync: 'knowledge-sync',
   delete: 'knowledge-delete',
   cleanup: 'knowledge-cleanup',
@@ -48,7 +49,8 @@ export type PublicJobKind =
   | 'embed'
   | 'index'
   | 'fulltext'
-  | 'rebuild';
+  | 'rebuild'
+  | 'synonym_rebuild';
 
 export interface CreateJobInput {
   kind: PublicJobKind;

@@ -191,6 +191,13 @@ export class S7CitationRepository implements S7CitationPersistencePort, S7Search
             degradedCodes: [...input.degradedCodes].sort(),
             filterConditionCount: input.filterSummary?.conditionCount ?? 0,
             filterConditionHash: input.filterSummary?.conditionHash ?? null,
+            queryExpansionSummary: input.queryExpansionSummary ?? {
+              queryCount: 0,
+              hitCount: 0,
+              fallbackReasons: [],
+              queryHashes: [],
+              spaces: [],
+            },
           },
         },
         context,
@@ -275,6 +282,7 @@ export class S7CitationRepository implements S7CitationPersistencePort, S7Search
       degradedCodes: string[];
       durationMs: number;
       filterSummary?: { conditionCount: number; conditionHash: string };
+      queryExpansionSummary?: Record<string, unknown>;
       failureCode?: string;
     },
     context: TenantContext,
@@ -295,6 +303,13 @@ export class S7CitationRepository implements S7CitationPersistencePort, S7Search
           degradedCodes: [...input.degradedCodes].sort(),
           filterConditionCount: input.filterSummary?.conditionCount ?? 0,
           filterConditionHash: input.filterSummary?.conditionHash ?? null,
+          queryExpansionSummary: input.queryExpansionSummary ?? {
+            queryCount: 0,
+            hitCount: 0,
+            fallbackReasons: [],
+            queryHashes: [],
+            spaces: [],
+          },
           failureCode: input.failureCode ?? null,
         },
       },

@@ -72,10 +72,17 @@ export class S7SearchRepository {
       traceId: context.traceId,
     });
     const embeddingBinding = bindings.find((binding) => binding.modelType === 'embedding');
+    const activeModelId = embeddingBinding?.activeQueryModelId ?? embeddingBinding?.modelId;
+    const capabilityDimension = embeddingBinding?.requiredCapabilities
+      .find((capability) => /^dimension:(768|1024|1536|3072)$/.test(capability))
+      ?.split(':')[1];
+    const activeDimension =
+      embeddingBinding?.activeQueryDimension ??
+      (capabilityDimension ? (Number(capabilityDimension) as 768 | 1024 | 1536 | 3072) : null);
     const embedding = embeddingBinding
-      ? modelOfType(catalog, embeddingBinding.modelId, 'embedding')
+      ? modelOfType(catalog, activeModelId ?? '', 'embedding')
       : undefined;
-    if (!embedding || embedding.dimension === null) {
+    if (!embedding || embedding.dimension === null || activeDimension === null) {
       throw tenantError(context, 'KNOWLEDGE_VALIDATION_FAILED', {
         field: 'modelBindings.embedding',
         reason: 'active_binding_required',
@@ -89,8 +96,8 @@ export class S7SearchRepository {
       : undefined;
     return {
       embedding: {
-        modelId: embedding.modelId,
-        dimension: embedding.dimension,
+        modelId: activeModelId ?? embedding.modelId,
+        dimension: activeDimension,
       },
       ...(rerank
         ? {

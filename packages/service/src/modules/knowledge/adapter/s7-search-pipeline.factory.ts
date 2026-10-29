@@ -66,6 +66,7 @@ export class S7SearchPipelineFactory implements S7SearchPipelineFactoryPort {
           }
         : {}),
       hydrator: this.input.authorization,
+      ...(input.queryExpansion ? { queryExpansion: input.queryExpansion } : {}),
     };
   }
 }

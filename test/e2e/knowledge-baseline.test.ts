@@ -2156,7 +2156,18 @@ describe.sequential('knowledge architecture baseline E2E', () => {
                     '系统状态',
                     '连接器',
                     ...(hasSpaceNavigation
-                      ? ['概览', '来源', '导入', '分段', '标签', '访问权限', '任务', '搜索', '图片']
+                      ? [
+                          '概览',
+                          '来源',
+                          '导入',
+                          '分段',
+                          '标签',
+                          '访问权限',
+                          '任务',
+                          '搜索',
+                          '图片',
+                          '同义词',
+                        ]
                       : []),
                   ]
                 : [
@@ -2174,6 +2185,7 @@ describe.sequential('knowledge architecture baseline E2E', () => {
                           'Jobs',
                           'Search',
                           'Images',
+                          'Synonyms',
                         ]
                       : []),
                   ];
@@ -2521,7 +2533,7 @@ describe.sequential('knowledge architecture baseline E2E', () => {
       },
     });
 
-    expect(runtimeRegistry.count).toBe(102);
+    expect(runtimeRegistry.count).toBe(110);
     const runtimeIds = new Set(
       runtimeRegistry.operations.map((operation) => operation.operationId),
     );

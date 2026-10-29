@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
-import type { Connection, Model, Types } from 'mongoose';
+import type { ClientSession, Connection, Model, Types } from 'mongoose';
 import { createKnowledgeError } from '@kb/contracts';
 import type {
   ModelBindingInput,
@@ -19,6 +19,18 @@ const TYPE_ORDER: readonly S5ModelType[] = ['llm', 'embedding', 'rerank', 'vlm',
 
 interface BindingDocument extends KnowledgeModelBindingDoc {
   _id: Types.ObjectId;
+}
+
+interface S09ModelChangeRebuildBridge {
+  requestModelChangeRebuildInSession(
+    input: {
+      spaceId: string;
+      targetModelId: string;
+      targetDimension: 768 | 1024 | 1536 | 3072;
+    },
+    context: TenantContext,
+    session: ClientSession,
+  ): Promise<unknown>;
 }
 
 function bindingView(document: BindingDocument): ModelBindingView {
@@ -53,12 +65,22 @@ function mirrorOf(bindings: readonly ModelBindingInput[]): Record<string, unknow
   );
 }
 
+function dimensionOfCapabilities(capabilities: readonly string[]): 768 | 1024 | 1536 | 3072 | null {
+  const value = capabilities.find((capability) =>
+    /^dimension:(768|1024|1536|3072)$/.test(capability),
+  );
+  return value ? (Number(value.split(':')[1]) as 768 | 1024 | 1536 | 3072) : null;
+}
+
 export class S5ModelBindingRepository implements ModelBindingRepositoryPort {
   private readonly spaces: Model<KnowledgeSpaceDoc>;
   private readonly bindings: Model<KnowledgeModelBindingDoc>;
   private readonly audits: Model<KnowledgeAuditEventDoc>;
 
-  constructor(private readonly connection: Connection) {
+  constructor(
+    private readonly connection: Connection,
+    private readonly synonymRebuild?: S09ModelChangeRebuildBridge,
+  ) {
     const models = registerKnowledgeModels(connection);
     this.spaces = models.KnowledgeSpace;
     this.bindings = models.KnowledgeModelBinding;
@@ -87,6 +109,15 @@ export class S5ModelBindingRepository implements ModelBindingRepositoryPort {
     const workspaceId = requireWorkspaceId(context);
     const spaceObjectId = objectIdOf(spaceId, context, 'spaceId');
     return withMongoTransaction(this.connection, async (session) => {
+      const existingEmbedding = await this.bindings
+        .findOne({
+          workspaceId,
+          knowledgeSpaceId: spaceObjectId,
+          modelType: 'embedding',
+          deletedAt: null,
+        })
+        .session(session)
+        .lean<BindingDocument>();
       const space = await this.spaces
         .findOneAndUpdate(
           {
@@ -143,9 +174,43 @@ export class S5ModelBindingRepository implements ModelBindingRepositoryPort {
             displayName: binding.displayName,
             requiredCapabilities: [...binding.requiredCapabilities].sort(),
             status: binding.status,
+            activeQueryModelId:
+              binding.modelType === 'embedding'
+                ? (existingEmbedding?.activeQueryModelId ?? binding.modelId)
+                : null,
+            activeQueryDimension:
+              binding.modelType === 'embedding'
+                ? (existingEmbedding?.activeQueryDimension ??
+                  dimensionOfCapabilities(
+                    existingEmbedding?.requiredCapabilities ?? binding.requiredCapabilities,
+                  ))
+                : null,
             authorizedAt: now,
           })),
           { session, ordered: true },
+        );
+      }
+      const nextEmbedding = bindings.find(
+        (binding) => binding.modelType === 'embedding' && binding.status === 'active',
+      );
+      const nextDimension = nextEmbedding
+        ? dimensionOfCapabilities(nextEmbedding.requiredCapabilities)
+        : null;
+      if (
+        nextEmbedding &&
+        nextDimension &&
+        this.synonymRebuild &&
+        (existingEmbedding?.modelId !== nextEmbedding.modelId ||
+          existingEmbedding?.activeQueryDimension !== nextDimension)
+      ) {
+        await this.synonymRebuild.requestModelChangeRebuildInSession(
+          {
+            spaceId,
+            targetModelId: nextEmbedding.modelId,
+            targetDimension: nextDimension,
+          },
+          context,
+          session,
         );
       }
       await this.audits.create(

@@ -146,6 +146,28 @@ export type {
   S8DeepSearchPanelLabels,
   S8DeepSearchPanelProps,
 } from './components/s8-deep-search-panel';
+export { S09SynonymClient, S09SynonymRequestError } from './client/s09-synonym-client';
+export type {
+  S09SynonymClientOptions,
+  S09SynonymConfigData,
+  S09SynonymJobData,
+  S09SynonymMappingData,
+  S09SynonymMappingListData,
+} from './client/s09-synonym-client';
+export {
+  DEFAULT_S09_SYNONYM_LABELS,
+  S09SynonymsWorkbench,
+} from './components/s09-synonyms-workbench';
+export type {
+  S09SynonymsWorkbenchLabels,
+  S09SynonymsWorkbenchProps,
+} from './components/s09-synonyms-workbench';
+export {
+  messageKeyOf,
+  synonymUiState,
+  validateSynonymFileDraft,
+} from './components/s09-synonym-state';
+export type { S09SynonymFileDraft, S09SynonymUiState } from './components/s09-synonym-state';
 export type {
   Column,
   Density,

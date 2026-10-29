@@ -115,6 +115,14 @@ export const RUNTIME_OPERATION_IDS = Object.freeze([
   'API-SEARCH-IMAGE',
   'API-SEARCH-DEEP',
   'API-CITATION-GET',
+  'API-SYNONYM-GET',
+  'API-SYNONYM-UPLOAD',
+  'API-SYNONYM-UPDATE',
+  'API-SYNONYM-DELETE',
+  'API-SYNONYM-DOWNLOAD',
+  'API-SYNONYM-MAPPINGS',
+  'API-SYNONYM-ENABLE',
+  'API-SYNONYM-REBUILD',
 ]);
 
 const HTTP_METHODS = new Set(['get', 'post', 'put', 'patch', 'delete', 'options', 'head', 'trace']);
@@ -304,10 +312,14 @@ function scopesOf(operation) {
   return typeof scope === 'string' && scope.length > 0 ? [scope] : [];
 }
 
-function idempotencyOf(operation) {
-  return (operation.parameters ?? []).some(
-    (parameter) => parameter?.name === IDEMPOTENCY_HEADER && parameter.required === true,
-  );
+function idempotencyOf(operation, document) {
+  return (operation.parameters ?? []).some((parameter) => {
+    const resolved =
+      typeof parameter?.$ref === 'string'
+        ? document.components?.parameters?.[parameter.$ref.split('/').at(-1)]
+        : parameter;
+    return resolved?.name === IDEMPOTENCY_HEADER && resolved.required === true;
+  });
 }
 
 export function buildKnowledgeContractArtifacts(repoRoot) {
@@ -346,7 +358,7 @@ export function buildKnowledgeContractArtifacts(repoRoot) {
       requestSchema: requestSchemaOf(operation),
       responseSchema: responseSchemaOf(operation),
       scopes: scopesOf(operation),
-      idempotent: idempotencyOf(operation),
+      idempotent: idempotencyOf(operation, document),
       rateLimit: operation['x-rate-limit'] ?? null,
       timeoutMs: operation['x-timeout-ms'] ?? null,
       audit: operation['x-audit'] === true,

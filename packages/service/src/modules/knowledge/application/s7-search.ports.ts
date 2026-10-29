@@ -6,8 +6,10 @@ import type {
   SourceFilterFacts,
   FilterTagDefinition,
   SearchFilterSummary,
+  SearchQueryExpansionResult,
 } from '@kb/search';
 import type { TenantContext } from '../../../shared/persistence/knowledge/tenant';
+import type { S09QueryExpansionPort } from './s09-synonym.ports';
 
 export type S7SearchPersistenceMode = SearchApiMode | 'multi_space' | 'image' | 'deep';
 
@@ -89,6 +91,7 @@ export interface S7SearchPipelineFactoryInput {
   models: S7ResolvedModels;
   usingRerank: boolean;
   context: TenantContext;
+  queryExpansion?: SearchEngineDeps['queryExpansion'];
 }
 
 export interface S7SearchPipelineFactoryPort {
@@ -104,6 +107,8 @@ export interface S7CitationIssueInput {
   durationMs: number;
   degradedCodes: string[];
   filterSummary?: SearchFilterSummary;
+  queryExpansions?: readonly SearchQueryExpansionResult[];
+  queryExpansionSummary?: Record<string, unknown>;
   now: Date;
   deadlineAt?: number;
   signal?: AbortSignal;
@@ -143,6 +148,8 @@ export interface S7SearchAuditPort {
       degradedCodes: string[];
       durationMs: number;
       filterSummary?: SearchFilterSummary;
+      queryExpansions?: readonly SearchQueryExpansionResult[];
+      queryExpansionSummary?: Record<string, unknown>;
       failureCode?: string;
     },
     context: TenantContext,
@@ -158,6 +165,7 @@ export interface S7SearchApplicationDependencies {
   pipeline: S7SearchPipelineFactoryPort;
   citations: S7CitationPersistencePort;
   audits: S7SearchAuditPort;
+  synonymExpansion?: S09QueryExpansionPort;
   now?: () => Date;
   searchIdFactory?: () => string;
   totalTimeoutMs?: {
@@ -172,6 +180,7 @@ export interface S7CandidateCollection {
   degradedCodes: string[];
   rerankApplied: boolean;
   filterSummary?: SearchFilterSummary;
+  queryExpansions: SearchQueryExpansionResult[];
   usage: { inputTokens: number; outputTokens: number };
 }
 

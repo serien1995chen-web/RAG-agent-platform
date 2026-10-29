@@ -166,7 +166,9 @@ export interface KnowledgeObjectRefDoc extends WorkspaceFields {
   provider: 'minio' | 'aws-s3' | 'r2' | 'cos' | 'oss';
   bucket: string;
   objectKey: string;
-  purpose: 'source' | 'image' | 'export' | 'preview' | 'avatar';
+  purpose: 'source' | 'image' | 'export' | 'preview' | 'avatar' | 'synonym';
+  synonymConfigId: Types.ObjectId | null;
+  synonymFileVersion: number | null;
   sourceId: Types.ObjectId | null;
   mimeType: string;
   sizeBytes: number;
@@ -205,9 +207,11 @@ export const KnowledgeObjectRefSchema = new Schema(
     objectKey: { type: String, required: true },
     purpose: {
       type: String,
-      enum: ['source', 'image', 'export', 'preview', 'avatar'],
+      enum: ['source', 'image', 'export', 'preview', 'avatar', 'synonym'],
       required: true,
     },
+    synonymConfigId: { type: Schema.Types.ObjectId, default: null },
+    synonymFileVersion: { type: Number, default: null, min: 1 },
     sourceId: { type: Schema.Types.ObjectId, default: null },
     mimeType: { type: String, required: true },
     sizeBytes: { type: Number, required: true, min: 0 },
@@ -275,6 +279,24 @@ defineKnowledgeIndex(KnowledgeObjectRefSchema, {
 defineKnowledgeIndex(KnowledgeObjectRefSchema, {
   name: 'ix_object_upload_status',
   key: { workspaceId: 1, state: 1, 'upload.status': 1, expiresAt: 1 },
+});
+defineKnowledgeIndex(KnowledgeObjectRefSchema, {
+  name: 'ux_object_synonym_version',
+  key: { workspaceId: 1, knowledgeSpaceId: 1, purpose: 1, synonymFileVersion: 1 },
+  options: {
+    unique: true,
+    partialFilterExpression: {
+      purpose: 'synonym',
+      synonymFileVersion: { $type: 'number' },
+    },
+  },
+});
+defineKnowledgeIndex(KnowledgeObjectRefSchema, {
+  name: 'ix_object_synonym_checksum',
+  key: { workspaceId: 1, knowledgeSpaceId: 1, purpose: 1, sha256: 1 },
+  options: {
+    partialFilterExpression: { purpose: 'synonym' },
+  },
 });
 
 export interface KnowledgeCitationDoc extends WorkspaceFields {

@@ -195,6 +195,18 @@ export const knowledgeQueryKeys = {
   deepSearch: {
     result: (requestHash: string): QueryKey => ['knowledge', VERSION, 'deep-search', requestHash],
   },
+  synonyms: {
+    detail: (spaceId: string): QueryKey => ['knowledge', VERSION, 'spaces', spaceId, 'synonyms'],
+    mappings: (spaceId: string, params: QueryParams = {}): QueryKey => [
+      'knowledge',
+      VERSION,
+      'spaces',
+      spaceId,
+      'synonyms',
+      'mappings',
+      stableParams(params),
+    ],
+  },
   search: {
     result: (spaceId: string, params: QueryParams = {}): QueryKey => [
       'knowledge',

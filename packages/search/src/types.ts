@@ -96,6 +96,32 @@ export interface SearchEngineContext {
   isWorkspaceOwner?: boolean;
 }
 
+export interface SearchQueryExpansionHit {
+  knowledgeSpaceId: string;
+  fileVersion: number;
+  logicalMappingId: string;
+  standardizedTerm: string;
+  normalizedStandardizedTerm: string;
+  matchedTerm: string;
+  start: number;
+  end: number;
+}
+
+export interface SearchQueryExpansionResult {
+  originalQuery: string;
+  expandedQuery: string;
+  hits: SearchQueryExpansionHit[];
+  normalizedStandardTerms: string[];
+  appliedMappingIds: string[];
+  fallbackReason:
+    | 'disabled'
+    | 'version_changed'
+    | 'cache_mismatch'
+    | 'safety'
+    | 'code_point_limit'
+    | null;
+}
+
 export interface SearchCandidateHydratorPort {
   hydrate(
     candidates: readonly Candidate[],
@@ -124,6 +150,7 @@ export interface RecallOutcome {
   degraded: DegradedInfo[];
   outcomes: ChannelOutcome[];
   totalOutcomes: number;
+  queryExpansions: SearchQueryExpansionResult[];
 }
 
 export interface SearchEngineDeps {
@@ -198,6 +225,9 @@ export interface SearchEngineDeps {
     ): Promise<Array<{ id: string; score: number }>>;
   };
   hydrator?: SearchCandidateHydratorPort;
+  queryExpansion?: {
+    expand(query: string, context: SearchEngineContext): Promise<SearchQueryExpansionResult>;
+  };
 }
 
 export interface SearchPipelineResult extends SearchResult {
@@ -208,6 +238,7 @@ export interface SearchPipelineResult extends SearchResult {
     inputTokens: number;
     outputTokens: number;
   };
+  queryExpansions: SearchQueryExpansionResult[];
 }
 
 export interface SearchPipelinePort {

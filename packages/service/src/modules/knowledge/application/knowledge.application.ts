@@ -16,6 +16,7 @@ import type { SourceFileApplication } from './source-preview';
 import { isS06Operation } from './operations/s06-jobs';
 import { isS7Operation } from './s7-search-operation.application';
 import { isS8Operation } from './s8-search-operation.application';
+import { isS09SynonymOperation } from './operations/s09-synonyms';
 import type { KnowledgeOperationInput, KnowledgeOperationResult } from './operation-types';
 
 export type { KnowledgeOperationInput, KnowledgeOperationResult } from './operation-types';
@@ -33,6 +34,10 @@ interface S7OperationApplication {
 }
 
 interface S8OperationApplication {
+  dispatch(input: KnowledgeOperationInput): Promise<KnowledgeOperationResult>;
+}
+
+interface S09OperationApplication {
   dispatch(input: KnowledgeOperationInput): Promise<KnowledgeOperationResult>;
 }
 
@@ -92,6 +97,7 @@ export class KnowledgeApplication {
     private readonly s06?: S6OperationApplication,
     private readonly s7?: S7OperationApplication,
     private readonly s8?: S8OperationApplication,
+    private readonly s09?: S09OperationApplication,
   ) {}
 
   private async requireExistingPermission(
@@ -185,6 +191,17 @@ export class KnowledgeApplication {
 
   async dispatch(input: KnowledgeOperationInput): Promise<KnowledgeOperationResult> {
     const { context, params } = input;
+    if (isS09SynonymOperation(input.operationId)) {
+      if (!this.s09) {
+        throw createKnowledgeError({
+          code: 'KNOWLEDGE_INTERNAL_ERROR',
+          requestId: context.requestId,
+          traceId: context.traceId,
+          details: { operationId: input.operationId, reason: 's09_application_missing' },
+        });
+      }
+      return this.s09.dispatch(input);
+    }
     if (isS8Operation(input.operationId)) {
       if (!this.s8) {
         throw createKnowledgeError({

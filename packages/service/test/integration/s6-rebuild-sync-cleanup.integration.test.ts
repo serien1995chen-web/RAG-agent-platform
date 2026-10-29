@@ -19,6 +19,7 @@ import { KnowledgeFullTextRepository } from '../../src/modules/knowledge/reposit
 import { KnowledgeJobExecutionRepository } from '../../src/modules/knowledge/repository/job-execution.repository';
 import { S6ProcessingRepository } from '../../src/modules/knowledge/repository/s06-processing.repository';
 import { S5ArtifactRepository } from '../../src/modules/knowledge/repository/s5-artifact.repository';
+import { KnowledgeSynonymRepository } from '../../src/modules/knowledge/repository/s09-synonym.repository';
 import type { TenantContext } from '../../src/shared/persistence/knowledge/tenant';
 
 function requiredEnv(name: string): string {
@@ -227,6 +228,7 @@ beforeAll(async () => {
   });
   jobs = new KnowledgeJobExecutionRepository(connection);
   vectors = new KnowledgeVectorRepository(pool);
+  const synonyms = new KnowledgeSynonymRepository(connection);
   const artifacts = new S5ArtifactRepository(connection, {
     provider: objectStore.provider,
     bucket: objectStore.bucket,
@@ -290,6 +292,7 @@ beforeAll(async () => {
         ];
       },
     },
+    synonymCleanup: synonyms,
     port: {
       async parse() {
         throw new Error('parse is not used by rebuild/sync/cleanup tests');
@@ -564,6 +567,153 @@ describe('S6 rebuild, sync and cleanup', () => {
     expect(cleaned.rows.map((row) => row.id)).not.toContain(second.vectorId);
     expect(cleaned.rows.map((row) => row.id)).toContain(recentOrphan.vectorIds[0]);
     expect(cleaned.rows).toHaveLength(3);
+  }, 60_000);
+
+  it('retains switched synonym vectors until their 30 day candidate boundary', async () => {
+    const models = registerKnowledgeModels(connection);
+    const sourceId = await createSource({ name: 'synonym-cleanup.txt', status: 'ready' });
+    const now = new Date();
+    const inserted = await vectors.insert(
+      [
+        {
+          workspaceId,
+          knowledgeSpaceId: String(knowledgeSpaceId),
+          sourceId: String(sourceId),
+          segmentId: String(new mongoose.Types.ObjectId()),
+          indexId: 'default',
+          embeddingModelId: 's6-embedding-768',
+          dimension: 768,
+          vector: vectorFixture(),
+          searchEnabled: true,
+          contentHash: `retained-0-${suffix}`,
+          version: 4,
+        },
+        {
+          workspaceId,
+          knowledgeSpaceId: String(knowledgeSpaceId),
+          sourceId: String(sourceId),
+          segmentId: String(new mongoose.Types.ObjectId()),
+          indexId: 'default',
+          embeddingModelId: 's6-embedding-768',
+          dimension: 768,
+          vector: vectorFixture(),
+          searchEnabled: true,
+          contentHash: `retained-29-${suffix}`,
+          version: 1,
+        },
+        {
+          workspaceId,
+          knowledgeSpaceId: String(knowledgeSpaceId),
+          sourceId: String(sourceId),
+          segmentId: String(new mongoose.Types.ObjectId()),
+          indexId: 'default',
+          embeddingModelId: 's6-embedding-768',
+          dimension: 768,
+          vector: vectorFixture(),
+          searchEnabled: true,
+          contentHash: `eligible-30-${suffix}`,
+          version: 2,
+        },
+        {
+          workspaceId,
+          knowledgeSpaceId: String(knowledgeSpaceId),
+          sourceId: String(sourceId),
+          segmentId: String(new mongoose.Types.ObjectId()),
+          indexId: 'default',
+          embeddingModelId: 's6-embedding-768',
+          dimension: 768,
+          vector: vectorFixture(),
+          searchEnabled: true,
+          contentHash: `eligible-31-${suffix}`,
+          version: 3,
+        },
+      ],
+      context,
+    );
+    await pool.query(
+      `UPDATE knowledge_segment_vectors_768
+       SET updated_at = now() - interval '31 days'
+       WHERE workspace_id = $1 AND id = ANY($2::uuid[])`,
+      [workspaceId, inserted.vectorIds],
+    );
+    await models.KnowledgeJob.create({
+      workspaceId,
+      knowledgeSpaceId,
+      version: 2,
+      deletedAt: null,
+      createdByMemberId: context.memberId,
+      updatedByMemberId: context.memberId,
+      kind: 'synonym_rebuild',
+      resourceType: 'synonym',
+      resourceId: String(knowledgeSpaceId),
+      status: 'succeeded',
+      priority: 5,
+      idempotencyKey: `synonym-cleanup-${suffix}`,
+      inputSnapshot: { reason: 'synonym_change', fileVersion: 2 },
+      progress: { stage: 'succeeded', completed: 1, total: 1, percent: 100 },
+      attempts: 1,
+      maxAttempts: 3,
+      attemptEpoch: 1,
+      fencingToken: randomUUID(),
+      leaseOwner: null,
+      leaseExpiresAt: null,
+      heartbeatAt: null,
+      availableAt: now,
+      cancelRequestedAt: null,
+      pausedAt: null,
+      error: null,
+      result: {
+        cleanupCandidates: [
+          {
+            vectorId: inserted.vectorIds[0],
+            dimension: 768,
+            availableAt: new Date(now.getTime() + 30 * 86_400_000).toISOString(),
+          },
+          {
+            vectorId: inserted.vectorIds[1],
+            dimension: 768,
+            availableAt: new Date(now.getTime() + 86_400_000).toISOString(),
+          },
+          {
+            vectorId: inserted.vectorIds[2],
+            dimension: 768,
+            availableAt: now.toISOString(),
+          },
+          {
+            vectorId: inserted.vectorIds[3],
+            dimension: 768,
+            availableAt: new Date(now.getTime() - 86_400_000).toISOString(),
+          },
+        ],
+      },
+      expiresAt: new Date(now.getTime() + 180 * 86_400_000),
+    });
+    const cleanupJobId = await createRawJob({
+      kind: 'cleanup',
+      resourceType: 'space',
+      resourceId: String(knowledgeSpaceId),
+      inputSnapshot: { retentionDays: 30, batchSize: 500 },
+    });
+    expect(
+      await processing.handleQueue(
+        'knowledge-cleanup',
+        cleanupJobId,
+        `synonym-cleanup-worker-${suffix}`,
+        context,
+      ),
+    ).toBe('succeeded');
+    const remaining = await pool.query<{ id: string }>(
+      'SELECT id FROM knowledge_segment_vectors_768 WHERE workspace_id = $1',
+      [workspaceId],
+    );
+    expect(remaining.rows.map((row) => row.id).sort()).toEqual(
+      [inserted.vectorIds[0], inserted.vectorIds[1]].sort(),
+    );
+    const cleanup = await jobs.getRaw(cleanupJobId, context);
+    expect(cleanup.result).toMatchObject({
+      deleted: 2,
+      synonymRetentionCandidateCount: 4,
+    });
   }, 60_000);
 
   it('expands a space rebuild into source roots and finalizes the nested tree', async () => {

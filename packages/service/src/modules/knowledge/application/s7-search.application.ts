@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import {
   MultiSpaceSearchApiRequestSchema,
   SearchApiRequestSchema,
@@ -21,7 +21,9 @@ import {
   mergeMultiSpaceCitations,
   type AuthorizedCandidate,
   type ChannelFailure,
+  type SearchEngineDeps,
   type SearchFilterSummary,
+  type SearchQueryExpansionResult,
 } from '@kb/search';
 import type { TenantContext } from '../../../shared/persistence/knowledge/tenant';
 import type { KnowledgeOperationInput, KnowledgeOperationResult } from './operation-types';
@@ -39,6 +41,7 @@ interface SpaceExecution {
   partial: boolean;
   rerankApplied: boolean;
   filterSummary?: SearchFilterSummary;
+  queryExpansions: SearchQueryExpansionResult[];
   usage: { inputTokens: number; outputTokens: number };
 }
 
@@ -213,6 +216,7 @@ export class S7SearchApplication {
     mode: SearchApiMode,
     context: TenantContext,
     finalization: 'complete' | 'defer',
+    queryExpansion?: SearchEngineDeps['queryExpansion'],
   ): Promise<SpaceExecution> {
     const filterFacts = await this.input.filters.listFilterFacts(
       space.spaceId,
@@ -233,6 +237,7 @@ export class S7SearchApplication {
         partial: false,
         rerankApplied: false,
         filterSummary: compiled.summary,
+        queryExpansions: [],
         usage: { inputTokens: 0, outputTokens: 0 },
       };
     }
@@ -246,6 +251,7 @@ export class S7SearchApplication {
       models,
       usingRerank: request.usingRerank,
       context,
+      ...(queryExpansion ? { queryExpansion } : {}),
     });
     const internalRequest = toPipelineSearchRequest(request, {
       requestId: context.requestId,
@@ -274,7 +280,76 @@ export class S7SearchApplication {
       partial: result.stats.partial ?? false,
       rerankApplied: result.stats.rerankApplied ?? false,
       filterSummary: compiled.summary,
+      queryExpansions: result.queryExpansions,
       usage: result.modelUsage,
+    };
+  }
+
+  private queryExpansionFor(
+    spaceIds: readonly string[],
+    context: TenantContext,
+  ): SearchEngineDeps['queryExpansion'] | undefined {
+    if (!this.input.synonymExpansion) return undefined;
+    const cache = new Map<string, Promise<SearchQueryExpansionResult>>();
+    return {
+      expand: (query) => {
+        const cached = cache.get(query);
+        if (cached) return cached;
+        const pending = this.input
+          .synonymExpansion!.expand({ query, spaceIds }, context)
+          .then((result) => result.result);
+        cache.set(query, pending);
+        return pending;
+      },
+    };
+  }
+
+  private safeQueryExpansionSummary(
+    expansions: readonly SearchQueryExpansionResult[],
+  ): Record<string, unknown> {
+    const deduped = [
+      ...new Map(
+        expansions.map((expansion) => [
+          `${expansion.originalQuery}\0${expansion.expandedQuery}\0${expansion.fallbackReason ?? ''}`,
+          expansion,
+        ]),
+      ).values(),
+    ];
+    const spaces = new Map<string, { fileVersion: number; mappingIds: Set<string> }>();
+    for (const expansion of deduped) {
+      for (const hit of expansion.hits) {
+        const known = spaces.get(hit.knowledgeSpaceId) ?? {
+          fileVersion: hit.fileVersion,
+          mappingIds: new Set<string>(),
+        };
+        known.fileVersion = Math.max(known.fileVersion, hit.fileVersion);
+        known.mappingIds.add(hit.logicalMappingId);
+        spaces.set(hit.knowledgeSpaceId, known);
+      }
+    }
+    return {
+      queryCount: deduped.length,
+      hitCount: deduped.reduce((total, expansion) => total + expansion.hits.length, 0),
+      fallbackReasons: [
+        ...new Set(
+          deduped
+            .map((expansion) => expansion.fallbackReason)
+            .filter((reason): reason is NonNullable<typeof reason> => reason !== null),
+        ),
+      ].sort(),
+      queryHashes: deduped.map((expansion) => ({
+        original: createHash('sha256').update(expansion.originalQuery, 'utf8').digest('hex'),
+        expanded: createHash('sha256').update(expansion.expandedQuery, 'utf8').digest('hex'),
+        originalCodePoints: [...expansion.originalQuery].length,
+        expandedCodePoints: [...expansion.expandedQuery].length,
+      })),
+      spaces: [...spaces.entries()]
+        .sort(([left], [right]) => left.localeCompare(right))
+        .map(([knowledgeSpaceId, value]) => ({
+          knowledgeSpaceId,
+          fileVersion: value.fileVersion,
+          mappingIds: [...value.mappingIds].sort(),
+        })),
     };
   }
 
@@ -357,6 +432,7 @@ export class S7SearchApplication {
       durationMs: number;
       degradedCodes: string[];
       filterSummary?: SearchFilterSummary;
+      queryExpansions?: readonly SearchQueryExpansionResult[];
       deadlineAt?: number;
       signal?: AbortSignal;
     },
@@ -367,6 +443,8 @@ export class S7SearchApplication {
         ...input,
         searchMode: input.mode,
         now: this.now(),
+        queryExpansions: input.queryExpansions ?? [],
+        queryExpansionSummary: this.safeQueryExpansionSummary(input.queryExpansions ?? []),
       },
       context,
     );
@@ -382,6 +460,7 @@ export class S7SearchApplication {
       durationMs: number;
       degradedCodes: string[];
       filterSummary?: SearchFilterSummary;
+      queryExpansions?: readonly SearchQueryExpansionResult[];
       deadlineAt: number;
     },
     context: TenantContext,
@@ -456,8 +535,9 @@ export class S7SearchApplication {
       );
       const executionBudgetMs = timeoutMs - (Date.now() - startedAt);
       if (executionBudgetMs < 1) throw searchTimeout(context, timeoutMs);
+      const queryExpansion = this.queryExpansionFor([space.spaceId], context);
       const execution = await withDeadline(
-        this.executeSpace(request, space, mode, context, 'complete'),
+        this.executeSpace(request, space, mode, context, 'complete', queryExpansion),
         executionBudgetMs,
         context,
       );
@@ -479,6 +559,7 @@ export class S7SearchApplication {
           partial,
           durationMs,
           degradedCodes: execution.degradedCodes,
+          queryExpansions: execution.queryExpansions,
           deadlineAt: startedAt + timeoutMs,
           ...(execution.filterSummary ? { filterSummary: execution.filterSummary } : {}),
         },
@@ -530,6 +611,7 @@ export class S7SearchApplication {
       );
       const searchBudgetMs = timeoutMs - (Date.now() - startedAt);
       if (searchBudgetMs < 1) throw searchTimeout(context, timeoutMs);
+      const queryExpansion = this.queryExpansionFor(knowledgeSpaceIds, context);
       const outcomes = await withDeadline(
         Promise.all(
           spaces.map(
@@ -543,7 +625,14 @@ export class S7SearchApplication {
               try {
                 return {
                   space,
-                  execution: await this.executeSpace(request, space, mode, context, 'defer'),
+                  execution: await this.executeSpace(
+                    request,
+                    space,
+                    mode,
+                    context,
+                    'defer',
+                    queryExpansion,
+                  ),
                 };
               } catch (error) {
                 if (statusOf(error) === 400) throw error;
@@ -608,6 +697,7 @@ export class S7SearchApplication {
         ...merged.degraded.map((entry) => entry.reason),
       ];
       const partial = merged.partial;
+      const queryExpansions = succeeded.flatMap((entry) => entry.execution.queryExpansions);
       const durationMs = Date.now() - startedAt;
       const filterSummary = succeeded.find((entry) => entry.execution.filterSummary)?.execution
         .filterSummary;
@@ -622,6 +712,7 @@ export class S7SearchApplication {
           partial,
           durationMs,
           degradedCodes,
+          queryExpansions,
           deadlineAt: startedAt + timeoutMs,
           ...(filterSummary ? { filterSummary } : {}),
         },
@@ -675,6 +766,7 @@ export class S7SearchApplication {
         this.input.access.getAuthorizedSpace(spaceId, input.context),
       ),
     );
+    const queryExpansion = this.queryExpansionFor(knowledgeSpaceIds, input.context);
     const outcomes = await Promise.all(
       spaces.map(async (space) => {
         try {
@@ -686,6 +778,7 @@ export class S7SearchApplication {
               input.mode,
               input.context,
               'defer',
+              queryExpansion,
             ),
           };
         } catch (error) {
@@ -747,6 +840,7 @@ export class S7SearchApplication {
         ...merged.degraded.map((entry) => entry.reason),
       ],
       rerankApplied,
+      queryExpansions: succeeded.flatMap((entry) => entry.execution.queryExpansions),
       usage: succeeded.reduce(
         (total, entry) => ({
           inputTokens: total.inputTokens + entry.execution.usage.inputTokens,
