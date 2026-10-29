@@ -10,6 +10,18 @@ import { KnowledgeAuditRepository } from '../../../shared/persistence/knowledge/
 import { createKnowledgeOutboxEvent } from '../../../shared/persistence/knowledge/outbox';
 import type { S5GatewayUsageFact, S5UsageRecorderPort } from '../application/s5-model-gateway.port';
 import type { S5ProviderUsageFact, S5ProviderUsageRecorderPort } from '../application/s5-ocr-ports';
+import {
+  FREE_V1_QUOTA,
+  ZERO_V1_PRICING,
+  type S10PricingProfile,
+  type S10QuotaProfile,
+} from '../../../shared/config/s10-profiles';
+import { computeUsagePointsMicros, pointsFromMicros } from '../domain/s10-usage';
+import type {
+  S10UsageRepositoryPort,
+  S10UsageSummary,
+  S10UsageSummaryQuery,
+} from '../application/s10-operations.ports';
 
 export function usageEventIdOf(input: {
   workspaceId: string;
@@ -40,13 +52,25 @@ function objectIdOf(value: string): Types.ObjectId {
   return new Types.ObjectId(createHash('sha256').update(value).digest('hex').slice(0, 24));
 }
 
-export class S5UsageRepository implements S5UsageRecorderPort, S5ProviderUsageRecorderPort {
+export class S5UsageRepository
+  implements S5UsageRecorderPort, S5ProviderUsageRecorderPort, S10UsageRepositoryPort
+{
   private readonly usage: Model<KnowledgeUsageEventDoc>;
   private readonly audit: KnowledgeAuditRepository;
+  private readonly pricing: S10PricingProfile;
+  private readonly quota: S10QuotaProfile;
+  private readonly models: ReturnType<typeof registerKnowledgeModels>;
 
-  constructor(private readonly connection: Connection) {
-    this.usage = registerKnowledgeModels(connection).KnowledgeUsageEvent;
+  constructor(
+    private readonly connection: Connection,
+    pricing: S10PricingProfile = ZERO_V1_PRICING,
+    quota: S10QuotaProfile = FREE_V1_QUOTA,
+  ) {
+    this.models = registerKnowledgeModels(connection);
+    this.usage = this.models.KnowledgeUsageEvent;
     this.audit = new KnowledgeAuditRepository(connection);
+    this.pricing = pricing;
+    this.quota = quota;
   }
 
   async recordInvocationUsage(fact: S5GatewayUsageFact, context: TenantContext): Promise<boolean> {
@@ -70,6 +94,18 @@ export class S5UsageRepository implements S5UsageRecorderPort, S5ProviderUsageRe
     });
     const eventType =
       fact.kind === 'embedding' ? 'embedding' : fact.kind === 'rerank' ? 'rerank' : fact.kind;
+    const inputTokens = Math.max(0, fact.inputTokens ?? 0);
+    const outputTokens = Math.max(0, fact.outputTokens ?? 0);
+    const pointsMicros = computeUsagePointsMicros({
+      kind: fact.kind,
+      status: fact.status,
+      intent: fact.intent === true,
+      quantity: fact.quantity,
+      unit: fact.unit,
+      inputTokens,
+      outputTokens,
+      pricing: this.pricing,
+    });
     return withMongoTransaction(this.connection, async (session) => {
       const now = new Date();
       const result = await this.usage.updateOne(
@@ -86,6 +122,11 @@ export class S5UsageRepository implements S5UsageRecorderPort, S5ProviderUsageRe
             eventType,
             quantity: fact.quantity,
             unit: fact.unit,
+            inputTokens,
+            outputTokens,
+            pointsMicros,
+            pricingVersion: this.pricing.version,
+            pricingSnapshot: { ...this.pricing },
             modelId: fact.modelId,
             resourceType: fact.resourceType,
             resourceId: objectIdOf(fact.resourceId),
@@ -116,6 +157,10 @@ export class S5UsageRepository implements S5UsageRecorderPort, S5ProviderUsageRe
             provider: fact.provider,
             quantity: fact.quantity,
             unit: fact.unit,
+            inputTokens,
+            outputTokens,
+            pointsMicros,
+            pricingVersion: this.pricing.version,
             status: fact.status,
             attempt: fact.attempt,
             fallbackUsed: fact.fallbackUsed,
@@ -177,6 +222,14 @@ export class S5UsageRepository implements S5UsageRecorderPort, S5ProviderUsageRe
       attempt: fact.attempt,
       eventSequence: fact.eventSequence,
     });
+    const pointsMicros = computeUsagePointsMicros({
+      kind: 'ocr',
+      status: fact.status,
+      intent: fact.quantity === 0,
+      quantity: fact.quantity,
+      unit: fact.unit,
+      pricing: this.pricing,
+    });
     return withMongoTransaction(this.connection, async (session) => {
       const now = new Date();
       const result = await this.usage.updateOne(
@@ -193,6 +246,11 @@ export class S5UsageRepository implements S5UsageRecorderPort, S5ProviderUsageRe
             eventType: 'ocr',
             quantity: fact.quantity,
             unit: fact.unit,
+            inputTokens: 0,
+            outputTokens: 0,
+            pointsMicros,
+            pricingVersion: this.pricing.version,
+            pricingSnapshot: { ...this.pricing },
             modelId: null,
             resourceType: 'source',
             resourceId: objectIdOf(fact.sourceId),
@@ -222,6 +280,8 @@ export class S5UsageRepository implements S5UsageRecorderPort, S5ProviderUsageRe
             provider: fact.provider,
             quantity: fact.quantity,
             unit: fact.unit,
+            pointsMicros,
+            pricingVersion: this.pricing.version,
             status: fact.status,
             attempt: fact.attempt,
             fallbackUsed: fact.fallbackUsed,
@@ -256,5 +316,212 @@ export class S5UsageRepository implements S5UsageRecorderPort, S5ProviderUsageRe
       );
       return true;
     });
+  }
+
+  async deliverUsage(): Promise<void> {
+    // Local-only usage is delivered when the outbox worker completes.
+  }
+
+  async markDelivery(
+    eventId: string,
+    status: 'delivered' | 'failed',
+    context: TenantContext,
+  ): Promise<void> {
+    const workspaceId = requireWorkspaceId(context);
+    const now = new Date();
+    await this.usage.updateOne(
+      {
+        workspaceId,
+        eventId,
+        deletedAt: null,
+        deliveryStatus: { $ne: status },
+      },
+      {
+        $set: {
+          deliveryStatus: status,
+          deliveredAt: status === 'delivered' ? now : null,
+          updatedByMemberId: context.memberId,
+        },
+        $inc: { version: 1 },
+      },
+    );
+  }
+
+  async summary(query: S10UsageSummaryQuery, context: TenantContext): Promise<S10UsageSummary> {
+    const workspaceId = requireWorkspaceId(context);
+    const match = {
+      workspaceId,
+      deletedAt: null,
+      occurredAt: { $gte: query.from, $lte: query.to },
+      ...(query.type ? { eventType: query.type } : {}),
+      ...(query.spaceId ? { knowledgeSpaceId: new Types.ObjectId(query.spaceId) } : {}),
+    };
+    const [usageRows, deliveryRows, seriesRows, storage, indexRows, spaceCount] = await Promise.all(
+      [
+        this.usage.aggregate<{
+          aiPointsMicros: number;
+          inputTokens: number;
+          outputTokens: number;
+          parsePages: number;
+          embeddingTokens: number;
+          rerankTokens: number;
+          modelCalls: number;
+        }>([
+          { $match: match },
+          {
+            $group: {
+              _id: null,
+              aiPointsMicros: { $sum: { $ifNull: ['$pointsMicros', 0] } },
+              inputTokens: { $sum: { $ifNull: ['$inputTokens', 0] } },
+              outputTokens: { $sum: { $ifNull: ['$outputTokens', 0] } },
+              parsePages: {
+                $sum: { $cond: [{ $eq: ['$unit', 'page'] }, '$quantity', 0] },
+              },
+              embeddingTokens: {
+                $sum: {
+                  $cond: [
+                    { $eq: ['$eventType', 'embedding'] },
+                    { $ifNull: ['$inputTokens', '$quantity'] },
+                    0,
+                  ],
+                },
+              },
+              rerankTokens: {
+                $sum: {
+                  $cond: [
+                    { $eq: ['$eventType', 'rerank'] },
+                    { $ifNull: ['$inputTokens', '$quantity'] },
+                    0,
+                  ],
+                },
+              },
+              modelCalls: {
+                $sum: {
+                  $cond: [
+                    {
+                      $and: [
+                        { $in: ['$eventType', ['llm', 'vlm', 'stt', 'tts']] },
+                        { $gt: ['$quantity', 0] },
+                      ],
+                    },
+                    1,
+                    0,
+                  ],
+                },
+              },
+            },
+          },
+        ]),
+        this.usage.aggregate<{ _id: string; count: number }>([
+          { $match: match },
+          { $group: { _id: '$deliveryStatus', count: { $sum: 1 } } },
+        ]),
+        this.usage.aggregate<{
+          _id: string;
+          pointsMicros: number;
+          inputTokens: number;
+          outputTokens: number;
+          pages: number;
+        }>([
+          { $match: match },
+          {
+            $group: {
+              _id: {
+                $dateToString: {
+                  format: '%Y-%m-%dT00:00:00.000Z',
+                  date: '$occurredAt',
+                  timezone: 'UTC',
+                },
+              },
+              pointsMicros: { $sum: { $ifNull: ['$pointsMicros', 0] } },
+              inputTokens: { $sum: { $ifNull: ['$inputTokens', 0] } },
+              outputTokens: { $sum: { $ifNull: ['$outputTokens', 0] } },
+              pages: {
+                $sum: { $cond: [{ $eq: ['$unit', 'page'] }, '$quantity', 0] },
+              },
+            },
+          },
+          { $sort: { _id: 1 } },
+        ]),
+        this.models.KnowledgeObjectRef.aggregate<{ total: number }>([
+          {
+            $match: {
+              workspaceId,
+              deletedAt: null,
+              state: { $in: ['pending', 'active'] },
+              ...(query.spaceId ? { knowledgeSpaceId: new Types.ObjectId(query.spaceId) } : {}),
+            },
+          },
+          { $group: { _id: null, total: { $sum: '$sizeBytes' } } },
+        ]),
+        this.models.KnowledgeSegment.aggregate<{ total: number }>([
+          {
+            $match: {
+              workspaceId,
+              deletedAt: null,
+              ...(query.spaceId ? { knowledgeSpaceId: new Types.ObjectId(query.spaceId) } : {}),
+            },
+          },
+          { $project: { count: { $size: { $ifNull: ['$indexes', []] } } } },
+          { $group: { _id: null, total: { $sum: '$count' } } },
+        ]),
+        this.models.KnowledgeSpace.countDocuments({
+          workspaceId,
+          deletedAt: null,
+          status: 'active',
+          ...(query.spaceId ? { _id: new Types.ObjectId(query.spaceId) } : {}),
+        }),
+      ],
+    );
+    const usage = usageRows[0] ?? {
+      aiPointsMicros: 0,
+      inputTokens: 0,
+      outputTokens: 0,
+      parsePages: 0,
+      embeddingTokens: 0,
+      rerankTokens: 0,
+      modelCalls: 0,
+    };
+    const deliveries = Object.fromEntries(deliveryRows.map((row) => [row._id, Number(row.count)]));
+    return {
+      period: { from: query.from.toISOString(), to: query.to.toISOString() },
+      quota: {
+        aiPointsLimit: this.quota.aiPointsLimit,
+        aiPointsLimitMicros: this.quota.aiPointsLimit * 1_000_000,
+        storageBytesLimit: this.quota.storageBytesLimit,
+        maxSpaces: this.quota.maxSpaces,
+        maxIndexes: this.quota.maxIndexes,
+        requestsPerMinute: this.quota.requestsPerMinute,
+        maxModelConcurrency: this.quota.maxModelConcurrency,
+        profileVersion: this.quota.version,
+      },
+      usage: {
+        aiPoints: pointsFromMicros(Number(usage.aiPointsMicros)),
+        aiPointsMicros: Number(usage.aiPointsMicros),
+        storageBytes: Number(storage[0]?.total ?? 0),
+        indexCount: Number(indexRows[0]?.total ?? 0),
+        spaceCount: Number(spaceCount),
+        parsePages: Number(usage.parsePages),
+        inputTokens: Number(usage.inputTokens),
+        outputTokens: Number(usage.outputTokens),
+        embeddingTokens: Number(usage.embeddingTokens),
+        rerankTokens: Number(usage.rerankTokens),
+        modelCalls: Number(usage.modelCalls),
+      },
+      delivery: {
+        pending: Number(deliveries.pending ?? 0),
+        delivered: Number(deliveries.delivered ?? 0),
+        failed: Number(deliveries.failed ?? 0),
+      },
+      series: seriesRows.map((row) => ({
+        bucketStart: row._id,
+        pointsMicros: Number(row.pointsMicros),
+        inputTokens: Number(row.inputTokens),
+        outputTokens: Number(row.outputTokens),
+        pages: Number(row.pages),
+        storageBytes: 0,
+      })),
+      profileVersion: this.pricing.version,
+    };
   }
 }

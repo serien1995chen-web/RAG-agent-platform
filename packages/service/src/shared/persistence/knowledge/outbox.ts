@@ -138,11 +138,14 @@ export class KnowledgeOutboxDispatcher {
     const model = this.connection.models.KnowledgeOutboxEvent;
     if (!model) return { dispatched: false };
     const now = new Date();
+    const stalePublishingBefore = new Date(now.getTime() - 30_000);
     const event = await model.findOneAndUpdate(
       {
         workspaceId,
-        status: 'pending',
-        availableAt: { $lte: now },
+        $or: [
+          { status: 'pending', availableAt: { $lte: now } },
+          { status: 'publishing', updatedAt: { $lte: stalePublishingBefore } },
+        ],
       },
       {
         $set: { status: 'publishing', updatedByMemberId: context.memberId },
@@ -227,6 +230,34 @@ export class KnowledgeOutboxDispatcher {
       {
         _id: eventId,
         workspaceId,
+        status: { $in: ['failed', 'dead_letter'] },
+      },
+      {
+        $set: {
+          status: 'pending',
+          availableAt: new Date(),
+          error: null,
+          updatedByMemberId: context.memberId,
+        },
+        $inc: { version: 1 },
+      },
+    );
+    return result.modifiedCount === 1;
+  }
+
+  async replayVersion(
+    eventId: string,
+    expectedVersion: number,
+    context: TenantContext,
+  ): Promise<boolean> {
+    const workspaceId = requireWorkspaceId(context);
+    const model = this.connection.models.KnowledgeOutboxEvent;
+    if (!model) return false;
+    const result = await model.updateOne(
+      {
+        _id: eventId,
+        workspaceId,
+        version: expectedVersion,
         status: { $in: ['failed', 'dead_letter'] },
       },
       {

@@ -1,6 +1,7 @@
 import { spawnSync } from 'node:child_process';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { detectBsdVariant } from '../../scripts/generate-sbom.mjs';
 
 const repositoryRoot = resolve(import.meta.dirname, '../..');
 const checker = resolve(repositoryRoot, 'scripts/check-licenses.mjs');
@@ -61,5 +62,27 @@ describe('S4 license gate decision', () => {
     ]) {
       expect(result.stdout).toContain(id);
     }
+    expect(result.stdout).toContain('echarts-gl@2.0.9 (UNKNOWN → BSD-3-Clause, license-text)');
+    expect(result.stdout).toContain('claygl@1.3.0 (UNKNOWN → BSD-2-Clause, license-text)');
+
+    expect(
+      detectBsdVariant(`BSD 3-Clause License
+Redistributions of source code must retain the above copyright notice, this list of conditions and the following disclaimer.
+Redistributions in binary form must reproduce the above copyright notice, this list of conditions and the following disclaimer in the documentation and/or other materials provided with the distribution.
+Neither the name of the copyright holder nor the names of its contributors may be used to endorse or promote products derived from this software without specific prior written permission.
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES.`),
+    ).toBe('BSD-3-Clause');
+    expect(
+      detectBsdVariant(`Copyright (c) 2014, Example
+Redistributions of source code must retain the above copyright notice, this list of conditions and the following disclaimer.
+Redistributions in binary form must reproduce the above copyright notice, this list of conditions and the following disclaimer in the documentation and/or other materials provided with the distribution.
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.`),
+    ).toBe('BSD-2-Clause');
+    expect(detectBsdVariant('BSD-3-Clause')).toBe('');
+    expect(
+      detectBsdVariant(
+        'Redistributions of source code must retain the above copyright notice. THIS SOFTWARE IS PROVIDED "AS IS" WITHOUT WARRANTY.',
+      ),
+    ).toBe('');
   });
 });

@@ -123,6 +123,16 @@ export const RUNTIME_OPERATION_IDS = Object.freeze([
   'API-SYNONYM-MAPPINGS',
   'API-SYNONYM-ENABLE',
   'API-SYNONYM-REBUILD',
+  'API-APIKEY-LIST',
+  'API-APIKEY-CREATE',
+  'API-APIKEY-UPDATE',
+  'API-APIKEY-DELETE',
+  'API-APIKEY-ROTATE',
+  'API-USAGE-GET',
+  'API-AUDIT-LIST',
+  'API-OPS-CLEANUP',
+  'API-OPS-RECONCILE',
+  'API-OPS-OUTBOX-REPLAY',
 ]);
 
 const HTTP_METHODS = new Set(['get', 'post', 'put', 'patch', 'delete', 'options', 'head', 'trace']);
@@ -462,7 +472,7 @@ export type RuntimeOperationId =
 ${runtimeRoutes.map((route) => `  | '${route.operationId}'`).join('\n')};
 
 export type DeferredOperationId =
-${deferredRoutes.map((route) => `  | '${route.operationId}'`).join('\n')};
+${deferredRoutes.length > 0 ? deferredRoutes.map((route) => `  | '${route.operationId}'`).join('\n') : '  never'};
 
 export type SchemaName =
 ${schemaNames.map((name) => `  | '${name}'`).join('\n')};
@@ -482,9 +492,13 @@ ${runtimeRoutes
 }
 
 export interface DeferredRouteMethodPathMap {
-${deferredRoutes
-  .map((route) => `  '${route.operationId}': '${route.method} ${route.path}';`)
-  .join('\n')}
+${
+  deferredRoutes.length > 0
+    ? deferredRoutes
+        .map((route) => `  '${route.operationId}': '${route.method} ${route.path}';`)
+        .join('\n')
+    : '  readonly __none?: never;'
+}
 }
 `;
 

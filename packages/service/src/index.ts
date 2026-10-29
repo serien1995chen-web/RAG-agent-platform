@@ -5,12 +5,18 @@
 export const PACKAGE_NAME = '@kb/service' as const;
 
 export { loadKnowledgeRuntimeConfig } from './shared/config/knowledge-runtime-config';
+export {
+  canonicalJson,
+  loadS10PricingProfile,
+  loadS10QuotaProfile,
+} from './shared/config/s10-profiles';
 export { loadS5AiproxyConfig } from './shared/config/s5-aiproxy-config';
 export { loadS5RuntimeEnvironment } from './shared/config/s5-runtime-env';
 export type {
   KnowledgeMockAuthConfig,
   KnowledgeRuntimeConfig,
 } from './shared/config/knowledge-runtime-config';
+export type { S10PricingProfile, S10QuotaProfile } from './shared/config/s10-profiles';
 export { resolveSecretRef } from './shared/config/secret-ref';
 export { loadS7CitationConfig } from './shared/config/s7-citation-config';
 export type { S7CitationConfig } from './shared/config/s7-citation-config';
@@ -69,6 +75,15 @@ export {
   FixtureScopedAuthPort,
   FixtureQuotaGatePort,
   KnowledgeAccessRepository,
+  S10ApiKeyRepository,
+  S10OperationsRepository,
+  KnowledgeQuotaGate,
+  KnowledgeScopedAuthAdapter,
+  KnowledgeSharedUsageAdapter,
+  S10ObjectInventoryAdapter,
+  S10OpsWorkerApplication,
+  S10StatusApplication,
+  S10StatusProbesAdapter,
   KnowledgeCatalogRepository,
   KnowledgeConnectorRepository,
   KnowledgeCredentialCipher,
@@ -138,6 +153,9 @@ export {
   KnowledgeSynonymRepository,
   S09_SYNONYM_OPERATION_IDS,
   isS09SynonymOperation,
+  S10_OPERATION_IDS,
+  S10OperationApplication,
+  isS10Operation,
   S7CitationApplication,
   S7SearchAuthorizationAdapter,
   S7FullTextSearchAdapter,
@@ -211,8 +229,21 @@ export type {
   S09S6RebuildPort,
   S09SynonymConfigView,
   S09SynonymRepositoryPort,
+  S10ApiKeyAuthRecord,
+  S10ApiKeyRecord,
+  S10ApiKeyRepositoryPort,
+  S10ApiKeyScope,
+  S10ApiKeyStatus,
+  S10OpsResult,
+  S10OpsWorkerDependencies,
+  S10ProbeState,
+  S10StatusProbePort,
+  S10StatusView,
+  S10VerificationStatus,
 } from './modules/knowledge';
 export {
+  KnowledgeApiKeyAuthProvider,
+  KnowledgeCompositeAuthProvider,
   KnowledgeMockAuthProvider,
   tenantContextOf,
 } from './modules/knowledge/adapter/auth.adapter';

@@ -13,5 +13,7 @@ artifacts/
 .env.local
 .env.*.local
 !.env.example
+deploy/secrets/*
+!deploy/secrets/README.md
 .DS_Store
 Thumbs.db

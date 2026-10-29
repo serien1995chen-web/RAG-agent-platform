@@ -128,17 +128,19 @@ export interface ScopedAuthPort {
     workspaceId: string;
     knowledgeSpaceId: string;
     requiredScope: 'knowledge:write';
+    context: TenantContext;
   }): Promise<void>;
 }
 
 export interface QuotaGatePort {
   check(
     input: {
-      operation: 'import' | 'sync';
+      operation: 'import' | 'sync' | 'rebuild' | 'model' | 'space';
       workspaceId: string;
-      knowledgeSpaceId: string;
-      sourceCount: number;
-      sizeBytes: number;
+      knowledgeSpaceId?: string;
+      sourceCount?: number;
+      sizeBytes?: number;
+      estimatedPointsMicros?: number;
     },
     context: TenantContext,
   ): Promise<void>;

@@ -58,8 +58,8 @@ describe('S9 synonym contract', () => {
       parameters: 8,
     });
     expect(FULL_ROUTE_REGISTRY).toHaveLength(120);
-    expect(RUNTIME_ROUTE_REGISTRY).toHaveLength(110);
-    expect(DEFERRED_OPERATION_MANIFEST).toHaveLength(10);
+    expect(RUNTIME_ROUTE_REGISTRY).toHaveLength(120);
+    expect(DEFERRED_OPERATION_MANIFEST).toHaveLength(0);
     const full = new Map(FULL_ROUTE_REGISTRY.map((route) => [route.operationId, route]));
     const runtime = new Set(RUNTIME_ROUTE_REGISTRY.map((route) => route.operationId));
     const deferred = new Set(DEFERRED_OPERATION_MANIFEST.map((route) => route.operationId));

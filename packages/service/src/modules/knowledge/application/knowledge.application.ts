@@ -17,6 +17,7 @@ import { isS06Operation } from './operations/s06-jobs';
 import { isS7Operation } from './s7-search-operation.application';
 import { isS8Operation } from './s8-search-operation.application';
 import { isS09SynonymOperation } from './operations/s09-synonyms';
+import { isS10Operation } from './operations/s10-operations';
 import type { KnowledgeOperationInput, KnowledgeOperationResult } from './operation-types';
 
 export type { KnowledgeOperationInput, KnowledgeOperationResult } from './operation-types';
@@ -39,6 +40,14 @@ interface S8OperationApplication {
 
 interface S09OperationApplication {
   dispatch(input: KnowledgeOperationInput): Promise<KnowledgeOperationResult>;
+}
+
+interface S10OperationApplication {
+  dispatch(input: KnowledgeOperationInput): Promise<KnowledgeOperationResult>;
+}
+
+interface SpaceQuotaGate {
+  check(input: { operation: 'space'; workspaceId: string }, context: TenantContext): Promise<void>;
 }
 
 function objectBody(value: unknown, context: TenantContext): Record<string, unknown> {
@@ -98,6 +107,8 @@ export class KnowledgeApplication {
     private readonly s7?: S7OperationApplication,
     private readonly s8?: S8OperationApplication,
     private readonly s09?: S09OperationApplication,
+    private readonly s10?: S10OperationApplication,
+    private readonly quotaGate?: SpaceQuotaGate,
   ) {}
 
   private async requireExistingPermission(
@@ -191,6 +202,17 @@ export class KnowledgeApplication {
 
   async dispatch(input: KnowledgeOperationInput): Promise<KnowledgeOperationResult> {
     const { context, params } = input;
+    if (isS10Operation(input.operationId)) {
+      if (!this.s10) {
+        throw createKnowledgeError({
+          code: 'KNOWLEDGE_INTERNAL_ERROR',
+          requestId: context.requestId,
+          traceId: context.traceId,
+          details: { operationId: input.operationId, reason: 's10_application_missing' },
+        });
+      }
+      return this.s10.dispatch(input);
+    }
     if (isS09SynonymOperation(input.operationId)) {
       if (!this.s09) {
         throw createKnowledgeError({
@@ -282,6 +304,10 @@ export class KnowledgeApplication {
         return { status: 200, data: { items: visible, pageInfo: page.pageInfo } };
       }
       case 'API-SPACE-CREATE': {
+        await this.quotaGate?.check(
+          { operation: 'space', workspaceId: context.workspaceId },
+          context,
+        );
         const created = await this.catalog.createSpace(
           {
             kind: body.kind as 'space' | 'folder',

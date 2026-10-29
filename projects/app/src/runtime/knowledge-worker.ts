@@ -44,7 +44,13 @@ async function start(): Promise<void> {
     telemetry.log('knowledge.worker.disabled', { operation: 'bootstrap' });
     return;
   }
-  const { mongo, redis, processing, close: closeServices } = await getKnowledgeWorkerServices();
+  const {
+    mongo,
+    redis,
+    processing,
+    s10Ops,
+    close: closeServices,
+  } = await getKnowledgeWorkerServices();
   const models = registerKnowledgeModels(mongo);
   const queue = new BullMqQueueAdapter({ connection: redis });
   const dispatcher = new KnowledgeOutboxDispatcher(mongo, queue);
@@ -53,10 +59,66 @@ async function start(): Promise<void> {
     queue: queueName,
     ...QUEUE_SETTINGS[queueName],
     backoffMs: [1_000, 5_000, 30_000],
-    handler: (payload: S06QueuePayload, workerId: string) =>
-      queueName === 'knowledge-import'
+    handler: async (payload: S06QueuePayload, workerId: string) => {
+      const payloadRecord =
+        payload !== null && typeof payload === 'object'
+          ? (payload as unknown as Record<string, unknown>)
+          : null;
+      const jobId = payloadRecord && 'jobId' in payloadRecord ? payloadRecord.jobId : undefined;
+      const workspaceId =
+        payloadRecord && 'workspaceId' in payloadRecord ? payloadRecord.workspaceId : undefined;
+      const outboxEventId =
+        payloadRecord && 'outboxEventId' in payloadRecord ? payloadRecord.outboxEventId : undefined;
+      const nestedPayload =
+        payloadRecord && 'payload' in payloadRecord && payloadRecord.payload !== null
+          ? (payloadRecord.payload as Record<string, unknown>)
+          : undefined;
+      const usageEventId =
+        nestedPayload && typeof nestedPayload.usageEventId === 'string'
+          ? nestedPayload.usageEventId
+          : undefined;
+      if (
+        queueName === 'knowledge-outbox' &&
+        typeof workspaceId === 'string' &&
+        typeof outboxEventId === 'string' &&
+        nestedPayload &&
+        usageEventId
+      ) {
+        const context: TenantContext = {
+          workspaceId,
+          memberId: 'system:s10-usage-delivery',
+          requestId: `worker:usage:${usageEventId}`,
+          traceId: `worker:${config.instanceId}`,
+          scopes: ['knowledge:admin'],
+          isWorkspaceOwner: false,
+        };
+        await s10Ops.handleUsageOutbox({
+          outboxEventId,
+          payload: nestedPayload,
+          context,
+        });
+        return 'succeeded';
+      }
+      if (
+        typeof jobId === 'string' &&
+        typeof workspaceId === 'string' &&
+        (queueName === 'knowledge-cleanup' || queueName === 'knowledge-outbox')
+      ) {
+        const context: TenantContext = {
+          workspaceId,
+          memberId: 'system:s10-ops-worker',
+          requestId: `worker:${jobId}`,
+          traceId: `worker:${config.instanceId}`,
+          scopes: ['knowledge:admin'],
+          isWorkspaceOwner: false,
+        };
+        const result = await s10Ops.handleQueue(jobId, queueName, workerId, context);
+        return result.status === 'succeeded' ? 'succeeded' : 'retry';
+      }
+      return queueName === 'knowledge-import'
         ? handlers.import(payload, workerId)
-        : handlers.queue(queueName, payload, workerId),
+        : handlers.queue(queueName, payload, workerId);
+    },
   }));
   const registry = createWorkerRegistry(definitions);
   const workers = startWorkerRegistry({
@@ -83,7 +145,7 @@ async function start(): Promise<void> {
         { operation: 'outbox.dispatch' },
         async () => {
           const workspaces = await models.KnowledgeOutboxEvent.distinct('workspaceId', {
-            status: { $in: ['pending', 'failed'] },
+            status: { $in: ['pending', 'failed', 'publishing'] },
           });
           for (const workspaceId of workspaces) {
             if (typeof workspaceId !== 'string') continue;

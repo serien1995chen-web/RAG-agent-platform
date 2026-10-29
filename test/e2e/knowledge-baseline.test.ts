@@ -519,6 +519,7 @@ beforeAll(async () => {
     KB_E2E_CITATION_SECRET: `e2e-citation-${suffix}-fixed-secret-value`,
     KB_AUTH_MODE: 'mock',
     KB_MOCK_AUTH_TOKEN: authToken,
+    API_KEY_HMAC_SECRET_FILE: `${process.cwd()}/test/fixtures/s10/api-key-hmac.secret`,
     KB_MOCK_WORKSPACE_ID: workspaceId,
     KB_MOCK_MEMBER_ID: memberId,
     KB_MOCK_SCOPES: 'knowledge:read,knowledge:write,knowledge:manage,knowledge:admin',
@@ -2152,6 +2153,9 @@ describe.sequential('knowledge architecture baseline E2E', () => {
             const expectedNavigation =
               locale === 'zh-CN'
                 ? [
+                    'API Keys',
+                    '审计',
+                    '用量',
                     '知识空间',
                     '系统状态',
                     '连接器',
@@ -2171,6 +2175,9 @@ describe.sequential('knowledge architecture baseline E2E', () => {
                       : []),
                   ]
                 : [
+                    'API Keys',
+                    'Audit',
+                    'Usage',
                     'Spaces',
                     'System status',
                     'Connectors',
@@ -2533,7 +2540,7 @@ describe.sequential('knowledge architecture baseline E2E', () => {
       },
     });
 
-    expect(runtimeRegistry.count).toBe(110);
+    expect(runtimeRegistry.count).toBe(120);
     const runtimeIds = new Set(
       runtimeRegistry.operations.map((operation) => operation.operationId),
     );

@@ -30,6 +30,8 @@
     "ahooks": "catalog:",
     "date-fns": "catalog:",
     "dayjs": "catalog:",
+    "echarts": "catalog:",
+    "echarts-gl": "catalog:",
     "framer-motion": "catalog:",
     "hast-util-to-jsx-runtime": "catalog:",
     "i18next": "catalog:",

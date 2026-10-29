@@ -94,6 +94,7 @@ export async function startS4App(input: {
       KB_S7_E2E_CITATION_SECRET: `s7-e2e-citation-secret-${input.suffix}-value`,
       KB_AUTH_MODE: 'mock',
       KB_MOCK_AUTH_TOKEN: input.authToken,
+      API_KEY_HMAC_SECRET_FILE: `${process.cwd()}/test/fixtures/s10/api-key-hmac.secret`,
       KB_MOCK_WORKSPACE_ID: input.workspaceId,
       KB_MOCK_MEMBER_ID: input.memberId,
       KB_MOCK_SCOPES: 'knowledge:read,knowledge:write,knowledge:manage,knowledge:admin',

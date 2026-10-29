@@ -142,6 +142,48 @@ export const knowledgeQueryKeys = {
   },
   operations: {
     status: ['knowledge', VERSION, 'operations', 'status'] as QueryKey,
+    cleanup: (draftHash: string): QueryKey => [
+      'knowledge',
+      VERSION,
+      'operations',
+      'cleanup',
+      draftHash,
+    ],
+    reconcile: (draftHash: string): QueryKey => [
+      'knowledge',
+      VERSION,
+      'operations',
+      'reconcile',
+      draftHash,
+    ],
+  },
+  usage: {
+    summary: (params: QueryParams = {}): QueryKey => [
+      'knowledge',
+      VERSION,
+      'usage',
+      'summary',
+      stableParams(params),
+    ],
+  },
+  audit: {
+    list: (params: QueryParams = {}): QueryKey => [
+      'knowledge',
+      VERSION,
+      'audit',
+      'list',
+      stableParams(params),
+    ],
+  },
+  apiKeys: {
+    list: (params: QueryParams = {}): QueryKey => [
+      'knowledge',
+      VERSION,
+      'api-keys',
+      'list',
+      stableParams(params),
+    ],
+    detail: (keyId: string): QueryKey => ['knowledge', VERSION, 'api-keys', 'detail', keyId],
   },
   connectors: {
     detail: (connectorId?: string): QueryKey => [

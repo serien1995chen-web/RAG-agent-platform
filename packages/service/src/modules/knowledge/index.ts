@@ -70,6 +70,25 @@ export type {
   SourcePermissionState,
 } from './domain';
 export { KnowledgeAccessRepository } from './repository/access.repository';
+export { S10ApiKeyRepository } from './repository/s10-api-key.repository';
+export { S10OperationsRepository } from './repository/s10-operations.repository';
+export { KnowledgeQuotaGate } from './adapter/s10-quota.adapter';
+export { KnowledgeScopedAuthAdapter } from './adapter/s10-scoped-auth.adapter';
+export { KnowledgeSharedUsageAdapter } from './adapter/s10-shared-usage.adapter';
+export { S10ObjectInventoryAdapter } from './adapter/s10-object-inventory.adapter';
+export { S10OpsWorkerApplication } from './application/s10-ops-worker.application';
+export type {
+  S10OpsResult,
+  S10OpsWorkerDependencies,
+} from './application/s10-ops-worker.application';
+export { S10StatusApplication } from './application/s10-status.application';
+export type {
+  S10ProbeState,
+  S10StatusProbePort,
+  S10StatusView,
+  S10VerificationStatus,
+} from './application/s10-status.application';
+export { S10StatusProbesAdapter } from './adapter/s10-status-probes.adapter';
 export { KnowledgeCatalogRepository } from './repository/catalog.repository';
 export type {
   CreateDirectoryInput,
@@ -213,6 +232,30 @@ export type {
   FullTextProjectionOutput,
 } from './adapter/s06-jieba.tokenizer';
 export { KnowledgeAuditRepository, safeAuditDiff } from '../../shared/persistence/knowledge/audit';
+export {
+  S10_OPERATION_IDS,
+  S10OperationApplication,
+  isS10Operation,
+} from './application/operations/s10-operations';
+export {
+  S10_API_KEY_SCOPES,
+  defaultApiKeyExpiry,
+  effectiveApiKeyStatus,
+  generateApiKeySecret,
+  hashApiKeySecret,
+  isApiKeyUsable,
+  isWorkspaceWideApiKey,
+  matchesApiKeySecretHash,
+  rotateApiKeyState,
+  validateApiKeyScopes,
+} from './domain/s10-api-key';
+export type {
+  S10ApiKeyAuthRecord,
+  S10ApiKeyRecord,
+  S10ApiKeyScope,
+  S10ApiKeyStatus,
+} from './domain/s10-api-key';
+export type { S10ApiKeyRepositoryPort } from './application/s10-operations.ports';
 export type {
   AiproxyProviderConfig,
   ConnectorMockResult,

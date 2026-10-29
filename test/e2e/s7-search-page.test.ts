@@ -207,6 +207,7 @@ beforeAll(async () => {
 
   const config = loadKnowledgeRuntimeConfig({
     ...process.env,
+    API_KEY_HMAC_SECRET_FILE: `${process.cwd()}/test/fixtures/s10/api-key-hmac.secret`,
     KB_MONGO_URI: requiredEnv('KB_TEST_MONGO_URI'),
     KB_REDIS_URL: requiredEnv('KB_TEST_REDIS_URL'),
     KB_PG_URL: requiredEnv('KB_TEST_PG_URL'),

@@ -79,8 +79,6 @@ import {
   loadS5RuntimeEnvironment,
   loadS7CitationConfig,
   createS5ModelGateway,
-  FixtureScopedAuthPort,
-  FixtureQuotaGatePort,
   isS04Operation,
   KnowledgeAuditRepository,
   KnowledgeApplication,
@@ -88,10 +86,24 @@ import {
   KnowledgeCatalogRepository,
   FileApplication,
   KnowledgeObjectRefRepository,
+  ObjectLifecycleService,
   KnowledgeOutboxDispatcher,
   KnowledgeReferenceRepository,
   KnowledgeMockAuthProvider,
+  KnowledgeApiKeyAuthProvider,
+  KnowledgeCompositeAuthProvider,
+  KnowledgeQuotaGate,
+  KnowledgeScopedAuthAdapter,
+  KnowledgeSharedUsageAdapter,
   KnowledgeTagRepository,
+  S10ApiKeyRepository,
+  S10OperationsRepository,
+  S10ObjectInventoryAdapter,
+  S10OpsWorkerApplication,
+  S10OperationApplication,
+  S10StatusApplication,
+  S10StatusProbesAdapter,
+  registerKnowledgeModels,
   SourceFileApplication,
   RedisKnowledgeRateLimiter,
   createKnowledgeConnections,
@@ -131,7 +143,7 @@ interface RuntimeState {
   queueAdapter: BullMqQueueAdapter;
   queues: Map<string, Queue>;
   idempotencyStore: IdempotencyStore;
-  authProvider: KnowledgeMockAuthProvider;
+  authProvider: KnowledgeCompositeAuthProvider;
   rateLimiter: RedisKnowledgeRateLimiter;
   application: KnowledgeApplication;
   ingestion: S04IngestionApplication;
@@ -141,6 +153,7 @@ interface RuntimeState {
   s5Ocr: S5OcrApplication;
   s06Jobs: S06JobApplication;
   s06Processing: S06ProcessingApplication;
+  s10OpsWorker: S10OpsWorkerApplication;
   telemetry: TelemetryRuntime;
 }
 
@@ -149,6 +162,7 @@ interface TelemetryKnowledgeApiRuntime extends KnowledgeApiRuntime {
   telemetryState(): TelemetryState;
   s06WorkerServices(): {
     processing: S06ProcessingApplication;
+    s10Ops: S10OpsWorkerApplication;
     mongo: Awaited<ReturnType<typeof createKnowledgeConnections>>['mongo'];
     redis: Awaited<ReturnType<typeof createKnowledgeConnections>>['redis'];
     config: KnowledgeRuntimeConfig;
@@ -196,57 +210,6 @@ async function probe(
       latencyMs: Date.now() - startedAt,
     };
   }
-}
-
-async function measureReconciliation(state: RuntimeState, workspaceId: string) {
-  const [orphanObjects, orphanVectors] = await Promise.all([
-    state.mongo.models.KnowledgeObjectRef?.aggregate([
-      { $match: { workspaceId, deletedAt: null, state: 'active', sourceId: { $ne: null } } },
-      {
-        $lookup: {
-          from: 'knowledge_sources',
-          let: { sourceId: '$sourceId' },
-          pipeline: [
-            {
-              $match: {
-                $expr: { $eq: ['$_id', '$$sourceId'] },
-                workspaceId,
-                deletedAt: null,
-              },
-            },
-            { $project: { _id: 1 } },
-          ],
-          as: 'source',
-        },
-      },
-      { $match: { source: { $size: 0 } } },
-      { $count: 'count' },
-    ]),
-    (async () => {
-      let total = 0;
-      for (const table of [
-        'knowledge_segment_vectors_768',
-        'knowledge_segment_vectors_1024',
-        'knowledge_segment_vectors_1536',
-        'knowledge_segment_vectors_3072',
-      ]) {
-        const result = await state.pool.query<{ count: string }>(
-          `SELECT COUNT(*)::text AS count FROM ${table}
-           WHERE workspace_id = $1 AND (deleted_at IS NOT NULL OR search_enabled = false)`,
-          [workspaceId],
-        );
-        total += Number(result.rows[0]?.count ?? 0);
-      }
-      return total;
-    })(),
-  ]);
-  return {
-    lastRunAt: new Date().toISOString(),
-    orphanObjects: Number(
-      (orphanObjects as Array<{ count?: number }> | undefined)?.[0]?.count ?? 0,
-    ),
-    orphanVectors,
-  };
 }
 
 async function bootstrapRuntime(): Promise<TelemetryKnowledgeApiRuntime> {
@@ -315,7 +278,22 @@ async function bootstrapRuntime(): Promise<TelemetryKnowledgeApiRuntime> {
       };
     },
   };
-  const s5Usage = new S5UsageRepository(mongo);
+  const s5Usage = new S5UsageRepository(mongo, config.s10.pricing, config.s10.quota);
+  const s10Usage =
+    config.s10.sharedUsage === undefined
+      ? s5Usage
+      : new KnowledgeSharedUsageAdapter(
+          {
+            ...config.s10.sharedUsage,
+            profileVersion: config.s10.quota.version,
+          },
+          s5Usage,
+        );
+  const quotaGate = new KnowledgeQuotaGate({
+    usage: s10Usage,
+    redis,
+    quota: config.s10.quota,
+  });
   const s5Catalog =
     s5AiproxyConfig.modelMode === 'mock'
       ? new S5MockModelCatalog()
@@ -340,6 +318,7 @@ async function bootstrapRuntime(): Promise<TelemetryKnowledgeApiRuntime> {
       transport: s5ModelTransport,
     }),
     usage: s5Usage,
+    quotaGate,
     limiter: new S5KeyedSemaphore(10),
   });
   const s5Models = new S5ModelApplication(s5Catalog);
@@ -654,7 +633,7 @@ async function bootstrapRuntime(): Promise<TelemetryKnowledgeApiRuntime> {
     rawFiles: synonymRawFiles,
     access,
   });
-  const s09Operations = new S09SynonymOperationApplication(synonymApplication);
+  const s09Operations = new S09SynonymOperationApplication(synonymApplication, quotaGate);
   const s09Expansion = new S09QueryExpansionApplication(
     new S09SynonymQueryExpansionAdapter({
       repository: synonymRepository,
@@ -681,6 +660,16 @@ async function bootstrapRuntime(): Promise<TelemetryKnowledgeApiRuntime> {
     jobs: jobExecution,
   });
   const s06Jobs = new S06JobApplication(jobExecution, segmentIndexes, catalog, access);
+  const s10ApiKeys = new S10ApiKeyRepository(mongo);
+  const s10Ops = new S10OperationsRepository(mongo, queueAdapter);
+  const s10Operations = new S10OperationApplication({
+    apiKeys: s10ApiKeys,
+    usage: s10Usage,
+    audits: s10Ops,
+    ops: s10Ops,
+    catalog,
+    hmacSecret: config.s10.apiKeyHmacSecret,
+  });
   const s7Authorization = new S7SearchAuthorizationAdapter(mongo, access);
   const s7SearchRepository = new S7SearchRepository(mongo, s5Catalog);
   const s8DeepRepository = new S8DeepSearchRepository(mongo, s5Catalog);
@@ -747,8 +736,8 @@ async function bootstrapRuntime(): Promise<TelemetryKnowledgeApiRuntime> {
     customApi: new CustomApiLibraryClient(),
     providers: connectorClients,
     access,
-    scopedAuth: new FixtureScopedAuthPort(),
-    quotaGate: new FixtureQuotaGatePort(),
+    scopedAuth: new KnowledgeScopedAuthAdapter(access),
+    quotaGate,
     templateParser: {
       parse(input) {
         return parseImportTemplate(input);
@@ -776,6 +765,207 @@ async function bootstrapRuntime(): Promise<TelemetryKnowledgeApiRuntime> {
     fileTickets,
     archiveSafety,
   );
+  const objectLifecycle = new ObjectLifecycleService(objectRefs, objectStore);
+  const s10Inventory = new S10ObjectInventoryAdapter(mongo, pool);
+  const s10OpsWorker = new S10OpsWorkerApplication({
+    jobs: jobExecution,
+    async deliverUsage({ eventId, payload, context }) {
+      try {
+        await s10Usage.deliverUsage({ eventId, payload }, context);
+        await s5Usage.markDelivery(eventId, 'delivered', context);
+      } catch (error) {
+        await s5Usage.markDelivery(eventId, 'failed', context).catch(() => undefined);
+        throw error;
+      }
+    },
+    async cleanup({ scope, context, step }) {
+      const startedAt = new Date().toISOString();
+      const scopes =
+        scope === 'all'
+          ? ['ttl_objects', 'orphan_objects', 'orphan_vectors', 'stale_jobs']
+          : [scope];
+      let diffCount = 0;
+      let repairedCount = 0;
+      let retryable = 0;
+      let deadLetter = 0;
+      const items: Array<Record<string, unknown>> = [];
+      for (const current of scopes) {
+        await step(current, 'running', { scope: current });
+        if (current === 'ttl_objects' || current === 'orphan_objects') {
+          const result = await objectLifecycle.cleanup(context);
+          diffCount += result.eligible;
+          repairedCount += result.deleted;
+          retryable += result.retryable;
+          deadLetter += result.failed;
+          items.push({ scope: current, ...result });
+        } else if (current === 'orphan_vectors') {
+          const activeVectorIds = await s10Inventory.listActiveVectorIds(context);
+          const result = await vectorRepository.cleanupUnreferenced(
+            {
+              workspaceId: context.workspaceId,
+              activeVectorIds,
+              olderThan: new Date(Date.now() - 30 * 86_400_000),
+              batchSize: 500,
+            },
+            context,
+          );
+          diffCount += result.deleted;
+          repairedCount += result.deleted;
+          items.push({ scope: current, ...result });
+        } else if (current === 'stale_jobs') {
+          const recovered = await jobExecution.recoverExpiredLeases(context);
+          diffCount += recovered;
+          repairedCount += recovered;
+          items.push({ scope: current, recovered });
+        } else {
+          throw createKnowledgeError({
+            code: 'KNOWLEDGE_VALIDATION_FAILED',
+            requestId: context.requestId,
+            traceId: context.traceId,
+            details: { field: 'scope', value: current },
+          });
+        }
+        await step(current, 'succeeded', {
+          scope: current,
+          diffCount,
+          repairedCount,
+          retryable,
+          deadLetter,
+        });
+      }
+      return {
+        diffCount,
+        repairedCount,
+        retryable,
+        deadLetter,
+        items,
+        startedAt,
+        finishedAt: new Date().toISOString(),
+      };
+    },
+    async reconcile({ scope, repair, context, step }) {
+      const startedAt = new Date().toISOString();
+      const scopes = scope === 'all' ? ['objects', 'vectors', 'fulltext', 'outbox'] : [scope];
+      let diffCount = 0;
+      let repairedCount = 0;
+      let retryable = 0;
+      let deadLetter = 0;
+      const items: Array<Record<string, unknown>> = [];
+      for (const current of scopes) {
+        await step(current, 'running', { scope: current, repair });
+        if (current === 'objects') {
+          const objects = await s10Inventory.listObjects(context);
+          let missing = 0;
+          for (const object of objects) {
+            try {
+              await objectStore.headObject(object.bucket, object.objectKey, {
+                workspaceId: context.workspaceId,
+                knowledgeSpaceId: 'system',
+                requestId: context.requestId,
+                traceId: context.traceId,
+              });
+            } catch {
+              missing += 1;
+              if (repair && !(await s10Inventory.activeObjectReference(object.id, context))) {
+                await registerKnowledgeModels(mongo).KnowledgeObjectRef.updateOne(
+                  {
+                    workspaceId: context.workspaceId,
+                    _id: new mongo.base.Types.ObjectId(object.id),
+                    version: object.version,
+                    deletedAt: null,
+                  },
+                  {
+                    $set: {
+                      state: 'deleted',
+                      updatedByMemberId: context.memberId,
+                    },
+                    $inc: { version: 1 },
+                  },
+                );
+                repairedCount += 1;
+              }
+            }
+          }
+          diffCount += missing;
+          items.push({ scope: current, scanned: objects.length, missing });
+        } else if (current === 'vectors') {
+          const [activeIds, stored] = await Promise.all([
+            s10Inventory.listActiveVectorIds(context),
+            s10Inventory.listVectorIds(context),
+          ]);
+          const active = new Set(activeIds);
+          const orphanIds = stored.filter((entry) => !active.has(entry.id));
+          diffCount += orphanIds.length;
+          if (repair && orphanIds.length > 0) {
+            const result = await vectorRepository.cleanupUnreferenced(
+              {
+                workspaceId: context.workspaceId,
+                activeVectorIds: activeIds,
+                olderThan: new Date(Date.now() - 30 * 86_400_000),
+                batchSize: 500,
+              },
+              context,
+            );
+            repairedCount += result.deleted;
+          }
+          items.push({
+            scope: current,
+            active: activeIds.length,
+            stored: stored.length,
+            orphan: orphanIds.length,
+          });
+        } else if (current === 'fulltext') {
+          const drift = await s10Inventory.fulltextDriftCount(context);
+          diffCount += drift;
+          items.push({ scope: current, drift });
+        } else if (current === 'outbox') {
+          const counts = await s10Inventory.outboxStatusCounts(context);
+          const drift = Number(counts.failed ?? 0) + Number(counts.dead_letter ?? 0);
+          diffCount += drift;
+          retryable += Number(counts.failed ?? 0);
+          deadLetter += Number(counts.dead_letter ?? 0);
+          items.push({ scope: current, counts });
+        } else {
+          throw createKnowledgeError({
+            code: 'KNOWLEDGE_VALIDATION_FAILED',
+            requestId: context.requestId,
+            traceId: context.traceId,
+            details: { field: 'scope', value: current },
+          });
+        }
+        await step(current, 'succeeded', {
+          scope: current,
+          repair,
+          diffCount,
+          repairedCount,
+        });
+      }
+      return {
+        diffCount,
+        repairedCount,
+        retryable,
+        deadLetter,
+        items,
+        startedAt,
+        finishedAt: new Date().toISOString(),
+      };
+    },
+    async replay({ context }) {
+      const result = await outboxDispatcher.dispatchOnce(context);
+      return {
+        diffCount: result.dispatched ? 1 : 0,
+        repairedCount: result.dispatched ? 1 : 0,
+        retryable: result.dispatched ? 0 : 1,
+        deadLetter: 0,
+        items: [
+          {
+            eventKey: result.eventKey ?? null,
+            dispatched: result.dispatched,
+          },
+        ],
+      };
+    },
+  });
   const application = new KnowledgeApplication(
     catalog,
     new KnowledgeTagRepository(mongo),
@@ -791,6 +981,8 @@ async function bootstrapRuntime(): Promise<TelemetryKnowledgeApiRuntime> {
     s7Operations,
     s8Operations,
     s09Operations,
+    s10Operations,
+    quotaGate,
   );
   const queues = new Map(
     KNOWLEDGE_QUEUE_NAMES.map((name) => [name, new Queue(name, { connection: redis })]),
@@ -804,7 +996,10 @@ async function bootstrapRuntime(): Promise<TelemetryKnowledgeApiRuntime> {
     queueAdapter,
     queues,
     idempotencyStore: new RedisIdempotencyStore(redis),
-    authProvider: new KnowledgeMockAuthProvider(config.auth, config.environment),
+    authProvider: new KnowledgeCompositeAuthProvider(
+      new KnowledgeMockAuthProvider(config.auth, config.environment),
+      new KnowledgeApiKeyAuthProvider(s10ApiKeys, config.s10.apiKeyHmacSecret),
+    ),
     rateLimiter: new RedisKnowledgeRateLimiter(redis),
     application,
     ingestion,
@@ -814,6 +1009,7 @@ async function bootstrapRuntime(): Promise<TelemetryKnowledgeApiRuntime> {
     s5Ocr,
     s06Jobs,
     s06Processing: s6Processing,
+    s10OpsWorker,
     telemetry,
   };
 
@@ -896,6 +1092,15 @@ async function bootstrapRuntime(): Promise<TelemetryKnowledgeApiRuntime> {
       },
     };
   };
+  const s10Status = new S10StatusApplication(
+    new S10StatusProbesAdapter({
+      config,
+      connection: mongo,
+      queues,
+      readiness,
+      models: s5Catalog,
+    }),
+  );
 
   const runtime: TelemetryKnowledgeApiRuntime = {
     async authenticate(request, input): Promise<KnowledgeAuthSubject> {
@@ -913,6 +1118,13 @@ async function bootstrapRuntime(): Promise<TelemetryKnowledgeApiRuntime> {
         workspaceId: input.workspaceId,
         requestId: input.requestId,
         traceId: input.traceId,
+        ipAddress:
+          (Array.isArray(request.headers['x-forwarded-for'])
+            ? request.headers['x-forwarded-for'][0]
+            : request.headers['x-forwarded-for']) ?? request.socket?.remoteAddress,
+        userAgent: Array.isArray(request.headers['user-agent'])
+          ? request.headers['user-agent'][0]
+          : request.headers['user-agent'],
         ...(consoleSession ? { consoleSession } : {}),
       });
     },
@@ -935,6 +1147,7 @@ async function bootstrapRuntime(): Promise<TelemetryKnowledgeApiRuntime> {
     s06WorkerServices() {
       return {
         processing: state.s06Processing,
+        s10Ops: state.s10OpsWorker,
         mongo: state.mongo,
         redis: state.redis,
         config: state.config,
@@ -944,36 +1157,19 @@ async function bootstrapRuntime(): Promise<TelemetryKnowledgeApiRuntime> {
       };
     },
     async operationsStatus(input) {
-      const health = await readiness(input.requestId);
-      const queueDepth: Record<string, number> = {};
-      for (const [name, queue] of state.queues) {
-        const counts = await queue.getJobCounts('waiting', 'active', 'delayed', 'failed');
-        queueDepth[name] =
-          (counts.waiting ?? 0) +
-          (counts.active ?? 0) +
-          (counts.delayed ?? 0) +
-          (counts.failed ?? 0);
-      }
-      const vectorHealthy =
-        health.body.checks.find((check) => check.name === 'postgres')?.status === 'ok';
-      const storageHealthy =
-        health.body.checks.find((check) => check.name === 's3')?.status === 'ok';
-      return {
-        status:
-          vectorHealthy &&
-          storageHealthy &&
-          health.body.checks.every((check) => check.status !== 'down')
-            ? 'ok'
-            : 'degraded',
-        queueDepth,
-        storage: { provider: 'minio', healthy: storageHealthy },
-        vector: {
-          backend: 'pgvector',
-          healthy: vectorHealthy,
-          profiles: [768, 1024, 1536, 3072],
-        },
-        reconciliation: await measureReconciliation(state, input.workspaceId),
-      };
+      return s10Status.get({
+        workspaceId: input.workspaceId,
+        memberId: input.memberId,
+        requestId: input.requestId,
+        traceId: input.traceId,
+        scopes: input.scopes,
+        isWorkspaceOwner: input.isWorkspaceOwner,
+        ...(input.apiKeyId ? { apiKeyId: input.apiKeyId } : {}),
+        ...(input.apiKeyPrefix ? { apiKeyPrefix: input.apiKeyPrefix } : {}),
+        ...(input.apiKeySpaceIds ? { apiKeySpaceIds: input.apiKeySpaceIds } : {}),
+        ...(input.ipHash ? { ipHash: input.ipHash } : {}),
+        ...(input.userAgentHash ? { userAgentHash: input.userAgentHash } : {}),
+      });
     },
     async dispatch(input: KnowledgeDispatchInput): Promise<KnowledgeDispatchResult> {
       if (input.route.operationId === 'API-OPS-STATUS') {
@@ -983,6 +1179,20 @@ async function bootstrapRuntime(): Promise<TelemetryKnowledgeApiRuntime> {
             requestId: input.context.requestId,
             traceId: input.context.traceId,
             workspaceId: input.context.workspaceId,
+            memberId: input.context.memberId,
+            scopes: input.context.scopes,
+            isWorkspaceOwner: input.context.subject.isWorkspaceOwner ?? false,
+            ...(input.context.subject.apiKeyId ? { apiKeyId: input.context.subject.apiKeyId } : {}),
+            ...(input.context.subject.apiKeyPrefix
+              ? { apiKeyPrefix: input.context.subject.apiKeyPrefix }
+              : {}),
+            ...(input.context.subject.spaceIds
+              ? { apiKeySpaceIds: input.context.subject.spaceIds }
+              : {}),
+            ...(input.context.subject.ipHash ? { ipHash: input.context.subject.ipHash } : {}),
+            ...(input.context.subject.userAgentHash
+              ? { userAgentHash: input.context.subject.userAgentHash }
+              : {}),
           }),
         };
       }
@@ -993,6 +1203,15 @@ async function bootstrapRuntime(): Promise<TelemetryKnowledgeApiRuntime> {
           scopes: input.context.scopes,
           authType: input.context.subject.authType,
           isWorkspaceOwner: input.context.subject.isWorkspaceOwner ?? false,
+          ...(input.context.subject.apiKeyId ? { apiKeyId: input.context.subject.apiKeyId } : {}),
+          ...(input.context.subject.apiKeyPrefix
+            ? { apiKeyPrefix: input.context.subject.apiKeyPrefix }
+            : {}),
+          ...(input.context.subject.spaceIds ? { spaceIds: input.context.subject.spaceIds } : {}),
+          ...(input.context.subject.ipHash ? { ipHash: input.context.subject.ipHash } : {}),
+          ...(input.context.subject.userAgentHash
+            ? { userAgentHash: input.context.subject.userAgentHash }
+            : {}),
         },
         input.context.workspaceId,
         input.context.requestId,
@@ -1035,6 +1254,7 @@ export function getKnowledgeApiRuntime(): Promise<TelemetryKnowledgeApiRuntime> 
 
 export async function getKnowledgeWorkerServices(): Promise<{
   processing: S06ProcessingApplication;
+  s10Ops: S10OpsWorkerApplication;
   mongo: Awaited<ReturnType<typeof createKnowledgeConnections>>['mongo'];
   redis: Awaited<ReturnType<typeof createKnowledgeConnections>>['redis'];
   config: KnowledgeRuntimeConfig;

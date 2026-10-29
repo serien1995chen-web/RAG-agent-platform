@@ -27,6 +27,33 @@ export type {
 } from './client/file-upload';
 export type { ConsoleSession } from './client/knowledge-client';
 export {
+  apiKeysPath,
+  auditPath,
+  cleanup,
+  createApiKey,
+  deleteApiKey,
+  fetchStatus,
+  fetchUsage,
+  listApiKeys,
+  listAudit,
+  reconcile,
+  rotateApiKey,
+  updateApiKey,
+  usagePath,
+} from './client/s10-ops-client';
+export type {
+  S10ApiKey,
+  S10ApiKeyList,
+  S10ApiKeyScope,
+  S10ApiKeySecret,
+  S10ApiKeyStatus,
+  S10AuditEvent,
+  S10AuditList,
+  S10OpsJob,
+  S10Status,
+  S10UsageSummary,
+} from './client/s10-ops-client';
+export {
   Button,
   EmptyState,
   Field,
@@ -176,6 +203,13 @@ export type {
 } from './components/data-table';
 export { KnowledgeAppShell } from './components/knowledge-shell';
 export type { ShellLocation } from './components/knowledge-shell';
+export { S10UsageDashboard } from './components/s10-usage-dashboard';
+export { S10AuditPanel } from './components/s10-audit-panel';
+export type { S10AuditFilters } from './components/s10-audit-panel';
+export { S10ApiKeyManager } from './components/s10-api-key-manager';
+export { S10SystemStatus } from './components/s10-system-status';
+export { createSecretDraft, s10UiState } from './components/s10-ops-state';
+export type { S10UiState } from './components/s10-ops-state';
 export {
   S7_SEARCH_MODES,
   S7_TAG_OPERATORS,

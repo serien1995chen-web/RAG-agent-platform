@@ -151,6 +151,7 @@ beforeAll(async () => {
       KB_S5_E2E_CITATION_SECRET: `s5-e2e-citation-${suffix}-fixed-secret-value`,
       KB_AUTH_MODE: 'mock',
       KB_MOCK_AUTH_TOKEN: authToken,
+      API_KEY_HMAC_SECRET_FILE: `${process.cwd()}/test/fixtures/s10/api-key-hmac.secret`,
       KB_MOCK_WORKSPACE_ID: workspaceId,
       KB_MOCK_MEMBER_ID: memberId,
       KB_MOCK_SCOPES: 'knowledge:read,knowledge:write,knowledge:manage,knowledge:admin',
