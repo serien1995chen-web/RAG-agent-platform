@@ -18,6 +18,11 @@ export interface KnowledgeUsageEventDoc extends WorkspaceFields {
     | 'sync';
   quantity: number;
   unit: 'page' | 'image' | 'token' | 'vector' | 'byte' | 'request' | 'second';
+  inputTokens: number;
+  outputTokens: number;
+  pointsMicros: number;
+  pricingVersion: string;
+  pricingSnapshot: Record<string, unknown>;
   modelId: string | null;
   resourceType: 'space' | 'source' | 'segment' | 'job';
   resourceId: Types.ObjectId;
@@ -46,6 +51,26 @@ export const KnowledgeUsageEventSchema = new Schema(
       enum: ['page', 'image', 'token', 'vector', 'byte', 'request', 'second'],
       required: true,
     },
+    inputTokens: {
+      type: Number,
+      default: 0,
+      min: 0,
+      validate: Number.isSafeInteger,
+    },
+    outputTokens: {
+      type: Number,
+      default: 0,
+      min: 0,
+      validate: Number.isSafeInteger,
+    },
+    pointsMicros: {
+      type: Number,
+      default: 0,
+      min: 0,
+      validate: Number.isSafeInteger,
+    },
+    pricingVersion: { type: String, default: 'zero-v1' },
+    pricingSnapshot: { type: Schema.Types.Mixed, default: {} },
     modelId: { type: String, default: null },
     resourceType: {
       type: String,
@@ -92,6 +117,7 @@ export interface KnowledgeAuditEventDoc extends WorkspaceFields {
   action: string;
   actorMemberId: string;
   apiKeyId: Types.ObjectId | null;
+  apiKeyPrefix: string | null;
   resourceType:
     | 'workspace'
     | 'space'
@@ -121,6 +147,7 @@ export const KnowledgeAuditEventSchema = new Schema(
     action: { type: String, required: true },
     actorMemberId: { type: String, required: true },
     apiKeyId: { type: Schema.Types.ObjectId, default: null },
+    apiKeyPrefix: { type: String, default: null },
     resourceType: {
       type: String,
       enum: ['workspace', 'space', 'directory', 'source', 'segment', 'job', 'connector', 'api_key'],

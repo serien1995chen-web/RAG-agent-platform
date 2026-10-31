@@ -72,6 +72,11 @@ export const KNOWLEDGE_ERROR_CATALOG = {
     retryable: false,
     message: 'The workspace quota was exceeded.',
   },
+  KNOWLEDGE_API_KEY_SCOPE_INVALID: {
+    status: 422,
+    retryable: false,
+    message: 'The API Key scope set is invalid.',
+  },
   KNOWLEDGE_PAYLOAD_TOO_LARGE: {
     status: 413,
     retryable: false,

@@ -307,14 +307,26 @@ function readLicenseText(packageDir) {
   return '';
 }
 
-/** 裸 BSD 声明：仅当 LICENSE 文本匹配 BSD-2-Clause/BSD-3-Clause 时才归一化。 */
+/** 裸 BSD 声明：仅当 LICENSE 文本包含完整 BSD-2/3 clause 结构时才归一化。 */
 export function detectBsdVariant(text) {
-  if (/BSD[- ]2[- ]Clause/i.test(text)) return 'BSD-2-Clause';
-  if (/BSD[- ]3[- ]Clause/i.test(text)) return 'BSD-3-Clause';
-  const redistributionSource = /Redistributions of source code must retain/i.test(text);
-  const redistributionBinary = /Redistributions in binary form must reproduce/i.test(text);
-  if (!redistributionSource || !redistributionBinary) return '';
-  const hasEndorsementClause = /Neither the name|endorse or promote/i.test(text);
+  const normalized = String(text).replace(/\s+/g, ' ').trim();
+  const hasSourceClause =
+    /Redistributions of source code must retain the above copyright notice,? this list of conditions and the following disclaimer\.?/i.test(
+      normalized,
+    );
+  const hasBinaryClause =
+    /Redistributions in binary form must reproduce the above copyright notice,? this list of conditions and the following disclaimer in the documentation and\/or other materials\.?/i.test(
+      normalized,
+    );
+  const hasDisclaimer =
+    /THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"/i.test(
+      normalized,
+    ) && /ARE DISCLAIMED/i.test(normalized);
+  if (!hasSourceClause || !hasBinaryClause || !hasDisclaimer) return '';
+  const hasEndorsementClause =
+    /Neither the name of (?:the copyright holder|[^ ]+) nor the names of its contributors may be used to endorse or promote products derived from this software without specific prior written permission/i.test(
+      normalized,
+    );
   return hasEndorsementClause ? 'BSD-3-Clause' : 'BSD-2-Clause';
 }
 
@@ -324,6 +336,10 @@ export function normalizeLicense(declared, packageDir) {
     const text = readLicenseText(packageDir);
     if (/^The MIT License(?: \(MIT\))?/im.test(text)) {
       return { declared: 'UNKNOWN', normalized: 'MIT', resolution: 'license-text' };
+    }
+    const detected = detectBsdVariant(text);
+    if (detected.length > 0) {
+      return { declared: 'UNKNOWN', normalized: detected, resolution: 'license-text' };
     }
     return { declared: 'UNKNOWN', normalized: 'UNKNOWN', resolution: 'unknown' };
   }

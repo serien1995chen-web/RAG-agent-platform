@@ -71,6 +71,7 @@ export class FixtureScopedAuthPort implements ScopedAuthPort {
     workspaceId: string;
     knowledgeSpaceId: string;
     requiredScope: 'knowledge:write';
+    context: TenantContext;
   }): Promise<void> {
     if (
       !input.subject.workspaceIds.includes(input.workspaceId) ||
@@ -232,6 +233,7 @@ async function assertWriteAccess(
     workspaceId: context.workspaceId,
     knowledgeSpaceId,
     requiredScope: 'knowledge:write',
+    context,
   });
 }
 

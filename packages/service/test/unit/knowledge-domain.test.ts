@@ -79,8 +79,15 @@ describe('knowledge domain invariants', () => {
   it('requires an exact positive version for every batch item and redacts audit data', () => {
     expect(assertBatchVersions(['a', 'b'], { a: 1, b: 2 }, context)).toEqual({ a: 1, b: 2 });
     expect(() => assertBatchVersions(['a'], { a: 1, b: 2 }, context)).toThrow();
-    expect(safeAuditDiff({ token: 'secret', nested: { authorization: 'Bearer x' } })).toEqual({
+    expect(
+      safeAuditDiff({
+        token: 'secret',
+        promptVersion: 's8.image-caption.v1',
+        nested: { authorization: 'Bearer x' },
+      }),
+    ).toEqual({
       token: '[REDACTED]',
+      promptVersion: 's8.image-caption.v1',
       nested: { authorization: '[REDACTED]' },
     });
   });

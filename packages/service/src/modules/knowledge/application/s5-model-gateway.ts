@@ -12,7 +12,10 @@ import type {
   S5ModelTransportError,
   S5UsageRecorderPort,
   S5UsageUnit,
+  S10ModelQuotaPort,
 } from './s5-model-gateway.port';
+import { ZERO_V1_PRICING, type S10PricingProfile } from '../../../shared/config/s10-profiles';
+import { computeUsagePointsMicros } from '../domain/s10-usage';
 import { S5ModelTransportError as TransportError } from './s5-model-gateway.port';
 
 const MAX_INPUT_TOKENS = 32_000;
@@ -46,6 +49,67 @@ function usageUnit(kind: S5ModelType): S5UsageUnit {
 function approximateTokens(text: string | undefined): number {
   if (!text) return 0;
   return Math.max(1, Math.ceil([...text].length / 4));
+}
+
+export function estimateInvocationPointsMicros(
+  invocation: S5ModelInvocation,
+  pricing: S10PricingProfile,
+): number {
+  const base = { status: 200, intent: false, pricing } as const;
+  switch (invocation.kind) {
+    case 'llm':
+      return computeUsagePointsMicros({
+        ...base,
+        kind: 'llm',
+        quantity: MAX_INPUT_TOKENS + invocation.maxOutputTokens,
+        unit: 'token',
+        inputTokens: MAX_INPUT_TOKENS,
+        outputTokens: invocation.maxOutputTokens,
+      });
+    case 'vlm': {
+      const inputTokens = MAX_INPUT_TOKENS + invocation.imageUrls.length * 1_000;
+      const outputTokens =
+        invocation.maxOutputTokens === undefined ? MAX_OUTPUT_TOKENS : invocation.maxOutputTokens;
+      return computeUsagePointsMicros({
+        ...base,
+        kind: 'vlm',
+        quantity: inputTokens + outputTokens,
+        unit: 'token',
+        inputTokens,
+        outputTokens,
+      });
+    }
+    case 'embedding':
+      return computeUsagePointsMicros({
+        ...base,
+        kind: 'embedding',
+        quantity: MAX_EMBEDDING_TOKENS,
+        unit: 'token',
+        inputTokens: MAX_EMBEDDING_TOKENS,
+      });
+    case 'rerank':
+      return computeUsagePointsMicros({
+        ...base,
+        kind: 'rerank',
+        quantity: MAX_RERANK_TOKENS,
+        unit: 'token',
+        inputTokens: MAX_RERANK_TOKENS,
+      });
+    case 'stt':
+      return computeUsagePointsMicros({
+        ...base,
+        kind: 'stt',
+        quantity: Math.ceil(invocation.audio.byteLength / 16_000),
+        unit: 'second',
+      });
+    case 'tts':
+      return computeUsagePointsMicros({
+        ...base,
+        kind: 'tts',
+        quantity: Math.ceil([...invocation.text].length / 10),
+        unit: 'second',
+      });
+  }
 }
 
 export function embeddingInputItems(invocation: {
@@ -186,6 +250,8 @@ export class S5ModelGateway implements S5ModelGatewayPort {
       catalog: ModelCatalogPort;
       adapter: S5ModelInvocationAdapterPort;
       usage: S5UsageRecorderPort;
+      quotaGate?: S10ModelQuotaPort;
+      pricing?: S10PricingProfile;
       limiter?: S5KeyedLimiterPort;
       maxAttempts?: number;
       sleep?: (ms: number) => Promise<void>;
@@ -246,71 +312,112 @@ export class S5ModelGateway implements S5ModelGatewayPort {
       let inputTokens = 0;
       let outputTokens = 0;
       let quantity = 0;
-
-      for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
-        const candidate = candidates[Math.min(candidateIndex, candidates.length - 1)]!;
-        const currentInvocation = {
-          ...request,
-          modelId: candidate.modelId,
-        } as S5ModelInvocation;
-        try {
-          await this.recordUsage(request, candidate, attempt, 0, null, fallbackUsed, true);
-          const parsed = await this.input.adapter.invoke<unknown>(currentInvocation, {
-            workspaceId: request.workspaceId,
-            requestId: request.requestId,
-            traceId: request.traceId,
-          });
-          await this.recordUsage(
-            request,
-            candidate,
-            attempt,
-            parsed.quantity,
-            parsed.status,
-            fallbackUsed,
-            false,
-          );
-          inputTokens += parsed.usage.inputTokens;
-          outputTokens += parsed.usage.outputTokens;
-          quantity = parsed.quantity;
-          return {
-            data: parsed.data as T,
-            actualModelId: candidate.modelId,
-            attempts: attempt,
-            fallbackUsed,
-            degraded: candidate.modelId !== request.modelId,
-            usage: { inputTokens, outputTokens, quantity },
-          };
-        } catch (error) {
-          if (!(error instanceof TransportError)) {
-            await this.recordUsage(request, candidate, attempt, 0, null, fallbackUsed, false);
-            throw error;
+      const execute = async () => {
+        for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+          const candidate = candidates[Math.min(candidateIndex, candidates.length - 1)]!;
+          const currentInvocation = {
+            ...request,
+            modelId: candidate.modelId,
+          } as S5ModelInvocation;
+          try {
+            await this.recordUsage(request, candidate, attempt, 0, 0, 0, null, fallbackUsed, true);
+            const parsed = await this.input.adapter.invoke<unknown>(currentInvocation, {
+              workspaceId: request.workspaceId,
+              requestId: request.requestId,
+              traceId: request.traceId,
+            });
+            await this.recordUsage(
+              request,
+              candidate,
+              attempt,
+              parsed.quantity,
+              parsed.usage.inputTokens,
+              parsed.usage.outputTokens,
+              parsed.status,
+              fallbackUsed,
+              false,
+            );
+            inputTokens += parsed.usage.inputTokens;
+            outputTokens += parsed.usage.outputTokens;
+            quantity = parsed.quantity;
+            return {
+              data: parsed.data as T,
+              actualModelId: candidate.modelId,
+              attempts: attempt,
+              fallbackUsed,
+              degraded: candidate.modelId !== request.modelId,
+              usage: { inputTokens, outputTokens, quantity },
+            };
+          } catch (error) {
+            if (!(error instanceof TransportError)) {
+              await this.recordUsage(
+                request,
+                candidate,
+                attempt,
+                0,
+                0,
+                0,
+                null,
+                fallbackUsed,
+                false,
+              );
+              throw error;
+            }
+            lastError = error;
+            await this.recordUsage(
+              request,
+              candidate,
+              attempt,
+              0,
+              0,
+              0,
+              error.status,
+              fallbackUsed,
+              false,
+            );
+            if (!transportRetryable(error.kind)) {
+              throw transportFailure(error, request, { actualModelId: candidate.modelId });
+            }
+            if (attempt >= maxAttempts) break;
+            if (candidateIndex + 1 < candidates.length) {
+              candidateIndex += 1;
+              fallbackUsed = true;
+            }
+            const retryDelay =
+              error.retryAfterMs ?? Math.min(5_000, 250 * 2 ** Math.min(attempt - 1, 5));
+            await (this.input.sleep ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms))))(
+              retryDelay,
+            );
           }
-          lastError = error;
-          await this.recordUsage(request, candidate, attempt, 0, error.status, fallbackUsed, false);
-          if (!transportRetryable(error.kind)) {
-            throw transportFailure(error, request, { actualModelId: candidate.modelId });
-          }
-          if (attempt >= maxAttempts) break;
-          if (candidateIndex + 1 < candidates.length) {
-            candidateIndex += 1;
-            fallbackUsed = true;
-          }
-          const retryDelay =
-            error.retryAfterMs ?? Math.min(5_000, 250 * 2 ** Math.min(attempt - 1, 5));
-          await (this.input.sleep ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms))))(
-            retryDelay,
-          );
         }
+        const finalError =
+          lastError ??
+          new TransportError('provider', null, null, 'attempts_exhausted_without_error');
+        throw transportFailure(finalError, request, {
+          actualModelId:
+            candidates[Math.min(candidateIndex, candidates.length - 1)]?.modelId ?? request.modelId,
+          attempts: maxAttempts,
+          fallbackUsed,
+          reason: 'attempts_exhausted',
+        });
+      };
+      if (this.input.quotaGate) {
+        const estimatedPointsMicros = estimateInvocationPointsMicros(
+          request,
+          this.input.pricing ?? ZERO_V1_PRICING,
+        );
+        await this.input.quotaGate.check(
+          {
+            operation: 'model',
+            workspaceId: request.workspaceId,
+            ...(request.knowledgeSpaceId ? { knowledgeSpaceId: request.knowledgeSpaceId } : {}),
+            estimatedPointsMicros,
+          },
+          request.context,
+        );
+        return this.input.quotaGate.withModelSlot(request.context, execute, estimatedPointsMicros);
       }
-      const finalError =
-        lastError ?? new TransportError('provider', null, null, 'attempts_exhausted_without_error');
-      throw transportFailure(finalError, request, {
-        actualModelId:
-          candidates[Math.min(candidateIndex, candidates.length - 1)]?.modelId ?? request.modelId,
-        attempts: maxAttempts,
-        fallbackUsed,
-        reason: 'attempts_exhausted',
-      });
+      return execute();
     });
   }
 
@@ -319,6 +426,8 @@ export class S5ModelGateway implements S5ModelGatewayPort {
     candidate: ModelCatalogItem,
     attempt: number,
     quantity: number,
+    inputTokens: number,
+    outputTokens: number,
     status: number | null,
     fallbackUsed: boolean,
     intent: boolean,
@@ -336,6 +445,8 @@ export class S5ModelGateway implements S5ModelGatewayPort {
       eventSequence,
       quantity: Math.max(0, quantity),
       unit: usageUnit(request.kind),
+      inputTokens: Math.max(0, inputTokens),
+      outputTokens: Math.max(0, outputTokens),
       status,
       fallbackUsed,
       provider: 'aiproxy',
@@ -359,6 +470,8 @@ export function createS5ModelGateway(input: {
   catalog: ModelCatalogPort;
   adapter: S5ModelInvocationAdapterPort;
   usage: S5UsageRecorderPort;
+  quotaGate?: S10ModelQuotaPort;
+  pricing?: S10PricingProfile;
   limiter: S5KeyedLimiterPort;
   sleep?: (ms: number) => Promise<void>;
 }): S5ModelGateway {

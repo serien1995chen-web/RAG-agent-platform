@@ -42,6 +42,8 @@ export function KnowledgeAppShell(props: { location: ShellLocation; children: Re
   const [session, setSession] = useState<ConsoleSession | null>(null);
   const [sessionError, setSessionError] = useState(false);
   const spaceId = queryString(props.location.query, 'spaceId');
+  const admin =
+    session?.isWorkspaceOwner === true || session?.scopes.includes('knowledge:admin') === true;
 
   useEffect(() => {
     let active = true;
@@ -183,38 +185,96 @@ export function KnowledgeAppShell(props: { location: ShellLocation; children: Re
               </Text>
               <Text as="span">{t('nav.spaces')}</Text>
             </Box>
-            <Box
-              as="a"
-              href="/system/status"
-              aria-current={props.location.pathname === '/system/status' ? 'page' : undefined}
-              {...navLink(props.location.pathname === '/system/status')}
-            >
-              <Text
-                as="span"
-                display={{ base: 'none', lg: 'block' }}
-                color="currentColor"
-                fontSize="xs"
+            {admin ? (
+              <>
+                <Box
+                  as="a"
+                  href="/usage"
+                  aria-current={props.location.pathname === '/usage' ? 'page' : undefined}
+                  {...navLink(props.location.pathname === '/usage')}
+                >
+                  <Text
+                    as="span"
+                    display={{ base: 'none', lg: 'block' }}
+                    color="currentColor"
+                    fontSize="xs"
+                  >
+                    {t('nav.usageCode')}
+                  </Text>
+                  <Text as="span">{t('nav.usage')}</Text>
+                </Box>
+                <Box
+                  as="a"
+                  href="/audit"
+                  aria-current={props.location.pathname === '/audit' ? 'page' : undefined}
+                  {...navLink(props.location.pathname === '/audit')}
+                >
+                  <Text
+                    as="span"
+                    display={{ base: 'none', lg: 'block' }}
+                    color="currentColor"
+                    fontSize="xs"
+                  >
+                    {t('nav.auditCode')}
+                  </Text>
+                  <Text as="span">{t('nav.audit')}</Text>
+                </Box>
+                <Box
+                  as="a"
+                  href="/system/status"
+                  aria-current={props.location.pathname === '/system/status' ? 'page' : undefined}
+                  {...navLink(props.location.pathname === '/system/status')}
+                >
+                  <Text
+                    as="span"
+                    display={{ base: 'none', lg: 'block' }}
+                    color="currentColor"
+                    fontSize="xs"
+                  >
+                    {t('nav.systemCode')}
+                  </Text>
+                  <Text as="span">{t('nav.systemStatus')}</Text>
+                </Box>
+                <Box
+                  as="a"
+                  href="/settings/api-keys"
+                  aria-current={
+                    props.location.pathname === '/settings/api-keys' ? 'page' : undefined
+                  }
+                  {...navLink(props.location.pathname === '/settings/api-keys')}
+                >
+                  <Text
+                    as="span"
+                    display={{ base: 'none', lg: 'block' }}
+                    color="currentColor"
+                    fontSize="xs"
+                  >
+                    {t('nav.apiKeysCode')}
+                  </Text>
+                  <Text as="span">{t('nav.apiKeys')}</Text>
+                </Box>
+              </>
+            ) : null}
+            {admin ? (
+              <Box
+                as="a"
+                href={spaceId ? `/settings/connectors?spaceId=${spaceId}` : '/settings/connectors'}
+                aria-current={
+                  props.location.pathname === '/settings/connectors' ? 'page' : undefined
+                }
+                {...navLink(props.location.pathname === '/settings/connectors')}
               >
-                {t('nav.systemCode')}
-              </Text>
-              <Text as="span">{t('nav.systemStatus')}</Text>
-            </Box>
-            <Box
-              as="a"
-              href={spaceId ? `/settings/connectors?spaceId=${spaceId}` : '/settings/connectors'}
-              aria-current={props.location.pathname === '/settings/connectors' ? 'page' : undefined}
-              {...navLink(props.location.pathname === '/settings/connectors')}
-            >
-              <Text
-                as="span"
-                display={{ base: 'none', lg: 'block' }}
-                color="currentColor"
-                fontSize="xs"
-              >
-                {t('nav.connectorsCode')}
-              </Text>
-              <Text as="span">{t('nav.connectors')}</Text>
-            </Box>
+                <Text
+                  as="span"
+                  display={{ base: 'none', lg: 'block' }}
+                  color="currentColor"
+                  fontSize="xs"
+                >
+                  {t('nav.connectorsCode')}
+                </Text>
+                <Text as="span">{t('nav.connectors')}</Text>
+              </Box>
+            ) : null}
           </Box>
 
           {spaceLinks.length > 0 ? (

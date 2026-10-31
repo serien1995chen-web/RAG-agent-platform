@@ -7,6 +7,10 @@ export interface TenantContext {
   requestId: string;
   traceId: string;
   apiKeyId?: string;
+  apiKeyPrefix?: string;
+  apiKeySpaceIds?: readonly string[];
+  ipHash?: string;
+  userAgentHash?: string;
   scopes: readonly string[];
   isWorkspaceOwner?: boolean;
 }

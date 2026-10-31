@@ -1,12 +1,13 @@
 import { randomUUID } from 'node:crypto';
 import mongoose from 'mongoose';
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   S5UsageRepository,
   usageEventIdOf,
 } from '../../src/modules/knowledge/repository/s5-usage.repository';
 import { registerKnowledgeModels } from '../../src/shared/persistence/schemas/knowledge-index';
 import type { TenantContext } from '../../src/shared/persistence/knowledge/tenant';
+import { KnowledgeOutboxDispatcher } from '../../src/shared/persistence/knowledge/outbox';
 
 const suffix = randomUUID().replaceAll('-', '').slice(0, 12);
 const workspaceId = `ws_s5_usage_${suffix}`;
@@ -221,5 +222,112 @@ describe('TEST-MODEL-003-BLOCK usage event and outbox transaction', () => {
         resourceType: 'source',
       }),
     ).toBe(1);
+  });
+
+  it('TEST-X-OUTBOX-CRASH recovers stale publishing and publishes one final fact', async () => {
+    const models = registerKnowledgeModels(connection);
+    const [event] = await models.KnowledgeOutboxEvent.create([
+      {
+        workspaceId,
+        knowledgeSpaceId: null,
+        version: 2,
+        deletedAt: null,
+        createdByMemberId: context.memberId,
+        updatedByMemberId: context.memberId,
+        eventKey: `crash-${suffix}`,
+        eventType: 'usage.recorded',
+        aggregateType: 'usage_event',
+        aggregateId: `usage-crash-${suffix}`,
+        payload: { queue: 'knowledge-outbox', usageEventId: `usage-crash-${suffix}` },
+        status: 'publishing',
+        attempts: 1,
+        availableAt: new Date(Date.now() - 60_000),
+        publishedAt: null,
+        error: null,
+        expiresAt: new Date(Date.now() + 86_400_000),
+      },
+    ]);
+    await models.KnowledgeOutboxEvent.collection.updateOne(
+      { _id: event!._id },
+      { $set: { updatedAt: new Date(Date.now() - 60_000) } },
+    );
+    const enqueue = vi.fn(async () => ({ jobId: 'k_ignored', enqueued: true }));
+    const dispatcher = new KnowledgeOutboxDispatcher(connection, { enqueue } as never);
+    await expect(dispatcher.dispatchOnce(context)).resolves.toMatchObject({ dispatched: true });
+    const persisted = await models.KnowledgeOutboxEvent.findById(event!._id).lean();
+    expect(persisted).toMatchObject({ status: 'published' });
+    expect(persisted?.publishedAt).toBeInstanceOf(Date);
+    expect(enqueue).toHaveBeenCalledOnce();
+    await expect(dispatcher.dispatchOnce(context)).resolves.toEqual({ dispatched: false });
+    expect(enqueue).toHaveBeenCalledOnce();
+  });
+
+  it('dispatches only the requested pending event by ID and version', async () => {
+    const models = registerKnowledgeModels(connection);
+    const replayJobId = new mongoose.Types.ObjectId();
+    const [target, other] = await models.KnowledgeOutboxEvent.create([
+      {
+        workspaceId,
+        knowledgeSpaceId: null,
+        version: 5,
+        deletedAt: null,
+        createdByMemberId: context.memberId,
+        updatedByMemberId: context.memberId,
+        eventKey: `target-${suffix}`,
+        eventType: 'usage.recorded',
+        aggregateType: 'usage_event',
+        aggregateId: `target-${suffix}`,
+        payload: { queue: 'knowledge-outbox', usageEventId: `target-${suffix}` },
+        status: 'pending',
+        attempts: 0,
+        replayJobId,
+        availableAt: new Date(Date.now() - 1_000),
+        publishedAt: null,
+        error: null,
+        expiresAt: new Date(Date.now() + 86_400_000),
+      },
+      {
+        workspaceId,
+        knowledgeSpaceId: null,
+        version: 9,
+        deletedAt: null,
+        createdByMemberId: context.memberId,
+        updatedByMemberId: context.memberId,
+        eventKey: `other-${suffix}`,
+        eventType: 'usage.recorded',
+        aggregateType: 'usage_event',
+        aggregateId: `other-${suffix}`,
+        payload: { queue: 'knowledge-outbox', usageEventId: `other-${suffix}` },
+        status: 'pending',
+        attempts: 0,
+        replayJobId: null,
+        availableAt: new Date(Date.now() - 10_000),
+        publishedAt: null,
+        error: null,
+        expiresAt: new Date(Date.now() + 86_400_000),
+      },
+    ]);
+    const enqueue = vi.fn(async () => ({ jobId: 'k_target', enqueued: true }));
+    const dispatcher = new KnowledgeOutboxDispatcher(connection, { enqueue } as never);
+    await expect(
+      dispatcher.dispatchById(String(target!._id), 5, String(replayJobId), context),
+    ).resolves.toMatchObject({
+      dispatched: true,
+      eventKey: target!.eventKey,
+    });
+    expect(await models.KnowledgeOutboxEvent.findById(target!._id).lean()).toMatchObject({
+      status: 'published',
+    });
+    expect(await models.KnowledgeOutboxEvent.findById(other!._id).lean()).toMatchObject({
+      status: 'pending',
+      version: 9,
+    });
+    expect(enqueue).toHaveBeenCalledWith(
+      'knowledge-outbox',
+      expect.stringMatching(/^k_[a-f0-9]{40}$/),
+      expect.objectContaining({ outboxEventId: String(target!._id) }),
+      expect.any(Object),
+    );
+    expect(enqueue).toHaveBeenCalledOnce();
   });
 });

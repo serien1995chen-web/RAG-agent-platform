@@ -3,6 +3,7 @@ import type { TenantContext } from '../../../shared/persistence/knowledge/tenant
 import type {
   ObjectRefRepositoryPort,
   ObjectRefView,
+  ObjectCleanupScope,
   ObjectStorageContext,
   ObjectStoreApplicationPort,
 } from './ports';
@@ -46,7 +47,11 @@ export class ObjectLifecycleService {
     private readonly batchSize = 500,
   ) {}
 
-  async cleanup(context: TenantContext, now: Date = new Date()): Promise<ObjectCleanupResult> {
+  async cleanup(
+    context: TenantContext,
+    now: Date = new Date(),
+    scope: ObjectCleanupScope = 'all',
+  ): Promise<ObjectCleanupResult> {
     const result: ObjectCleanupResult = {
       scanned: 0,
       eligible: 0,
@@ -54,7 +59,12 @@ export class ObjectLifecycleService {
       retryable: 0,
       failed: 0,
     };
-    const candidates = await this.objectRefs.findCleanupCandidates(this.batchSize, now, context);
+    const candidates = await this.objectRefs.findCleanupCandidates(
+      this.batchSize,
+      now,
+      scope,
+      context,
+    );
     result.scanned = candidates.length;
 
     for (const candidate of candidates) {
@@ -96,13 +106,18 @@ export class ObjectLifecycleService {
       if (await this.objectRefs.hasActiveSourceReference(candidate.blobId, context)) {
         continue;
       }
-      if (candidate.state === 'active' && candidate.purpose !== 'export') {
+      if (
+        candidate.state === 'active' &&
+        candidate.purpose === 'export' &&
+        candidate.expiresAt === null
+      ) {
         continue;
       }
-      if (candidate.state === 'active' && candidate.expiresAt === null) {
-        continue;
-      }
-      if (candidate.state === 'active' && Date.parse(candidate.expiresAt!) > now.getTime()) {
+      if (
+        candidate.state === 'active' &&
+        candidate.purpose === 'export' &&
+        Date.parse(candidate.expiresAt!) > now.getTime()
+      ) {
         continue;
       }
       if (candidate.state === 'pending' && candidate.expiresAt === null) {

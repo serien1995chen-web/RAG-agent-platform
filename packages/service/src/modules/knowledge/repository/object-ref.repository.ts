@@ -17,6 +17,7 @@ import type {
   CompleteUploadInput,
   ObjectRefRepositoryPort,
   ObjectRefView,
+  ObjectCleanupScope,
   UploadPartView,
 } from '../application/ports';
 
@@ -373,7 +374,7 @@ export class KnowledgeObjectRefRepository implements ObjectRefRepositoryPort {
     return document === null ? null : objectRefDto(document);
   }
 
-  async findCleanupCandidates(
+  private async ttlCleanupCandidates(
     limit: number,
     now: Date,
     context: TenantContext,
@@ -385,7 +386,7 @@ export class KnowledgeObjectRefRepository implements ObjectRefRepositoryPort {
             {
               state: 'deleting',
               $or: [
-                { 'upload.status': { $nin: ['aborted', 'expired'] } },
+                { 'upload.status': { $in: ['aborted', 'expired'] } },
                 { expiresAt: { $ne: null, $lte: now } },
               ],
             },
@@ -413,6 +414,68 @@ export class KnowledgeObjectRefRepository implements ObjectRefRepositoryPort {
       .lean<PlainObjectRef[]>()
       .exec();
     return documents.map(objectRefDto);
+  }
+
+  private async orphanCleanupCandidates(
+    limit: number,
+    context: TenantContext,
+  ): Promise<ObjectRefView[]> {
+    const workspaceId = requireWorkspaceId(context);
+    const documents = await this.objects.aggregate<PlainObjectRef>([
+      {
+        $match: {
+          workspaceId,
+          deletedAt: null,
+          state: { $in: ['active', 'deleting'] },
+          purpose: { $ne: 'export' },
+        },
+      },
+      {
+        $lookup: {
+          from: 'knowledge_sources',
+          let: { blobId: '$_id' },
+          pipeline: [
+            {
+              $match: {
+                $expr: {
+                  $and: [
+                    { $eq: ['$workspaceId', workspaceId] },
+                    { $eq: ['$blobRefId', '$$blobId'] },
+                    { $eq: ['$deletedAt', null] },
+                    { $not: [{ $in: ['$status', ['deleted', 'archived']] }] },
+                  ],
+                },
+              },
+            },
+            { $project: { _id: 1 } },
+          ],
+          as: 'activeSources',
+        },
+      },
+      { $match: { activeSources: { $size: 0 } } },
+      { $sort: { updatedAt: 1 } },
+      { $limit: Math.min(Math.max(limit, 1), 500) },
+    ]);
+    return documents.map(objectRefDto);
+  }
+
+  async findCleanupCandidates(
+    limit: number,
+    now: Date,
+    scope: ObjectCleanupScope,
+    context: TenantContext,
+  ): Promise<ObjectRefView[]> {
+    if (scope === 'ttl_objects') return this.ttlCleanupCandidates(limit, now, context);
+    if (scope === 'orphan_objects') return this.orphanCleanupCandidates(limit, context);
+    const [ttl, orphan] = await Promise.all([
+      this.ttlCleanupCandidates(limit, now, context),
+      this.orphanCleanupCandidates(limit, context),
+    ]);
+    return [
+      ...new Map([...ttl, ...orphan].map((candidate) => [candidate.blobId, candidate])).values(),
+    ]
+      .sort((left, right) => left.updatedAt.localeCompare(right.updatedAt))
+      .slice(0, Math.min(Math.max(limit, 1), 500));
   }
 
   async markDeleting(

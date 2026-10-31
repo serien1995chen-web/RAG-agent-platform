@@ -98,7 +98,15 @@ function spaceId(input: KnowledgeOperationInput): string {
 }
 
 export class S09SynonymOperationApplication {
-  constructor(private readonly application: S09SynonymApplication) {}
+  constructor(
+    private readonly application: S09SynonymApplication,
+    private readonly quotaGate?: {
+      check(
+        input: { operation: 'rebuild'; workspaceId: string; knowledgeSpaceId: string },
+        context: KnowledgeOperationInput['context'],
+      ): Promise<void>;
+    },
+  ) {}
 
   private async download(input: KnowledgeOperationInput): Promise<KnowledgeOperationResult> {
     const fileVersion = Number(input.params.fileVersion);
@@ -192,6 +200,14 @@ export class S09SynonymOperationApplication {
     if (input.operationId === 'API-SYNONYM-REBUILD') {
       const body = objectBody(input);
       idempotencyKey(input);
+      await this.quotaGate?.check(
+        {
+          operation: 'rebuild',
+          workspaceId: input.context.workspaceId,
+          knowledgeSpaceId: spaceId(input),
+        },
+        input.context,
+      );
       return {
         status: 202,
         data: await this.application.rebuild(

@@ -24,6 +24,10 @@ type TelemetryKnowledgeApiRuntime = KnowledgeApiRuntime & {
   withSpan<T>(name: string, attributes: SafeAttributes, fn: () => Promise<T> | T): Promise<T>;
 };
 
+type PersistedDispatchResult = KnowledgeDispatchResult & {
+  oneTimeSecretReturned?: true;
+};
+
 function header(request: NextApiRequest, name: string): string | undefined {
   const value = request.headers[name.toLowerCase()];
   return Array.isArray(value) ? value[0] : value;
@@ -217,7 +221,7 @@ function validateIdempotencyHeader(
   return key;
 }
 
-async function withIdempotency(
+export async function withIdempotency(
   store: Awaited<ReturnType<KnowledgeApiRuntime['idempotencyStore']>>,
   scopeKey: string,
   hash: string,
@@ -227,7 +231,13 @@ async function withIdempotency(
 ): Promise<KnowledgeDispatchResult> {
   const begun = await store.begin(scopeKey, hash);
   if (begun.kind === 'replay') {
-    return begun.record.response as KnowledgeDispatchResult;
+    const replay = begun.record.response as PersistedDispatchResult;
+    if (replay.oneTimeSecretReturned) {
+      throw conflict(requestId, traceId, {
+        reason: 'one_time_secret_already_returned',
+      });
+    }
+    return replay;
   }
   if (begun.kind === 'conflict') {
     const record = begun.record as IdempotencyRecord;
@@ -238,7 +248,10 @@ async function withIdempotency(
   }
   try {
     const result = await execute();
-    await store.complete(scopeKey, result);
+    const persisted: PersistedDispatchResult = result.oneTimeSecret
+      ? { ...result, oneTimeSecret: undefined, oneTimeSecretReturned: true }
+      : result;
+    await store.complete(scopeKey, persisted);
     return result;
   } catch (error) {
     await store.fail(scopeKey).catch(() => undefined);
@@ -446,7 +459,10 @@ export function createKnowledgeApiHandler(): NextApiHandler {
       }
       response.status(result.status).json({
         success: true,
-        data: result.data,
+        data:
+          result.oneTimeSecret && result.data !== null && typeof result.data === 'object'
+            ? { ...(result.data as Record<string, unknown>), secret: result.oneTimeSecret }
+            : result.data,
         traceId,
         requestId,
       });

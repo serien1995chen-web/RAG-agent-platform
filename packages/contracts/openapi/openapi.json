@@ -16012,6 +16012,9 @@
           "502": {
             "$ref": "#/components/responses/Problem502"
           },
+          "503": {
+            "$ref": "#/components/responses/Problem503"
+          },
           "504": {
             "$ref": "#/components/responses/Problem504"
           }
@@ -16145,11 +16148,20 @@
           "409": {
             "$ref": "#/components/responses/Problem409"
           },
+          "422": {
+            "$ref": "#/components/responses/Problem422"
+          },
           "429": {
             "$ref": "#/components/responses/Problem429"
           },
           "500": {
             "$ref": "#/components/responses/Problem500"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem503"
+          },
+          "504": {
+            "$ref": "#/components/responses/Problem504"
           }
         },
         "security": [
@@ -16314,6 +16326,9 @@
           "409": {
             "$ref": "#/components/responses/Problem409"
           },
+          "422": {
+            "$ref": "#/components/responses/Problem422"
+          },
           "429": {
             "$ref": "#/components/responses/Problem429"
           },
@@ -16322,6 +16337,9 @@
           },
           "502": {
             "$ref": "#/components/responses/Problem502"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem503"
           },
           "504": {
             "$ref": "#/components/responses/Problem504"
@@ -16412,6 +16430,15 @@
               "maxLength": 128
             },
             "example": "8c45a1f2-0ee1-4e21-937b-1a2e4c2f0921"
+          },
+          {
+            "name": "expectedVersion",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
           }
         ],
         "x-required-scope": "knowledge:admin",
@@ -16443,6 +16470,12 @@
           },
           "500": {
             "$ref": "#/components/responses/Problem500"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem503"
+          },
+          "504": {
+            "$ref": "#/components/responses/Problem504"
           }
         },
         "security": [
@@ -16596,6 +16629,9 @@
           "502": {
             "$ref": "#/components/responses/Problem502"
           },
+          "503": {
+            "$ref": "#/components/responses/Problem503"
+          },
           "504": {
             "$ref": "#/components/responses/Problem504"
           }
@@ -16659,6 +16695,53 @@
               "type": "string"
             },
             "example": "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01"
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "type",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "parse",
+                "ocr",
+                "embedding",
+                "rerank",
+                "llm",
+                "vlm",
+                "stt",
+                "tts",
+                "storage",
+                "sync"
+              ]
+            }
+          },
+          {
+            "name": "spaceId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{24}$"
+            }
           }
         ],
         "x-required-scope": "knowledge:admin",
@@ -16744,6 +16827,9 @@
           "502": {
             "$ref": "#/components/responses/Problem502"
           },
+          "503": {
+            "$ref": "#/components/responses/Problem503"
+          },
           "504": {
             "$ref": "#/components/responses/Problem504"
           }
@@ -16805,11 +16891,59 @@
             }
           },
           {
+            "name": "actor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
             "name": "resourceType",
             "in": "query",
             "required": false,
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "resourceId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "outcome",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "allowed",
+                "denied",
+                "succeeded",
+                "failed"
+              ]
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
             }
           },
           {
@@ -16912,6 +17046,9 @@
           },
           "502": {
             "$ref": "#/components/responses/Problem502"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem503"
           },
           "504": {
             "$ref": "#/components/responses/Problem504"
@@ -17086,6 +17223,9 @@
           "502": {
             "$ref": "#/components/responses/Problem502"
           },
+          "503": {
+            "$ref": "#/components/responses/Problem503"
+          },
           "504": {
             "$ref": "#/components/responses/Problem504"
           }
@@ -17228,6 +17368,12 @@
           },
           "500": {
             "$ref": "#/components/responses/Problem500"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem503"
+          },
+          "504": {
+            "$ref": "#/components/responses/Problem504"
           }
         },
         "security": [
@@ -17381,6 +17527,12 @@
           },
           "500": {
             "$ref": "#/components/responses/Problem500"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem503"
+          },
+          "504": {
+            "$ref": "#/components/responses/Problem504"
           }
         },
         "security": [
@@ -17534,6 +17686,9 @@
           },
           "502": {
             "$ref": "#/components/responses/Problem502"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem503"
           },
           "504": {
             "$ref": "#/components/responses/Problem504"
@@ -20123,7 +20278,10 @@
             ]
           },
           "knowledgeSpaceId": {
-            "type": "string",
+            "type": [
+              "string",
+              "null"
+            ],
             "pattern": "^[a-f0-9]{24}$",
             "examples": [
               "65f1e5b2a1c9d4b7e8f01234"
@@ -22196,82 +22354,71 @@
           "scopes",
           "spaceIds",
           "status",
-          "createdAt"
+          "createdAt",
+          "updatedAt",
+          "version"
         ],
         "properties": {
           "id": {
             "type": "string",
-            "pattern": "^[a-f0-9]{24}$",
-            "examples": [
-              "65f1e5b2a1c9d4b7e8f01234"
-            ]
+            "pattern": "^[a-f0-9]{24}$"
           },
           "workspaceId": {
             "type": "string",
             "minLength": 1,
-            "maxLength": 64,
-            "examples": [
-              "ws_acme_cn"
-            ]
+            "maxLength": 64
           },
           "name": {
-            "type": "string",
-            "examples": [
-              "Chat retrieval key"
-            ]
+            "type": "string"
           },
           "keyPrefix": {
-            "type": "string",
-            "examples": [
-              "kn_live_7Vf2"
-            ]
+            "type": "string"
           },
           "scopes": {
             "type": "array",
             "items": {
-              "type": "string"
-            },
-            "examples": [
-              [
+              "type": "string",
+              "enum": [
                 "knowledge:read",
-                "knowledge:search"
+                "knowledge:search",
+                "knowledge:write",
+                "knowledge:manage",
+                "knowledge:admin"
               ]
-            ]
+            }
           },
           "spaceIds": {
             "type": "array",
             "items": {
               "type": "string",
-              "pattern": "^[a-f0-9]{24}$",
-              "examples": [
-                "65f1e5b2a1c9d4b7e8f01234"
-              ]
-            },
-            "examples": [
-              [
-                "65f1e5b2a1c9d4b7e8f01234"
-              ]
-            ]
+              "pattern": "^[a-f0-9]{24}$"
+            }
           },
           "status": {
             "type": "string",
             "enum": [
               "active",
+              "rotated",
               "revoked",
               "expired"
-            ],
-            "examples": [
-              "active"
             ]
           },
           "expiresAt": {
             "oneOf": [
               {
                 "type": "string",
-                "format": "date-time",
-                "examples": [
-                  "2026-10-21T10:00:00+08:00"
-                ]
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "retireAt": {
+            "oneOf": [
+              {
+                "type": "string",
+                "format": "date-time"
               },
               {
                 "type": "null"
@@ -22282,22 +22429,35 @@
             "oneOf": [
               {
                 "type": "string",
-                "format": "date-time",
-                "examples": [
-                  "2026-10-21T10:00:00+08:00"
-                ]
+                "format": "date-time"
               },
               {
                 "type": "null"
               }
             ]
           },
+          "rotatedFromKeyId": {
+            "oneOf": [
+              {
+                "type": "string",
+                "pattern": "^[a-f0-9]{24}$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1
+          },
           "createdAt": {
             "type": "string",
-            "format": "date-time",
-            "examples": [
-              "2026-10-21T10:00:00+08:00"
-            ]
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
           }
         }
       },
@@ -22327,7 +22487,10 @@
         "required": [
           "period",
           "quota",
-          "usage"
+          "usage",
+          "delivery",
+          "series",
+          "profileVersion"
         ],
         "properties": {
           "period": {
@@ -22339,17 +22502,11 @@
             "properties": {
               "from": {
                 "type": "string",
-                "format": "date-time",
-                "examples": [
-                  "2026-10-21T10:00:00+08:00"
-                ]
+                "format": "date-time"
               },
               "to": {
                 "type": "string",
-                "format": "date-time",
-                "examples": [
-                  "2026-10-21T10:00:00+08:00"
-                ]
+                "format": "date-time"
               }
             }
           },
@@ -22357,20 +22514,38 @@
             "type": "object",
             "required": [
               "aiPointsLimit",
-              "storageBytesLimit"
+              "aiPointsLimitMicros",
+              "storageBytesLimit",
+              "maxSpaces",
+              "maxIndexes",
+              "requestsPerMinute",
+              "maxModelConcurrency",
+              "profileVersion"
             ],
             "properties": {
               "aiPointsLimit": {
-                "type": "number",
-                "examples": [
-                  100000
-                ]
+                "type": "integer"
+              },
+              "aiPointsLimitMicros": {
+                "type": "integer"
               },
               "storageBytesLimit": {
-                "type": "integer",
-                "examples": [
-                  100000000000
-                ]
+                "type": "integer"
+              },
+              "maxSpaces": {
+                "type": "integer"
+              },
+              "maxIndexes": {
+                "type": "integer"
+              },
+              "requestsPerMinute": {
+                "type": "integer"
+              },
+              "maxModelConcurrency": {
+                "type": "integer"
+              },
+              "profileVersion": {
+                "type": "string"
               }
             }
           },
@@ -22378,43 +22553,109 @@
             "type": "object",
             "required": [
               "aiPoints",
+              "aiPointsMicros",
               "storageBytes",
+              "indexCount",
+              "spaceCount",
               "parsePages",
+              "inputTokens",
+              "outputTokens",
               "embeddingTokens",
-              "rerankTokens"
+              "rerankTokens",
+              "modelCalls"
             ],
             "properties": {
               "aiPoints": {
-                "type": "number",
-                "examples": [
-                  18450
-                ]
+                "type": "number"
+              },
+              "aiPointsMicros": {
+                "type": "integer"
               },
               "storageBytes": {
-                "type": "integer",
-                "examples": [
-                  8429134521
-                ]
+                "type": "integer"
+              },
+              "indexCount": {
+                "type": "integer"
+              },
+              "spaceCount": {
+                "type": "integer"
               },
               "parsePages": {
-                "type": "integer",
-                "examples": [
-                  1240
-                ]
+                "type": "integer"
+              },
+              "inputTokens": {
+                "type": "integer"
+              },
+              "outputTokens": {
+                "type": "integer"
               },
               "embeddingTokens": {
-                "type": "integer",
-                "examples": [
-                  3280000
-                ]
+                "type": "integer"
               },
               "rerankTokens": {
-                "type": "integer",
-                "examples": [
-                  285000
-                ]
+                "type": "integer"
+              },
+              "modelCalls": {
+                "type": "integer"
               }
             }
+          },
+          "delivery": {
+            "type": "object",
+            "required": [
+              "pending",
+              "delivered",
+              "failed"
+            ],
+            "properties": {
+              "pending": {
+                "type": "integer"
+              },
+              "delivered": {
+                "type": "integer"
+              },
+              "failed": {
+                "type": "integer"
+              }
+            }
+          },
+          "series": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "bucketStart",
+                "pointsMicros",
+                "inputTokens",
+                "outputTokens",
+                "pages",
+                "storageBytes"
+              ],
+              "properties": {
+                "bucketStart": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "pointsMicros": {
+                  "type": "integer"
+                },
+                "inputTokens": {
+                  "type": "integer"
+                },
+                "outputTokens": {
+                  "type": "integer"
+                },
+                "pages": {
+                  "type": "integer"
+                },
+                "storageBytes": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "profileVersion": {
+            "type": "string"
           }
         }
       },
@@ -22428,47 +22669,66 @@
           "resourceType",
           "resourceId",
           "outcome",
-          "occurredAt"
+          "traceId",
+          "requestId",
+          "ipHash",
+          "userAgentHash",
+          "safeDiff",
+          "occurredAt",
+          "expiresAt"
         ],
         "properties": {
           "eventId": {
-            "type": "string",
-            "examples": [
-              "audit_01JABCDEF"
-            ]
+            "type": "string"
           },
           "workspaceId": {
             "type": "string",
             "minLength": 1,
-            "maxLength": 64,
-            "examples": [
-              "ws_acme_cn"
+            "maxLength": 64
+          },
+          "knowledgeSpaceId": {
+            "oneOf": [
+              {
+                "type": "string",
+                "pattern": "^[a-f0-9]{24}$"
+              },
+              {
+                "type": "null"
+              }
             ]
           },
           "action": {
-            "type": "string",
-            "examples": [
-              "source.delete"
-            ]
+            "type": "string"
           },
           "actorMemberId": {
-            "type": "string",
-            "examples": [
-              "mem_01JABCDEF"
+            "type": "string"
+          },
+          "apiKeyId": {
+            "oneOf": [
+              {
+                "type": "string",
+                "pattern": "^[a-f0-9]{24}$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "apiKeyPrefix": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
             ]
           },
           "resourceType": {
-            "type": "string",
-            "examples": [
-              "source"
-            ]
+            "type": "string"
           },
           "resourceId": {
-            "type": "string",
-            "pattern": "^[a-f0-9]{24}$",
-            "examples": [
-              "65f1e5b2a1c9d4b7e8f01234"
-            ]
+            "type": "string"
           },
           "outcome": {
             "type": "string",
@@ -22477,23 +22737,31 @@
               "denied",
               "succeeded",
               "failed"
-            ],
-            "examples": [
-              "succeeded"
             ]
           },
           "traceId": {
-            "type": "string",
-            "examples": [
-              "4bf92f3577b34da6a3ce929d0e0e4736"
-            ]
+            "type": "string"
+          },
+          "requestId": {
+            "type": "string"
+          },
+          "ipHash": {
+            "type": "string"
+          },
+          "userAgentHash": {
+            "type": "string"
+          },
+          "safeDiff": {
+            "type": "object",
+            "additionalProperties": true
           },
           "occurredAt": {
             "type": "string",
-            "format": "date-time",
-            "examples": [
-              "2026-10-21T10:00:00+08:00"
-            ]
+            "format": "date-time"
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
           }
         }
       },
@@ -22502,8 +22770,15 @@
         "required": [
           "status",
           "queueDepth",
+          "queueLag",
           "storage",
           "vector",
+          "dependencies",
+          "modelProbe",
+          "connectorProbes",
+          "queueProbe",
+          "connectorProbe",
+          "securityChecks",
           "reconciliation"
         ],
         "properties": {
@@ -22512,29 +22787,50 @@
             "enum": [
               "ok",
               "degraded"
-            ],
-            "examples": [
-              "ok"
             ]
           },
           "queueDepth": {
             "type": "object",
             "additionalProperties": {
               "type": "integer"
-            },
-            "examples": [
-              {
-                "knowledge-parse": 12,
-                "knowledge-embed": 4,
-                "knowledge-delete": 0
+            }
+          },
+          "queueLag": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "object",
+              "required": [
+                "waiting",
+                "delayed",
+                "active",
+                "failed",
+                "lag"
+              ],
+              "properties": {
+                "waiting": {
+                  "type": "integer"
+                },
+                "delayed": {
+                  "type": "integer"
+                },
+                "active": {
+                  "type": "integer"
+                },
+                "failed": {
+                  "type": "integer"
+                },
+                "lag": {
+                  "type": "integer"
+                }
               }
-            ]
+            }
           },
           "storage": {
             "type": "object",
             "required": [
               "provider",
-              "healthy"
+              "healthy",
+              "verificationStatus"
             ],
             "properties": {
               "provider": {
@@ -22549,6 +22845,15 @@
               },
               "healthy": {
                 "type": "boolean"
+              },
+              "verificationStatus": {
+                "type": "string",
+                "enum": [
+                  "REAL_VERIFIED",
+                  "FIXTURE_VERIFIED",
+                  "EXTERNAL_UNVERIFIED",
+                  "UNKNOWN"
+                ]
               }
             }
           },
@@ -22557,7 +22862,8 @@
             "required": [
               "backend",
               "healthy",
-              "profiles"
+              "profiles",
+              "verificationStatus"
             ],
             "properties": {
               "backend": {
@@ -22571,15 +22877,334 @@
                 "type": "array",
                 "items": {
                   "type": "integer"
-                },
-                "examples": [
-                  [
-                    768,
-                    1024,
-                    1536,
-                    3072
-                  ]
+                }
+              },
+              "verificationStatus": {
+                "type": "string",
+                "enum": [
+                  "REAL_VERIFIED",
+                  "FIXTURE_VERIFIED",
+                  "EXTERNAL_UNVERIFIED",
+                  "UNKNOWN"
                 ]
+              }
+            }
+          },
+          "dependencies": {
+            "type": "object",
+            "required": [
+              "mongo",
+              "redis",
+              "postgres",
+              "s3"
+            ],
+            "properties": {
+              "mongo": {
+                "type": "object",
+                "required": [
+                  "status",
+                  "latencyMs",
+                  "verificationStatus"
+                ],
+                "properties": {
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "ok",
+                      "degraded",
+                      "down",
+                      "timeout"
+                    ]
+                  },
+                  "latencyMs": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "verificationStatus": {
+                    "type": "string",
+                    "enum": [
+                      "REAL_VERIFIED",
+                      "FIXTURE_VERIFIED",
+                      "EXTERNAL_UNVERIFIED",
+                      "UNKNOWN"
+                    ]
+                  },
+                  "reason": {
+                    "type": "string"
+                  }
+                }
+              },
+              "redis": {
+                "type": "object",
+                "required": [
+                  "status",
+                  "latencyMs",
+                  "verificationStatus"
+                ],
+                "properties": {
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "ok",
+                      "degraded",
+                      "down",
+                      "timeout"
+                    ]
+                  },
+                  "latencyMs": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "verificationStatus": {
+                    "type": "string",
+                    "enum": [
+                      "REAL_VERIFIED",
+                      "FIXTURE_VERIFIED",
+                      "EXTERNAL_UNVERIFIED",
+                      "UNKNOWN"
+                    ]
+                  },
+                  "reason": {
+                    "type": "string"
+                  }
+                }
+              },
+              "postgres": {
+                "type": "object",
+                "required": [
+                  "status",
+                  "latencyMs",
+                  "verificationStatus"
+                ],
+                "properties": {
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "ok",
+                      "degraded",
+                      "down",
+                      "timeout"
+                    ]
+                  },
+                  "latencyMs": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "verificationStatus": {
+                    "type": "string",
+                    "enum": [
+                      "REAL_VERIFIED",
+                      "FIXTURE_VERIFIED",
+                      "EXTERNAL_UNVERIFIED",
+                      "UNKNOWN"
+                    ]
+                  },
+                  "reason": {
+                    "type": "string"
+                  }
+                }
+              },
+              "s3": {
+                "type": "object",
+                "required": [
+                  "status",
+                  "latencyMs",
+                  "verificationStatus"
+                ],
+                "properties": {
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "ok",
+                      "degraded",
+                      "down",
+                      "timeout"
+                    ]
+                  },
+                  "latencyMs": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "verificationStatus": {
+                    "type": "string",
+                    "enum": [
+                      "REAL_VERIFIED",
+                      "FIXTURE_VERIFIED",
+                      "EXTERNAL_UNVERIFIED",
+                      "UNKNOWN"
+                    ]
+                  },
+                  "reason": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "modelProbe": {
+            "type": "object",
+            "required": [
+              "status",
+              "verificationStatus",
+              "latencyMs"
+            ],
+            "properties": {
+              "status": {
+                "type": "string"
+              },
+              "verificationStatus": {
+                "type": "string",
+                "enum": [
+                  "REAL_VERIFIED",
+                  "FIXTURE_VERIFIED",
+                  "EXTERNAL_UNVERIFIED",
+                  "UNKNOWN"
+                ]
+              },
+              "latencyMs": {
+                "type": "integer"
+              },
+              "modelCount": {
+                "type": "integer"
+              }
+            }
+          },
+          "connectorProbes": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "provider",
+                "status",
+                "verificationStatus"
+              ],
+              "properties": {
+                "connectorId": {
+                  "type": "string"
+                },
+                "provider": {
+                  "type": "string"
+                },
+                "status": {
+                  "type": "string"
+                },
+                "verificationStatus": {
+                  "type": "string",
+                  "enum": [
+                    "REAL_VERIFIED",
+                    "FIXTURE_VERIFIED",
+                    "EXTERNAL_UNVERIFIED",
+                    "UNKNOWN"
+                  ]
+                },
+                "lastAttemptAt": {
+                  "oneOf": [
+                    {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "queueProbe": {
+            "type": "object",
+            "required": [
+              "status",
+              "latencyMs",
+              "verificationStatus"
+            ],
+            "properties": {
+              "status": {
+                "type": "string",
+                "enum": [
+                  "ok",
+                  "degraded",
+                  "down",
+                  "timeout"
+                ]
+              },
+              "latencyMs": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "verificationStatus": {
+                "type": "string",
+                "enum": [
+                  "REAL_VERIFIED",
+                  "FIXTURE_VERIFIED",
+                  "EXTERNAL_UNVERIFIED",
+                  "UNKNOWN"
+                ]
+              },
+              "reason": {
+                "type": "string"
+              }
+            }
+          },
+          "connectorProbe": {
+            "type": "object",
+            "required": [
+              "status",
+              "latencyMs",
+              "verificationStatus"
+            ],
+            "properties": {
+              "status": {
+                "type": "string",
+                "enum": [
+                  "ok",
+                  "degraded",
+                  "down",
+                  "timeout"
+                ]
+              },
+              "latencyMs": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "verificationStatus": {
+                "type": "string",
+                "enum": [
+                  "REAL_VERIFIED",
+                  "FIXTURE_VERIFIED",
+                  "EXTERNAL_UNVERIFIED",
+                  "UNKNOWN"
+                ]
+              },
+              "reason": {
+                "type": "string"
+              }
+            }
+          },
+          "securityChecks": {
+            "type": "object",
+            "required": [
+              "apiKeyHmacConfigured",
+              "scopeEnforced",
+              "auditAppendOnly",
+              "secretRedactionEnabled",
+              "rateLimitEnabled"
+            ],
+            "properties": {
+              "apiKeyHmacConfigured": {
+                "type": "boolean"
+              },
+              "scopeEnforced": {
+                "type": "boolean"
+              },
+              "auditAppendOnly": {
+                "type": "boolean"
+              },
+              "secretRedactionEnabled": {
+                "type": "boolean"
+              },
+              "rateLimitEnabled": {
+                "type": "boolean"
               }
             }
           },
@@ -22587,28 +23212,44 @@
             "type": "object",
             "required": [
               "lastRunAt",
+              "state",
               "orphanObjects",
-              "orphanVectors"
+              "orphanVectors",
+              "diffCount",
+              "repairedCount"
             ],
             "properties": {
               "lastRunAt": {
+                "oneOf": [
+                  {
+                    "type": "string",
+                    "format": "date-time"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "state": {
                 "type": "string",
-                "format": "date-time",
-                "examples": [
-                  "2026-10-21T10:00:00+08:00"
+                "enum": [
+                  "unknown",
+                  "ok",
+                  "degraded",
+                  "failed"
                 ]
               },
               "orphanObjects": {
-                "type": "integer",
-                "examples": [
-                  0
-                ]
+                "type": "integer"
               },
               "orphanVectors": {
-                "type": "integer",
-                "examples": [
-                  0
-                ]
+                "type": "integer"
+              },
+              "diffCount": {
+                "type": "integer"
+              },
+              "repairedCount": {
+                "type": "integer"
               }
             }
           }
@@ -22893,7 +23534,8 @@
       "APIKeyList": {
         "type": "object",
         "required": [
-          "items"
+          "items",
+          "pageInfo"
         ],
         "properties": {
           "items": {
@@ -22901,6 +23543,9 @@
             "items": {
               "$ref": "#/components/schemas/APIKey"
             }
+          },
+          "pageInfo": {
+            "$ref": "#/components/schemas/PageInfo"
           }
         }
       },
@@ -25496,7 +26141,9 @@
                 "knowledge:manage",
                 "knowledge:admin"
               ]
-            }
+            },
+            "maxItems": 5,
+            "uniqueItems": true
           },
           "spaceIds": {
             "type": "array",
@@ -25506,7 +26153,8 @@
               "examples": [
                 "65f1e5b2a1c9d4b7e8f01234"
               ]
-            }
+            },
+            "uniqueItems": true
           },
           "expiresAt": {
             "oneOf": [
@@ -25536,7 +26184,14 @@
           "scopes": {
             "type": "array",
             "items": {
-              "type": "string"
+              "type": "string",
+              "enum": [
+                "knowledge:read",
+                "knowledge:search",
+                "knowledge:write",
+                "knowledge:manage",
+                "knowledge:admin"
+              ]
             }
           },
           "spaceIds": {
@@ -25592,6 +26247,7 @@
               "objects",
               "vectors",
               "fulltext",
+              "outbox",
               "all"
             ]
           },
@@ -25886,8 +26542,8 @@
     "operations": 120,
     "schemas": 139,
     "parameters": 8,
-    "runtimeOperations": 110,
-    "deferredOperations": 10,
+    "runtimeOperations": 120,
+    "deferredOperations": 0,
     "canonicalCollections": 23,
     "vectorProfiles": 4,
     "canonicalQueues": 13

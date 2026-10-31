@@ -453,6 +453,8 @@ export interface ObjectRefView {
   deletedAt: string | null;
 }
 
+export type ObjectCleanupScope = 'all' | 'ttl_objects' | 'orphan_objects';
+
 export interface CreateUploadSessionInput {
   uploadId: string;
   workspaceId: string;
@@ -675,7 +677,12 @@ export interface ObjectRefRepositoryPort {
   ): Promise<UploadSessionView>;
   markUploadExpired(uploadId: string, context: TenantContext): Promise<UploadSessionView>;
   findObjectRef(blobId: string, context: TenantContext): Promise<ObjectRefView | null>;
-  findCleanupCandidates(limit: number, now: Date, context: TenantContext): Promise<ObjectRefView[]>;
+  findCleanupCandidates(
+    limit: number,
+    now: Date,
+    scope: ObjectCleanupScope,
+    context: TenantContext,
+  ): Promise<ObjectRefView[]>;
   markDeleting(
     blobId: string,
     expectedVersion: number,

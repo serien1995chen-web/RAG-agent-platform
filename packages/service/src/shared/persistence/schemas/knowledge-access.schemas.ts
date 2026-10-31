@@ -174,10 +174,13 @@ export interface KnowledgeApiKeyDoc extends WorkspaceFields {
   secretHash: string;
   scopes: string[];
   spaceIds: Types.ObjectId[];
-  status: 'active' | 'revoked' | 'expired';
+  status: 'active' | 'rotated' | 'revoked' | 'expired';
   expiresAt: Date | null;
   lastUsedAt: Date | null;
   rotatedFromKeyId: Types.ObjectId | null;
+  rotatedToKeyId: Types.ObjectId | null;
+  rotatedAt: Date | null;
+  retireAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -187,22 +190,32 @@ export const KnowledgeApiKeySchema = new Schema(
     ...knowledgeCommonFields,
     name: { type: String, required: true, maxlength: 120 },
     keyPrefix: { type: String, required: true, minlength: 12, maxlength: 24 },
-    secretHash: { type: String, required: true },
+    secretHash: { type: String, required: true, select: false },
     scopes: {
       type: [String],
       required: true,
       default: [],
+      enum: [
+        'knowledge:read',
+        'knowledge:search',
+        'knowledge:write',
+        'knowledge:manage',
+        'knowledge:admin',
+      ],
     },
     spaceIds: { type: [Schema.Types.ObjectId], required: true, default: [] },
     status: {
       type: String,
-      enum: ['active', 'revoked', 'expired'],
+      enum: ['active', 'rotated', 'revoked', 'expired'],
       required: true,
       default: 'active',
     },
     expiresAt: { type: Date, default: null },
     lastUsedAt: { type: Date, default: null },
     rotatedFromKeyId: { type: Schema.Types.ObjectId, default: null },
+    rotatedToKeyId: { type: Schema.Types.ObjectId, default: null },
+    rotatedAt: { type: Date, default: null },
+    retireAt: { type: Date, default: null },
   },
   knowledgeSchemaOptions('knowledge_api_keys'),
 );
@@ -219,5 +232,5 @@ defineKnowledgeIndex(KnowledgeApiKeySchema, {
 });
 defineKnowledgeIndex(KnowledgeApiKeySchema, {
   name: 'ix_api_key_status',
-  key: { workspaceId: 1, status: 1, expiresAt: 1 },
+  key: { workspaceId: 1, status: 1, expiresAt: 1, retireAt: 1 },
 });

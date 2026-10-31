@@ -90,13 +90,21 @@ const workspaceManifestExtras: Record<
       '@types/yauzl': 'catalog:',
     },
   },
+  'packages/web': {
+    dependencies: {
+      echarts: 'catalog:',
+      'echarts-gl': 'catalog:',
+    },
+  },
   'packages/service': {
     dependencies: {
       '@apidevtools/json-schema-ref-parser': 'catalog:',
+      cookie: 'catalog:',
       'form-data': 'catalog:',
       'http-proxy-agent': 'catalog:',
       'https-proxy-agent': 'catalog:',
       'ipaddr.js': 'catalog:',
+      jsonwebtoken: 'catalog:',
       'jsonpath-plus': 'catalog:',
       multer: 'catalog:',
       'node-cron': 'catalog:',
@@ -107,6 +115,8 @@ const workspaceManifestExtras: Record<
     },
     devDependencies: {
       '@types/async-retry': 'catalog:',
+      '@types/cookie': 'catalog:',
+      '@types/jsonwebtoken': 'catalog:',
       '@types/multer': 'catalog:',
       '@types/node-cron': 'catalog:',
       '@types/pg': 'catalog:',

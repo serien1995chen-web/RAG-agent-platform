@@ -81,6 +81,8 @@ export interface S5GatewayUsageFact {
   eventSequence: number;
   quantity: number;
   unit: S5UsageUnit;
+  inputTokens?: number;
+  outputTokens?: number;
   status: number | null;
   fallbackUsed: boolean;
   provider: string;
@@ -95,6 +97,23 @@ export interface S5GatewayUsageFact {
 
 export interface S5UsageRecorderPort {
   recordInvocationUsage(fact: S5GatewayUsageFact, context: TenantContext): Promise<boolean>;
+}
+
+export interface S10ModelQuotaPort {
+  check(
+    input: {
+      operation: 'model';
+      workspaceId: string;
+      knowledgeSpaceId?: string;
+      estimatedPointsMicros?: number;
+    },
+    context: TenantContext,
+  ): Promise<void>;
+  withModelSlot<T>(
+    context: TenantContext,
+    work: () => Promise<T>,
+    estimatedPointsMicros?: number,
+  ): Promise<T>;
 }
 
 export interface S5GatewayResult<T> {

@@ -124,6 +124,12 @@ export type OperationId =
 export type RuntimeOperationId =
   | 'API-HEALTH-LIVE'
   | 'API-HEALTH-READY'
+  | 'API-APIKEY-LIST'
+  | 'API-APIKEY-CREATE'
+  | 'API-APIKEY-DELETE'
+  | 'API-APIKEY-UPDATE'
+  | 'API-APIKEY-ROTATE'
+  | 'API-AUDIT-LIST'
   | 'API-CITATION-GET'
   | 'API-CONNECTOR-DELETE'
   | 'API-CONNECTOR-GET'
@@ -147,6 +153,9 @@ export type RuntimeOperationId =
   | 'API-MODEL-BINDING-VALIDATE'
   | 'API-MODEL-LIST'
   | 'API-OPENAPI'
+  | 'API-OPS-CLEANUP'
+  | 'API-OPS-OUTBOX-REPLAY'
+  | 'API-OPS-RECONCILE'
   | 'API-OPS-STATUS'
   | 'API-ACL-GET'
   | 'API-ACL-UPDATE'
@@ -231,19 +240,11 @@ export type RuntimeOperationId =
   | 'API-UPLOAD-ABORT'
   | 'API-UPLOAD-COMPLETE'
   | 'API-UPLOAD-PART'
-  | 'API-UPLOAD-PRESIGN';
+  | 'API-UPLOAD-PRESIGN'
+  | 'API-USAGE-GET';
 
 export type DeferredOperationId =
-  | 'API-APIKEY-LIST'
-  | 'API-APIKEY-CREATE'
-  | 'API-APIKEY-DELETE'
-  | 'API-APIKEY-UPDATE'
-  | 'API-APIKEY-ROTATE'
-  | 'API-AUDIT-LIST'
-  | 'API-OPS-CLEANUP'
-  | 'API-OPS-OUTBOX-REPLAY'
-  | 'API-OPS-RECONCILE'
-  | 'API-USAGE-GET';
+  never;
 
 export type SchemaName =
   | 'ACL'
@@ -390,15 +391,15 @@ export interface SchemaPropertyMap {
   "ACL": "entries" | "inheritMode" | "permissionRevision" | "permissionState" | "resourceId" | "resourceType" | "snapshotVersion";
   "ACLResourceType": never;
   "ACLUpdate": "entries" | "inheritMode" | "version";
-  "APIKey": "createdAt" | "expiresAt" | "id" | "keyPrefix" | "lastUsedAt" | "name" | "scopes" | "spaceIds" | "status" | "workspaceId";
+  "APIKey": "createdAt" | "expiresAt" | "id" | "keyPrefix" | "lastUsedAt" | "name" | "retireAt" | "rotatedFromKeyId" | "scopes" | "spaceIds" | "status" | "updatedAt" | "version" | "workspaceId";
   "APIKeyCreate": "expiresAt" | "name" | "scopes" | "spaceIds";
-  "APIKeyList": "items";
+  "APIKeyList": "items" | "pageInfo";
   "APIKeySecret": never;
   "APIKeyUpdate": "name" | "scopes" | "spaceIds" | "status" | "version";
   "ApiLibraryCatalog": "items" | "nextCursor" | "provider";
   "ApiLibraryCatalogRequest": "config" | "credentials" | "cursor" | "offset" | "parentId";
   "ArchiveCreate": "sourceIds";
-  "AuditEvent": "action" | "actorMemberId" | "eventId" | "occurredAt" | "outcome" | "resourceId" | "resourceType" | "traceId" | "workspaceId";
+  "AuditEvent": "action" | "actorMemberId" | "apiKeyId" | "apiKeyPrefix" | "eventId" | "expiresAt" | "ipHash" | "knowledgeSpaceId" | "occurredAt" | "outcome" | "requestId" | "resourceId" | "resourceType" | "safeDiff" | "traceId" | "userAgentHash" | "workspaceId";
   "AuditEventList": "items" | "pageInfo";
   "BatchResult": "code" | "failed" | "items" | "requested" | "succeeded";
   "BinaryStream": never;
@@ -470,7 +471,7 @@ export interface SchemaPropertyMap {
   "ObjectBlobReference": "blobId" | "bucket" | "etag" | "objectKey" | "sizeBytes" | "state" | "workspaceId";
   "OpenApiDocument": never;
   "OperationResult": "id" | "jobId" | "status";
-  "OpsStatus": "queueDepth" | "reconciliation" | "status" | "storage" | "vector";
+  "OpsStatus": "connectorProbe" | "connectorProbes" | "dependencies" | "modelProbe" | "queueDepth" | "queueLag" | "queueProbe" | "reconciliation" | "securityChecks" | "status" | "storage" | "vector";
   "OwnershipTransfer": "targetMemberId" | "version";
   "PageInfo": "hasMore" | "nextCursor";
   "ParseProviderConfig": never;
@@ -522,7 +523,7 @@ export interface SchemaPropertyMap {
   "UploadPart": never;
   "UploadPartResult": "etag" | "partNumber" | "uploadId";
   "UploadSession": "expiresAt" | "mode" | "partSizeBytes" | "status" | "uploadId";
-  "UsageSummary": "period" | "quota" | "usage";
+  "UsageSummary": "delivery" | "period" | "profileVersion" | "quota" | "series" | "usage";
   "VersionedMutation": "version";
   "YuqueConnectorConfig": "basePath" | "provider";
   "YuqueCredentials": "provider" | "token" | "userId";
@@ -532,15 +533,15 @@ export interface RequiredSchemaPropertyMap {
   "ACL": "entries" | "inheritMode" | "permissionRevision" | "permissionState" | "resourceId" | "resourceType" | "snapshotVersion";
   "ACLResourceType": never;
   "ACLUpdate": "entries" | "inheritMode" | "version";
-  "APIKey": "createdAt" | "id" | "keyPrefix" | "name" | "scopes" | "spaceIds" | "status" | "workspaceId";
+  "APIKey": "createdAt" | "id" | "keyPrefix" | "name" | "scopes" | "spaceIds" | "status" | "updatedAt" | "version" | "workspaceId";
   "APIKeyCreate": "name" | "scopes" | "spaceIds";
-  "APIKeyList": "items";
+  "APIKeyList": "items" | "pageInfo";
   "APIKeySecret": never;
   "APIKeyUpdate": "version";
   "ApiLibraryCatalog": "items" | "provider";
   "ApiLibraryCatalogRequest": "config" | "credentials";
   "ArchiveCreate": "sourceIds";
-  "AuditEvent": "action" | "actorMemberId" | "eventId" | "occurredAt" | "outcome" | "resourceId" | "resourceType" | "workspaceId";
+  "AuditEvent": "action" | "actorMemberId" | "eventId" | "expiresAt" | "ipHash" | "occurredAt" | "outcome" | "requestId" | "resourceId" | "resourceType" | "safeDiff" | "traceId" | "userAgentHash" | "workspaceId";
   "AuditEventList": "items" | "pageInfo";
   "BatchResult": "failed" | "items" | "requested" | "succeeded";
   "BinaryStream": never;
@@ -612,7 +613,7 @@ export interface RequiredSchemaPropertyMap {
   "ObjectBlobReference": "blobId" | "bucket" | "etag" | "objectKey" | "sizeBytes" | "state" | "workspaceId";
   "OpenApiDocument": never;
   "OperationResult": "id" | "status";
-  "OpsStatus": "queueDepth" | "reconciliation" | "status" | "storage" | "vector";
+  "OpsStatus": "connectorProbe" | "connectorProbes" | "dependencies" | "modelProbe" | "queueDepth" | "queueLag" | "queueProbe" | "reconciliation" | "securityChecks" | "status" | "storage" | "vector";
   "OwnershipTransfer": "targetMemberId" | "version";
   "PageInfo": "hasMore" | "nextCursor";
   "ParseProviderConfig": never;
@@ -664,7 +665,7 @@ export interface RequiredSchemaPropertyMap {
   "UploadPart": never;
   "UploadPartResult": "etag" | "partNumber" | "uploadId";
   "UploadSession": "expiresAt" | "mode" | "partSizeBytes" | "status" | "uploadId";
-  "UsageSummary": "period" | "quota" | "usage";
+  "UsageSummary": "delivery" | "period" | "profileVersion" | "quota" | "series" | "usage";
   "VersionedMutation": "version";
   "YuqueConnectorConfig": "provider";
   "YuqueCredentials": "provider" | "token" | "userId";
@@ -673,6 +674,12 @@ export interface RequiredSchemaPropertyMap {
 export interface RuntimeRouteMethodPathMap {
   'API-HEALTH-LIVE': 'GET /healthz';
   'API-HEALTH-READY': 'GET /readyz';
+  'API-APIKEY-LIST': 'GET /v1/knowledge/api-keys';
+  'API-APIKEY-CREATE': 'POST /v1/knowledge/api-keys';
+  'API-APIKEY-DELETE': 'DELETE /v1/knowledge/api-keys/{keyId}';
+  'API-APIKEY-UPDATE': 'PATCH /v1/knowledge/api-keys/{keyId}';
+  'API-APIKEY-ROTATE': 'POST /v1/knowledge/api-keys/{keyId}/rotate';
+  'API-AUDIT-LIST': 'GET /v1/knowledge/audit-events';
   'API-CITATION-GET': 'GET /v1/knowledge/citations/{citationId}';
   'API-CONNECTOR-DELETE': 'DELETE /v1/knowledge/connectors/{connectorId}';
   'API-CONNECTOR-GET': 'GET /v1/knowledge/connectors/{connectorId}';
@@ -696,6 +703,9 @@ export interface RuntimeRouteMethodPathMap {
   'API-MODEL-BINDING-VALIDATE': 'POST /v1/knowledge/model-bindings/validate';
   'API-MODEL-LIST': 'GET /v1/knowledge/models';
   'API-OPENAPI': 'GET /v1/knowledge/openapi.json';
+  'API-OPS-CLEANUP': 'POST /v1/knowledge/operations/cleanup';
+  'API-OPS-OUTBOX-REPLAY': 'POST /v1/knowledge/operations/outbox/{eventId}/replay';
+  'API-OPS-RECONCILE': 'POST /v1/knowledge/operations/reconcile';
   'API-OPS-STATUS': 'GET /v1/knowledge/operations/status';
   'API-ACL-GET': 'GET /v1/knowledge/resources/{resourceType}/{resourceId}/acl';
   'API-ACL-UPDATE': 'PUT /v1/knowledge/resources/{resourceType}/{resourceId}/acl';
@@ -781,17 +791,9 @@ export interface RuntimeRouteMethodPathMap {
   'API-UPLOAD-COMPLETE': 'POST /v1/knowledge/uploads/{uploadId}/complete';
   'API-UPLOAD-PART': 'PUT /v1/knowledge/uploads/{uploadId}/parts/{partNumber}';
   'API-UPLOAD-PRESIGN': 'POST /v1/knowledge/uploads/{uploadId}/presign';
+  'API-USAGE-GET': 'GET /v1/knowledge/usage';
 }
 
 export interface DeferredRouteMethodPathMap {
-  'API-APIKEY-LIST': 'GET /v1/knowledge/api-keys';
-  'API-APIKEY-CREATE': 'POST /v1/knowledge/api-keys';
-  'API-APIKEY-DELETE': 'DELETE /v1/knowledge/api-keys/{keyId}';
-  'API-APIKEY-UPDATE': 'PATCH /v1/knowledge/api-keys/{keyId}';
-  'API-APIKEY-ROTATE': 'POST /v1/knowledge/api-keys/{keyId}/rotate';
-  'API-AUDIT-LIST': 'GET /v1/knowledge/audit-events';
-  'API-OPS-CLEANUP': 'POST /v1/knowledge/operations/cleanup';
-  'API-OPS-OUTBOX-REPLAY': 'POST /v1/knowledge/operations/outbox/{eventId}/replay';
-  'API-OPS-RECONCILE': 'POST /v1/knowledge/operations/reconcile';
-  'API-USAGE-GET': 'GET /v1/knowledge/usage';
+  readonly __none?: never;
 }

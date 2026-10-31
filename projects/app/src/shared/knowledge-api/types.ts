@@ -1,6 +1,6 @@
 import type { HealthResponse, RouteEntry } from '@kb/contracts';
 import type { IdempotencyStore } from '@kb/dal';
-import type { FileBinaryResult } from '@kb/service';
+import type { FileBinaryResult, S10StatusView } from '@kb/service';
 import type { NextApiRequest } from 'next';
 
 export interface KnowledgeAuthSubject {
@@ -9,6 +9,11 @@ export interface KnowledgeAuthSubject {
   workspaceIds: readonly string[];
   scopes: readonly string[];
   isWorkspaceOwner?: boolean;
+  apiKeyId?: string;
+  apiKeyPrefix?: string;
+  spaceIds?: readonly string[];
+  ipHash?: string;
+  userAgentHash?: string;
 }
 
 export interface KnowledgeRequestContext {
@@ -34,6 +39,7 @@ export interface KnowledgeDispatchResult {
   data: unknown;
   headers?: Readonly<Record<string, string>>;
   binary?: FileBinaryResult;
+  oneTimeSecret?: string;
 }
 
 export interface RateLimitDecision {
@@ -56,17 +62,19 @@ export interface KnowledgeApiRuntime {
     requestId: string;
   }): Promise<RateLimitDecision | null>;
   readiness(requestId: string): Promise<{ status: number; body: HealthResponse }>;
-  operationsStatus(input: { requestId: string; traceId: string; workspaceId: string }): Promise<{
-    status: 'ok' | 'degraded';
-    queueDepth: Record<string, number>;
-    storage: { provider: 'minio' | 'aws-s3' | 'r2' | 'cos' | 'oss'; healthy: boolean };
-    vector: { backend: 'pgvector'; healthy: boolean; profiles: number[] };
-    reconciliation: {
-      lastRunAt: string;
-      orphanObjects: number;
-      orphanVectors: number;
-    };
-  }>;
+  operationsStatus(input: {
+    requestId: string;
+    traceId: string;
+    workspaceId: string;
+    memberId: string;
+    scopes: readonly string[];
+    isWorkspaceOwner: boolean;
+    apiKeyId?: string;
+    apiKeyPrefix?: string;
+    apiKeySpaceIds?: readonly string[];
+    ipHash?: string;
+    userAgentHash?: string;
+  }): Promise<S10StatusView>;
   dispatch(input: KnowledgeDispatchInput): Promise<KnowledgeDispatchResult>;
   log(input: {
     event: string;

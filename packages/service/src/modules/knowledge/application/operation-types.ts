@@ -15,4 +15,5 @@ export interface KnowledgeOperationResult {
   data: unknown;
   headers?: Readonly<Record<string, string>>;
   binary?: FileBinaryResult;
+  oneTimeSecret?: string;
 }

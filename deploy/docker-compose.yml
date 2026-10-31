@@ -26,6 +26,9 @@ x-knowledge-environment: &knowledge-environment
   KB_MOCK_MEMBER_ID: ${KB_MOCK_MEMBER_ID:-mem_compose_owner}
   KB_MOCK_SCOPES: ${KB_MOCK_SCOPES:-knowledge:read,knowledge:write,knowledge:manage,knowledge:admin}
   KB_MOCK_WORKSPACE_OWNER: ${KB_MOCK_WORKSPACE_OWNER:-true}
+  API_KEY_HMAC_SECRET_FILE: ${API_KEY_HMAC_SECRET_FILE:-/run/secrets/api-key-hmac}
+  KB_USAGE_PRICING_PROFILE: ${KB_USAGE_PRICING_PROFILE:-zero-v1}
+  KB_QUOTA_PROFILE: ${KB_QUOTA_PROFILE:-free-v1}
   KB_EXTERNAL_MODEL_MODE: ${KB_EXTERNAL_MODEL_MODE:-mock}
   KB_EXTERNAL_OCR_MODE: ${KB_EXTERNAL_OCR_MODE:-mock}
   KB_EXTERNAL_CONNECTOR_MODE: ${KB_EXTERNAL_CONNECTOR_MODE:-mock}
@@ -224,6 +227,8 @@ services:
         condition: service_healthy
     ports:
       - '3010:3010'
+    volumes:
+      - ./secrets/api-key-hmac.secret:/run/secrets/api-key-hmac:ro
     healthcheck:
       test: ['CMD-SHELL', 'wget -q -O - http://127.0.0.1:3010/healthz >/dev/null || exit 1']
       interval: 10s
@@ -251,6 +256,8 @@ services:
         condition: service_healthy
       minio:
         condition: service_healthy
+    volumes:
+      - ./secrets/api-key-hmac.secret:/run/secrets/api-key-hmac:ro
     healthcheck:
       test: ['CMD-SHELL', 'test -f /tmp/knowledge-worker-ready']
       interval: 10s

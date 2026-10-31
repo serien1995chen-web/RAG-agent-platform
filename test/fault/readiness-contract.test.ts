@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { resolve } from 'node:path';
 import { loadKnowledgeRuntimeConfig } from '../../packages/service/src/shared/config/knowledge-runtime-config';
 
 const readiness = vi.hoisted(() => vi.fn());
@@ -60,6 +61,7 @@ describe('readiness failure contract', () => {
     KB_S3_BUCKET: 'knowledge',
     KB_S3_ACCESS_KEY_REF: 'knowledge-access',
     KB_S3_SECRET_KEY_REF: 'knowledge-secret',
+    API_KEY_HMAC_SECRET_FILE: resolve(import.meta.dirname, '../fixtures/s10/api-key-hmac.secret'),
   };
 
   it('treats an absent or empty OTLP endpoint as disabled', () => {

@@ -276,6 +276,17 @@ export class KnowledgeAccessRepository {
     context: TenantContext,
   ): Promise<ResourceAccess> {
     const resource = await this.resolveResource(resourceType, resourceId, context);
+    if (
+      context.apiKeySpaceIds?.length &&
+      !context.apiKeySpaceIds.includes(String(resource.knowledgeSpaceId))
+    ) {
+      throw createKnowledgeError({
+        code: 'KNOWLEDGE_FORBIDDEN',
+        requestId: context.requestId,
+        traceId: context.traceId,
+        details: { reason: 'api_key_space_scope' },
+      });
+    }
     if (context.isWorkspaceOwner || resource.ownershipMemberId === context.memberId) {
       return resource;
     }
@@ -370,6 +381,7 @@ export class KnowledgeAccessRepository {
           action: input.action,
           actorMemberId: context.memberId,
           apiKeyId: context.apiKeyId ? new Types.ObjectId(context.apiKeyId) : null,
+          apiKeyPrefix: context.apiKeyPrefix ?? null,
           resourceType: input.resourceType,
           resourceId: input.resourceId,
           outcome: input.outcome,

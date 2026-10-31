@@ -56,9 +56,9 @@ describe('knowledge target contract', () => {
     expect(Object.keys(document.components.securitySchemes)).toEqual(['JWTAuth', 'APIKeyAuth']);
   });
 
-  it('splits runtime 110 and deferred 10 with no overlap and full union', () => {
-    expect(artifacts.runtimeRegistry.count).toBe(110);
-    expect(artifacts.deferredManifest.count).toBe(10);
+  it('splits runtime 120 and deferred 0 with no overlap and full union', () => {
+    expect(artifacts.runtimeRegistry.count).toBe(120);
+    expect(artifacts.deferredManifest.count).toBe(0);
     const full = new Set(artifacts.fullRegistry.routes.map((route) => route.operationId));
     const runtime = new Set(artifacts.runtimeRegistry.operations.map((route) => route.operationId));
     const deferred = new Set(
