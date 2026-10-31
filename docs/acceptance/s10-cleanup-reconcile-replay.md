@@ -3,7 +3,7 @@
 ## Status
 
 - Task: `S10-T04`
-- Candidate: `319dbd4bf9b5e3a956c475beb8a1c950fcb47cd2`
+- Candidate: `82478af398322b5027b9f715bb5dfd4748211d17`
 - Result: `PASS`
 
 ## Delivered
@@ -33,8 +33,8 @@
 ## Commands
 
 - `pnpm test:integration`: exit 0, service 33 files / 179 tests.
-- `pnpm test:concurrency`: exit 0, 10 files / 21 tests.
-- `pnpm test:fault`: exit 0, 12 files / 38 tests.
+- `pnpm test:concurrency`: exit 0, 10 files / 22 tests.
+- `pnpm test:fault`: exit 0, 12 files / 39 tests.
 - `pnpm test:e2e`: cleanup submission returns and displays a real 24-hex Job ID.
 
 ## Risks

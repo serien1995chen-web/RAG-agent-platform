@@ -7,7 +7,7 @@
 | Wave / stage / owner            | `W4 / S10 / personB`                       |
 | Branch                          | `feat/kb-s10-ops-admin`                    |
 | W4 baseline                     | `14a3b9e96fcab7b6a1f1e92ccdf4dc775719ee7d` |
-| S10 source candidate            | `319dbd4bf9b5e3a956c475beb8a1c950fcb47cd2` |
+| S10 source candidate            | `82478af398322b5027b9f715bb5dfd4748211d17` |
 | Tasks                           | `S10-T01...T08 PASS`                       |
 | DATA Capability closure         | `57/57`                                    |
 | S10 operations                  | `10/10`                                    |
@@ -42,7 +42,7 @@ pending.
 - `docs/acceptance/s10-stage-evidence.md`
 - `docs/acceptance/s10-review-resolution.md`
 
-Both bind the source candidate above. S11 rebase will invalidate these SHAs and
+All bind the source candidate above. S11 rebase will invalidate these SHAs and
 require a new W4 candidate.
 
 ## W4 PersonB Blocker
@@ -55,5 +55,6 @@ pushedBranch=<required>
 s10MergeSha=<required>
 ```
 
-Until all three are supplied, the personB W4 gate remains `BLOCKED`. No W4 PASS,
-push, PR or merge is claimed.
+Until all three are supplied, the personB W4 gate remains `BLOCKED`. No W4 PASS
+or merge is claimed; branch publication preserves this source candidate for
+personA handoff.

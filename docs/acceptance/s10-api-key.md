@@ -6,7 +6,7 @@
 - Stage: `S10`
 - Task: `S10-T01`
 - Owner: `personB`
-- Candidate: `319dbd4bf9b5e3a956c475beb8a1c950fcb47cd2`
+- Candidate: `82478af398322b5027b9f715bb5dfd4748211d17`
 - Result: `PASS`
 
 ## Delivered
@@ -42,7 +42,7 @@ with `403` before probes run.
 - `pnpm test:security`: exit 0, 5 files / 9 tests.
 - `pnpm test:integration`: exit 0, service 33 files / 179 tests.
 - `pnpm test:tenant`: exit 0, 10 files / 19 tests.
-- `pnpm test:concurrency`: exit 0, 10 files / 19 tests.
+- `pnpm test:concurrency`: exit 0, 10 files / 22 tests.
 - `pnpm test:e2e`: exit 0, 16 files / 67 tests.
 
 ## Risks

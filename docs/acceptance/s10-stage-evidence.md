@@ -3,7 +3,7 @@
 ## Candidate
 
 ```text
-candidateSha=319dbd4bf9b5e3a956c475beb8a1c950fcb47cd2
+candidateSha=82478af398322b5027b9f715bb5dfd4748211d17
 baseSha=14a3b9e96fcab7b6a1f1e92ccdf4dc775719ee7d
 branch=feat/kb-s10-ops-admin
 owner=personB
@@ -33,21 +33,21 @@ contract 21 files / 100 tests
 security 5 files / 9 tests
 integration service 33 files / 179 tests
 tenant 10 files / 19 tests
-concurrency 10 files / 21 tests
-fault 12 files / 38 tests
+concurrency 10 files / 22 tests
+fault 12 files / 39 tests
 E2E 16 files / 67 tests
 ```
 
 ## Key Artifacts
 
 ```text
-test-results/s10-review-fix/e2e.log
-test-results/s10-review-fix/integration.log
-test-results/s10-review-fix/fault.log
-test-results/s10-review-fix/security.log
-test-results/s10-review-fix/build.log
-test-results/s10-review-fix/build-workers.log
-test-results/s10-review-fix/compose-config.log
+test-results/s10-review2/e2e.log
+test-results/s10-review2/integration.log
+test-results/s10-review2/fault.log
+test-results/s10-review2/security.log
+test-results/s10-review2/build.log
+test-results/s10-review2/build-workers.log
+test-results/s10-review2/compose-config.log
 docs/acceptance/s10-review-resolution.md
 ```
 

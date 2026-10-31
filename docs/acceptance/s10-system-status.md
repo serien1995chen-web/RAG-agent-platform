@@ -3,7 +3,7 @@
 ## Status
 
 - Task: `S10-T05`
-- Candidate: `319dbd4bf9b5e3a956c475beb8a1c950fcb47cd2`
+- Candidate: `82478af398322b5027b9f715bb5dfd4748211d17`
 - Result: `PASS`
 
 ## Delivered
@@ -29,7 +29,7 @@
 
 - `pnpm test:unit`: service 28 files / 129 tests.
 - `pnpm test:security`: 5 files / 9 tests.
-- `pnpm test:fault`: 12 files / 38 tests.
+- `pnpm test:fault`: 12 files / 39 tests.
 - `pnpm test:e2e`: real dependency status is `REAL_VERIFIED`; mock model remains
   `FIXTURE_VERIFIED`; overall result is `degraded`.
 
