@@ -81,6 +81,7 @@ export {
   KnowledgeScopedAuthAdapter,
   KnowledgeSharedUsageAdapter,
   S10ObjectInventoryAdapter,
+  isObjectHeadNotFound,
   S10OpsWorkerApplication,
   S10StatusApplication,
   S10StatusProbesAdapter,

@@ -241,6 +241,7 @@ export interface KnowledgeOutboxEventDoc extends WorkspaceFields {
   payload: Record<string, unknown>;
   status: 'pending' | 'publishing' | 'published' | 'failed' | 'dead_letter';
   attempts: number;
+  replayJobId: Types.ObjectId | null;
   availableAt: Date;
   publishedAt: Date | null;
   error: Record<string, unknown> | null;
@@ -264,6 +265,7 @@ export const KnowledgeOutboxEventSchema = new Schema(
       default: 'pending',
     },
     attempts: { type: Number, required: true, min: 0, default: 0 },
+    replayJobId: { type: Schema.Types.ObjectId, default: null },
     availableAt: { type: Date, required: true, default: () => new Date() },
     publishedAt: { type: Date, default: null },
     error: { type: Schema.Types.Mixed, default: null },
@@ -279,7 +281,7 @@ defineKnowledgeIndex(KnowledgeOutboxEventSchema, {
 });
 defineKnowledgeIndex(KnowledgeOutboxEventSchema, {
   name: 'ix_outbox_dispatch',
-  key: { status: 1, availableAt: 1 },
+  key: { status: 1, availableAt: 1, replayJobId: 1 },
 });
 defineKnowledgeIndex(KnowledgeOutboxEventSchema, {
   name: 'ttl_outbox_dispatch',

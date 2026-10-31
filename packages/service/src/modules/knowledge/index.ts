@@ -75,7 +75,10 @@ export { S10OperationsRepository } from './repository/s10-operations.repository'
 export { KnowledgeQuotaGate } from './adapter/s10-quota.adapter';
 export { KnowledgeScopedAuthAdapter } from './adapter/s10-scoped-auth.adapter';
 export { KnowledgeSharedUsageAdapter } from './adapter/s10-shared-usage.adapter';
-export { S10ObjectInventoryAdapter } from './adapter/s10-object-inventory.adapter';
+export {
+  S10ObjectInventoryAdapter,
+  isObjectHeadNotFound,
+} from './adapter/s10-object-inventory.adapter';
 export { S10OpsWorkerApplication } from './application/s10-ops-worker.application';
 export type {
   S10OpsResult,

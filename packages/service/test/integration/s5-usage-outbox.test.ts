@@ -264,6 +264,7 @@ describe('TEST-MODEL-003-BLOCK usage event and outbox transaction', () => {
 
   it('dispatches only the requested pending event by ID and version', async () => {
     const models = registerKnowledgeModels(connection);
+    const replayJobId = new mongoose.Types.ObjectId();
     const [target, other] = await models.KnowledgeOutboxEvent.create([
       {
         workspaceId,
@@ -279,6 +280,7 @@ describe('TEST-MODEL-003-BLOCK usage event and outbox transaction', () => {
         payload: { queue: 'knowledge-outbox', usageEventId: `target-${suffix}` },
         status: 'pending',
         attempts: 0,
+        replayJobId,
         availableAt: new Date(Date.now() - 1_000),
         publishedAt: null,
         error: null,
@@ -298,6 +300,7 @@ describe('TEST-MODEL-003-BLOCK usage event and outbox transaction', () => {
         payload: { queue: 'knowledge-outbox', usageEventId: `other-${suffix}` },
         status: 'pending',
         attempts: 0,
+        replayJobId: null,
         availableAt: new Date(Date.now() - 10_000),
         publishedAt: null,
         error: null,
@@ -306,7 +309,9 @@ describe('TEST-MODEL-003-BLOCK usage event and outbox transaction', () => {
     ]);
     const enqueue = vi.fn(async () => ({ jobId: 'k_target', enqueued: true }));
     const dispatcher = new KnowledgeOutboxDispatcher(connection, { enqueue } as never);
-    await expect(dispatcher.dispatchById(String(target!._id), 5, context)).resolves.toMatchObject({
+    await expect(
+      dispatcher.dispatchById(String(target!._id), 5, String(replayJobId), context),
+    ).resolves.toMatchObject({
       dispatched: true,
       eventKey: target!.eventKey,
     });

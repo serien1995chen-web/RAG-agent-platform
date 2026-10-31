@@ -1,5 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
-import { KnowledgeQuotaGate } from '../../packages/service/src/modules/knowledge/adapter/s10-quota.adapter';
+import {
+  KnowledgeQuotaGate,
+  S10_MODEL_LEASE_TTL_SECONDS,
+} from '../../packages/service/src/modules/knowledge/adapter/s10-quota.adapter';
 import { FREE_V1_QUOTA } from '../../packages/service/src/shared/config/s10-profiles';
 import type { TenantContext } from '../../packages/service/src/shared/persistence/knowledge/tenant';
 
@@ -14,6 +17,7 @@ const context: TenantContext = {
 
 class FakeRedis {
   values = new Map<string, number>();
+  expires = new Map<string, number>();
   async incr(key: string) {
     const next = (this.values.get(key) ?? 0) + 1;
     this.values.set(key, next);
@@ -38,7 +42,8 @@ class FakeRedis {
     this.values.delete(key);
     return 1;
   }
-  async expire() {
+  async expire(key: string, seconds: number) {
+    this.expires.set(key, seconds);
     return 1;
   }
 }
@@ -147,5 +152,17 @@ describe('TEST-S10-QUOTA-ZERO-SIDE-EFFECT model concurrency', () => {
       ),
     ).rejects.toThrow('provider failed');
     expect(redis.values.get(`kb:quota:points-reserved:${context.workspaceId}`)).toBeUndefined();
+  });
+
+  it('keeps concurrency and points leases beyond the Provider retry window', async () => {
+    const { quota, redis } = gate();
+    await quota.withModelSlot(context, async () => 'ok', 10_000_000);
+    expect(S10_MODEL_LEASE_TTL_SECONDS).toBeGreaterThanOrEqual(600);
+    expect(redis.expires.get(`kb:quota:model-concurrency:${context.workspaceId}`)).toBe(
+      S10_MODEL_LEASE_TTL_SECONDS,
+    );
+    expect(redis.expires.get(`kb:quota:points-reserved:${context.workspaceId}`)).toBe(
+      S10_MODEL_LEASE_TTL_SECONDS,
+    );
   });
 });

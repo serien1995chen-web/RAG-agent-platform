@@ -106,6 +106,7 @@ export async function createKnowledgeOutboxEvent(
         payload: { ...input.payload, queue: input.queue },
         status: 'pending',
         attempts: 0,
+        replayJobId: null,
         availableAt: new Date(),
         publishedAt: null,
         error: null,
@@ -216,9 +217,16 @@ export class KnowledgeOutboxDispatcher {
     const event = await model.findOneAndUpdate(
       {
         workspaceId,
-        $or: [
-          { status: 'pending', availableAt: { $lte: now } },
-          { status: 'publishing', updatedAt: { $lte: stalePublishingBefore } },
+        $and: [
+          {
+            $or: [
+              { status: 'pending', availableAt: { $lte: now } },
+              { status: 'publishing', updatedAt: { $lte: stalePublishingBefore } },
+            ],
+          },
+          {
+            $or: [{ replayJobId: null }, { replayJobId: { $exists: false } }],
+          },
         ],
       },
       {
@@ -237,11 +245,14 @@ export class KnowledgeOutboxDispatcher {
   async dispatchById(
     eventId: string,
     expectedVersion: number,
+    replayJobId: string,
     context: TenantContext,
   ): Promise<{ dispatched: boolean; eventKey?: string }> {
     const workspaceId = requireWorkspaceId(context);
     const model = this.connection.models.KnowledgeOutboxEvent;
-    if (!model || !Types.ObjectId.isValid(eventId)) return { dispatched: false };
+    if (!model || !Types.ObjectId.isValid(eventId) || !Types.ObjectId.isValid(replayJobId)) {
+      return { dispatched: false };
+    }
     const now = new Date();
     const event = await model.findOneAndUpdate(
       {
@@ -249,16 +260,35 @@ export class KnowledgeOutboxDispatcher {
         workspaceId,
         version: expectedVersion,
         status: 'pending',
+        replayJobId: new Types.ObjectId(replayJobId),
         availableAt: { $lte: now },
         deletedAt: null,
       },
       {
-        $set: { status: 'publishing', updatedByMemberId: context.memberId },
+        $set: {
+          status: 'publishing',
+          replayJobId: null,
+          updatedByMemberId: context.memberId,
+        },
         $inc: { version: 1, attempts: 1 },
       },
       { new: true },
     );
-    if (!event) return { dispatched: false };
+    if (!event) {
+      const publishing = await model.findOne({
+        _id: new Types.ObjectId(eventId),
+        workspaceId,
+        version: expectedVersion + 1,
+        status: 'publishing',
+        replayJobId: null,
+        deletedAt: null,
+      });
+      if (!publishing) return { dispatched: false };
+      return this.deliverClaimedEvent(
+        publishing.toObject() as KnowledgeOutboxEventDoc & { _id: Types.ObjectId },
+        context,
+      );
+    }
     return this.deliverClaimedEvent(
       event.toObject() as KnowledgeOutboxEventDoc & { _id: Types.ObjectId },
       context,

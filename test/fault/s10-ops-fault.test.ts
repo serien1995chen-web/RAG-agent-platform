@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { createKnowledgeError } from '../../packages/contracts/src';
 import { S10OpsWorkerApplication } from '../../packages/service/src/modules/knowledge/application/s10-ops-worker.application';
 import { S10StatusApplication } from '../../packages/service/src/modules/knowledge/application/s10-status.application';
+import { isObjectHeadNotFound } from '../../packages/service/src/modules/knowledge/adapter/s10-object-inventory.adapter';
 import type { TenantContext } from '../../packages/service/src/shared/persistence/knowledge/tenant';
 
 const context: TenantContext = {
@@ -104,5 +105,22 @@ describe('TEST-X-PGVECTOR-PARTIAL', () => {
       }),
       context,
     );
+  });
+});
+
+describe('TEST-OPS-004-S3-ERROR-CLASSIFICATION', () => {
+  it('treats only a real object 404 as missing during reconcile', () => {
+    const error = (code: Parameters<typeof createKnowledgeError>[0]['code'], status?: number) =>
+      createKnowledgeError({
+        code,
+        requestId: context.requestId,
+        traceId: context.traceId,
+        details: { provider: 'minio', status },
+      });
+    expect(isObjectHeadNotFound(error('KNOWLEDGE_NOT_FOUND', 404))).toBe(true);
+    expect(isObjectHeadNotFound(error('KNOWLEDGE_DEPENDENCY_UNAVAILABLE', 403))).toBe(false);
+    expect(isObjectHeadNotFound(error('KNOWLEDGE_DEPENDENCY_UNAVAILABLE', 503))).toBe(false);
+    expect(isObjectHeadNotFound(error('KNOWLEDGE_DEPENDENCY_TIMEOUT'))).toBe(false);
+    expect(isObjectHeadNotFound(new Error('network failed'))).toBe(false);
   });
 });

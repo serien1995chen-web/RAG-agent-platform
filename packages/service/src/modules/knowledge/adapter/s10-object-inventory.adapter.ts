@@ -1,3 +1,4 @@
+import { KnowledgeApiError } from '@kb/contracts';
 import { Types, type Connection } from 'mongoose';
 import type { Pool } from 'pg';
 import type { TenantContext } from '../../../shared/persistence/knowledge/tenant';
@@ -14,6 +15,10 @@ export interface S10InventoryObject {
   objectKey: string;
   sizeBytes: number;
   state: KnowledgeObjectRefDoc['state'];
+}
+
+export function isObjectHeadNotFound(error: unknown): boolean {
+  return error instanceof KnowledgeApiError && error.problem.error.code === 'KNOWLEDGE_NOT_FOUND';
 }
 
 export class S10ObjectInventoryAdapter {

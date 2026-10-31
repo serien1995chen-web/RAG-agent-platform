@@ -411,6 +411,27 @@ export class S10OperationsRepository implements S10AuditQueryPort, S10OpsReposit
         .session(session)
         .lean();
       if (!event) throw tenantError(context, 'KNOWLEDGE_NOT_FOUND');
+      const existingJob = (await this.jobs
+        .findOne({
+          workspaceId: requireWorkspaceId(context),
+          idempotencyKey: input.idempotencyKey,
+          deletedAt: null,
+        })
+        .session(session)
+        .lean()) as unknown as PlainJob | null;
+      if (existingJob) {
+        if (
+          existingJob.kind !== 'outbox' ||
+          existingJob.inputSnapshot.outboxEventId !== input.eventId ||
+          Number(existingJob.inputSnapshot.outboxVersion) !== input.version + 1 ||
+          String(event.replayJobId ?? '') !== String(existingJob._id)
+        ) {
+          throw tenantError(context, 'KNOWLEDGE_CONFLICT', {
+            reason: 'replay_idempotency_target_mismatch',
+          });
+        }
+        return existingJob;
+      }
       if (event.version !== input.version || !['failed', 'dead_letter'].includes(event.status)) {
         throw tenantError(context, 'KNOWLEDGE_CONFLICT', {
           version: input.version,
@@ -418,27 +439,7 @@ export class S10OperationsRepository implements S10AuditQueryPort, S10OpsReposit
           status: event.status,
         });
       }
-      const updated = await this.outbox.updateOne(
-        {
-          workspaceId: event.workspaceId,
-          _id: event._id,
-          version: input.version,
-          status: { $in: ['failed', 'dead_letter'] },
-          deletedAt: null,
-        },
-        {
-          $set: {
-            status: 'pending',
-            availableAt: new Date(),
-            error: null,
-            updatedByMemberId: context.memberId,
-          },
-          $inc: { version: 1 },
-        },
-        { session },
-      );
-      if (updated.modifiedCount !== 1) throw tenantError(context, 'KNOWLEDGE_CONFLICT');
-      return this.createJob(
+      const createdJob = await this.createJob(
         {
           kind: 'outbox',
           operationId: 'API-OPS-OUTBOX-REPLAY',
@@ -455,6 +456,28 @@ export class S10OperationsRepository implements S10AuditQueryPort, S10OpsReposit
         context,
         session,
       );
+      const updated = await this.outbox.updateOne(
+        {
+          workspaceId: event.workspaceId,
+          _id: event._id,
+          version: input.version,
+          status: { $in: ['failed', 'dead_letter'] },
+          deletedAt: null,
+        },
+        {
+          $set: {
+            status: 'pending',
+            replayJobId: createdJob._id,
+            availableAt: new Date(),
+            error: null,
+            updatedByMemberId: context.memberId,
+          },
+          $inc: { version: 1 },
+        },
+        { session },
+      );
+      if (updated.modifiedCount !== 1) throw tenantError(context, 'KNOWLEDGE_CONFLICT');
+      return createdJob;
     });
     await this.enqueue(job, 'knowledge-outbox', context);
     return { id: input.eventId, status: 'accepted', jobId: String(job._id) };

@@ -3,6 +3,7 @@ import mongoose from 'mongoose';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { S10OperationsRepository } from '../../src/modules/knowledge/repository/s10-operations.repository';
 import { KnowledgeAuditRepository } from '../../src/shared/persistence/knowledge/audit';
+import { KnowledgeOutboxDispatcher } from '../../src/shared/persistence/knowledge/outbox';
 import type { TenantContext } from '../../src/shared/persistence/knowledge/tenant';
 import { registerKnowledgeModels } from '../../src/shared/persistence/schemas/knowledge-index';
 import { ensureKnowledgeCollections } from '../../src/shared/persistence/schemas/knowledge-index';
@@ -156,6 +157,7 @@ describe('TEST-OPS-003-BLOCK / TEST-OPS-004-BLOCK operations', () => {
     const replayed = await models.KnowledgeOutboxEvent.findById(event!._id).lean();
     expect(replayed?.status).toBe('pending');
     expect(replayed?.version).toBe(4);
+    expect(String(replayed?.replayJobId)).toBe(result.jobId);
     const replayJob = await models.KnowledgeJob.findOne({
       workspaceId,
       kind: 'outbox',
@@ -165,6 +167,29 @@ describe('TEST-OPS-003-BLOCK / TEST-OPS-004-BLOCK operations', () => {
       outboxEventId: String(event!._id),
       outboxVersion: 4,
     });
+    await expect(
+      repository.replayOutbox(
+        {
+          eventId: String(event!._id),
+          version: 3,
+          idempotencyKey: `${idempotencyKey}-o`.padEnd(16, '0'),
+        },
+        context,
+      ),
+    ).resolves.toEqual(result);
+    const dispatcherQueue = vi.fn(async () => ({ jobId: 'k_target', enqueued: true }));
+    const dispatcher = new KnowledgeOutboxDispatcher(connection, {
+      enqueue: dispatcherQueue,
+    } as never);
+    await expect(dispatcher.dispatchOnce(context)).resolves.toEqual({ dispatched: false });
+    expect((await models.KnowledgeOutboxEvent.findById(event!._id).lean())?.status).toBe('pending');
+    await expect(
+      dispatcher.dispatchById(String(event!._id), 4, result.jobId, context),
+    ).resolves.toMatchObject({
+      dispatched: true,
+      eventKey: event!.eventKey,
+    });
+    expect(dispatcherQueue).toHaveBeenCalledOnce();
     await expect(
       repository.replayOutbox(
         {

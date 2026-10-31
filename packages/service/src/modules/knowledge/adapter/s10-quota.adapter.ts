@@ -14,6 +14,10 @@ type QuotaKind =
   | 'requests_per_minute'
   | 'model_concurrency';
 
+// Provider timeout is 120s with up to three attempts; keep crash-safe leases
+// beyond the complete retry window.
+export const S10_MODEL_LEASE_TTL_SECONDS = 900;
+
 function quotaError(
   context: TenantContext,
   kind: QuotaKind,
@@ -86,7 +90,7 @@ export class KnowledgeQuotaGate implements QuotaGatePort {
     if (pointsMicros === 0) return null;
     const key = `kb:quota:points-reserved:${requireWorkspaceId(context)}`;
     const reserved = Number(await this.input.redis.incrby(key, pointsMicros));
-    await this.input.redis.expire(key, 120);
+    await this.input.redis.expire(key, S10_MODEL_LEASE_TTL_SECONDS);
     if (snapshot.usage.aiPointsMicros + reserved > snapshot.quota.aiPointsLimit * 1_000_000) {
       const remaining = await this.input.redis.decrby(key, pointsMicros);
       if (remaining <= 0) await this.input.redis.del(key);
@@ -185,7 +189,7 @@ export class KnowledgeQuotaGate implements QuotaGatePort {
     let reservation: { key: string; pointsMicros: number } | null = null;
     try {
       const active = await this.input.redis.incr(key);
-      await this.input.redis.expire(key, 60);
+      await this.input.redis.expire(key, S10_MODEL_LEASE_TTL_SECONDS);
       if (active > this.input.quota.maxModelConcurrency) {
         await this.input.redis.decr(key);
         quotaError(context, 'model_concurrency', this.input.quota.version, {

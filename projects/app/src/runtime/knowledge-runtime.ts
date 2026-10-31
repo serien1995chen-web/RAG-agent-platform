@@ -4,7 +4,12 @@ import {
   RedisIdempotencyStore,
   type IdempotencyStore,
 } from '@kb/dal';
-import { createKnowledgeError, type HealthResponse, type RouteEntry } from '@kb/contracts';
+import {
+  createKnowledgeError,
+  KnowledgeApiError,
+  type HealthResponse,
+  type RouteEntry,
+} from '@kb/contracts';
 import {
   configureTelemetry,
   type SafeAttributes,
@@ -99,6 +104,7 @@ import {
   S10ApiKeyRepository,
   S10OperationsRepository,
   S10ObjectInventoryAdapter,
+  isObjectHeadNotFound,
   S10OpsWorkerApplication,
   S10OperationApplication,
   S10StatusApplication,
@@ -889,7 +895,33 @@ async function bootstrapRuntime(): Promise<TelemetryKnowledgeApiRuntime> {
                 requestId: context.requestId,
                 traceId: context.traceId,
               });
-            } catch {
+            } catch (error) {
+              if (!isObjectHeadNotFound(error)) {
+                const errorCode =
+                  error instanceof KnowledgeApiError
+                    ? error.problem.error.code
+                    : 'KNOWLEDGE_DEPENDENCY_UNAVAILABLE';
+                await step(current, 'failed', {
+                  scope: current,
+                  repair,
+                  objectId: object.id,
+                  errorCode,
+                  reason: 'object_head_dependency_failure',
+                });
+                if (error instanceof KnowledgeApiError) throw error;
+                throw createKnowledgeError({
+                  code: 'KNOWLEDGE_DEPENDENCY_UNAVAILABLE',
+                  requestId: context.requestId,
+                  traceId: context.traceId,
+                  retryable: true,
+                  details: {
+                    operation: 'reconcile',
+                    scope: current,
+                    objectId: object.id,
+                    reason: 'object_head_dependency_failure',
+                  },
+                });
+              }
               missing += 1;
               if (repair && !(await s10Inventory.activeObjectReference(object.id, context))) {
                 const updated = await registerKnowledgeModels(mongo).KnowledgeObjectRef.updateOne(
@@ -1021,8 +1053,8 @@ async function bootstrapRuntime(): Promise<TelemetryKnowledgeApiRuntime> {
         finishedAt: new Date().toISOString(),
       };
     },
-    async replay({ eventId, expectedVersion, context }) {
-      const result = await outboxDispatcher.dispatchById(eventId, expectedVersion, context);
+    async replay({ jobId, eventId, expectedVersion, context }) {
+      const result = await outboxDispatcher.dispatchById(eventId, expectedVersion, jobId, context);
       if (!result.dispatched) {
         throw createKnowledgeError({
           code: 'KNOWLEDGE_CONFLICT',
