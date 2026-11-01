@@ -97,12 +97,19 @@ remain unchanged. W3 evidence remains `53 implemented / 49 closed`.
 | Archive/build            | FAIL    | `pnpm build:workers` PASS; `pnpm build` fails because `projects/app/node_modules/next` is a symlink outside Turbopack root |
 
 The app-build failure is an environment/dependency-layout blocker, not a
-release PASS. No explicit `pnpm install/add/update/remove` command was issued.
-One temporary Windows scratch checkout invocation let pnpm's
+release PASS. The initial phase1 run issued no explicit
+`pnpm install/add/update/remove` command. One temporary Windows scratch
+checkout invocation let pnpm's
 `verify-deps-before-run` try an implicit install; it failed on ignored build
 scripts, its temporary `pnpm-workspace.yaml` placeholder was removed, and the
 tracked lockfile stayed at the W4 hash. The implementation and evidence
 worktree used pre-existing WSL dependency links, not a new install.
+
+The user subsequently ran `pnpm install` and `pnpm install --force` in the S11
+worktree. Both exited 0 and left `pnpm-lock.yaml` unchanged, but they retained
+the pre-existing `projects/app/node_modules/next` symlink pointing to the main
+checkout. A clean dependency-directory reinstall is required before the
+Turbopack build can be accepted.
 
 ## Provider Matrix
 
