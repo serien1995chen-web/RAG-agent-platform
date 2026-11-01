@@ -48,8 +48,8 @@ describe('TEST-X-S11-FULL-CHAIN', () => {
     expect(missing).toContain('S11_PROVIDER_MODE=real');
     expect(missing).toContain('AIPROXY_API_TOKEN');
     expect(missing).toContain('S11_FEISHU_APP_SECRET');
-    expect(missing).toContain('S11_YUQUE_TOKEN');
-    expect(missing).toContain('S11_DINGTALK_APP_SECRET');
+    expect(missing).not.toContain('S11_YUQUE_TOKEN');
+    expect(missing).not.toContain('S11_DINGTALK_APP_SECRET');
     expect(missing.join(',')).not.toMatch(/kn_live_|Bearer|secret-value/i);
   });
 });

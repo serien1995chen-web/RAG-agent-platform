@@ -87,6 +87,61 @@ function candidateIds(models, hints) {
     .slice(0, 20);
 }
 
+function profileModels(raw) {
+  if (!raw?.trim()) return { models: [], error: 'profile_missing' };
+  try {
+    const parsed = JSON.parse(raw);
+    if (!parsed || !Array.isArray(parsed.models)) {
+      return { models: [], error: 'models_array_required' };
+    }
+    return {
+      models: parsed.models
+        .filter(
+          (entry) =>
+            entry &&
+            typeof entry === 'object' &&
+            typeof entry.id === 'string' &&
+            typeof entry.type === 'string' &&
+            Array.isArray(entry.capabilities),
+        )
+        .map((entry) => ({
+          id: entry.id,
+          type: entry.type,
+          capabilities: entry.capabilities.filter((item) => typeof item === 'string'),
+          dimension: Number.isInteger(entry.dimension) ? entry.dimension : null,
+        })),
+      error: null,
+    };
+  } catch {
+    return { models: [], error: 'profile_invalid_json' };
+  }
+}
+
+function roleMatches(kind, profile) {
+  if (!profile) return false;
+  if (kind === 'llm') return profile.type === 'llm' && profile.capabilities.includes('chat');
+  if (kind === 'embedding') {
+    return (
+      profile.type === 'embedding' &&
+      profile.capabilities.includes('text-embedding') &&
+      [768, 1024, 1536, 3072].includes(profile.dimension)
+    );
+  }
+  if (kind === 'rerank') {
+    return profile.type === 'rerank' && profile.capabilities.includes('rerank');
+  }
+  if (kind === 'vlm') {
+    return (
+      (profile.type === 'vlm' || profile.type === 'llm') && profile.capabilities.includes('vision')
+    );
+  }
+  return (
+    profile.type === 'embedding' &&
+    profile.capabilities.includes('vision') &&
+    [768, 1024, 1536, 3072].includes(profile.dimension)
+  );
+}
+
 export async function probeCatalog(env = process.env, fetcher = globalThis.fetch) {
   const baseUrl = valueOf(env, 'AIPROXY_BASE_URL');
   const token = valueOf(env, 'AIPROXY_API_TOKEN');
@@ -151,10 +206,16 @@ export async function probeCatalog(env = process.env, fetcher = globalThis.fetch
   }
 
   const models = payload.data.map(safeModel).filter((model) => model !== null);
+  const internalProfile = profileModels(valueOf(env, 'AIPROXY_MODEL_PROFILE_JSON'));
+  const mappingApproved = valueOf(env, 'S11_AIPROXY_MODEL_MAPPING_APPROVED') === 'true';
   const mappings = TARGETS.map((target) => {
     const configured = valueOf(env, target.env);
     const exact = models.some((model) => model.id === target.target);
     const candidates = exact ? [target.target] : candidateIds(models, target.hints);
+    const catalogModel = models.find((model) => model.id === configured) ?? null;
+    const profile = internalProfile.models.find((model) => model.id === configured) ?? null;
+    const profileMatched = roleMatches(target.kind, profile);
+    const approved = mappingApproved && Boolean(catalogModel) && profileMatched;
     return {
       kind: target.kind,
       variable: target.env,
@@ -162,7 +223,9 @@ export async function probeCatalog(env = process.env, fetcher = globalThis.fetch
       configured: configured || null,
       exact,
       candidates,
-      approved: false,
+      configuredFound: Boolean(catalogModel),
+      profileMatched,
+      approved,
     };
   });
   return {
@@ -172,7 +235,8 @@ export async function probeCatalog(env = process.env, fetcher = globalThis.fetch
     modelCount: models.length,
     models,
     mappings,
-    requiresUserConfirmation: mappings.some((mapping) => !mapping.exact),
+    profileStatus: internalProfile.error ?? 'READY',
+    requiresUserConfirmation: mappings.some((mapping) => !mapping.approved),
   };
 }
 

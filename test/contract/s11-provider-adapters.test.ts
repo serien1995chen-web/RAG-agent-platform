@@ -18,6 +18,12 @@ import type { S5HttpTransportPort } from '../../packages/service/src/modules/kno
 import { FeishuHttpDelegate } from '../../packages/service/src/modules/knowledge/adapter/connectors/feishu-http.delegate';
 import { YuqueHttpDelegate } from '../../packages/service/src/modules/knowledge/adapter/connectors/yuque-http.delegate';
 import { DingtalkHttpDelegate } from '../../packages/service/src/modules/knowledge/adapter/connectors/dingtalk-http.delegate';
+import {
+  createConnectorProviderClients,
+  ScopedDeferredConnectorClient,
+} from '../../packages/service/src/modules/knowledge/adapter/connectors/provider-clients';
+import { FeishuConnectorClient } from '../../packages/service/src/modules/knowledge/adapter/connectors/feishu';
+import { probeCatalog } from '../../scripts/probe-aiproxy-catalog.mjs';
 import type {
   S11ConnectorHttpRequest,
   S11ConnectorHttpResponse,
@@ -583,6 +589,101 @@ describe('TEST-X-S11-PROVIDER-REAL contract adapters', () => {
       expect(`${ready.stdout}${ready.stderr}`).not.toContain(secret);
     }
     expect(`${ready.stdout}${ready.stderr}`).not.toContain('token=hidden');
+  });
+
+  it('selects connector adapters by runtime mode without a scoped real-mode mock fallback', async () => {
+    const mock = createConnectorProviderClients({ mode: 'mock' });
+    expect(mock.feishu).toBeInstanceOf(FeishuConnectorClient);
+
+    const real = createConnectorProviderClients({
+      mode: 'real',
+      scopeProfile: 'canonical-v1',
+    });
+    expect(real.feishu).toBeInstanceOf(FeishuHttpDelegate);
+    expect(real.yuque).toBeInstanceOf(YuqueHttpDelegate);
+    expect(real.dingtalk).toBeInstanceOf(DingtalkHttpDelegate);
+
+    const scoped = createConnectorProviderClients({
+      mode: 'real',
+      scopeProfile: 'knowledge-usability-v1',
+    });
+    expect(scoped.feishu).toBeInstanceOf(FeishuHttpDelegate);
+    expect(scoped.yuque).toBeInstanceOf(ScopedDeferredConnectorClient);
+    expect(scoped.dingtalk).toBeInstanceOf(ScopedDeferredConnectorClient);
+    await expect(
+      scoped.yuque.catalog({
+        provider: 'yuque',
+        config: {},
+        credentials: {},
+        rootId: 'deferred',
+        context,
+      }),
+    ).rejects.toMatchObject({
+      problem: {
+        error: {
+          code: 'KNOWLEDGE_UNSUPPORTED_CONTENT',
+          details: { reason: 'DEFERRED_BY_SCOPE' },
+        },
+      },
+    });
+  });
+
+  it('accepts only approved configured model IDs that exist in both catalog and profile', async () => {
+    const configured = {
+      S11_AIPROXY_LLM_MODEL: 'provider-llm',
+      S11_AIPROXY_EMBEDDING_MODEL: 'provider-embedding',
+      S11_AIPROXY_RERANK_MODEL: 'provider-rerank',
+      S11_AIPROXY_VLM_MODEL: 'provider-vlm',
+      S11_AIPROXY_VISION_EMBEDDING_MODEL: 'provider-vision-embedding',
+    };
+    const profile = {
+      models: [
+        { id: configured.S11_AIPROXY_LLM_MODEL, type: 'llm', capabilities: ['chat'] },
+        {
+          id: configured.S11_AIPROXY_EMBEDDING_MODEL,
+          type: 'embedding',
+          capabilities: ['text-embedding'],
+          dimension: 1024,
+        },
+        {
+          id: configured.S11_AIPROXY_RERANK_MODEL,
+          type: 'rerank',
+          capabilities: ['rerank'],
+        },
+        { id: configured.S11_AIPROXY_VLM_MODEL, type: 'vlm', capabilities: ['vision', 'chat'] },
+        {
+          id: configured.S11_AIPROXY_VISION_EMBEDDING_MODEL,
+          type: 'embedding',
+          capabilities: ['vision'],
+          dimension: 1024,
+        },
+      ],
+    };
+    const fetcher = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          data: Object.values(configured).map((id) => ({ id })),
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      ),
+    );
+    const catalog = await probeCatalog(
+      {
+        AIPROXY_BASE_URL: 'https://aiproxy.example.test/v1',
+        AIPROXY_API_TOKEN: 'aiproxy-secret-value',
+        S11_AIPROXY_MODEL_MAPPING_APPROVED: 'true',
+        AIPROXY_MODEL_PROFILE_JSON: JSON.stringify(profile),
+        ...configured,
+      },
+      fetcher,
+    );
+    expect(catalog).toMatchObject({
+      status: 'READY',
+      requiresUserConfirmation: false,
+      profileStatus: 'READY',
+    });
+    expect(catalog.mappings).toHaveLength(5);
+    expect(catalog.mappings.every((mapping) => mapping.approved)).toBe(true);
   });
 
   it('provider preflight exits 2 with PROVIDER_BLOCKED', () => {

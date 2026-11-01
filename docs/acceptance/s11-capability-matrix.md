@@ -1,79 +1,79 @@
 # S11 Capability Matrix
 
-Phase: `S11 phase1`. Status `NOT_RUN` is a template value; it is not a pass.
+Phase: `S11 scoped knowledge-usability-v1`. Status `NOT_RUN` is a template value; it is not a pass.
 
-| Capability | Type     | Task trace          | Blocking test           | Status   | Command / evidence        | Provider | Remaining risk                                              |
-| ---------- | -------- | ------------------- | ----------------------- | -------- | ------------------------- | -------- | ----------------------------------------------------------- |
-| KB-001     | BASE     | T01/T06/T08         | TEST-KB-001-BLOCK       | NOT_RUN  | -                         | BLOCKED  | candidate, S10 merge and real-provider evidence unavailable |
-| KB-002     | DATA     | T01/T06/T08         | TEST-KB-002-BLOCK       | NOT_RUN  | -                         | BLOCKED  | candidate, S10 merge and real-provider evidence unavailable |
-| KB-003     | DATA     | T01/T06/T08         | TEST-KB-003-BLOCK       | NOT_RUN  | -                         | BLOCKED  | candidate, S10 merge and real-provider evidence unavailable |
-| KB-004     | EXCLUDED | T04/T08             | TEST-EXCLUDED-KB-004    | EXCLUDED | zero-implementation guard | N/A      | zero implementation must remain                             |
-| COL-001    | BASE     | T01/T06/T08         | TEST-COL-001-BLOCK      | NOT_RUN  | -                         | BLOCKED  | candidate, S10 merge and real-provider evidence unavailable |
-| COL-002    | DATA     | T01/T06/T08         | TEST-COL-002-BLOCK      | NOT_RUN  | -                         | BLOCKED  | candidate, S10 merge and real-provider evidence unavailable |
-| COL-003    | BASE     | T01/T06/T08         | TEST-COL-003-BLOCK      | NOT_RUN  | -                         | BLOCKED  | candidate, S10 merge and real-provider evidence unavailable |
-| COL-004    | BASE     | T01/T04/T08         | TEST-COL-004-BLOCK      | NOT_RUN  | -                         | BLOCKED  | candidate, S10 merge and real-provider evidence unavailable |
-| DATA-001   | BASE     | T01/T06/T08         | TEST-DATA-001-BLOCK     | NOT_RUN  | -                         | BLOCKED  | candidate, S10 merge and real-provider evidence unavailable |
-| DATA-002   | DATA     | T01/T06/T08         | TEST-DATA-002-BLOCK     | NOT_RUN  | -                         | BLOCKED  | candidate, S10 merge and real-provider evidence unavailable |
-| DATA-003   | DATA     | T01/T06/T08         | TEST-DATA-003-BLOCK     | NOT_RUN  | -                         | BLOCKED  | candidate, S10 merge and real-provider evidence unavailable |
-| DATA-004   | DATA     | T01/T06/T08         | TEST-DATA-004-BLOCK     | NOT_RUN  | -                         | BLOCKED  | candidate, S10 merge and real-provider evidence unavailable |
-| ING-001    | DATA     | T01/T03/T08         | TEST-ING-001-BLOCK      | NOT_RUN  | -                         | BLOCKED  | candidate, S10 merge and real-provider evidence unavailable |
-| ING-002    | DATA     | T01/T03/T08         | TEST-ING-002-BLOCK      | NOT_RUN  | -                         | BLOCKED  | candidate, S10 merge and real-provider evidence unavailable |
-| ING-003    | DATA     | T01/T04/T08         | TEST-ING-003-BLOCK      | NOT_RUN  | -                         | BLOCKED  | candidate, S10 merge and real-provider evidence unavailable |
-| ING-004    | DATA     | T01/T03/T08         | TEST-ING-004-BLOCK      | NOT_RUN  | -                         | BLOCKED  | candidate, S10 merge and real-provider evidence unavailable |
-| ING-005    | DATA     | T01/T03/T08         | TEST-ING-005-BLOCK      | NOT_RUN  | -                         | BLOCKED  | candidate, S10 merge and real-provider evidence unavailable |
-| ING-006    | DATA     | T01/T02/T08         | TEST-ING-006-BLOCK      | NOT_RUN  | -                         | BLOCKED  | candidate, S10 merge and real-provider evidence unavailable |
-| ING-007    | DATA     | T01/T02/T08         | TEST-ING-007-BLOCK      | NOT_RUN  | -                         | BLOCKED  | candidate, S10 merge and real-provider evidence unavailable |
-| ING-008    | DATA     | T01/T02/T08         | TEST-ING-008-BLOCK      | NOT_RUN  | -                         | BLOCKED  | candidate, S10 merge and real-provider evidence unavailable |
-| ING-009    | DATA     | T01/T02/T08         | TEST-ING-009-BLOCK      | NOT_RUN  | -                         | BLOCKED  | candidate, S10 merge and real-provider evidence unavailable |
-| ING-010    | EXCLUDED | T04/T08             | TEST-EXCLUDED-ING-010   | EXCLUDED | zero-implementation guard | N/A      | zero implementation must remain                             |
-| FILE-001   | DATA     | T01/T04/T08         | TEST-FILE-001-BLOCK     | NOT_RUN  | -                         | BLOCKED  | candidate, S10 merge and real-provider evidence unavailable |
-| FILE-002   | DATA     | T01/T04/T08         | TEST-FILE-002-BLOCK     | NOT_RUN  | -                         | BLOCKED  | candidate, S10 merge and real-provider evidence unavailable |
-| FILE-003   | DATA     | T01/T04/T08         | TEST-FILE-003-BLOCK     | NOT_RUN  | -                         | BLOCKED  | candidate, S10 merge and real-provider evidence unavailable |
-| FILE-004   | DATA     | T01/T04/T05/T08     | TEST-FILE-004-BLOCK     | NOT_RUN  | -                         | BLOCKED  | candidate, S10 merge and real-provider evidence unavailable |
-| FILE-005   | DATA     | T01/T04/T05/T08     | TEST-FILE-005-BLOCK     | NOT_RUN  | -                         | BLOCKED  | candidate, S10 merge and real-provider evidence unavailable |
-| PARSE-001  | DATA     | T01/T03/T08         | TEST-PARSE-001-BLOCK    | NOT_RUN  | -                         | BLOCKED  | candidate, S10 merge and real-provider evidence unavailable |
-| PARSE-002  | DATA     | T01/T02/T08         | TEST-PARSE-002-BLOCK    | NOT_RUN  | -                         | BLOCKED  | candidate, S10 merge and real-provider evidence unavailable |
-| PARSE-003  | DATA     | T01/T03/T08         | TEST-PARSE-003-BLOCK    | NOT_RUN  | -                         | BLOCKED  | candidate, S10 merge and real-provider evidence unavailable |
-| PARSE-004  | DATA     | T01/T03/T08         | TEST-PARSE-004-BLOCK    | NOT_RUN  | -                         | BLOCKED  | candidate, S10 merge and real-provider evidence unavailable |
-| PARSE-005  | DATA     | T01/T02/T08         | TEST-PARSE-005-BLOCK    | NOT_RUN  | -                         | BLOCKED  | candidate, S10 merge and real-provider evidence unavailable |
-| TRAIN-001  | DATA     | T01/T03/T05/T08     | TEST-TRAIN-001-BLOCK    | NOT_RUN  | -                         | BLOCKED  | candidate, S10 merge and real-provider evidence unavailable |
-| TRAIN-002  | DATA     | T01/T03/T05/T08     | TEST-TRAIN-002-BLOCK    | NOT_RUN  | -                         | BLOCKED  | candidate, S10 merge and real-provider evidence unavailable |
-| TRAIN-003  | DATA     | T01/T03/T08         | TEST-TRAIN-003-BLOCK    | NOT_RUN  | -                         | BLOCKED  | candidate, S10 merge and real-provider evidence unavailable |
-| TRAIN-004  | DATA     | T01/T03/T08         | TEST-TRAIN-004-BLOCK    | NOT_RUN  | -                         | BLOCKED  | candidate, S10 merge and real-provider evidence unavailable |
-| TRAIN-005  | DATA     | T01/T03/T05/T08     | TEST-TRAIN-005-BLOCK    | NOT_RUN  | -                         | BLOCKED  | candidate, S10 merge and real-provider evidence unavailable |
-| TRAIN-006  | DATA     | T01/T03/T08         | TEST-TRAIN-006-BLOCK    | NOT_RUN  | -                         | BLOCKED  | candidate, S10 merge and real-provider evidence unavailable |
-| TRAIN-007  | DATA     | T01/T03/T08         | TEST-TRAIN-007-BLOCK    | NOT_RUN  | -                         | BLOCKED  | candidate, S10 merge and real-provider evidence unavailable |
-| SEARCH-001 | DATA     | T01/T03/T04/T06/T08 | TEST-SEARCH-001-BLOCK   | NOT_RUN  | -                         | BLOCKED  | candidate, S10 merge and real-provider evidence unavailable |
-| SEARCH-002 | DATA     | T01/T03/T04/T06/T08 | TEST-SEARCH-002-BLOCK   | NOT_RUN  | -                         | BLOCKED  | candidate, S10 merge and real-provider evidence unavailable |
-| SEARCH-003 | DATA     | T01/T03/T04/T06/T08 | TEST-SEARCH-003-BLOCK   | NOT_RUN  | -                         | BLOCKED  | candidate, S10 merge and real-provider evidence unavailable |
-| SEARCH-004 | DATA     | T01/T03/T04/T06/T08 | TEST-SEARCH-004-BLOCK   | NOT_RUN  | -                         | BLOCKED  | candidate, S10 merge and real-provider evidence unavailable |
-| SEARCH-005 | DATA     | T01/T03/T04/T06/T08 | TEST-SEARCH-005-BLOCK   | NOT_RUN  | -                         | BLOCKED  | candidate, S10 merge and real-provider evidence unavailable |
-| SEARCH-006 | DATA     | T01/T02/T04/T06/T08 | TEST-SEARCH-006-BLOCK   | NOT_RUN  | -                         | BLOCKED  | candidate, S10 merge and real-provider evidence unavailable |
-| SEARCH-007 | DATA     | T01/T03/T04/T06/T08 | TEST-SEARCH-007-BLOCK   | NOT_RUN  | -                         | BLOCKED  | candidate, S10 merge and real-provider evidence unavailable |
-| SEARCH-008 | DATA     | T01/T02/T04/T06/T08 | TEST-SEARCH-008-BLOCK   | NOT_RUN  | -                         | BLOCKED  | candidate, S10 merge and real-provider evidence unavailable |
-| SEARCH-009 | DATA     | T01/T03/T04/T06/T08 | TEST-SEARCH-009-BLOCK   | NOT_RUN  | -                         | BLOCKED  | candidate, S10 merge and real-provider evidence unavailable |
-| MODEL-001  | DATA     | T01/T02/T07/T08     | TEST-MODEL-001-BLOCK    | NOT_RUN  | -                         | BLOCKED  | candidate, S10 merge and real-provider evidence unavailable |
-| MODEL-002  | DATA     | T01/T02/T08         | TEST-MODEL-002-BLOCK    | NOT_RUN  | -                         | BLOCKED  | candidate, S10 merge and real-provider evidence unavailable |
-| MODEL-003  | DATA     | T01/T02/T08         | TEST-MODEL-003-BLOCK    | NOT_RUN  | -                         | BLOCKED  | candidate, S10 merge and real-provider evidence unavailable |
-| MODEL-004  | DATA     | T01/T02/T08         | TEST-MODEL-004-BLOCK    | NOT_RUN  | -                         | BLOCKED  | candidate, S10 merge and real-provider evidence unavailable |
-| MODEL-005  | DATA     | T01/T02/T08         | TEST-MODEL-005-BLOCK    | NOT_RUN  | -                         | BLOCKED  | candidate, S10 merge and real-provider evidence unavailable |
-| MODEL-006  | DATA     | T01/T02/T08         | TEST-MODEL-006-BLOCK    | NOT_RUN  | -                         | BLOCKED  | candidate, S10 merge and real-provider evidence unavailable |
-| MULTI-001  | DATA     | T01/T02/T06/T08     | TEST-MULTI-001-BLOCK    | NOT_RUN  | -                         | BLOCKED  | candidate, S10 merge and real-provider evidence unavailable |
-| MULTI-002  | EXCLUDED | T04/T08             | TEST-EXCLUDED-MULTI-002 | EXCLUDED | zero-implementation guard | N/A      | zero implementation must remain                             |
-| MULTI-003  | EXCLUDED | T04/T08             | TEST-EXCLUDED-MULTI-003 | EXCLUDED | zero-implementation guard | N/A      | zero implementation must remain                             |
-| AUTH-001   | BASE     | T01/T04/T08         | TEST-AUTH-001-BLOCK     | NOT_RUN  | -                         | BLOCKED  | candidate, S10 merge and real-provider evidence unavailable |
-| AUTH-002   | BASE     | T01/T04/T08         | TEST-AUTH-002-BLOCK     | NOT_RUN  | -                         | BLOCKED  | candidate, S10 merge and real-provider evidence unavailable |
-| AUTH-003   | BASE     | T01/T04/T08         | TEST-AUTH-003-BLOCK     | NOT_RUN  | -                         | BLOCKED  | candidate, S10 merge and real-provider evidence unavailable |
-| AUTH-004   | BASE     | T01/T04/T08         | TEST-AUTH-004-BLOCK     | NOT_RUN  | -                         | BLOCKED  | candidate, S10 merge and real-provider evidence unavailable |
-| API-001    | BASE     | T01/T04/T07/T08     | TEST-API-001-BLOCK      | NOT_RUN  | -                         | BLOCKED  | candidate, S10 merge and real-provider evidence unavailable |
-| API-002    | DATA     | T01/T04/T08         | TEST-API-002-BLOCK      | NOT_RUN  | -                         | BLOCKED  | candidate, S10 merge and real-provider evidence unavailable |
-| API-003    | BASE     | T01/T04/T07/T08     | TEST-API-003-BLOCK      | NOT_RUN  | -                         | BLOCKED  | candidate, S10 merge and real-provider evidence unavailable |
-| OPS-001    | DATA     | T01/T05/T08         | TEST-OPS-001-BLOCK      | NOT_RUN  | -                         | BLOCKED  | candidate, S10 merge and real-provider evidence unavailable |
-| OPS-002    | DATA     | T01/T05/T08         | TEST-OPS-002-BLOCK      | NOT_RUN  | -                         | BLOCKED  | candidate, S10 merge and real-provider evidence unavailable |
-| OPS-003    | DATA     | T01/T05/T08         | TEST-OPS-003-BLOCK      | NOT_RUN  | -                         | BLOCKED  | candidate, S10 merge and real-provider evidence unavailable |
-| OPS-004    | DATA     | T01/T05/T08         | TEST-OPS-004-BLOCK      | NOT_RUN  | -                         | BLOCKED  | candidate, S10 merge and real-provider evidence unavailable |
-| OPS-005    | BASE     | T01/T05/T07/T08     | TEST-OPS-005-BLOCK      | NOT_RUN  | -                         | BLOCKED  | candidate, S10 merge and real-provider evidence unavailable |
-| DOWN-001   | DATA     | T01/T04/T08         | TEST-DOWN-001-BLOCK     | NOT_RUN  | -                         | BLOCKED  | candidate, S10 merge and real-provider evidence unavailable |
-| DOWN-002   | DATA     | T01/T04/T08         | TEST-DOWN-002-BLOCK     | NOT_RUN  | -                         | BLOCKED  | candidate, S10 merge and real-provider evidence unavailable |
-| DOWN-003   | DATA     | T01/T04/T08         | TEST-DOWN-003-BLOCK     | NOT_RUN  | -                         | BLOCKED  | candidate, S10 merge and real-provider evidence unavailable |
-| DOWN-004   | DATA     | T01/T04/T08         | TEST-DOWN-004-BLOCK     | NOT_RUN  | -                         | BLOCKED  | candidate, S10 merge and real-provider evidence unavailable |
+| Capability | Type     | Task trace          | Blocking test           | Status            | Command / evidence                       | Provider          | Remaining risk                                              |
+| ---------- | -------- | ------------------- | ----------------------- | ----------------- | ---------------------------------------- | ----------------- | ----------------------------------------------------------- |
+| KB-001     | BASE     | T01/T06/T08         | TEST-KB-001-BLOCK       | NOT_RUN           | -                                        | BLOCKED           | candidate, S10 merge and real-provider evidence unavailable |
+| KB-002     | DATA     | T01/T06/T08         | TEST-KB-002-BLOCK       | NOT_RUN           | -                                        | BLOCKED           | candidate, S10 merge and real-provider evidence unavailable |
+| KB-003     | DATA     | T01/T06/T08         | TEST-KB-003-BLOCK       | NOT_RUN           | -                                        | BLOCKED           | candidate, S10 merge and real-provider evidence unavailable |
+| KB-004     | EXCLUDED | T04/T08             | TEST-EXCLUDED-KB-004    | EXCLUDED          | zero-implementation guard                | N/A               | zero implementation must remain                             |
+| COL-001    | BASE     | T01/T06/T08         | TEST-COL-001-BLOCK      | NOT_RUN           | -                                        | BLOCKED           | candidate, S10 merge and real-provider evidence unavailable |
+| COL-002    | DATA     | T01/T06/T08         | TEST-COL-002-BLOCK      | NOT_RUN           | -                                        | BLOCKED           | candidate, S10 merge and real-provider evidence unavailable |
+| COL-003    | BASE     | T01/T06/T08         | TEST-COL-003-BLOCK      | NOT_RUN           | -                                        | BLOCKED           | candidate, S10 merge and real-provider evidence unavailable |
+| COL-004    | BASE     | T01/T04/T08         | TEST-COL-004-BLOCK      | NOT_RUN           | -                                        | BLOCKED           | candidate, S10 merge and real-provider evidence unavailable |
+| DATA-001   | BASE     | T01/T06/T08         | TEST-DATA-001-BLOCK     | NOT_RUN           | -                                        | BLOCKED           | candidate, S10 merge and real-provider evidence unavailable |
+| DATA-002   | DATA     | T01/T06/T08         | TEST-DATA-002-BLOCK     | NOT_RUN           | -                                        | BLOCKED           | candidate, S10 merge and real-provider evidence unavailable |
+| DATA-003   | DATA     | T01/T06/T08         | TEST-DATA-003-BLOCK     | NOT_RUN           | -                                        | BLOCKED           | candidate, S10 merge and real-provider evidence unavailable |
+| DATA-004   | DATA     | T01/T06/T08         | TEST-DATA-004-BLOCK     | NOT_RUN           | -                                        | BLOCKED           | candidate, S10 merge and real-provider evidence unavailable |
+| ING-001    | DATA     | T01/T03/T08         | TEST-ING-001-BLOCK      | NOT_RUN           | -                                        | BLOCKED           | candidate, S10 merge and real-provider evidence unavailable |
+| ING-002    | DATA     | T01/T03/T08         | TEST-ING-002-BLOCK      | NOT_RUN           | -                                        | BLOCKED           | candidate, S10 merge and real-provider evidence unavailable |
+| ING-003    | DATA     | T01/T04/T08         | TEST-ING-003-BLOCK      | NOT_RUN           | -                                        | BLOCKED           | candidate, S10 merge and real-provider evidence unavailable |
+| ING-004    | DATA     | T01/T03/T08         | TEST-ING-004-BLOCK      | NOT_RUN           | -                                        | BLOCKED           | candidate, S10 merge and real-provider evidence unavailable |
+| ING-005    | DATA     | T01/T03/T08         | TEST-ING-005-BLOCK      | NOT_RUN           | -                                        | BLOCKED           | candidate, S10 merge and real-provider evidence unavailable |
+| ING-006    | DATA     | T01/T02/T08         | TEST-ING-006-BLOCK      | NOT_RUN           | -                                        | BLOCKED           | candidate, S10 merge and real-provider evidence unavailable |
+| ING-007    | DATA     | T01/T02/T08         | TEST-ING-007-BLOCK      | NOT_RUN           | -                                        | BLOCKED           | candidate, S10 merge and real-provider evidence unavailable |
+| ING-008    | DATA     | T01/T02/T08         | TEST-ING-008-BLOCK      | DEFERRED_BY_SCOPE | deferred capability zero-real-call guard | DEFERRED_BY_SCOPE | deferred by developer; canonical W4 remains incomplete      |
+| ING-009    | DATA     | T01/T02/T08         | TEST-ING-009-BLOCK      | DEFERRED_BY_SCOPE | deferred capability zero-real-call guard | DEFERRED_BY_SCOPE | deferred by developer; canonical W4 remains incomplete      |
+| ING-010    | EXCLUDED | T04/T08             | TEST-EXCLUDED-ING-010   | EXCLUDED          | zero-implementation guard                | N/A               | zero implementation must remain                             |
+| FILE-001   | DATA     | T01/T04/T08         | TEST-FILE-001-BLOCK     | NOT_RUN           | -                                        | BLOCKED           | candidate, S10 merge and real-provider evidence unavailable |
+| FILE-002   | DATA     | T01/T04/T08         | TEST-FILE-002-BLOCK     | NOT_RUN           | -                                        | BLOCKED           | candidate, S10 merge and real-provider evidence unavailable |
+| FILE-003   | DATA     | T01/T04/T08         | TEST-FILE-003-BLOCK     | NOT_RUN           | -                                        | BLOCKED           | candidate, S10 merge and real-provider evidence unavailable |
+| FILE-004   | DATA     | T01/T04/T05/T08     | TEST-FILE-004-BLOCK     | NOT_RUN           | -                                        | BLOCKED           | candidate, S10 merge and real-provider evidence unavailable |
+| FILE-005   | DATA     | T01/T04/T05/T08     | TEST-FILE-005-BLOCK     | NOT_RUN           | -                                        | BLOCKED           | candidate, S10 merge and real-provider evidence unavailable |
+| PARSE-001  | DATA     | T01/T03/T08         | TEST-PARSE-001-BLOCK    | NOT_RUN           | -                                        | BLOCKED           | candidate, S10 merge and real-provider evidence unavailable |
+| PARSE-002  | DATA     | T01/T02/T08         | TEST-PARSE-002-BLOCK    | DEFERRED_BY_SCOPE | deferred capability zero-real-call guard | DEFERRED_BY_SCOPE | deferred by developer; canonical W4 remains incomplete      |
+| PARSE-003  | DATA     | T01/T03/T08         | TEST-PARSE-003-BLOCK    | NOT_RUN           | -                                        | BLOCKED           | candidate, S10 merge and real-provider evidence unavailable |
+| PARSE-004  | DATA     | T01/T03/T08         | TEST-PARSE-004-BLOCK    | NOT_RUN           | -                                        | BLOCKED           | candidate, S10 merge and real-provider evidence unavailable |
+| PARSE-005  | DATA     | T01/T02/T08         | TEST-PARSE-005-BLOCK    | NOT_RUN           | -                                        | BLOCKED           | candidate, S10 merge and real-provider evidence unavailable |
+| TRAIN-001  | DATA     | T01/T03/T05/T08     | TEST-TRAIN-001-BLOCK    | NOT_RUN           | -                                        | BLOCKED           | candidate, S10 merge and real-provider evidence unavailable |
+| TRAIN-002  | DATA     | T01/T03/T05/T08     | TEST-TRAIN-002-BLOCK    | NOT_RUN           | -                                        | BLOCKED           | candidate, S10 merge and real-provider evidence unavailable |
+| TRAIN-003  | DATA     | T01/T03/T08         | TEST-TRAIN-003-BLOCK    | NOT_RUN           | -                                        | BLOCKED           | candidate, S10 merge and real-provider evidence unavailable |
+| TRAIN-004  | DATA     | T01/T03/T08         | TEST-TRAIN-004-BLOCK    | NOT_RUN           | -                                        | BLOCKED           | candidate, S10 merge and real-provider evidence unavailable |
+| TRAIN-005  | DATA     | T01/T03/T05/T08     | TEST-TRAIN-005-BLOCK    | NOT_RUN           | -                                        | BLOCKED           | candidate, S10 merge and real-provider evidence unavailable |
+| TRAIN-006  | DATA     | T01/T03/T08         | TEST-TRAIN-006-BLOCK    | NOT_RUN           | -                                        | BLOCKED           | candidate, S10 merge and real-provider evidence unavailable |
+| TRAIN-007  | DATA     | T01/T03/T08         | TEST-TRAIN-007-BLOCK    | NOT_RUN           | -                                        | BLOCKED           | candidate, S10 merge and real-provider evidence unavailable |
+| SEARCH-001 | DATA     | T01/T03/T04/T06/T08 | TEST-SEARCH-001-BLOCK   | NOT_RUN           | -                                        | BLOCKED           | candidate, S10 merge and real-provider evidence unavailable |
+| SEARCH-002 | DATA     | T01/T03/T04/T06/T08 | TEST-SEARCH-002-BLOCK   | NOT_RUN           | -                                        | BLOCKED           | candidate, S10 merge and real-provider evidence unavailable |
+| SEARCH-003 | DATA     | T01/T03/T04/T06/T08 | TEST-SEARCH-003-BLOCK   | NOT_RUN           | -                                        | BLOCKED           | candidate, S10 merge and real-provider evidence unavailable |
+| SEARCH-004 | DATA     | T01/T03/T04/T06/T08 | TEST-SEARCH-004-BLOCK   | NOT_RUN           | -                                        | BLOCKED           | candidate, S10 merge and real-provider evidence unavailable |
+| SEARCH-005 | DATA     | T01/T03/T04/T06/T08 | TEST-SEARCH-005-BLOCK   | NOT_RUN           | -                                        | BLOCKED           | candidate, S10 merge and real-provider evidence unavailable |
+| SEARCH-006 | DATA     | T01/T02/T04/T06/T08 | TEST-SEARCH-006-BLOCK   | NOT_RUN           | -                                        | BLOCKED           | candidate, S10 merge and real-provider evidence unavailable |
+| SEARCH-007 | DATA     | T01/T03/T04/T06/T08 | TEST-SEARCH-007-BLOCK   | NOT_RUN           | -                                        | BLOCKED           | candidate, S10 merge and real-provider evidence unavailable |
+| SEARCH-008 | DATA     | T01/T02/T04/T06/T08 | TEST-SEARCH-008-BLOCK   | NOT_RUN           | -                                        | BLOCKED           | candidate, S10 merge and real-provider evidence unavailable |
+| SEARCH-009 | DATA     | T01/T03/T04/T06/T08 | TEST-SEARCH-009-BLOCK   | NOT_RUN           | -                                        | BLOCKED           | candidate, S10 merge and real-provider evidence unavailable |
+| MODEL-001  | DATA     | T01/T02/T07/T08     | TEST-MODEL-001-BLOCK    | NOT_RUN           | -                                        | BLOCKED           | candidate, S10 merge and real-provider evidence unavailable |
+| MODEL-002  | DATA     | T01/T02/T08         | TEST-MODEL-002-BLOCK    | NOT_RUN           | -                                        | BLOCKED           | candidate, S10 merge and real-provider evidence unavailable |
+| MODEL-003  | DATA     | T01/T02/T08         | TEST-MODEL-003-BLOCK    | NOT_RUN           | -                                        | BLOCKED           | candidate, S10 merge and real-provider evidence unavailable |
+| MODEL-004  | DATA     | T01/T02/T08         | TEST-MODEL-004-BLOCK    | NOT_RUN           | -                                        | BLOCKED           | candidate, S10 merge and real-provider evidence unavailable |
+| MODEL-005  | DATA     | T01/T02/T08         | TEST-MODEL-005-BLOCK    | NOT_RUN           | -                                        | BLOCKED           | candidate, S10 merge and real-provider evidence unavailable |
+| MODEL-006  | DATA     | T01/T02/T08         | TEST-MODEL-006-BLOCK    | NOT_RUN           | -                                        | BLOCKED           | candidate, S10 merge and real-provider evidence unavailable |
+| MULTI-001  | DATA     | T01/T02/T06/T08     | TEST-MULTI-001-BLOCK    | NOT_RUN           | -                                        | BLOCKED           | candidate, S10 merge and real-provider evidence unavailable |
+| MULTI-002  | EXCLUDED | T04/T08             | TEST-EXCLUDED-MULTI-002 | EXCLUDED          | zero-implementation guard                | N/A               | zero implementation must remain                             |
+| MULTI-003  | EXCLUDED | T04/T08             | TEST-EXCLUDED-MULTI-003 | EXCLUDED          | zero-implementation guard                | N/A               | zero implementation must remain                             |
+| AUTH-001   | BASE     | T01/T04/T08         | TEST-AUTH-001-BLOCK     | NOT_RUN           | -                                        | BLOCKED           | candidate, S10 merge and real-provider evidence unavailable |
+| AUTH-002   | BASE     | T01/T04/T08         | TEST-AUTH-002-BLOCK     | NOT_RUN           | -                                        | BLOCKED           | candidate, S10 merge and real-provider evidence unavailable |
+| AUTH-003   | BASE     | T01/T04/T08         | TEST-AUTH-003-BLOCK     | NOT_RUN           | -                                        | BLOCKED           | candidate, S10 merge and real-provider evidence unavailable |
+| AUTH-004   | BASE     | T01/T04/T08         | TEST-AUTH-004-BLOCK     | NOT_RUN           | -                                        | BLOCKED           | candidate, S10 merge and real-provider evidence unavailable |
+| API-001    | BASE     | T01/T04/T07/T08     | TEST-API-001-BLOCK      | NOT_RUN           | -                                        | BLOCKED           | candidate, S10 merge and real-provider evidence unavailable |
+| API-002    | DATA     | T01/T04/T08         | TEST-API-002-BLOCK      | NOT_RUN           | -                                        | BLOCKED           | candidate, S10 merge and real-provider evidence unavailable |
+| API-003    | BASE     | T01/T04/T07/T08     | TEST-API-003-BLOCK      | NOT_RUN           | -                                        | BLOCKED           | candidate, S10 merge and real-provider evidence unavailable |
+| OPS-001    | DATA     | T01/T05/T08         | TEST-OPS-001-BLOCK      | NOT_RUN           | -                                        | BLOCKED           | candidate, S10 merge and real-provider evidence unavailable |
+| OPS-002    | DATA     | T01/T05/T08         | TEST-OPS-002-BLOCK      | NOT_RUN           | -                                        | BLOCKED           | candidate, S10 merge and real-provider evidence unavailable |
+| OPS-003    | DATA     | T01/T05/T08         | TEST-OPS-003-BLOCK      | NOT_RUN           | -                                        | BLOCKED           | candidate, S10 merge and real-provider evidence unavailable |
+| OPS-004    | DATA     | T01/T05/T08         | TEST-OPS-004-BLOCK      | NOT_RUN           | -                                        | BLOCKED           | candidate, S10 merge and real-provider evidence unavailable |
+| OPS-005    | BASE     | T01/T05/T07/T08     | TEST-OPS-005-BLOCK      | NOT_RUN           | -                                        | BLOCKED           | candidate, S10 merge and real-provider evidence unavailable |
+| DOWN-001   | DATA     | T01/T04/T08         | TEST-DOWN-001-BLOCK     | NOT_RUN           | -                                        | BLOCKED           | candidate, S10 merge and real-provider evidence unavailable |
+| DOWN-002   | DATA     | T01/T04/T08         | TEST-DOWN-002-BLOCK     | NOT_RUN           | -                                        | BLOCKED           | candidate, S10 merge and real-provider evidence unavailable |
+| DOWN-003   | DATA     | T01/T04/T08         | TEST-DOWN-003-BLOCK     | NOT_RUN           | -                                        | BLOCKED           | candidate, S10 merge and real-provider evidence unavailable |
+| DOWN-004   | DATA     | T01/T04/T08         | TEST-DOWN-004-BLOCK     | NOT_RUN           | -                                        | BLOCKED           | candidate, S10 merge and real-provider evidence unavailable |

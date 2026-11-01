@@ -25,7 +25,7 @@ const root = resolve(import.meta.dirname, '../..');
 describe('TEST-X-S11-CAPABILITY-MATRIX / TEST-X-S11-EVIDENCE-BINDING', () => {
   it('contains exactly 73 unique rows, 69 development and 4 excluded', () => {
     const text = readFileSync(join(root, 'docs', 'acceptance', 's11-capability-matrix.md'), 'utf8');
-    const result = validateTemplate(text);
+    const result = validateTemplate(text, S11_SCOPE_PROFILE);
     expect(result.errors).toEqual([]);
     expect(result.rows).toBe(73);
     expect(new Set(result.ids).size).toBe(73);
@@ -87,11 +87,12 @@ describe('TEST-X-S11-CAPABILITY-MATRIX / TEST-X-S11-EVIDENCE-BINDING', () => {
   });
 
   it('renders a 73-row blocked release report without claiming PASS', () => {
-    const report = renderBlockedReport();
+    const report = renderBlockedReport(S11_SCOPE_PROFILE);
     expect(parseMatrix(report)).toHaveLength(73);
-    expect(report).toContain('Result: `BLOCKED`');
+    expect(report).toContain('Result: `SCOPED_BLOCKED`');
     expect(report).not.toMatch(/\| PASS \|/);
     expect(report).not.toContain('NOT_RUN');
     expect(report.match(/EXCLUDED \|/g)).toHaveLength(4);
+    expect(report.match(/DEFERRED_BY_SCOPE \|/g)).toHaveLength(6);
   });
 });

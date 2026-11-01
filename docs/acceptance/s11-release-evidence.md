@@ -2,9 +2,9 @@
 
 ## Status
 
-- Result: `BLOCKED`.
+- Result: `SCOPED_BLOCKED`.
 - Wave / stage / owner: `W4 / S11 / personA`.
-- Phase: `phase1 + post-rebase pre-install`.
+- Phase: `post-rebase hardening checkpoint`; candidate not frozen.
 - W4 base: `14a3b9e96fcab7b6a1f1e92ccdf4dc775719ee7d`.
 - S10 merge SHA: `d7e38c71293a283cd6268605b5036e8ee5763c9a`; rebase completed.
 - Candidate SHA: not frozen.
@@ -22,20 +22,20 @@
 | license status        | `approved-2026-10-29`                                                                         |
 | approved exceptions   | `argparse`, `caniuse-lite`, `jschardet`, `pako`, `sax`                                        |
 | obligations           | full text, notice, attribution, source/relink and distribution obligations recorded per entry |
-| NOTICE SHA-256        | `d9d5e614499d9e24af1aaa7dd8adefe8c88752cda99c919d7c3e0ecec081f195`                            |
-| SBOM SHA-256          | `a49bfe6f5a35bae8b6faec2a305ac96cd367f3860bd68830f2838f28d1001ea5`                            |
+| NOTICE SHA-256        | `b5a4dbcf5b25377d5467eef3189e8b59c784d142ed89b92c4614ecc03ebc551e`                            |
+| SBOM SHA-256          | `840c5cda2baee8cac5cd05249d76eb2906daa7031dd3b598548f872a985ee80f`                            |
 | SBOM image components | 6 classes; app/worker shared reference is pending                                             |
-| app/worker digest     | `RELEASE_BLOCKED_APP_IMAGE`                                                                   |
-| SaaS staging          | `BLOCKED`; URL/token not provided                                                             |
+| app/worker digest     | `PENDING_RELEASE_EVIDENCE` (`DEFERRED_TO_PRODUCTION`)                                         |
+| SaaS staging          | `DEFERRED_BY_SCOPE`; URL/token not provided                                                   |
 
 ## Static Release Gates
 
-| Gate                                                        | Result  | Evidence                                                           |
-| ----------------------------------------------------------- | ------- | ------------------------------------------------------------------ |
-| `node scripts/generate-sbom.mjs`                            | PASS    | `NOTICE` and `artifacts/sbom.json` regenerated; 6 image components |
-| `node scripts/check-licenses.mjs`                           | PASS    | approved-2026-10-29; 5 obligations; no pending status              |
-| `node scripts/check-release-images.mjs --allow-missing-app` | BLOCKED | third-party digests match; `RELEASE_BLOCKED_APP_IMAGE`             |
-| `docker compose -f deploy/docker-compose.yml config`        | PASS    | base config accepted                                               |
-| release Compose with `--profile aiproxy`                    | PASS    | profile config accepted; no container start                        |
+| Gate                                                        | Result                 | Evidence                                                           |
+| ----------------------------------------------------------- | ---------------------- | ------------------------------------------------------------------ |
+| `node scripts/generate-sbom.mjs`                            | PASS                   | `NOTICE` and `artifacts/sbom.json` regenerated; 6 image components |
+| `node scripts/check-licenses.mjs`                           | PASS                   | approved-2026-10-29; 5 obligations; no pending status              |
+| `node scripts/check-release-images.mjs --allow-missing-app` | DEFERRED_TO_PRODUCTION | third-party digests match; app digest pending                      |
+| `docker compose -f deploy/docker-compose.yml config`        | PASS                   | base config accepted                                               |
+| release Compose with `--profile aiproxy`                    | PASS                   | profile config accepted; no container start                        |
 
 No release PASS or W4 completion is claimed.

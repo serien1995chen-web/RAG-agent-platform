@@ -2,6 +2,8 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
+  PENDING_APP_DIGEST,
+  checkReleaseImages,
   loadManifest,
   parseResolvedImage,
   validateManifest,
@@ -33,12 +35,27 @@ describe('TEST-X-S11-LICENSE-OBLIGATIONS / TEST-X-S11-RELEASE-IMAGES', () => {
     ]);
     expect(manifest.services.at(-2)).toMatchObject({
       service: 'app',
-      digest: null,
+      digest: PENDING_APP_DIGEST,
     });
     expect(manifest.services.at(-1)).toMatchObject({
       service: 'worker',
-      digest: null,
+      digest: PENDING_APP_DIGEST,
     });
+  });
+
+  it('treats the production app digest as deferred instead of a scoped failure', () => {
+    const result = checkReleaseImages({
+      env: { ...process.env, KB_APP_IMAGE_REF: '' },
+      allowMissingApp: true,
+    });
+    expect(result.errors).toEqual([]);
+    expect(result.status).toBe('DEFERRED_TO_PRODUCTION');
+    expect(result.deferred).toEqual([
+      expect.objectContaining({
+        code: 'APP_IMAGE_DIGEST_PENDING',
+        status: 'DEFERRED_TO_PRODUCTION',
+      }),
+    ]);
   });
 
   it('parses only tag plus sha256 digest references', () => {

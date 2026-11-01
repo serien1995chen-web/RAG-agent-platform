@@ -118,7 +118,10 @@ export function collectImageComponents() {
       { name: 'kb:license', value: image.license },
       {
         name: 'kb:digest-status',
-        value: image.digest === null ? 'PENDING_RELEASE_EVIDENCE' : 'LOCKED',
+        value:
+          image.digest === null || !image.digest.startsWith('sha256:')
+            ? 'PENDING_RELEASE_EVIDENCE'
+            : 'LOCKED',
       },
       ...(image.alsoServices
         ? [{ name: 'kb:also-services', value: image.alsoServices.join(',') }]

@@ -89,7 +89,7 @@
 | pgvector   | `registry.cn-hangzhou.aliyuncs.com/fastgpt/pgvector` | `0.8.0-pg15`                   | `sha256:92be4ea0424cccf17003f5803d54448e2864ac27a70e6ac5d24b3d8b463c689c` | PostgreSQL License |
 | minio      | `registry.cn-hangzhou.aliyuncs.com/fastgpt/minio`    | `RELEASE.2025-09-07T16-13-09Z` | `sha256:a63b19df59e6ec7c02ebba6e7a1097b7e032da7947b18db7ff67dae8e84fd44d` | AGPL-3.0           |
 | aiproxy    | `registry.cn-hangzhou.aliyuncs.com/labring/aiproxy`  | `v0.7.3`                       | `sha256:da8d8394634eacdcf72533953c77c1e0ca3e28920545354dd20bdaa0aaa9ee4b` | UNKNOWN，待复核    |
-| app/worker | 用户 production Registry                             | 用户确认 tag                   | `null`（`RELEASE_BLOCKED_APP_IMAGE`）                                     | INTERNAL           |
+| app/worker | 用户 production Registry                             | 用户确认 tag                   | `PENDING_RELEASE_EVIDENCE`（`DEFERRED_TO_PRODUCTION`）                    | INTERNAL           |
 
 digest 来源为设计文档 §6.3 + U-11 只读验证；Agent 不得执行 `docker pull` 现场取值。
 
@@ -123,9 +123,11 @@ digest 来源为设计文档 §6.3 + U-11 只读验证；Agent 不得执行 `doc
 
 以下外部事实仍阻止 S11 整阶段 PASS：
 
-- 应用镜像 production Registry、tag、`sha256:64hex` digest 与 linux/amd64 证据未提供：`RELEASE_BLOCKED_APP_IMAGE`。
+- 应用镜像 production Registry、tag、`sha256:64hex` digest 与 linux/amd64 证据未提供：`PENDING_RELEASE_EVIDENCE`，状态 `DEFERRED_TO_PRODUCTION`。
 - AIProxy 镜像许可证与再分发条款仍为 `UNKNOWN`，需供应链复核。
-- SaaS staging URL、受控 API Key、`/healthz`、`/readyz` 与真实 API 响应未提供：`TEST-X-SAAS-READY=BLOCKED`。
+- SaaS staging URL、受控 API Key、`/healthz`、`/readyz` 与真实 API 响应未提供：`TEST-X-SAAS-READY=DEFERRED_BY_SCOPE`。
 - `NOTICE`、`artifacts/sbom.json` 与应用/worker 同源 digest 必须在最终 candidate 上重新生成并绑定。
 
-`pnpm release:check` 在应用 digest 缺失时必须 BLOCKED，不得把 upstream digest 当成 production digest。
+`pnpm release:check --allow-missing-app` 在应用 digest 缺失时必须输出
+`PENDING_RELEASE_EVIDENCE` 和 `DEFERRED_TO_PRODUCTION`，不得把 upstream
+digest 当成 production digest。生产发布门禁仍必须补齐真实 digest 后才能 PASS。

@@ -79,9 +79,9 @@ node scripts/check-release-images.mjs --allow-missing-app
 ```
 
 The static check must show pinned third-party digests and no `latest`. It
-returns `RELEASE_BLOCKED_APP_IMAGE` until the user supplies the app/worker
-digest, production Registry and linux/amd64 evidence. `AIPROXY_MODE=external`
-must not start the local AIProxy profile.
+returns `PENDING_RELEASE_EVIDENCE` with `DEFERRED_TO_PRODUCTION` until the user
+supplies the app/worker digest, production Registry and linux/amd64 evidence.
+`AIPROXY_MODE=external` must not start the local AIProxy profile.
 
 ## S1 Evidence
 

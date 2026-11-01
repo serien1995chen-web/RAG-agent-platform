@@ -25,6 +25,10 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
     if (inputs.invalidFields.length > 0) console.error(inputs.invalidFields.join(','));
     return 2;
   }
+  if (!env.S11_EVIDENCE_DIR?.trim()) {
+    console.error('SCOPED_BLOCKED: S11_EVIDENCE_DIR is required');
+    return 2;
+  }
 
   const scenario = requestedScenario(argv);
   if (!scenario || scenario.includes('s11-aiproxy-catalog-preflight')) {

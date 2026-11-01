@@ -51,19 +51,19 @@
       "service": "app",
       "repository": "rag-agent-platform",
       "tag": "kb-baseline",
-      "digest": null,
+      "digest": "PENDING_RELEASE_EVIDENCE",
       "platform": "linux/amd64",
       "pullPolicy": "IfNotPresent",
-      "source": "RELEASE_BLOCKED_APP_IMAGE"
+      "source": "DEFERRED_TO_PRODUCTION"
     },
     {
       "service": "worker",
       "repository": "rag-agent-platform",
       "tag": "kb-baseline",
-      "digest": null,
+      "digest": "PENDING_RELEASE_EVIDENCE",
       "platform": "linux/amd64",
       "pullPolicy": "IfNotPresent",
-      "source": "RELEASE_BLOCKED_APP_IMAGE"
+      "source": "DEFERRED_TO_PRODUCTION"
     }
   ]
 }

@@ -1,7 +1,6 @@
-import { spawnSync } from 'node:child_process';
-import { resolve } from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
+  main,
   RECOVERY_FAULT_MATRIX,
   assertIsolatedTarget,
   buildMinioMirror,
@@ -9,8 +8,6 @@ import {
   buildPgDump,
   buildRedisSnapshot,
 } from '../../scripts/run-recovery-drill.mjs';
-
-const root = resolve(import.meta.dirname, '../..');
 
 describe('TEST-X-S11-COMPONENT-FAULT / WORKER-RESTART', () => {
   it('covers every required dependency and lifecycle fault', () => {
@@ -62,22 +59,51 @@ describe('TEST-X-S11-COMPONENT-FAULT / WORKER-RESTART', () => {
     );
   });
 
-  it('check mode reports missing tools without claiming a recovery PASS', () => {
-    const result = spawnSync(
-      process.execPath,
-      [
-        resolve(root, 'scripts/run-recovery-drill.mjs'),
-        '--check',
-        '--source-prefix',
-        'kb_s11_source',
-      ],
+  it('check mode accepts only image-resident tools and never claims a recovery PASS', async () => {
+    const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    const exitCode = await main(
+      ['--check', '--source-prefix', 'kb_s11_source'],
+      {},
       {
-        encoding: 'utf8',
-        env: { PATH: process.env.PATH ?? '' },
+        executor: {
+          probe: () => ({
+            status: 'READY',
+            composeFile: 'deploy/docker-compose.yml',
+            services: {
+              mongo: { mongodump: { available: true } },
+              pgvector: { pg_dump: { available: true } },
+              minio: { mc: { available: true } },
+              redis: { 'redis-cli': { available: true } },
+            },
+          }),
+        },
       },
     );
-    expect(result.status).toBe(0);
-    expect(result.stdout).toContain('RECOVERY_CHECK_READY');
-    expect(result.stdout).not.toContain('"status": "PASS"');
+    expect(exitCode).toBe(0);
+    expect(log.mock.calls.flat().join('\n')).toContain('RECOVERY_CHECK_READY');
+    expect(log.mock.calls.flat().join('\n')).not.toContain('"status": "PASS"');
+    log.mockRestore();
+  });
+
+  it('check mode blocks when any required image tool is absent', async () => {
+    const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const exitCode = await main(
+      ['--check', '--source-prefix', 'kb_s11_source'],
+      {},
+      {
+        executor: {
+          probe: () => ({
+            status: 'BLOCKED',
+            composeFile: 'deploy/docker-compose.yml',
+            services: {},
+          }),
+        },
+      },
+    );
+    expect(exitCode).toBe(3);
+    expect(error.mock.calls.flat().join('\n')).toContain('RECOVERY_CHECK_BLOCKED');
+    log.mockRestore();
+    error.mockRestore();
   });
 });

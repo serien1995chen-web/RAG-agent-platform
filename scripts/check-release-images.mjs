@@ -7,6 +7,7 @@ import { pathToFileURL } from 'node:url';
 const repositoryRoot = resolve(import.meta.dirname, '..');
 const manifestPath = join(repositoryRoot, 'deploy', 'release-images.data.json');
 const DIGEST = /^sha256:[a-f0-9]{64}$/;
+export const PENDING_APP_DIGEST = 'PENDING_RELEASE_EVIDENCE';
 const RESOLVED_REF =
   /^(?<repository>(?:[^/@]+(?:\.[^/:]+|:[0-9]+)?\/)?[^/@:]+):(?<tag>[^@]+)@(?<digest>sha256:[a-f0-9]{64})$/;
 
@@ -31,8 +32,11 @@ export function validateManifest(manifest) {
     if (service.pullPolicy !== 'IfNotPresent') {
       errors.push(`${service.service}: pullPolicy must be IfNotPresent`);
     }
-    if (service.digest !== null && !DIGEST.test(service.digest)) {
+    if (service.digest !== PENDING_APP_DIGEST && !DIGEST.test(service.digest)) {
       errors.push(`${service.service}: digest must be sha256:64hex`);
+    }
+    if (!['app', 'worker'].includes(service.service) && service.digest === PENDING_APP_DIGEST) {
+      errors.push(`${service.service}: pending digest is only allowed for app/worker`);
     }
   }
   const app = services.get('app');
@@ -43,6 +47,9 @@ export function validateManifest(manifest) {
     (app.repository !== worker.repository || app.tag !== worker.tag || app.digest !== worker.digest)
   ) {
     errors.push('app/worker must use the same image reference');
+  }
+  if (app?.digest !== PENDING_APP_DIGEST || worker?.digest !== PENDING_APP_DIGEST) {
+    errors.push('app/worker digest must be PENDING_RELEASE_EVIDENCE');
   }
   return errors;
 }
@@ -107,6 +114,7 @@ export function checkReleaseImages(
   const manifest = loadManifest();
   const errors = validateManifest(manifest);
   const blockers = [];
+  const deferred = [];
   const services = new Map(manifest.services.map((entry) => [entry.service, entry]));
   const providedRef = parseResolvedImage(input.env.KB_APP_IMAGE_REF);
   if (providedRef) {
@@ -124,9 +132,10 @@ export function checkReleaseImages(
   } else if (!input.allowMissingApp) {
     errors.push('RELEASE_BLOCKED_APP_IMAGE: KB_APP_IMAGE_REF is missing');
   } else {
-    blockers.push({
-      code: 'RELEASE_BLOCKED_APP_IMAGE',
-      detail: 'application Registry manifest digest is missing',
+    deferred.push({
+      code: 'APP_IMAGE_DIGEST_PENDING',
+      status: 'DEFERRED_TO_PRODUCTION',
+      detail: 'application Registry manifest digest is PENDING_RELEASE_EVIDENCE',
     });
   }
   const compose = inspectCompose(input.env);
@@ -160,7 +169,14 @@ export function checkReleaseImages(
       }
       if (
         !resolved &&
-        expected.digest !== null &&
+        expected.digest === PENDING_APP_DIGEST &&
+        actual !== `${expected.repository}:${expected.tag}`
+      ) {
+        errors.push(`compose service ${name} must use the pending local candidate tag`);
+      }
+      if (
+        !resolved &&
+        expected.digest !== PENDING_APP_DIGEST &&
         actual !== `${expected.repository}:${expected.tag}@${expected.digest}`
       ) {
         errors.push(`compose service ${name} has no pinned digest`);
@@ -168,12 +184,20 @@ export function checkReleaseImages(
     }
   }
   return {
-    status: errors.length > 0 ? 'FAIL' : blockers.length > 0 ? 'BLOCKED' : 'PASS',
+    status:
+      errors.length > 0
+        ? 'FAIL'
+        : deferred.length > 0
+          ? 'DEFERRED_TO_PRODUCTION'
+          : blockers.length > 0
+            ? 'BLOCKED'
+            : 'PASS',
     errors,
     blockers,
+    deferred,
     appImageRef: providedRef?.reference ?? null,
     thirdPartyDigests: manifest.services
-      .filter((entry) => entry.digest !== null)
+      .filter((entry) => DIGEST.test(entry.digest ?? ''))
       .map((entry) => ({
         service: entry.service,
         repository: entry.repository,
@@ -190,8 +214,9 @@ export function main(argv = process.argv.slice(2), env = process.env) {
   const result = checkReleaseImages({ env, allowMissingApp });
   console.log(JSON.stringify(result, null, 2));
   if (result.status === 'PASS') return 0;
-  if (result.status === 'BLOCKED' && allowMissingApp) {
-    console.error('RELEASE_BLOCKED_APP_IMAGE');
+  if (result.status === 'DEFERRED_TO_PRODUCTION' && allowMissingApp) {
+    console.error('PENDING_RELEASE_EVIDENCE');
+    console.error('DEFERRED_TO_PRODUCTION');
     return 0;
   }
   for (const error of result.errors) console.error(error);

@@ -1855,7 +1855,7 @@ redis | registry.cn-hangzhou.aliyuncs.com/fastgpt/redis | 7.2-alpine | sha256:2b
 pgvector | registry.cn-hangzhou.aliyuncs.com/fastgpt/pgvector | 0.8.0-pg15 | sha256:92be4ea0424cccf17003f5803d54448e2864ac27a70e6ac5d24b3d8b463c689c | PostgreSQL | linux/amd64 | pgvector,aiproxy-postgres,aiproxy-init
 minio | registry.cn-hangzhou.aliyuncs.com/fastgpt/minio | RELEASE.2025-09-07T16-13-09Z | sha256:a63b19df59e6ec7c02ebba6e7a1097b7e032da7947b18db7ff67dae8e84fd44d | AGPL-3.0 | linux/amd64 | minio
 aiproxy | registry.cn-hangzhou.aliyuncs.com/labring/aiproxy | v0.7.3 | sha256:da8d8394634eacdcf72533953c77c1e0ca3e28920545354dd20bdaa0aaa9ee4b | UNKNOWN | linux/amd64 | aiproxy
-app | rag-agent-platform | kb-baseline | null | INTERNAL | linux/amd64 | app,worker
+app | rag-agent-platform | kb-baseline | PENDING_RELEASE_EVIDENCE | INTERNAL | linux/amd64 | app,worker
 
 五、许可证白名单（两套清单分开）
 npm 生产闭包白名单: MIT、Apache-2.0、BSD-2-Clause、BSD-3-Clause、ISC、0BSD；字体另允许 OFL-1.1

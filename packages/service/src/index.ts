@@ -98,6 +98,8 @@ export {
   FeishuHttpDelegate,
   YuqueHttpDelegate,
   DingtalkHttpDelegate,
+  ScopedDeferredConnectorClient,
+  createConnectorProviderClients,
   FileApplication,
   KnowledgeJobRepository,
   KnowledgeJobExecutionRepository,
@@ -177,6 +179,7 @@ export {
   S5OcrCredentialProfileAdapter,
   S5RemoteAssetAdapter,
 } from './modules/knowledge';
+export type { ConnectorClientMap } from './modules/knowledge';
 export type {
   AclResourceType,
   CreateDirectoryInput,

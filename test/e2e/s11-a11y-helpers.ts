@@ -25,7 +25,7 @@ export function collectBrowserErrors(page: Page): UiBrowserErrors {
   return errors;
 }
 
-export async function assertNoOverflow(page: Page): Promise<void> {
+export async function assertNoOverflow(page: Page): Promise<number> {
   const state = await page.evaluate(() => ({
     overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
     offenders: Array.from(document.querySelectorAll<HTMLElement>('body *'))
@@ -41,6 +41,7 @@ export async function assertNoOverflow(page: Page): Promise<void> {
       })),
   }));
   expect(state.overflow, JSON.stringify(state.offenders)).toBeLessThanOrEqual(1);
+  return state.overflow;
 }
 
 export async function assertShell(page: Page): Promise<void> {
@@ -48,13 +49,19 @@ export async function assertShell(page: Page): Promise<void> {
   await expect(page.getByRole('heading', { level: 1 }).first()).toBeVisible();
 }
 
-export async function assertAxe(page: Page): Promise<void> {
+export async function assertAxe(
+  page: Page,
+): Promise<{ serious: number; critical: number; violations: number }> {
   const result = await new AxeBuilder({ page }).analyze();
-  expect(
-    result.violations.filter(
-      (violation) => violation.impact === 'serious' || violation.impact === 'critical',
-    ),
-  ).toEqual([]);
+  const blocking = result.violations.filter(
+    (violation) => violation.impact === 'serious' || violation.impact === 'critical',
+  );
+  expect(blocking).toEqual([]);
+  return {
+    serious: blocking.filter((violation) => violation.impact === 'serious').length,
+    critical: blocking.filter((violation) => violation.impact === 'critical').length,
+    violations: result.violations.length,
+  };
 }
 
 export async function assertFocusable(page: Page): Promise<void> {
@@ -72,15 +79,10 @@ export async function assertFocusable(page: Page): Promise<void> {
   expect(focusable).toBeGreaterThan(0);
 }
 
-export async function assertNoDeferredNavigation(page: Page): Promise<void> {
-  const hrefs = await page
-    .locator('a[href]')
-    .evaluateAll((links) =>
-      links.map((link) => (link as HTMLAnchorElement).getAttribute('href') ?? ''),
-    );
-  expect(hrefs).not.toContain('/usage');
-  expect(hrefs).not.toContain('/audit');
-  expect(hrefs).not.toContain('/settings/api-keys');
+export async function assertAuthorizedNavigation(page: Page, authorized = true): Promise<void> {
+  for (const href of ['/usage', '/audit', '/settings/api-keys']) {
+    await expect(page.locator(`nav a[href="${href}"]`)).toHaveCount(authorized ? 1 : 0);
+  }
 }
 
 export async function assertSkipLink(page: Page): Promise<void> {
@@ -90,15 +92,34 @@ export async function assertSkipLink(page: Page): Promise<void> {
   await page.keyboard.press('Tab');
   const state = await page.evaluate(() => {
     const skip = document.querySelector<HTMLElement>('.skip-link');
-    if (!skip) return { found: false, focused: false, target: null as string | null };
+    if (!skip) {
+      return {
+        found: false,
+        focused: false,
+        target: null as string | null,
+        mainExists: false,
+      };
+    }
+    const style = getComputedStyle(skip);
     return {
-      found: getComputedStyle(skip).display !== 'none',
+      found: true,
       focused: document.activeElement === skip,
       target: skip.getAttribute('href'),
+      mainExists:
+        skip.getAttribute('href') === '#knowledge-main' &&
+        Boolean(document.querySelector('#knowledge-main')),
+      visible: style.opacity !== '0' && style.pointerEvents !== 'none',
     };
   });
-  expect(state.found).toBe(true);
-  expect(state.target).toBe('#main-content');
+  expect(state).toMatchObject({
+    found: true,
+    focused: true,
+    target: '#knowledge-main',
+    mainExists: true,
+    visible: true,
+  });
+  await page.keyboard.press('Enter');
+  await expect(page.locator('#knowledge-main')).toBeFocused();
 }
 
 export async function assertKeyboardFlow(page: Page): Promise<void> {

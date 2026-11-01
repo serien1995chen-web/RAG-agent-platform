@@ -1,5 +1,7 @@
-import { existsSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { randomUUID } from 'node:crypto';
+import { existsSync, mkdirSync, realpathSync } from 'node:fs';
+import { isAbsolute, join, relative, resolve } from 'node:path';
+import type { APIRequestContext } from '@playwright/test';
 
 const root = resolve(import.meta.dirname, '../..');
 const pagesRoot = join(root, 'projects', 'app', 'src', 'pages');
@@ -102,6 +104,313 @@ export const S11_CANONICAL_PAGES = [
 ] as const;
 
 export type S11CanonicalPage = (typeof S11_CANONICAL_PAGES)[number];
+
+export interface UiMatrixConfiguration {
+  baseUrl: string;
+  authToken: string;
+  evidenceDirectory: string;
+  suffix: string;
+}
+
+export interface UiMatrixSession {
+  workspaceId: string;
+  memberId: string;
+  storageState: Awaited<ReturnType<APIRequestContext['storageState']>>;
+}
+
+export interface UiMatrixWorkspace {
+  spaceId: string;
+  sourceId: string;
+  segmentId: string;
+}
+
+interface ApiEnvelope<T> {
+  success?: boolean;
+  data?: T;
+  error?: {
+    code?: string;
+    message?: string;
+  };
+}
+
+function requiredUiEnv(name: string): string {
+  const value = process.env[name]?.trim();
+  if (!value) throw new Error(`S11_UI_BLOCKED: missing ${name}`);
+  return value;
+}
+
+function assertOutsideWorktree(directory: string): string {
+  const resolvedDirectory = resolve(directory);
+  const lexicalRelative = relative(root, resolvedDirectory);
+  if (
+    lexicalRelative === '' ||
+    (!lexicalRelative.startsWith('..') && !isAbsolute(lexicalRelative))
+  ) {
+    throw new Error(`S11_UI_EVIDENCE_DIR must be outside ${root}`);
+  }
+  mkdirSync(resolvedDirectory, { recursive: true });
+  const realDirectory = realpathSync(resolvedDirectory);
+  const realRelative = relative(realpathSync(root), realDirectory);
+  if (realRelative === '' || (!realRelative.startsWith('..') && !isAbsolute(realRelative))) {
+    throw new Error(`S11_UI_EVIDENCE_DIR resolves inside ${root}`);
+  }
+  return realDirectory;
+}
+
+export function startUiMatrix(): UiMatrixConfiguration {
+  const rawBaseUrl = requiredUiEnv('S11_UI_BASE_URL');
+  const baseUrl = new URL(rawBaseUrl);
+  if (baseUrl.protocol !== 'http:' && baseUrl.protocol !== 'https:') {
+    throw new Error('S11_UI_BASE_URL must use http or https');
+  }
+  return {
+    baseUrl: rawBaseUrl.replace(/\/+$/, ''),
+    authToken: requiredUiEnv('S11_UI_AUTH_TOKEN'),
+    evidenceDirectory: assertOutsideWorktree(requiredUiEnv('S11_UI_EVIDENCE_DIR')),
+    suffix: randomUUID().replaceAll('-', '').slice(0, 12),
+  };
+}
+
+async function readApiEnvelope<T>(
+  request: APIRequestContext,
+  path: string,
+  input: {
+    method: 'POST';
+    headers: Record<string, string>;
+    body: unknown;
+  },
+): Promise<T> {
+  const response = await request.fetch(path, {
+    method: input.method,
+    headers: input.headers,
+    data: input.body,
+  });
+  const payload = (await response.json()) as ApiEnvelope<T>;
+  if (!response.ok() || payload.success !== true || payload.data === undefined) {
+    const code = payload.error?.code ?? 'UNKNOWN';
+    throw new Error(
+      `S11_UI_FIXTURE_FAILED: ${input.method} ${new URL(path, 'http://fixture').pathname} status=${response.status()} code=${code}`,
+    );
+  }
+  return payload.data;
+}
+
+export async function bootstrapUiSession(
+  request: APIRequestContext,
+  configuration: UiMatrixConfiguration,
+): Promise<UiMatrixSession> {
+  const response = await request.post('/api/console/session', {
+    headers: {
+      authorization: `Bearer ${configuration.authToken}`,
+      accept: 'application/json',
+    },
+    data: {},
+  });
+  if (!response.ok()) {
+    throw new Error(`S11_UI_BLOCKED: console session status=${response.status()}`);
+  }
+  const session = (await response.json()) as {
+    workspaceId?: string;
+    memberId?: string;
+  };
+  if (!session.workspaceId || !session.memberId) {
+    throw new Error('S11_UI_BLOCKED: console session omitted workspace or member identity');
+  }
+  return {
+    workspaceId: session.workspaceId,
+    memberId: session.memberId,
+    storageState: await request.storageState(),
+  };
+}
+
+export async function createUiWorkspace(
+  request: APIRequestContext,
+  configuration: UiMatrixConfiguration,
+  session: UiMatrixSession,
+): Promise<UiMatrixWorkspace> {
+  const headers = {
+    authorization: `Bearer ${configuration.authToken}`,
+    'x-workspace-id': session.workspaceId,
+    accept: 'application/json',
+    'content-type': 'application/json',
+  };
+  const space = await readApiEnvelope<{ id: string }>(request, '/v1/knowledge/spaces', {
+    method: 'POST',
+    headers: {
+      ...headers,
+      'idempotency-key': `s11-ui-space-${configuration.suffix}`,
+    },
+    body: {
+      kind: 'space',
+      name: `S11 UI ${configuration.suffix}`,
+      accessMode: 'workspace',
+      sourceAclMode: 'inherited',
+      sourcePermissionEnabled: true,
+    },
+  });
+  const source = await readApiEnvelope<{ id: string }>(
+    request,
+    `/v1/knowledge/spaces/${space.id}/sources`,
+    {
+      method: 'POST',
+      headers: {
+        ...headers,
+        'idempotency-key': `s11-ui-source-${configuration.suffix}`,
+      },
+      body: {
+        kind: 'text',
+        name: `S11 UI Source ${configuration.suffix}`,
+        searchEnabled: true,
+        metadata: {},
+      },
+    },
+  );
+  const segment = await readApiEnvelope<{ id: string }>(
+    request,
+    `/v1/knowledge/sources/${source.id}/segments`,
+    {
+      method: 'POST',
+      headers: {
+        ...headers,
+        'idempotency-key': `s11-ui-segment-${configuration.suffix}`,
+      },
+      body: {
+        question: 'How are release evidence changes handled?',
+        answer: 'A changed candidate invalidates both independent evidence gates.',
+        searchEnabled: true,
+        metadata: { section: 'release-hardening' },
+      },
+    },
+  );
+  const created = {
+    spaceId: space.id,
+    sourceId: source.id,
+    segmentId: segment.id,
+  };
+  try {
+    const synonymResponse = await request.post(`/v1/knowledge/spaces/${space.id}/synonyms/files`, {
+      headers: {
+        authorization: `Bearer ${configuration.authToken}`,
+        'x-workspace-id': session.workspaceId,
+        accept: 'application/json',
+        'idempotency-key': `s11-ui-synonyms-${configuration.suffix}`,
+      },
+      multipart: {
+        enabled: 'true',
+        file: {
+          name: 's11-synonyms.csv',
+          mimeType: 'text/csv',
+          buffer: Buffer.from('标准词,同义词\n退款,退货\n配送,发货\n'),
+        },
+      },
+    });
+    const synonymPayload = (await synonymResponse.json()) as ApiEnvelope<{ version: number }>;
+    if (
+      synonymResponse.status() !== 201 ||
+      synonymPayload.success !== true ||
+      synonymPayload.data === undefined
+    ) {
+      throw new Error(
+        `S11_UI_FIXTURE_FAILED: POST synonym fixture status=${synonymResponse.status()} code=${synonymPayload.error?.code ?? 'UNKNOWN'}`,
+      );
+    }
+  } catch (error) {
+    await deleteUiWorkspace(request, configuration, session, created);
+    throw error;
+  }
+  return created;
+}
+
+export async function deleteUiWorkspace(
+  request: APIRequestContext,
+  configuration: UiMatrixConfiguration,
+  session: UiMatrixSession,
+  workspace: UiMatrixWorkspace,
+): Promise<void> {
+  const headers = {
+    authorization: `Bearer ${configuration.authToken}`,
+    'x-workspace-id': session.workspaceId,
+    accept: 'application/json',
+  };
+  const failures: string[] = [];
+  const synonymsResponse = await request.get(`/v1/knowledge/spaces/${workspace.spaceId}/synonyms`, {
+    headers,
+  });
+  if (synonymsResponse.ok()) {
+    const payload = (await synonymsResponse.json()) as ApiEnvelope<{ version: number }>;
+    if (payload.success === true && payload.data) {
+      const deleted = await request.delete(`/v1/knowledge/spaces/${workspace.spaceId}/synonyms`, {
+        headers: {
+          ...headers,
+          'content-type': 'application/json',
+          'idempotency-key': `s11-ui-cleanup-synonyms-${configuration.suffix}`,
+        },
+        data: { version: payload.data.version },
+      });
+      if (![202, 204, 404, 409].includes(deleted.status())) {
+        failures.push(`synonyms status=${deleted.status()}`);
+      }
+    }
+  } else if (synonymsResponse.status() !== 404) {
+    failures.push(`synonyms read status=${synonymsResponse.status()}`);
+  }
+  const sourceResponse = await request.delete(`/v1/knowledge/sources/${workspace.sourceId}`, {
+    headers: {
+      ...headers,
+      'idempotency-key': `s11-ui-cleanup-source-${configuration.suffix}`,
+    },
+  });
+  if (![202, 204, 404].includes(sourceResponse.status())) {
+    failures.push(`source status=${sourceResponse.status()}`);
+  }
+  const spaceResponse = await request.get(`/v1/knowledge/spaces/${workspace.spaceId}`, {
+    headers,
+  });
+  if (spaceResponse.ok()) {
+    const payload = (await spaceResponse.json()) as ApiEnvelope<{
+      version: number;
+      referenceRevision: number;
+    }>;
+    if (payload.success !== true || !payload.data) {
+      failures.push('space read returned no data');
+    } else {
+      const deleted = await request.delete(`/v1/knowledge/spaces/${workspace.spaceId}`, {
+        headers: {
+          ...headers,
+          'content-type': 'application/json',
+          'idempotency-key': `s11-ui-cleanup-space-${configuration.suffix}`,
+        },
+        data: {
+          version: payload.data.version,
+          expectedReferenceRevision: payload.data.referenceRevision,
+          referenceStrategy: 'block',
+        },
+      });
+      if (![202, 204, 404].includes(deleted.status())) {
+        failures.push(`space status=${deleted.status()}`);
+      }
+    }
+  } else if (spaceResponse.status() !== 404) {
+    failures.push(`space read status=${spaceResponse.status()}`);
+  }
+  if (failures.length > 0) {
+    throw new Error(`S11_UI_FIXTURE_CLEANUP_FAILED: ${failures.join(', ')}`);
+  }
+}
+
+export function canonicalPageTarget(page: S11CanonicalPage, workspace: UiMatrixWorkspace): string {
+  const route = page.route
+    .replace('[spaceId]', workspace.spaceId)
+    .replace('[segmentId]', workspace.segmentId);
+  if (page.id === 'PAGE-SEGMENTS') return `${route}?sourceId=${workspace.sourceId}`;
+  if (page.id === 'PAGE-IMPORT') return `${route}?kind=text`;
+  if (page.id === 'PAGE-CONNECTORS') return `${route}?spaceId=${workspace.spaceId}`;
+  return route;
+}
+
+export function uiScreenshotName(pageId: string, viewport: string): string {
+  return `${pageId.toLowerCase()}-${viewport}.png`;
+}
 
 export function pageSourceExists(page: S11CanonicalPage): boolean {
   return existsSync(join(pagesRoot, page.source));

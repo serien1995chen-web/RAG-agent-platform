@@ -39,22 +39,36 @@ export function renderFinal(summaryPath) {
 }
 
 function evidenceForTask(taskTrace) {
-  if (taskTrace.includes('T03')) return 'pnpm test:performance; PERFORMANCE_STACK_UNAVAILABLE';
-  if (taskTrace.includes('T02')) {
-    return 'pnpm test:contract; real Provider inputs unavailable';
+  if (taskTrace.includes('T03')) {
+    return 'k6 probe READY; full PERFORMANCE_PROVIDER_BLOCKED (missing real fixture/key)';
   }
-  if (taskTrace.includes('T05')) return 'pnpm test:recovery --check; recovery tools unavailable';
-  if (taskTrace.includes('T07')) return 'pnpm release:check; RELEASE_BLOCKED_APP_IMAGE';
-  if (taskTrace.includes('T06'))
-    return 'pnpm test:e2e; local 18-page matrix passed; final evidence pending';
+  if (taskTrace.includes('T02')) {
+    return 'pnpm test:contract; provider preflight BLOCKED (34 canonical / 18 scoped fields)';
+  }
+  if (taskTrace.includes('T05')) {
+    return 'RECOVERY_CHECK_READY; real drill BLOCKED by isolated media/changeId';
+  }
+  if (taskTrace.includes('T07')) {
+    return 'pnpm release:check --allow-missing-app; DEFERRED_TO_PRODUCTION';
+  }
+  if (taskTrace.includes('T06')) {
+    return 'Playwright 18x3=54 PASS; ui-summary sha256 afcf8430...; candidate pending';
+  }
+  if (taskTrace.includes('T04')) {
+    return 'pnpm test:security; 10 files / 21 tests PASS; real API Key pending';
+  }
+  if (taskTrace.includes('T01')) {
+    return 'fixture/harness tests PASS; real full-chain Provider evidence pending';
+  }
   return 'pnpm test:contract; post-rebase local gates passed; final candidate absent';
 }
 
 export function renderBlockedReport(scopeProfile = 'canonical-v1') {
+  const scoped = scopeProfile === S11_SCOPE_PROFILE;
   const lines = [
     '# S11 Release Report',
     '',
-    'Result: `BLOCKED`.',
+    `Result: \`${scoped ? 'SCOPED_BLOCKED' : 'BLOCKED'}\`.`,
     '',
     'No candidate freeze and no W4 completion is claimed. The table has 73 data rows.',
     '',
@@ -63,13 +77,22 @@ export function renderBlockedReport(scopeProfile = 'canonical-v1') {
   ];
   for (const row of buildTemplateRows(repoRoot, scopeProfile)) {
     const excluded = row.type === 'EXCLUDED';
+    const deferred = row.status === 'DEFERRED_BY_SCOPE';
     lines.push(
-      `| ${row.capability} / ${row.testId} | ${excluded ? 'EXCLUDED' : 'BLOCKED'} | ${
-        excluded ? 'zero-implementation guard' : evidenceForTask(row.taskTrace)
-      } | ${excluded ? 'N/A' : 'BLOCKED'} | ${
+      `| ${row.capability} / ${row.testId} | ${
+        excluded ? 'EXCLUDED' : deferred ? 'DEFERRED_BY_SCOPE' : 'BLOCKED'
+      } | ${
+        excluded
+          ? 'zero-implementation guard'
+          : deferred
+            ? `${row.testId}; zero-real-call guard`
+            : evidenceForTask(row.taskTrace)
+      } | ${excluded ? 'N/A' : deferred ? 'DEFERRED_BY_SCOPE' : 'BLOCKED'} | ${
         excluded
           ? 'zero implementation must remain'
-          : 'real Provider, candidate, performance or release evidence remains missing'
+          : deferred
+            ? 'contract/mock only; must not be reported as REAL_VERIFIED'
+            : 'real Provider, candidate, performance or recovery evidence remains missing'
       } |`,
     );
   }

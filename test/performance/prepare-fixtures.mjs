@@ -80,6 +80,8 @@ export function prepareFixtures(input) {
     seed: input.seed,
     fixtureHash,
     segmentCount: input.segmentCount,
+    segmentCountActual: 0,
+    seedVerified: false,
     seedPlan: {
       collection: 'knowledge_segments',
       database: databaseTarget,
@@ -87,6 +89,7 @@ export function prepareFixtures(input) {
     },
     pdfCount: input.pdfCount,
     pagesPerPdf: input.pagesPerPdf,
+    uploadIdCount: 0,
     parseConcurrency: 10,
     quotaProfile: 's11-perf-v1',
     uploadIdsFile: join(evidenceDir, 'upload-ids.json'),
@@ -99,7 +102,6 @@ export function prepareFixtures(input) {
     join(evidenceDir, 'fixture-manifest.json'),
     `${JSON.stringify(manifest, null, 2)}\n`,
   );
-  if (!existsSync(manifest.uploadIdsFile)) writeFileSync(manifest.uploadIdsFile, '[]\n');
   return { evidenceDir, manifest };
 }
 
@@ -126,18 +128,24 @@ if (isMain) {
     console.log(
       JSON.stringify(
         {
-          status: 'READY',
+          status: 'STAGED',
+          readyForFull: false,
           fixtureHash: result.manifest.fixtureHash,
           manifest: join(result.evidenceDir, 'fixture-manifest.json'),
           pdfCount: result.manifest.pdfCount,
           segmentCount: result.manifest.segmentCount,
           quotaProfile: result.manifest.quotaProfile,
+          uploadIdCount: result.manifest.uploadIdCount,
+          segmentCountActual: result.manifest.segmentCountActual,
         },
         null,
         2,
       ),
     );
-    console.log('PERFORMANCE_FIXTURE_READY');
+    console.error(
+      'PERFORMANCE_FIXTURE_BLOCKED: 300 upload IDs and 1,000,000 seeded Segments are required',
+    );
+    process.exit(3);
   } catch (error) {
     console.error(
       `PERFORMANCE_FIXTURE_FAILED: ${error instanceof Error ? error.message : String(error)}`,

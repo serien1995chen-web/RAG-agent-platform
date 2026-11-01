@@ -123,6 +123,33 @@ function scenarioFiles() {
   ];
 }
 
+export function validateFullFixture(manifest, env = process.env) {
+  const errors = [];
+  if (manifest.segmentCount !== 1_000_000 || manifest.segmentCountActual !== 1_000_000) {
+    errors.push('segment_count_1m_required');
+  }
+  if (manifest.seedVerified !== true) errors.push('segment_seed_unverified');
+  const uploadIdsPath = manifest.uploadIdsFile || env.S11_PERF_UPLOAD_IDS_FILE;
+  if (!uploadIdsPath || !existsSync(uploadIdsPath)) {
+    errors.push('upload_ids_file_missing');
+  } else {
+    try {
+      const uploadIds = JSON.parse(readFileSync(uploadIdsPath, 'utf8'));
+      if (!Array.isArray(uploadIds) || uploadIds.length !== manifest.pdfCount) {
+        errors.push('upload_ids_count_mismatch');
+      } else if (
+        uploadIds.some((value) => typeof value !== 'string' || value.trim() === '') ||
+        new Set(uploadIds).size !== uploadIds.length
+      ) {
+        errors.push('upload_ids_invalid_or_duplicate');
+      }
+    } catch {
+      errors.push('upload_ids_json_invalid');
+    }
+  }
+  return errors;
+}
+
 export async function main(env = process.env) {
   const mode = env.S11_PERF_MODE?.trim() || 'full';
   const profile = env.S11_PERF_PROFILE?.trim() || 'standard';
@@ -195,6 +222,10 @@ export async function main(env = process.env) {
     return blocked('PERFORMANCE_FIXTURE_FAILED', 'fixture manifest is missing', 5);
   }
   const fixtureManifest = JSON.parse(readFileSync(fixtureManifestPath, 'utf8'));
+  const fixtureErrors = validateFullFixture(fixtureManifest, env);
+  if (fixtureErrors.length > 0) {
+    return blocked('PERFORMANCE_FIXTURE_FAILED', fixtureErrors.join(','), 5);
+  }
   const scenarios = {};
   for (const scenario of scenarioFiles()) {
     const run = runK6({ k6Binary, env, evidenceDir, scenario });

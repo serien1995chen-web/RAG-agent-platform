@@ -20,6 +20,11 @@ S11_PERF_MODE=full S11_PERF_PROFILE=standard pnpm test:performance
 node test/performance/prepare-fixtures.mjs --profile standard
 ```
 
+`prepare-fixtures.mjs` only stages deterministic PDF copies and hardware
+metadata. It exits `3` with `PERFORMANCE_FIXTURE_BLOCKED` until an operator has
+created 300 unique upload IDs and verified the 1,000,000 Segment seed. The full
+runner independently rejects an unverified or incomplete manifest.
+
 `K6_BIN` must be an absolute executable path when used. Otherwise the runner
 searches PATH. Missing k6 prints `PERFORMANCE_K6_UNAVAILABLE` and exits `127`.
 
