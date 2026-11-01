@@ -21,6 +21,7 @@ import {
 } from '../../scripts/validate-s11-report.mjs';
 import { renderBlockedReport, renderProviderMatrix } from '../../scripts/render-s11-evidence.mjs';
 import { writeProviderMatrixManifest } from '../../scripts/run-provider-real.mjs';
+import { collectAll } from '../../scripts/collect-s11-evidence.mjs';
 
 const root = resolve(import.meta.dirname, '../..');
 const temporaryDirectories: string[] = [];
@@ -310,5 +311,33 @@ describe('TEST-X-S11-CAPABILITY-MATRIX / TEST-X-S11-EVIDENCE-BINDING', () => {
       status: 'FAIL',
       blockerCount: 1,
     });
+  });
+
+  it('collects scoped task evidence without trusting an invalid candidate value', () => {
+    const summary = collectAll(
+      {
+        S11_SCOPE_PROFILE,
+        S10_MERGE_SHA: 'd7e38c71293a283cd6268605b5036e8ee5763c9a',
+        CANDIDATE_SHA: 'not-a-sha',
+      },
+      'S11-T02',
+    );
+    expect(summary.status).toBe('SCOPED_BLOCKED');
+    expect(summary.candidateSha).toBe('UNFROZEN');
+    expect(summary.task).toBe('S11-T02');
+    expect(summary.rowCount).toBeGreaterThan(0);
+    expect(summary.rows.every((row) => row.taskTrace.split('/').includes('T02'))).toBe(true);
+    expect(summary.capabilities).toMatchObject({
+      total: 73,
+      base: 12,
+      data: 57,
+      excluded: 4,
+      deferred: 3,
+      inScopeDevelopment: 66,
+      inScopeData: 54,
+    });
+    expect(summary.blockers.map((blocker) => blocker.code)).toEqual(
+      expect.arrayContaining(['SCOPED_PROVIDER_BLOCKED', 'SCOPED_CANDIDATE_UNFROZEN']),
+    );
   });
 });

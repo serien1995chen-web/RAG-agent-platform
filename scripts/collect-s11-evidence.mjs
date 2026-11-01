@@ -18,6 +18,9 @@ import {
 const repoRoot = resolve(import.meta.dirname, '..');
 const SENSITIVE_KEY =
   /token|secret|password|credential|authorization|cookie|object[-_]?key|api[-_]?key/i;
+const TASK_IDS = new Set(
+  Array.from({ length: 8 }, (_, index) => `S11-T${String(index + 1).padStart(2, '0')}`),
+);
 
 export function redactEvidence(value, keyHint = '') {
   if (SENSITIVE_KEY.test(keyHint)) return '[REDACTED]';
@@ -52,12 +55,22 @@ export function appendTest(tests, input) {
   });
 }
 
-export function collectAll(env = process.env) {
+function isCandidateSha(value) {
+  return typeof value === 'string' && /^(?:[a-f0-9]{40}|[a-f0-9]{64})$/.test(value);
+}
+
+function isTaskId(value) {
+  return typeof value === 'string' && TASK_IDS.has(value);
+}
+
+export function collectAll(env = process.env, task = null) {
   const artifacts = buildKnowledgeContractArtifacts(repoRoot);
   const scopeProfile = env.S11_SCOPE_PROFILE || 'canonical-v1';
   const rows = buildTemplateRows(repoRoot, scopeProfile);
   const counts = scopeCounts(repoRoot, scopeProfile);
   const providers = safeProviderSummary(env);
+  const configuredCandidate = env.CANDIDATE_SHA?.trim() ?? '';
+  const candidateSha = isCandidateSha(configuredCandidate) ? configuredCandidate : 'UNFROZEN';
   const blockers = [];
   if (providers.status !== 'READY') {
     blockers.push({
@@ -82,13 +95,20 @@ export function collectAll(env = process.env) {
       detail: 'S10_MERGE_SHA must be d7e38c71293a283cd6268605b5036e8ee5763c9a',
     });
   }
-  if (scopeProfile === S11_SCOPE_PROFILE && !env.CANDIDATE_SHA) {
+  if (scopeProfile === S11_SCOPE_PROFILE && !isCandidateSha(configuredCandidate)) {
     blockers.push({
       code: 'SCOPED_CANDIDATE_UNFROZEN',
       task: 'S11-T08',
-      detail: 'CANDIDATE_SHA is required after rebase',
+      detail: 'CANDIDATE_SHA must be a frozen 40 or 64 character hexadecimal SHA',
     });
   }
+  if (task !== null && !isTaskId(task)) {
+    throw new Error(`unknown S11 task: ${String(task)}`);
+  }
+  const taskSuffix = task?.slice('S11-'.length);
+  const selectedRows = task
+    ? rows.filter((row) => row.taskTrace.split('/').includes(taskSuffix))
+    : rows;
   return {
     schemaVersion: 1,
     wave: 'W4',
@@ -96,14 +116,16 @@ export function collectAll(env = process.env) {
     owner: 'personA',
     phase: scopeProfile === S11_SCOPE_PROFILE ? 'scoped' : 'phase1',
     scopeProfile,
-    candidateSha: env.CANDIDATE_SHA ?? 'UNFROZEN',
+    candidateSha,
     s10MergeSha: env.S10_MERGE_SHA ?? null,
-    generatedAt: null,
+    generatedAt: new Date().toISOString(),
+    task,
     contract: artifacts.actualCounts,
     runtime: artifacts.runtimeRegistry.count,
     deferred: artifacts.deferredManifest.count,
     capabilities: counts,
-    rows,
+    rows: selectedRows,
+    rowCount: selectedRows.length,
     providers,
     crossTestIds: S11_CROSS_TEST_IDS,
     deferredCrossTestIds: scopeProfile === S11_SCOPE_PROFILE ? ['TEST-X-SAAS-READY'] : [],
@@ -151,12 +173,36 @@ function main(argv = process.argv.slice(2), env = process.env) {
     console.log(JSON.stringify(selfTest(), null, 2));
     return 0;
   }
-  const summary = redactEvidence(collectAll(env));
+  const allowed = new Set(['--all', '--task']);
+  if (argv.some((arg) => !allowed.has(arg) && !TASK_IDS.has(arg))) {
+    console.error('S11_EVIDENCE_ARGUMENT_INVALID');
+    return 2;
+  }
+  if (argv.includes('--all') && argv.includes('--task')) {
+    console.error('S11_EVIDENCE_TASK_CONFLICT');
+    return 2;
+  }
+  let task = null;
+  if (argv.includes('--task')) {
+    const index = argv.indexOf('--task');
+    task = argv[index + 1];
+    if (!isTaskId(task)) {
+      console.error('S11_EVIDENCE_TASK_INVALID');
+      return 2;
+    }
+  }
+  const summary = redactEvidence(collectAll(env, task));
   const outputDir = evidenceDirectory(env);
-  const path = join(outputDir, 'summary.json');
+  const path = join(outputDir, task ? `${task.toLowerCase()}-summary.json` : 'summary.json');
   writeFileSync(path, `${JSON.stringify(summary, null, 2)}\n`);
   console.log(
-    JSON.stringify({ status: summary.status, path, blockerCount: summary.blockers.length }),
+    JSON.stringify({
+      status: summary.status,
+      path,
+      task: summary.task,
+      rowCount: summary.rowCount,
+      blockerCount: summary.blockers.length,
+    }),
   );
   return 0;
 }
