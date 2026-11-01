@@ -32,6 +32,7 @@ export interface S8ImageModels {
   vlm: ModelCatalogItem;
   visionEmbedding: ModelCatalogItem & {
     dimension: 768 | 1024 | 1536 | 3072;
+    mode?: 'vision-embedding' | 'caption-embedding';
   };
 }
 
@@ -65,6 +66,7 @@ export interface S8ImageIndexStorePort {
       vectorStatus: S8VectorStatus;
       captionPromptVersion: string;
       visionEmbeddingModelId: string;
+      visionEmbeddingMode?: 'vision-embedding' | 'caption-embedding';
       captionKey: string;
       indexes: S6SegmentRecord['indexes'];
     },

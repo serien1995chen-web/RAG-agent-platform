@@ -288,7 +288,7 @@ describe('S7 real runtime Search page and HTTP contract', () => {
       searchMode: 'hybrid',
       usingRerank: false,
     });
-    expect(chat.status).toBe(200);
+    expect(chat.status, JSON.stringify(chat.data)).toBe(200);
     expect(chat.data.items.length).toBeGreaterThan(0);
 
     const agent = await new AgentSemanticConsumer(client).tool({

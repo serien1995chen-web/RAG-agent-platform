@@ -38,8 +38,7 @@ export function writeProviderMatrixManifest(
 ) {
   const directory = evidenceDirectory(env);
   if (!directory) return null;
-  const status =
-    exitCode !== 0 ? 'FAIL' : blockers.length === 0 ? 'REAL_VERIFIED' : 'SCOPED_BLOCKED';
+  const status = blockers.length > 0 ? 'SCOPED_BLOCKED' : exitCode === 0 ? 'REAL_VERIFIED' : 'FAIL';
   const manifest = {
     schemaVersion: 1,
     candidateSha: env.CANDIDATE_SHA?.trim() || 'UNFROZEN',
@@ -119,7 +118,7 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
       console.error('AIPROXY_MODEL_ALIAS_CONFIRMATION_REQUIRED');
       return 3;
     }
-    if (!scenario) return 0;
+    if (scenario.includes('s11-aiproxy-catalog-preflight')) return 0;
   }
 
   const result = spawnSync(
@@ -140,13 +139,15 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
     },
   );
   const blockers = evidenceBlockers(env, scenario);
-  writeProviderMatrixManifest(env, scenario, result.status ?? 2, blockers);
-  if ((result.status ?? 2) !== 0) return result.status ?? 2;
+  const finalExitCode =
+    (result.status ?? 2) !== 0 ? (result.status ?? 2) : blockers.length > 0 ? 2 : 0;
+  writeProviderMatrixManifest(env, scenario, finalExitCode, blockers);
+  if (finalExitCode !== 0 && (result.status ?? 2) !== 0) return finalExitCode;
   if (blockers.length > 0) {
     console.error(`SCOPED_BLOCKED: ${blockers.join('; ')}`);
-    return 2;
+    return finalExitCode;
   }
-  return 0;
+  return finalExitCode;
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {

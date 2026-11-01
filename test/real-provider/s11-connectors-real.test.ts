@@ -13,6 +13,48 @@ function documentExternalId(value: string): string {
   return `feishu:docx:${value}`;
 }
 
+function deleteCaseEvidence(input: { evidenceDir: string; caseId: string }): {
+  verified: boolean;
+  sha256: string | null;
+  error: string | null;
+} {
+  const path = join(input.evidenceDir, 't02-feishu-delete.json');
+  if (!existsSync(path)) {
+    return { verified: false, sha256: null, error: 'delete_evidence_missing' };
+  }
+  const bytes = readFileSync(path);
+  try {
+    const value = JSON.parse(bytes.toString('utf8')) as {
+      status?: unknown;
+      caseIdHash?: unknown;
+      deletedExternalIdHash?: unknown;
+      retainedExternalIdHash?: unknown;
+      beforeExternalIdHashes?: unknown;
+      afterExternalIdHashes?: unknown;
+    };
+    const expectedCaseHash = sha256(input.caseId);
+    const valid =
+      value.status === 'REAL_VERIFIED' &&
+      value.caseIdHash === expectedCaseHash &&
+      typeof value.deletedExternalIdHash === 'string' &&
+      typeof value.retainedExternalIdHash === 'string' &&
+      value.deletedExternalIdHash !== value.retainedExternalIdHash &&
+      Array.isArray(value.beforeExternalIdHashes) &&
+      Array.isArray(value.afterExternalIdHashes) &&
+      value.beforeExternalIdHashes.includes(value.deletedExternalIdHash) &&
+      !value.afterExternalIdHashes.includes(value.deletedExternalIdHash) &&
+      value.beforeExternalIdHashes.includes(value.retainedExternalIdHash) &&
+      value.afterExternalIdHashes.includes(value.retainedExternalIdHash);
+    return {
+      verified: valid,
+      sha256: createHash('sha256').update(bytes).digest('hex'),
+      error: valid ? null : 'delete_evidence_invalid',
+    };
+  } catch {
+    return { verified: false, sha256: null, error: 'delete_evidence_invalid_json' };
+  }
+}
+
 describe('TEST-X-S11-PROVIDER-REAL connectors', () => {
   it('Feishu paginates, reads two documents and defers Yuque/DingTalk without calls', async () => {
     const clients = createConnectorProviderClients({
@@ -32,18 +74,27 @@ describe('TEST-X-S11-PROVIDER-REAL connectors', () => {
     };
     const pages = [];
     let cursor: string | undefined;
-    do {
-      const page = await delegate.catalog({
-        provider: 'feishu',
-        config,
-        credentials,
-        rootId: config.folderToken,
-        ...(cursor ? { cursor } : {}),
-        context: providerContext,
-      });
-      pages.push(page);
-      cursor = page.nextCursor ?? undefined;
-    } while (cursor && pages.length < 20);
+    let catalogErrorCode: string | null = null;
+    try {
+      do {
+        const page = await delegate.catalog({
+          provider: 'feishu',
+          config,
+          credentials,
+          rootId: config.folderToken,
+          ...(cursor ? { cursor } : {}),
+          context: providerContext,
+        });
+        pages.push(page);
+        cursor = page.nextCursor ?? undefined;
+      } while (cursor && pages.length < 20);
+    } catch (error) {
+      const problem = error as { problem?: { error?: { code?: unknown } } };
+      catalogErrorCode =
+        typeof problem.problem?.error?.code === 'string'
+          ? problem.problem.error.code
+          : 'KNOWLEDGE_DEPENDENCY_UNAVAILABLE';
+    }
 
     const externalIds = [
       documentExternalId(requiredProviderEnv('S11_FEISHU_DOC_1')),
@@ -92,12 +143,22 @@ describe('TEST-X-S11-PROVIDER-REAL connectors', () => {
       problem: { error: { details: { reason: 'DEFERRED_BY_SCOPE' } } },
     });
 
+    const caseId = process.env.S11_FEISHU_DELETE_CASE_ID?.trim() ?? '';
+    const deletion =
+      caseId && process.env.S11_EVIDENCE_DIR
+        ? deleteCaseEvidence({
+            evidenceDir: process.env.S11_EVIDENCE_DIR,
+            caseId,
+          })
+        : { verified: false, sha256: null, error: 'delete_evidence_missing' };
+    const deleteVerified =
+      process.env.S11_FEISHU_DELETE_PROPAGATION_VERIFIED === 'true' &&
+      deletion.verified &&
+      catalogErrorCode === null;
     const evidence = {
-      status:
-        process.env.S11_FEISHU_DELETE_PROPAGATION_VERIFIED === 'true' &&
-        process.env.S11_FEISHU_DELETE_CASE_ID?.trim()
-          ? 'REAL_VERIFIED'
-          : 'SCOPED_BLOCKED',
+      status: deleteVerified ? 'REAL_VERIFIED' : 'SCOPED_BLOCKED',
+      catalogStatus: catalogErrorCode === null ? 'PASS' : 'SCOPED_BLOCKED',
+      catalogErrorCode,
       documentCount: contents.length,
       catalogPages: pages.length,
       externalIdHash: sha256(JSON.stringify([...externalIds].sort())),
@@ -108,13 +169,16 @@ describe('TEST-X-S11-PROVIDER-REAL connectors', () => {
       dingtalk: 'DEFERRED_BY_SCOPE',
       dingtalkRealCalls: 0,
       deletePropagation: {
-        verified: process.env.S11_FEISHU_DELETE_PROPAGATION_VERIFIED === 'true',
-        caseIdHash: process.env.S11_FEISHU_DELETE_CASE_ID?.trim()
-          ? sha256(process.env.S11_FEISHU_DELETE_CASE_ID.trim())
-          : null,
+        verified: deleteVerified,
+        caseIdHash: caseId ? sha256(caseId) : null,
+        evidenceSha256: deletion.sha256,
+        error: deletion.error,
       },
     };
     expect(JSON.stringify(evidence)).not.toContain(credentials.appSecret);
     writeProviderEvidence('t02-connectors.json', evidence);
   });
 });
+import { createHash } from 'node:crypto';
+import { existsSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';

@@ -518,7 +518,7 @@ describe('S8 real app image and deep search routes', () => {
         searchMode: 'hybrid',
       },
     });
-    expect(image.response.status).toBe(200);
+    expect(image.response.status, JSON.stringify(image.payload)).toBe(200);
     expect(
       (image.payload.data.items as Array<{ segment: { imageBlobRefId: string | null } }>).some(
         (item) => item.segment.imageBlobRefId === imageBlobRefId,

@@ -275,7 +275,7 @@ describe('TEST-DOWN-001...004-BLOCK real API Key downstream', () => {
       usingRerank: false,
       rerankWeight: 0.5,
     });
-    expect(hybrid.status).toBe(200);
+    expect(hybrid.status, JSON.stringify(hybrid.data)).toBe(200);
     expect(hybrid.data.items.length).toBeGreaterThan(0);
     expect(hybrid.data.items[0]?.citation.segmentId).toBe(segmentId);
 

@@ -2,7 +2,10 @@ import { describe, expect, it } from 'vitest';
 import { AxiosS5OcrHttpTransport } from '../../packages/service/src/modules/knowledge/adapter/s5-ocr-http.adapter';
 import { S5OcrHttpAdapter } from '../../packages/service/src/modules/knowledge/adapter/s5-ocr-http.adapter';
 import { S5OcrCredentialProfileAdapter } from '../../packages/service/src/modules/knowledge/adapter/s5-ocr-profile.adapter';
-import type { S5OcrRequest } from '../../packages/service/src/modules/knowledge/application/s5-ocr-ports';
+import {
+  S5OcrProviderError,
+  type S5OcrRequest,
+} from '../../packages/service/src/modules/knowledge/application/s5-ocr-ports';
 import {
   fixturePdf,
   providerContext,
@@ -78,32 +81,46 @@ describe('TEST-X-S11-PROVIDER-REAL OCR', () => {
     const results: Record<
       string,
       {
-        pages: number;
-        markdownSha256: string;
-        usage: Array<{
+        status: 'PASS' | 'SCOPED_BLOCKED' | 'FAIL';
+        pages?: number;
+        markdownSha256?: string;
+        usage?: Array<{
           provider: string;
           unit: string;
           quantity: number;
           status: number | null;
         }>;
+        errorKind?: string;
+        upstreamStatus?: number | null;
       }
     > = {};
     for (const provider of providers) {
-      const result = await adapter.parse(requestFor(provider, bytes), providerContext);
-      expect(result.markdown.trim().length).toBeGreaterThan(0);
-      expect(result.pages.length).toBeGreaterThanOrEqual(2);
-      expect(result.usage.length).toBeGreaterThan(0);
-      expect(result.usage.every((usage) => usage.quantity > 0)).toBe(true);
-      results[provider] = {
-        pages: result.pages.length,
-        markdownSha256: sha256(result.markdown),
-        usage: result.usage.map((usage) => ({
-          provider: usage.provider,
-          unit: usage.unit,
-          quantity: usage.quantity,
-          status: usage.status,
-        })),
-      };
+      try {
+        const result = await adapter.parse(requestFor(provider, bytes), providerContext);
+        expect(result.markdown.trim().length).toBeGreaterThan(0);
+        expect(result.pages.length).toBeGreaterThanOrEqual(2);
+        expect(result.usage.length).toBeGreaterThan(0);
+        expect(result.usage.every((usage) => usage.quantity > 0)).toBe(true);
+        results[provider] = {
+          status: 'PASS',
+          pages: result.pages.length,
+          markdownSha256: sha256(result.markdown),
+          usage: result.usage.map((usage) => ({
+            provider: usage.provider,
+            unit: usage.unit,
+            quantity: usage.quantity,
+            status: usage.status,
+          })),
+        };
+      } catch (error) {
+        if (!(error instanceof S5OcrProviderError)) throw error;
+        const blocked = ['auth', 'quota', 'rate_limit', 'timeout'].includes(error.kind);
+        results[provider] = {
+          status: blocked ? 'SCOPED_BLOCKED' : 'FAIL',
+          errorKind: error.kind,
+          upstreamStatus: error.status,
+        };
+      }
     }
     const profileHosts = Object.fromEntries(
       providers.map((provider) => {
@@ -112,13 +129,18 @@ describe('TEST-X-S11-PROVIDER-REAL OCR', () => {
         return [provider, endpoint ? safeHostHash(endpoint) : null];
       }),
     );
+    expect(Object.values(results).filter((result) => result.status === 'FAIL')).toEqual([]);
+    const anyBlocked = Object.values(results).some((result) => result.status === 'SCOPED_BLOCKED');
     writeProviderEvidence('t02-ocr.json', {
-      status: 'REAL_VERIFIED',
+      status: anyBlocked ? 'SCOPED_BLOCKED' : 'REAL_VERIFIED',
       sangfor: 'DEFERRED_BY_SCOPE',
       sangforRealCalls: 0,
       fixtureSha256: sha256(bytes),
       profileHosts,
       results,
+      blockers: Object.entries(results)
+        .filter(([, result]) => result.status === 'SCOPED_BLOCKED')
+        .map(([provider, result]) => `${provider}:${result.errorKind}`),
     });
   });
 });

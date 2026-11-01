@@ -1,7 +1,10 @@
 import { spawnSync } from 'node:child_process';
 import { resolve } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
-import { S5AiproxyHttpAdapter } from '../../packages/service/src/modules/knowledge/adapter/s5-aiproxy-http.adapter';
+import {
+  S5AiproxyHttpAdapter,
+  S5MockAiproxyTransport,
+} from '../../packages/service/src/modules/knowledge/adapter/s5-aiproxy-http.adapter';
 import { S5OcrHttpAdapter } from '../../packages/service/src/modules/knowledge/adapter/s5-ocr-http.adapter';
 import { S5OcrCredentialProfileAdapter } from '../../packages/service/src/modules/knowledge/adapter/s5-ocr-profile.adapter';
 import type {
@@ -203,6 +206,106 @@ describe('TEST-X-S11-PROVIDER-REAL contract adapters', () => {
     );
   });
 
+  it('uses TokenDance standard embedding input with explicit provider routing', async () => {
+    const transport = new ScriptedTransport<S5HttpRequest, S5HttpResponse>([
+      response(200, {
+        data: [{ index: 0, embedding: Array.from({ length: 1024 }, () => 0.1) }],
+        usage: { prompt_tokens: 4, total_tokens: 4 },
+      }),
+    ]);
+    const adapter = new S5AiproxyHttpAdapter({
+      baseUrl: 'https://tokendance.space/gateway/v1',
+      token: 'aiproxy-secret-value',
+      transport: transport as S5HttpTransportPort,
+      providerOnly: ['alibaba'],
+    });
+    const result = await adapter.invoke(
+      {
+        kind: 'embedding',
+        modelId: 'qwen3.7-text-embedding',
+        input: [{ type: 'text', text: 'release evidence' }],
+        dimension: 1024,
+      },
+      context,
+    );
+    expect(result.usage).toEqual({ inputTokens: 4, outputTokens: 0 });
+    expect(transport.requests[0]).toMatchObject({
+      url: 'https://tokendance.space/gateway/v1/embeddings',
+      body: {
+        model: 'qwen3.7-text-embedding',
+        input: 'release evidence',
+        provider: { only: ['alibaba'] },
+      },
+    });
+  });
+
+  it('keeps the mock embedding transport compatible with standard string input', async () => {
+    const adapter = new S5AiproxyHttpAdapter({
+      baseUrl: 'http://aiproxy.test',
+      token: 'mock-token',
+      transport: new S5MockAiproxyTransport(),
+    });
+    const result = await adapter.invoke(
+      {
+        kind: 'embedding',
+        modelId: 'mock-embedding-768',
+        input: [{ type: 'text', text: 'single search query' }],
+        dimension: 768,
+      },
+      context,
+    );
+    expect(result.data).toMatchObject({
+      data: [expect.objectContaining({ index: 0, embedding: expect.any(Array) })],
+    });
+    expect(
+      (result.data as { data: Array<{ embedding: number[] }> }).data[0]?.embedding,
+    ).toHaveLength(768);
+  });
+
+  it('uses the TokenDance Alibaba native rerank contract', async () => {
+    const transport = new ScriptedTransport<S5HttpRequest, S5HttpResponse>([
+      response(200, {
+        output: {
+          results: [
+            { index: 0, relevance_score: 0.95 },
+            { index: 1, relevance_score: 0.1 },
+          ],
+        },
+        usage: { prompt_tokens: 12, total_tokens: 12 },
+        request_id: 'safe-request-id',
+      }),
+    ]);
+    const adapter = new S5AiproxyHttpAdapter({
+      baseUrl: 'https://tokendance.space/gateway/v1',
+      token: 'aiproxy-secret-value',
+      transport: transport as S5HttpTransportPort,
+      providerOnly: ['alibaba'],
+      rerankProtocol: 'alibaba-native',
+    });
+    const result = await adapter.invoke(
+      {
+        kind: 'rerank',
+        modelId: 'qwen3.7-text-rerank',
+        query: 'release evidence',
+        candidates: ['release evidence', 'unrelated'],
+      },
+      context,
+    );
+    expect(result.quantity).toBe(12);
+    expect(transport.requests[0]).toMatchObject({
+      url: 'https://tokendance.space/gateway/alibaba/text-rerank/v1',
+      body: {
+        model: 'qwen3.7-text-rerank',
+        input: {
+          query: 'release evidence',
+          documents: ['release evidence', 'unrelated'],
+        },
+        parameters: { top_n: 2 },
+        provider: { only: ['alibaba'] },
+      },
+    });
+  });
+
   it('classifies AIProxy 401, 429, timeout, and invalid schema without retrying auth', async () => {
     await expect(invokeModel(401, {}).result).rejects.toMatchObject({
       kind: 'auth',
@@ -268,13 +371,87 @@ describe('TEST-X-S11-PROVIDER-REAL contract adapters', () => {
       expect(result.markdown).toBeTruthy();
       expect(result.pages.length).toBeGreaterThan(0);
       expect(result.usage.some((usage) => usage.unit === 'page')).toBe(true);
-      expect(transport.requests[0]?.url).toMatch(
+      expect(new URL(transport.requests[0]!.url).pathname).toMatch(
         /\/api\/(ocr|parse\/sync|pdf_to_markdown|parse\/preupload)$/,
       );
       expect(JSON.stringify(result.requestEvidence)).not.toMatch(
         /sg-token|sm-key|ti-secret|dx-key|S11_OCR_.*PROFILE_JSON/,
       );
     }
+  });
+
+  it('supports the providers native Somark, TextIn and Doc2X contracts', async () => {
+    const somarkTransport = new ScriptedTransport<
+      Parameters<S5OcrHttpTransportPort['request']>[0],
+      S5HttpResponse
+    >([
+      response(200, {
+        code: 0,
+        data: {
+          result: { outputs: { markdown: '# Somark native' } },
+          metadata: { page_num: 2 },
+        },
+      }),
+    ]);
+    const somarkAdapter = new S5OcrHttpAdapter({
+      profiles: { resolve: vi.fn().mockResolvedValue(OCR_PROFILES.somark) },
+      transport: somarkTransport as S5OcrHttpTransportPort,
+    });
+    const somark = await somarkAdapter.parse(ocrRequest('somark') as never, context);
+    expect(somark.markdown).toBe('# Somark native');
+    expect(somark.usage).toContainEqual(expect.objectContaining({ unit: 'page', quantity: 2 }));
+    const somarkForm = somarkTransport.requests[0]?.body as FormData;
+    expect(somarkForm.get('api_key')).toBe('sm-key');
+    expect(somarkForm.get('output_formats')).toBe('markdown');
+
+    const textinTransport = new ScriptedTransport<
+      Parameters<S5OcrHttpTransportPort['request']>[0],
+      S5HttpResponse
+    >([
+      response(200, {
+        code: 200,
+        result: {
+          markdown: '# TextIn native',
+          total_page_number: 2,
+          pages: [{ page: 1, md: 'TextIn' }],
+        },
+      }),
+    ]);
+    const textinAdapter = new S5OcrHttpAdapter({
+      profiles: { resolve: vi.fn().mockResolvedValue(OCR_PROFILES.textin) },
+      transport: textinTransport as S5OcrHttpTransportPort,
+    });
+    const textin = await textinAdapter.parse(ocrRequest('textin') as never, context);
+    expect(textin.markdown).toBe('# TextIn native');
+    const textinUrl = new URL(textinTransport.requests[0]!.url);
+    expect(textinUrl.searchParams.get('parse_mode')).toBe('auto');
+    expect(textinUrl.searchParams.get('remove_watermark')).toBe('1');
+
+    const doc2xTransport = new ScriptedTransport<
+      Parameters<S5OcrHttpTransportPort['request']>[0],
+      S5HttpResponse
+    >([
+      response(200, {
+        code: 'ok',
+        data: { uid: 'doc2x-uid', url: 'https://upload.example.test/object' },
+      }),
+      response(200, {}),
+      response(200, {
+        code: 'ok',
+        data: {
+          status: 'success',
+          result: { pages: [{ md: '# Doc2X native' }] },
+        },
+      }),
+    ]);
+    const doc2xAdapter = new S5OcrHttpAdapter({
+      profiles: { resolve: vi.fn().mockResolvedValue(OCR_PROFILES.doc2x) },
+      transport: doc2xTransport as S5OcrHttpTransportPort,
+      sleep: vi.fn().mockResolvedValue(undefined),
+    });
+    const doc2x = await doc2xAdapter.parse(ocrRequest('doc2x') as never, context);
+    expect(doc2x.markdown).toBe('# Doc2X native');
+    expect(doc2xTransport.requests[2]?.url).toContain('/parse/status?uid=doc2x-uid');
   });
 
   it('maps OCR auth and invalid schema to retry-safe provider categories', async () => {
@@ -307,6 +484,36 @@ describe('TEST-X-S11-PROVIDER-REAL contract adapters', () => {
     ).rejects.toMatchObject({
       kind: 'contract',
       schemaRetryable: true,
+    });
+  });
+
+  it('classifies OCR HTTP-200 business errors without exposing provider text', async () => {
+    const somarkTransport = new ScriptedTransport<
+      Parameters<S5OcrHttpTransportPort['request']>[0],
+      S5HttpResponse
+    >([response(200, { code: 1107, message: 'Invalid API key.', data: '' })]);
+    const somarkAdapter = new S5OcrHttpAdapter({
+      profiles: { resolve: vi.fn().mockResolvedValue(OCR_PROFILES.somark) },
+      transport: somarkTransport as S5OcrHttpTransportPort,
+    });
+    await expect(somarkAdapter.parse(ocrRequest('somark') as never, context)).rejects.toMatchObject(
+      {
+        kind: 'auth',
+        retryable: false,
+      },
+    );
+
+    const doc2xTransport = new ScriptedTransport<
+      Parameters<S5OcrHttpTransportPort['request']>[0],
+      S5HttpResponse
+    >([response(200, { code: 'parse_quota_limit', msg: '解析额度不足' })]);
+    const doc2xAdapter = new S5OcrHttpAdapter({
+      profiles: { resolve: vi.fn().mockResolvedValue(OCR_PROFILES.doc2x) },
+      transport: doc2xTransport as S5OcrHttpTransportPort,
+    });
+    await expect(doc2xAdapter.parse(ocrRequest('doc2x') as never, context)).rejects.toMatchObject({
+      kind: 'quota',
+      retryable: false,
     });
   });
 
@@ -562,6 +769,25 @@ describe('TEST-X-S11-PROVIDER-REAL contract adapters', () => {
       S11_AIPROXY_RERANK_MODEL: 'rerank-real',
       S11_AIPROXY_VLM_MODEL: 'vlm-real',
       S11_AIPROXY_VISION_EMBEDDING_MODEL: 'vision-real',
+      AIPROXY_MODEL_PROFILE_JSON: JSON.stringify({
+        models: [
+          { id: 'llm-real', type: 'llm', capabilities: ['chat'] },
+          {
+            id: 'embedding-real',
+            type: 'embedding',
+            capabilities: ['text-embedding'],
+            dimension: 1024,
+          },
+          { id: 'rerank-real', type: 'rerank', capabilities: ['rerank'] },
+          { id: 'vlm-real', type: 'vlm', capabilities: ['vision'] },
+          {
+            id: 'vision-real',
+            type: 'embedding',
+            capabilities: ['caption-embedding'],
+            dimension: 1024,
+          },
+        ],
+      }),
       S11_OCR_SANGFOR_PROFILE_JSON: JSON.stringify(OCR_PROFILES.sangfor),
       S11_OCR_SOMARK_PROFILE_JSON: JSON.stringify(OCR_PROFILES.somark),
       S11_OCR_TEXTIN_PROFILE_JSON: JSON.stringify(OCR_PROFILES.textin),

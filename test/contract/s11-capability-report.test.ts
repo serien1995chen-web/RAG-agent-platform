@@ -59,6 +59,25 @@ function readyEnvironment(directory: string, candidateSha = 'a'.repeat(40)) {
     S11_AIPROXY_RERANK_MODEL: 'rerank-test',
     S11_AIPROXY_VLM_MODEL: 'vlm-test',
     S11_AIPROXY_VISION_EMBEDDING_MODEL: 'vision-embedding-test',
+    AIPROXY_MODEL_PROFILE_JSON: JSON.stringify({
+      models: [
+        { id: 'llm-test', type: 'llm', capabilities: ['chat'] },
+        {
+          id: 'embedding-test',
+          type: 'embedding',
+          capabilities: ['text-embedding'],
+          dimension: 1024,
+        },
+        { id: 'rerank-test', type: 'rerank', capabilities: ['rerank'] },
+        { id: 'vlm-test', type: 'vlm', capabilities: ['vision'] },
+        {
+          id: 'vision-embedding-test',
+          type: 'embedding',
+          capabilities: ['caption-embedding'],
+          dimension: 1024,
+        },
+      ],
+    }),
     S11_AIPROXY_MODEL_MAPPING_APPROVED: 'true',
     S11_OCR_SOMARK_PROFILE_JSON: profile({ apiKey: 'test-only-secret' }),
     S11_OCR_TEXTIN_PROFILE_JSON: profile({
@@ -308,7 +327,7 @@ describe('TEST-X-S11-CAPABILITY-MATRIX / TEST-X-S11-EVIDENCE-BINDING', () => {
     const failed = JSON.parse(readFileSync(manifestPath!, 'utf8'));
     expect(failed.lastRun).toMatchObject({
       exitCode: 2,
-      status: 'FAIL',
+      status: 'SCOPED_BLOCKED',
       blockerCount: 1,
     });
   });

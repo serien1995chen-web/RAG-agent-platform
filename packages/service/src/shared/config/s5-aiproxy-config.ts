@@ -31,6 +31,8 @@ export const S5AiproxyConfigSchema = z
     apiTokenRef: SecretRefSchema,
     postgresUriRef: SecretRefSchema.nullable(),
     modelMode: z.enum(['mock', 'real']),
+    providerOnly: z.array(z.string().min(1)).nullable(),
+    rerankProtocol: z.enum(['openai', 'alibaba-native']),
   })
   .strict();
 
@@ -60,6 +62,23 @@ export function loadS5AiproxyConfig(env: EnvSource = process.env): S5AiproxyConf
   const postgresUriRef =
     read(env, 'AIPROXY_POSTGRES_URI_REF') ??
     (mode === 'compose' ? 'env:AIPROXY_POSTGRES_URI' : undefined);
+  const tokenDanceGateway =
+    explicitBaseUrl !== undefined &&
+    (() => {
+      try {
+        return new URL(explicitBaseUrl).hostname === 'tokendance.space';
+      } catch {
+        return false;
+      }
+    })();
+  const providerOnly =
+    read(env, 'AIPROXY_PROVIDER_ONLY')
+      ?.split(',')
+      .map((value) => value.trim())
+      .filter(Boolean) ?? (mode === 'openai' && tokenDanceGateway ? ['alibaba'] : null);
+  const rerankProtocol =
+    read(env, 'AIPROXY_RERANK_PROTOCOL') ??
+    (mode === 'openai' && tokenDanceGateway ? 'alibaba-native' : 'openai');
 
   const parsed = S5AiproxyConfigSchema.safeParse({
     mode,
@@ -67,6 +86,8 @@ export function loadS5AiproxyConfig(env: EnvSource = process.env): S5AiproxyConf
     apiTokenRef,
     postgresUriRef: postgresUriRef ?? null,
     modelMode,
+    providerOnly,
+    rerankProtocol,
   });
   if (!parsed.success) {
     throw new ConfigValidationException(issuesOf(parsed.error, 'AIPROXY'));

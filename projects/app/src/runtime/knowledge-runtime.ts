@@ -320,6 +320,8 @@ async function bootstrapRuntime(): Promise<TelemetryKnowledgeApiRuntime> {
       baseUrl: s5AiproxyConfig.baseUrl,
       token: s5ModelToken,
       transport: s5ModelTransport,
+      ...(s5AiproxyConfig.providerOnly ? { providerOnly: s5AiproxyConfig.providerOnly } : {}),
+      rerankProtocol: s5AiproxyConfig.rerankProtocol,
     }),
     usage: s5Usage,
     quotaGate,

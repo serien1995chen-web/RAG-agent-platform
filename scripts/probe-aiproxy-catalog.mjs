@@ -13,13 +13,13 @@ const TARGETS = Object.freeze([
     kind: 'embedding',
     env: 'S11_AIPROXY_EMBEDDING_MODEL',
     target: 'bge-large-zh-v1.5',
-    hints: ['bge', 'large', 'zh'],
+    hints: ['qwen', 'embedding'],
   },
   {
     kind: 'rerank',
     env: 'S11_AIPROXY_RERANK_MODEL',
     target: 'bge-reranker-v2-m3',
-    hints: ['bge', 'rerank'],
+    hints: ['qwen', 'rerank'],
   },
   {
     kind: 'vlm',
@@ -30,8 +30,8 @@ const TARGETS = Object.freeze([
   {
     kind: 'vision-embedding',
     env: 'S11_AIPROXY_VISION_EMBEDDING_MODEL',
-    target: 'qwen-vision-embedding',
-    hints: ['qwen', 'vision', 'embedding'],
+    target: 'qwen3.7-text-embedding',
+    hints: ['qwen', 'embedding'],
   },
 ]);
 
@@ -135,11 +135,15 @@ function roleMatches(kind, profile) {
       (profile.type === 'vlm' || profile.type === 'llm') && profile.capabilities.includes('vision')
     );
   }
-  return (
-    profile.type === 'embedding' &&
-    profile.capabilities.includes('vision') &&
-    [768, 1024, 1536, 3072].includes(profile.dimension)
-  );
+  if (kind === 'vision-embedding') {
+    return (
+      profile.type === 'embedding' &&
+      (profile.capabilities.includes('vision') ||
+        profile.capabilities.includes('caption-embedding')) &&
+      [768, 1024, 1536, 3072].includes(profile.dimension)
+    );
+  }
+  return profile.type === 'embedding' && [768, 1024, 1536, 3072].includes(profile.dimension);
 }
 
 export async function probeCatalog(env = process.env, fetcher = globalThis.fetch) {
@@ -225,6 +229,12 @@ export async function probeCatalog(env = process.env, fetcher = globalThis.fetch
       candidates,
       configuredFound: Boolean(catalogModel),
       profileMatched,
+      mode:
+        target.kind === 'vision-embedding' && profile?.capabilities.includes('caption-embedding')
+          ? 'caption-embedding'
+          : target.kind === 'vision-embedding'
+            ? 'vision-embedding'
+            : null,
       approved,
     };
   });

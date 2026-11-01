@@ -7,6 +7,17 @@ const root = resolve(import.meta.dirname, '../..');
 
 const SENSITIVE_KEY =
   /token|secret|password|credential|authorization|cookie|object[-_]?key|api[-_]?key/i;
+const SAFE_TOKEN_USAGE_KEYS = new Set([
+  'inputtokens',
+  'outputtokens',
+  'prompt_tokens',
+  'completion_tokens',
+  'total_tokens',
+]);
+
+function isSensitiveKey(keyHint: string): boolean {
+  return !SAFE_TOKEN_USAGE_KEYS.has(keyHint.toLowerCase()) && SENSITIVE_KEY.test(keyHint);
+}
 
 export const providerContext: TenantContext = {
   workspaceId: 'ws_s11_real_provider',
@@ -47,7 +58,7 @@ export function safeHostHash(endpoint: string): string {
 }
 
 export function redactProviderEvidence(value: unknown, keyHint = ''): unknown {
-  if (SENSITIVE_KEY.test(keyHint)) return '[REDACTED]';
+  if (isSensitiveKey(keyHint)) return '[REDACTED]';
   if (Array.isArray(value)) return value.map((item) => redactProviderEvidence(item));
   if (value && typeof value === 'object') {
     return Object.fromEntries(

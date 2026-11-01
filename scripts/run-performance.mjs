@@ -75,8 +75,6 @@ function runK6(input) {
     '-e',
     `S11_PERF_WORKSPACE_ID=${input.env.S11_PERF_WORKSPACE_ID ?? ''}`,
     '-e',
-    `S11_PERF_API_KEY=${input.env.S11_PERF_API_KEY ?? ''}`,
-    '-e',
     `S11_PERF_SPACE_ID=${input.env.S11_PERF_SPACE_ID ?? ''}`,
     '-e',
     `S11_PERF_UPLOAD_IDS_FILE=${input.env.S11_PERF_UPLOAD_IDS_FILE ?? ''}`,

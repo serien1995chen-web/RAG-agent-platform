@@ -232,6 +232,7 @@ export class S8ImageIndexRepository implements S8ImageIndexStorePort {
       vectorStatus: S8VectorStatus;
       captionPromptVersion: string;
       visionEmbeddingModelId: string;
+      visionEmbeddingMode?: 'vision-embedding' | 'caption-embedding';
       captionKey: string;
       indexes: S6SegmentRecord['indexes'];
     },
@@ -261,6 +262,9 @@ export class S8ImageIndexRepository implements S8ImageIndexStorePort {
             'metadata.vectorStatus': input.vectorStatus,
             'metadata.captionPromptVersion': input.captionPromptVersion,
             'metadata.visionEmbeddingModelId': input.visionEmbeddingModelId,
+            ...(input.visionEmbeddingMode
+              ? { 'metadata.visionEmbeddingMode': input.visionEmbeddingMode }
+              : {}),
             'metadata.imageSourceVersion': input.sourceVersion,
             'metadata.captionKey': input.captionKey,
             updatedByMemberId: context.memberId,

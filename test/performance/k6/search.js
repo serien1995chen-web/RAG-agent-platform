@@ -1,4 +1,4 @@
-/* global __ENV */
+/* global __ENV, __VU, __ITER */
 import http from 'k6/http';
 import { check } from 'k6';
 
@@ -22,8 +22,9 @@ export const options = {
 export default function () {
   const baseUrl = __ENV.S11_PERF_BASE_URL.replace(/\/+$/, '');
   const response = http.post(
-    `${baseUrl}/v1/knowledge/spaces/${__ENV.S11_PERF_SPACE_ID}/search`,
+    `${baseUrl}/v1/knowledge/search/hybrid`,
     JSON.stringify({
+      knowledgeSpaceId: __ENV.S11_PERF_SPACE_ID,
       query: 'S11 performance search fixture',
       searchMode: 'hybrid',
       tokenBudget: 5000,
@@ -32,6 +33,7 @@ export default function () {
       headers: {
         Authorization: `Bearer ${__ENV.S11_PERF_API_KEY}`,
         'X-Workspace-Id': __ENV.S11_PERF_WORKSPACE_ID,
+        'Idempotency-Key': `s11-search-${__VU}-${__ITER}`,
         'Content-Type': 'application/json',
       },
       tags: { scenario: 'search' },
