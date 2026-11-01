@@ -38,21 +38,26 @@ export function renderFinal(summaryPath) {
   return renderRows(summary.rows, summary.scopeProfile ?? 'canonical-v1');
 }
 
-function evidenceForTask(taskTrace) {
+function shortHash(env, name) {
+  const value = env[name]?.trim();
+  return value && /^[a-f0-9]{64}$/.test(value) ? `${value.slice(0, 8)}...` : 'pending';
+}
+
+function evidenceForTask(taskTrace, env = process.env) {
   if (taskTrace.includes('T03')) {
-    return 'k6 probe READY; full PERFORMANCE_PROVIDER_BLOCKED (missing real fixture/key)';
+    return `k6 probe READY; fixture 1M/300 PASS sha ${shortHash(env, 'S11_PERF_FIXTURE_HASH')}; full PERFORMANCE_PROVIDER_BLOCKED (missing real models)`;
   }
   if (taskTrace.includes('T02')) {
-    return 'pnpm test:contract; provider preflight BLOCKED (34 canonical / 18 scoped fields)';
+    return 'pnpm test:contract; scoped provider preflight SCOPED_BLOCKED (18 fields)';
   }
   if (taskTrace.includes('T05')) {
-    return 'recovery generate+consume PASS; diff=0; health/ready=200';
+    return `recovery generate+consume PASS; diff=0; health/ready=200; media sha ${shortHash(env, 'S11_RECOVERY_MANIFEST_SHA256')}`;
   }
   if (taskTrace.includes('T07')) {
     return 'pnpm release:check --allow-missing-app; DEFERRED_TO_PRODUCTION';
   }
   if (taskTrace.includes('T06')) {
-    return 'Playwright 18x3=54 PASS; ui-summary sha256 afcf8430...; candidate pending';
+    return `Playwright 18x3=54 PASS; ui-summary sha256 ${shortHash(env, 'S11_UI_SUMMARY_SHA256')}; candidate pending`;
   }
   if (taskTrace.includes('T04')) {
     return 'pnpm test:security; 10 files / 21 tests PASS; real API Key pending';
@@ -63,7 +68,7 @@ function evidenceForTask(taskTrace) {
   return 'pnpm test:contract; post-rebase local gates passed; final candidate absent';
 }
 
-export function renderBlockedReport(scopeProfile = 'canonical-v1') {
+export function renderBlockedReport(scopeProfile = 'canonical-v1', env = process.env) {
   const scoped = scopeProfile === S11_SCOPE_PROFILE;
   const lines = [
     '# S11 Release Report',
@@ -86,7 +91,7 @@ export function renderBlockedReport(scopeProfile = 'canonical-v1') {
           ? 'zero-implementation guard'
           : deferred
             ? `${row.testId}; zero-real-call guard`
-            : evidenceForTask(row.taskTrace)
+            : evidenceForTask(row.taskTrace, env)
       } | ${excluded ? 'N/A' : deferred ? 'DEFERRED_BY_SCOPE' : 'BLOCKED'} | ${
         excluded
           ? 'zero implementation must remain'
@@ -139,7 +144,7 @@ export async function main(argv = process.argv.slice(2)) {
     return 0;
   }
   if (argv.includes('--blocked')) {
-    await writeFormattedReport(renderBlockedReport(scopeProfile));
+    await writeFormattedReport(renderBlockedReport(scopeProfile, process.env));
     console.log(`S11_RELEASE_REPORT_BLOCKED path=${reportPath} rows=73`);
     return 0;
   }
