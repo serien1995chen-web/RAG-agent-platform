@@ -10,8 +10,8 @@
 - S10 ancestor check: exit `0`.
 - Candidate SHA: not frozen.
 - Evidence commit SHA: not created.
-- Worktree: `/home/serien/RAG-agent-platform-s11`. HEAD is a hardening
-  checkpoint; it is not a frozen candidate or evidence worktree.
+- Worktree: `/home/serien/RAG-agent-platform-s11`. Implementation checkpoint:
+  `90dd4f5`; it is not a frozen candidate or evidence worktree.
 
 This report records a blocked phase1/post-rebase checkpoint. It is not a
 whole-stage PASS and does not close W4.
@@ -49,10 +49,10 @@ real API-key evidence and are not closed by this blocked report. W3 remains
 | --------- | ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
 | `S11-T01` | BLOCKED for real chain                     | deterministic fixtures, full-chain stack/API-key harness and runbook                                             | fixture manifest stable; phase1 harness tests pass                                                      |
 | `S11-T02` | `SCOPED_BLOCKED`                           | AIProxy/OCR/Feishu HTTP adapters, mode-aware connector factory, scoped deferred guards and real-provider harness | 14 provider contract tests; 4 provider fault tests; 2 quota inheritance tests; 18 missing scoped fields |
-| `S11-T03` | `SCOPED_BLOCKED`                           | k6 probe/full runner, three scenarios, canonical PDF upload fixture, 1M Segment seeder and strict validation     | k6 v2.3.0 probe READY; 1M seed and 300 upload IDs absent                                                |
+| `S11-T03` | fixture PASS; full runner `SCOPED_BLOCKED` | k6 probe/full runner, three scenarios, canonical PDF upload fixture, 1M Segment seeder and strict validation     | k6 v2.3.0 probe READY; 1,000,000 actual Segments; 300 unique uploads; real models missing               |
 | `S11-T04` | local PASS; external key scope blocked     | SSRF, archive, MIME, Range, XSS, tenant and secret tests                                                         | 10 files / 21 tests                                                                                     |
 | `S11-T05` | generate + consume real drill PASS         | container recovery executor, media generator/consumer, isolated restore, counts/hash and health guards           | differences 0; health/ready 200; 2 files / 9 tests                                                      |
-| `S11-T06` | local matrix PASS; final candidate blocked | real Playwright 18-page matrix, axe, overflow, keyboard, network and external evidence                           | 18 x 3 = 54 screenshots; 1 test passed                                                                  |
+| `S11-T06` | local matrix PASS; final candidate blocked | real Playwright 18-page matrix, axe, overflow, keyboard, network and external evidence                           | 18 x 3 = 54 screenshots; UI summary `4686ca2b...`                                                       |
 | `S11-T07` | static PASS; production deferred           | approved obligations, generated NOTICE/SBOM, five third-party digests and release semantics                      | release check `DEFERRED_TO_PRODUCTION`; app digest pending                                              |
 | `S11-T08` | blocked template/report                    | 73-row generator, collector, validator and Scoped matrix logic                                                   | 73 unique rows; no candidate-bound PASS                                                                 |
 
@@ -83,7 +83,8 @@ real API-key evidence and are not closed by this blocked report. W3 remains
 | Playwright S11 matrix                    |    0 | 18 pages x 3 viewports; 54 screenshots                           |
 | `pnpm test:provider:real`                |    2 | `SCOPED_BLOCKED` by 18 missing input names                       |
 | `pnpm test:performance` probe            |    0 | `PERFORMANCE_READY`                                              |
-| performance full fixture guard           |    5 | 1M seed, verified seed and upload IDs missing                    |
+| performance full fixture                 |    0 | 1M actual Segments; 300 unique uploads; `s11-perf-v1`            |
+| performance full runner                  |    4 | `PERFORMANCE_PROVIDER_BLOCKED`; real model inputs missing        |
 | `pnpm test:recovery -- --check`          |    0 | `RECOVERY_CHECK_READY`                                           |
 | recovery local tests                     |    0 | 2 files / 9 tests                                                |
 | `pnpm release:check --allow-missing-app` |    0 | `DEFERRED_TO_PRODUCTION`; no release PASS                        |
@@ -106,15 +107,21 @@ No mock transport is represented as a real Provider success.
 ## Performance, Recovery And UI
 
 - k6 v2.3.0 is available and the local app `/readyz` returned `200`.
-- Full performance remains blocked: `segmentCountActual=0`,
-  `seedVerified=false`, `uploadIdCount=0`.
+- Full performance fixture is complete: `segmentCountActual=1000000`,
+  `seedVerified=true`, `uploadIdCount=300`, fixture hash
+  `82b20e68f2eb52d5f0dc2c3b604be348adf1f3cff448fec281a9bb4e9f971cee`.
+  The k6 full runner remains blocked on missing real AIProxy models.
 - All required recovery tools exist inside the Mongo, pgvector, MinIO and Redis
   images. A real generate and consume drill completed against isolated
-  Mongo/PostgreSQL/Redis/MinIO targets with zero count differences and
-  health/ready 200.
+  Mongo/PostgreSQL/Redis/MinIO targets with zero count differences,
+  health/ready 200, 23 Mongo collections, 4 vector profiles, 18/18 Redis keys,
+  3/3 MinIO objects and no duplicate events. Generate summary
+  `cca7560c25f61feef91c4c64ac7bc89bd7f5b3066107040e85568a233315bdc6`;
+  consume summary
+  `87c5bad91ac57ebdbba4e1e2882cc610e64bfec645ddbc0ccecdc90c43d89b28`.
 - The real browser matrix produced 54 PNG files, 54 SHA-256 sidecars and
   `ui-summary.json` SHA-256
-  `afcf8430f9ede9206fc3ab65895bcba41b176dafe65b26f4e27c71c914a7790d`.
+  `4686ca2bc645b609a66e1a03e55e5d1c443c5e0878f82f1370838005360ad31d`.
 - UI evidence is outside the worktree. The matrix found 0 serious/critical axe
   issues, 0 overflow and 0 runtime request failures.
 
@@ -129,7 +136,7 @@ signature or approver identity is fabricated.
 | Artifact                                  | SHA-256                                                            |
 | ----------------------------------------- | ------------------------------------------------------------------ |
 | `NOTICE`                                  | `b5a4dbcf5b25377d5467eef3189e8b59c784d142ed89b92c4614ecc03ebc551e` |
-| `artifacts/sbom.json`                     | `840c5cda2baee8cac5cd05249d76eb2906daa7031dd3b598548f872a985ee80f` |
+| `artifacts/sbom.json`                     | `88ed3b23a416e7295c8a76ec0abe280b2de5a015fad200c35e70cae4e92a5c89` |
 | `deploy/release-images.data.json`         | `aa77525cdcc985cf6e9ab9ab6140b38c9bb65f720f065f2bbe21a31fd6f3c0aa` |
 | `scripts/license-obligations.data.json`   | `09ff0d671766a7bc65fff30bc673934fd7533535b53409bc4cc8aeb2f785dd75` |
 | `test/fixtures/s11/fixture-manifest.json` | `44998778494b8abdd3da9eb93e86c36b143e209d8b82224f60643c573435ec51` |
@@ -151,18 +158,18 @@ Five third-party runtime images retain tag plus digest. The application image is
 
 `docs/acceptance/s11-release-report.md` contains 73 unique capability/test
 rows. No row is promoted to PASS from this blocked stage report. The report is
-regenerated from the scoped template with explicit public-provider,
-performance, recovery and candidate blockers.
+regenerated from the scoped template with explicit real-provider,
+full-performance, release and candidate blockers.
 
 ## Remaining Actions
 
 1. Inject scoped Provider values outside the repository and approve the five
    catalog model mappings.
 2. Provide a real Drive folder token containing two readable docx files.
-3. Create the isolated performance workspace/API key, upload 300 PDFs and
-   verify the 1,000,000 Segment seed.
-4. Re-run all local, Provider, performance, UI and release gates after the
-   Provider and performance inputs are complete.
+3. Inject real AIProxy models, restart in real mode and run the three k6
+   scenarios against the verified fixture.
+4. Re-run Provider, performance, UI, recovery and release gates after all
+   external inputs are complete.
 5. Only after all scoped gates pass, freeze `candidateSha`, write
    `s11-personA-gate.md`, and request independent personB evidence.
 

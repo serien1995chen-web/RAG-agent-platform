@@ -21,9 +21,10 @@ pnpm exec playwright test --config test/e2e/playwright.s11.config.ts
 | serious/critical axe findings    | 0                                                                  |
 | overflow findings                | 0                                                                  |
 | browser/runtime request failures | 0                                                                  |
-| `ui-summary.json` SHA-256        | `afcf8430f9ede9206fc3ab65895bcba41b176dafe65b26f4e27c71c914a7790d` |
+| `ui-summary.json` SHA-256        | `4686ca2bc645b609a66e1a03e55e5d1c443c5e0878f82f1370838005360ad31d` |
 
 Evidence is stored outside the worktree under `S11_UI_EVIDENCE_DIR`.
 
-The overall S11 result remains blocked because real Provider, performance,
-recovery and production image evidence are incomplete.
+The overall S11 result remains blocked because real Provider, full k6
+performance and production image evidence are incomplete. Recovery has a
+separate real generate/consume PASS.

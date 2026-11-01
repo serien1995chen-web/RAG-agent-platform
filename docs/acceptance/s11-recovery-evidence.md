@@ -4,6 +4,9 @@ Result: real isolated drill `PASS`; overall S11 remains `SCOPED_BLOCKED`.
 
 Candidate: not frozen.
 
+The repeatable drill was rerun from implementation checkpoint `e68b00a`; it is
+not a frozen candidate gate.
+
 ## Container Tool Probe
 
 `pnpm test:recovery -- --check --source-prefix kb_s11_source` exited `0` and
@@ -33,21 +36,23 @@ generate: PASS; differences=0; healthz=200; readyz=200
 consume:  PASS; differences=0; healthz=200; readyz=200
 Mongo collections: 23 before / 23 after
 PostgreSQL profiles: 4
-Redis keys: 19 / 19
+Redis keys: 18 / 18
 MinIO objects: 3 / 3
 Outbox + Usage event IDs: 3 unique, 0 duplicate
+Vector profiles: 4 unique, 0 duplicate
 ```
 
 Evidence:
 
 | Artifact         | SHA-256                                                            |
 | ---------------- | ------------------------------------------------------------------ |
-| generate summary | `374a73d084fba196534ebf960434b7e8c6ca1289a1895539c245b4a158a9e663` |
-| consume summary  | `e97fe6b348f9694f8085ebb368ee2adf25f42dfb42b512bd099de903176aac7f` |
-| input manifest   | `7feadc09a9fddf869d63840da33fb02cad9d494f4c398184a2ef7dfe0dd13844` |
-| Mongo archive    | `bf20ac5b7192eab1650672dc6087819daba08dfc6ddb7bed89f34742138f9a7e` |
-| PostgreSQL dump  | `039aa140638382b389ec0db6d7811ae2cb180b03519e4624143000716330004d` |
-| Redis RDB        | `c6826975b51026dd8a0e855389abf76375b533f868647b8af68818cdb63f3905` |
+| generate summary | `cca7560c25f61feef91c4c64ac7bc89bd7f5b3066107040e85568a233315bdc6` |
+| consume summary  | `87c5bad91ac57ebdbba4e1e2882cc610e64bfec645ddbc0ccecdc90c43d89b28` |
+| input manifest   | `836cf524a95dc637d4a6da6341a051734d49a7bacbebd134bf3c92db88915ff4` |
+| Mongo archive    | `23d025d049c5330ddfb15df97e91069782f14493d9c3eeb7a0c59a5fe87fe386` |
+| PostgreSQL dump  | `c71dea5f65c42eb50f83941ea4f9bc02b7a8b2219a07813b400ea34e012e7c0d` |
+| Redis RDB        | `e92dd6633c19352f733de669e6d0dab9847a801beb159310b03f6fe1986a0664` |
+| MinIO directory  | `5e648687a671fbf0dcfbed8f9957d3305f08dec439d57fb3696d8422fe1bfd94` |
 
 The drill ran with `candidateSha=UNFROZEN`; it does not by itself authorize
 candidate freeze or W4 completion.

@@ -14,7 +14,8 @@ close W4.
 | Recovery tool probe | READY                  | all four service images contain required tools         |
 | Real recovery       | PASS                   | generate+consume; 0 diff; health/ready 200             |
 | Performance probe   | READY                  | k6 v2.3.0; local `/readyz` 200                         |
-| Full performance    | SCOPED_BLOCKED         | 1,000,000 seed and 300 upload IDs absent               |
+| Performance fixture | PASS                   | 1,000,000 actual Segments; 300 unique uploads          |
+| Full performance    | SCOPED_BLOCKED         | k6 missing real AIProxy model configuration            |
 | Provider real tests | SCOPED_BLOCKED         | 18 scoped inputs absent; harness present               |
 | Deferred providers  | DEFERRED_BY_SCOPE      | Sangfor, Yuque, DingTalk                               |
 | License/SBOM/NOTICE | PASS                   | approved five exceptions and full obligations          |

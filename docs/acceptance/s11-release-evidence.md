@@ -23,7 +23,7 @@
 | approved exceptions   | `argparse`, `caniuse-lite`, `jschardet`, `pako`, `sax`                                        |
 | obligations           | full text, notice, attribution, source/relink and distribution obligations recorded per entry |
 | NOTICE SHA-256        | `b5a4dbcf5b25377d5467eef3189e8b59c784d142ed89b92c4614ecc03ebc551e`                            |
-| SBOM SHA-256          | `840c5cda2baee8cac5cd05249d76eb2906daa7031dd3b598548f872a985ee80f`                            |
+| SBOM SHA-256          | `88ed3b23a416e7295c8a76ec0abe280b2de5a015fad200c35e70cae4e92a5c89`                            |
 | SBOM image components | 6 classes; app/worker shared reference is pending                                             |
 | app/worker digest     | `PENDING_RELEASE_EVIDENCE` (`DEFERRED_TO_PRODUCTION`)                                         |
 | SaaS staging          | `DEFERRED_BY_SCOPE`; URL/token not provided                                                   |
