@@ -8,7 +8,8 @@
 - Branch: `feat/kb-s11-release-hardening`.
 - W4 base: `14a3b9e96fcab7b6a1f1e92ccdf4dc775719ee7d`.
 - Opening HEAD / status: exact base / empty porcelain.
-- Post-rebase HEAD: `4c2a59b2bbab149bcab535a383b0e8dd67e44945`.
+- Post-rebase state: S11 branch rebased onto `d7e38c7...`; current HEAD is
+  recorded in the handoff, not self-referenced here.
 - S10 merge SHA: `d7e38c71293a283cd6268605b5036e8ee5763c9a`; ancestor check
   passed.
 - Post-rebase runtime / deferred: `120 / 0`; contract remains `92/120/139/8`.
