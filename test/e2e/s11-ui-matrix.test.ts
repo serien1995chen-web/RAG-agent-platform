@@ -9,32 +9,27 @@ import {
 } from './s11-ui-matrix.fixture';
 
 describe('TEST-X-S11-UI-MATRIX', () => {
-  it('lists 18 canonical pages and exactly 15 existing phase1 pages', () => {
+  it('lists all 18 canonical pages after the S10 merge', () => {
     expect(S11_CANONICAL_PAGES).toHaveLength(18);
-    expect(existingPageMatrix()).toHaveLength(15);
-    expect(missingPageMatrix().map((page) => page.id)).toEqual([
-      'PAGE-USAGE',
-      'PAGE-AUDIT',
-      'PAGE-API-KEYS',
-    ]);
+    expect(existingPageMatrix()).toHaveLength(18);
+    expect(missingPageMatrix()).toEqual([]);
     for (const page of existingPageMatrix()) expect(pageSourceExists(page), page.id).toBe(true);
   });
 
-  it('uses three fixed viewports and reports S10 pages as BLOCKED, not mocked', () => {
+  it('uses three fixed viewports and exposes all pages after S10', () => {
     expect(S11_VIEWPORTS.map((viewport) => viewport.width)).toEqual([360, 768, 1200]);
     expect(phase1UiStatus()).toMatchObject({
-      status: 'BLOCKED',
-      existingCount: 15,
+      status: 'READY',
+      existingCount: 18,
       expectedPhase1Count: 15,
       finalExpectedCount: 18,
     });
-    expect(phase1UiStatus().blockers).toHaveLength(3);
+    expect(phase1UiStatus().blockers).toHaveLength(0);
   });
 
-  it('does not expose Deferred routes in the phase1 matrix', () => {
+  it('has a unique canonical route for every page', () => {
     const routes = existingPageMatrix().map((page) => page.route);
-    expect(routes).not.toContain('/usage');
-    expect(routes).not.toContain('/audit');
-    expect(routes).not.toContain('/settings/api-keys');
+    expect(new Set(routes).size).toBe(routes.length);
+    expect(routes).toEqual(expect.arrayContaining(['/usage', '/audit', '/settings/api-keys']));
   });
 });

@@ -85,8 +85,8 @@ export const S11_CANONICAL_PAGES = [
     source: 'settings/connectors.tsx',
     phase: 'existing',
   },
-  { id: 'PAGE-USAGE', route: '/usage', source: 'usage/index.tsx', phase: 's10' },
-  { id: 'PAGE-AUDIT', route: '/audit', source: 'audit/index.tsx', phase: 's10' },
+  { id: 'PAGE-USAGE', route: '/usage', source: 'usage.tsx', phase: 's10' },
+  { id: 'PAGE-AUDIT', route: '/audit', source: 'audit.tsx', phase: 's10' },
   {
     id: 'PAGE-API-KEYS',
     route: '/settings/api-keys',

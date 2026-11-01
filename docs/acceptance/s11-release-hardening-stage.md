@@ -44,16 +44,16 @@ remain unchanged. W3 evidence remains `53 implemented / 49 closed`.
 
 ## Task Coverage
 
-| Task      | Phase1 result                        | Implemented surface                                                               | Evidence                                                                                        |
-| --------- | ------------------------------------ | --------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
-| `S11-T01` | BLOCKED, setup PASS                  | deterministic fixture generator, full-chain fixture/harness and runbook           | fixtureHash `eb11355abb5af04128bb365de37494898aec250ef0d48d2bc9f5467768101856`; 3 harness tests |
-| `S11-T02` | BLOCKED, contract PASS               | Feishu/Yuque/DingTalk HTTP delegates, shared transport, provider input preflight  | 11 provider contract tests                                                                      |
-| `S11-T03` | BLOCKED                              | k6 search/deep/import scripts, runner and fixture preparer                        | `PERFORMANCE_K6_UNAVAILABLE`, exit code 127                                                     |
-| `S11-T04` | local PASS; S10 key items BLOCKED    | SSRF, archive, range/XSS, tenant and secret tests                                 | 12 security tests                                                                               |
-| `S11-T05` | local PASS; real recovery BLOCKED    | prefix-safe recovery commands, fault matrix and invariants                        | 7 recovery tests; `RECOVERY_TOOL_UNAVAILABLE`                                                   |
-| `S11-T06` | phase1 matrix PASS; final UI BLOCKED | 18-page registry, 3 viewports, a11y helpers and external screenshot switch        | 15 existing pages; 3 S10 pages blocked                                                          |
-| `S11-T07` | static PASS; release BLOCKED         | approved obligations, generated NOTICE/SBOM, release manifest and Compose overlay | `RELEASE_BLOCKED_APP_IMAGE`; app digest/SaaS unavailable                                        |
-| `S11-T08` | template PASS; final report BLOCKED  | 73-row generator, collector and validator                                         | 73 rows / 69 NOT_RUN / 4 EXCLUDED                                                               |
+| Task      | Phase1 result                       | Implemented surface                                                               | Evidence                                                                                        |
+| --------- | ----------------------------------- | --------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| `S11-T01` | BLOCKED, setup PASS                 | deterministic fixture generator, full-chain fixture/harness and runbook           | fixtureHash `eb11355abb5af04128bb365de37494898aec250ef0d48d2bc9f5467768101856`; 3 harness tests |
+| `S11-T02` | BLOCKED, contract PASS              | Feishu/Yuque/DingTalk HTTP delegates, shared transport, provider input preflight  | 11 provider contract tests                                                                      |
+| `S11-T03` | BLOCKED                             | k6 search/deep/import scripts, runner and fixture preparer                        | `PERFORMANCE_K6_UNAVAILABLE`, exit code 127                                                     |
+| `S11-T04` | local PASS; S10 key items BLOCKED   | SSRF, archive, range/XSS, tenant and secret tests                                 | 12 security tests                                                                               |
+| `S11-T05` | local PASS; real recovery BLOCKED   | prefix-safe recovery commands, fault matrix and invariants                        | 7 recovery tests; `RECOVERY_TOOL_UNAVAILABLE`                                                   |
+| `S11-T06` | registry PASS; final UI BLOCKED     | 18-page registry, 3 viewports, a11y helpers and external screenshot switch        | all 18 pages enumerated; 54 screenshots not run because app build is blocked                    |
+| `S11-T07` | static PASS; release BLOCKED        | approved obligations, generated NOTICE/SBOM, release manifest and Compose overlay | `RELEASE_BLOCKED_APP_IMAGE`; app digest/SaaS unavailable                                        |
+| `S11-T08` | template PASS; final report BLOCKED | 73-row generator, collector and validator                                         | 73 rows / 69 NOT_RUN / 4 EXCLUDED                                                               |
 
 ## Gate Evidence
 
@@ -146,9 +146,9 @@ is `BLOCKED`, not PASS.
   hash or hardware acceptance is claimed.
 - Recovery: Mongo/Redis/PostgreSQL/MinIO tools and real media are unavailable;
   empty-prefix and invariant tests are local only.
-- UI: existing 15 canonical pages are enumerated; Usage, Audit and API Keys
-  are `BLOCKED` until S10 merge. Final 18×3=54 viewport evidence is not
-  generated.
+- UI: all 18 canonical pages are now present after S10; raw page registry tests
+  pass. Final 18×3=54 viewport evidence is not generated because the app build
+  is blocked by the current Turbopack dependency layout.
 
 ## C7, Pricing And Quota
 
