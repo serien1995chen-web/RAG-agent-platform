@@ -12,6 +12,7 @@ MIME/archive/zip-bomb/zip-slip checks: PASS
 Range/XSS checks: PASS
 secret redaction checks: PASS
 cross-tenant API-key checks: PASS
+connector dynamic path segments normalized to ID placeholders: PASS
 high/serious/critical local hits: 0
 ```
 

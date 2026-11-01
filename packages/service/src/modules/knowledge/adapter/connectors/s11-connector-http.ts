@@ -64,7 +64,18 @@ export function safeEndpointHost(endpoint: string): string {
 
 export function safeEndpointPath(endpoint: string): string {
   try {
-    return new URL(endpoint).pathname;
+    const pathname = new URL(endpoint).pathname;
+    const apiStart = pathname.indexOf('/api/v2');
+    const providerPath = apiStart >= 0 ? pathname.slice(apiStart) : pathname;
+    return providerPath
+      .replace(
+        /^\/open-apis\/docx\/v1\/documents\/[^/]+/,
+        '/open-apis/docx/v1/documents/:documentId',
+      )
+      .replace(/^\/api\/v2\/groups\/[^/]+/, '/api/v2/groups/:groupId')
+      .replace(/^\/api\/v2\/repos\/[^/]+/, '/api/v2/repos/:repoId')
+      .replace(/(\/api\/v2\/repos\/:repoId\/docs)\/[^/]+/, '$1/:docSlug')
+      .replace(/^\/v2\.0\/wiki\/nodes\/[^/]+/, '/v2.0/wiki/nodes/:nodeId');
   } catch {
     return '[invalid-path]';
   }

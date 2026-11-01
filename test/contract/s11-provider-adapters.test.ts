@@ -29,6 +29,7 @@ import type {
   S11ConnectorHttpResponse,
   S11ConnectorHttpTransport,
 } from '../../packages/service/src/modules/knowledge/adapter/connectors/s11-connector-http';
+import { safeEndpointPath } from '../../packages/service/src/modules/knowledge/adapter/connectors/s11-connector-http';
 import type { TenantContext } from '../../packages/service/src/shared/persistence/knowledge/tenant';
 
 const root = resolve(import.meta.dirname, '../..');
@@ -368,8 +369,11 @@ describe('TEST-X-S11-PROVIDER-REAL contract adapters', () => {
     expect(transport.requests[2]?.headers.authorization).toBe('Bearer tenant-one');
     expect(transport.requests[4]?.headers.authorization).toBe('Bearer tenant-two');
     expect(JSON.stringify(delegate.evidence)).not.toMatch(
-      /app-secret-value|tenant-one|tenant-two|folder\+value/,
+      /app-secret-value|tenant-one|tenant-two|folder\+value|doc-token/,
     );
+    expect(
+      safeEndpointPath('https://open.feishu.cn/open-apis/docx/v1/documents/doc-token/raw_content'),
+    ).toBe('/open-apis/docx/v1/documents/:documentId/raw_content');
   });
 
   it('Feishu and Yuque use the fixed 5/10/20/40 second retry policy', async () => {
@@ -534,6 +538,14 @@ describe('TEST-X-S11-PROVIDER-REAL contract adapters', () => {
     expect(
       transport.requests.filter((request) => request.url.endsWith('/accessToken')),
     ).toHaveLength(1);
+    expect(JSON.stringify(delegate.evidence)).not.toContain('doc-node');
+    expect(delegate.evidence).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          endpointPath: '/v2.0/wiki/nodes/:nodeId/blocks',
+        }),
+      ]),
+    );
   });
 
   it('provider input preflight emits safe field names only and returns BLOCKED for gaps', () => {
