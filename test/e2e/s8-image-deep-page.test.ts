@@ -33,7 +33,9 @@ import {
 } from './s4-app-harness';
 
 const root = resolve(import.meta.dirname, '../..');
-const screenshotDir = join(root, 'docs/acceptance/s8-ui');
+const screenshotDir = process.env.S11_UI_EVIDENCE_DIR
+  ? join(process.env.S11_UI_EVIDENCE_DIR, 's8-ui')
+  : join(root, 'docs/acceptance/s8-ui');
 
 const suffix = randomUUID().replaceAll('-', '').slice(0, 12);
 const workspaceId = `ws_s8_e2e_${suffix}`;

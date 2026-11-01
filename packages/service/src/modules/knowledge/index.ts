@@ -118,6 +118,9 @@ export { CustomApiLibraryClient } from './adapter/api-library';
 export { FeishuConnectorClient } from './adapter/connectors/feishu';
 export { YuqueConnectorClient } from './adapter/connectors/yuque';
 export { DingtalkConnectorClient } from './adapter/connectors/dingtalk';
+export { FeishuHttpDelegate } from './adapter/connectors/feishu-http.delegate';
+export { YuqueHttpDelegate } from './adapter/connectors/yuque-http.delegate';
+export { DingtalkHttpDelegate } from './adapter/connectors/dingtalk-http.delegate';
 export {
   AiproxyMockAdapter,
   ConnectorMockAdapter,

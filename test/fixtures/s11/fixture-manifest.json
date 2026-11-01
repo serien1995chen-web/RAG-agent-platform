@@ -1,0 +1,73 @@
+{
+  "schemaVersion": 1,
+  "seed": "s11-release-hardening-v1",
+  "fixtureRoot": "test/fixtures/s11/generated",
+  "fixtureHash": "eb11355abb5af04128bb365de37494898aec250ef0d48d2bc9f5467768101856",
+  "entries": [
+    {
+      "name": "s11-two-page.pdf",
+      "sha256": "5aada2540ac65a8007c1ffc6ba0d279f293a43b9acaa978ef3d500bba18e35f8",
+      "bytes": 890,
+      "pageCount": 2,
+      "mimeType": "application/pdf",
+      "purpose": [
+        "ocr:sangfor",
+        "ocr:somark",
+        "ocr:textin",
+        "ocr:doc2x"
+      ]
+    },
+    {
+      "name": "s11-malformed.pdf",
+      "sha256": "1f0e4a94f702d6682e4ee7752bcdc6ef0a6497a568a893113eb3ee40e7a8b7e9",
+      "bytes": 35,
+      "pageCount": null,
+      "mimeType": "application/pdf",
+      "purpose": [
+        "fault:invalid-output"
+      ]
+    },
+    {
+      "name": "s11-import-20-pages.pdf",
+      "sha256": "ef6be678bb27fa1604322e47496d54ba820dc62f04613c2922952d4bc0154db2",
+      "bytes": 6205,
+      "pageCount": 20,
+      "mimeType": "application/pdf",
+      "purpose": [
+        "performance:import",
+        "import:file"
+      ]
+    },
+    {
+      "name": "s11-zip-bomb.zip",
+      "sha256": "6364bf083cfadca7752805c462a5fe7f3121d67e8f9dfc5914d6df973dfd875b",
+      "bytes": 134,
+      "pageCount": null,
+      "mimeType": "application/zip",
+      "purpose": [
+        "security:zip-bomb"
+      ]
+    },
+    {
+      "name": "s11-zip-slip.zip",
+      "sha256": "0d38694d4ff3bf11ded9d9cfc3c7bf68424d1ddfd91a35ab518fef92c2b9e7be",
+      "bytes": 133,
+      "pageCount": null,
+      "mimeType": "application/zip",
+      "purpose": [
+        "security:zip-slip"
+      ]
+    },
+    {
+      "name": "s11-image-1x1.png",
+      "sha256": "98884e721ec2f605f3788f2bc39a61de305ff4f4fcaf26b6f4eabeebcd6c0fb4",
+      "bytes": 68,
+      "pageCount": null,
+      "mimeType": "image/png",
+      "purpose": [
+        "aiproxy:vlm",
+        "aiproxy:vision-embedding"
+      ]
+    }
+  ]
+}

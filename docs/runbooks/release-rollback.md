@@ -49,3 +49,11 @@
 | incidentNotes        |       |
 
 Failed rollback keeps the environment isolated for manual handling. The backup is not deleted before verification completes.
+
+## S11 Recovery Binding
+
+For W4 release evidence, `rollbackInfo` must include the S11 changeId,
+isolated restore prefix, manifest hash and the backup/restore command exit
+code. A rollback rehearsal is invalid if the source or restore target does not
+start with the required `kb_s11_` prefix, or if a Mongo, PostgreSQL, MinIO,
+Redis, eventId, vectorId or object reference comparison is non-zero.

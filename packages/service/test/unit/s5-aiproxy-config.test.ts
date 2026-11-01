@@ -6,7 +6,7 @@ import {
 } from '../../src/shared/config/s5-aiproxy-config';
 
 describe('S5-CFG-01 AIProxy configuration', () => {
-  it('accepts compose mock and real combinations without resolving secrets', () => {
+  it('accepts compose, external and openai combinations without resolving secrets', () => {
     const mock = loadS5AiproxyConfig({
       AIPROXY_MODE: 'compose',
       AIPROXY_BASE_URL: 'http://aiproxy:3000',
@@ -31,6 +31,20 @@ describe('S5-CFG-01 AIProxy configuration', () => {
     });
     expect(real.postgresUriRef).toBeNull();
     expect(real.modelMode).toBe('real');
+
+    const openai = loadS5AiproxyConfig({
+      AIPROXY_MODE: 'openai',
+      AIPROXY_BASE_URL: 'https://tokendance.space/gateway/v1',
+      AIPROXY_API_TOKEN_REF: 'env:TOKENDANCE_API_TOKEN',
+      KB_EXTERNAL_MODEL_MODE: 'real',
+      AIPROXY_API_TOKEN: 'fake-local-token',
+    });
+    expect(openai).toMatchObject({
+      mode: 'openai',
+      baseUrl: 'https://tokendance.space/gateway/v1',
+      postgresUriRef: null,
+      modelMode: 'real',
+    });
   });
 
   it('requires explicit external URL and a compose PostgreSQL reference', () => {
@@ -38,6 +52,13 @@ describe('S5-CFG-01 AIProxy configuration', () => {
       loadS5AiproxyConfig({
         AIPROXY_MODE: 'external',
         AIPROXY_API_TOKEN_REF: 'env:EXTERNAL_PROXY_TOKEN',
+        KB_EXTERNAL_MODEL_MODE: 'mock',
+      }),
+    ).toThrow(ConfigValidationException);
+    expect(() =>
+      loadS5AiproxyConfig({
+        AIPROXY_MODE: 'openai',
+        AIPROXY_API_TOKEN_REF: 'env:TOKENDANCE_API_TOKEN',
         KB_EXTERNAL_MODEL_MODE: 'mock',
       }),
     ).toThrow(ConfigValidationException);
@@ -69,5 +90,16 @@ describe('S5-CFG-01 AIProxy configuration', () => {
     });
     expect(config.mode).toBe('compose');
     expect(config.modelMode).toBe('real');
+  });
+
+  it('requires a non-empty token for openai real mode', () => {
+    expect(() =>
+      loadS5AiproxyConfig({
+        AIPROXY_MODE: 'openai',
+        AIPROXY_BASE_URL: 'https://tokendance.space/gateway/v1',
+        AIPROXY_API_TOKEN_REF: 'env:TOKENDANCE_API_TOKEN',
+        KB_EXTERNAL_MODEL_MODE: 'real',
+      }),
+    ).toThrow(ConfigValidationException);
   });
 });

@@ -9,6 +9,22 @@ const licenseModule = (await import(
   new URL('../../scripts/check-licenses.mjs', import.meta.url).href
 )) as {
   NPM_LICENSE_WHITELIST: string[];
+  LICENSE_OBLIGATION_DATA: {
+    approvalDate: string;
+    approvalSource: string;
+    status: string;
+    entries: unknown[];
+  };
+  APPROVED_LICENSE_EXCEPTIONS: Array<{
+    name: string;
+    version: string;
+    expression: string;
+    parentChain: string;
+    status: string;
+    releaseBlocking: boolean;
+    obligations: string[];
+    licenseFilePaths: string[];
+  }>;
   PENDING_LEGAL_REVIEW: Array<{
     name: string;
     version: string;
@@ -19,24 +35,31 @@ const licenseModule = (await import(
   }>;
 };
 
-describe('S4 license gate decision', () => {
-  it('keeps exactly five release-blocking legal review entries', () => {
-    expect(licenseModule.PENDING_LEGAL_REVIEW).toHaveLength(5);
-    expect(licenseModule.PENDING_LEGAL_REVIEW).toEqual(
+describe('S11 license approval gate', () => {
+  it('keeps exactly five approved-2026-10-29 exception obligations', () => {
+    expect(licenseModule.APPROVED_LICENSE_EXCEPTIONS).toHaveLength(5);
+    expect(licenseModule.LICENSE_OBLIGATION_DATA).toMatchObject({
+      approvalDate: '2026-10-29',
+      approvalSource: '用户于 2026-10-29 转述的法务批准',
+      status: 'approved-2026-10-29',
+    });
+    expect(licenseModule.APPROVED_LICENSE_EXCEPTIONS).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           name: 'argparse',
           version: '2.0.1',
           expression: 'Python-2.0',
-          status: 'pending-legal-review',
-          releaseBlocking: true,
+          status: 'approved-2026-10-29',
+          releaseBlocking: false,
+          obligations: expect.any(Array),
         }),
         expect.objectContaining({
           name: 'jschardet',
           version: '3.1.1',
           expression: 'LGPL-2.1+',
-          status: 'pending-legal-review',
-          releaseBlocking: true,
+          status: 'approved-2026-10-29',
+          releaseBlocking: false,
+          obligations: expect.any(Array),
         }),
       ]),
     );
@@ -44,7 +67,7 @@ describe('S4 license gate decision', () => {
     expect(licenseModule.NPM_LICENSE_WHITELIST).not.toContain('LGPL-2.1+');
   });
 
-  it('passes the full license gate while reporting all five blockers', () => {
+  it('passes the full license gate while reporting all five obligations', () => {
     const result = spawnSync(process.execPath, [checker], {
       cwd: repositoryRoot,
       encoding: 'utf8',
@@ -52,7 +75,7 @@ describe('S4 license gate decision', () => {
     });
 
     expect(result.status, result.stderr).toBe(0);
-    expect(result.stdout).toContain('RELEASE BLOCKER（pending-legal-review，5 条');
+    expect(result.stdout).toContain('APPROVED LICENSE EXCEPTIONS（approved-2026-10-29，5 条');
     for (const id of [
       'caniuse-lite@1.0.30001814',
       'pako@1.0.11',

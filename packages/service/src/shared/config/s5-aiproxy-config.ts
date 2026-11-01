@@ -26,7 +26,7 @@ const HttpUrlSchema = z
 
 export const S5AiproxyConfigSchema = z
   .object({
-    mode: z.enum(['compose', 'external']),
+    mode: z.enum(['compose', 'external', 'openai']),
     baseUrl: HttpUrlSchema,
     apiTokenRef: SecretRefSchema,
     postgresUriRef: SecretRefSchema.nullable(),
@@ -48,7 +48,7 @@ function issuesOf(error: z.ZodError, prefix: string): string[] {
  */
 export function loadS5AiproxyConfig(env: EnvSource = process.env): S5AiproxyConfig {
   const modeValue = read(env, 'AIPROXY_MODE') ?? 'compose';
-  const modeResult = z.enum(['compose', 'external']).safeParse(modeValue);
+  const modeResult = z.enum(['compose', 'external', 'openai']).safeParse(modeValue);
   if (!modeResult.success) {
     throw new ConfigValidationException(issuesOf(modeResult.error, 'AIPROXY_MODE'));
   }
@@ -71,13 +71,13 @@ export function loadS5AiproxyConfig(env: EnvSource = process.env): S5AiproxyConf
   if (!parsed.success) {
     throw new ConfigValidationException(issuesOf(parsed.error, 'AIPROXY'));
   }
-  if (mode === 'external' && explicitBaseUrl === undefined) {
-    throw new ConfigValidationException(['AIPROXY_BASE_URL: required in external mode']);
+  if ((mode === 'external' || mode === 'openai') && explicitBaseUrl === undefined) {
+    throw new ConfigValidationException([`AIPROXY_BASE_URL: required in ${mode} mode`]);
   }
   if (mode === 'compose' && parsed.data.postgresUriRef === null) {
     throw new ConfigValidationException(['AIPROXY_POSTGRES_URI_REF: required in compose mode']);
   }
-  if (parsed.data.modelMode === 'real' && env.AIPROXY_API_TOKEN?.trim() === '') {
+  if (parsed.data.modelMode === 'real' && !env.AIPROXY_API_TOKEN?.trim()) {
     throw new ConfigValidationException([
       'AIPROXY_API_TOKEN: must not be blank when KB_EXTERNAL_MODEL_MODE=real',
     ]);

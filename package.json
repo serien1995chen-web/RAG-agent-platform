@@ -21,6 +21,11 @@
     "test:integration": "turbo run test:integration",
     "test:contract": "vitest run --config test/contract/vitest.config.ts",
     "test:e2e": "vitest run --config test/e2e/vitest.config.ts",
+    "test:performance": "node scripts/run-performance.mjs",
+    "test:recovery": "node scripts/run-recovery-drill.mjs",
+    "test:security": "vitest run --config test/security/vitest.config.ts",
+    "test:provider:real": "node scripts/run-provider-real.mjs",
+    "probe:aiproxy:catalog": "node scripts/probe-aiproxy-catalog.mjs",
     "test:tenant": "vitest run --config test/tenant/vitest.config.ts",
     "test:concurrency": "vitest run --config test/concurrency/vitest.config.ts",
     "test:fault": "vitest run --config test/fault/vitest.config.ts",
@@ -32,7 +37,8 @@
     "architecture:check": "node scripts/check-architecture.mjs",
     "forbidden-files:check": "node scripts/check-forbidden-files.mjs",
     "sbom:generate": "node scripts/generate-sbom.mjs",
-    "license:check": "node scripts/check-licenses.mjs"
+    "license:check": "node scripts/check-licenses.mjs",
+    "release:check": "node scripts/check-release-images.mjs"
   },
   "devDependencies": {
     "@axe-core/playwright": "catalog:",

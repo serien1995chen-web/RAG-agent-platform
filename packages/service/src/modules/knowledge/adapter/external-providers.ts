@@ -62,7 +62,8 @@ export interface ConnectorMockResult {
   nextCursor: string | null;
 }
 
-const SENSITIVE_KEY = /token|secret|password|credential|authorization|api[-_]?key/i;
+const SENSITIVE_KEY =
+  /token|secret|password|credential|authorization|cookie|object[-_]?key|api[-_]?key/i;
 
 export function redactExternalValue(value: unknown, keyHint = ''): unknown {
   if (SENSITIVE_KEY.test(keyHint)) return '[REDACTED]';

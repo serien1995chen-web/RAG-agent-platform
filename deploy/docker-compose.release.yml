@@ -1,0 +1,5 @@
+services:
+  app:
+    image: ${KB_APP_IMAGE_REF:-rag-agent-platform:kb-baseline}
+  worker:
+    image: ${KB_APP_IMAGE_REF:-rag-agent-platform:kb-baseline}

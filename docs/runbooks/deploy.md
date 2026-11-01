@@ -63,6 +63,26 @@ AIProxy, OCR, Feishu, Yuque and DingTalk stay in mock mode by default and remain
 `EXTERNAL_UNVERIFIED` until real credentials, timeout/failure evidence and
 provider-specific integration tests exist.
 
+## S11 Release Hardening
+
+Build-time base image is pinned to `node:22.23.2-alpine`. The release overlay
+uses one user-supplied `KB_APP_IMAGE_REF` for both app and worker:
+
+```bash
+KB_APP_IMAGE_REF=registry.example.invalid/rag-agent-platform:2026.10.29@sha256:<64hex> \
+docker compose \
+  -f deploy/docker-compose.yml \
+  -f deploy/docker-compose.release.yml \
+  --profile aiproxy config --format json
+
+node scripts/check-release-images.mjs --allow-missing-app
+```
+
+The static check must show pinned third-party digests and no `latest`. It
+returns `RELEASE_BLOCKED_APP_IMAGE` until the user supplies the app/worker
+digest, production Registry and linux/amd64 evidence. `AIPROXY_MODE=external`
+must not start the local AIProxy profile.
+
 ## S1 Evidence
 
 - Compose services, image digests and AIProxy `UNKNOWN/BLOCKED`:

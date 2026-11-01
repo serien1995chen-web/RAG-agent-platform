@@ -57,3 +57,24 @@ the private operator; this repository does not embed destructive commands.
 | afterChecks      |       |
 | comparisonResult |       |
 | incidentNotes    |       |
+
+## S11 Isolated Recovery Drill
+
+The S11 drill only accepts `kb_s11_` source targets and
+`kb_s11_restore_` restore targets. A non-matching target fails before any
+command is run.
+
+```bash
+node scripts/run-recovery-drill.mjs --check --source-prefix kb_s11_
+S11_RECOVERY_MODE=real \
+S11_RECOVERY_SOURCE_PREFIX=kb_s11_source \
+S11_RECOVERY_RESTORE_PREFIX=kb_s11_restore_target \
+S11_RECOVERY_CHANGE_ID="$CHANGE_ID" \
+S11_EVIDENCE_DIR="$S11_EVIDENCE_DIR" \
+pnpm test:recovery
+```
+
+The phase-1 check records tool availability and redacted command templates. It
+does not create a recovery PASS. Real archives, dumps, mirrors and Redis
+snapshots must be supplied outside the worktree, and missing media remains
+`BLOCKED`.
