@@ -36,7 +36,7 @@ const EnvironmentSchema = z.object({
   API_KEY_HMAC_SECRET_FILE: z.string().trim().min(1).optional(),
   KB_USAGE_PRICING_PROFILE: z.enum(['zero-v1', 'fixture-v1']).optional(),
   KB_USAGE_PRICING_PROFILE_FILE: z.string().trim().min(1).optional(),
-  KB_QUOTA_PROFILE: z.enum(['free-v1']).optional(),
+  KB_QUOTA_PROFILE: z.enum(['free-v1', 's11-perf-v1']).optional(),
   KB_QUOTA_PROFILE_FILE: z.string().trim().min(1).optional(),
   USAGE_INGEST_URL: z.string().url().optional(),
   USAGE_SNAPSHOT_URL: z.string().url().optional(),

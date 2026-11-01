@@ -11,9 +11,11 @@ import {
 } from 'node:fs';
 import { cpus, totalmem, tmpdir } from 'node:os';
 import { isAbsolute, join, relative, resolve } from 'node:path';
+import { setTimeout as delay } from 'node:timers/promises';
 import { pathToFileURL } from 'node:url';
 
 const repositoryRoot = resolve(import.meta.dirname, '../..');
+const UPLOAD_INIT_INTERVAL_MS = 250;
 
 function hash(value) {
   return createHash('sha256').update(value).digest('hex');
@@ -55,8 +57,15 @@ async function apiJson(response, operation) {
     throw new Error(`${operation} returned invalid JSON`);
   }
   if (!response.ok || payload?.success !== true || payload.data === undefined) {
+    const rate = [
+      response.headers.get('ratelimit-limit'),
+      response.headers.get('ratelimit-remaining'),
+      response.headers.get('retry-after'),
+    ]
+      .map((value) => value ?? 'none')
+      .join('/');
     throw new Error(
-      `${operation} failed status=${response.status} code=${payload?.error?.code ?? 'UNKNOWN'}`,
+      `${operation} failed status=${response.status} code=${payload?.error?.code ?? 'UNKNOWN'} rate=${rate}`,
     );
   }
   return payload.data;
@@ -120,6 +129,17 @@ function writeRuntimeEnvironment(path, values) {
   return target;
 }
 
+function createUploadInitPacer(intervalMs = UPLOAD_INIT_INTERVAL_MS) {
+  let nextRequestAt = 0;
+  return async () => {
+    const now = Date.now();
+    const scheduledAt = Math.max(now, nextRequestAt);
+    nextRequestAt = scheduledAt + intervalMs;
+    if (scheduledAt <= now) return;
+    await delay(scheduledAt - now);
+  };
+}
+
 async function uploadPdf(input) {
   const bytes = readFileSync(input.path);
   const headers = {
@@ -128,6 +148,7 @@ async function uploadPdf(input) {
     'content-type': 'application/json',
     accept: 'application/json',
   };
+  await input.waitForUploadInit();
   const initResponse = await globalThis.fetch(`${input.baseUrl}/v1/knowledge/uploads`, {
     method: 'POST',
     headers: {
@@ -205,12 +226,18 @@ async function uploadPdf(input) {
 async function uploadPdfs(input) {
   const results = new Array(input.files.length);
   let cursor = 0;
+  const waitForUploadInit = createUploadInitPacer();
   const workers = Array.from({ length: Math.min(10, input.files.length) }, async () => {
     for (;;) {
       const index = cursor;
       cursor += 1;
       if (index >= input.files.length) return;
-      results[index] = await uploadPdf({ ...input, ...input.files[index], index });
+      results[index] = await uploadPdf({
+        ...input,
+        ...input.files[index],
+        index,
+        waitForUploadInit,
+      });
     }
   });
   await Promise.all(workers);

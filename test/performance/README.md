@@ -42,6 +42,10 @@ container, and writes upload IDs to the external evidence directory. If no
 `S11_PERF_RUNTIME_ENV` file with mode `0600`; it is not written to evidence or
 the repository.
 
+Upload initialization is paced to at most four requests per second so the
+fixture respects the canonical `API-UPLOAD-INIT` limit of `10 QPS/workspace`.
+This is request pacing, not retry and not a runtime limit change.
+
 `K6_BIN` must be an absolute executable path when used. Otherwise the runner
 searches PATH. Missing k6 prints `PERFORMANCE_K6_UNAVAILABLE` and exits `127`.
 
