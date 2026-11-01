@@ -11,7 +11,7 @@
 - Candidate SHA: not frozen.
 - Evidence commit SHA: not created.
 - Worktree: `/home/serien/RAG-agent-platform-s11`. Implementation checkpoint:
-  `2cc2fd4`; it is not a frozen candidate or evidence worktree.
+  `59c4639`; it is not a frozen candidate or evidence worktree.
 
 This report records a blocked phase1/post-rebase checkpoint. It is not a
 whole-stage PASS and does not close W4.
@@ -73,7 +73,7 @@ real API-key evidence and are not closed by this blocked report. W3 remains
 | `pnpm build`                             |    0 | 12/12 tasks; 20 application routes                               |
 | `pnpm build:workers`                     |    0 | 11/11 tasks                                                      |
 | `pnpm test:unit`                         |    0 | 22/22 tasks                                                      |
-| `pnpm test:contract`                     |    0 | 25 files / 131 tests                                             |
+| `pnpm test:contract`                     |    0 | 25 files / 132 tests                                             |
 | `pnpm test:integration`                  |    0 | 33 files / 179 tests in the service integration slice            |
 | `pnpm test:tenant`                       |    0 | 10 files / 19 tests                                              |
 | `pnpm test:concurrency`                  |    0 | 10 files / 22 tests                                              |
@@ -96,11 +96,11 @@ Collector summaries are outside the worktree:
 
 | Artifact               | SHA-256                                                            |
 | ---------------------- | ------------------------------------------------------------------ |
-| `summary.json`         | `21035764030222adf03edd40464fa5df773e4d86b7f7da9a913aa01e14c31cf8` |
-| `s11-t02-summary.json` | `4c15f4aeb2f62959b481f5be32da940ba40df25de7117efbec7b77b3f6b84414` |
+| `summary.json`         | `80b36d3e641108d9e2195329e82acd2f2125558a48c39031071769fd6def7f9f` |
+| `s11-t02-summary.json` | `1c8c5831fa2f755872dae05e6d2e192452d6e7f5739bdd79e7c8d7075d6bf18e` |
 
-Both summaries remain `SCOPED_BLOCKED` because Provider inputs and candidate
-are absent.
+Both summaries remain `SCOPED_BLOCKED` because Provider inputs, a frozen
+candidate and external `commands.json` evidence are absent.
 
 ## Provider Status
 
