@@ -49,7 +49,7 @@ real API-key evidence and are not closed by this blocked report. W3 remains
 | --------- | ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
 | `S11-T01` | BLOCKED for real chain                     | deterministic fixtures, full-chain stack/API-key harness and runbook                                             | fixture manifest stable; phase1 harness tests pass                                                      |
 | `S11-T02` | `SCOPED_BLOCKED`                           | AIProxy/OCR/Feishu HTTP adapters, mode-aware connector factory, scoped deferred guards and real-provider harness | 14 provider contract tests; 4 provider fault tests; 2 quota inheritance tests; 18 missing scoped fields |
-| `S11-T03` | `SCOPED_BLOCKED`                           | k6 probe/full runner, three scenarios, fixture metadata and strict full-fixture validation                       | k6 v2.3.0 probe READY; 1M seed and 300 upload IDs absent                                                |
+| `S11-T03` | `SCOPED_BLOCKED`                           | k6 probe/full runner, three scenarios, canonical PDF upload fixture, 1M Segment seeder and strict validation     | k6 v2.3.0 probe READY; 1M seed and 300 upload IDs absent                                                |
 | `S11-T04` | local PASS; external key scope blocked     | SSRF, archive, MIME, Range, XSS, tenant and secret tests                                                         | 10 files / 21 tests                                                                                     |
 | `S11-T05` | tool probe PASS; real drill blocked        | container recovery executor, prefix guards, fault matrix and invariants                                          | tools READY; 2 files / 8 tests; media/changeId absent                                                   |
 | `S11-T06` | local matrix PASS; final candidate blocked | real Playwright 18-page matrix, axe, overflow, keyboard, network and external evidence                           | 18 x 3 = 54 screenshots; 1 test passed                                                                  |
@@ -73,7 +73,7 @@ real API-key evidence and are not closed by this blocked report. W3 remains
 | `pnpm build`                             |    0 | 12/12 tasks; 20 application routes                               |
 | `pnpm build:workers`                     |    0 | 11/11 tasks                                                      |
 | `pnpm test:unit`                         |    0 | 22/22 tasks                                                      |
-| `pnpm test:contract`                     |    0 | 24 files / 123 tests                                             |
+| `pnpm test:contract`                     |    0 | 25 files / 125 tests                                             |
 | `pnpm test:integration`                  |    0 | 33 files / 179 tests in the service integration slice            |
 | `pnpm test:tenant`                       |    0 | 10 files / 19 tests                                              |
 | `pnpm test:concurrency`                  |    0 | 10 files / 22 tests                                              |

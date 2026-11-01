@@ -7,7 +7,7 @@ close W4.
 
 | Area                | Current result         | Evidence                                               |
 | ------------------- | ---------------------- | ------------------------------------------------------ |
-| Contract/runtime    | PASS                   | `92/120/139/8`; `120/0`; 24 contract files / 123 tests |
+| Contract/runtime    | PASS                   | `92/120/139/8`; `120/0`; 25 contract files / 125 tests |
 | Full local E2E      | PASS                   | 18 files / 73 tests                                    |
 | UI matrix           | PASS for local app     | 18 pages x 3 viewports; 54 screenshots                 |
 | Security            | PASS local matrix      | 10 files / 21 tests                                    |

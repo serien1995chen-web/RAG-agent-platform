@@ -18,12 +18,29 @@ timer, or historical result.
 S11_PERF_MODE=probe pnpm test:performance
 S11_PERF_MODE=full S11_PERF_PROFILE=standard pnpm test:performance
 node test/performance/prepare-fixtures.mjs --profile standard
+S11_PERF_FIXTURE_MODE=full node test/performance/prepare-fixtures.mjs --profile standard
 ```
 
 `prepare-fixtures.mjs` only stages deterministic PDF copies and hardware
 metadata. It exits `3` with `PERFORMANCE_FIXTURE_BLOCKED` until an operator has
 created 300 unique upload IDs and verified the 1,000,000 Segment seed. The full
 runner independently rejects an unverified or incomplete manifest.
+
+Full fixture mode requires an already running app plus:
+
+```text
+S11_PERF_BASE_URL
+S11_PERF_WORKSPACE_ID
+S11_PERF_BOOTSTRAP_TOKEN
+S11_PERF_DATABASE=kb_s11_...
+```
+
+It creates the isolated Space and S10 API key when needed, uploads 300 PDFs
+through the canonical Upload API, seeds `knowledge_segments` inside the Mongo
+container, and writes upload IDs to the external evidence directory. If no
+`S11_PERF_API_KEY` is supplied, the created key is written only to the external
+`S11_PERF_RUNTIME_ENV` file with mode `0600`; it is not written to evidence or
+the repository.
 
 `K6_BIN` must be an absolute executable path when used. Otherwise the runner
 searches PATH. Missing k6 prints `PERFORMANCE_K6_UNAVAILABLE` and exits `127`.

@@ -44,6 +44,13 @@ PERFORMANCE_FIXTURE_FAILED: segment_count_1m_required,segment_seed_unverified,up
 
 No QPS, percentile, throughput or bottleneck PASS is claimed.
 
+The full fixture path is implemented behind `S11_PERF_FIXTURE_MODE=full`. It
+uses the canonical Upload API for 300 PDFs, creates the isolated Space and S10
+API key when required, writes a mode-`0600` runtime env outside the worktree,
+and seeds `knowledge_segments` inside the Mongo container. Running full mode
+without its external inputs exits `1` with a missing-variable error rather than
+producing a fixture.
+
 ## Required To Unblock
 
 - operator-created isolated workspace, Space and API key;
