@@ -10,8 +10,8 @@
 - Candidate SHA: not frozen.
 - Worktree: `/home/serien/RAG-agent-platform-s11` (clean at opening; post-rebase
   changes are implementation work, not candidate evidence).
-- S11 worktree install: `BLOCKED`; the user's install log was from the main
-  checkout, not this worktree.
+- S11 worktree install: `PASS`; user `pnpm install` in this worktree exited 0
+  and left the lockfile unchanged.
 
 ## Release Inputs
 

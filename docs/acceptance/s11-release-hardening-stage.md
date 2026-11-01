@@ -13,9 +13,9 @@
 - S10 merge SHA: `d7e38c71293a283cd6268605b5036e8ee5763c9a`; ancestor check
   passed.
 - Post-rebase runtime / deferred: `120 / 0`; contract remains `92/120/139/8`.
-- S11 worktree installation: `BLOCKED`; the user's `pnpm install` log was
-  executed in `/home/serien/RAG-agent-platform`, not in
-  `/home/serien/RAG-agent-platform-s11`.
+- S11 worktree installation: `PASS`; user ran `pnpm install` in
+  `/home/serien/RAG-agent-platform-s11` with exit 0. The lockfile remained
+  `b6478a45...` with no tracked diff.
 - Candidate SHA: not frozen.
 
 ## Inputs And Opening Checks
@@ -80,20 +80,21 @@ remain unchanged. W3 evidence remains `53 implemented / 49 closed`.
 
 ### Post-Rebase Rechecks
 
-| Gate                     | Result  | Evidence                                                                                                             |
-| ------------------------ | ------- | -------------------------------------------------------------------------------------------------------------------- |
-| S10 merge ancestor       | PASS    | `git merge-base --is-ancestor d7e38c7... 4c2a59b...` exit 0                                                          |
-| Contract / runtime       | PASS    | `92/120/139/8`; `120 / 0`; inventory `73/12/57/4`, Mongo 23, profiles 4, queues 13                                   |
-| Contract suite           | PASS    | 24 files / 119 tests                                                                                                 |
-| Unit service suite       | PASS    | 28 files / 130 tests                                                                                                 |
-| Unit web/app/contracts   | PASS    | 23 files / 88 tests                                                                                                  |
-| Security + recovery      | PASS    | 10 + 2 files / 21 tests                                                                                              |
-| Tenant                   | PASS    | 10 files / 19 tests with local real Mongo/PG/Redis/MinIO                                                             |
-| Fault                    | PASS    | 12 files / 39 tests with local real Mongo/PG/Redis/MinIO                                                             |
-| Concurrency              | PASS    | 10 files / 22 tests                                                                                                  |
-| S10 integration slice    | PASS    | 5 files / 17 tests                                                                                                   |
-| Full service integration | PARTIAL | 28 passed files; 5 files blocked by tests that default to hostname `mongo` and need an explicit `KB_MONGO_URI` alias |
-| Archive/build            | BLOCKED | S11 worktree has no official post-rebase install; Next/Turbo local package resolution remains incomplete             |
+| Gate                     | Result  | Evidence                                                                                                                   |
+| ------------------------ | ------- | -------------------------------------------------------------------------------------------------------------------------- |
+| S10 merge ancestor       | PASS    | `git merge-base --is-ancestor d7e38c7... 4c2a59b...` exit 0                                                                |
+| Contract / runtime       | PASS    | `92/120/139/8`; `120 / 0`; inventory `73/12/57/4`, Mongo 23, profiles 4, queues 13                                         |
+| Contract suite           | PASS    | 24 files / 119 tests                                                                                                       |
+| Unit service suite       | PASS    | 28 files / 130 tests                                                                                                       |
+| Unit web/app/contracts   | PASS    | 23 files / 88 tests                                                                                                        |
+| `pnpm install` in S11    | PASS    | exit 0; `pnpm-lock.yaml` unchanged                                                                                         |
+| Security + recovery      | PASS    | 10 + 2 files / 21 tests                                                                                                    |
+| Tenant                   | PASS    | 10 files / 19 tests with local real Mongo/PG/Redis/MinIO                                                                   |
+| Fault                    | PASS    | 12 files / 39 tests with local real Mongo/PG/Redis/MinIO                                                                   |
+| Concurrency              | PASS    | 10 files / 22 tests                                                                                                        |
+| S10 integration slice    | PASS    | 5 files / 17 tests                                                                                                         |
+| Full service integration | PARTIAL | 28 passed files; 5 files blocked by tests that default to hostname `mongo` and need an explicit `KB_MONGO_URI` alias       |
+| Archive/build            | FAIL    | `pnpm build:workers` PASS; `pnpm build` fails because `projects/app/node_modules/next` is a symlink outside Turbopack root |
 
 The app-build failure is an environment/dependency-layout blocker, not a
 release PASS. No explicit `pnpm install/add/update/remove` command was issued.
@@ -171,8 +172,8 @@ No `PASS` row is present in phase1.
 
 ## Hold Point
 
-The implementation stops at the installation gate. S10 is merged and rebased,
-but the next action is the user running `pnpm install` inside
-`/home/serien/RAG-agent-platform-s11` after reviewing the post-rebase branch.
-Candidate, personA/personB evidence and W4 wave evidence must not be created
-before that installation and the subsequent full gate.
+The implementation stops at the external-input/release gate. S10 is merged,
+the S11 worktree is installed, and local post-rebase tests are largely green,
+but the build layout and real Provider/k6/image/SaaS prerequisites are not yet
+complete. Candidate, personA/personB evidence and W4 wave evidence must not be
+created before those gates are resolved.
