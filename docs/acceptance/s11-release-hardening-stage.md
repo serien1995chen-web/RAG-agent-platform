@@ -48,7 +48,7 @@ remain unchanged. W3 evidence remains `53 implemented / 49 closed`.
 | --------- | ----------------------------------- | --------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
 | `S11-T01` | BLOCKED, setup PASS                 | deterministic fixture generator, full-chain fixture/harness and runbook           | fixtureHash `eb11355abb5af04128bb365de37494898aec250ef0d48d2bc9f5467768101856`; 3 harness tests |
 | `S11-T02` | BLOCKED, contract PASS              | Feishu/Yuque/DingTalk HTTP delegates, shared transport, provider input preflight  | 11 provider contract tests                                                                      |
-| `S11-T03` | BLOCKED                             | k6 search/deep/import scripts, runner and fixture preparer                        | `PERFORMANCE_K6_UNAVAILABLE`, exit code 127                                                     |
+| `S11-T03` | BLOCKED                             | k6 search/deep/import scripts, runner and fixture preparer                        | `PERFORMANCE_STACK_UNAVAILABLE`, exit code 3 (`/readyz` not 200)                                |
 | `S11-T04` | local PASS; S10 key items BLOCKED   | SSRF, archive, range/XSS, tenant and secret tests                                 | 12 security tests                                                                               |
 | `S11-T05` | local PASS; real recovery BLOCKED   | prefix-safe recovery commands, fault matrix and invariants                        | 7 recovery tests; `RECOVERY_TOOL_UNAVAILABLE`                                                   |
 | `S11-T06` | registry PASS; final UI BLOCKED     | 18-page registry, 3 viewports, a11y helpers and external screenshot switch        | all 18 pages enumerated; 54 screenshots not run because app build is blocked                    |
@@ -61,7 +61,7 @@ remain unchanged. W3 evidence remains `53 implemented / 49 closed`.
 | -------------------------------- | --------: | ------------------------------------------------------------------------------------ |
 | fixture generation and `--check` |         0 | PASS; deterministic 6-file manifest                                                  |
 | provider input preflight         |         2 | BLOCKED; 34 missing variable names, no values logged                                 |
-| `test:performance` in probe mode |       127 | BLOCKED; `PERFORMANCE_K6_UNAVAILABLE`                                                |
+| `pnpm test:performance`          |         3 | BLOCKED; `PERFORMANCE_STACK_UNAVAILABLE` (`/readyz` not 200)                         |
 | `test:security`                  |         0 | 5 files / 12 tests PASS for local matrix                                             |
 | `test:recovery`                  |         0 | 2 files / 7 tests PASS                                                               |
 | full contract suite              |         0 | 23 files / 113 tests PASS                                                            |
@@ -142,8 +142,8 @@ is `BLOCKED`, not PASS.
 
 - Security: local high/serious/critical/secret/cross-tenant assertions are
   0; S10 real API-key scope and rotation are `BLOCKED`.
-- Performance: k6 unavailable; no full thresholds, qps, percentiles, fixture
-  hash or hardware acceptance is claimed.
+- Performance: k6 is present, but app readiness is unavailable; no full
+  thresholds, qps, percentiles, fixture hash or hardware acceptance is claimed.
 - Recovery: Mongo/Redis/PostgreSQL/MinIO tools and real media are unavailable;
   empty-prefix and invariant tests are local only.
 - UI: all 18 canonical pages are now present after S10; raw page registry tests
