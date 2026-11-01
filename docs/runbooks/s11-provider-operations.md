@@ -41,6 +41,8 @@ S11_FEISHU_APP_SECRET
 S11_FEISHU_FOLDER_TOKEN
 S11_FEISHU_DOC_1
 S11_FEISHU_DOC_2
+S11_FEISHU_DELETE_CASE_ID
+S11_FEISHU_DELETE_PROPAGATION_VERIFIED=true
 ```
 
 `AIPROXY_MODEL_PROFILE_JSON` is required when the catalog returns only model
@@ -90,6 +92,10 @@ provider bodies or credentials.
 - Invalid provider schema: contract failure; never accept an empty success.
 - Feishu folder token from `/wiki/...`: invalid for this gate; use a Drive
   `/drive/folder/<token>` token containing at least two readable docx files.
+- Feishu delete propagation remains `SCOPED_BLOCKED` unless an operator supplies
+  a controlled case ID and sets
+  `S11_FEISHU_DELETE_PROPAGATION_VERIFIED=true`. A successful read test alone
+  does not produce `REAL_VERIFIED`.
 
 Yuque and DingTalk are guarded with `DEFERRED_BY_SCOPE`; a real call or mock
 success in scoped real mode is a failure.

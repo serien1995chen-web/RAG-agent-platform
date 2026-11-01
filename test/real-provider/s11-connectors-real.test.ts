@@ -93,7 +93,11 @@ describe('TEST-X-S11-PROVIDER-REAL connectors', () => {
     });
 
     const evidence = {
-      status: 'REAL_VERIFIED',
+      status:
+        process.env.S11_FEISHU_DELETE_PROPAGATION_VERIFIED === 'true' &&
+        process.env.S11_FEISHU_DELETE_CASE_ID?.trim()
+          ? 'REAL_VERIFIED'
+          : 'SCOPED_BLOCKED',
       documentCount: contents.length,
       catalogPages: pages.length,
       externalIdHash: sha256(JSON.stringify([...externalIds].sort())),
@@ -103,7 +107,12 @@ describe('TEST-X-S11-PROVIDER-REAL connectors', () => {
       yuqueRealCalls: 0,
       dingtalk: 'DEFERRED_BY_SCOPE',
       dingtalkRealCalls: 0,
-      deletePropagation: 'EXTERNAL_DELETE_NOT_PERFORMED',
+      deletePropagation: {
+        verified: process.env.S11_FEISHU_DELETE_PROPAGATION_VERIFIED === 'true',
+        caseIdHash: process.env.S11_FEISHU_DELETE_CASE_ID?.trim()
+          ? sha256(process.env.S11_FEISHU_DELETE_CASE_ID.trim())
+          : null,
+      },
     };
     expect(JSON.stringify(evidence)).not.toContain(credentials.appSecret);
     writeProviderEvidence('t02-connectors.json', evidence);

@@ -5,16 +5,16 @@ Result: `SCOPED_BLOCKED`.
 Candidate: not frozen. Worktree: `/home/serien/RAG-agent-platform-s11`.
 S10 merge: `d7e38c71293a283cd6268605b5036e8ee5763c9a`.
 
-| Provider             | Scoped status       | Real verification     | Evidence                                                                   |
-| -------------------- | ------------------- | --------------------- | -------------------------------------------------------------------------- |
-| TokenDance / AIProxy | `SCOPED_BLOCKED`    | `EXTERNAL_UNVERIFIED` | catalog/model profile inputs absent; 14 adapter contract tests pass        |
-| Somark               | `SCOPED_BLOCKED`    | `EXTERNAL_UNVERIFIED` | profile absent; request/schema/usage contract tests pass                   |
-| TextIn               | `SCOPED_BLOCKED`    | `EXTERNAL_UNVERIFIED` | profile absent; request/schema/usage contract tests pass                   |
-| Doc2X                | `SCOPED_BLOCKED`    | `EXTERNAL_UNVERIFIED` | profile absent; preupload/poll/deadline contract tests pass                |
-| Feishu               | `SCOPED_BLOCKED`    | `EXTERNAL_UNVERIFIED` | app/folder/doc inputs absent; token refresh/pagination contract tests pass |
-| Sangfor              | `DEFERRED_BY_SCOPE` | not permitted         | zero scoped real-call guard                                                |
-| Yuque                | `DEFERRED_BY_SCOPE` | not permitted         | zero scoped real-call guard                                                |
-| DingTalk             | `DEFERRED_BY_SCOPE` | not permitted         | zero scoped real-call guard                                                |
+| Provider             | Scoped status       | Real verification     | Evidence                                                                                                          |
+| -------------------- | ------------------- | --------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| TokenDance / AIProxy | `SCOPED_BLOCKED`    | `EXTERNAL_UNVERIFIED` | catalog/model profile inputs absent; 14 adapter contract tests pass                                               |
+| Somark               | `SCOPED_BLOCKED`    | `EXTERNAL_UNVERIFIED` | profile absent; request/schema/usage contract tests pass                                                          |
+| TextIn               | `SCOPED_BLOCKED`    | `EXTERNAL_UNVERIFIED` | profile absent; request/schema/usage contract tests pass                                                          |
+| Doc2X                | `SCOPED_BLOCKED`    | `EXTERNAL_UNVERIFIED` | profile absent; preupload/poll/deadline contract tests pass                                                       |
+| Feishu               | `SCOPED_BLOCKED`    | `EXTERNAL_UNVERIFIED` | app/folder/doc inputs and controlled delete-propagation case absent; token refresh/pagination contract tests pass |
+| Sangfor              | `DEFERRED_BY_SCOPE` | not permitted         | zero scoped real-call guard                                                                                       |
+| Yuque                | `DEFERRED_BY_SCOPE` | not permitted         | zero scoped real-call guard                                                                                       |
+| DingTalk             | `DEFERRED_BY_SCOPE` | not permitted         | zero scoped real-call guard                                                                                       |
 
 No mock result is counted as a real Provider result.
 
