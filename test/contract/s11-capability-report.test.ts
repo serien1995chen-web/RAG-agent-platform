@@ -70,9 +70,7 @@ describe('TEST-X-S11-CAPABILITY-MATRIX / TEST-X-S11-EVIDENCE-BINDING', () => {
     expect(rows.filter((row) => row.status === 'DEFERRED_BY_SCOPE')).toHaveLength(3);
     expect(rows.filter((row) => row.status === 'EXCLUDED')).toHaveLength(4);
     expect(
-      rows
-        .filter((row) => row.status === 'DEFERRED_BY_SCOPE')
-        .map((row) => row.capability),
+      rows.filter((row) => row.status === 'DEFERRED_BY_SCOPE').map((row) => row.capability),
     ).toEqual(S11_DEFERRED_CAPABILITY_IDS);
     expect(scopedDevelopmentTestIds(root)).toHaveLength(66);
     expect(counts).toMatchObject({

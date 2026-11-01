@@ -61,12 +61,10 @@ export function collectAll(env = process.env) {
   const blockers = [];
   if (providers.status !== 'READY') {
     blockers.push({
-      code: providers.status === 'SCOPED_BLOCKED' ? 'SCOPED_PROVIDER_BLOCKED' : 'REAL_PROVIDER_BLOCKED',
+      code:
+        providers.status === 'SCOPED_BLOCKED' ? 'SCOPED_PROVIDER_BLOCKED' : 'REAL_PROVIDER_BLOCKED',
       task: 'S11-T02',
-      detail: [
-        ...providers.missingFields,
-        ...providers.invalidFields,
-      ].join(','),
+      detail: [...providers.missingFields, ...providers.invalidFields].join(','),
     });
   }
   const k6 = spawnSync('k6', ['version'], { encoding: 'utf8', env });
@@ -108,13 +106,17 @@ export function collectAll(env = process.env) {
     rows,
     providers,
     crossTestIds: S11_CROSS_TEST_IDS,
-    deferredCrossTestIds:
-      scopeProfile === S11_SCOPE_PROFILE ? ['TEST-X-SAAS-READY'] : [],
+    deferredCrossTestIds: scopeProfile === S11_SCOPE_PROFILE ? ['TEST-X-SAAS-READY'] : [],
     excludedIds: S11_EXCLUDED_IDS,
     commands: [],
     testIds: [],
     blockers,
-    status: blockers.length > 0 ? (scopeProfile === S11_SCOPE_PROFILE ? 'SCOPED_BLOCKED' : 'BLOCKED') : 'SCOPED_READY',
+    status:
+      blockers.length > 0
+        ? scopeProfile === S11_SCOPE_PROFILE
+          ? 'SCOPED_BLOCKED'
+          : 'BLOCKED'
+        : 'SCOPED_READY',
   };
 }
 

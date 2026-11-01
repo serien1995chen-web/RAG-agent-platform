@@ -43,7 +43,14 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
 
   const result = spawnSync(
     'pnpm',
-    ['exec', 'vitest', 'run', '--config', 'test/real-provider/vitest.config.ts', ...(scenario ? [scenario] : [])],
+    [
+      'exec',
+      'vitest',
+      'run',
+      '--config',
+      'test/real-provider/vitest.config.ts',
+      ...(scenario ? [scenario] : []),
+    ],
     {
       cwd: repositoryRoot,
       env,

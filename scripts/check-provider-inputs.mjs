@@ -222,7 +222,8 @@ export function checkEnvironment(env = process.env) {
   const requiredProviders = providers.filter(
     (provider) => provider.provider !== 'mode' && required.has(provider.provider),
   );
-  const ready = providers.find((provider) => provider.provider === 'mode')?.status === 'READY' &&
+  const ready =
+    providers.find((provider) => provider.provider === 'mode')?.status === 'READY' &&
     requiredProviders.every((provider) => provider.status === 'READY');
   return {
     status: ready

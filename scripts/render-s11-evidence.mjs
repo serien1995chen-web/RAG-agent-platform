@@ -31,10 +31,7 @@ export function renderTemplate(scopeProfile = 'canonical-v1') {
 
 export function renderFinal(summaryPath) {
   const summary = JSON.parse(readFileSync(summaryPath, 'utf8'));
-  if (
-    summary.candidateSha === 'UNFROZEN' ||
-    !['PASS', 'SCOPED_PASS'].includes(summary.status)
-  ) {
+  if (summary.candidateSha === 'UNFROZEN' || !['PASS', 'SCOPED_PASS'].includes(summary.status)) {
     throw new Error('final rendering requires a frozen PASS or SCOPED_PASS summary');
   }
   return renderRows(summary.rows, summary.scopeProfile ?? 'canonical-v1');

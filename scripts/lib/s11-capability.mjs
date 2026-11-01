@@ -133,29 +133,25 @@ export function buildTemplateRows(repoRoot, scopeProfile = 'canonical-v1') {
     status:
       capability.status === 'EXCLUDED'
         ? 'EXCLUDED'
-        : scopeProfile === S11_SCOPE_PROFILE &&
-            S11_DEFERRED_CAPABILITY_IDS.includes(capability.id)
+        : scopeProfile === S11_SCOPE_PROFILE && S11_DEFERRED_CAPABILITY_IDS.includes(capability.id)
           ? 'DEFERRED_BY_SCOPE'
           : 'NOT_RUN',
     commandEvidence:
       capability.status === 'EXCLUDED'
         ? 'zero-implementation guard'
-        : scopeProfile === S11_SCOPE_PROFILE &&
-            S11_DEFERRED_CAPABILITY_IDS.includes(capability.id)
+        : scopeProfile === S11_SCOPE_PROFILE && S11_DEFERRED_CAPABILITY_IDS.includes(capability.id)
           ? 'deferred capability zero-real-call guard'
           : '',
     provider:
       capability.status === 'EXCLUDED'
         ? 'N/A'
-        : scopeProfile === S11_SCOPE_PROFILE &&
-            S11_DEFERRED_CAPABILITY_IDS.includes(capability.id)
+        : scopeProfile === S11_SCOPE_PROFILE && S11_DEFERRED_CAPABILITY_IDS.includes(capability.id)
           ? 'DEFERRED_BY_SCOPE'
           : 'BLOCKED',
     risk:
       capability.status === 'EXCLUDED'
         ? 'zero implementation must remain'
-        : scopeProfile === S11_SCOPE_PROFILE &&
-            S11_DEFERRED_CAPABILITY_IDS.includes(capability.id)
+        : scopeProfile === S11_SCOPE_PROFILE && S11_DEFERRED_CAPABILITY_IDS.includes(capability.id)
           ? 'deferred by developer; canonical W4 remains incomplete'
           : 'candidate, S10 merge and real-provider evidence unavailable',
   }));
@@ -171,8 +167,7 @@ export function scopedDevelopmentTestIds(repoRoot) {
   return loadCapabilities(repoRoot)
     .filter(
       (capability) =>
-        capability.status !== 'EXCLUDED' &&
-        !S11_DEFERRED_CAPABILITY_IDS.includes(capability.id),
+        capability.status !== 'EXCLUDED' && !S11_DEFERRED_CAPABILITY_IDS.includes(capability.id),
     )
     .map((capability) => blockingTestOf(capability.id));
 }
@@ -184,8 +179,7 @@ export function deferredCapabilityTestIds() {
 export function scopeCounts(repoRoot, scopeProfile = 'canonical-v1') {
   const capabilities = loadCapabilities(repoRoot);
   const excluded = capabilities.filter((capability) => capability.status === 'EXCLUDED').length;
-  const deferred =
-    scopeProfile === S11_SCOPE_PROFILE ? S11_DEFERRED_CAPABILITY_IDS.length : 0;
+  const deferred = scopeProfile === S11_SCOPE_PROFILE ? S11_DEFERRED_CAPABILITY_IDS.length : 0;
   const development = capabilities.length - excluded;
   const inScopeDevelopment = development - deferred;
   const data = capabilities.filter((capability) => capability.status === 'DATA');
