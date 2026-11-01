@@ -92,6 +92,16 @@ real API-key evidence and are not closed by this blocked report. W3 remains
 | recovery local tests                     |    0 | 2 files / 9 tests                                                |
 | `pnpm release:check --allow-missing-app` |    0 | `DEFERRED_TO_PRODUCTION`; no release PASS                        |
 
+Collector summaries are outside the worktree:
+
+| Artifact               | SHA-256                                                            |
+| ---------------------- | ------------------------------------------------------------------ |
+| `summary.json`         | `21035764030222adf03edd40464fa5df773e4d86b7f7da9a913aa01e14c31cf8` |
+| `s11-t02-summary.json` | `4c15f4aeb2f62959b481f5be32da940ba40df25de7117efbec7b77b3f6b84414` |
+
+Both summaries remain `SCOPED_BLOCKED` because Provider inputs and candidate
+are absent.
+
 ## Provider Status
 
 | Provider             | Real status           | Current reason                                                    |
