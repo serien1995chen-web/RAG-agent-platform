@@ -78,10 +78,44 @@ The runner writes sanitized evidence under `S11_EVIDENCE_DIR`:
 - `t02-aiproxy.json`;
 - `t02-ocr.json`;
 - `t02-connectors.json`.
+- `t02-provider-matrix.json`.
 
 Evidence may include model IDs, endpoint host hashes, HTTP statuses, request
 IDs, latency, page counts, usage and safe error codes. It may not include raw
 provider bodies or credentials.
+
+`t02-provider-matrix.json` is the safe manifest consumed by the matrix
+generator. Its shape is:
+
+```json
+{
+  "schemaVersion": 1,
+  "candidateSha": "<sha-or-UNFROZEN>",
+  "fixtureHash": "<sha256-or-null>",
+  "files": {
+    "aiproxy": "t02-aiproxy.json",
+    "ocr": "t02-ocr.json",
+    "connectors": "t02-connectors.json"
+  }
+}
+```
+
+The runner also records the last command, exit code and blocker count. It does
+not record response bodies or credentials.
+
+## Provider Matrix
+
+```bash
+S11_SCOPE_PROFILE=knowledge-usability-v1 \
+S11_EVIDENCE_DIR=<outside-worktree-evidence> \
+CANDIDATE_SHA=<candidate> \
+S11_PROVIDER_FIXTURE_SHA256=<fixture-sha256> \
+  node scripts/render-s11-evidence.mjs --provider-matrix
+```
+
+Only complete, candidate-bound evidence with five AIProxy roles, three OCR
+results, Feishu read/delete propagation and zero deferred calls may emit
+`REAL_VERIFIED`. Missing input keeps the matrix at `SCOPED_BLOCKED`.
 
 ## Failure Handling
 

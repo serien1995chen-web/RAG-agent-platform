@@ -68,6 +68,7 @@ export function writeProviderEvidence(name: string, value: unknown): string {
       {
         testId: 'TEST-X-S11-PROVIDER-REAL',
         generatedAt: new Date().toISOString(),
+        candidateSha: process.env.CANDIDATE_SHA?.trim() || 'UNFROZEN',
         ...(redactProviderEvidence(value) as Record<string, unknown>),
       },
       null,

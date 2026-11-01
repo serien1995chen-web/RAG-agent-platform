@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { spawnSync } from 'node:child_process';
-import { existsSync, readFileSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { isAbsolute, join, relative, resolve } from 'node:path';
 import { checkEnvironment } from './check-provider-inputs.mjs';
 import { probeCatalog } from './probe-aiproxy-catalog.mjs';
 
@@ -17,6 +17,52 @@ const SCENARIO_EVIDENCE = Object.freeze({
   's11-ocr-real': 't02-ocr.json',
   's11-connectors-real': 't02-connectors.json',
 });
+
+function evidenceDirectory(env) {
+  const configured = env.S11_EVIDENCE_DIR?.trim();
+  if (!configured) return null;
+  const path = resolve(configured);
+  const fromRoot = relative(repositoryRoot, path);
+  if (fromRoot === '' || (!fromRoot.startsWith('..') && !isAbsolute(fromRoot))) {
+    throw new Error('S11_EVIDENCE_DIR must be outside the worktree');
+  }
+  return path;
+}
+
+export function writeProviderMatrixManifest(
+  env,
+  scenario,
+  exitCode,
+  blockers,
+  command = scenario ? `pnpm test:provider:real -- ${scenario}` : 'pnpm test:provider:real',
+) {
+  const directory = evidenceDirectory(env);
+  if (!directory) return null;
+  const status =
+    exitCode !== 0 ? 'FAIL' : blockers.length === 0 ? 'REAL_VERIFIED' : 'SCOPED_BLOCKED';
+  const manifest = {
+    schemaVersion: 1,
+    candidateSha: env.CANDIDATE_SHA?.trim() || 'UNFROZEN',
+    fixtureHash:
+      env.S11_PROVIDER_FIXTURE_SHA256?.trim() || env.S11_PERF_FIXTURE_HASH?.trim() || null,
+    files: {
+      aiproxy: 't02-aiproxy.json',
+      ocr: 't02-ocr.json',
+      connectors: 't02-connectors.json',
+    },
+    lastRun: {
+      scenario: scenario || 'all',
+      command,
+      exitCode,
+      status,
+      blockerCount: blockers.length,
+      finishedAt: new Date().toISOString(),
+    },
+  };
+  const path = join(directory, 't02-provider-matrix.json');
+  writeFileSync(path, `${JSON.stringify(manifest, null, 2)}\n`);
+  return path;
+}
 
 function evidenceBlockers(env, scenario) {
   if (scenario === 's11-provider-quota') return [];
@@ -93,8 +139,9 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
       stdio: 'inherit',
     },
   );
-  if ((result.status ?? 2) !== 0) return result.status ?? 2;
   const blockers = evidenceBlockers(env, scenario);
+  writeProviderMatrixManifest(env, scenario, result.status ?? 2, blockers);
+  if ((result.status ?? 2) !== 0) return result.status ?? 2;
   if (blockers.length > 0) {
     console.error(`SCOPED_BLOCKED: ${blockers.join('; ')}`);
     return 2;
