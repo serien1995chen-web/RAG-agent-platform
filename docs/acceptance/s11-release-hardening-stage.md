@@ -4,13 +4,17 @@
 
 - Result: `BLOCKED`.
 - Wave / stage / owner: `W4 / S11 / personA`.
-- Phase: `phase1` only; no candidate freeze and no whole-stage PASS.
+- Phase: `phase1 + post-rebase pre-install`; no candidate freeze and no whole-stage PASS.
 - Branch: `feat/kb-s11-release-hardening`.
 - W4 base: `14a3b9e96fcab7b6a1f1e92ccdf4dc775719ee7d`.
 - Opening HEAD / status: exact base / empty porcelain.
-- Current HEAD remains the W4 base; all phase1 changes are uncommitted because
-  S10 merge and user installation are not yet available.
-- S10 merge SHA: not provided.
+- Post-rebase HEAD: `4c2a59b2bbab149bcab535a383b0e8dd67e44945`.
+- S10 merge SHA: `d7e38c71293a283cd6268605b5036e8ee5763c9a`; ancestor check
+  passed.
+- Post-rebase runtime / deferred: `120 / 0`; contract remains `92/120/139/8`.
+- S11 worktree installation: `BLOCKED`; the user's `pnpm install` log was
+  executed in `/home/serien/RAG-agent-platform`, not in
+  `/home/serien/RAG-agent-platform-s11`.
 - Candidate SHA: not frozen.
 
 ## Inputs And Opening Checks
@@ -73,6 +77,23 @@ remain unchanged. W3 evidence remains `53 implemented / 49 closed`.
 | fault tests                      |         1 | BLOCKED: real Mongo test environment missing                                         |
 | app build                        |         1 | environment failure: Next package resolves through a link outside the clean worktree |
 
+### Post-Rebase Rechecks
+
+| Gate                     | Result  | Evidence                                                                                                             |
+| ------------------------ | ------- | -------------------------------------------------------------------------------------------------------------------- |
+| S10 merge ancestor       | PASS    | `git merge-base --is-ancestor d7e38c7... 4c2a59b...` exit 0                                                          |
+| Contract / runtime       | PASS    | `92/120/139/8`; `120 / 0`; inventory `73/12/57/4`, Mongo 23, profiles 4, queues 13                                   |
+| Contract suite           | PASS    | 24 files / 119 tests                                                                                                 |
+| Unit service suite       | PASS    | 28 files / 130 tests                                                                                                 |
+| Unit web/app/contracts   | PASS    | 23 files / 88 tests                                                                                                  |
+| Security + recovery      | PASS    | 10 + 2 files / 21 tests                                                                                              |
+| Tenant                   | PASS    | 10 files / 19 tests with local real Mongo/PG/Redis/MinIO                                                             |
+| Fault                    | PASS    | 12 files / 39 tests with local real Mongo/PG/Redis/MinIO                                                             |
+| Concurrency              | PASS    | 10 files / 22 tests                                                                                                  |
+| S10 integration slice    | PASS    | 5 files / 17 tests                                                                                                   |
+| Full service integration | PARTIAL | 28 passed files; 5 files blocked by tests that default to hostname `mongo` and need an explicit `KB_MONGO_URI` alias |
+| Archive/build            | BLOCKED | S11 worktree has no official post-rebase install; Next/Turbo local package resolution remains incomplete             |
+
 The app-build failure is an environment/dependency-layout blocker, not a
 release PASS. No explicit `pnpm install/add/update/remove` command was issued.
 One temporary Windows scratch checkout invocation let pnpm's
@@ -104,8 +125,8 @@ are in `scripts/license-obligations.data.json` and generated `NOTICE`.
 
 | Artifact                                   | SHA-256                                                            |
 | ------------------------------------------ | ------------------------------------------------------------------ |
-| `NOTICE`                                   | `edd810c160cd0a57fb14119a1211431415f681658a78e5b702c0b02042735c09` |
-| `artifacts/sbom.json`                      | `81166ca23652a67a472eafea35b6e950461b19610329da72f3a14e7dd7ddce50` |
+| `NOTICE`                                   | `d9d5e614499d9e24af1aaa7dd8adefe8c88752cda99c919d7c3e0ecec081f195` |
+| `artifacts/sbom.json`                      | `a49bfe6f5a35bae8b6faec2a305ac96cd367f3860bd68830f2838f28d1001ea5` |
 | `docs/acceptance/s11-capability-matrix.md` | `278c69b52b794162835c1588311e36a4aba9632d5f844a7cc9eb2a9b05fab12b` |
 | `test/fixtures/s11/fixture-manifest.json`  | `44998778494b8abdd3da9eb93e86c36b143e209d8b82224f60643c573435ec51` |
 | `scripts/license-obligations.data.json`    | `09ff0d671766a7bc65fff30bc673934fd7533535b53409bc4cc8aeb2f785dd75` |
@@ -129,8 +150,9 @@ is `BLOCKED`, not PASS.
 
 ## C7, Pricing And Quota
 
-- C7: `BLOCKED`. Phase1 has no real API Key, no 120-operation runtime, no real
-  AIProxy/OCR/connector calls, and no full Source-to-Citation-to-Delete chain.
+- C7: `BLOCKED`. Runtime is now `120/0`, but no real API Key, real
+  AIProxy/OCR/connector credentials, or full Source-to-Citation-to-Delete chain
+  has been executed.
 - Pricing: `zero-v1` remains the default; `fixture-v1` and its integer
   micro-point calculation are not exercised against S10 usage facts.
 - Quota: `free-v1` is unchanged; `s11-perf-v1` exists only as a performance
@@ -148,8 +170,8 @@ No `PASS` row is present in phase1.
 
 ## Hold Point
 
-The implementation stops here as required. The next action is user
-confirmation of the S10 merge SHA and latest `origin/main`; only then may the
-S11 coding agent fetch, rebase, request the user's `pnpm install`, and start
-post-rebase/candidate gates. Candidate, personA/personB evidence and W4 wave
-evidence must not be created before that point.
+The implementation stops at the installation gate. S10 is merged and rebased,
+but the next action is the user running `pnpm install` inside
+`/home/serien/RAG-agent-platform-s11` after reviewing the post-rebase branch.
+Candidate, personA/personB evidence and W4 wave evidence must not be created
+before that installation and the subsequent full gate.

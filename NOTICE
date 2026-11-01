@@ -7,7 +7,7 @@ NOTICE
 生成脚本: scripts/generate-sbom.mjs（禁止手工维护本文件）
 SBOM 产物: artifacts/sbom.json
 
-一、直接依赖（160）
+一、直接依赖（166）
 名称@版本 | 许可证 | scope | 来源 workspace
 @apidevtools/json-schema-ref-parser@11.7.2 | MIT | production | packages/service
 @apidevtools/swagger-parser@10.1.1 | MIT | production | packages/contracts
@@ -48,8 +48,10 @@ SBOM 产物: artifacts/sbom.json
 @types/ali-oss@6.23.3 | MIT | development | sdk/storage
 @types/archiver@6.0.4 | MIT | development | projects/app
 @types/async-retry@1.4.9 | MIT | development | packages/service
+@types/cookie@0.5.4 | MIT | development | packages/service
 @types/js-yaml@4.0.9 | MIT | development | packages/contracts
 @types/jsdom@21.1.7 | MIT | development | .
+@types/jsonwebtoken@9.0.9 | MIT | development | packages/service
 @types/lodash-es@4.17.12 | MIT | development | packages/search
 @types/mime-types@3.0.1 | MIT | development | packages/parse
 @types/multer@1.4.12 | MIT | development | packages/service
@@ -72,11 +74,14 @@ archiver@7.0.1 | MIT | production | projects/app
 axios@1.18.1 | MIT | production | packages/service
 bullmq@5.52.2 | MIT | production | packages/dal,packages/service,projects/app
 cheerio@1.0.0-rc.12 | MIT | production | packages/parse
+cookie@0.7.2 | MIT | production | packages/service
 cos-nodejs-sdk-v5@3.0.0 | ISC | production | sdk/storage
 cron-parser@4.9.0 | MIT | production | packages/contracts
 date-fns@3.6.0 | MIT | production | packages/web
 dayjs@1.11.19 | MIT | production | packages/web
 domino-ext@2.1.4 | BSD-2-Clause | production | packages/parse
+echarts-gl@2.0.9 | BSD-3-Clause | production | packages/web
+echarts@5.4.1 | Apache-2.0 | production | packages/web
 encoding@0.1.13 | MIT | production | packages/parse
 es-toolkit@1.51.0 | MIT | production | sdk/storage
 esbuild@0.25.11 | MIT | development | .
@@ -100,6 +105,7 @@ jsdom@26.1.0 | MIT | development | packages/web
 json5@2.2.3 | MIT | development | .
 jsonpath-plus@10.3.0 | MIT | production | packages/service
 jsonrepair@3.13.2 | ISC | production | packages/qa
+jsonwebtoken@9.0.3 | MIT | production | packages/service
 jszip@3.10.1 | MIT | production | projects/app
 katex@0.18.2 | MIT | production | packages/web
 lint-staged@16.4.0 | MIT | development | .
@@ -170,7 +176,7 @@ zod-openapi@5.4.6 | MIT | production | packages/contracts
 zod@4.1.12 | MIT | production | packages/contracts,packages/service,packages/web
 zustand@4.5.6 | MIT | production | packages/web
 
-二、传递依赖（1639）
+二、传递依赖（1654）
 名称@版本 | 许可证 | scope | 依赖父链
 @ai-sdk/anthropic@3.0.135 | Apache-2.0 | development | . → @chakra-ui/cli@2.5.8 → cli-welcome@2.2.3 → clear-any-console@1.16.4 → command-code@1.88.0 → @ai-sdk/anthropic@3.0.135
 @ai-sdk/gateway@3.0.221 | Apache-2.0 | development | . → @chakra-ui/cli@2.5.8 → cli-welcome@2.2.3 → clear-any-console@1.16.4 → command-code@1.88.0 → ai@6.0.315 → @ai-sdk/gateway@3.0.221
@@ -697,6 +703,7 @@ browser-or-node@2.1.1 | MIT | production | sdk/storage → minio@8.0.7 → brows
 browserslist@4.29.4 | MIT | development | . → @svgr/webpack@6.5.1 → @babel/core@7.29.7 → @babel/helper-compilation-targets@7.29.7 → browserslist@4.29.4
 bson@6.10.4 | Apache-2.0 | production | packages/service → mongoose@8.24.5 → bson@6.10.4
 buffer-crc32@1.0.0 | MIT | production | projects/app → archiver@7.0.1 → buffer-crc32@1.0.0
+buffer-equal-constant-time@1.0.1 | BSD-3-Clause | production | packages/service → jsonwebtoken@9.0.3 → jws@4.0.1 → jwa@2.0.1 → buffer-equal-constant-time@1.0.1
 buffer@5.6.0 | MIT | production | sdk/storage → @aws-sdk/lib-storage@3.1113.0 → buffer@5.6.0
 buffer@6.0.3 | MIT | production | projects/app → archiver@7.0.1 → readable-stream@4.8.0 → buffer@6.0.3
 builtin-status-codes@3.0.0 | MIT | production | sdk/storage → ali-oss@6.23.0 → stream-http@2.8.2 → builtin-status-codes@3.0.0
@@ -735,6 +742,7 @@ cheerio-select@2.1.0 | BSD-2-Clause | production | packages/parse → cheerio@1.
 chokidar@3.6.0 | MIT | development | . → @chakra-ui/cli@2.5.8 → chokidar@3.6.0
 chokidar@4.0.3 | MIT | development | . → sass@1.85.1 → chokidar@4.0.3
 ci-info@3.9.0 | MIT | development | . → @chakra-ui/cli@2.5.8 → update-notifier@6.0.2 → is-ci@3.0.1 → ci-info@3.9.0
+claygl@1.3.0 | BSD-2-Clause | production | packages/web → echarts-gl@2.0.9 → claygl@1.3.0
 clear-any-console@1.16.4 | MIT | development | . → @chakra-ui/cli@2.5.8 → cli-welcome@2.2.3 → clear-any-console@1.16.4
 cli-boxes@3.0.0 | MIT | development | . → @chakra-ui/cli@2.5.8 → update-notifier@6.0.2 → boxen@7.1.1 → cli-boxes@3.0.0
 cli-boxes@4.0.1 | MIT | development | . → @chakra-ui/cli@2.5.8 → cli-welcome@2.2.3 → clear-any-console@1.16.4 → command-code@1.88.0 → ink@7.1.0 → cli-boxes@4.0.1
@@ -904,6 +912,7 @@ duck@0.1.12 | BSD-2-Clause | production | packages/parse → mammoth@1.11.0 → 
 dunder-proto@1.0.1 | MIT | production | packages/service → form-data@4.0.4 → es-set-tostringtag@2.1.0 → get-intrinsic@1.3.0 → get-proto@1.0.1 → dunder-proto@1.0.1
 eastasianwidth@0.2.0 | MIT | production | projects/app → archiver@7.0.1 → archiver-utils@5.0.2 → glob@10.4.5 → jackspeak@3.4.3 → @isaacs/cliui@8.0.2 → string-width@5.1.2 → eastasianwidth@0.2.0
 ecc-jsbn@0.1.2 | MIT | production | sdk/storage → cos-nodejs-sdk-v5@3.0.0 → cos-request@1.3.3 → http-signature@1.2.0 → sshpk@1.18.0 → ecc-jsbn@0.1.2
+ecdsa-sig-formatter@1.0.11 | Apache-2.0 | production | packages/service → jsonwebtoken@9.0.3 → jws@4.0.1 → jwa@2.0.1 → ecdsa-sig-formatter@1.0.11
 ee-first@1.1.1 | MIT | production | sdk/storage → ali-oss@6.23.0 → urllib@2.44.1 → ee-first@1.1.1
 electron-to-chromium@1.5.464 | ISC | development | . → @svgr/webpack@6.5.1 → @babel/core@7.29.7 → @babel/helper-compilation-targets@7.29.7 → browserslist@4.29.4 → electron-to-chromium@1.5.464
 emoji-regex@10.6.0 | MIT | development | . → @chakra-ui/cli@2.5.8 → ora@7.0.1 → string-width@6.1.0 → emoji-regex@10.6.0
@@ -1209,6 +1218,8 @@ jsprim@1.4.2 | MIT | production | sdk/storage → cos-nodejs-sdk-v5@3.0.0 → co
 jstoxml@2.2.9 | MIT | production | sdk/storage → ali-oss@6.23.0 → jstoxml@2.2.9
 jsx-ast-utils@3.3.5 | MIT | development | . → eslint-config-next@16.3.6 → eslint-plugin-jsx-a11y@6.10.2 → jsx-ast-utils@3.3.5
 jszip@3.10.2 | MIT | production | packages/parse → mammoth@1.11.0 → jszip@3.10.2
+jwa@2.0.1 | MIT | production | packages/service → jsonwebtoken@9.0.3 → jws@4.0.1 → jwa@2.0.1
+jws@4.0.1 | MIT | production | packages/service → jsonwebtoken@9.0.3 → jws@4.0.1
 kareem@2.6.3 | Apache-2.0 | production | packages/service → mongoose@8.24.5 → kareem@2.6.3
 katex@0.16.47 | MIT | production | packages/web → mermaid@11.16.1 → katex@0.16.47
 keyv@4.5.4 | MIT | development | . → eslint@9.39.4 → file-entry-cache@8.0.0 → flat-cache@4.0.1 → keyv@4.5.4
@@ -1231,8 +1242,15 @@ locate-path@5.0.0 | MIT | development | packages/service → mongodb-memory-serv
 locate-path@6.0.0 | MIT | development | . → eslint@9.39.4 → find-up@5.0.0 → locate-path@6.0.0
 lodash.camelcase@4.3.0 | MIT | production | sdk/otel → pino-opentelemetry-transport@1.0.1 → otlp-logger@1.1.13 → @opentelemetry/exporter-logs-otlp-grpc@0.206.0 → @grpc/grpc-js@1.14.6 → @grpc/proto-loader@0.8.1 → lodash.camelcase@4.3.0
 lodash.debounce@4.0.8 | MIT | development | . → @svgr/webpack@6.5.1 → @babel/preset-env@7.29.7 → babel-plugin-polyfill-corejs2@0.4.17 → @babel/helper-define-polyfill-provider@0.6.8 → lodash.debounce@4.0.8
+lodash.includes@4.3.0 | MIT | production | packages/service → jsonwebtoken@9.0.3 → lodash.includes@4.3.0
+lodash.isboolean@3.0.3 | MIT | production | packages/service → jsonwebtoken@9.0.3 → lodash.isboolean@3.0.3
+lodash.isinteger@4.0.4 | MIT | production | packages/service → jsonwebtoken@9.0.3 → lodash.isinteger@4.0.4
+lodash.isnumber@3.0.3 | MIT | production | packages/service → jsonwebtoken@9.0.3 → lodash.isnumber@3.0.3
+lodash.isplainobject@4.0.6 | MIT | production | packages/service → jsonwebtoken@9.0.3 → lodash.isplainobject@4.0.6
+lodash.isstring@4.0.1 | MIT | production | packages/service → jsonwebtoken@9.0.3 → lodash.isstring@4.0.1
 lodash.merge@4.6.2 | MIT | development | . → eslint@9.39.4 → lodash.merge@4.6.2
 lodash.mergewith@4.6.2 | MIT | production | packages/web → @chakra-ui/react@2.10.7 → @chakra-ui/utils@2.2.4 → lodash.mergewith@4.6.2
+lodash.once@4.1.1 | MIT | production | packages/service → jsonwebtoken@9.0.3 → lodash.once@4.1.1
 lodash@4.18.1 | MIT | production | packages/web → ahooks@3.9.5 → lodash@4.18.1
 log-symbols@5.1.0 | MIT | development | . → @chakra-ui/cli@2.5.8 → ora@7.0.1 → log-symbols@5.1.0
 log-symbols@7.0.1 | MIT | development | . → @chakra-ui/cli@2.5.8 → cli-welcome@2.2.3 → clear-any-console@1.16.4 → command-code@1.88.0 → log-symbols@7.0.1
@@ -1332,7 +1350,7 @@ mongodb-memory-server-core@10.4.3 | MIT | development | packages/service → mon
 mongodb@6.20.0 | Apache-2.0 | production | packages/service → mongoose@8.24.5 → mongodb@6.20.0
 mpath@0.9.0 | MIT | production | packages/service → mongoose@8.24.5 → mpath@0.9.0
 mquery@5.0.0 | MIT | production | packages/service → mongoose@8.24.5 → mquery@5.0.0
-ms@2.1.3 | MIT | production | packages/service → mongoose@8.24.5 → ms@2.1.3
+ms@2.1.3 | MIT | production | packages/service → jsonwebtoken@9.0.3 → ms@2.1.3
 msgpackr@1.12.1 | MIT | production | packages/dal → bullmq@5.52.2 → msgpackr@1.12.1
 mz@2.7.0 | MIT | production | sdk/storage → ali-oss@6.23.0 → utility@1.18.0 → mz@2.7.0
 nanoid@3.3.20 | MIT | production | projects/app → next@16.3.0 → postcss@8.5.23 → nanoid@3.3.20
@@ -1547,7 +1565,7 @@ run-parallel@1.2.0 | MIT | development | . → tailwindcss@3.4.18 → fast-glob@
 rw@1.3.3 | BSD-3-Clause | production | packages/web → mermaid@11.16.1 → d3@7.9.0 → d3-dsv@3.0.1 → rw@1.3.3
 safe-array-concat@1.1.4 | MIT | development | . → eslint-config-next@16.3.6 → eslint-plugin-import@2.32.0 → array-includes@3.2.0 → es-abstract@1.24.2 → safe-array-concat@1.1.4
 safe-buffer@5.1.2 | MIT | production | projects/app → jszip@3.10.1 → readable-stream@2.3.8 → safe-buffer@5.1.2
-safe-buffer@5.2.1 | MIT | production | sdk/storage → cos-nodejs-sdk-v5@3.0.0 → cos-request@1.3.3 → safe-buffer@5.2.1
+safe-buffer@5.2.1 | MIT | production | packages/service → jsonwebtoken@9.0.3 → jws@4.0.1 → safe-buffer@5.2.1
 safe-push-apply@1.0.0 | MIT | development | . → eslint-config-next@16.3.6 → eslint-plugin-import@2.32.0 → array-includes@3.2.0 → es-abstract@1.24.2 → safe-push-apply@1.0.0
 safe-regex-test@1.1.0 | MIT | development | . → eslint-config-next@16.3.6 → eslint-plugin-jsx-a11y@6.10.2 → safe-regex-test@1.1.0
 safe-stable-stringify@2.5.0 | MIT | production | sdk/otel → pino@9.14.0 → safe-stable-stringify@2.5.0
@@ -1694,6 +1712,7 @@ ts-api-utils@2.5.0 | MIT | development | . → typescript-eslint@8.71.0 → @typ
 ts-dedent@2.3.0 | MIT | production | packages/web → mermaid@11.16.1 → ts-dedent@2.3.0
 ts-interface-checker@0.1.13 | Apache-2.0 | development | . → tailwindcss@3.4.18 → sucrase@3.35.1 → ts-interface-checker@0.1.13
 tsconfig-paths@3.15.0 | MIT | development | . → eslint-config-next@16.3.6 → eslint-plugin-import@2.32.0 → tsconfig-paths@3.15.0
+tslib@2.3.0 | 0BSD | production | packages/web → echarts@5.4.1 → tslib@2.3.0
 tslib@2.4.0 | 0BSD | production | packages/web → @chakra-ui/react@2.10.7 → @chakra-ui/hooks@2.4.4 → framesync@6.1.2 → tslib@2.4.0
 tslib@2.8.1 | 0BSD | production | packages/dal → bullmq@5.52.2 → tslib@2.8.1
 tunnel-agent@0.6.0 | Apache-2.0 | production | sdk/storage → cos-nodejs-sdk-v5@3.0.0 → cos-request@1.3.3 → tunnel-agent@0.6.0
@@ -1810,6 +1829,8 @@ zip-stream@6.0.1 | MIT | production | projects/app → archiver@7.0.1 → zip-st
 zod-validation-error@3.5.4 | MIT | development | . → @chakra-ui/cli@2.5.8 → cli-welcome@2.2.3 → clear-any-console@1.16.4 → langbase@1.2.4 → zod-validation-error@3.5.4
 zod-validation-error@4.0.2 | MIT | development | . → eslint-config-next@16.3.6 → eslint-plugin-react-hooks@7.1.1 → zod-validation-error@4.0.2
 zod@3.25.76 | MIT | development | . → @chakra-ui/cli@2.5.8 → cli-welcome@2.2.3 → clear-any-console@1.16.4 → langbase@1.2.4 → zod@3.25.76
+zrender@5.4.1 | BSD-3-Clause | production | packages/web → echarts@5.4.1 → zrender@5.4.1
+zrender@5.6.1 | BSD-3-Clause | production | packages/web → echarts-gl@2.0.9 → zrender@5.6.1
 zwitch@2.0.4 | MIT | production | packages/web → rehype-raw@7.0.0 → hast-util-raw@9.1.0 → zwitch@2.0.4
 
 三、workspace 内部包（12）

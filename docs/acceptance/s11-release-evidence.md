@@ -4,12 +4,14 @@
 
 - Result: `BLOCKED`.
 - Wave / stage / owner: `W4 / S11 / personA`.
-- Phase: `phase1` pre-hardening only.
+- Phase: `phase1 + post-rebase pre-install`.
 - W4 base: `14a3b9e96fcab7b6a1f1e92ccdf4dc775719ee7d`.
-- S10 merge SHA: not provided; rebase not run.
+- S10 merge SHA: `d7e38c71293a283cd6268605b5036e8ee5763c9a`; rebase completed.
 - Candidate SHA: not frozen.
-- Worktree: `/home/serien/RAG-agent-platform-s11` (clean at opening; current
-  uncommitted phase1 changes are implementation work, not candidate evidence).
+- Worktree: `/home/serien/RAG-agent-platform-s11` (clean at opening; post-rebase
+  changes are implementation work, not candidate evidence).
+- S11 worktree install: `BLOCKED`; the user's install log was from the main
+  checkout, not this worktree.
 
 ## Release Inputs
 
@@ -20,8 +22,8 @@
 | license status        | `approved-2026-10-29`                                                                         |
 | approved exceptions   | `argparse`, `caniuse-lite`, `jschardet`, `pako`, `sax`                                        |
 | obligations           | full text, notice, attribution, source/relink and distribution obligations recorded per entry |
-| NOTICE SHA-256        | `edd810c160cd0a57fb14119a1211431415f681658a78e5b702c0b02042735c09`                            |
-| SBOM SHA-256          | `81166ca23652a67a472eafea35b6e950461b19610329da72f3a14e7dd7ddce50`                            |
+| NOTICE SHA-256        | `d9d5e614499d9e24af1aaa7dd8adefe8c88752cda99c919d7c3e0ecec081f195`                            |
+| SBOM SHA-256          | `a49bfe6f5a35bae8b6faec2a305ac96cd367f3860bd68830f2838f28d1001ea5`                            |
 | SBOM image components | 6 classes; app/worker shared reference is pending                                             |
 | app/worker digest     | `RELEASE_BLOCKED_APP_IMAGE`                                                                   |
 | SaaS staging          | `BLOCKED`; URL/token not provided                                                             |

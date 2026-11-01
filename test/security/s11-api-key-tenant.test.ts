@@ -35,7 +35,7 @@ describe('TEST-X-SECURITY-APIKEY-SCOPE / ROTATION / TENANT-GUARD', () => {
     ).toThrow();
   });
 
-  it('reports S10 API key scope and rotation as BLOCKED before the S10 merge', () => {
+  it('keeps real S10 API-key scope and rotation BLOCKED until credentials exist', () => {
     const runtime = JSON.parse(
       readFileSync(
         join(root, 'packages', 'contracts', 'src', 'openapi', 'runtime-registry.data.json'),
@@ -50,20 +50,20 @@ describe('TEST-X-SECURITY-APIKEY-SCOPE / ROTATION / TENANT-GUARD', () => {
     ) as { operations: Array<{ operationId: string }> };
     const runtimeIds = new Set(runtime.operations.map((operation) => operation.operationId));
     const deferredIds = new Set(deferred.operations.map((operation) => operation.operationId));
-    expect(runtime.operations).toHaveLength(110);
-    expect(deferred.operations).toHaveLength(10);
-    expect(runtimeIds.has('API-APIKEY-CREATE')).toBe(false);
-    expect(runtimeIds.has('API-APIKEY-ROTATE')).toBe(false);
-    expect(deferredIds.has('API-APIKEY-CREATE')).toBe(true);
-    expect(deferredIds.has('API-APIKEY-ROTATE')).toBe(true);
+    expect(runtime.operations).toHaveLength(120);
+    expect(deferred.operations).toHaveLength(0);
+    expect(runtimeIds.has('API-APIKEY-CREATE')).toBe(true);
+    expect(runtimeIds.has('API-APIKEY-ROTATE')).toBe(true);
+    expect(deferredIds.has('API-APIKEY-CREATE')).toBe(false);
+    expect(deferredIds.has('API-APIKEY-ROTATE')).toBe(false);
     expect({
       testId: 'TEST-X-SECURITY-APIKEY-SCOPE',
       result: 'BLOCKED',
-      reason: 'S10_MERGE_REQUIRED',
+      reason: 'REAL_API_KEY_CREDENTIALS_UNAVAILABLE',
     }).toEqual({
       testId: 'TEST-X-SECURITY-APIKEY-SCOPE',
       result: 'BLOCKED',
-      reason: 'S10_MERGE_REQUIRED',
+      reason: 'REAL_API_KEY_CREDENTIALS_UNAVAILABLE',
     });
   });
 });

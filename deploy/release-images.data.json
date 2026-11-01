@@ -54,7 +54,7 @@
       "digest": null,
       "platform": "linux/amd64",
       "pullPolicy": "IfNotPresent",
-      "source": "DEFERRED_TO_PRODUCTION"
+      "source": "RELEASE_BLOCKED_APP_IMAGE"
     },
     {
       "service": "worker",
@@ -63,7 +63,7 @@
       "digest": null,
       "platform": "linux/amd64",
       "pullPolicy": "IfNotPresent",
-      "source": "DEFERRED_TO_PRODUCTION"
+      "source": "RELEASE_BLOCKED_APP_IMAGE"
     }
   ]
 }

@@ -125,8 +125,8 @@ export function checkReleaseImages(
     errors.push('RELEASE_BLOCKED_APP_IMAGE: KB_APP_IMAGE_REF is missing');
   } else {
     blockers.push({
-      code: 'PENDING_RELEASE_EVIDENCE',
-      detail: 'application Registry manifest digest is deferred to production release',
+      code: 'RELEASE_BLOCKED_APP_IMAGE',
+      detail: 'application Registry manifest digest is missing',
     });
   }
   const compose = inspectCompose(input.env);
@@ -168,14 +168,7 @@ export function checkReleaseImages(
     }
   }
   return {
-    status:
-      errors.length > 0
-        ? 'FAIL'
-        : blockers.length > 0 && input.allowMissingApp
-          ? 'DEFERRED_TO_PRODUCTION'
-          : blockers.length > 0
-            ? 'BLOCKED'
-            : 'PASS',
+    status: errors.length > 0 ? 'FAIL' : blockers.length > 0 ? 'BLOCKED' : 'PASS',
     errors,
     blockers,
     appImageRef: providedRef?.reference ?? null,
@@ -197,8 +190,8 @@ export function main(argv = process.argv.slice(2), env = process.env) {
   const result = checkReleaseImages({ env, allowMissingApp });
   console.log(JSON.stringify(result, null, 2));
   if (result.status === 'PASS') return 0;
-  if (result.status === 'DEFERRED_TO_PRODUCTION' && allowMissingApp) {
-    console.error('PENDING_RELEASE_EVIDENCE');
+  if (result.status === 'BLOCKED' && allowMissingApp) {
+    console.error('RELEASE_BLOCKED_APP_IMAGE');
     return 0;
   }
   for (const error of result.errors) console.error(error);
