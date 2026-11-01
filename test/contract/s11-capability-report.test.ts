@@ -18,6 +18,7 @@ import {
   parseMatrix,
   validateTemplate,
 } from '../../scripts/validate-s11-report.mjs';
+import { renderBlockedReport } from '../../scripts/render-s11-evidence.mjs';
 
 const root = resolve(import.meta.dirname, '../..');
 
@@ -83,5 +84,14 @@ describe('TEST-X-S11-CAPABILITY-MATRIX / TEST-X-S11-EVIDENCE-BINDING', () => {
       inScopeDevelopment: 66,
       inScopeData: 54,
     });
+  });
+
+  it('renders a 73-row blocked release report without claiming PASS', () => {
+    const report = renderBlockedReport();
+    expect(parseMatrix(report)).toHaveLength(73);
+    expect(report).toContain('Result: `BLOCKED`');
+    expect(report).not.toMatch(/\| PASS \|/);
+    expect(report).not.toContain('NOT_RUN');
+    expect(report.match(/EXCLUDED \|/g)).toHaveLength(4);
   });
 });

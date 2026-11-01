@@ -80,36 +80,28 @@ remain unchanged. W3 evidence remains `53 implemented / 49 closed`.
 
 ### Post-Rebase Rechecks
 
-| Gate                     | Result  | Evidence                                                                                                                   |
-| ------------------------ | ------- | -------------------------------------------------------------------------------------------------------------------------- |
-| S10 merge ancestor       | PASS    | `git merge-base --is-ancestor d7e38c7... 4c2a59b...` exit 0                                                                |
-| Contract / runtime       | PASS    | `92/120/139/8`; `120 / 0`; inventory `73/12/57/4`, Mongo 23, profiles 4, queues 13                                         |
-| Contract suite           | PASS    | 24 files / 119 tests                                                                                                       |
-| Unit service suite       | PASS    | 28 files / 130 tests                                                                                                       |
-| Unit web/app/contracts   | PASS    | 23 files / 88 tests                                                                                                        |
-| `pnpm install` in S11    | PASS    | exit 0; `pnpm-lock.yaml` unchanged                                                                                         |
-| Security + recovery      | PASS    | 10 + 2 files / 21 tests                                                                                                    |
-| Tenant                   | PASS    | 10 files / 19 tests with local real Mongo/PG/Redis/MinIO                                                                   |
-| Fault                    | PASS    | 12 files / 39 tests with local real Mongo/PG/Redis/MinIO                                                                   |
-| Concurrency              | PASS    | 10 files / 22 tests                                                                                                        |
-| S10 integration slice    | PASS    | 5 files / 17 tests                                                                                                         |
-| Full service integration | PARTIAL | 28 passed files; 5 files blocked by tests that default to hostname `mongo` and need an explicit `KB_MONGO_URI` alias       |
-| Archive/build            | FAIL    | `pnpm build:workers` PASS; `pnpm build` fails because `projects/app/node_modules/next` is a symlink outside Turbopack root |
+| Gate                     | Result  | Evidence                                                                                                             |
+| ------------------------ | ------- | -------------------------------------------------------------------------------------------------------------------- |
+| S10 merge ancestor       | PASS    | `git merge-base --is-ancestor d7e38c7... 4c2a59b...` exit 0                                                          |
+| Contract / runtime       | PASS    | `92/120/139/8`; `120 / 0`; inventory `73/12/57/4`, Mongo 23, profiles 4, queues 13                                   |
+| Contract suite           | PASS    | 24 files / 119 tests                                                                                                 |
+| Full E2E suite           | PASS    | 18 files / 73 tests; 18 canonical pages exercised in the local app                                                   |
+| Unit service suite       | PASS    | 28 files / 130 tests                                                                                                 |
+| Unit web/app/contracts   | PASS    | 23 files / 88 tests                                                                                                  |
+| `pnpm install` in S11    | PASS    | exit 0; `pnpm-lock.yaml` unchanged                                                                                   |
+| Security + recovery      | PASS    | 10 + 2 files / 21 tests                                                                                              |
+| Tenant                   | PASS    | 10 files / 19 tests with local real Mongo/PG/Redis/MinIO                                                             |
+| Fault                    | PASS    | 12 files / 39 tests with local real Mongo/PG/Redis/MinIO                                                             |
+| Concurrency              | PASS    | 10 files / 22 tests                                                                                                  |
+| S10 integration slice    | PASS    | 5 files / 17 tests                                                                                                   |
+| Full service integration | PARTIAL | 28 passed files; 5 files blocked by tests that default to hostname `mongo` and need an explicit `KB_MONGO_URI` alias |
+| Archive/build            | PASS    | clean dependency reinstall; `pnpm build` 12/12 and `pnpm build:workers` 11/11                                        |
 
-The app-build failure is an environment/dependency-layout blocker, not a
-release PASS. The initial phase1 run issued no explicit
-`pnpm install/add/update/remove` command. One temporary Windows scratch
-checkout invocation let pnpm's
-`verify-deps-before-run` try an implicit install; it failed on ignored build
-scripts, its temporary `pnpm-workspace.yaml` placeholder was removed, and the
-tracked lockfile stayed at the W4 hash. The implementation and evidence
-worktree used pre-existing WSL dependency links, not a new install.
-
-The user subsequently ran `pnpm install` and `pnpm install --force` in the S11
-worktree. Both exited 0 and left `pnpm-lock.yaml` unchanged, but they retained
-the pre-existing `projects/app/node_modules/next` symlink pointing to the main
-checkout. A clean dependency-directory reinstall is required before the
-Turbopack build can be accepted.
+An earlier error was caused by the temporary dependency-link layout: Turbopack
+rejected `projects/app/node_modules/next` because it pointed outside the
+worktree. The user then ran a clean dependency-directory reinstall; the final
+`pnpm install` exited 0 without changing `pnpm-lock.yaml`, and the final
+`pnpm build` passed all 12 tasks. The tracked worktree remained clean.
 
 ## Provider Matrix
 
