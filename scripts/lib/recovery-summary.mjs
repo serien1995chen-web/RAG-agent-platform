@@ -53,7 +53,15 @@ export function normalizeRecovery(input) {
   const events = assertNoDuplicateEventIds(input.eventIds);
   const vectors = assertNoDuplicateVectors(input.vectors);
   const orphans = assertNoActiveOrphans(input.objects);
-  const failures = [counts, events, vectors, orphans].filter((item) => item.status === 'FAIL');
+  const health = {
+    status: input.health?.healthz === 200 && input.health?.readyz === 200 ? 'PASS' : 'FAIL',
+    healthz: input.health?.healthz ?? null,
+    readyz: input.health?.readyz ?? null,
+  };
+  const failures = [counts, events, vectors, orphans, health].filter(
+    (item) => item.status === 'FAIL',
+  );
+  const blockers = input.blockers ?? [];
   return {
     schemaVersion: 1,
     changeId: input.changeId,
@@ -67,8 +75,8 @@ export function normalizeRecovery(input) {
     events,
     vectors,
     objects: orphans,
-    health: input.health,
-    status: failures.length === 0 ? 'PASS' : 'FAIL',
-    blockers: input.blockers ?? [],
+    health,
+    status: failures.length > 0 ? 'FAIL' : blockers.length > 0 ? 'SCOPED_BLOCKED' : 'PASS',
+    blockers,
   };
 }

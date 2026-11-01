@@ -24,7 +24,9 @@ No mock result is counted as a real Provider result.
 - `test/real-provider/s11-aiproxy-real.test.ts`
 - `test/real-provider/s11-ocr-real.test.ts`
 - `test/real-provider/s11-connectors-real.test.ts`
+- `test/real-provider/s11-provider-quota.test.ts`
 - `test/fault/s11-provider-fault.test.ts`
+- `test/fault/s11-full-chain-recovery.test.ts`
 
 Run:
 
