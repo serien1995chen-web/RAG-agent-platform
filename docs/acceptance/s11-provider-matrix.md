@@ -2,37 +2,21 @@
 
 Result: `SCOPED_BLOCKED`.
 
-Candidate: not frozen. Worktree: `/home/serien/RAG-agent-platform-s11`.
-S10 merge: `d7e38c71293a283cd6268605b5036e8ee5763c9a`.
+Candidate: `UNFROZEN`.
 
-| Provider             | Scoped status       | Real verification     | Evidence                                                                                                          |
-| -------------------- | ------------------- | --------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| TokenDance / AIProxy | `SCOPED_BLOCKED`    | `EXTERNAL_UNVERIFIED` | catalog/model profile inputs absent; 14 adapter contract tests pass                                               |
-| Somark               | `SCOPED_BLOCKED`    | `EXTERNAL_UNVERIFIED` | profile absent; request/schema/usage contract tests pass                                                          |
-| TextIn               | `SCOPED_BLOCKED`    | `EXTERNAL_UNVERIFIED` | profile absent; request/schema/usage contract tests pass                                                          |
-| Doc2X                | `SCOPED_BLOCKED`    | `EXTERNAL_UNVERIFIED` | profile absent; preupload/poll/deadline contract tests pass                                                       |
-| Feishu               | `SCOPED_BLOCKED`    | `EXTERNAL_UNVERIFIED` | app/folder/doc inputs and controlled delete-propagation case absent; token refresh/pagination contract tests pass |
-| Sangfor              | `DEFERRED_BY_SCOPE` | not permitted         | zero scoped real-call guard                                                                                       |
-| Yuque                | `DEFERRED_BY_SCOPE` | not permitted         | zero scoped real-call guard                                                                                       |
-| DingTalk             | `DEFERRED_BY_SCOPE` | not permitted         | zero scoped real-call guard                                                                                       |
+Fixture SHA-256: `82b20e68f2eb52d5f0dc2c3b604be348adf1f3cff448fec281a9bb4e9f971cee`.
 
-No mock result is counted as a real Provider result.
+Input manifest SHA-256: `UNAVAILABLE`.
 
-## Implemented Harness
+| Provider             | Status                | Command / evidence                                                                                                                                 | Remaining risk                  |
+| -------------------- | --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------- |
+| TokenDance / AIProxy | `EXTERNAL_UNVERIFIED` | S11_SCOPE_PROFILE=knowledge-usability-v1 pnpm test:provider:real -- s11-aiproxy-real; t02-aiproxy.json sha256=missing; host=none                   | S11_EVIDENCE_DIR missing        |
+| Somark               | `EXTERNAL_UNVERIFIED` | S11_SCOPE_PROFILE=knowledge-usability-v1 pnpm test:provider:real -- s11-ocr-real; t02-ocr.json sha256=missing; host=none                           | S11_EVIDENCE_DIR missing        |
+| TextIn               | `EXTERNAL_UNVERIFIED` | S11_SCOPE_PROFILE=knowledge-usability-v1 pnpm test:provider:real -- s11-ocr-real; t02-ocr.json sha256=missing; host=none                           | S11_EVIDENCE_DIR missing        |
+| Doc2X                | `EXTERNAL_UNVERIFIED` | S11_SCOPE_PROFILE=knowledge-usability-v1 pnpm test:provider:real -- s11-ocr-real; t02-ocr.json sha256=missing; host=none                           | S11_EVIDENCE_DIR missing        |
+| 飞书                 | `EXTERNAL_UNVERIFIED` | S11_SCOPE_PROFILE=knowledge-usability-v1 pnpm test:provider:real -- s11-connectors-real; t02-connectors.json sha256=missing; host=3b1b05eb4480d8b8 | S11_EVIDENCE_DIR missing        |
+| Sangfor              | `DEFERRED_BY_SCOPE`   | pnpm test:contract -- s11-provider-adapters; zero-real-call guard=MISSING                                                                          | deferred guard evidence missing |
+| 语雀                 | `DEFERRED_BY_SCOPE`   | pnpm test:contract -- s11-provider-adapters; zero-real-call guard=MISSING                                                                          | deferred guard evidence missing |
+| 钉钉                 | `DEFERRED_BY_SCOPE`   | pnpm test:contract -- s11-provider-adapters; zero-real-call guard=MISSING                                                                          | deferred guard evidence missing |
 
-- `test/real-provider/vitest.config.ts`
-- `test/real-provider/s11-aiproxy-real.test.ts`
-- `test/real-provider/s11-ocr-real.test.ts`
-- `test/real-provider/s11-connectors-real.test.ts`
-- `test/real-provider/s11-provider-quota.test.ts`
-- `test/fault/s11-provider-fault.test.ts`
-- `test/fault/s11-full-chain-recovery.test.ts`
-
-Run:
-
-```bash
-S11_SCOPE_PROFILE=knowledge-usability-v1 pnpm test:provider:real
-```
-
-Current exit code is `2` with 18 missing scoped field names. No credential value
-is printed.
+No mock transport or unverified Provider is counted as real.

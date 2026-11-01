@@ -11,7 +11,7 @@
 - Candidate SHA: not frozen.
 - Evidence commit SHA: not created.
 - Worktree: `/home/serien/RAG-agent-platform-s11`. Implementation checkpoint:
-  `90dd4f5`; it is not a frozen candidate or evidence worktree.
+  `4fcbceb`; it is not a frozen candidate or evidence worktree.
 
 This report records a blocked phase1/post-rebase checkpoint. It is not a
 whole-stage PASS and does not close W4.
@@ -45,16 +45,16 @@ real API-key evidence and are not closed by this blocked report. W3 remains
 
 ## Task Coverage
 
-| Task      | Current result                             | Implemented surface                                                                                              | Evidence                                                                                                |
-| --------- | ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
-| `S11-T01` | BLOCKED for real chain                     | deterministic fixtures, full-chain stack/API-key harness and runbook                                             | fixture manifest stable; phase1 harness tests pass                                                      |
-| `S11-T02` | `SCOPED_BLOCKED`                           | AIProxy/OCR/Feishu HTTP adapters, mode-aware connector factory, scoped deferred guards and real-provider harness | 14 provider contract tests; 4 provider fault tests; 2 quota inheritance tests; 18 missing scoped fields |
-| `S11-T03` | fixture PASS; full runner `SCOPED_BLOCKED` | k6 probe/full runner, three scenarios, canonical PDF upload fixture, 1M Segment seeder and strict validation     | k6 v2.3.0 probe READY; 1,000,000 actual Segments; 300 unique uploads; real models missing               |
-| `S11-T04` | local PASS; external key scope blocked     | SSRF, archive, MIME, Range, XSS, tenant and secret tests                                                         | 10 files / 21 tests                                                                                     |
-| `S11-T05` | generate + consume real drill PASS         | container recovery executor, media generator/consumer, isolated restore, counts/hash and health guards           | differences 0; health/ready 200; 2 files / 9 tests                                                      |
-| `S11-T06` | local matrix PASS; final candidate blocked | real Playwright 18-page matrix, axe, overflow, keyboard, network and external evidence                           | 18 x 3 = 54 screenshots; UI summary `4686ca2b...`                                                       |
-| `S11-T07` | static PASS; production deferred           | approved obligations, generated NOTICE/SBOM, five third-party digests and release semantics                      | release check `DEFERRED_TO_PRODUCTION`; app digest pending                                              |
-| `S11-T08` | blocked template/report                    | 73-row generator, collector, validator and Scoped matrix logic                                                   | 73 unique rows; no candidate-bound PASS                                                                 |
+| Task      | Current result                             | Implemented surface                                                                                              | Evidence                                                                                  |
+| --------- | ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| `S11-T01` | BLOCKED for real chain                     | deterministic fixtures, full-chain stack/API-key harness and runbook                                             | fixture manifest stable; phase1 harness tests pass                                        |
+| `S11-T02` | `SCOPED_BLOCKED`                           | AIProxy/OCR/Feishu HTTP adapters, mode-aware connector factory, scoped deferred guards and real-provider harness | provider matrix sha `1dde3fbc...`; 18 missing scoped fields                               |
+| `S11-T03` | fixture PASS; full runner `SCOPED_BLOCKED` | k6 probe/full runner, three scenarios, canonical PDF upload fixture, 1M Segment seeder and strict validation     | k6 v2.3.0 probe READY; 1,000,000 actual Segments; 300 unique uploads; real models missing |
+| `S11-T04` | local PASS; external key scope blocked     | SSRF, archive, MIME, Range, XSS, tenant and secret tests                                                         | 10 files / 21 tests                                                                       |
+| `S11-T05` | generate + consume real drill PASS         | container recovery executor, media generator/consumer, isolated restore, counts/hash and health guards           | differences 0; health/ready 200; 2 files / 9 tests                                        |
+| `S11-T06` | local matrix PASS; final candidate blocked | real Playwright 18-page matrix, axe, overflow, keyboard, network and external evidence                           | 18 x 3 = 54 screenshots; UI summary `4686ca2b...`                                         |
+| `S11-T07` | static PASS; production deferred           | approved obligations, generated NOTICE/SBOM, five third-party digests and release semantics                      | release check `DEFERRED_TO_PRODUCTION`; app digest pending                                |
+| `S11-T08` | blocked template/report                    | 73-row generator, collector, validator and Scoped matrix logic                                                   | 73 unique rows; no candidate-bound PASS                                                   |
 
 ## Local Gate Results
 
@@ -73,7 +73,7 @@ real API-key evidence and are not closed by this blocked report. W3 remains
 | `pnpm build`                             |    0 | 12/12 tasks; 20 application routes                               |
 | `pnpm build:workers`                     |    0 | 11/11 tasks                                                      |
 | `pnpm test:unit`                         |    0 | 22/22 tasks                                                      |
-| `pnpm test:contract`                     |    0 | 25 files / 125 tests                                             |
+| `pnpm test:contract`                     |    0 | 25 files / 130 tests                                             |
 | `pnpm test:integration`                  |    0 | 33 files / 179 tests in the service integration slice            |
 | `pnpm test:tenant`                       |    0 | 10 files / 19 tests                                              |
 | `pnpm test:concurrency`                  |    0 | 10 files / 22 tests                                              |
@@ -82,6 +82,7 @@ real API-key evidence and are not closed by this blocked report. W3 remains
 | `pnpm test:e2e`                          |    0 | 18 files / 73 tests                                              |
 | Playwright S11 matrix                    |    0 | 18 pages x 3 viewports; 54 screenshots                           |
 | `pnpm test:provider:real`                |    2 | `SCOPED_BLOCKED` by 18 missing input names                       |
+| provider matrix generator                |    0 | 8 rows; 5 unverified / 3 deferred; 0 real                        |
 | `pnpm test:performance` probe            |    0 | `PERFORMANCE_READY`                                              |
 | performance full fixture                 |    0 | 1M actual Segments; 300 unique uploads; `s11-perf-v1`            |
 | performance full runner                  |    4 | `PERFORMANCE_PROVIDER_BLOCKED`; real model inputs missing        |
@@ -103,6 +104,8 @@ real API-key evidence and are not closed by this blocked report. W3 remains
 | DingTalk             | `DEFERRED_BY_SCOPE`   | real mode returns explicit deferred guard                         |
 
 No mock transport is represented as a real Provider success.
+The generated matrix is `docs/acceptance/s11-provider-matrix.md` with SHA-256
+`1dde3fbc9a62d8f2713768d0913d819bc5e05bc9a77ba0dc7d45cf597f1e62df`.
 
 ## Performance, Recovery And UI
 
