@@ -21,7 +21,7 @@ import {
 } from '../../scripts/validate-s11-report.mjs';
 import { renderBlockedReport, renderProviderMatrix } from '../../scripts/render-s11-evidence.mjs';
 import { writeProviderMatrixManifest } from '../../scripts/run-provider-real.mjs';
-import { collectAll } from '../../scripts/collect-s11-evidence.mjs';
+import { collectAll, loadCommandEvidence } from '../../scripts/collect-s11-evidence.mjs';
 
 const root = resolve(import.meta.dirname, '../..');
 const temporaryDirectories: string[] = [];
@@ -337,7 +337,61 @@ describe('TEST-X-S11-CAPABILITY-MATRIX / TEST-X-S11-EVIDENCE-BINDING', () => {
       inScopeData: 54,
     });
     expect(summary.blockers.map((blocker) => blocker.code)).toEqual(
-      expect.arrayContaining(['SCOPED_PROVIDER_BLOCKED', 'SCOPED_CANDIDATE_UNFROZEN']),
+      expect.arrayContaining([
+        'SCOPED_PROVIDER_BLOCKED',
+        'SCOPED_CANDIDATE_UNFROZEN',
+        'SCOPED_EVIDENCE_MISSING',
+      ]),
+    );
+  });
+
+  it('loads candidate-bound command and test evidence without accepting missing hashes', () => {
+    const directory = evidenceDirectory();
+    const candidateSha = 'a'.repeat(40);
+    const evidencePath = join(directory, 'commands.json');
+    writeFileSync(
+      evidencePath,
+      `${JSON.stringify({
+        schemaVersion: 1,
+        candidateSha,
+        commands: [
+          {
+            command: 'pnpm test:security',
+            exitCode: 0,
+            keyResult: '10 files / 21 tests',
+            outputSha256: 'c'.repeat(64),
+          },
+        ],
+        testIds: [
+          {
+            id: 'TEST-X-SECRET-LEAK',
+            result: 'PASS',
+            evidencePath: 'security.log',
+          },
+        ],
+      })}\n`,
+    );
+    const loaded = loadCommandEvidence({ S11_COMMAND_EVIDENCE_FILE: evidencePath });
+    expect(loaded.error).toBeNull();
+    expect(loaded.sha256).toMatch(/^[a-f0-9]{64}$/);
+    expect(loaded.commands).toEqual([
+      expect.objectContaining({ command: 'pnpm test:security', exitCode: 0 }),
+    ]);
+    expect(loaded.testIds).toEqual([
+      expect.objectContaining({ id: 'TEST-X-SECRET-LEAK', result: 'PASS' }),
+    ]);
+
+    writeFileSync(
+      evidencePath,
+      `${JSON.stringify({
+        schemaVersion: 1,
+        candidateSha,
+        commands: [{ command: 'pnpm test:security', exitCode: 0 }],
+        testIds: [],
+      })}\n`,
+    );
+    expect(loadCommandEvidence({ S11_COMMAND_EVIDENCE_FILE: evidencePath }).error).toBe(
+      'command evidence entry invalid',
     );
   });
 });

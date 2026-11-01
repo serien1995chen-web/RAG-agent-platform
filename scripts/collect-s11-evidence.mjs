@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 import { createHash } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { isAbsolute, join, relative, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { buildKnowledgeContractArtifacts } from '../packages/contracts/src/openapi/openapi-builder.mjs';
 import { safeProviderSummary } from './check-provider-inputs.mjs';
@@ -55,6 +55,101 @@ export function appendTest(tests, input) {
   });
 }
 
+function outsideRepository(path) {
+  const resolved = resolve(path);
+  const fromRoot = relative(repoRoot, resolved);
+  if (fromRoot === '' || (!fromRoot.startsWith('..') && !isAbsolute(fromRoot))) {
+    throw new Error('evidence manifest must be outside the worktree');
+  }
+  return resolved;
+}
+
+function validSha256(value) {
+  return typeof value === 'string' && /^[a-f0-9]{64}$/.test(value);
+}
+
+export function loadCommandEvidence(env = process.env) {
+  const configured = env.S11_COMMAND_EVIDENCE_FILE?.trim();
+  const fallback = env.S11_EVIDENCE_DIR?.trim()
+    ? join(env.S11_EVIDENCE_DIR.trim(), 'commands.json')
+    : null;
+  const selected = configured || fallback;
+  if (!selected) {
+    return {
+      commands: [],
+      testIds: [],
+      candidateSha: null,
+      path: null,
+      sha256: null,
+      error: 'command evidence manifest missing',
+    };
+  }
+  let path = null;
+  let raw = null;
+  try {
+    path = outsideRepository(selected);
+    if (!existsSync(path)) {
+      return {
+        commands: [],
+        testIds: [],
+        candidateSha: null,
+        path,
+        sha256: null,
+        error: 'command evidence manifest missing',
+      };
+    }
+    raw = readFileSync(path, 'utf8');
+    const value = JSON.parse(raw);
+    if (
+      value.schemaVersion !== 1 ||
+      !Array.isArray(value.commands) ||
+      !Array.isArray(value.testIds)
+    ) {
+      throw new Error('command evidence manifest schema invalid');
+    }
+    if (value.candidateSha !== undefined && !isCandidateSha(value.candidateSha)) {
+      throw new Error('command evidence candidate invalid');
+    }
+    const commands = value.commands.map((entry) => {
+      if (
+        !entry ||
+        typeof entry.command !== 'string' ||
+        entry.command.trim() === '' ||
+        !Number.isInteger(entry.exitCode) ||
+        !validSha256(entry.outputSha256)
+      ) {
+        throw new Error('command evidence entry invalid');
+      }
+      return {
+        ...runCommand(entry.command, {
+          exitCode: entry.exitCode,
+          keyResult: entry.keyResult,
+        }),
+        outputSha256: entry.outputSha256,
+      };
+    });
+    const testIds = [];
+    for (const entry of value.testIds) appendTest(testIds, entry);
+    return {
+      commands,
+      testIds,
+      candidateSha: value.candidateSha ?? null,
+      path,
+      sha256: captureHash(raw),
+      error: null,
+    };
+  } catch (error) {
+    return {
+      commands: [],
+      testIds: [],
+      candidateSha: null,
+      path,
+      sha256: raw ? captureHash(raw) : null,
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
+
 function isCandidateSha(value) {
   return typeof value === 'string' && /^(?:[a-f0-9]{40}|[a-f0-9]{64})$/.test(value);
 }
@@ -69,6 +164,7 @@ export function collectAll(env = process.env, task = null) {
   const rows = buildTemplateRows(repoRoot, scopeProfile);
   const counts = scopeCounts(repoRoot, scopeProfile);
   const providers = safeProviderSummary(env);
+  const commandEvidence = loadCommandEvidence(env);
   const configuredCandidate = env.CANDIDATE_SHA?.trim() ?? '';
   const candidateSha = isCandidateSha(configuredCandidate) ? configuredCandidate : 'UNFROZEN';
   const blockers = [];
@@ -102,6 +198,24 @@ export function collectAll(env = process.env, task = null) {
       detail: 'CANDIDATE_SHA must be a frozen 40 or 64 character hexadecimal SHA',
     });
   }
+  if (commandEvidence.error) {
+    blockers.push({
+      code: scopeProfile === S11_SCOPE_PROFILE ? 'SCOPED_EVIDENCE_MISSING' : 'EVIDENCE_MISSING',
+      task: 'S11-T08',
+      detail: commandEvidence.error,
+    });
+  }
+  if (
+    commandEvidence.candidateSha &&
+    isCandidateSha(configuredCandidate) &&
+    commandEvidence.candidateSha !== configuredCandidate
+  ) {
+    blockers.push({
+      code: 'EVIDENCE_CANDIDATE_MISMATCH',
+      task: 'S11-T08',
+      detail: 'command evidence belongs to a different candidate',
+    });
+  }
   if (task !== null && !isTaskId(task)) {
     throw new Error(`unknown S11 task: ${String(task)}`);
   }
@@ -130,8 +244,12 @@ export function collectAll(env = process.env, task = null) {
     crossTestIds: S11_CROSS_TEST_IDS,
     deferredCrossTestIds: scopeProfile === S11_SCOPE_PROFILE ? ['TEST-X-SAAS-READY'] : [],
     excludedIds: S11_EXCLUDED_IDS,
-    commands: [],
-    testIds: [],
+    commands: commandEvidence.commands,
+    testIds: commandEvidence.testIds,
+    commandEvidenceManifest: {
+      path: commandEvidence.path,
+      sha256: commandEvidence.sha256,
+    },
     blockers,
     status:
       blockers.length > 0
