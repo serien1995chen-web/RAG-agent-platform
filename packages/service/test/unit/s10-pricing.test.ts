@@ -2,8 +2,10 @@ import { describe, expect, it } from 'vitest';
 import {
   FIXTURE_V1_PRICING,
   FREE_V1_QUOTA,
+  S11_PERFORMANCE_V1_QUOTA,
   ZERO_V1_PRICING,
   canonicalJson,
+  loadS10QuotaProfile,
   loadS10PricingProfile,
 } from '../../src/shared/config/s10-profiles';
 import {
@@ -23,6 +25,38 @@ describe('S10 pricing and quota profiles', () => {
     expect(loadS10PricingProfile({ KB_USAGE_PRICING_PROFILE: 'fixture-v1' })).toEqual(
       FIXTURE_V1_PRICING,
     );
+  });
+
+  it('keeps free-v1 as the default and gates the S11 performance quota to KB_ENV=test', () => {
+    expect(loadS10QuotaProfile({})).toEqual(FREE_V1_QUOTA);
+    expect(loadS10QuotaProfile({ KB_ENV: 'test' })).toEqual(FREE_V1_QUOTA);
+    expect(S11_PERFORMANCE_V1_QUOTA).toMatchObject({
+      name: 's11-perf-v1',
+      aiPointsLimit: 1_000_000,
+      storageBytesLimit: 50 * 1024 * 1024 * 1024,
+      maxSpaces: 3,
+      maxIndexes: 1_100_000,
+      requestsPerMinute: 6_000,
+      maxModelConcurrency: 10,
+    });
+    expect(S11_PERFORMANCE_V1_QUOTA.aiPointsLimit * 1_000_000).toBe(1_000_000_000_000);
+    expect(
+      loadS10QuotaProfile({
+        KB_ENV: 'test',
+        KB_QUOTA_PROFILE: 's11-perf-v1',
+      }),
+    ).toEqual(S11_PERFORMANCE_V1_QUOTA);
+    expect(() =>
+      loadS10QuotaProfile({
+        KB_ENV: 'production',
+        KB_QUOTA_PROFILE: 's11-perf-v1',
+      }),
+    ).toThrow(/KB_ENV=test/);
+    expect(() =>
+      loadS10QuotaProfile({
+        KB_QUOTA_PROFILE: 's11-perf-v1',
+      }),
+    ).toThrow(/KB_ENV=test/);
   });
 
   it('applies zero, token, page and audio micros without floating accumulation', () => {

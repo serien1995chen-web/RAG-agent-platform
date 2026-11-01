@@ -196,7 +196,7 @@ export default function SearchPage() {
     const rawFilters = parseFilters(queryString(router.query.filters));
     const nextMode = parsePageMode(queryString(router.query.mode));
     const defaults = defaultS7SearchForm(spaceId);
-    const next = S7SearchFormSchema.parse({
+    const candidate = {
       ...defaults,
       query: queryString(router.query.query) ?? '',
       mode: nextMode === 'deep' ? 'hybrid' : nextMode,
@@ -210,7 +210,15 @@ export default function SearchPage() {
       usingRerank: queryString(router.query.rerank) === 'true',
       knowledgeSpaceIds: parseSpaceIds(queryString(router.query.spaces), spaceId),
       filters: rawFilters ?? defaults.filters,
+    };
+    // The workbench must render before the first non-empty query is submitted.
+    const parsed = S7SearchFormSchema.safeParse({
+      ...candidate,
+      query: candidate.query || '__s7_empty_query__',
     });
+    const next = parsed.success
+      ? { ...parsed.data, query: candidate.query }
+      : { ...defaults, query: candidate.query };
     setValue(next);
     setPageMode(nextMode);
     setDeepValue((current) => ({

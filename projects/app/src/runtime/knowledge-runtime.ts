@@ -29,9 +29,7 @@ import {
   KnowledgeVectorRepository,
   KnowledgeUrlImportAdapter,
   CustomApiLibraryClient,
-  FeishuConnectorClient,
-  YuqueConnectorClient,
-  DingtalkConnectorClient,
+  createConnectorProviderClients,
   S04IngestionApplication,
   S5AiproxyCatalogAdapter,
   S5AiproxyHttpAdapter,
@@ -322,6 +320,8 @@ async function bootstrapRuntime(): Promise<TelemetryKnowledgeApiRuntime> {
       baseUrl: s5AiproxyConfig.baseUrl,
       token: s5ModelToken,
       transport: s5ModelTransport,
+      ...(s5AiproxyConfig.providerOnly ? { providerOnly: s5AiproxyConfig.providerOnly } : {}),
+      rerankProtocol: s5AiproxyConfig.rerankProtocol,
     }),
     usage: s5Usage,
     quotaGate,
@@ -446,11 +446,10 @@ async function bootstrapRuntime(): Promise<TelemetryKnowledgeApiRuntime> {
     resolveSecretRef(config.credentialEncryptionKeyRef),
   );
   const ingestionContent = new KnowledgeIngestionContentAdapter(objectStore);
-  const connectorClients = {
-    feishu: new FeishuConnectorClient(),
-    yuque: new YuqueConnectorClient(),
-    dingtalk: new DingtalkConnectorClient(),
-  };
+  const connectorClients = createConnectorProviderClients({
+    mode: config.externalModes.connector,
+    scopeProfile: config.scopeProfile,
+  });
   const connectorGateway = {
     async catalog(input: {
       provider: 'feishu' | 'yuque' | 'dingtalk';
@@ -461,6 +460,7 @@ async function bootstrapRuntime(): Promise<TelemetryKnowledgeApiRuntime> {
       context: TenantContext;
     }) {
       const request = {
+        provider: input.provider,
         config: input.config,
         credentials: input.credentials,
         rootId: input.rootId,
@@ -479,6 +479,7 @@ async function bootstrapRuntime(): Promise<TelemetryKnowledgeApiRuntime> {
       context: TenantContext;
     }) {
       const request = {
+        provider: input.provider,
         config: input.config,
         credentials: input.credentials,
         externalIds: input.externalIds,

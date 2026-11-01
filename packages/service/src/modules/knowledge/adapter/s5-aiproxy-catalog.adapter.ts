@@ -1,10 +1,79 @@
+import { z } from 'zod';
 import { createKnowledgeError } from '@kb/contracts';
-import type { ModelCatalogItem, ModelCatalogPort } from '../application/s5-model-ports';
+import {
+  S5_MODEL_TYPES,
+  type ModelCatalogItem,
+  type ModelCatalogPort,
+} from '../application/s5-model-ports';
 import { resolveSecretRef } from '../../../shared/config/secret-ref';
 import type { S5AiproxyConfig } from '../../../shared/config/s5-aiproxy-config';
 import { S5ModelTransportError } from '../application/s5-model-gateway.port';
 import { S5AiproxyCatalogEnvelopeSchema, normalizeCatalog } from './s5-model-catalog.schema';
 import { joinAiproxyUrl, type S5HttpTransportPort } from './s5-aiproxy-http.adapter';
+
+const BareCatalogEnvelopeSchema = z
+  .object({
+    data: z.array(z.object({ id: z.string().min(1).max(256) }).passthrough()),
+  })
+  .passthrough();
+
+const ModelProfileSchema = z
+  .object({
+    models: z.array(
+      z
+        .object({
+          id: z.string().min(1).max(256),
+          type: z.enum(S5_MODEL_TYPES),
+          capabilities: z.array(z.string().min(1).max(128)).min(1),
+          dimension: z.number().int().nullable().optional(),
+        })
+        .strict(),
+    ),
+  })
+  .strict();
+
+type ModelProfileEntry = z.infer<typeof ModelProfileSchema>['models'][number];
+
+function modelProfile(env: Readonly<Record<string, string | undefined>>) {
+  const raw = env.AIPROXY_MODEL_PROFILE_JSON?.trim();
+  if (!raw) return null;
+  let value: unknown;
+  try {
+    value = JSON.parse(raw);
+  } catch {
+    return null;
+  }
+  const parsed = ModelProfileSchema.safeParse(value);
+  if (!parsed.success) return null;
+  const profile = new Map<string, ModelProfileEntry>();
+  for (const entry of parsed.data.models) {
+    if (profile.has(entry.id)) return null;
+    profile.set(entry.id, entry);
+  }
+  return profile;
+}
+
+function mergeCatalogWithProfile(
+  payload: unknown,
+  profile: ReadonlyMap<string, ModelProfileEntry>,
+) {
+  const bare = BareCatalogEnvelopeSchema.safeParse(payload);
+  if (!bare.success) return null;
+  return {
+    data: bare.data.data.flatMap((item) => {
+      const configured = profile.get(item.id);
+      if (!configured) return [];
+      return [
+        {
+          ...item,
+          type: configured.type,
+          capabilities: configured.capabilities,
+          ...(typeof configured.dimension === 'number' ? { dimension: configured.dimension } : {}),
+        },
+      ];
+    }),
+  };
+}
 
 function catalogError(
   code:
@@ -27,6 +96,7 @@ function catalogError(
 
 export class S5AiproxyCatalogAdapter implements ModelCatalogPort {
   private readonly token: string;
+  private readonly env: Readonly<Record<string, string | undefined>>;
 
   constructor(
     private readonly input: {
@@ -36,6 +106,7 @@ export class S5AiproxyCatalogAdapter implements ModelCatalogPort {
     },
   ) {
     this.token = resolveSecretRef(input.config.apiTokenRef, input.env ?? {});
+    this.env = input.env ?? {};
   }
 
   async listModels(input: {
@@ -83,7 +154,19 @@ export class S5AiproxyCatalogAdapter implements ModelCatalogPort {
         response.status,
       );
     }
-    const parsed = S5AiproxyCatalogEnvelopeSchema.safeParse(response.data);
+    const profile = modelProfile(this.env);
+    if (profile && this.env.S11_AIPROXY_MODEL_MAPPING_APPROVED !== 'true') {
+      throw catalogError(
+        'KNOWLEDGE_PROVIDER_CONTRACT_INVALID',
+        input.requestId,
+        input.traceId,
+        response.status,
+      );
+    }
+    const catalogPayload = profile
+      ? mergeCatalogWithProfile(response.data, profile)
+      : response.data;
+    const parsed = S5AiproxyCatalogEnvelopeSchema.safeParse(catalogPayload);
     if (!parsed.success) {
       throw catalogError(
         'KNOWLEDGE_PROVIDER_CONTRACT_INVALID',

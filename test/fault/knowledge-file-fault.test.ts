@@ -150,7 +150,7 @@ describe('TEST-FILE-003-BLOCK ticket rate limit isolation', () => {
       async eval(_script: string, _keys: number, key: string) {
         const used = (counts.get(key) ?? 0) + 1;
         counts.set(key, used);
-        return [used, 1000];
+        return [used <= 2 ? 1 : 0, Math.max(0, 2 - used), used <= 2 ? 0 : 500];
       },
     };
     const limiter = new RedisKnowledgeRateLimiter(redis as never);

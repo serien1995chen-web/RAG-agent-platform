@@ -1,0 +1,99 @@
+{
+  "schemaVersion": 1,
+  "approvalDate": "2026-10-29",
+  "approvalSource": "用户于 2026-10-29 转述的法务批准",
+  "status": "approved-2026-10-29",
+  "entries": [
+    {
+      "name": "argparse",
+      "version": "2.0.1",
+      "expression": "Python-2.0",
+      "parentChain": "packages/service → @apidevtools/json-schema-ref-parser@11.7.2 → js-yaml@4.3.2 → argparse@2.0.1",
+      "obligations": [
+        "保留 Python-2.0 许可证全文",
+        "保留版权和历史 notice",
+        "随分发保留"
+      ],
+      "licenseFilePaths": [
+        "node_modules/.pnpm/argparse@2.0.1/node_modules/argparse/LICENSE"
+      ],
+      "sourceUrl": "https://github.com/nodeca/argparse/tree/2.0.1",
+      "replaceable": true,
+      "relinkInstructions": null,
+      "attribution": "argparse contributors; see the retained license and package notice"
+    },
+    {
+      "name": "caniuse-lite",
+      "version": "1.0.30001814",
+      "expression": "CC-BY-4.0",
+      "parentChain": "projects/app → next@16.3.0 → caniuse-lite@1.0.30001814",
+      "obligations": [
+        "保留 CC-BY-4.0 许可证全文",
+        "记录指定 attribution",
+        "如修改需标明"
+      ],
+      "licenseFilePaths": [
+        "node_modules/.pnpm/caniuse-lite@1.0.30001814/node_modules/caniuse-lite/LICENSE"
+      ],
+      "sourceUrl": "https://github.com/browserslist/caniuse-lite/tree/1.0.30001814",
+      "replaceable": true,
+      "relinkInstructions": null,
+      "attribution": "caniuse-lite 1.0.30001814 / Ben Briggs / Browserslist contributors"
+    },
+    {
+      "name": "jschardet",
+      "version": "3.1.1",
+      "expression": "LGPL-2.1+",
+      "parentChain": "packages/parse → jschardet@3.1.1",
+      "obligations": [
+        "保留 LGPL-2.1 许可证全文",
+        "保留版权 notice",
+        "提供库源码获取方式与安装路径",
+        "说明可替换并保留重新链接说明"
+      ],
+      "licenseFilePaths": [
+        "node_modules/.pnpm/jschardet@3.1.1/node_modules/jschardet/LICENSE"
+      ],
+      "sourceUrl": "https://github.com/aadsm/jschardet/tree/v3.1.1",
+      "replaceable": true,
+      "relinkInstructions": "The package is installed at packages/parse/node_modules/jschardet. Replace it with a compatible build of the same public interface and rerun the parse contract and build.",
+      "attribution": "jschardet contributors; see the retained LGPL notice"
+    },
+    {
+      "name": "pako",
+      "version": "1.0.11",
+      "expression": "MIT AND Zlib",
+      "parentChain": "projects/app → jszip@3.10.1 → pako@1.0.11",
+      "obligations": [
+        "同时保留 MIT 与 Zlib 两份许可证文本",
+        "保留版权 notice",
+        "如修改需标明"
+      ],
+      "licenseFilePaths": [
+        "node_modules/.pnpm/pako@1.0.11/node_modules/pako/LICENSE"
+      ],
+      "sourceUrl": "https://github.com/nodeca/pako/tree/1.0.11",
+      "replaceable": true,
+      "relinkInstructions": null,
+      "attribution": "pako contributors; see the retained MIT and Zlib notices"
+    },
+    {
+      "name": "sax",
+      "version": "1.6.1",
+      "expression": "BlueOak-1.0.0",
+      "parentChain": "sdk/storage → ali-oss@6.23.0 → xml2js@0.6.2 → sax@1.6.1",
+      "obligations": [
+        "保留 Blue Oak Model License 1.0.0 全文",
+        "保留 notice",
+        "随分发保留"
+      ],
+      "licenseFilePaths": [
+        "node_modules/.pnpm/sax@1.6.1/node_modules/sax/LICENSE.md"
+      ],
+      "sourceUrl": "https://github.com/isaacs/sax-js/tree/v1.6.1",
+      "replaceable": true,
+      "relinkInstructions": null,
+      "attribution": "sax contributors; see the retained Blue Oak notice"
+    }
+  ]
+}

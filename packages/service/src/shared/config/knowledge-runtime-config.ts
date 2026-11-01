@@ -36,7 +36,7 @@ const EnvironmentSchema = z.object({
   API_KEY_HMAC_SECRET_FILE: z.string().trim().min(1).optional(),
   KB_USAGE_PRICING_PROFILE: z.enum(['zero-v1', 'fixture-v1']).optional(),
   KB_USAGE_PRICING_PROFILE_FILE: z.string().trim().min(1).optional(),
-  KB_QUOTA_PROFILE: z.enum(['free-v1']).optional(),
+  KB_QUOTA_PROFILE: z.enum(['free-v1', 's11-perf-v1']).optional(),
   KB_QUOTA_PROFILE_FILE: z.string().trim().min(1).optional(),
   USAGE_INGEST_URL: z.string().url().optional(),
   USAGE_SNAPSHOT_URL: z.string().url().optional(),
@@ -44,6 +44,7 @@ const EnvironmentSchema = z.object({
   KB_EXTERNAL_MODEL_MODE: z.enum(['mock', 'real']).default('mock'),
   KB_EXTERNAL_OCR_MODE: z.enum(['mock', 'real']).default('mock'),
   KB_EXTERNAL_CONNECTOR_MODE: z.enum(['mock', 'real']).default('mock'),
+  S11_SCOPE_PROFILE: z.enum(['canonical-v1', 'knowledge-usability-v1']).default('canonical-v1'),
   OTEL_EXPORTER_OTLP_ENDPOINT: z.preprocess(
     (value) => (typeof value === 'string' && value.trim() === '' ? undefined : value),
     z.string().trim().url().optional(),
@@ -96,6 +97,7 @@ export interface KnowledgeRuntimeConfig {
     ocr: 'mock' | 'real';
     connector: 'mock' | 'real';
   };
+  scopeProfile?: 'canonical-v1' | 'knowledge-usability-v1';
   otelEndpoint?: string;
   logLevel: 'debug' | 'info' | 'warn' | 'error';
 }
@@ -220,6 +222,7 @@ export function loadKnowledgeRuntimeConfig(
       ocr: data.KB_EXTERNAL_OCR_MODE,
       connector: data.KB_EXTERNAL_CONNECTOR_MODE,
     },
+    scopeProfile: data.S11_SCOPE_PROFILE,
     ...(data.OTEL_EXPORTER_OTLP_ENDPOINT ? { otelEndpoint: data.OTEL_EXPORTER_OTLP_ENDPOINT } : {}),
     logLevel: data.KB_LOG_LEVEL,
   };

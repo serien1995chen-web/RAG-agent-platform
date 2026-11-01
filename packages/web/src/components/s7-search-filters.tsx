@@ -316,7 +316,7 @@ export function S7SearchFilters(props: {
       </Grid>
 
       <Box mt={6} borderTopWidth="1px" borderColor="kn.line" pt={4}>
-        <Text as="h3" m={0} mb={3} fontSize="md" fontWeight="700">
+        <Text as="h2" m={0} mb={3} fontSize="md" fontWeight="700">
           {props.labels.filters}
         </Text>
         <Grid templateColumns={{ base: '1fr', md: 'repeat(2, minmax(0, 1fr))' }} gap={4}>

@@ -18,12 +18,17 @@ import {
 } from '@kb/search';
 import type { TenantContext } from '../../../shared/persistence/knowledge/tenant';
 import { tenantError } from '../../../shared/persistence/knowledge/tenant';
+import { ImageCaptionOutputSchema, S8_CAPTION_PROMPT_VERSION } from './s8-caption.application';
 import type { KnowledgeOperationInput, KnowledgeOperationResult } from './operation-types';
 import type { S8CaptionStatus, S8ImageSearchDependencies } from './s8-image-deep.ports';
 import { assertS8ImageMedia } from './s8-image-policy';
 
 interface EmbeddingEnvelope {
   data: Array<{ index?: number; embedding: number[] }>;
+}
+
+interface ChatCompletionEnvelope {
+  choices: Array<{ message: { content: string } }>;
 }
 
 function validationError(context: TenantContext, details: Record<string, unknown>) {
@@ -72,6 +77,42 @@ function failureRank(error: unknown): number {
 
 function citationKey(spaceId: string, segmentId: string): string {
   return `${spaceId}:${segmentId}`;
+}
+
+function queryCaption(data: unknown, context: TenantContext): string {
+  const content =
+    typeof data === 'object' && data !== null
+      ? (data as Partial<ChatCompletionEnvelope>).choices?.[0]?.message?.content
+      : undefined;
+  if (typeof content !== 'string') {
+    throw createKnowledgeError({
+      code: 'KNOWLEDGE_MODEL_OUTPUT_INVALID',
+      requestId: context.requestId,
+      traceId: context.traceId,
+      details: { reason: 'query_caption_content_missing' },
+    });
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(content);
+  } catch {
+    throw createKnowledgeError({
+      code: 'KNOWLEDGE_MODEL_OUTPUT_INVALID',
+      requestId: context.requestId,
+      traceId: context.traceId,
+      details: { reason: 'query_caption_json_invalid' },
+    });
+  }
+  const result = ImageCaptionOutputSchema.safeParse(parsed);
+  if (!result.success) {
+    throw createKnowledgeError({
+      code: 'KNOWLEDGE_MODEL_OUTPUT_INVALID',
+      requestId: context.requestId,
+      traceId: context.traceId,
+      details: { reason: 'query_caption_schema_invalid' },
+    });
+  }
+  return result.data.caption.trim();
 }
 
 function candidateWithImageIdentity(candidate: AuthorizedCandidate): Candidate {
@@ -144,10 +185,15 @@ export class S8ImageSearchApplication {
   private async queryVectors(
     request: ImageSearchApiRequest,
     context: TenantContext,
-  ): Promise<{ vectors: number[][]; modelId: string; dimension: 768 | 1024 | 1536 | 3072 }> {
+  ): Promise<{
+    vectors: number[][];
+    modelId: string;
+    dimension: 768 | 1024 | 1536 | 3072;
+    indexType: 'image' | 'image_caption';
+  }> {
     const model = await this.input.models.resolveVisionEmbedding(request.knowledgeSpaceId, context);
     const objects = await this.queryObjects(request, context);
-    const input = objects.map((object) => {
+    const imageTickets = objects.map((object) => {
       const ticket = this.input.tickets.issueImage({
         workspaceId: context.workspaceId,
         blobId: object.blobId,
@@ -156,12 +202,53 @@ export class S8ImageSearchApplication {
         ttlSeconds: 300,
         context,
       });
-      return { type: 'image_url' as const, image_url: { url: ticket.url } };
+      return { object, ticket };
     });
+    const embeddingInput =
+      model.mode === 'caption-embedding'
+        ? await (async () => {
+            const vlm = await this.input.models.resolveVlm(request.knowledgeSpaceId, context);
+            const captions = await Promise.all(
+              imageTickets.map(async ({ object, ticket }) => {
+                const caption = await this.input.gateway.invoke<ChatCompletionEnvelope>({
+                  kind: 'vlm',
+                  modelId: vlm.modelId,
+                  messages: [
+                    {
+                      role: 'user',
+                      content:
+                        'Describe this knowledge image for retrieval. Return only JSON: {"caption":"..."}',
+                    },
+                  ],
+                  imageUrls: [ticket.url],
+                  maxOutputTokens: 1_200,
+                  workspaceId: context.workspaceId,
+                  knowledgeSpaceId: request.knowledgeSpaceId,
+                  resourceType: 'space',
+                  resourceId: request.knowledgeSpaceId,
+                  operation: 's8.image-query-caption',
+                  audit: {
+                    promptVersion: S8_CAPTION_PROMPT_VERSION,
+                    mediaItemCount: 1,
+                    totalBytes: object.sizeBytes,
+                  },
+                  requestId: context.requestId,
+                  traceId: context.traceId,
+                  context,
+                });
+                return { type: 'text' as const, text: queryCaption(caption.data, context) };
+              }),
+            );
+            return captions;
+          })()
+        : imageTickets.map(({ ticket }) => ({
+            type: 'image_url' as const,
+            image_url: { url: ticket.url },
+          }));
     const result = await this.input.gateway.invoke<EmbeddingEnvelope>({
       kind: 'embedding',
       modelId: model.modelId,
-      input,
+      input: embeddingInput,
       dimension: model.dimension,
       workspaceId: context.workspaceId,
       knowledgeSpaceId: request.knowledgeSpaceId,
@@ -169,14 +256,14 @@ export class S8ImageSearchApplication {
       resourceId: request.knowledgeSpaceId,
       operation: 's8.image-query-embedding',
       audit: {
-        mediaItemCount: input.length,
+        mediaItemCount: model.mode === 'caption-embedding' ? 0 : embeddingInput.length,
         totalBytes: objects.reduce((total, object) => total + object.sizeBytes, 0),
       },
       requestId: context.requestId,
       traceId: context.traceId,
       context,
     });
-    if (!Array.isArray(result.data?.data) || result.data.data.length !== input.length) {
+    if (!Array.isArray(result.data?.data) || result.data.data.length !== embeddingInput.length) {
       throw createKnowledgeError({
         code: 'KNOWLEDGE_MODEL_OUTPUT_INVALID',
         requestId: context.requestId,
@@ -200,7 +287,12 @@ export class S8ImageSearchApplication {
         details: { reason: 'query_embedding_dimension_mismatch' },
       });
     }
-    return { vectors, modelId: model.modelId, dimension: model.dimension };
+    return {
+      vectors,
+      modelId: model.modelId,
+      dimension: model.dimension,
+      indexType: model.mode === 'caption-embedding' ? 'image_caption' : 'image',
+    };
   }
 
   private async recallImageDescendants(
@@ -316,7 +408,7 @@ export class S8ImageSearchApplication {
       const hydrated = await this.recallImageDescendants(raw, request, allowedSourceIds, context);
       return {
         candidates: hydrated.filter((candidate) =>
-          candidate.segment.indexes.some((index) => index.type === 'image'),
+          candidate.segment.indexes.some((index) => index.type === query.indexType),
         ),
         failed: false,
       };

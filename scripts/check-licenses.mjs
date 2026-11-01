@@ -6,8 +6,8 @@
  * 1. 既有三项不削弱：catalog: 已登记 / workspace: 指向存在包 / 禁止 latest、*。
  * 2. npm 生产闭包白名单：SPDX OR 命中任一白名单分支即通过并记录所选分支；
  *    AND 要求全部分支命中；裸 BSD 读取包内 LICENSE 文本归一化为 BSD-2/3-Clause。
- * 3. N6-A `PENDING_LEGAL_REVIEW` 例外表（精确 name@version，仅 5 条）：
- *    命中即退出 0，但必须输出 `RELEASE BLOCKER`，并登记到 NOTICE 与 release.md。
+ * 3. `approved-2026-10-29` 例外表（精确 name@version，仅 5 条）：
+ *    每项必须带批准来源、完整义务、许可证全文和精确父链。
  * 4. 容器镜像白名单单独一套（与 npm 清单分开）。
  * 5. dev/build-only 白名单外许可证记非阻塞审计，不阻断。
  * 6. SBOM diff：与既有 artifacts/sbom.json 比对组件集合差异（新增/移除）。
@@ -44,53 +44,20 @@ export const NORMALIZED_DECLARED_LICENSES = new Map([
   ['wrap-ansi-cjs@wrap-ansi@7.0.0', 'MIT'],
 ]);
 
-/**
- * N6-A 生产闭包例外表：只登记 5 条待法务复核项。
- * 状态固定为 `pending-legal-review`，`releaseBlocking: true` 表示阻断发布、但不阻断 CI。
- */
-export const PENDING_LEGAL_REVIEW = [
-  {
-    name: 'pako',
-    version: '1.0.11',
-    expression: '(MIT AND Zlib)',
-    parentChain: 'packages/parse → mammoth@1.11.0 → jszip@3.10.2 → pako@1.0.11',
-    status: 'pending-legal-review',
-    releaseBlocking: true,
-  },
-  {
-    name: 'sax',
-    version: '1.6.1',
-    expression: 'BlueOak-1.0.0',
-    parentChain: 'sdk/storage → minio@8.0.7 → xml2js@0.6.2 → sax@1.6.1',
-    status: 'pending-legal-review',
-    releaseBlocking: true,
-  },
-  {
-    name: 'caniuse-lite',
-    version: '1.0.30001814',
-    expression: 'CC-BY-4.0',
-    parentChain: 'projects/app → next@16.3.0 → caniuse-lite@1.0.30001814',
-    status: 'pending-legal-review',
-    releaseBlocking: true,
-  },
-  {
-    name: 'argparse',
-    version: '2.0.1',
-    expression: 'Python-2.0',
-    parentChain:
-      'packages/service → @apidevtools/json-schema-ref-parser@11.7.2 → js-yaml@4.3.2 → argparse@2.0.1',
-    status: 'pending-legal-review',
-    releaseBlocking: true,
-  },
-  {
-    name: 'jschardet',
-    version: '3.1.1',
-    expression: 'LGPL-2.1+',
-    parentChain: 'packages/parse → jschardet@3.1.1',
-    status: 'pending-legal-review',
-    releaseBlocking: true,
-  },
-];
+const LICENSE_OBLIGATION_PATH = join(import.meta.dirname, 'license-obligations.data.json');
+
+export const LICENSE_OBLIGATION_DATA = JSON.parse(readFileSync(LICENSE_OBLIGATION_PATH, 'utf8'));
+
+export const APPROVED_LICENSE_EXCEPTIONS = Object.freeze(
+  LICENSE_OBLIGATION_DATA.entries.map((entry) => ({
+    ...entry,
+    status: LICENSE_OBLIGATION_DATA.status,
+    releaseBlocking: false,
+  })),
+);
+
+/** @deprecated Use APPROVED_LICENSE_EXCEPTIONS. */
+export const PENDING_LEGAL_REVIEW = APPROVED_LICENSE_EXCEPTIONS;
 
 /** 容器镜像白名单（与 npm 包白名单分开登记）。 */
 export const IMAGE_LICENSE_WHITELIST = [
@@ -98,6 +65,8 @@ export const IMAGE_LICENSE_WHITELIST = [
   { service: 'redis', license: 'RSAL/SSPL', confirmedBy: '设计 6.2' },
   { service: 'minio', license: 'AGPL-3.0', confirmedBy: '设计 6.2' },
   { service: 'pgvector', license: 'PostgreSQL', confirmedBy: 'N2-A 用户确认' },
+  { service: 'aiproxy', license: 'UNKNOWN', confirmedBy: '设计 17.5 待供应链复核' },
+  { service: 'app', license: 'INTERNAL', confirmedBy: '同仓库应用镜像' },
 ];
 
 const EXACT_DEPENDENCY_VERSION = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z][0-9A-Za-z.-]*)?$/;
@@ -162,8 +131,14 @@ const BASELINE_TRANSITIVE_ONLY = new Set([
   'vite',
 ]);
 
+export function findApprovedException(name, version) {
+  return APPROVED_LICENSE_EXCEPTIONS.find(
+    (entry) => entry.name === name && entry.version === version,
+  );
+}
+
 export function findPendingException(name, version) {
-  return PENDING_LEGAL_REVIEW.find((entry) => entry.name === name && entry.version === version);
+  return findApprovedException(name, version);
 }
 
 export function stripOuterParens(expression) {
@@ -657,15 +632,100 @@ function checkDependencyAudit(repoRoot) {
   return errors;
 }
 
+export function validateObligations(model, repoRoot = join(import.meta.dirname, '..')) {
+  const errors = [];
+  if (LICENSE_OBLIGATION_DATA.schemaVersion !== 1) {
+    errors.push('license obligations schemaVersion 必须为 1');
+  }
+  if (LICENSE_OBLIGATION_DATA.approvalDate !== '2026-10-29') {
+    errors.push('license approvalDate 必须为 2026-10-29');
+  }
+  if (LICENSE_OBLIGATION_DATA.approvalSource !== '用户于 2026-10-29 转述的法务批准') {
+    errors.push('license approvalSource 必须精确记录用户转述来源');
+  }
+  if (LICENSE_OBLIGATION_DATA.status !== 'approved-2026-10-29') {
+    errors.push('license status 必须为 approved-2026-10-29');
+  }
+  if (APPROVED_LICENSE_EXCEPTIONS.length !== 5) {
+    errors.push(
+      `approved license exceptions 必须为 5 条，实际 ${APPROVED_LICENSE_EXCEPTIONS.length}`,
+    );
+  }
+  const productionByKey = new Map(
+    model.licenseEntries
+      .filter((entry) => entry.scope === 'production')
+      .map((entry) => [`${entry.name}@${entry.version}`, entry]),
+  );
+  for (const approved of APPROVED_LICENSE_EXCEPTIONS) {
+    const id = `${approved.name}@${approved.version}`;
+    const production = productionByKey.get(id);
+    if (!production) {
+      errors.push(`${id}: approved 条目不在生产闭包`);
+      continue;
+    }
+    if (production.parentChain !== approved.parentChain) {
+      errors.push(
+        `${id}: 父链不一致，expected=${approved.parentChain} actual=${production.parentChain}`,
+      );
+    }
+    if (production.normalized !== approved.expression) {
+      errors.push(
+        `${id}: SPDX 不一致，expected=${approved.expression} actual=${production.normalized}`,
+      );
+    }
+    if (!Array.isArray(approved.obligations) || approved.obligations.length === 0) {
+      errors.push(`${id}: 缺少义务`);
+    }
+    if (!Array.isArray(approved.licenseFilePaths) || approved.licenseFilePaths.length === 0) {
+      errors.push(`${id}: 缺少许可证全文路径`);
+    } else {
+      for (const licensePath of approved.licenseFilePaths) {
+        const absolute = resolve(repoRoot, licensePath);
+        const relativePath = relative(repoRoot, absolute);
+        if (
+          relativePath.startsWith('..') ||
+          !existsSync(absolute) ||
+          readFileSync(absolute, 'utf8').trim().length < 100
+        ) {
+          errors.push(`${id}: 许可证全文缺失或为空 ${licensePath}`);
+        }
+      }
+    }
+    if (!/^https:\/\//.test(approved.sourceUrl ?? '')) {
+      errors.push(`${id}: sourceUrl 必须是 https 来源`);
+    }
+    if (
+      approved.expression === 'LGPL-2.1+' &&
+      (!approved.replaceable || !approved.relinkInstructions)
+    ) {
+      errors.push(`${id}: LGPL 条目必须记录可替换与重新链接说明`);
+    }
+    if (
+      approved.name === 'caniuse-lite' &&
+      approved.attribution !== 'caniuse-lite 1.0.30001814 / Ben Briggs / Browserslist contributors'
+    ) {
+      errors.push(`${id}: CC-BY attribution 不精确`);
+    }
+    if (
+      Object.hasOwn(approved, 'approvedBy') ||
+      Object.hasOwn(approved, 'signature') ||
+      Object.hasOwn(approved, 'approvalFile')
+    ) {
+      errors.push(`${id}: 不得伪造批准人、签名或批准文件`);
+    }
+  }
+  return errors;
+}
+
 function auditLicenses(model) {
   const whitelist = new Set(NPM_LICENSE_WHITELIST);
   const blockers = [];
-  const releaseBlockers = [];
+  const approvedExceptions = [];
   const normalized = [];
   const devAudit = [];
 
   for (const entry of model.licenseEntries) {
-    const pending = findPendingException(entry.name, entry.version);
+    const approved = findApprovedException(entry.name, entry.version);
     const normalizedLicense =
       NORMALIZED_DECLARED_LICENSES.get(`${entry.name}@${entry.version}`) ?? entry.normalized;
     const evaluation = evaluateLicense(normalizedLicense, whitelist);
@@ -678,14 +738,16 @@ function auditLicenses(model) {
     };
 
     if (entry.scope !== 'production') {
-      if (!evaluation.approved && pending === undefined) devAudit.push(record);
+      if (!evaluation.approved && approved === undefined) devAudit.push(record);
       continue;
     }
 
-    if (pending !== undefined) {
-      if (pending.releaseBlocking) {
-        releaseBlockers.push({ ...record, status: pending.status, expression: pending.expression });
-      }
+    if (approved !== undefined) {
+      approvedExceptions.push({
+        ...record,
+        status: LICENSE_OBLIGATION_DATA.status,
+        expression: approved.expression,
+      });
       continue;
     }
 
@@ -703,7 +765,7 @@ function auditLicenses(model) {
     }
   }
 
-  return { blockers, releaseBlockers, normalized, devAudit };
+  return { blockers, approvedExceptions, normalized, devAudit };
 }
 
 function checkImageLicenses(model) {
@@ -792,7 +854,8 @@ export async function main(argv = process.argv.slice(2)) {
 
   const { collectSbomModel } = await import('./generate-sbom.mjs');
   const model = collectSbomModel(repoRoot);
-  const { blockers, releaseBlockers, normalized, devAudit } = auditLicenses(model);
+  const { blockers, approvedExceptions, normalized, devAudit } = auditLicenses(model);
+  errors.push(...validateObligations(model, repoRoot));
   errors.push(...checkImageLicenses(model).map((violation) => `镜像许可证: ${violation}`));
   errors.push(
     ...blockers.map(
@@ -809,9 +872,9 @@ export async function main(argv = process.argv.slice(2)) {
   if (errors.length > 0) {
     console.error(`license:check 失败，共 ${errors.length} 项：`);
     for (const error of errors) console.error(`  - ${error}`);
-    for (const blocker of releaseBlockers) {
+    for (const blocker of approvedExceptions) {
       console.error(
-        `  - RELEASE BLOCKER ${blocker.id} (${blocker.license}) ${blocker.parentChain}`,
+        `  - APPROVED EXCEPTION ${blocker.id} (${blocker.license}) ${blocker.parentChain}`,
       );
     }
     process.exit(1);
@@ -841,14 +904,19 @@ export async function main(argv = process.argv.slice(2)) {
     );
   }
 
-  if (releaseBlockers.length > 0) {
+  if (approvedExceptions.length > 0) {
     console.log(
-      `RELEASE BLOCKER（pending-legal-review，${releaseBlockers.length} 条；阻断发布、不阻断 CI）：`,
+      `APPROVED LICENSE EXCEPTIONS（${LICENSE_OBLIGATION_DATA.status}，${approvedExceptions.length} 条；approvalSource=${LICENSE_OBLIGATION_DATA.approvalSource}）：`,
     );
-    for (const blocker of releaseBlockers) {
-      console.log(`  - ${blocker.id} | ${blocker.license} | ${blocker.parentChain}`);
+    for (const exception of approvedExceptions) {
+      const approved = APPROVED_LICENSE_EXCEPTIONS.find(
+        (entry) => `${entry.name}@${entry.version}` === exception.id,
+      );
+      console.log(
+        `  - ${exception.id} | ${exception.license} | obligations=${approved?.obligations.length ?? 0} | ${exception.parentChain}`,
+      );
     }
-    console.log('详见 NOTICE 与 docs/runbooks/release.md 的发布阻塞项。');
+    console.log('五项义务与许可证全文由 NOTICE 生成器输出。');
   }
 }
 

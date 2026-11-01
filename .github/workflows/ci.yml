@@ -76,6 +76,8 @@ jobs:
         run: pnpm test:unit
       - name: Contract tests
         run: pnpm test:contract
+      - name: Security tests
+        run: pnpm test:security
       - name: Build application
         run: pnpm build
       - name: Build worker

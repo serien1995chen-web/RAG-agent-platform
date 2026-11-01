@@ -55,8 +55,52 @@ export class AxiosS5OcrHttpTransport implements S5OcrHttpTransportPort {
 
 const PreuploadSchema = z
   .object({
-    uploadUrl: z.string().url(),
-    statusUrl: z.string().url(),
+    uploadUrl: z.string().url().optional(),
+    statusUrl: z.string().url().optional(),
+    data: z
+      .object({
+        uid: z.string().min(1),
+        url: z.string().url(),
+      })
+      .passthrough()
+      .optional(),
+  })
+  .passthrough();
+
+const SomarkNativeResponseSchema = z
+  .object({
+    code: z.number().int(),
+    data: z
+      .object({
+        result: z
+          .object({
+            outputs: z.object({ markdown: z.string().min(1) }).passthrough(),
+          })
+          .passthrough(),
+        metadata: z.object({ page_num: z.number().int().min(1) }).passthrough(),
+      })
+      .passthrough(),
+  })
+  .passthrough();
+
+const TextinNativeResponseSchema = z
+  .object({
+    code: z.number().int(),
+    result: z
+      .object({
+        markdown: z.string().min(1),
+        total_page_number: z.number().int().min(1).optional(),
+        pages: z.array(z.record(z.string(), z.unknown())).optional(),
+      })
+      .passthrough(),
+  })
+  .passthrough();
+
+const Doc2xNativeResponseSchema = z
+  .object({
+    code: z.union([z.string(), z.number()]).optional(),
+    msg: z.string().optional(),
+    data: z.record(z.string(), z.unknown()),
   })
   .passthrough();
 
@@ -73,6 +117,20 @@ function appendPath(endpoint: string, path: string): string {
   return url.toString();
 }
 
+function textinUrl(endpoint: string): string {
+  const url = new URL(appendPath(endpoint, '/pdf_to_markdown'));
+  url.searchParams.set('get_image', 'objects');
+  url.searchParams.set('image_output_type', 'default');
+  url.searchParams.set('parse_mode', 'auto');
+  url.searchParams.set('dpi', '144');
+  url.searchParams.set('markdown_details', '1');
+  url.searchParams.set('table_flavor', 'md');
+  url.searchParams.set('paratext_mode', 'none');
+  url.searchParams.set('page_details', '0');
+  url.searchParams.set('remove_watermark', '1');
+  return url.toString();
+}
+
 function requestUsage(provider: string, status: number | null): S5ProviderUsage {
   return { provider, unit: 'request', quantity: 1, status };
 }
@@ -86,6 +144,41 @@ function classifyStatus(status: number, usage: S5ProviderUsage[]): ProviderError
   if (status < 200 || status >= 300)
     return new ProviderError('provider', status, usage, false, false);
   return null;
+}
+
+function classifyBusinessCode(
+  provider: S5OcrRequest['config']['provider'],
+  data: unknown,
+  status: number,
+  usage: S5ProviderUsage[],
+): ProviderError | null {
+  if (!data || typeof data !== 'object' || !('code' in data)) return null;
+  const code = (data as { code: unknown }).code;
+  const success =
+    provider === 'somark'
+      ? code === 0
+      : provider === 'textin'
+        ? code === 200
+        : code === 'ok' || code === 'success' || code === 0 || code === 200;
+  if (success) return null;
+  const normalized = String(code).toLowerCase();
+  if (provider === 'somark' && code === 1107) {
+    return new ProviderError('auth', status, usage, false, false);
+  }
+  if (normalized.includes('quota') || normalized.includes('balance')) {
+    return new ProviderError('quota', status, usage, false, false);
+  }
+  if (
+    normalized.includes('auth') ||
+    normalized.includes('unauthorized') ||
+    normalized.includes('forbidden')
+  ) {
+    return new ProviderError('auth', status, usage, false, false);
+  }
+  if (normalized.includes('rate') || normalized.includes('limit')) {
+    return new ProviderError('rate_limit', status, usage, true, false);
+  }
+  return new ProviderError('provider', status, usage, false, false);
 }
 
 function multipartFile(input: S5OcrRequest): FormData {
@@ -122,6 +215,13 @@ export class S5OcrHttpAdapter implements OcrProviderPort {
         usage.push(requestUsage(config.provider, response.status));
         const failure = classifyStatus(response.status, usage);
         if (failure) throw failure;
+        const businessFailure = classifyBusinessCode(
+          config.provider,
+          response.data,
+          response.status,
+          usage,
+        );
+        if (businessFailure) throw businessFailure;
         return response;
       } catch (error) {
         if (error instanceof S5OcrHttpTimeoutError) {
@@ -151,8 +251,14 @@ export class S5OcrHttpAdapter implements OcrProviderPort {
         break;
       }
       case 'somark': {
-        body = multipartFile(request);
-        headers['X-API-Key'] = profile.credentials.apiKey ?? '';
+        const form = multipartFile(request);
+        form.append('api_key', profile.credentials.apiKey ?? '');
+        form.append('output_formats', 'markdown');
+        form.append(
+          'element_formats',
+          JSON.stringify({ image: 'url', formula: 'latex', table: 'markdown', cs: 'image' }),
+        );
+        body = form;
         break;
       }
       case 'textin': {
@@ -163,10 +269,6 @@ export class S5OcrHttpAdapter implements OcrProviderPort {
         break;
       }
       case 'doc2x': {
-        const bodyRecord = {
-          fileName: request.fileName,
-          mimeType: request.mimeType,
-        };
         const preupload = await call({
           method: 'POST',
           url,
@@ -175,15 +277,30 @@ export class S5OcrHttpAdapter implements OcrProviderPort {
             'Content-Type': 'application/json',
             Authorization: `Bearer ${profile.credentials.apiKey ?? ''}`,
           },
-          body: new TextEncoder().encode(JSON.stringify(bodyRecord)),
+          body: new TextEncoder().encode('{}'),
         });
         const parsedPreupload = PreuploadSchema.safeParse(preupload.data);
-        if (!parsedPreupload.success) {
+        if (
+          !parsedPreupload.success ||
+          (!parsedPreupload.data.data &&
+            (!parsedPreupload.data.uploadUrl || !parsedPreupload.data.statusUrl))
+        ) {
+          throw new ProviderError('contract', preupload.status, usage, false, true);
+        }
+        const uploadUrl = parsedPreupload.data.uploadUrl ?? parsedPreupload.data.data?.url;
+        const statusUrl =
+          parsedPreupload.data.statusUrl ??
+          (() => {
+            const value = new URL(appendPath(profile.endpoint, '/parse/status'));
+            value.searchParams.set('uid', parsedPreupload.data.data!.uid);
+            return value.toString();
+          })();
+        if (!uploadUrl || !statusUrl) {
           throw new ProviderError('contract', preupload.status, usage, false, true);
         }
         await call({
           method: 'PUT',
-          url: parsedPreupload.data.uploadUrl,
+          url: uploadUrl,
           headers: { ...headers, 'Content-Type': request.mimeType },
           body: request.bytes,
         });
@@ -191,16 +308,61 @@ export class S5OcrHttpAdapter implements OcrProviderPort {
         while (Date.now() < deadline) {
           const statusResponse = await call({
             method: 'GET',
-            url: parsedPreupload.data.statusUrl,
+            url: statusUrl,
             headers: {
               ...headers,
               Authorization: `Bearer ${profile.credentials.apiKey ?? ''}`,
             },
           });
-          const record = statusResponse.data as { status?: unknown; error?: unknown };
+          const native = Doc2xNativeResponseSchema.safeParse(statusResponse.data);
+          const legacyRecord = statusResponse.data as {
+            status?: unknown;
+            error?: unknown;
+            markdown?: unknown;
+            pages?: unknown;
+            result?: { pages?: Array<{ md?: unknown }> };
+          };
+          if (!native.success && typeof legacyRecord.markdown === 'string') {
+            const result = parseOcrResponse('doc2x', statusResponse.data, {
+              status: statusResponse.status,
+            });
+            return {
+              ...result,
+              usage: [...usage, ...result.usage],
+              requestEvidence: {
+                ...result.requestEvidence,
+                requests: usage.length,
+              },
+            };
+          }
+          if (
+            !native.success &&
+            (typeof legacyRecord !== 'object' ||
+              legacyRecord === null ||
+              typeof legacyRecord.status !== 'string')
+          ) {
+            throw new ProviderError('contract', statusResponse.status, usage, false, true);
+          }
+          const record = (native.success ? native.data.data : legacyRecord) as {
+            status?: unknown;
+            error?: unknown;
+            result?: { pages?: Array<{ md?: unknown }> };
+          };
           if (record.status === 'success') {
             try {
-              const result = parseOcrResponse('doc2x', statusResponse.data, {
+              const pages = (record.result?.pages ?? []).map((page, index) => ({
+                pageNumber: index + 1,
+                markdown: typeof page.md === 'string' ? page.md : '',
+              }));
+              if (pages.length === 0 || pages.every((page) => page.markdown.trim() === '')) {
+                throw new ProviderError('contract', statusResponse.status, usage, false, true);
+              }
+              const normalized = {
+                status: 'success',
+                markdown: pages.map((page) => page.markdown).join('\n\n'),
+                pages,
+              };
+              const result = parseOcrResponse('doc2x', normalized, {
                 status: statusResponse.status,
               });
               return {
@@ -228,15 +390,47 @@ export class S5OcrHttpAdapter implements OcrProviderPort {
     try {
       const response = await call({
         method: 'POST',
-        url,
+        url: config.provider === 'textin' ? textinUrl(profile.endpoint) : url,
         headers: {
           ...headers,
           ...(config.provider === 'textin' ? {} : { 'Content-Type': 'multipart/form-data' }),
         },
         body,
       });
-      const result = parseOcrResponse(config.provider, response.data, {
+      let normalized = response.data;
+      let pageCountHint: number | undefined;
+      if (config.provider === 'somark') {
+        const native = SomarkNativeResponseSchema.safeParse(response.data);
+        if (native.success) {
+          normalized = {
+            code: native.data.code,
+            markdown: native.data.data.result.outputs.markdown,
+            pages: [],
+          };
+          pageCountHint = native.data.data.metadata.page_num;
+        }
+      } else if (config.provider === 'textin') {
+        const native = TextinNativeResponseSchema.safeParse(response.data);
+        if (native.success) {
+          const pages = [...(native.data.result.pages ?? [])];
+          const totalPages = native.data.result.total_page_number ?? 0;
+          if (pages.length === 0 && totalPages > 0) {
+            pages.push({ pageNumber: 1, markdown: native.data.result.markdown });
+          }
+          for (let pageNumber = pages.length + 1; pageNumber <= totalPages; pageNumber += 1) {
+            pages.push({ pageNumber, markdown: '' });
+          }
+          normalized = {
+            code: native.data.code,
+            markdown: native.data.result.markdown,
+            pages,
+          };
+          pageCountHint = native.data.result.total_page_number;
+        }
+      }
+      const result = parseOcrResponse(config.provider, normalized, {
         status: response.status,
+        ...(pageCountHint === undefined ? {} : { pageCountHint }),
       });
       return {
         ...result,

@@ -1,0 +1,69 @@
+{
+  "schemaVersion": 1,
+  "applicationRepository": "rag-agent-platform",
+  "services": [
+    {
+      "service": "mongo",
+      "repository": "registry.cn-hangzhou.aliyuncs.com/fastgpt/mongo",
+      "tag": "5.0.32",
+      "digest": "sha256:ab12670508974afbdf3bdc7dd39a201d228a73c9c13c70a684b9eedfb063dc3e",
+      "platform": "linux/amd64",
+      "pullPolicy": "IfNotPresent",
+      "source": "upstream-locked"
+    },
+    {
+      "service": "redis",
+      "repository": "registry.cn-hangzhou.aliyuncs.com/fastgpt/redis",
+      "tag": "7.2-alpine",
+      "digest": "sha256:2bf71743152d3ca631d358029d504fed349ea28179667acfa755dffb4b321e7c",
+      "platform": "linux/amd64",
+      "pullPolicy": "IfNotPresent",
+      "source": "upstream-locked"
+    },
+    {
+      "service": "pgvector",
+      "repository": "registry.cn-hangzhou.aliyuncs.com/fastgpt/pgvector",
+      "tag": "0.8.0-pg15",
+      "digest": "sha256:92be4ea0424cccf17003f5803d54448e2864ac27a70e6ac5d24b3d8b463c689c",
+      "platform": "linux/amd64",
+      "pullPolicy": "IfNotPresent",
+      "source": "upstream-locked"
+    },
+    {
+      "service": "minio",
+      "repository": "registry.cn-hangzhou.aliyuncs.com/fastgpt/minio",
+      "tag": "RELEASE.2025-09-07T16-13-09Z",
+      "digest": "sha256:a63b19df59e6ec7c02ebba6e7a1097b7e032da7947b18db7ff67dae8e84fd44d",
+      "platform": "linux/amd64",
+      "pullPolicy": "IfNotPresent",
+      "source": "upstream-locked"
+    },
+    {
+      "service": "aiproxy",
+      "repository": "registry.cn-hangzhou.aliyuncs.com/labring/aiproxy",
+      "tag": "v0.7.3",
+      "digest": "sha256:da8d8394634eacdcf72533953c77c1e0ca3e28920545354dd20bdaa0aaa9ee4b",
+      "platform": "linux/amd64",
+      "pullPolicy": "IfNotPresent",
+      "source": "upstream-locked"
+    },
+    {
+      "service": "app",
+      "repository": "rag-agent-platform",
+      "tag": "kb-baseline",
+      "digest": "PENDING_RELEASE_EVIDENCE",
+      "platform": "linux/amd64",
+      "pullPolicy": "IfNotPresent",
+      "source": "DEFERRED_TO_PRODUCTION"
+    },
+    {
+      "service": "worker",
+      "repository": "rag-agent-platform",
+      "tag": "kb-baseline",
+      "digest": "PENDING_RELEASE_EVIDENCE",
+      "platform": "linux/amd64",
+      "pullPolicy": "IfNotPresent",
+      "source": "DEFERRED_TO_PRODUCTION"
+    }
+  ]
+}

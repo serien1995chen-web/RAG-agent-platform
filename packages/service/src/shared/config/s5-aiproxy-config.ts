@@ -26,11 +26,13 @@ const HttpUrlSchema = z
 
 export const S5AiproxyConfigSchema = z
   .object({
-    mode: z.enum(['compose', 'external']),
+    mode: z.enum(['compose', 'external', 'openai']),
     baseUrl: HttpUrlSchema,
     apiTokenRef: SecretRefSchema,
     postgresUriRef: SecretRefSchema.nullable(),
     modelMode: z.enum(['mock', 'real']),
+    providerOnly: z.array(z.string().min(1)).nullable(),
+    rerankProtocol: z.enum(['openai', 'alibaba-native']),
   })
   .strict();
 
@@ -48,7 +50,7 @@ function issuesOf(error: z.ZodError, prefix: string): string[] {
  */
 export function loadS5AiproxyConfig(env: EnvSource = process.env): S5AiproxyConfig {
   const modeValue = read(env, 'AIPROXY_MODE') ?? 'compose';
-  const modeResult = z.enum(['compose', 'external']).safeParse(modeValue);
+  const modeResult = z.enum(['compose', 'external', 'openai']).safeParse(modeValue);
   if (!modeResult.success) {
     throw new ConfigValidationException(issuesOf(modeResult.error, 'AIPROXY_MODE'));
   }
@@ -60,6 +62,23 @@ export function loadS5AiproxyConfig(env: EnvSource = process.env): S5AiproxyConf
   const postgresUriRef =
     read(env, 'AIPROXY_POSTGRES_URI_REF') ??
     (mode === 'compose' ? 'env:AIPROXY_POSTGRES_URI' : undefined);
+  const tokenDanceGateway =
+    explicitBaseUrl !== undefined &&
+    (() => {
+      try {
+        return new URL(explicitBaseUrl).hostname === 'tokendance.space';
+      } catch {
+        return false;
+      }
+    })();
+  const providerOnly =
+    read(env, 'AIPROXY_PROVIDER_ONLY')
+      ?.split(',')
+      .map((value) => value.trim())
+      .filter(Boolean) ?? (mode === 'openai' && tokenDanceGateway ? ['alibaba'] : null);
+  const rerankProtocol =
+    read(env, 'AIPROXY_RERANK_PROTOCOL') ??
+    (mode === 'openai' && tokenDanceGateway ? 'alibaba-native' : 'openai');
 
   const parsed = S5AiproxyConfigSchema.safeParse({
     mode,
@@ -67,17 +86,19 @@ export function loadS5AiproxyConfig(env: EnvSource = process.env): S5AiproxyConf
     apiTokenRef,
     postgresUriRef: postgresUriRef ?? null,
     modelMode,
+    providerOnly,
+    rerankProtocol,
   });
   if (!parsed.success) {
     throw new ConfigValidationException(issuesOf(parsed.error, 'AIPROXY'));
   }
-  if (mode === 'external' && explicitBaseUrl === undefined) {
-    throw new ConfigValidationException(['AIPROXY_BASE_URL: required in external mode']);
+  if ((mode === 'external' || mode === 'openai') && explicitBaseUrl === undefined) {
+    throw new ConfigValidationException([`AIPROXY_BASE_URL: required in ${mode} mode`]);
   }
   if (mode === 'compose' && parsed.data.postgresUriRef === null) {
     throw new ConfigValidationException(['AIPROXY_POSTGRES_URI_REF: required in compose mode']);
   }
-  if (parsed.data.modelMode === 'real' && env.AIPROXY_API_TOKEN?.trim() === '') {
+  if (parsed.data.modelMode === 'real' && !env.AIPROXY_API_TOKEN?.trim()) {
     throw new ConfigValidationException([
       'AIPROXY_API_TOKEN: must not be blank when KB_EXTERNAL_MODEL_MODE=real',
     ]);

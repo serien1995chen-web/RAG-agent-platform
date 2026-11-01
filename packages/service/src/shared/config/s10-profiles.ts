@@ -25,7 +25,7 @@ export const S10PricingProfileSchema = PricingCoreSchema.extend({
   version: z.string().regex(/^[a-f0-9]{64}$/),
 }).strict();
 
-export const S10QuotaProfileSchema = z
+const FreeQuotaProfileSchema = z
   .object({
     schemaVersion: z.literal(1),
     name: z.literal('free-v1'),
@@ -39,6 +39,26 @@ export const S10QuotaProfileSchema = z
     maxModelConcurrency: z.literal(10),
   })
   .strict();
+
+const S11PerformanceQuotaProfileSchema = z
+  .object({
+    schemaVersion: z.literal(1),
+    name: z.literal('s11-perf-v1'),
+    version: z.string().regex(/^[a-f0-9]{64}$/),
+    retentionDays: z.literal(30),
+    aiPointsLimit: z.literal(1_000_000),
+    storageBytesLimit: z.literal(50 * 1024 * 1024 * 1024),
+    maxSpaces: z.literal(3),
+    maxIndexes: z.literal(1_100_000),
+    requestsPerMinute: z.literal(6_000),
+    maxModelConcurrency: z.literal(10),
+  })
+  .strict();
+
+export const S10QuotaProfileSchema = z.discriminatedUnion('name', [
+  FreeQuotaProfileSchema,
+  S11PerformanceQuotaProfileSchema,
+]);
 
 export type S10PricingProfile = z.infer<typeof S10PricingProfileSchema>;
 export type S10PricingCore = z.infer<typeof PricingCoreSchema>;
@@ -109,11 +129,27 @@ const FREE_QUOTA_CORE = {
   maxModelConcurrency: 10,
 };
 
+const S11_PERFORMANCE_QUOTA_CORE = {
+  schemaVersion: 1,
+  name: 's11-perf-v1',
+  retentionDays: 30,
+  aiPointsLimit: 1_000_000,
+  storageBytesLimit: 50 * 1024 * 1024 * 1024,
+  maxSpaces: 3,
+  maxIndexes: 1_100_000,
+  requestsPerMinute: 6_000,
+  maxModelConcurrency: 10,
+};
+
 export const ZERO_V1_PRICING = withVersion(ZERO_CORE);
 export const FIXTURE_V1_PRICING = withVersion(FIXTURE_CORE);
 export const FREE_V1_QUOTA = S10QuotaProfileSchema.parse({
   ...FREE_QUOTA_CORE,
   version: profileVersionOf(FREE_QUOTA_CORE),
+});
+export const S11_PERFORMANCE_V1_QUOTA = S10QuotaProfileSchema.parse({
+  ...S11_PERFORMANCE_QUOTA_CORE,
+  version: profileVersionOf(S11_PERFORMANCE_QUOTA_CORE),
 });
 
 function readStrictProfile<T>(filePath: string, schema: z.ZodType<T>, label: string): T {
@@ -142,6 +178,17 @@ function assertProfileVersion(value: S10PricingProfile | S10QuotaProfile, label:
   const { version: _version, ...core } = value;
   if (profileVersionOf(core) !== value.version) {
     throw new ConfigValidationException([`${label}: version 与 canonical hash 不一致`]);
+  }
+}
+
+function assertQuotaProfileEnvironment(
+  value: S10QuotaProfile,
+  env: Readonly<Record<string, string | undefined>>,
+): void {
+  if (value.name === 's11-perf-v1' && env.KB_ENV !== 'test') {
+    throw new ConfigValidationException([
+      'quota profile s11-perf-v1 仅允许在 KB_ENV=test 的隔离性能 harness 中使用',
+    ]);
   }
 }
 
@@ -176,10 +223,15 @@ export function loadS10QuotaProfile(
   if (file) {
     const parsed = readStrictProfile(file, S10QuotaProfileSchema, 'quota profile');
     assertProfileVersion(parsed, 'quota profile');
+    assertQuotaProfileEnvironment(parsed, env);
     return parsed;
   }
   if (selected === undefined || selected === '' || selected === 'free-v1') {
     return FREE_V1_QUOTA;
+  }
+  if (selected === 's11-perf-v1') {
+    assertQuotaProfileEnvironment(S11_PERFORMANCE_V1_QUOTA, env);
+    return S11_PERFORMANCE_V1_QUOTA;
   }
   throw new ConfigValidationException([`quota profile 未知: ${selected}`]);
 }

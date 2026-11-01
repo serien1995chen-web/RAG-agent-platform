@@ -118,7 +118,7 @@ export function S7SearchWorkbench(props: S7SearchWorkbenchProps) {
     setDraftFilters(props.filters);
   }, [props.filters]);
   return (
-    <Box as="main" id="knowledge-main" minW={0}>
+    <Box minW={0}>
       <Box as="header" mb={5}>
         <Heading as="h1" m={0} fontSize={{ base: '24px', md: '30px' }} letterSpacing={0}>
           {props.labels.title}
