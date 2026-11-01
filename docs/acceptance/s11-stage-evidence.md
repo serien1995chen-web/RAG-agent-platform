@@ -7,7 +7,7 @@ close W4.
 
 | Area                | Current result         | Evidence                                               |
 | ------------------- | ---------------------- | ------------------------------------------------------ |
-| Contract/runtime    | PASS                   | `92/120/139/8`; `120/0`; 25 contract files / 130 tests |
+| Contract/runtime    | PASS                   | `92/120/139/8`; `120/0`; 25 contract files / 131 tests |
 | Full local E2E      | PASS                   | 18 files / 73 tests                                    |
 | UI matrix           | PASS for local app     | 18 pages x 3 viewports; 54 screenshots                 |
 | Security            | PASS local matrix      | 10 files / 21 tests                                    |
@@ -18,6 +18,7 @@ close W4.
 | Full performance    | SCOPED_BLOCKED         | k6 missing real AIProxy model configuration            |
 | Provider real tests | SCOPED_BLOCKED         | 18 scoped inputs absent; harness present               |
 | Provider matrix     | SCOPED_BLOCKED         | 5 unverified / 3 deferred; candidate-bound renderer    |
+| Evidence collector  | SCOPED_BLOCKED         | `--all` 73 rows; `--task S11-T02` 15 rows              |
 | Deferred providers  | DEFERRED_BY_SCOPE      | Sangfor, Yuque, DingTalk                               |
 | License/SBOM/NOTICE | PASS                   | approved five exceptions and full obligations          |
 | Release images      | DEFERRED_TO_PRODUCTION | five third-party digests pinned; app digest pending    |

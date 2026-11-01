@@ -11,7 +11,7 @@
 - Candidate SHA: not frozen.
 - Evidence commit SHA: not created.
 - Worktree: `/home/serien/RAG-agent-platform-s11`. Implementation checkpoint:
-  `4fcbceb`; it is not a frozen candidate or evidence worktree.
+  `2cc2fd4`; it is not a frozen candidate or evidence worktree.
 
 This report records a blocked phase1/post-rebase checkpoint. It is not a
 whole-stage PASS and does not close W4.
@@ -73,7 +73,7 @@ real API-key evidence and are not closed by this blocked report. W3 remains
 | `pnpm build`                             |    0 | 12/12 tasks; 20 application routes                               |
 | `pnpm build:workers`                     |    0 | 11/11 tasks                                                      |
 | `pnpm test:unit`                         |    0 | 22/22 tasks                                                      |
-| `pnpm test:contract`                     |    0 | 25 files / 130 tests                                             |
+| `pnpm test:contract`                     |    0 | 25 files / 131 tests                                             |
 | `pnpm test:integration`                  |    0 | 33 files / 179 tests in the service integration slice            |
 | `pnpm test:tenant`                       |    0 | 10 files / 19 tests                                              |
 | `pnpm test:concurrency`                  |    0 | 10 files / 22 tests                                              |
@@ -83,6 +83,8 @@ real API-key evidence and are not closed by this blocked report. W3 remains
 | Playwright S11 matrix                    |    0 | 18 pages x 3 viewports; 54 screenshots                           |
 | `pnpm test:provider:real`                |    2 | `SCOPED_BLOCKED` by 18 missing input names                       |
 | provider matrix generator                |    0 | 8 rows; 5 unverified / 3 deferred; 0 real                        |
+| `collect-s11-evidence --all`             |    0 | 73 rows; 66 in-scope / 3 deferred; candidate UNFROZEN            |
+| `collect-s11-evidence --task S11-T02`    |    0 | 15 task rows; explicit provider/candidate blockers               |
 | `pnpm test:performance` probe            |    0 | `PERFORMANCE_READY`                                              |
 | performance full fixture                 |    0 | 1M actual Segments; 300 unique uploads; `s11-perf-v1`            |
 | performance full runner                  |    4 | `PERFORMANCE_PROVIDER_BLOCKED`; real model inputs missing        |
