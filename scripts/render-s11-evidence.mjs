@@ -46,7 +46,7 @@ function evidenceForTask(taskTrace) {
     return 'pnpm test:contract; provider preflight BLOCKED (34 canonical / 18 scoped fields)';
   }
   if (taskTrace.includes('T05')) {
-    return 'RECOVERY_CHECK_READY; real drill BLOCKED by isolated media/changeId';
+    return 'recovery generate+consume PASS; diff=0; health/ready=200';
   }
   if (taskTrace.includes('T07')) {
     return 'pnpm release:check --allow-missing-app; DEFERRED_TO_PRODUCTION';
@@ -92,7 +92,7 @@ export function renderBlockedReport(scopeProfile = 'canonical-v1') {
           ? 'zero implementation must remain'
           : deferred
             ? 'contract/mock only; must not be reported as REAL_VERIFIED'
-            : 'real Provider, candidate, performance or recovery evidence remains missing'
+            : 'real Provider, candidate or performance evidence remains missing'
       } |`,
     );
   }

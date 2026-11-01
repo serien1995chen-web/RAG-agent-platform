@@ -71,10 +71,20 @@ S11_RECOVERY_SOURCE_PREFIX=kb_s11_source \
 S11_RECOVERY_RESTORE_PREFIX=kb_s11_restore_target \
 S11_RECOVERY_CHANGE_ID="$CHANGE_ID" \
 S11_EVIDENCE_DIR="$S11_EVIDENCE_DIR" \
+S11_RECOVERY_MEDIA_MODE=generate \
+S11_RECOVERY_MEDIA_DIR="$S11_EVIDENCE_DIR/media" \
 pnpm test:recovery
 ```
 
-The phase-1 check records tool availability and redacted command templates. It
-does not create a recovery PASS. Real archives, dumps, mirrors and Redis
-snapshots must be supplied outside the worktree, and missing media remains
-`BLOCKED`.
+`generate` creates all four media files, `recovery-input-manifest.json`, and
+their SHA-256 hashes from the isolated source before restoring to the isolated
+target. `consume` verifies the same manifest and media hashes instead of
+generating new files. Both modes require source/restore Mongo, PostgreSQL and
+Redis URLs, source/restore buckets, S3 credentials, a health URL and an external
+media directory. Raw URIs and credentials are never written to evidence.
+
+The drill compares all 23 `knowledge_*` collection names/counts, four vector
+profiles and dimension tables, MinIO object counts, Redis keys and S10
+Outbox/Usage event IDs. It writes `recovery-summary.json` and only returns
+`RECOVERY_PASS` when `/healthz=200`, `/readyz=200`, hashes match and every count
+diff is zero.

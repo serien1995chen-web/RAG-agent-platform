@@ -1,4 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import {
   main,
   RECOVERY_FAULT_MATRIX,
@@ -7,6 +10,8 @@ import {
   buildMongoDump,
   buildPgDump,
   buildRedisSnapshot,
+  verifyRecoveryInputManifest,
+  writeRecoveryInputManifest,
 } from '../../scripts/run-recovery-drill.mjs';
 
 describe('TEST-X-S11-COMPONENT-FAULT / WORKER-RESTART', () => {
@@ -57,6 +62,52 @@ describe('TEST-X-S11-COMPONENT-FAULT / WORKER-RESTART', () => {
     expect(JSON.stringify(commands.map(({ command, args }) => ({ command, args })))).not.toMatch(
       /mongodb:\/\/secret|postgresql:\/\/secret|password/i,
     );
+    expect(commands[3]?.args.slice(0, 2)).toEqual(['-u', '$S11_RECOVERY_REDIS_SOURCE_URL']);
+  });
+
+  it('binds generated media to changeId and source/restore targets and detects tampering', () => {
+    const mediaDir = mkdtempSync(join(tmpdir(), 's11-recovery-media-'));
+    try {
+      mkdirSync(join(mediaDir, 'minio', 'evidence'), { recursive: true });
+      writeFileSync(join(mediaDir, 'mongo.archive.gz'), 'mongo');
+      writeFileSync(join(mediaDir, 'postgres.dump'), 'postgres');
+      writeFileSync(join(mediaDir, 'redis.rdb'), 'redis');
+      writeFileSync(join(mediaDir, 'minio', 'evidence', 'object.txt'), 'object');
+      writeRecoveryInputManifest({
+        mediaDir,
+        changeId: 'change-s11-unit',
+        sourcePrefix: 'kb_s11_source_unit',
+        restorePrefix: 'kb_s11_restore_unit',
+        tools: { status: 'READY' },
+      });
+      expect(
+        verifyRecoveryInputManifest({
+          mediaDir,
+          changeId: 'change-s11-unit',
+          sourcePrefix: 'kb_s11_source_unit',
+          restorePrefix: 'kb_s11_restore_unit',
+        }).manifest.schemaVersion,
+      ).toBe(1);
+      expect(() =>
+        verifyRecoveryInputManifest({
+          mediaDir,
+          changeId: 'other-change',
+          sourcePrefix: 'kb_s11_source_unit',
+          restorePrefix: 'kb_s11_restore_unit',
+        }),
+      ).toThrow('RECOVERY_MEDIA_CHANGE_ID_MISMATCH');
+      writeFileSync(join(mediaDir, 'redis.rdb'), 'tampered');
+      expect(() =>
+        verifyRecoveryInputManifest({
+          mediaDir,
+          changeId: 'change-s11-unit',
+          sourcePrefix: 'kb_s11_source_unit',
+          restorePrefix: 'kb_s11_restore_unit',
+        }),
+      ).toThrow('RECOVERY_MEDIA_HASH_MISMATCH:redis.rdb');
+    } finally {
+      rmSync(mediaDir, { recursive: true, force: true });
+    }
   });
 
   it('check mode accepts only image-resident tools and never claims a recovery PASS', async () => {

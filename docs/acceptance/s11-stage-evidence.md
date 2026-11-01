@@ -12,7 +12,7 @@ close W4.
 | UI matrix           | PASS for local app     | 18 pages x 3 viewports; 54 screenshots                 |
 | Security            | PASS local matrix      | 10 files / 21 tests                                    |
 | Recovery tool probe | READY                  | all four service images contain required tools         |
-| Real recovery       | SCOPED_BLOCKED         | isolated media/changeId/inventory not supplied         |
+| Real recovery       | PASS                   | generate+consume; 0 diff; health/ready 200             |
 | Performance probe   | READY                  | k6 v2.3.0; local `/readyz` 200                         |
 | Full performance    | SCOPED_BLOCKED         | 1,000,000 seed and 300 upload IDs absent               |
 | Provider real tests | SCOPED_BLOCKED         | 18 scoped inputs absent; harness present               |

@@ -20,7 +20,7 @@ whole-stage PASS and does not close W4.
 
 | Input                       | SHA-256                                                            |
 | --------------------------- | ------------------------------------------------------------------ |
-| S11 implementation plan     | `D070CAF0DD2C460FFEFFBA3DD0E51BA50922C0D80ABAD0C373CB1781F66F137B` |
+| S11 implementation plan     | `D9F199F1BACE424D55A3BBFEDFEEB2DA6507F45EA11AA9512C1C118B56CEEA47` |
 | KnowledgeBase system design | `8E5E7300C651C4FE0478B87FC3572ADD52F95C3E49C8F15700B45BB8C690A26D` |
 | Stage task breakdown        | `11AA3693599759EF969C9F6AD85AE61DA8FD925940BAACFB17A1C5C389E2FB6E` |
 | Coding rules                | `6160D409FA57EA0DE6BEF24777979492F0ED10520070032AC5DF578211EF8CC9` |
@@ -51,7 +51,7 @@ real API-key evidence and are not closed by this blocked report. W3 remains
 | `S11-T02` | `SCOPED_BLOCKED`                           | AIProxy/OCR/Feishu HTTP adapters, mode-aware connector factory, scoped deferred guards and real-provider harness | 14 provider contract tests; 4 provider fault tests; 2 quota inheritance tests; 18 missing scoped fields |
 | `S11-T03` | `SCOPED_BLOCKED`                           | k6 probe/full runner, three scenarios, canonical PDF upload fixture, 1M Segment seeder and strict validation     | k6 v2.3.0 probe READY; 1M seed and 300 upload IDs absent                                                |
 | `S11-T04` | local PASS; external key scope blocked     | SSRF, archive, MIME, Range, XSS, tenant and secret tests                                                         | 10 files / 21 tests                                                                                     |
-| `S11-T05` | tool probe PASS; real drill blocked        | container recovery executor, prefix guards, fault matrix and invariants                                          | tools READY; 2 files / 8 tests; media/changeId absent                                                   |
+| `S11-T05` | generate + consume real drill PASS         | container recovery executor, media generator/consumer, isolated restore, counts/hash and health guards           | differences 0; health/ready 200; 2 files / 9 tests                                                      |
 | `S11-T06` | local matrix PASS; final candidate blocked | real Playwright 18-page matrix, axe, overflow, keyboard, network and external evidence                           | 18 x 3 = 54 screenshots; 1 test passed                                                                  |
 | `S11-T07` | static PASS; production deferred           | approved obligations, generated NOTICE/SBOM, five third-party digests and release semantics                      | release check `DEFERRED_TO_PRODUCTION`; app digest pending                                              |
 | `S11-T08` | blocked template/report                    | 73-row generator, collector, validator and Scoped matrix logic                                                   | 73 unique rows; no candidate-bound PASS                                                                 |
@@ -85,7 +85,7 @@ real API-key evidence and are not closed by this blocked report. W3 remains
 | `pnpm test:performance` probe            |    0 | `PERFORMANCE_READY`                                              |
 | performance full fixture guard           |    5 | 1M seed, verified seed and upload IDs missing                    |
 | `pnpm test:recovery -- --check`          |    0 | `RECOVERY_CHECK_READY`                                           |
-| recovery local tests                     |    0 | 2 files / 8 tests                                                |
+| recovery local tests                     |    0 | 2 files / 9 tests                                                |
 | `pnpm release:check --allow-missing-app` |    0 | `DEFERRED_TO_PRODUCTION`; no release PASS                        |
 
 ## Provider Status
@@ -109,8 +109,9 @@ No mock transport is represented as a real Provider success.
 - Full performance remains blocked: `segmentCountActual=0`,
   `seedVerified=false`, `uploadIdCount=0`.
 - All required recovery tools exist inside the Mongo, pgvector, MinIO and Redis
-  images. A real backup/restore needs isolated source/restore targets, media,
-  change ID and before/after inventory.
+  images. A real generate and consume drill completed against isolated
+  Mongo/PostgreSQL/Redis/MinIO targets with zero count differences and
+  health/ready 200.
 - The real browser matrix produced 54 PNG files, 54 SHA-256 sidecars and
   `ui-summary.json` SHA-256
   `afcf8430f9ede9206fc3ab65895bcba41b176dafe65b26f4e27c71c914a7790d`.
@@ -160,9 +161,9 @@ performance, recovery and candidate blockers.
 2. Provide a real Drive folder token containing two readable docx files.
 3. Create the isolated performance workspace/API key, upload 300 PDFs and
    verify the 1,000,000 Segment seed.
-4. Provide isolated recovery targets, media and change ID.
-5. Re-run all local, Provider, performance, recovery, UI and release gates.
-6. Only after all scoped gates pass, freeze `candidateSha`, write
+4. Re-run all local, Provider, performance, UI and release gates after the
+   Provider and performance inputs are complete.
+5. Only after all scoped gates pass, freeze `candidateSha`, write
    `s11-personA-gate.md`, and request independent personB evidence.
 
 PersonB evidence, Scoped wave evidence, final CI binding and W4 completion have
