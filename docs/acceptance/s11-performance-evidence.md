@@ -51,6 +51,11 @@ and seeds `knowledge_segments` inside the Mongo container. Running full mode
 without its external inputs exits `1` with a missing-variable error rather than
 producing a fixture.
 
+The container seeder was smoke-tested against the isolated database
+`kb_s11_seed_probe` with 100 records. It returned `count=100`, confirming the
+container command and Segment document shape. This smoke is not a full
+performance fixture and does not replace the required 1,000,000-record seed.
+
 ## Required To Unblock
 
 - operator-created isolated workspace, Space and API key;
