@@ -549,10 +549,12 @@ export function restoreAll(input) {
 function mongoStats(executor, envName) {
   const variable = `$${envName}`;
   const script = [
-    'const out={collections:{},eventKeys:[],usageEventIds:[]};',
+    'const out={collections:{},eventKeys:[],usageEventIds:[],duplicateEventKeys:[],duplicateUsageEventIds:[]};',
     'db.getCollectionNames().filter((name)=>name.startsWith("knowledge_")).sort().forEach((name)=>{out.collections[name]=db.getCollection(name).countDocuments({});});',
     'if(db.getCollectionNames().includes("knowledge_outbox_events")){out.eventKeys=db.knowledge_outbox_events.distinct("eventKey").slice(0,1000);}',
     'if(db.getCollectionNames().includes("knowledge_usage_events")){out.usageEventIds=db.knowledge_usage_events.distinct("eventId").slice(0,1000);}',
+    'if(db.getCollectionNames().includes("knowledge_outbox_events")){out.duplicateEventKeys=db.knowledge_outbox_events.aggregate([{$group:{_id:"$eventKey",count:{$sum:1}}},{$match:{count:{$gt:1}}},{$project:{_id:0,value:"$_id"}}]).toArray().map((entry)=>entry.value);}',
+    'if(db.getCollectionNames().includes("knowledge_usage_events")){out.duplicateUsageEventIds=db.knowledge_usage_events.aggregate([{$group:{_id:"$eventId",count:{$sum:1}}},{$match:{count:{$gt:1}}},{$project:{_id:0,value:"$_id"}}]).toArray().map((entry)=>entry.value);}',
     'print(JSON.stringify(out));',
   ].join('');
   const result = requireSuccess(
@@ -755,7 +757,12 @@ export async function executeRecovery(input, dependencies = {}) {
     ].map(({ service, command, args }) => ({ service, command, args })),
     beforeCounts,
     afterCounts,
-    eventIds: [...restoreMongo.eventKeys, ...restoreMongo.usageEventIds],
+    eventIds: [
+      ...restoreMongo.eventKeys.map((value) => `outbox:${value}`),
+      ...restoreMongo.usageEventIds.map((value) => `usage:${value}`),
+      ...restoreMongo.duplicateEventKeys.map((value) => `outbox:${value}`),
+      ...restoreMongo.duplicateUsageEventIds.map((value) => `usage:${value}`),
+    ],
     vectors,
     objects: minioFiles.map((file) => ({
       active: true,
