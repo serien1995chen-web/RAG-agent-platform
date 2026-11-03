@@ -1,7 +1,10 @@
 import {
+  AddIcon,
   Button,
+  ConfirmDialog,
   Field,
   FormField,
+  FormDrawer,
   KnowledgeDataTable,
   LoadingState,
   PageHeader,
@@ -43,6 +46,9 @@ export default function SegmentsPage() {
   const [sourceId, setSourceId] = useState(sourceFromQuery);
   const [problem, setProblem] = useState<unknown>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [pendingSegment, setPendingSegment] = useState<SegmentRecord | null>(null);
   const space = useKnowledgeQuery<SpaceRecord>(
     knowledgeQueryKeys.spaces.detail(spaceId),
     spaceId ? `/v1/knowledge/spaces/${spaceId}` : null,
@@ -67,6 +73,7 @@ export default function SegmentsPage() {
     invalidateKeys: [knowledgeQueryKeys.sources.segments(sourceId), knowledgeQueryKeys.jobs.list()],
     onSuccess: () => {
       form.reset();
+      setCreateOpen(false);
     },
   });
   const deleteSegment = useKnowledgeMutation<void, string>({
@@ -107,10 +114,11 @@ export default function SegmentsPage() {
   });
 
   async function removeSegment(segment: SegmentRecord) {
-    if (!window.confirm(t('segments.confirmDelete', { order: segment.order }))) return;
     await submitWithProblem(async () => {
       await deleteSegment.mutateAsync(segment.id);
     }, setProblem);
+    setDeleteOpen(false);
+    setPendingSegment(null);
   }
 
   return (
@@ -126,6 +134,12 @@ export default function SegmentsPage() {
         eyebrow={t('segments.eyebrow')}
         title={t('segments.heading')}
         description={t('segments.description')}
+        actions={
+          <Button tone="primary" isDisabled={!sourceId} onClick={() => setCreateOpen(true)}>
+            <AddIcon boxSize={3.5} mr={2} />
+            {t('segments.create')}
+          </Button>
+        }
       />
       <ProblemNotice
         error={
@@ -162,55 +176,6 @@ export default function SegmentsPage() {
           </SelectInput>
         </Field>
       </div>
-
-      <Section title={t('segments.createTitle')} meta={t('segments.createMeta')}>
-        <form className="form-band" onSubmit={submitSegment}>
-          <div className="form-intro">
-            <h2>{t('segments.formTitle')}</h2>
-            <p>{t('segments.formDescription')}</p>
-          </div>
-          <div className="form-fields">
-            <FormField
-              control={form.control}
-              name="question"
-              label={t('segments.question')}
-              render={(field) => (
-                <TextInput
-                  {...field}
-                  required
-                  maxLength={100000}
-                  value={String(field.value)}
-                  onChange={(event) => field.onChange(event.target.value)}
-                />
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="answer"
-              label={t('segments.answer')}
-              render={(field) => (
-                <TextArea
-                  {...field}
-                  required
-                  maxLength={100000}
-                  value={String(field.value)}
-                  onChange={(event) => field.onChange(event.target.value)}
-                />
-              )}
-            />
-          </div>
-          <div className="form-actions">
-            <Button
-              type="submit"
-              tone="primary"
-              busy={createSegment.isLoading}
-              disabled={!sourceId}
-            >
-              {t('segments.create')}
-            </Button>
-          </div>
-        </form>
-      </Section>
 
       <Section
         title={t('segments.register')}
@@ -308,7 +273,10 @@ export default function SegmentsPage() {
                       size="sm"
                       tone="danger"
                       busy={deleteSegment.isLoading}
-                      onClick={() => void removeSegment(segment)}
+                      onClick={() => {
+                        setPendingSegment(segment);
+                        setDeleteOpen(true);
+                      }}
                     >
                       {t('segments.actionDelete')}
                     </Button>
@@ -319,6 +287,74 @@ export default function SegmentsPage() {
           />
         )}
       </Section>
+
+      <FormDrawer
+        isOpen={createOpen}
+        onClose={() => setCreateOpen(false)}
+        title={t('segments.formTitle')}
+        description={t('segments.formDescription')}
+        size="lg"
+        footer={
+          <>
+            <Button onClick={() => setCreateOpen(false)}>{t('common.cancel')}</Button>
+            <Button
+              type="submit"
+              form="segment-create-form"
+              tone="primary"
+              busy={createSegment.isLoading}
+            >
+              {t('segments.create')}
+            </Button>
+          </>
+        }
+      >
+        <form id="segment-create-form" className="form-stack" onSubmit={submitSegment}>
+          <FormField
+            control={form.control}
+            name="question"
+            label={t('segments.question')}
+            render={(field) => (
+              <TextInput
+                {...field}
+                required
+                maxLength={100000}
+                value={String(field.value)}
+                onChange={(event) => field.onChange(event.target.value)}
+              />
+            )}
+          />
+          <FormField
+            control={form.control}
+            name="answer"
+            label={t('segments.answer')}
+            render={(field) => (
+              <TextArea
+                {...field}
+                required
+                minH="220px"
+                maxLength={100000}
+                value={String(field.value)}
+                onChange={(event) => field.onChange(event.target.value)}
+              />
+            )}
+          />
+        </form>
+      </FormDrawer>
+
+      <ConfirmDialog
+        isOpen={deleteOpen}
+        onClose={() => setDeleteOpen(false)}
+        onConfirm={async () => {
+          if (pendingSegment) await removeSegment(pendingSegment);
+        }}
+        title={t('segments.deleteTitle')}
+        description={
+          pendingSegment ? t('segments.confirmDelete', { order: pendingSegment.order }) : ''
+        }
+        confirmLabel={t('segments.actionDelete')}
+        busy={deleteSegment.isLoading}
+        destructive
+      />
     </>
   );
 }

@@ -27,17 +27,17 @@ describe('knowledge theme tokens', () => {
 
   it('uses the exact design values', () => {
     expect(knowledgeThemeTokens.colors).toEqual({
-      canvas: '#F3F6F4',
+      canvas: '#F5F7F6',
       surface: '#FFFFFF',
-      surfaceMuted: '#E8EFEC',
-      ink: '#17232B',
-      inkMuted: '#52636B',
-      line: '#CBD8D2',
+      surfaceMuted: '#E9EFEC',
+      ink: '#14272B',
+      inkMuted: '#5A6A70',
+      line: '#D1DDD7',
       primary: '#176B73',
-      primaryHover: '#11565D',
-      secondary: '#667B3F',
-      accent: '#C4623B',
-      warning: '#A56A12',
+      primaryHover: '#0F565D',
+      secondary: '#4F7248',
+      accent: '#C1683F',
+      warning: '#A26912',
       danger: '#B33A3A',
       info: '#356AA0',
       focus: '#0A84A5',
@@ -52,15 +52,19 @@ describe('knowledge theme tokens', () => {
       8: '32px',
       12: '48px',
     });
-    expect(knowledgeThemeTokens.shadows[1]).toBe('0 1px 2px rgba(23,35,43,0.08)');
-    expect(knowledgeThemeTokens.shadows[2]).toBe('0 8px 24px rgba(23,35,43,0.12)');
+    expect(knowledgeThemeTokens.shadows[1]).toBe('0 1px 2px rgba(20,39,43,0.08)');
+    expect(knowledgeThemeTokens.shadows[2]).toBe('0 16px 40px rgba(20,39,43,0.16)');
     expect(knowledgeThemeTokens.motion).toEqual({
       fast: '120ms',
       base: '180ms',
       slow: '240ms',
     });
-    expect(knowledgeThemeTokens.fonts.body).toBe('IBM Plex Sans, Noto Sans SC, sans-serif');
-    expect(knowledgeThemeTokens.fonts.display).toBe('Noto Serif SC, serif');
+    expect(knowledgeThemeTokens.fonts.body).toBe(
+      'IBM Plex Sans, Noto Sans SC, system-ui, sans-serif',
+    );
+    expect(knowledgeThemeTokens.fonts.display).toBe(
+      'IBM Plex Sans, Noto Sans SC, system-ui, sans-serif',
+    );
     expect(knowledgeThemeTokens.typography).toEqual({
       xs: { fontSize: '12px', lineHeight: '18px' },
       sm: { fontSize: '14px', lineHeight: '22px' },

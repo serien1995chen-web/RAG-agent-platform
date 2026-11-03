@@ -36,22 +36,32 @@ Successful probes use the frozen envelope and return the `HealthStatus` object
 under `data`. A failed readiness dependency returns 503 with a
 `KNOWLEDGE_DEPENDENCY_UNAVAILABLE` Problem, never a fake 200.
 
-## Base Pages
+## Console Pages
 
 ```text
 /spaces
 /spaces/new
 /spaces/[spaceId]/overview
 /spaces/[spaceId]/sources
+/spaces/[spaceId]/import
 /spaces/[spaceId]/segments
+/spaces/[spaceId]/segments/[segmentId]
 /spaces/[spaceId]/tags
 /spaces/[spaceId]/access
 /spaces/[spaceId]/jobs
+/spaces/[spaceId]/search
+/spaces/[spaceId]/images
+/spaces/[spaceId]/synonyms
+/settings/connectors
+/settings/api-keys
+/usage
+/audit
 /system/status
 ```
 
-Deferred import, search, image, synonym, connector and API-key capabilities are
-not exposed as available console actions.
+All pages call the canonical knowledge API. Local console authentication uses
+the development mock fixture from `projects/app/.env.local`; production rejects
+mock authentication.
 
 ## Gates
 

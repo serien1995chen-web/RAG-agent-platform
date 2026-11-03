@@ -1,10 +1,16 @@
 import {
+  AddIcon,
   ArchiveAction,
   Button,
   CatalogBatchResult,
   CatalogMoveControl,
+  ConfirmDialog,
+  DeleteIcon,
+  DownloadIcon,
+  EditIcon,
   FilePreviewPanel,
   FormField,
+  FormDrawer,
   KnowledgeDataTable,
   LoadingState,
   PageHeader,
@@ -84,6 +90,17 @@ export default function SourcesPage() {
   const [batchResult, setBatchResult] = useState<BatchActionResult | null>(null);
   const [batchProblem, setBatchProblem] = useState<unknown>(null);
   const [batchBusy, setBatchBusy] = useState(false);
+  const [sourceOpen, setSourceOpen] = useState(false);
+  const [directoryOpen, setDirectoryOpen] = useState(false);
+  const [directoryName, setDirectoryName] = useState('');
+  const [directoryParentId, setDirectoryParentId] = useState('');
+  const [editingDirectory, setEditingDirectory] = useState<DirectoryRecord | null>(null);
+  const [pendingSource, setPendingSource] = useState<SourceRecord | null>(null);
+  const [pendingDirectory, setPendingDirectory] = useState<DirectoryRecord | null>(null);
+  const [deleteSourceOpen, setDeleteSourceOpen] = useState(false);
+  const [deleteDirectoryOpen, setDeleteDirectoryOpen] = useState(false);
+  const [batchDeleteOpen, setBatchDeleteOpen] = useState(false);
+  const [directoryBusy, setDirectoryBusy] = useState(false);
   const space = useKnowledgeQuery<SpaceRecord>(
     knowledgeQueryKeys.spaces.detail(spaceId),
     spaceId ? `/v1/knowledge/spaces/${spaceId}` : null,
@@ -114,6 +131,7 @@ export default function SourcesPage() {
     invalidateKeys: [knowledgeQueryKeys.sources.list(spaceId), knowledgeQueryKeys.jobs.list()],
     onSuccess: () => {
       form.reset();
+      setSourceOpen(false);
     },
   });
   const deleteSource = useKnowledgeMutation<void, string>({
@@ -127,12 +145,6 @@ export default function SourcesPage() {
 
   const runSourceBatch = async (action: 'move' | 'delete') => {
     if (selectedSourceIds.length === 0) return;
-    if (
-      action === 'delete' &&
-      !window.confirm(t('sources.confirmBatchDelete', { count: selectedSourceIds.length }))
-    ) {
-      return;
-    }
     setBatchBusy(true);
     setBatchProblem(null);
     try {
@@ -157,6 +169,7 @@ export default function SourcesPage() {
       );
       setBatchResult(result);
       setSelectedSourceIds([]);
+      setBatchDeleteOpen(false);
       await Promise.all([sources.refetch(), directories.refetch()]);
     } catch (error) {
       setBatchProblem(error);
@@ -176,10 +189,71 @@ export default function SourcesPage() {
   });
 
   async function removeSource(source: SourceRecord) {
-    if (!window.confirm(t('sources.confirmDelete', { name: source.name }))) return;
     await submitWithProblem(async () => {
       await deleteSource.mutateAsync(source.id);
     }, setProblem);
+    setDeleteSourceOpen(false);
+    setPendingSource(null);
+  }
+
+  function openDirectory(directory?: DirectoryRecord) {
+    setEditingDirectory(directory ?? null);
+    setDirectoryName(directory?.name ?? '');
+    setDirectoryParentId(directory?.parentDirectoryId ?? '');
+    setDirectoryOpen(true);
+  }
+
+  async function submitDirectory() {
+    if (!directoryName.trim()) return;
+    setDirectoryBusy(true);
+    setProblem(null);
+    try {
+      if (editingDirectory) {
+        await knowledgeRequest<DirectoryRecord>(
+          `/v1/knowledge/directories/${editingDirectory.id}`,
+          {
+            method: 'PATCH',
+            body: {
+              name: directoryName.trim(),
+              version: editingDirectory.version,
+            },
+          },
+        );
+      } else {
+        await knowledgeRequest<DirectoryRecord>(`/v1/knowledge/spaces/${spaceId}/directories`, {
+          method: 'POST',
+          body: {
+            name: directoryName.trim(),
+            parentDirectoryId: directoryParentId || null,
+          },
+        });
+      }
+      await directories.refetch();
+      setDirectoryOpen(false);
+    } catch (error) {
+      setProblem(error);
+    } finally {
+      setDirectoryBusy(false);
+    }
+  }
+
+  async function removeDirectory() {
+    if (!pendingDirectory) return;
+    setDirectoryBusy(true);
+    setProblem(null);
+    try {
+      await knowledgeRequest<void>(`/v1/knowledge/directories/${pendingDirectory.id}`, {
+        method: 'DELETE',
+        body: {},
+      });
+      await Promise.all([directories.refetch(), sources.refetch()]);
+      setDeleteDirectoryOpen(false);
+      setPendingDirectory(null);
+    } catch (error) {
+      setProblem(error);
+    } finally {
+      setDirectoryBusy(false);
+    }
   }
 
   return (
@@ -193,6 +267,23 @@ export default function SourcesPage() {
         eyebrow={t('sources.eyebrow')}
         title={t('sources.heading')}
         description={t('sources.description')}
+        actions={
+          <>
+            <Button onClick={() => openDirectory()}>
+              <AddIcon boxSize={3.5} mr={2} />
+              {t('directories.create')}
+            </Button>
+            <Button onClick={() => setSourceOpen(true)}>{t('sources.create')}</Button>
+            <Button
+              href={`/spaces/${spaceId}/import`}
+              tone="primary"
+              onClick={() => void router.push(`/spaces/${spaceId}/import`)}
+            >
+              <DownloadIcon boxSize={4} mr={2} />
+              {t('sources.selectFile')}
+            </Button>
+          </>
+        }
       />
       <ProblemNotice
         error={
@@ -206,75 +297,16 @@ export default function SourcesPage() {
         }
         onRetry={() => void sources.refetch()}
       />
-      <Section title={t('sources.createTitle')} meta={t('sources.createMeta')}>
-        <form className="form-band" onSubmit={submitSource}>
-          <div className="form-intro">
-            <h2>{t('sources.formTitle')}</h2>
-            <p>{t('sources.formDescription')}</p>
-          </div>
-          <div className="form-fields">
-            <FormField
-              control={form.control}
-              name="name"
-              label={t('sources.name')}
-              render={(field) => (
-                <TextInput
-                  {...field}
-                  required
-                  maxLength={240}
-                  value={String(field.value)}
-                  onChange={(event) => field.onChange(event.target.value)}
-                />
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="kind"
-              label={t('sources.kind')}
-              render={(field) => (
-                <SelectInput
-                  name={field.name}
-                  value={String(field.value)}
-                  onBlur={field.onBlur}
-                  onChange={(event) => field.onChange(event.target.value)}
-                >
-                  <option value="text">{t('enum.text')}</option>
-                  <option value="file">{t('enum.file')}</option>
-                  <option value="url">{t('enum.url')}</option>
-                  <option value="template">{t('enum.template')}</option>
-                  <option value="image">{t('enum.image')}</option>
-                </SelectInput>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="directoryId"
-              label={t('sources.directory')}
-              render={(field) => (
-                <SelectInput
-                  name={field.name}
-                  value={String(field.value)}
-                  onBlur={field.onBlur}
-                  onChange={(event) => field.onChange(event.target.value)}
-                >
-                  <option value="">{t('sources.noDirectory')}</option>
-                  {directories.data?.items.map((directory) => (
-                    <option key={directory.id} value={directory.id}>
-                      {directory.name}
-                    </option>
-                  ))}
-                </SelectInput>
-              )}
-            />
-          </div>
-          <div className="form-actions">
-            <Button type="submit" tone="primary" busy={createSource.isLoading}>
-              {t('sources.create')}
-            </Button>
-          </div>
-        </form>
-      </Section>
-      <Section title={t('directories.title')} meta={t('directories.meta')}>
+      <Section
+        title={t('directories.title')}
+        meta={t('directories.meta')}
+        actions={
+          <Button size="sm" onClick={() => openDirectory()}>
+            <AddIcon boxSize={3.5} mr={2} />
+            {t('directories.create')}
+          </Button>
+        }
+      >
         <KnowledgeDataTable
           rows={directories.data?.items ?? []}
           rowKey={(directory) => directory.id}
@@ -296,20 +328,42 @@ export default function SourcesPage() {
               key: 'actions',
               label: t('sources.columnActions'),
               render: (directory) => (
-                <CatalogMoveControl
-                  resourceType="directory"
-                  resourceId={directory.id}
-                  endpoint={`/v1/knowledge/directories/${directory.id}/move`}
-                  version={directory.version}
-                  currentParentId={directory.parentDirectoryId}
-                  targets={(directories.data?.items ?? []).map((entry) => ({
-                    id: entry.id,
-                    label: entry.name,
-                  }))}
-                  onMoved={async () => {
-                    await Promise.all([directories.refetch(), sources.refetch()]);
-                  }}
-                />
+                <div className="inline-actions">
+                  <Button
+                    size="sm"
+                    aria-label={t('directories.edit')}
+                    onClick={() => openDirectory(directory)}
+                  >
+                    <EditIcon />
+                  </Button>
+                  <CatalogMoveControl
+                    resourceType="directory"
+                    resourceId={directory.id}
+                    endpoint={`/v1/knowledge/directories/${directory.id}/move`}
+                    version={directory.version}
+                    currentParentId={directory.parentDirectoryId}
+                    targets={(directories.data?.items ?? [])
+                      .filter((entry) => entry.id !== directory.id)
+                      .map((entry) => ({
+                        id: entry.id,
+                        label: entry.name,
+                      }))}
+                    onMoved={async () => {
+                      await Promise.all([directories.refetch(), sources.refetch()]);
+                    }}
+                  />
+                  <Button
+                    size="sm"
+                    tone="danger"
+                    aria-label={t('directories.delete')}
+                    onClick={() => {
+                      setPendingDirectory(directory);
+                      setDeleteDirectoryOpen(true);
+                    }}
+                  >
+                    <DeleteIcon />
+                  </Button>
+                </div>
               ),
             },
           ]}
@@ -350,7 +404,7 @@ export default function SourcesPage() {
             tone="danger"
             busy={batchBusy}
             isDisabled={selectedSourceIds.length === 0}
-            onClick={() => void runSourceBatch('delete')}
+            onClick={() => setBatchDeleteOpen(true)}
           >
             {t('sources.batchDelete')}
           </Button>
@@ -434,7 +488,10 @@ export default function SourcesPage() {
                       size="sm"
                       tone="danger"
                       busy={deleteSource.isLoading}
-                      onClick={() => void removeSource(source)}
+                      onClick={() => {
+                        setPendingSource(source);
+                        setDeleteSourceOpen(true);
+                      }}
                     >
                       {t('sources.actionDelete')}
                     </Button>
@@ -445,6 +502,163 @@ export default function SourcesPage() {
           />
         )}
       </Section>
+
+      <FormDrawer
+        isOpen={sourceOpen}
+        onClose={() => setSourceOpen(false)}
+        title={t('sources.createTitle')}
+        description={t('sources.formDescription')}
+        footer={
+          <>
+            <Button onClick={() => setSourceOpen(false)}>{t('common.cancel')}</Button>
+            <Button
+              type="submit"
+              form="source-create-form"
+              tone="primary"
+              busy={createSource.isLoading}
+            >
+              {t('sources.create')}
+            </Button>
+          </>
+        }
+      >
+        <form id="source-create-form" className="form-stack" onSubmit={submitSource}>
+          <FormField
+            control={form.control}
+            name="name"
+            label={t('sources.name')}
+            render={(field) => (
+              <TextInput
+                {...field}
+                required
+                maxLength={240}
+                value={String(field.value)}
+                onChange={(event) => field.onChange(event.target.value)}
+              />
+            )}
+          />
+          <FormField
+            control={form.control}
+            name="kind"
+            label={t('sources.kind')}
+            render={(field) => (
+              <SelectInput
+                name={field.name}
+                value={String(field.value)}
+                onBlur={field.onBlur}
+                onChange={(event) => field.onChange(event.target.value)}
+              >
+                <option value="text">{t('enum.text')}</option>
+                <option value="file">{t('enum.file')}</option>
+                <option value="url">{t('enum.url')}</option>
+                <option value="template">{t('enum.template')}</option>
+                <option value="image">{t('enum.image')}</option>
+              </SelectInput>
+            )}
+          />
+          <FormField
+            control={form.control}
+            name="directoryId"
+            label={t('sources.directory')}
+            render={(field) => (
+              <SelectInput
+                name={field.name}
+                value={String(field.value)}
+                onBlur={field.onBlur}
+                onChange={(event) => field.onChange(event.target.value)}
+              >
+                <option value="">{t('sources.noDirectory')}</option>
+                {directories.data?.items.map((directory) => (
+                  <option key={directory.id} value={directory.id}>
+                    {directory.name}
+                  </option>
+                ))}
+              </SelectInput>
+            )}
+          />
+        </form>
+      </FormDrawer>
+
+      <FormDrawer
+        isOpen={directoryOpen}
+        onClose={() => setDirectoryOpen(false)}
+        title={editingDirectory ? t('directories.editTitle') : t('directories.createTitle')}
+        description={
+          editingDirectory ? t('directories.editDescription') : t('directories.createDescription')
+        }
+        footer={
+          <>
+            <Button onClick={() => setDirectoryOpen(false)}>{t('common.cancel')}</Button>
+            <Button tone="primary" busy={directoryBusy} onClick={() => void submitDirectory()}>
+              {editingDirectory ? t('common.save') : t('directories.create')}
+            </Button>
+          </>
+        }
+      >
+        <div className="form-stack">
+          <label className="field">
+            <span className="field-label">{t('directories.name')}</span>
+            <TextInput
+              value={directoryName}
+              maxLength={120}
+              onChange={(event) => setDirectoryName(event.target.value)}
+            />
+          </label>
+          {!editingDirectory ? (
+            <label className="field">
+              <span className="field-label">{t('directories.parent')}</span>
+              <SelectInput
+                value={directoryParentId}
+                onChange={(event) => setDirectoryParentId(event.target.value)}
+              >
+                <option value="">{t('directories.root')}</option>
+                {directories.data?.items.map((directory) => (
+                  <option key={directory.id} value={directory.id}>
+                    {directory.name}
+                  </option>
+                ))}
+              </SelectInput>
+            </label>
+          ) : null}
+        </div>
+      </FormDrawer>
+
+      <ConfirmDialog
+        isOpen={deleteSourceOpen}
+        onClose={() => setDeleteSourceOpen(false)}
+        onConfirm={async () => {
+          if (pendingSource) await removeSource(pendingSource);
+        }}
+        title={t('sources.deleteTitle')}
+        description={pendingSource ? t('sources.confirmDelete', { name: pendingSource.name }) : ''}
+        confirmLabel={t('sources.actionDelete')}
+        busy={deleteSource.isLoading}
+        destructive
+      />
+
+      <ConfirmDialog
+        isOpen={batchDeleteOpen}
+        onClose={() => setBatchDeleteOpen(false)}
+        onConfirm={() => runSourceBatch('delete')}
+        title={t('sources.batchDeleteTitle')}
+        description={t('sources.confirmBatchDelete', { count: selectedSourceIds.length })}
+        confirmLabel={t('sources.batchDelete')}
+        busy={batchBusy}
+        destructive
+      />
+
+      <ConfirmDialog
+        isOpen={deleteDirectoryOpen}
+        onClose={() => setDeleteDirectoryOpen(false)}
+        onConfirm={() => void removeDirectory()}
+        title={t('directories.deleteTitle')}
+        description={
+          pendingDirectory ? t('directories.confirmDelete', { name: pendingDirectory.name }) : ''
+        }
+        confirmLabel={t('directories.delete')}
+        busy={directoryBusy}
+        destructive
+      />
     </>
   );
 }

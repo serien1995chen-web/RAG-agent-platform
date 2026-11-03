@@ -36,15 +36,23 @@ export const knowledgeTheme = extendTheme({
       'html, body, #__next': {
         minHeight: '100%',
       },
+      html: {
+        backgroundColor: 'kn.canvas',
+      },
       body: {
         margin: 0,
         color: 'kn.ink',
         backgroundColor: 'kn.canvas',
         fontFamily: 'body',
         fontSize: 'sm',
+        fontFeatureSettings: '"ss01" 1, "cv02" 1, "cv03" 1, "cv04" 1',
       },
       '*, *::before, *::after': {
         boxSizing: 'border-box',
+      },
+      '::selection': {
+        color: 'kn.surface',
+        backgroundColor: 'kn.primary',
       },
       'a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible':
         {
@@ -57,7 +65,21 @@ export const knowledgeTheme = extendTheme({
     Button: {
       baseStyle: {
         borderRadius: 'sm',
-        fontWeight: '700',
+        fontWeight: '600',
+        letterSpacing: '0',
+        transitionProperty: 'background-color, border-color, color, box-shadow',
+        transitionDuration: knowledgeThemeTokens.motion.fast,
+      },
+    },
+    Badge: {
+      baseStyle: {
+        fontWeight: '600',
+        letterSpacing: '0',
+      },
+    },
+    Heading: {
+      baseStyle: {
+        letterSpacing: '0',
       },
     },
     Input: {

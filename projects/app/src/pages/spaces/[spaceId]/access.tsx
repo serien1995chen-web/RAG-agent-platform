@@ -1,7 +1,9 @@
 import {
   Button,
+  ConfirmDialog,
   Field,
   FormField,
+  FormDrawer,
   KnowledgeDataTable,
   LoadingState,
   PageHeader,
@@ -41,6 +43,11 @@ export default function AccessPage() {
   const spaceId = typeof router.query.spaceId === 'string' ? router.query.spaceId : '';
   const [problem, setProblem] = useState<unknown>(null);
   const [selectedSourceId, setSelectedSourceId] = useState('');
+  const [removeOpen, setRemoveOpen] = useState(false);
+  const [pendingCollaborator, setPendingCollaborator] = useState<CollaboratorRecord | null>(null);
+  const [transferOpen, setTransferOpen] = useState(false);
+  const [targetMemberId, setTargetMemberId] = useState('');
+  const [transferBusy, setTransferBusy] = useState(false);
   const space = useKnowledgeQuery<SpaceRecord>(
     knowledgeQueryKeys.spaces.detail(spaceId),
     spaceId ? `/v1/knowledge/spaces/${spaceId}` : null,
@@ -122,6 +129,28 @@ export default function AccessPage() {
       knowledgeQueryKeys.jobs.list(),
     ],
   });
+  const transferOwnership = async () => {
+    const current = space.data;
+    if (!current || !targetMemberId.trim()) return;
+    setTransferBusy(true);
+    setProblem(null);
+    try {
+      await knowledgeRequest<void>(`/v1/knowledge/spaces/${current.id}/ownership-transfer`, {
+        method: 'POST',
+        body: {
+          targetMemberId: targetMemberId.trim(),
+          version: current.version,
+        },
+      });
+      await space.refetch();
+      setTargetMemberId('');
+      setTransferOpen(false);
+    } catch (error) {
+      setProblem(error);
+    } finally {
+      setTransferBusy(false);
+    }
+  };
 
   useEffect(() => {
     if (!selectedSourceId && sources.data?.items[0]) {
@@ -146,10 +175,11 @@ export default function AccessPage() {
   }
 
   async function revokeCollaborator(collaborator: CollaboratorRecord) {
-    if (!window.confirm(t('access.confirmRemove', { memberId: collaborator.memberId }))) return;
     await submitWithProblem(async () => {
       await removeCollaborator.mutateAsync(collaborator.memberId);
     }, setProblem);
+    setRemoveOpen(false);
+    setPendingCollaborator(null);
   }
 
   async function changePermission(action: PermissionAction) {
@@ -312,7 +342,10 @@ export default function AccessPage() {
                     size="sm"
                     tone="danger"
                     busy={removeCollaborator.isLoading}
-                    onClick={() => void revokeCollaborator(collaborator)}
+                    onClick={() => {
+                      setPendingCollaborator(collaborator);
+                      setRemoveOpen(true);
+                    }}
                   >
                     {t('access.remove')}
                   </Button>
@@ -394,6 +427,65 @@ export default function AccessPage() {
           <p className="table-empty">{t('access.selectSourcePrompt')}</p>
         )}
       </Section>
+
+      <Section
+        title={t('access.ownership')}
+        meta={
+          space.data ? `${t('access.currentOwner')}: ${space.data.ownershipMemberId}` : undefined
+        }
+        actions={
+          <Button tone="danger" onClick={() => setTransferOpen(true)}>
+            {t('access.transferOwnership')}
+          </Button>
+        }
+      >
+        <p className="subtle-label">{t('access.ownershipDescription')}</p>
+      </Section>
+
+      <ConfirmDialog
+        isOpen={removeOpen}
+        onClose={() => setRemoveOpen(false)}
+        onConfirm={async () => {
+          if (pendingCollaborator) await revokeCollaborator(pendingCollaborator);
+        }}
+        title={t('access.remove')}
+        description={
+          pendingCollaborator
+            ? t('access.confirmRemove', { memberId: pendingCollaborator.memberId })
+            : ''
+        }
+        confirmLabel={t('access.remove')}
+        busy={removeCollaborator.isLoading}
+        destructive
+      />
+
+      <FormDrawer
+        isOpen={transferOpen}
+        onClose={() => setTransferOpen(false)}
+        title={t('access.transferOwnership')}
+        description={t('access.ownershipDescription')}
+        footer={
+          <>
+            <Button onClick={() => setTransferOpen(false)}>{t('common.cancel')}</Button>
+            <Button
+              tone="danger"
+              busy={transferBusy}
+              isDisabled={!targetMemberId.trim()}
+              onClick={() => void transferOwnership()}
+            >
+              {t('access.confirmTransfer')}
+            </Button>
+          </>
+        }
+      >
+        <label className="field">
+          <span className="field-label">{t('access.targetMember')}</span>
+          <TextInput
+            value={targetMemberId}
+            onChange={(event) => setTargetMemberId(event.target.value)}
+          />
+        </label>
+      </FormDrawer>
     </>
   );
 }

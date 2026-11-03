@@ -245,7 +245,7 @@ export function S09SynonymsWorkbench(props: S09SynonymsWorkbenchProps) {
   };
 
   return (
-    <Box as="main" id="knowledge-main" minW={0}>
+    <Box as="section" minW={0}>
       <Box as="header" mb={6}>
         <Heading as="h1" m={0} fontSize={{ base: '24px', md: '30px' }} letterSpacing={0}>
           {labels.title}

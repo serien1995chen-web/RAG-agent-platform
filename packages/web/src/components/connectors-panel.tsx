@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 import { knowledgeRequest } from '../client/knowledge-client';
 import { useKnowledgeI18n } from '../i18n';
 import { Button, ProblemNotice, Section, StatusTag } from './knowledge-primitives';
+import { ConfirmDialog } from './knowledge-overlays';
 import { ConnectorForm, type ConnectorFormInput, type ConnectorRecord } from './connector-form';
 
 interface JobResult {
@@ -32,6 +33,7 @@ export function ConnectorsPanel(props: ConnectorsPanelProps) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
   const [message, setMessage] = useState('');
+  const [deleteOpen, setDeleteOpen] = useState(false);
 
   useEffect(() => {
     if (!connectorId) return;
@@ -123,7 +125,7 @@ export function ConnectorsPanel(props: ConnectorsPanelProps) {
   };
 
   const remove = async () => {
-    if (!connector || !window.confirm(t('connectors.deleteConfirm'))) return;
+    if (!connector) return;
     setBusy(true);
     setError(null);
     try {
@@ -134,6 +136,7 @@ export function ConnectorsPanel(props: ConnectorsPanelProps) {
       setMessage(t('connectors.deleted'));
       setConnector(null);
       setConnectorId('');
+      setDeleteOpen(false);
     } catch (caught) {
       setError(caught);
     } finally {
@@ -176,7 +179,7 @@ export function ConnectorsPanel(props: ConnectorsPanelProps) {
               <Button busy={busy} onClick={() => void sync()}>
                 {t('connectors.sync')}
               </Button>
-              <Button tone="danger" busy={busy} onClick={() => void remove()}>
+              <Button tone="danger" busy={busy} onClick={() => setDeleteOpen(true)}>
                 {t('connectors.delete')}
               </Button>
             </Flex>
@@ -188,6 +191,16 @@ export function ConnectorsPanel(props: ConnectorsPanelProps) {
 
       {message ? <Text role="status">{message}</Text> : null}
       {error ? <ProblemNotice error={error} onRetry={() => setError(null)} /> : null}
+      <ConfirmDialog
+        isOpen={deleteOpen}
+        onClose={() => setDeleteOpen(false)}
+        onConfirm={() => remove()}
+        title={t('connectors.delete')}
+        description={t('connectors.deleteConfirm')}
+        confirmLabel={t('connectors.delete')}
+        busy={busy}
+        destructive
+      />
     </Box>
   );
 }

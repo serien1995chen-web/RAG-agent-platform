@@ -53,8 +53,8 @@ export interface S8DeepSearchPanelProps {
 
 export function S8DeepSearchPanel(props: S8DeepSearchPanelProps) {
   return (
-    <Box as="main" id="knowledge-main" minW={0}>
-      <Heading as="h1" m={0} fontSize={{ base: '24px', md: '30px' }} letterSpacing={0}>
+    <Box as="section" minW={0}>
+      <Heading as="h2" m={0} fontSize={{ base: '20px', md: '24px' }} letterSpacing={0}>
         {props.labels.title}
       </Heading>
       <Text mt={2} color="kn.inkMuted">

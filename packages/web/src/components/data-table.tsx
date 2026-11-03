@@ -172,8 +172,56 @@ export function KnowledgeDataTable<T>(props: KnowledgeDataTableProps<T>) {
           </ButtonGroup>
         </Flex>
       </Flex>
+      <Box className="mobile-data-list" aria-label={props.caption ?? t('common.dataTable')}>
+        {props.rows.length === 0 ? (
+          <Box className="empty-state" py={8}>
+            <Text m={0} color="kn.inkMuted">
+              {props.empty}
+            </Text>
+          </Box>
+        ) : (
+          props.rows.map((row, rowIndex) => {
+            const rowId = props.rowKey(row);
+            const primaryColumn =
+              props.columns.find((column) => column.key !== 'select' && column.key !== 'actions') ??
+              props.columns[0];
+            const detailColumns = props.columns.filter(
+              (column) =>
+                column !== primaryColumn && column.key !== 'select' && column.key !== 'actions',
+            );
+            const actionColumn = props.columns.find((column) => column.key === 'actions');
+            const selectColumn = props.columns.find((column) => column.key === 'select');
+            return (
+              <Box className="mobile-data-row" key={rowId} data-row-index={rowIndex}>
+                <Flex align="flex-start" justify="space-between" gap={3}>
+                  <Box minW={0} fontWeight="650">
+                    {selectColumn ? selectColumn.render(row) : null}
+                    <Box mt={selectColumn ? 2 : 0}>{primaryColumn?.render(row)}</Box>
+                  </Box>
+                  {actionColumn ? (
+                    <Box flex="0 0 auto" maxW="52%">
+                      {actionColumn.render(row)}
+                    </Box>
+                  ) : null}
+                </Flex>
+                {detailColumns.length > 0 ? (
+                  <Box as="dl">
+                    {detailColumns.map((column) => (
+                      <Box as="div" display="contents" key={column.key}>
+                        <Box as="dt">{column.label}</Box>
+                        <Box as="dd">{column.render(row)}</Box>
+                      </Box>
+                    ))}
+                  </Box>
+                ) : null}
+              </Box>
+            );
+          })
+        )}
+      </Box>
       <TableContainer
         className="table-scroll"
+        display={{ base: 'none', md: 'block' }}
         width="100%"
         maxW="100%"
         overflowX="auto"

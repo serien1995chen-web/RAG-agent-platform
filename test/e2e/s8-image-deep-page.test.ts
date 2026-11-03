@@ -647,7 +647,7 @@ describe('S8 real app image and deep search routes', () => {
           { waitUntil: 'networkidle' },
         );
         await playwrightExpect(
-          page.getByRole('heading', { level: 1, name: '深度检索' }),
+          page.getByRole('heading', { level: 2, name: '深度检索' }),
         ).toBeVisible();
         const deepResponsePromise = page.waitForResponse(
           (response) =>

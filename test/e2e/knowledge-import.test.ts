@@ -95,7 +95,7 @@ describe('TEST-X-FRONTEND-IMPORT, TEST-DOWN-004-BLOCK and ACC-UI', () => {
       await page.goto(`${app!.baseUrl}/spaces/${spaceId}/import?kind=text`, {
         waitUntil: 'networkidle',
       });
-      await page.locator('input').nth(1).fill('UI text');
+      await page.getByRole('textbox', { name: '文本名称' }).fill('UI text');
       await page
         .getByRole('textbox', { name: '文本正文' })
         .fill('Text submitted through ACC-UI-02');
@@ -130,7 +130,9 @@ describe('TEST-X-FRONTEND-IMPORT, TEST-DOWN-004-BLOCK and ACC-UI', () => {
       await page.goto(`${app!.baseUrl}/spaces/${spaceId}/import?kind=url`, {
         waitUntil: 'networkidle',
       });
-      await page.locator('input').nth(1).fill('http://169.254.169.254/latest/meta-data');
+      await page
+        .getByRole('textbox', { name: '页面 URL' })
+        .fill('http://169.254.169.254/latest/meta-data');
       const response = page.waitForResponse(
         (candidate) =>
           candidate.request().method() === 'POST' && candidate.url().endsWith('/imports/url'),
@@ -213,8 +215,8 @@ describe('TEST-X-FRONTEND-IMPORT, TEST-DOWN-004-BLOCK and ACC-UI', () => {
       await page.goto(`${app!.baseUrl}/spaces/${spaceId}/import?kind=api_library`, {
         waitUntil: 'networkidle',
       });
-      await page.locator('input[type=url]').fill('https://api.example.test');
-      await page.locator('input').nth(3).fill('folder:eng');
+      await page.getByRole('textbox', { name: 'API Base URL' }).fill('https://api.example.test');
+      await page.getByRole('textbox', { name: 'Parent ID' }).fill('folder:eng');
       const catalogResponse = page.waitForResponse(
         (response) =>
           response.request().method() === 'POST' &&
@@ -293,7 +295,7 @@ describe('TEST-X-FRONTEND-IMPORT, TEST-DOWN-004-BLOCK and ACC-UI', () => {
       await page.goto(`${app!.baseUrl}/spaces/${spaceId}/import?kind=feishu`, {
         waitUntil: 'networkidle',
       });
-      await page.locator('input').nth(1).fill('folder:feishu');
+      await page.getByRole('textbox', { name: '根目录 ID' }).fill('folder:feishu');
       const catalogResponse = page.waitForResponse(
         (response) =>
           response.request().method() === 'POST' &&
@@ -345,11 +347,11 @@ describe('TEST-X-FRONTEND-IMPORT, TEST-DOWN-004-BLOCK and ACC-UI', () => {
       await page.goto(`${app!.baseUrl}/spaces/${spaceId}/import?kind=text`, {
         waitUntil: 'networkidle',
       });
-      await page.locator('input').nth(1).fill('Keep this name');
+      await page.getByRole('textbox', { name: '文本名称' }).fill('Keep this name');
       await page.getByRole('textbox', { name: '文本正文' }).fill('Keep this body');
       await page.getByRole('button', { name: /提交导入|Submit import/ }).click();
       await expectUi(page.locator('.problem-notice')).toContainText('KNOWLEDGE_CONFLICT');
-      await expectUi(page.locator('input').nth(1)).toHaveValue('Keep this name');
+      await expectUi(page.getByRole('textbox', { name: '文本名称' })).toHaveValue('Keep this name');
       await expectUi(page.getByRole('textbox', { name: '文本正文' })).toHaveValue('Keep this body');
       await expectUi(page.getByRole('button', { name: /重试|Retry/ })).toBeVisible();
     } finally {
