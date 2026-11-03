@@ -178,8 +178,21 @@ Compose 生命周期证据：
 | 模型网关（U-09）                        | mock 合同                           | 真实端点与凭证未提供，禁止写成真实联调 |
 | Auth / 容量 / PDF / 备份 / 通知（U-10） | mock 合同或 Runbook                 | 真实服务未提供                         |
 | OTLP exporter（U-14）                   | 本地契约测试                        | 外部 Collector 与生产导出未验证        |
-| jieba + `default_language:none`（U-17） | 仓库测试                            | 真实全文服务待外部条件复评             |
-| 生产迁移范围与备份介质（U-19）          | dry-run / mock / 框架证据           | 真实迁移、恢复和窗口未提供             |
+
+## 11. S11 Recovery Evidence
+
+S11 recovery evidence is accepted only from
+`scripts/run-recovery-drill.mjs` or an owner-supplied external summary with the
+same schema. It must include `changeId`, candidate SHA, isolated source and
+restore prefixes, before/after counts, event ID and vector uniqueness,
+active-object orphan checks, `/healthz`, `/readyz`, command exit codes and
+archive/dump/mirror hashes.
+
+Missing recovery tools, media or an isolated target is `BLOCKED`. Mock
+archives, manual health-only checks and a non-zero reconcile diff are not a
+recovery PASS.
+| jieba + `default_language:none`（U-17） | 仓库测试 | 真实全文服务待外部条件复评 |
+| 生产迁移范围与备份介质（U-19） | dry-run / mock / 框架证据 | 真实迁移、恢复和窗口未提供 |
 
 ## 11. 已知风险与发布阻塞项
 

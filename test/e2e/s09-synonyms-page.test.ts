@@ -23,7 +23,9 @@ import {
 } from './s4-app-harness';
 
 const root = resolve(import.meta.dirname, '../..');
-const outputDir = join(root, 'test-results', 's09-synonyms-real-ui');
+const outputDir = process.env.S11_UI_EVIDENCE_DIR
+  ? join(process.env.S11_UI_EVIDENCE_DIR, 's09-synonyms-real-ui')
+  : join(root, 'test-results', 's09-synonyms-real-ui');
 const suffix = randomUUID().replaceAll('-', '').slice(0, 12);
 const workspaceId = `ws_s9_page_${suffix}`;
 const memberId = `mem_s9_page_${suffix}`;

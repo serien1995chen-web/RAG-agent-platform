@@ -127,7 +127,17 @@ function vlmMessages(input: Extract<S5ModelInvocation, { kind: 'vlm' }>): unknow
   return [...messages, { role: 'user', content: imageParts }];
 }
 
-function bodyOf(input: S5ModelInvocation): unknown {
+function bodyOf(
+  input: S5ModelInvocation,
+  routing: {
+    providerOnly?: readonly string[];
+    rerankProtocol: 'openai' | 'alibaba-native';
+  },
+): unknown {
+  const provider =
+    routing.providerOnly && routing.providerOnly.length > 0
+      ? { only: [...routing.providerOnly] }
+      : undefined;
   switch (input.kind) {
     case 'llm':
       return {
@@ -141,13 +151,38 @@ function bodyOf(input: S5ModelInvocation): unknown {
         messages: vlmMessages(input),
         ...(input.maxOutputTokens === undefined ? {} : { max_tokens: input.maxOutputTokens }),
       };
-    case 'embedding':
-      return { model: input.modelId, input: embeddingInputItems(input) };
+    case 'embedding': {
+      const items = embeddingInputItems(input);
+      const textInputs = items.map((item) => (item.type === 'text' ? item.text : null));
+      const standardInput =
+        textInputs.every((item) => item !== null) && textInputs.length > 0
+          ? textInputs.length === 1
+            ? textInputs[0]
+            : textInputs
+          : items;
+      return {
+        model: input.modelId,
+        input: standardInput,
+        ...(provider ? { provider } : {}),
+      };
+    }
     case 'rerank':
+      if (routing.rerankProtocol === 'alibaba-native') {
+        return {
+          model: input.modelId,
+          input: {
+            query: input.query,
+            documents: input.candidates,
+          },
+          parameters: { top_n: input.candidates.length },
+          ...(provider ? { provider } : {}),
+        };
+      }
       return {
         model: input.modelId,
         query: input.query,
         documents: input.candidates,
+        ...(provider ? { provider } : {}),
       };
     case 'stt':
       return formDataOf(input);
@@ -181,6 +216,8 @@ export class S5AiproxyHttpAdapter implements S5ModelInvocationAdapterPort {
       baseUrl: string;
       token: string;
       transport: S5HttpTransportPort;
+      providerOnly?: readonly string[];
+      rerankProtocol?: 'openai' | 'alibaba-native';
     },
   ) {}
 
@@ -192,9 +229,14 @@ export class S5AiproxyHttpAdapter implements S5ModelInvocationAdapterPort {
       traceId: string;
     } = { workspaceId: 'runtime', requestId: 'runtime', traceId: 'runtime' },
   ): Promise<S5ModelAdapterResponse<T>> {
+    const rerankProtocol = this.input.rerankProtocol ?? 'openai';
+    const endpoint =
+      invocation.kind === 'rerank' && rerankProtocol === 'alibaba-native'
+        ? new URL('/gateway/alibaba/text-rerank/v1', this.input.baseUrl).toString()
+        : joinAiproxyUrl(this.input.baseUrl, ENDPOINT_BY_KIND[invocation.kind]);
     const response = await this.input.transport.request<T>({
       method: 'POST',
-      url: joinAiproxyUrl(this.input.baseUrl, ENDPOINT_BY_KIND[invocation.kind]),
+      url: endpoint,
       headers: {
         Authorization: `Bearer ${this.input.token}`,
         'Content-Type': invocation.kind === 'stt' ? 'multipart/form-data' : 'application/json',
@@ -203,7 +245,10 @@ export class S5AiproxyHttpAdapter implements S5ModelInvocationAdapterPort {
         'X-Request-Id': context.requestId,
         'X-Trace-Id': context.traceId,
       },
-      body: bodyOf(invocation),
+      body: bodyOf(invocation, {
+        ...(this.input.providerOnly ? { providerOnly: this.input.providerOnly } : {}),
+        rerankProtocol,
+      }),
       timeoutMs: TIMEOUT_BY_KIND[invocation.kind],
       responseType: invocation.kind === 'tts' ? 'arraybuffer' : 'json',
     });
@@ -230,9 +275,20 @@ export class S5AiproxyHttpAdapter implements S5ModelInvocationAdapterPort {
       throw new S5ModelTransportError('contract', response.status, null, 'aiproxy_http_error');
     }
     try {
+      const responseData =
+        invocation.kind === 'rerank' && rerankProtocol === 'alibaba-native'
+          ? {
+              results: (
+                response.data as {
+                  output?: { results?: unknown[] };
+                }
+              ).output?.results,
+              usage: (response.data as { usage?: unknown }).usage,
+            }
+          : response.data;
       const parsed = parseModelResponse({
         kind: invocation.kind,
-        data: response.data,
+        data: responseData,
         ...(invocation.kind === 'embedding' ? { dimension: invocation.dimension } : {}),
         ...(invocation.kind === 'tts'
           ? {
@@ -266,13 +322,17 @@ export class S5MockAiproxyTransport implements S5HttpTransportPort {
   async request<T = unknown>(input: S5HttpRequest): Promise<S5HttpResponse<T>> {
     const path = new URL(input.url).pathname;
     if (path.endsWith('/embeddings')) {
-      const body = input.body as { model: string; input: Array<Record<string, unknown>> };
+      const body = input.body as {
+        model: string;
+        input: string | Array<string | Record<string, unknown>>;
+      };
       const dimension = Number(/-(\d+)$/.exec(body.model)?.[1] ?? 0);
+      const items = Array.isArray(body.input) ? body.input : [body.input];
       return {
         status: 200,
         headers: {},
         data: {
-          data: body.input.map((item, index) => ({
+          data: items.map((item, index) => ({
             index,
             embedding: Array.from({ length: dimension }, (_, vectorIndex) => {
               const stable = JSON.stringify(item) || 'item';

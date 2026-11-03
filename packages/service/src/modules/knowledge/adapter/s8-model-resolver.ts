@@ -76,7 +76,8 @@ export class S8ModelResolver implements S8ImageModelResolverPort {
             item.modelId === binding.modelId &&
             item.type === 'embedding' &&
             item.authorized &&
-            item.capabilities.includes('vision') &&
+            (item.capabilities.includes('vision') ||
+              item.capabilities.includes('caption-embedding')) &&
             item.dimension !== null &&
             VISION_DIMENSIONS.has(item.dimension),
         )
@@ -91,6 +92,7 @@ export class S8ModelResolver implements S8ImageModelResolverPort {
     return {
       ...embedding,
       dimension: embedding.dimension as 768 | 1024 | 1536 | 3072,
+      mode: embedding.capabilities.includes('vision') ? 'vision-embedding' : 'caption-embedding',
     };
   }
 

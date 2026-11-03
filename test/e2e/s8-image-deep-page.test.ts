@@ -33,7 +33,9 @@ import {
 } from './s4-app-harness';
 
 const root = resolve(import.meta.dirname, '../..');
-const screenshotDir = join(root, 'docs/acceptance/s8-ui');
+const screenshotDir = process.env.S11_UI_EVIDENCE_DIR
+  ? join(process.env.S11_UI_EVIDENCE_DIR, 's8-ui')
+  : join(root, 'docs/acceptance/s8-ui');
 
 const suffix = randomUUID().replaceAll('-', '').slice(0, 12);
 const workspaceId = `ws_s8_e2e_${suffix}`;
@@ -516,7 +518,7 @@ describe('S8 real app image and deep search routes', () => {
         searchMode: 'hybrid',
       },
     });
-    expect(image.response.status).toBe(200);
+    expect(image.response.status, JSON.stringify(image.payload)).toBe(200);
     expect(
       (image.payload.data.items as Array<{ segment: { imageBlobRefId: string | null } }>).some(
         (item) => item.segment.imageBlobRefId === imageBlobRefId,

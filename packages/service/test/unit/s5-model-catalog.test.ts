@@ -124,6 +124,72 @@ describe('TEST-MODEL-001-BLOCK AIProxy catalog and model operations', () => {
     });
   });
 
+  it('merges an approved internal profile into a bare TokenDance catalog', async () => {
+    const transport: S5HttpTransportPort = {
+      async request<T>() {
+        return catalogResponse({
+          data: [
+            { id: 'deepseek-v4.1-flash', name: 'DeepSeek' },
+            { id: 'qwen3.7-text-embedding', name: 'Qwen embedding' },
+            { id: 'qwen3.7-text-rerank', name: 'Qwen rerank' },
+            { id: 'kimi-k2.5', name: 'Kimi' },
+            { id: 'unprofiled-model', name: 'Not selected' },
+          ],
+        }) as S5HttpResponse<T>;
+      },
+    };
+    const catalog = new S5AiproxyCatalogAdapter({
+      config,
+      transport,
+      env: {
+        AIPROXY_API_TOKEN: 'fake-catalog-token',
+        S11_AIPROXY_MODEL_MAPPING_APPROVED: 'true',
+        AIPROXY_MODEL_PROFILE_JSON: JSON.stringify({
+          models: [
+            {
+              id: 'deepseek-v4.1-flash',
+              type: 'llm',
+              capabilities: ['chat'],
+            },
+            {
+              id: 'qwen3.7-text-embedding',
+              type: 'embedding',
+              capabilities: ['text-embedding', 'caption-embedding'],
+              dimension: 1024,
+            },
+            {
+              id: 'qwen3.7-text-rerank',
+              type: 'rerank',
+              capabilities: ['rerank'],
+            },
+            {
+              id: 'kimi-k2.5',
+              type: 'vlm',
+              capabilities: ['vision'],
+            },
+          ],
+        }),
+      },
+    });
+    const models = await catalog.listModels({
+      workspaceId: context.workspaceId,
+      requestId: context.requestId,
+      traceId: context.traceId,
+    });
+    expect(models.map((item) => item.modelId)).toEqual([
+      'deepseek-v4.1-flash',
+      'qwen3.7-text-embedding',
+      'qwen3.7-text-rerank',
+      'kimi-k2.5',
+    ]);
+    expect(models.find((item) => item.modelId === 'qwen3.7-text-embedding')).toMatchObject({
+      type: 'embedding',
+      dimension: 1024,
+      capabilities: ['caption-embedding', 'text-embedding'],
+    });
+    expect(models.some((item) => item.modelId === 'unprofiled-model')).toBe(false);
+  });
+
   it('defaults MODEL-LIST to 50 items and applies cursor pagination', async () => {
     const models = Array.from({ length: 60 }, (_, index) => ({
       id: `llm-${String(index).padStart(3, '0')}`,

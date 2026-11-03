@@ -162,6 +162,7 @@ export class S8CaptionApplication implements S8CaptionExecutorPort {
       sourceVersion: number;
       modelId: string;
       dimension: 768 | 1024 | 1536 | 3072;
+      mode: 'vision-embedding' | 'caption-embedding';
       caption: string | null;
       imageUrl: string;
       imageBytes: number;
@@ -172,10 +173,18 @@ export class S8CaptionApplication implements S8CaptionExecutorPort {
     input: S5EmbeddingInputItem[];
     usage: { inputTokens: number; outputTokens: number };
   }> {
-    const ordered: S5EmbeddingInputItem[] = [
-      ...(input.caption ? ([{ type: 'text', text: input.caption }] as const) : []),
-      imageInput(input.imageUrl),
-    ];
+    const ordered: S5EmbeddingInputItem[] =
+      input.mode === 'caption-embedding'
+        ? input.caption
+          ? [{ type: 'text', text: input.caption }]
+          : []
+        : [
+            ...(input.caption ? ([{ type: 'text', text: input.caption }] as const) : []),
+            imageInput(input.imageUrl),
+          ];
+    if (ordered.length === 0) {
+      throw outputInvalid(context, 'caption_required_for_caption_embedding');
+    }
     const result = await this.input.gateway.invoke<EmbeddingEnvelope>({
       kind: 'embedding',
       modelId: input.modelId,
@@ -185,11 +194,14 @@ export class S8CaptionApplication implements S8CaptionExecutorPort {
       knowledgeSpaceId: input.knowledgeSpaceId,
       resourceType: 'source',
       resourceId: input.sourceId,
-      operation: `s8.vision-embedding:${input.sourceVersion}`,
+      operation:
+        input.mode === 'caption-embedding'
+          ? `s8.caption-embedding:${input.sourceVersion}`
+          : `s8.vision-embedding:${input.sourceVersion}`,
       audit: {
         promptVersion: S8_CAPTION_PROMPT_VERSION,
-        mediaItemCount: 1,
-        totalBytes: input.imageBytes,
+        mediaItemCount: input.mode === 'caption-embedding' ? 0 : 1,
+        totalBytes: input.mode === 'caption-embedding' ? 0 : input.imageBytes,
         sourceVersion: input.sourceVersion,
       },
       requestId: context.requestId,
@@ -259,6 +271,7 @@ export class S8CaptionApplication implements S8CaptionExecutorPort {
     }
     const vlm = vlmResult.status === 'fulfilled' ? vlmResult.value : null;
     const visionEmbedding = embeddingResult.status === 'fulfilled' ? embeddingResult.value : null;
+    const embeddingMode = visionEmbedding?.mode ?? 'vision-embedding';
     const vlmResolutionFailure = vlmResult.status === 'rejected' ? vlmResult.reason : undefined;
     const embeddingResolutionFailure =
       embeddingResult.status === 'rejected' ? embeddingResult.reason : undefined;
@@ -323,6 +336,7 @@ export class S8CaptionApplication implements S8CaptionExecutorPort {
             sourceVersion,
             modelId: visionEmbedding.modelId,
             dimension: visionEmbedding.dimension,
+            mode: embeddingMode,
             caption,
             imageUrl: ticket.url,
             imageBytes: object.sizeBytes,
@@ -366,10 +380,15 @@ export class S8CaptionApplication implements S8CaptionExecutorPort {
     const indexes: S6SegmentRecord['indexes'] = [];
     if (vectorIndexed) {
       const indexVersion = segment.version + 2;
-      const textOffset = embeddingInput[0]?.type === 'text' ? 1 : 0;
+      const textOffset =
+        embeddingMode === 'vision-embedding' && embeddingInput[0]?.type === 'text' ? 1 : 0;
       const captionVector = textOffset === 1 ? vectors[0] : undefined;
-      const imageVector = vectors[textOffset] ?? vectors[0];
-      if (!imageVector) throw outputInvalid(context, 'image_vector_missing');
+      const captionOnlyVector = embeddingMode === 'caption-embedding' ? vectors[0] : undefined;
+      const imageVector =
+        embeddingMode === 'vision-embedding' ? (vectors[textOffset] ?? vectors[0]) : undefined;
+      if (!captionVector && !captionOnlyVector && !imageVector) {
+        throw outputInvalid(context, 'image_vector_missing');
+      }
       const profile = this.input.vectors
         .listProfiles()
         .find((item) => item.dimension === visionEmbedding?.dimension);
@@ -385,7 +404,8 @@ export class S8CaptionApplication implements S8CaptionExecutorPort {
         });
       }
       const records: Array<Parameters<S6VectorPort['insert']>[0][number]> = [];
-      if (captionVector) {
+      const indexedCaptionVector = captionVector ?? captionOnlyVector;
+      if (indexedCaptionVector) {
         records.push({
           workspaceId: context.workspaceId,
           knowledgeSpaceId: source.knowledgeSpaceId,
@@ -394,31 +414,33 @@ export class S8CaptionApplication implements S8CaptionExecutorPort {
           indexId: 'image_caption',
           embeddingModelId: visionEmbedding!.modelId,
           dimension: visionEmbedding!.dimension,
-          vector: captionVector,
+          vector: indexedCaptionVector,
           searchEnabled: source.searchEnabled,
           contentHash: hash(caption ?? ''),
           version: indexVersion,
         });
       }
-      records.push({
-        workspaceId: context.workspaceId,
-        knowledgeSpaceId: source.knowledgeSpaceId,
-        sourceId,
-        segmentId: segment.id,
-        indexId: 'image',
-        embeddingModelId: visionEmbedding!.modelId,
-        dimension: visionEmbedding!.dimension,
-        vector: imageVector,
-        searchEnabled: source.searchEnabled,
-        contentHash: hash(`${caption ?? ''}\n${imageBlobRefId}`),
-        version: indexVersion,
-      });
+      if (imageVector) {
+        records.push({
+          workspaceId: context.workspaceId,
+          knowledgeSpaceId: source.knowledgeSpaceId,
+          sourceId,
+          segmentId: segment.id,
+          indexId: 'image',
+          embeddingModelId: visionEmbedding!.modelId,
+          dimension: visionEmbedding!.dimension,
+          vector: imageVector,
+          searchEnabled: source.searchEnabled,
+          contentHash: hash(`${caption ?? ''}\n${imageBlobRefId}`),
+          version: indexVersion,
+        });
+      }
       const written = await this.input.vectors.insert(records, context);
       if (written.vectorIds.length !== records.length) {
         throw outputInvalid(context, 'image_vector_insert_count_mismatch');
       }
       let vectorIndex = 0;
-      if (captionVector) {
+      if (indexedCaptionVector) {
         indexes.push({
           indexId: 'image_caption',
           type: 'image_caption',
@@ -431,17 +453,19 @@ export class S8CaptionApplication implements S8CaptionExecutorPort {
           version: indexVersion,
         });
       }
-      indexes.push({
-        indexId: 'image',
-        type: 'image',
-        modelId: visionEmbedding!.modelId,
-        dimension: visionEmbedding!.dimension,
-        storageType: profile.storageType,
-        vectorProfile: profile.tableName,
-        vectorId: written.vectorIds[vectorIndex]!,
-        text: caption ?? '',
-        version: indexVersion,
-      });
+      if (imageVector) {
+        indexes.push({
+          indexId: 'image',
+          type: 'image',
+          modelId: visionEmbedding!.modelId,
+          dimension: visionEmbedding!.dimension,
+          storageType: profile.storageType,
+          vectorProfile: profile.tableName,
+          vectorId: written.vectorIds[vectorIndex]!,
+          text: caption ?? '',
+          version: indexVersion,
+        });
+      }
     }
 
     const committed = await this.input.indexes.commit(
@@ -455,6 +479,7 @@ export class S8CaptionApplication implements S8CaptionExecutorPort {
         vectorStatus: vectorIndexed ? 'indexed' : 'error',
         captionPromptVersion: S8_CAPTION_PROMPT_VERSION,
         visionEmbeddingModelId: visionEmbedding?.modelId ?? 'unavailable',
+        visionEmbeddingMode: embeddingMode,
         captionKey,
         indexes,
       },
@@ -483,6 +508,7 @@ export class S8CaptionApplication implements S8CaptionExecutorPort {
         vectorStatus: vectorIndexed ? 'indexed' : 'error',
         captionPromptVersion: S8_CAPTION_PROMPT_VERSION,
         visionEmbeddingModelId: visionEmbedding?.modelId ?? 'unavailable',
+        visionEmbeddingMode: embeddingMode,
         captionKey,
         sourceVersion,
         usage: {

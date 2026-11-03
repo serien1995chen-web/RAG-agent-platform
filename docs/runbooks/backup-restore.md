@@ -57,3 +57,34 @@ the private operator; this repository does not embed destructive commands.
 | afterChecks      |       |
 | comparisonResult |       |
 | incidentNotes    |       |
+
+## S11 Isolated Recovery Drill
+
+The S11 drill only accepts `kb_s11_` source targets and
+`kb_s11_restore_` restore targets. A non-matching target fails before any
+command is run.
+
+```bash
+node scripts/run-recovery-drill.mjs --check --source-prefix kb_s11_
+S11_RECOVERY_MODE=real \
+S11_RECOVERY_SOURCE_PREFIX=kb_s11_source \
+S11_RECOVERY_RESTORE_PREFIX=kb_s11_restore_target \
+S11_RECOVERY_CHANGE_ID="$CHANGE_ID" \
+S11_EVIDENCE_DIR="$S11_EVIDENCE_DIR" \
+S11_RECOVERY_MEDIA_MODE=generate \
+S11_RECOVERY_MEDIA_DIR="$S11_EVIDENCE_DIR/media" \
+pnpm test:recovery
+```
+
+`generate` creates all four media files, `recovery-input-manifest.json`, and
+their SHA-256 hashes from the isolated source before restoring to the isolated
+target. `consume` verifies the same manifest and media hashes instead of
+generating new files. Both modes require source/restore Mongo, PostgreSQL and
+Redis URLs, source/restore buckets, S3 credentials, a health URL and an external
+media directory. Raw URIs and credentials are never written to evidence.
+
+The drill compares all 23 `knowledge_*` collection names/counts, four vector
+profiles and dimension tables, MinIO object counts, Redis keys and S10
+Outbox/Usage event IDs. It writes `recovery-summary.json` and only returns
+`RECOVERY_PASS` when `/healthz=200`, `/readyz=200`, hashes match and every count
+diff is zero.

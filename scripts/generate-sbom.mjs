@@ -11,43 +11,58 @@
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { PENDING_LEGAL_REVIEW, evaluateLicense, stripOuterParens } from './check-licenses.mjs';
+import {
+  APPROVED_LICENSE_EXCEPTIONS,
+  LICENSE_OBLIGATION_DATA,
+  evaluateLicense,
+  stripOuterParens,
+} from './check-licenses.mjs';
 
 export const PROJECT_NAME = 'rag-agent-platform';
 
-/** 设计文档 6.3 登记的基础设施镜像（只登记常量，不 pull、不 inspect）。 */
+const releaseImageManifest = JSON.parse(
+  readFileSync(join(import.meta.dirname, '..', 'deploy', 'release-images.data.json'), 'utf8'),
+);
+
+function releaseImage(service) {
+  const entry = releaseImageManifest.services.find((candidate) => candidate.service === service);
+  if (!entry) throw new Error(`release image manifest is missing ${service}`);
+  return entry;
+}
+
+/** 六类运行镜像；app/worker 与 AIProxy PostgreSQL 分别记录共享镜像关系。 */
 export const IMAGE_COMPONENTS = [
   {
     service: 'mongo',
-    repository: 'registry.cn-hangzhou.aliyuncs.com/fastgpt/mongo',
-    tag: '5.0.32',
-    digest: 'sha256:ab12670508974afbdf3bdc7dd39a201d228a73c9c13c70a684b9eedfb063dc3e',
     license: 'SSPL',
-    platform: 'linux/amd64',
+    ...releaseImage('mongo'),
   },
   {
     service: 'redis',
-    repository: 'registry.cn-hangzhou.aliyuncs.com/fastgpt/redis',
-    tag: '7.2-alpine',
-    digest: 'sha256:2bf71743152d3ca631d358029d504fed349ea28179667acfa755dffb4b321e7c',
     license: 'RSAL/SSPL',
-    platform: 'linux/amd64',
+    ...releaseImage('redis'),
   },
   {
     service: 'pgvector',
-    repository: 'registry.cn-hangzhou.aliyuncs.com/fastgpt/pgvector',
-    tag: '0.8.0-pg15',
-    digest: 'sha256:92be4ea0424cccf17003f5803d54448e2864ac27a70e6ac5d24b3d8b463c689c',
     license: 'PostgreSQL',
-    platform: 'linux/amd64',
+    ...releaseImage('pgvector'),
+    alsoServices: ['pgvector', 'aiproxy-postgres', 'aiproxy-init'],
   },
   {
     service: 'minio',
-    repository: 'registry.cn-hangzhou.aliyuncs.com/fastgpt/minio',
-    tag: 'RELEASE.2025-09-07T16-13-09Z',
-    digest: 'sha256:a63b19df59e6ec7c02ebba6e7a1097b7e032da7947b18db7ff67dae8e84fd44d',
     license: 'AGPL-3.0',
-    platform: 'linux/amd64',
+    ...releaseImage('minio'),
+  },
+  {
+    service: 'aiproxy',
+    license: 'UNKNOWN',
+    ...releaseImage('aiproxy'),
+  },
+  {
+    service: 'app',
+    license: 'INTERNAL',
+    ...releaseImage('app'),
+    alsoServices: ['app', 'worker'],
   },
 ];
 
@@ -98,9 +113,19 @@ export function collectImageComponents() {
     properties: [
       { name: 'kb:component-class', value: 'image-component' },
       { name: 'kb:registry-repository', value: image.repository },
-      { name: 'kb:digest', value: image.digest },
+      { name: 'kb:digest', value: image.digest ?? 'PENDING_RELEASE_EVIDENCE' },
       { name: 'kb:platform', value: image.platform },
       { name: 'kb:license', value: image.license },
+      {
+        name: 'kb:digest-status',
+        value:
+          image.digest === null || !image.digest.startsWith('sha256:')
+            ? 'PENDING_RELEASE_EVIDENCE'
+            : 'LOCKED',
+      },
+      ...(image.alsoServices
+        ? [{ name: 'kb:also-services', value: image.alsoServices.join(',') }]
+        : []),
       { name: 'kb:source', value: '设计文档 6.3' },
     ],
   }));
@@ -526,17 +551,17 @@ export function collectDependencyComponents(lockfile, installed) {
       ),
     );
 
-  const releaseBlockers = licenseEntries
+  const approvedExceptions = licenseEntries
     .filter((entry) => entry.scope === 'production')
     .flatMap((entry) => {
-      const pending = PENDING_LEGAL_REVIEW.find(
+      const approved = APPROVED_LICENSE_EXCEPTIONS.find(
         (candidate) => candidate.name === entry.name && candidate.version === entry.version,
       );
-      return pending === undefined
+      return approved === undefined
         ? []
         : [
             {
-              ...pending,
+              ...approved,
               license: entry.normalized,
               resolvedParentChain: entry.parentChain,
             },
@@ -547,9 +572,25 @@ export function collectDependencyComponents(lockfile, installed) {
     directComponents,
     transitiveComponents,
     licenseEntries,
-    releaseBlockers,
+    releaseBlockers: [],
+    approvedExceptions,
     productionKeys: production.keys,
   };
+}
+
+function collectLicenseApprovals(repoRoot) {
+  return LICENSE_OBLIGATION_DATA.entries.map((entry) => ({
+    ...entry,
+    licenseText: entry.licenseFilePaths
+      .map((licensePath) =>
+        readFileSync(join(repoRoot, licensePath), 'utf8')
+          .split(/\r?\n/)
+          .map((line) => line.replace(/\s+$/, ''))
+          .join('\n')
+          .trim(),
+      )
+      .join('\n\n'),
+  }));
 }
 
 export function collectSbomModel(repoRoot) {
@@ -580,6 +621,7 @@ export function collectSbomModel(repoRoot) {
     imageComponents,
     licenseEntries: dependencies.licenseEntries,
     releaseBlockers: dependencies.releaseBlockers,
+    licenseApprovals: collectLicenseApprovals(repoRoot),
   };
 }
 
@@ -670,11 +712,11 @@ export function renderNotice(model) {
   lines.push('');
 
   lines.push(`四、镜像组件（${model.imageComponents.length}）`);
-  lines.push('服务 | registry/repository | tag | digest | 许可证 | 平台');
+  lines.push('服务 | registry/repository | tag | digest | 许可证 | 平台 | 共享服务');
   for (const image of IMAGE_COMPONENTS) {
     lines.push(
       `${image.service} | ${image.repository} | ${image.tag} | ${image.digest} | ` +
-        `${image.license} | ${image.platform}`,
+        `${image.license} | ${image.platform} | ${(image.alsoServices ?? [image.service]).join(',')}`,
     );
   }
   lines.push('');
@@ -684,19 +726,31 @@ export function renderNotice(model) {
     'npm 生产闭包白名单: MIT、Apache-2.0、BSD-2-Clause、BSD-3-Clause、ISC、0BSD；字体另允许 OFL-1.1',
   );
   lines.push(
-    '容器镜像白名单: mongo=SSPL、redis=RSAL/SSPL、minio=AGPL-3.0、pgvector=PostgreSQL License',
+    '容器镜像白名单: mongo=SSPL、redis=RSAL/SSPL、minio=AGPL-3.0、pgvector=PostgreSQL License、aiproxy=UNKNOWN（待供应链复核）、app=INTERNAL',
   );
   lines.push('');
 
   lines.push(
-    `六、发布阻塞项（pending-legal-review，releaseBlocking=true，${model.releaseBlockers.length} 条）`,
+    `六、许可证批准与义务（${LICENSE_OBLIGATION_DATA.status}，${model.licenseApprovals.length} 条）`,
   );
-  lines.push('说明: 以下条目不阻断 CI，但阻断对外发布，待法务复核；不得声明为已批准。');
-  for (const blocker of model.releaseBlockers) {
+  lines.push(`approvalSource: ${LICENSE_OBLIGATION_DATA.approvalSource}`);
+  lines.push('说明: 本记录只引用用户转述的法务批准，不包含姓名、签名或批准文件。');
+  for (const approval of model.licenseApprovals) {
+    lines.push('');
     lines.push(
-      `${blocker.name}@${blocker.version} | ${blocker.expression} | ${blocker.status} | ` +
-        `releaseBlocking=${String(blocker.releaseBlocking)} | ${blocker.resolvedParentChain}`,
+      `${approval.name}@${approval.version} | ${approval.expression} | ${approval.parentChain}`,
     );
+    lines.push(`sourceUrl: ${approval.sourceUrl}`);
+    lines.push(`replaceable: ${String(approval.replaceable)}`);
+    if (approval.relinkInstructions) {
+      lines.push(`relinkInstructions: ${approval.relinkInstructions}`);
+    }
+    lines.push(`attribution: ${approval.attribution}`);
+    lines.push('obligations:');
+    for (const obligation of approval.obligations) lines.push(`  - ${obligation}`);
+    lines.push('licenseTextBegin');
+    lines.push(approval.licenseText);
+    lines.push('licenseTextEnd');
   }
   lines.push('');
 

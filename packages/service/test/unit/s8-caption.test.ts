@@ -45,6 +45,7 @@ function application(input?: {
   failEmbedding?: boolean;
   failVlmResolution?: boolean;
   failEmbeddingResolution?: boolean;
+  embeddingMode?: 'vision-embedding' | 'caption-embedding';
 }) {
   const commit = vi.fn(async (value: { indexes: unknown[] }) => ({
     id: '65f1e5b2a1c9d4b7e8f02222',
@@ -134,9 +135,13 @@ function application(input?: {
           modelId: 'mock-embedding-1536',
           displayName: 'Vision embedding',
           type: 'embedding',
-          capabilities: ['vision', 'dimension:1536'],
+          capabilities:
+            input?.embeddingMode === 'caption-embedding'
+              ? ['text-embedding', 'caption-embedding', 'dimension:1536']
+              : ['vision', 'dimension:1536'],
           dimension: 1536,
           authorized: true,
+          mode: input?.embeddingMode ?? 'vision-embedding',
         };
       },
       resolveLlm: async () => {
@@ -266,6 +271,23 @@ describe('TEST-X-IMAGE-CAPTION executor', () => {
       embeddingFailureCode: 'KNOWLEDGE_MODEL_FAILED',
     });
     expect(updateStatus).toHaveBeenCalledWith(source.id, 'partial', context, 2);
+  });
+
+  it('uses caption text only and writes an image_caption vector in caption-only mode', async () => {
+    const { instance, commit, updateStatus } = application({
+      embeddingMode: 'caption-embedding',
+    });
+    const result = await instance.execute(job, context);
+    expect(result.result).toMatchObject({
+      captionStatus: 'indexed',
+      vectorStatus: 'indexed',
+      visionEmbeddingModelId: 'mock-embedding-1536',
+      visionEmbeddingMode: 'caption-embedding',
+    });
+    expect(
+      commit.mock.calls[0]?.[0].indexes.map((index: { indexId: string }) => index.indexId),
+    ).toEqual(['image_caption']);
+    expect(updateStatus).toHaveBeenCalledWith(source.id, 'ready', context, 2);
   });
 
   it('keeps the vector path available when the VLM binding is missing', async () => {
