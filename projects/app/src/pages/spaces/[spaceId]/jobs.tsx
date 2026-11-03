@@ -21,7 +21,7 @@ import {
 } from '@kb/web';
 import Head from 'next/head';
 import { useRouter } from 'next/router';
-import { useEffect, useMemo, useState } from 'react';
+import { useDeferredValue, useEffect, useMemo, useState } from 'react';
 import type { JobRecord, PageInfo, SpaceRecord } from '../../../lib/knowledge-types';
 import { statusTone } from '../../../lib/knowledge-types';
 
@@ -38,20 +38,19 @@ export default function JobsPage() {
   );
   const [selectedJobId, setSelectedJobId] = useState('');
   const [isAdmin, setIsAdmin] = useState(false);
+  const deferredKind = useDeferredValue(kind);
+  const deferredStatus = useDeferredValue(status);
   const path = useMemo(() => {
-    const query = new URLSearchParams({ limit: '200' });
-    if (kind) query.set('kind', kind);
-    if (status) query.set('status', status);
+    const query = new URLSearchParams({ limit: '200', sort: '-updatedAt' });
     return `/v1/knowledge/jobs?${query.toString()}`;
-  }, [kind, status]);
+  }, []);
   const space = useKnowledgeQuery<SpaceRecord>(
     knowledgeQueryKeys.spaces.detail(spaceId),
     spaceId ? `/v1/knowledge/spaces/${spaceId}` : null,
   );
-  const jobs = useKnowledgeQuery<JobResponse>(
-    knowledgeQueryKeys.jobs.list({ limit: 200, kind, status }),
-    path,
-  );
+  const jobs = useKnowledgeQuery<JobResponse>(knowledgeQueryKeys.jobs.list({ limit: 200 }), path, {
+    refetchInterval: selectedJobId ? 3_000 : 10_000,
+  });
   const mutate = useKnowledgeMutation<JobRecord, { action: S6JobAction; job: JobRecord }>({
     mutationFn: ({ action, job }) =>
       knowledgeRequest<JobRecord>(`/v1/knowledge/jobs/${job.jobId}/${action}`, {
@@ -60,7 +59,13 @@ export default function JobsPage() {
       }),
     invalidateKeys: [knowledgeQueryKeys.jobs.list()],
   });
-  const selected = (jobs.data?.items ?? []).find((job) => job.jobId === selectedJobId);
+  const allJobs = jobs.data?.items ?? [];
+  const filteredJobs = allJobs.filter(
+    (job) =>
+      (!deferredKind || job.kind === deferredKind) &&
+      (!deferredStatus || job.status === deferredStatus),
+  );
+  const selected = allJobs.find((job) => job.jobId === selectedJobId);
 
   useEffect(() => {
     void ensureConsoleSession()
@@ -138,13 +143,13 @@ export default function JobsPage() {
       </div>
       <Section
         title={t('jobs.register')}
-        meta={jobs.data ? t('common.records', { count: jobs.data.items.length }) : undefined}
+        meta={jobs.data ? t('common.records', { count: filteredJobs.length }) : undefined}
       >
         {jobs.isLoading ? (
           <LoadingState />
         ) : (
           <KnowledgeDataTable
-            rows={jobs.data?.items ?? []}
+            rows={filteredJobs}
             rowKey={(job) => job.jobId}
             empty={t('jobs.empty')}
             caption={t('jobs.register')}

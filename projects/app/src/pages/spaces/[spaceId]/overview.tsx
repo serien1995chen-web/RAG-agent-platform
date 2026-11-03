@@ -1,6 +1,9 @@
 import {
   Button,
+  ConfirmDialog,
+  EditIcon,
   FormField,
+  FormDrawer,
   LoadingState,
   PageHeader,
   ProblemNotice,
@@ -38,6 +41,8 @@ export default function SpaceOverviewPage() {
   const enumLabel = useKnowledgeEnumLabel();
   const spaceId = typeof router.query.spaceId === 'string' ? router.query.spaceId : '';
   const [problem, setProblem] = useState<unknown>(null);
+  const [editOpen, setEditOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
   const spaceRequest = useKnowledgeQuery<SpaceRecord>(
     knowledgeQueryKeys.spaces.detail(spaceId),
     spaceId ? `/v1/knowledge/spaces/${spaceId}` : null,
@@ -75,6 +80,7 @@ export default function SpaceOverviewPage() {
     ],
     onSuccess: () => {
       form.reset({ name: '', description: '' });
+      setEditOpen(false);
     },
   });
   const deleteSpace = useKnowledgeMutation<void, void>({
@@ -94,6 +100,7 @@ export default function SpaceOverviewPage() {
     ],
     onSuccess: async () => {
       await router.push('/spaces');
+      setDeleteOpen(false);
     },
   });
   const updateBindings = useKnowledgeMutation<
@@ -123,7 +130,6 @@ export default function SpaceOverviewPage() {
 
   async function removeSpace() {
     if (!space) return;
-    if (!window.confirm(t('overview.confirmDelete', { name: space.name }))) return;
     await submitWithProblem(async () => {
       await deleteSpace.mutateAsync();
     }, setProblem);
@@ -153,8 +159,16 @@ export default function SpaceOverviewPage() {
         actions={
           space ? (
             <>
+              <Button onClick={() => setEditOpen(true)}>
+                <EditIcon boxSize={4} mr={2} />
+                {t('overview.updateTitle')}
+              </Button>
               <Button href={`/spaces/${space.id}/sources`}>{t('overview.sources')}</Button>
-              <Button tone="danger" onClick={() => void removeSpace()} busy={deleteSpace.isLoading}>
+              <Button
+                tone="danger"
+                onClick={() => setDeleteOpen(true)}
+                busy={deleteSpace.isLoading}
+              >
                 {t('overview.delete')}
               </Button>
             </>
@@ -251,49 +265,6 @@ export default function SpaceOverviewPage() {
             )}
           </Section>
 
-          <Section title={t('overview.updateTitle')} meta={t('overview.updateMeta')}>
-            <form className="form-band" onSubmit={submitUpdate}>
-              <div className="form-intro">
-                <h2>{t('overview.updateFormTitle')}</h2>
-                <p>{t('overview.updateFormDescription')}</p>
-              </div>
-              <div className="form-fields">
-                <FormField
-                  control={form.control}
-                  name="name"
-                  label={t('newSpace.name')}
-                  render={(field) => (
-                    <TextInput
-                      {...field}
-                      maxLength={120}
-                      placeholder={space.name}
-                      value={String(field.value)}
-                      onChange={(event) => field.onChange(event.target.value)}
-                    />
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="description"
-                  label={t('newSpace.fieldDescription')}
-                  render={(field) => (
-                    <TextArea
-                      {...field}
-                      maxLength={2000}
-                      placeholder={space.description}
-                      value={String(field.value)}
-                      onChange={(event) => field.onChange(event.target.value)}
-                    />
-                  )}
-                />
-              </div>
-              <div className="form-actions">
-                <Button type="submit" tone="primary" busy={updateSpace.isLoading}>
-                  {t('overview.save')}
-                </Button>
-              </div>
-            </form>
-          </Section>
           <Section title={t('governance.exportSpace')}>
             <SpaceExportAction spaceId={space.id} />
           </Section>
@@ -302,6 +273,70 @@ export default function SpaceOverviewPage() {
           </Section>
         </>
       )}
+
+      <FormDrawer
+        isOpen={editOpen}
+        onClose={() => setEditOpen(false)}
+        title={t('overview.updateFormTitle')}
+        description={t('overview.updateFormDescription')}
+        footer={
+          <>
+            <Button onClick={() => setEditOpen(false)}>{t('common.cancel')}</Button>
+            <Button
+              type="submit"
+              form="space-metadata-form"
+              tone="primary"
+              busy={updateSpace.isLoading}
+            >
+              {t('overview.save')}
+            </Button>
+          </>
+        }
+      >
+        <form id="space-metadata-form" className="form-stack" onSubmit={submitUpdate}>
+          <FormField
+            control={form.control}
+            name="name"
+            label={t('newSpace.name')}
+            render={(field) => (
+              <TextInput
+                {...field}
+                maxLength={120}
+                placeholder={space?.name}
+                value={String(field.value)}
+                onChange={(event) => field.onChange(event.target.value)}
+              />
+            )}
+          />
+          <FormField
+            control={form.control}
+            name="description"
+            label={t('newSpace.fieldDescription')}
+            render={(field) => (
+              <TextArea
+                {...field}
+                maxLength={2000}
+                placeholder={space?.description}
+                value={String(field.value)}
+                onChange={(event) => field.onChange(event.target.value)}
+              />
+            )}
+          />
+        </form>
+      </FormDrawer>
+
+      <ConfirmDialog
+        isOpen={deleteOpen}
+        onClose={() => setDeleteOpen(false)}
+        onConfirm={() => void removeSpace()}
+        title={t('overview.delete')}
+        description={
+          space ? t('overview.confirmDelete', { name: space.name }) : t('overview.fallbackTitle')
+        }
+        confirmLabel={t('overview.delete')}
+        busy={deleteSpace.isLoading}
+        destructive
+      />
     </>
   );
 }

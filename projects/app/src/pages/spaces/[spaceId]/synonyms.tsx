@@ -52,7 +52,7 @@ export default function SynonymsPage() {
       search,
       limit: 50,
     }),
-    spaceId
+    spaceId && config.data
       ? `/v1/knowledge/spaces/${spaceId}/synonyms/mappings?limit=50${
           search ? `&search=${encodeURIComponent(search)}` : ''
         }${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`

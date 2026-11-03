@@ -4,6 +4,8 @@ import { Box, Checkbox, Flex, Text } from '@chakra-ui/react';
 import { useEffect, useState } from 'react';
 import { knowledgeRequest } from '../client/knowledge-client';
 import { useKnowledgeI18n } from '../i18n';
+import { knowledgeQueryKeys } from '../query/query-keys';
+import { useKnowledgeQuery } from '../query/use-knowledge-query';
 import {
   Button,
   Field,
@@ -39,6 +41,19 @@ export const IMPORT_SOURCE_KINDS: readonly ImportSourceKind[] = [
 
 interface JobResult {
   jobId: string;
+}
+
+interface JobProgress {
+  jobId: string;
+  status: string;
+  progress: Record<string, unknown>;
+  error: { code?: string; message?: string } | null;
+  updatedAt: string;
+}
+
+interface DirectoryOption {
+  id: string;
+  name: string;
 }
 
 export interface ImportWorkbenchProps {
@@ -96,6 +111,41 @@ export function ImportWorkbench(props: ImportWorkbenchProps) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
   const [jobId, setJobId] = useState('');
+  const [jobProgress, setJobProgress] = useState<JobProgress | null>(null);
+  const [jobProblem, setJobProblem] = useState<unknown>(null);
+  const directories = useKnowledgeQuery<{ items: DirectoryOption[] }>(
+    knowledgeQueryKeys.directories.list(props.spaceId),
+    `/v1/knowledge/spaces/${props.spaceId}/directories?limit=200`,
+  );
+
+  useEffect(() => {
+    if (!jobId) {
+      setJobProgress(null);
+      setJobProblem(null);
+      return;
+    }
+    let active = true;
+    let timer: number | undefined;
+    const terminal = new Set(['succeeded', 'failed', 'cancelled', 'dead_letter']);
+    const poll = async () => {
+      try {
+        const latest = await knowledgeRequest<JobProgress>(`/v1/knowledge/jobs/${jobId}`);
+        if (!active) return;
+        setJobProgress(latest);
+        setJobProblem(null);
+        if (!terminal.has(latest.status)) {
+          timer = window.setTimeout(() => void poll(), 2_000);
+        }
+      } catch (caught) {
+        if (active) setJobProblem(caught);
+      }
+    };
+    void poll();
+    return () => {
+      active = false;
+      if (timer) window.clearTimeout(timer);
+    };
+  }, [jobId]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -246,12 +296,16 @@ export function ImportWorkbench(props: ImportWorkbenchProps) {
 
   return (
     <Box className="import-workbench" minW={0} maxW="840px" overflowWrap="anywhere">
-      <Flex direction={{ base: 'column', md: 'row' }} gap={4} mb={5}>
-        <Field label={t('import.kind')}>
-          <SelectInput
-            value={kind}
-            onChange={(event) => {
-              setKind(event.target.value as ImportSourceKind);
+      <Box className="import-kind-tabs" role="tablist" aria-label={t('import.kind')} mb={5}>
+        {IMPORT_SOURCE_KINDS.map((option) => (
+          <button
+            key={option}
+            type="button"
+            role="tab"
+            aria-selected={kind === option}
+            className="import-kind-tab"
+            onClick={() => {
+              setKind(option);
               setApiFileIds('');
               setApiCatalog([]);
               setApiParentId('');
@@ -262,39 +316,40 @@ export function ImportWorkbench(props: ImportWorkbenchProps) {
               setError(null);
             }}
           >
-            {IMPORT_SOURCE_KINDS.map((option) => (
-              <option key={option} value={option}>
-                {t(
-                  option === 'api_library'
-                    ? 'enum.apiLibrary'
-                    : option === 'files'
-                      ? 'enum.file'
-                      : option === 'backup'
-                        ? 'enum.backup'
-                        : option === 'feishu'
-                          ? 'enum.feishu'
-                          : option === 'yuque'
-                            ? 'enum.yuque'
-                            : option === 'dingtalk'
-                              ? 'enum.dingtalk'
-                              : option === 'template'
-                                ? 'enum.template'
-                                : option === 'text'
-                                  ? 'enum.text'
-                                  : 'enum.url',
-                )}
+            {t(
+              option === 'api_library'
+                ? 'enum.apiLibrary'
+                : option === 'files'
+                  ? 'enum.file'
+                  : option === 'backup'
+                    ? 'enum.backup'
+                    : option === 'feishu'
+                      ? 'enum.feishu'
+                      : option === 'yuque'
+                        ? 'enum.yuque'
+                        : option === 'dingtalk'
+                          ? 'enum.dingtalk'
+                          : option === 'template'
+                            ? 'enum.template'
+                            : option === 'text'
+                              ? 'enum.text'
+                              : 'enum.url',
+            )}
+          </button>
+        ))}
+      </Box>
+      <Box maxW="420px" mb={5}>
+        <Field label={t('import.directory')}>
+          <SelectInput value={directoryId} onChange={(event) => setDirectoryId(event.target.value)}>
+            <option value="">{t('sources.noDirectory')}</option>
+            {(directories.data?.items ?? []).map((directory) => (
+              <option key={directory.id} value={directory.id}>
+                {directory.name}
               </option>
             ))}
           </SelectInput>
         </Field>
-        <Field label={t('import.directory')}>
-          <TextInput
-            value={directoryId}
-            onChange={(event) => setDirectoryId(event.target.value)}
-            placeholder="24-hex"
-          />
-        </Field>
-      </Flex>
+      </Box>
 
       {kind === 'files' ? (
         <Box>
@@ -487,12 +542,49 @@ export function ImportWorkbench(props: ImportWorkbenchProps) {
       ) : null}
 
       <Flex mt={6} gap={3} align="center" wrap="wrap">
-        <Button tone="primary" busy={busy} onClick={() => void submitCurrent()}>
+        <Button
+          tone="primary"
+          busy={busy}
+          isDisabled={kind === 'files' && !uploadId}
+          onClick={() => void submitCurrent()}
+        >
           {t('import.submit')}
         </Button>
         {jobId ? <Text role="status">{t('import.queued', { jobId })}</Text> : null}
       </Flex>
       {error ? <ProblemNotice error={error} onRetry={() => void submitCurrent()} /> : null}
+      {jobProgress ? (
+        <Box className="job-progress-card" mt={5}>
+          <Flex align="center" justify="space-between" gap={3} wrap="wrap">
+            <Box>
+              <Text className="subtle-label" display="block">
+                {t('import.jobLive')}
+              </Text>
+              <Text as="strong" display="block" mt={1}>
+                {jobProgress.jobId}
+              </Text>
+            </Box>
+            <Text as="strong" color="kn.primary">
+              {jobProgress.status}
+            </Text>
+          </Flex>
+          <Box className="job-progress-track" mt={4} aria-hidden>
+            <Box
+              className="job-progress-fill"
+              width={`${Math.max(0, Math.min(100, Number(jobProgress.progress.percent ?? 0)))}%`}
+            />
+          </Box>
+          <Text mt={2} mb={0} color="kn.inkMuted" fontSize="xs">
+            {String(jobProgress.progress.percent ?? 0)}% · {jobProgress.updatedAt}
+          </Text>
+          {jobProgress.error?.code ? (
+            <Text mt={2} mb={0} color="kn.danger" fontSize="sm">
+              {jobProgress.error.code}
+            </Text>
+          ) : null}
+        </Box>
+      ) : null}
+      {jobProblem ? <ProblemNotice error={jobProblem} /> : null}
     </Box>
   );
 }

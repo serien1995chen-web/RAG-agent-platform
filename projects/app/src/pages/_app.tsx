@@ -19,7 +19,12 @@ export default function App({ Component, pageProps }: AppProps) {
     <KnowledgeI18nProvider>
       <KnowledgeUiProvider>
         <KnowledgeQueryProvider>
-          <KnowledgeAppShell location={location}>
+          <KnowledgeAppShell
+            location={location}
+            onNavigate={(href) => {
+              void router.push(href);
+            }}
+          >
             <Component {...pageProps} />
           </KnowledgeAppShell>
         </KnowledgeQueryProvider>

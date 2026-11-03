@@ -94,7 +94,7 @@ describe('TEST-X-FRONTEND-A11Y S7 test-only Search UI harness', () => {
       });
       page.on('pageerror', (error) => pageErrors.push(error.message));
       await page.goto(`${baseUrl}/?state=partial`, { waitUntil: 'networkidle' });
-      await playwrightExpect(page.getByRole('heading', { level: 1, name: 'Search' })).toBeVisible();
+      await playwrightExpect(page.getByRole('heading', { level: 2, name: 'Search' })).toBeVisible();
       await playwrightExpect(
         page.getByText('Some retrieval channels were unavailable.'),
       ).toBeVisible();

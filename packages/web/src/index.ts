@@ -1,4 +1,25 @@
 export {
+  AddIcon,
+  AttachmentIcon,
+  CheckIcon,
+  ChevronRightIcon,
+  CloseIcon,
+  CopyIcon,
+  DeleteIcon,
+  DownloadIcon,
+  EditIcon,
+  ExternalLinkIcon,
+  HamburgerIcon,
+  InfoOutlineIcon,
+  LockIcon,
+  RepeatIcon,
+  SearchIcon,
+  SettingsIcon,
+  TimeIcon,
+  ViewIcon,
+  WarningIcon,
+} from '@chakra-ui/icons';
+export {
   ensureConsoleSession,
   knowledgeBinaryRequest,
   knowledgeRequest,
@@ -67,6 +88,12 @@ export {
   TextArea,
   TextInput,
 } from './components/knowledge-primitives';
+export { ConfirmDialog, FormDrawer, JobDrawer, PageToolbar } from './components/knowledge-overlays';
+export type {
+  ConfirmDialogProps,
+  FormDrawerProps,
+  JobDrawerProps,
+} from './components/knowledge-overlays';
 export { KnowledgeDataTable } from './components/data-table';
 export { ArchiveAction } from './components/archive-action';
 export {
@@ -291,6 +318,12 @@ export { loadCompleteModelCatalog, useKnowledgeModelCatalog } from './query/mode
 export type { ModelCatalogPage, ModelPageInfo } from './query/model-catalog';
 export { useKnowledgeMutation } from './query/use-knowledge-mutation';
 export { useKnowledgeQueries, useKnowledgeQuery } from './query/use-knowledge-query';
+export { buildCursorPagePath, useCursorKnowledgeQuery } from './query/use-cursor-knowledge-query';
+export type {
+  CursorKnowledgeQueryOptions,
+  CursorPage,
+  CursorPageInfo,
+} from './query/use-cursor-knowledge-query';
 export { knowledgeGlobalStyles, knowledgeTheme, KnowledgeUiProvider } from './theme';
 export { knowledgeThemeTokens } from './theme';
 export type { KnowledgeThemeTokens } from './theme';

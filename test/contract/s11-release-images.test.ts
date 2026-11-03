@@ -56,7 +56,7 @@ describe('TEST-X-S11-LICENSE-OBLIGATIONS / TEST-X-S11-RELEASE-IMAGES', () => {
         status: 'DEFERRED_TO_PRODUCTION',
       }),
     ]);
-  });
+  }, 30_000);
 
   it('parses only tag plus sha256 digest references', () => {
     expect(

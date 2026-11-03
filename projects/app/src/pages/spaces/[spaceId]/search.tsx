@@ -14,6 +14,7 @@ import {
   S8SearchFormSchema,
   S7SearchFormSchema,
   S7SearchWorkbench,
+  PageHeader,
   buildS7SearchRequest,
   buildS8DeepRequest,
   classifyS7SearchState,
@@ -196,9 +197,10 @@ export default function SearchPage() {
     const rawFilters = parseFilters(queryString(router.query.filters));
     const nextMode = parsePageMode(queryString(router.query.mode));
     const defaults = defaultS7SearchForm(spaceId);
+    const rawQuery = queryString(router.query.query) ?? '';
     const candidate = {
       ...defaults,
-      query: queryString(router.query.query) ?? '',
+      query: rawQuery,
       mode: nextMode === 'deep' ? 'hybrid' : nextMode,
       tokenBudget: finiteNumber(queryString(router.query.budget), defaults.tokenBudget),
       similarity: finiteNumber(queryString(router.query.similarity), defaults.similarity),
@@ -360,6 +362,7 @@ export default function SearchPage() {
       <Head>
         <title>{t('search.title')}</title>
       </Head>
+      <PageHeader title={t('search.title')} description={t('search.description')} />
       <div
         role="group"
         aria-label={t('search.mode')}

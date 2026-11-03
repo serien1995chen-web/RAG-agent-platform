@@ -1,6 +1,9 @@
 import {
   Button,
+  ConfirmDialog,
+  EditIcon,
   FormField,
+  FormDrawer,
   KnowledgeDataTable,
   LoadingState,
   PageHeader,
@@ -34,6 +37,14 @@ export default function TagsPage() {
   const enumLabel = useKnowledgeEnumLabel();
   const spaceId = typeof router.query.spaceId === 'string' ? router.query.spaceId : '';
   const [problem, setProblem] = useState<unknown>(null);
+  const [pendingTag, setPendingTag] = useState<TagRecord | null>(null);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [editingTag, setEditingTag] = useState<TagRecord | null>(null);
+  const [editOpen, setEditOpen] = useState(false);
+  const [editLabel, setEditLabel] = useState('');
+  const [editRequired, setEditRequired] = useState(false);
+  const [editStatus, setEditStatus] = useState<'active' | 'disabled'>('active');
+  const [editBusy, setEditBusy] = useState(false);
   const space = useKnowledgeQuery<SpaceRecord>(
     knowledgeQueryKeys.spaces.detail(spaceId),
     spaceId ? `/v1/knowledge/spaces/${spaceId}` : null,
@@ -146,10 +157,42 @@ export default function TagsPage() {
   });
 
   async function removeTag(tag: TagRecord) {
-    if (!window.confirm(t('tags.confirmDelete', { label: tag.label }))) return;
     await submitWithProblem(async () => {
       await deleteTag.mutateAsync(tag.id);
     }, setProblem);
+    setDeleteOpen(false);
+    setPendingTag(null);
+  }
+
+  function openEdit(tag: TagRecord) {
+    setEditingTag(tag);
+    setEditLabel(tag.label);
+    setEditRequired(tag.required);
+    setEditStatus(tag.status);
+    setEditOpen(true);
+  }
+
+  async function saveTag() {
+    if (!editingTag || !editLabel.trim()) return;
+    setEditBusy(true);
+    setProblem(null);
+    try {
+      await knowledgeRequest<TagRecord>(`/v1/knowledge/tags/${editingTag.id}`, {
+        method: 'PATCH',
+        body: {
+          label: editLabel.trim(),
+          required: editRequired,
+          status: editStatus,
+          version: editingTag.version,
+        },
+      });
+      await tags.refetch();
+      setEditOpen(false);
+    } catch (error) {
+      setProblem(error);
+    } finally {
+      setEditBusy(false);
+    }
   }
 
   return (
@@ -308,14 +351,22 @@ export default function TagsPage() {
                 key: 'actions',
                 label: t('tags.columnActions'),
                 render: (tag) => (
-                  <Button
-                    size="sm"
-                    tone="danger"
-                    busy={deleteTag.isLoading}
-                    onClick={() => void removeTag(tag)}
-                  >
-                    {t('tags.delete')}
-                  </Button>
+                  <div className="inline-actions">
+                    <Button size="sm" aria-label={t('tags.edit')} onClick={() => openEdit(tag)}>
+                      <EditIcon />
+                    </Button>
+                    <Button
+                      size="sm"
+                      tone="danger"
+                      busy={deleteTag.isLoading}
+                      onClick={() => {
+                        setPendingTag(tag);
+                        setDeleteOpen(true);
+                      }}
+                    >
+                      {t('tags.delete')}
+                    </Button>
+                  </div>
                 ),
               },
             ]}
@@ -400,6 +451,63 @@ export default function TagsPage() {
           </div>
         </form>
       </Section>
+
+      <FormDrawer
+        isOpen={editOpen}
+        onClose={() => setEditOpen(false)}
+        title={t('tags.editTitle')}
+        description={t('tags.editDescription')}
+        footer={
+          <>
+            <Button onClick={() => setEditOpen(false)}>{t('common.cancel')}</Button>
+            <Button tone="primary" busy={editBusy} onClick={() => void saveTag()}>
+              {t('common.save')}
+            </Button>
+          </>
+        }
+      >
+        <div className="form-stack">
+          <label className="field">
+            <span className="field-label">{t('tags.label')}</span>
+            <TextInput
+              value={editLabel}
+              maxLength={80}
+              onChange={(event) => setEditLabel(event.target.value)}
+            />
+          </label>
+          <label className="checkbox-row">
+            <input
+              type="checkbox"
+              checked={editRequired}
+              onChange={(event) => setEditRequired(event.target.checked)}
+            />
+            {t('tags.required')}
+          </label>
+          <label className="field">
+            <span className="field-label">{t('tags.columnStatus')}</span>
+            <SelectInput
+              value={editStatus}
+              onChange={(event) => setEditStatus(event.target.value as 'active' | 'disabled')}
+            >
+              <option value="active">{t('enum.active')}</option>
+              <option value="disabled">{t('enum.disabled')}</option>
+            </SelectInput>
+          </label>
+        </div>
+      </FormDrawer>
+
+      <ConfirmDialog
+        isOpen={deleteOpen}
+        onClose={() => setDeleteOpen(false)}
+        onConfirm={async () => {
+          if (pendingTag) await removeTag(pendingTag);
+        }}
+        title={t('tags.delete')}
+        description={pendingTag ? t('tags.confirmDelete', { label: pendingTag.label }) : ''}
+        confirmLabel={t('tags.delete')}
+        busy={deleteTag.isLoading}
+        destructive
+      />
     </>
   );
 }

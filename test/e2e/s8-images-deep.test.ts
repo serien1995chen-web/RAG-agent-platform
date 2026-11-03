@@ -80,7 +80,7 @@ describe('TEST-X-FRONTEND-A11Y S8 Images and Deep UI', () => {
         await page.goto(`${baseUrl}/?panel=${panel}`, { waitUntil: 'networkidle' });
         await playwrightExpect(
           page.getByRole('heading', {
-            level: 1,
+            level: panel === 'images' ? 1 : 2,
             name: panel === 'images' ? 'Image knowledge' : 'Deep search',
           }),
         ).toBeVisible();

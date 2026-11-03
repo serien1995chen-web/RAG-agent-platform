@@ -1,16 +1,16 @@
 export const knowledgeThemeTokens = {
   colors: {
-    canvas: '#F3F6F4',
+    canvas: '#F5F7F6',
     surface: '#FFFFFF',
-    surfaceMuted: '#E8EFEC',
-    ink: '#17232B',
-    inkMuted: '#52636B',
-    line: '#CBD8D2',
+    surfaceMuted: '#E9EFEC',
+    ink: '#14272B',
+    inkMuted: '#5A6A70',
+    line: '#D1DDD7',
     primary: '#176B73',
-    primaryHover: '#11565D',
-    secondary: '#667B3F',
-    accent: '#C4623B',
-    warning: '#A56A12',
+    primaryHover: '#0F565D',
+    secondary: '#4F7248',
+    accent: '#C1683F',
+    warning: '#A26912',
     danger: '#B33A3A',
     info: '#356AA0',
     focus: '#0A84A5',
@@ -30,8 +30,8 @@ export const knowledgeThemeTokens = {
     12: '48px',
   },
   shadows: {
-    1: '0 1px 2px rgba(23,35,43,0.08)',
-    2: '0 8px 24px rgba(23,35,43,0.12)',
+    1: '0 1px 2px rgba(20,39,43,0.08)',
+    2: '0 16px 40px rgba(20,39,43,0.16)',
   },
   motion: {
     fast: '120ms',
@@ -39,8 +39,8 @@ export const knowledgeThemeTokens = {
     slow: '240ms',
   },
   fonts: {
-    body: 'IBM Plex Sans, Noto Sans SC, sans-serif',
-    display: 'Noto Serif SC, serif',
+    body: 'IBM Plex Sans, Noto Sans SC, system-ui, sans-serif',
+    display: 'IBM Plex Sans, Noto Sans SC, system-ui, sans-serif',
   },
   typography: {
     xs: { fontSize: '12px', lineHeight: '18px' },
