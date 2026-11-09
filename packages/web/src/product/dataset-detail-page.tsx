@@ -1096,7 +1096,7 @@ export function DatasetDetailPage(props: {
                                 type="button"
                                 className="kb2-status-button"
                                 onClick={() => setTrainingSource(source)}
-                                aria-label={`${source.name} 的训练状态`}
+                                aria-label={`${source.name} 的训练状态：${status.label}`}
                               >
                                 <StatusTag value={status.label} tone={status.tone} dot />
                               </button>

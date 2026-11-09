@@ -257,6 +257,9 @@ describe('FastGPT product module 2 detail and collection', () => {
     await page.getByLabel('确认文本').fill(`销售手册 ${suffix}`);
     await page.getByRole('button', { name: '确认删除' }).click();
     await playwrightExpect(page.getByText(`销售手册 ${suffix}`, { exact: true })).toHaveCount(0);
+    await playwrightExpect(page.locator('.kb2-status-button').first()).toHaveAccessibleName(
+      /训练状态：/,
+    );
 
     for (const width of [1440, 1200, 900]) {
       await page.setViewportSize({ width, height: 900 });

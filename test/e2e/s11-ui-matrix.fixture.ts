@@ -13,6 +13,18 @@ export const S11_VIEWPORTS = [
 ] as const;
 
 export const S11_CANONICAL_PAGES = [
+  {
+    id: 'PAGE-DATASET-LIST',
+    route: '/dataset/list',
+    source: 'dataset/list/index.tsx',
+    phase: 'product',
+  },
+  {
+    id: 'PAGE-DATASET-DETAIL',
+    route: '/dataset/detail',
+    source: 'dataset/detail/index.tsx',
+    phase: 'product',
+  },
   { id: 'PAGE-SPACES', route: '/spaces', source: 'spaces/index.tsx', phase: 'existing' },
   { id: 'PAGE-SPACE-NEW', route: '/spaces/new', source: 'spaces/new.tsx', phase: 'existing' },
   {
@@ -37,12 +49,6 @@ export const S11_CANONICAL_PAGES = [
     id: 'PAGE-SEGMENTS',
     route: '/spaces/[spaceId]/segments',
     source: 'spaces/[spaceId]/segments.tsx',
-    phase: 'existing',
-  },
-  {
-    id: 'PAGE-SEGMENT-EDIT',
-    route: '/spaces/[spaceId]/segments/[segmentId]',
-    source: 'spaces/[spaceId]/segments/[segmentId].tsx',
     phase: 'existing',
   },
   {
@@ -79,26 +85,6 @@ export const S11_CANONICAL_PAGES = [
     id: 'PAGE-SYNONYMS',
     route: '/spaces/[spaceId]/synonyms',
     source: 'spaces/[spaceId]/synonyms.tsx',
-    phase: 'existing',
-  },
-  {
-    id: 'PAGE-CONNECTORS',
-    route: '/settings/connectors',
-    source: 'settings/connectors.tsx',
-    phase: 'existing',
-  },
-  { id: 'PAGE-USAGE', route: '/usage', source: 'usage.tsx', phase: 's10' },
-  { id: 'PAGE-AUDIT', route: '/audit', source: 'audit.tsx', phase: 's10' },
-  {
-    id: 'PAGE-API-KEYS',
-    route: '/settings/api-keys',
-    source: 'settings/api-keys.tsx',
-    phase: 's10',
-  },
-  {
-    id: 'PAGE-SYSTEM-STATUS',
-    route: '/system/status',
-    source: 'system/status.tsx',
     phase: 'existing',
   },
 ] as const;
@@ -399,6 +385,9 @@ export async function deleteUiWorkspace(
 }
 
 export function canonicalPageTarget(page: S11CanonicalPage, workspace: UiMatrixWorkspace): string {
+  if (page.id === 'PAGE-DATASET-DETAIL') {
+    return `/dataset/detail?datasetId=${workspace.spaceId}&currentTab=collectionCard`;
+  }
   const route = page.route
     .replace('[spaceId]', workspace.spaceId)
     .replace('[segmentId]', workspace.segmentId);
@@ -430,8 +419,8 @@ export function phase1UiStatus() {
   return {
     status: missing.length > 0 ? 'BLOCKED' : 'READY',
     existingCount: existing.length,
-    expectedPhase1Count: 15,
-    finalExpectedCount: 18,
+    expectedPhase1Count: 14,
+    finalExpectedCount: 14,
     missing,
     blockers: missing.map((page) => ({
       testId: 'TEST-X-S11-UI-MATRIX',

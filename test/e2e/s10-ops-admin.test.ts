@@ -186,7 +186,9 @@ describe('TEST-API-003-BLOCK / TEST-DOWN real scoped HTTP API Key', () => {
   });
 });
 
-describe('TEST-X-FRONTEND-A11Y S10 ops pages', () => {
+// The standalone usage, audit, API-key and status pages were retired with the
+// product console; their HTTP contracts remain covered below and in integration tests.
+describe.skip('TEST-X-FRONTEND-A11Y S10 ops pages', () => {
   it('renders real API pages at 360/768/1200 without overflow or axe issues', async () => {
     const cookie = await consoleCookie({ baseUrl: app.baseUrl, authToken, workspaceId });
     for (const [path, prefix] of [

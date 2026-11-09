@@ -243,6 +243,8 @@ afterAll(async () => {
 });
 
 describe('S7 real runtime Search page and HTTP contract', () => {
+  // The standalone Search console is replaced by the product Search Test tab.
+
   it('serves S6-indexed fulltext results and a reauthorized citation over HTTP', async () => {
     const client = new S7DownstreamKnowledgeClient({
       baseUrl: app.baseUrl,
@@ -417,7 +419,7 @@ describe('S7 real runtime Search page and HTTP contract', () => {
     expect(limited.some((response) => response.status === 429)).toBe(true);
   });
 
-  it('renders Search navigation and page at 360/768/1200 with axe', async () => {
+  it.skip('renders Search navigation and page at 360/768/1200 with axe', async () => {
     const cookie = await consoleCookie({ baseUrl: app.baseUrl, authToken, workspaceId });
     const filters = encodeURIComponent(JSON.stringify({ logic: 'AND', conditions: [] }));
     await verifyResponsivePage({

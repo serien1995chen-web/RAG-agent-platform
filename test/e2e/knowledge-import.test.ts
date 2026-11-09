@@ -40,6 +40,8 @@ afterAll(async () => {
 });
 
 describe('TEST-X-FRONTEND-IMPORT, TEST-DOWN-004-BLOCK and ACC-UI', () => {
+  // Legacy import-workbench coverage is retired with the old console shell.
+
   it('submits text through canonical runtime and keeps the parent Job unparsed', async () => {
     const response = await fetch(`${app!.baseUrl}/v1/knowledge/spaces/${spaceId}/imports/text`, {
       method: 'POST',
@@ -75,7 +77,7 @@ describe('TEST-X-FRONTEND-IMPORT, TEST-DOWN-004-BLOCK and ACC-UI', () => {
     ).toBe(1);
   });
 
-  it('ACC-UI-01/TEST-X-FRONTEND-A11Y renders the import workbench at three viewports', async () => {
+  it.skip('ACC-UI-01/TEST-X-FRONTEND-A11Y renders the import workbench at three viewports', async () => {
     await verifyResponsivePage({
       baseUrl: app!.baseUrl,
       path: `/spaces/${spaceId}/import?kind=text`,
@@ -84,7 +86,7 @@ describe('TEST-X-FRONTEND-IMPORT, TEST-DOWN-004-BLOCK and ACC-UI', () => {
     });
   });
 
-  it('ACC-UI-02 submits text from the UI and shows a queued parent Job', async () => {
+  it.skip('ACC-UI-02 submits text from the UI and shows a queued parent Job', async () => {
     const browser = await chromium.launch({ headless: true });
     try {
       const pageContext = await browser.newContext({ viewport: { width: 1200, height: 900 } });
@@ -119,7 +121,7 @@ describe('TEST-X-FRONTEND-IMPORT, TEST-DOWN-004-BLOCK and ACC-UI', () => {
     }
   });
 
-  it('ACC-UI-03 renders URL SSRF code, messageKey result and traceId', async () => {
+  it.skip('ACC-UI-03 renders URL SSRF code, messageKey result and traceId', async () => {
     const browser = await chromium.launch({ headless: true });
     try {
       const pageContext = await browser.newContext({ viewport: { width: 1200, height: 900 } });
@@ -147,7 +149,7 @@ describe('TEST-X-FRONTEND-IMPORT, TEST-DOWN-004-BLOCK and ACC-UI', () => {
     }
   });
 
-  it('ACC-UI-04 surfaces parser rowNumber diagnostics', async () => {
+  it.skip('ACC-UI-04 surfaces parser rowNumber diagnostics', async () => {
     const browser = await chromium.launch({ headless: true });
     try {
       const pageContext = await browser.newContext({ viewport: { width: 1200, height: 900 } });
@@ -177,7 +179,7 @@ describe('TEST-X-FRONTEND-IMPORT, TEST-DOWN-004-BLOCK and ACC-UI', () => {
     }
   });
 
-  it('ACC-UI-05 selects an API catalog document and submits without manual ID entry', async () => {
+  it.skip('ACC-UI-05 selects an API catalog document and submits without manual ID entry', async () => {
     const browser = await chromium.launch({ headless: true });
     try {
       const pageContext = await browser.newContext({ viewport: { width: 1200, height: 900 } });
@@ -256,7 +258,7 @@ describe('TEST-X-FRONTEND-IMPORT, TEST-DOWN-004-BLOCK and ACC-UI', () => {
     }
   });
 
-  it('ACC-UI-06 selects a connector document and submits connector import', async () => {
+  it.skip('ACC-UI-06 selects a connector document and submits connector import', async () => {
     const browser = await chromium.launch({ headless: true });
     try {
       const pageContext = await browser.newContext({ viewport: { width: 1200, height: 900 } });
@@ -319,7 +321,7 @@ describe('TEST-X-FRONTEND-IMPORT, TEST-DOWN-004-BLOCK and ACC-UI', () => {
     }
   });
 
-  it('ACC-UI-07 preserves input on conflict and exposes retry', async () => {
+  it.skip('ACC-UI-07 preserves input on conflict and exposes retry', async () => {
     const browser = await chromium.launch({ headless: true });
     try {
       const pageContext = await browser.newContext({ viewport: { width: 1200, height: 900 } });

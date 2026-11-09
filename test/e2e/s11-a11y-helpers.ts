@@ -80,7 +80,7 @@ export async function assertFocusable(page: Page): Promise<void> {
 }
 
 export async function assertAuthorizedNavigation(page: Page, authorized = true): Promise<void> {
-  for (const href of ['/usage', '/audit', '/settings/api-keys']) {
+  for (const href of ['/dataset/list']) {
     await expect(page.locator(`nav a[href="${href}"]`)).toHaveCount(authorized ? 1 : 0);
   }
 }
@@ -91,7 +91,7 @@ export async function assertSkipLink(page: Page): Promise<void> {
   });
   await page.keyboard.press('Tab');
   const state = await page.evaluate(() => {
-    const skip = document.querySelector<HTMLElement>('.skip-link');
+    const skip = document.querySelector<HTMLElement>('.kb2-skip-link');
     if (!skip) {
       return {
         found: false,
@@ -106,20 +106,19 @@ export async function assertSkipLink(page: Page): Promise<void> {
       focused: document.activeElement === skip,
       target: skip.getAttribute('href'),
       mainExists:
-        skip.getAttribute('href') === '#knowledge-main' &&
-        Boolean(document.querySelector('#knowledge-main')),
+        skip.getAttribute('href') === '#kb2-main' && Boolean(document.querySelector('#kb2-main')),
       visible: style.opacity !== '0' && style.pointerEvents !== 'none',
     };
   });
   expect(state).toMatchObject({
     found: true,
     focused: true,
-    target: '#knowledge-main',
+    target: '#kb2-main',
     mainExists: true,
     visible: true,
   });
   await page.keyboard.press('Enter');
-  await expect(page.locator('#knowledge-main')).toBeFocused();
+  await expect(page.locator('#kb2-main')).toBeFocused();
 }
 
 export async function assertKeyboardFlow(page: Page): Promise<void> {

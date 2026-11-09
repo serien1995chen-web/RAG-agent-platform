@@ -143,7 +143,8 @@ afterAll(async () => {
   await app?.close();
 });
 
-describe('TEST-X-FRONTEND-A11Y S9 real Synonyms page', () => {
+// The standalone Synonyms console was replaced by the product Info rail.
+describe.skip('TEST-X-FRONTEND-A11Y S9 real Synonyms page', () => {
   it('passes responsive, axe, navigation, operation and overflow gates', async () => {
     const cookie = await consoleCookie({ baseUrl: app.baseUrl, authToken, workspaceId });
     for (const viewport of [
