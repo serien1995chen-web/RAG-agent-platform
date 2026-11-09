@@ -94,9 +94,9 @@ describe('knowledge theme tokens', () => {
     expect(css).not.toContain('rgba(');
   });
 
-  it('uses exactly one KnowledgeUiProvider and no direct ChakraProvider in _app', () => {
+  it('uses exactly one product provider and no direct ChakraProvider in _app', () => {
     const app = readFileSync(resolve(repositoryRoot, 'projects/app/src/pages/_app.tsx'), 'utf8');
-    expect(app.match(/<KnowledgeUiProvider\b/g)).toHaveLength(1);
+    expect(app.match(/<FastGptProductProvider\b/g)).toHaveLength(1);
     expect(app.match(/<ChakraProvider\b/g)).toBeNull();
   });
 });

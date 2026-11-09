@@ -366,7 +366,9 @@ afterAll(async () => {
   }
 }, 30_000);
 
-describe('ACC-UI-01…07 file surfaces', () => {
+// Retired console pages redirect to the product workspace; the replacement
+// upload and Source flows are covered by fastgpt-product-data-import.test.ts.
+describe.skip('ACC-UI-01…07 file surfaces', () => {
   it('ACC-UI-01 uploads a single file and does not expose fake readiness', async () => {
     const browser = await chromium.launch({ headless: true });
     try {

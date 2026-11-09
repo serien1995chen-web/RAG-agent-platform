@@ -5,7 +5,8 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./styles/knowledge.css": "./src/styles/knowledge.css"
+    "./styles/knowledge.css": "./src/styles/knowledge.css",
+    "./styles/fastgpt-product.css": "./src/styles/fastgpt-product.css"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json --noEmit",

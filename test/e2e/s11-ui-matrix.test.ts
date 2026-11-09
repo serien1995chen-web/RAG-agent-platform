@@ -9,20 +9,20 @@ import {
 } from './s11-ui-matrix.fixture';
 
 describe('TEST-X-S11-UI-MATRIX', () => {
-  it('lists all 18 canonical pages after the S10 merge', () => {
-    expect(S11_CANONICAL_PAGES).toHaveLength(18);
-    expect(existingPageMatrix()).toHaveLength(18);
+  it('lists all product pages after the FastGPT product migration', () => {
+    expect(S11_CANONICAL_PAGES).toHaveLength(14);
+    expect(existingPageMatrix()).toHaveLength(14);
     expect(missingPageMatrix()).toEqual([]);
     for (const page of existingPageMatrix()) expect(pageSourceExists(page), page.id).toBe(true);
   });
 
-  it('uses three fixed viewports and exposes all pages after S10', () => {
+  it('uses three fixed viewports and exposes all product pages', () => {
     expect(S11_VIEWPORTS.map((viewport) => viewport.width)).toEqual([360, 768, 1200]);
     expect(phase1UiStatus()).toMatchObject({
       status: 'READY',
-      existingCount: 18,
-      expectedPhase1Count: 15,
-      finalExpectedCount: 18,
+      existingCount: 14,
+      expectedPhase1Count: 14,
+      finalExpectedCount: 14,
     });
     expect(phase1UiStatus().blockers).toHaveLength(0);
   });
@@ -30,6 +30,15 @@ describe('TEST-X-S11-UI-MATRIX', () => {
   it('has a unique canonical route for every page', () => {
     const routes = existingPageMatrix().map((page) => page.route);
     expect(new Set(routes).size).toBe(routes.length);
-    expect(routes).toEqual(expect.arrayContaining(['/usage', '/audit', '/settings/api-keys']));
+    expect(routes).toEqual(expect.arrayContaining(['/dataset/list', '/dataset/detail']));
+    for (const retiredRoute of [
+      '/usage',
+      '/audit',
+      '/settings/api-keys',
+      '/settings/connectors',
+      '/system/status',
+    ]) {
+      expect(routes).not.toContain(retiredRoute);
+    }
   });
 });

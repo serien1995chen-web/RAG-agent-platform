@@ -97,6 +97,11 @@ function sourceDto(document: Plain<KnowledgeSourceDoc>, parentPath?: string[]) {
     searchEnabled: document.searchEnabled,
     permissionState: document.permissionState,
     permissionRevision: document.permissionRevision,
+    tagValues: document.tagValues.map((entry) => ({
+      tagId: String(entry.tagId),
+      valueKey: entry.valueKey,
+      value: entry.value,
+    })),
     version: document.version,
     ...(parentPath ? { parentPath } : {}),
   };

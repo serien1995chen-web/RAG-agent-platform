@@ -68,7 +68,7 @@ test.afterAll(async () => {
   }
 });
 
-test('TEST-X-S11-UI-MATRIX renders 18 pages at three viewports with external evidence', async ({
+test('TEST-X-S11-UI-MATRIX renders product pages at three viewports with external evidence', async ({
   browser,
 }) => {
   test.setTimeout(600_000);
@@ -177,8 +177,11 @@ test('TEST-X-S11-UI-MATRIX renders 18 pages at three viewports with external evi
     }
   }
 
-  expect(results).toHaveLength(54);
-  expect(new Set(results.map((entry) => `${entry.pageId}:${entry.viewport}`)).size).toBe(54);
+  const expectedResults = S11_CANONICAL_PAGES.length * S11_VIEWPORTS.length;
+  expect(results).toHaveLength(expectedResults);
+  expect(new Set(results.map((entry) => `${entry.pageId}:${entry.viewport}`)).size).toBe(
+    expectedResults,
+  );
   for (const result of results) {
     expect(
       existsSync(join(configuration.evidenceDirectory, result.screenshot)),
