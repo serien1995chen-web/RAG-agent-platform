@@ -22,7 +22,6 @@ let connections: Awaited<ReturnType<typeof createKnowledgeConnections>>;
 let models: ReturnType<typeof registerKnowledgeModels>;
 let datasetId = '';
 let sourceId = '';
-let segmentOneId = '';
 
 async function api<T = Record<string, unknown>>(
   path: string,
@@ -72,13 +71,12 @@ async function seed() {
     metadata: {},
   });
   sourceId = source.id;
-  const one = await api<{ id: string }>(`/v1/knowledge/sources/${sourceId}/segments`, 'POST', {
+  await api(`/v1/knowledge/sources/${sourceId}/segments`, 'POST', {
     question: '退款多久到账？\n\n退款通常会在五个工作日内到账。',
     answer: '退款通常会在五个工作日内到账。',
     searchEnabled: true,
     metadata: {},
   });
-  segmentOneId = one.id;
   await api(`/v1/knowledge/sources/${sourceId}/segments`, 'POST', {
     question: '如何联系人工客服？',
     answer: '可以在工作时间内联系人工客服。',
