@@ -123,6 +123,15 @@ const forbiddenSourceFragments = [
   'SKELETON_NOT_IMPLEMENTED',
   '501999',
 ];
+const productDetailRoute = join(
+  'projects',
+  'app',
+  'src',
+  'pages',
+  'dataset',
+  'detail',
+  'index.tsx',
+);
 for (const file of runtimeSourceFiles) {
   let content;
   try {
@@ -132,6 +141,9 @@ for (const file of runtimeSourceFiles) {
   }
   const relativeFile = relative(repoRoot, file);
   for (const fragment of forbiddenSourceFragments) {
+    // collectionId is now an approved public detail-page query parameter. Keep
+    // rejecting the retired canonical name everywhere else in runtime source.
+    if (fragment === 'collectionId' && relativeFile === productDetailRoute) continue;
     if (content.includes(fragment)) {
       problems.push(`${relativeFile} 含旧 canonical 或占位片段: ${fragment}`);
     }

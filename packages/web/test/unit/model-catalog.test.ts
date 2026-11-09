@@ -1,5 +1,3 @@
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { loadCompleteModelCatalog, type ModelCatalogPage } from '../../src/query/model-catalog';
 import type { S5ModelView } from '../../src/components/s5-model-parse-state';
@@ -66,25 +64,5 @@ describe('B09 full model catalog loader', () => {
       pageInfo: { hasMore: false, nextCursor: null },
     };
     expect(page.pageInfo).toEqual({ hasMore: false, nextCursor: null });
-  });
-
-  it('uses the shared full-catalog loader on New and Overview', () => {
-    const root = join(
-      import.meta.dirname,
-      '..',
-      '..',
-      '..',
-      '..',
-      'projects',
-      'app',
-      'src',
-      'pages',
-      'spaces',
-    );
-    for (const path of [join(root, 'new.tsx'), join(root, '[spaceId]', 'overview.tsx')]) {
-      const source = readFileSync(path, 'utf8');
-      expect(source).toContain('useKnowledgeModelCatalog()');
-      expect(source).not.toContain("'/v1/knowledge/models'");
-    }
   });
 });

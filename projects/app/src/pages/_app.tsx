@@ -1,34 +1,13 @@
-import '@kb/web/styles/knowledge.css';
-import {
-  KnowledgeAppShell,
-  KnowledgeI18nProvider,
-  KnowledgeQueryProvider,
-  KnowledgeUiProvider,
-  type ShellLocation,
-} from '@kb/web';
+import '@kb/web/styles/fastgpt-product.css';
+import { FastGptProductProvider, KnowledgeQueryProvider } from '@kb/web';
 import type { AppProps } from 'next/app';
-import { useRouter } from 'next/router';
 
 export default function App({ Component, pageProps }: AppProps) {
-  const router = useRouter();
-  const location: ShellLocation = {
-    pathname: router.pathname,
-    query: router.query,
-  };
   return (
-    <KnowledgeI18nProvider>
-      <KnowledgeUiProvider>
-        <KnowledgeQueryProvider>
-          <KnowledgeAppShell
-            location={location}
-            onNavigate={(href) => {
-              void router.push(href);
-            }}
-          >
-            <Component {...pageProps} />
-          </KnowledgeAppShell>
-        </KnowledgeQueryProvider>
-      </KnowledgeUiProvider>
-    </KnowledgeI18nProvider>
+    <FastGptProductProvider>
+      <KnowledgeQueryProvider>
+        <Component {...pageProps} />
+      </KnowledgeQueryProvider>
+    </FastGptProductProvider>
   );
 }

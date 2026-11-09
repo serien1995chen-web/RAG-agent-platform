@@ -1,8 +1,8 @@
 export async function getServerSideProps() {
   return {
     redirect: {
-      destination: '/spaces',
-      permanent: false,
+      destination: '/dataset/list',
+      permanent: true,
     },
   };
 }

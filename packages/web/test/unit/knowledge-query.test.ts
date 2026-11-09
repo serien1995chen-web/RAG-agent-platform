@@ -94,19 +94,9 @@ describe('knowledge query infrastructure', () => {
     vi.unstubAllGlobals();
   });
 
-  it('keeps all nine pages off the retired request hook and table', () => {
+  it('keeps the new knowledge routes off the retired request hook and table', () => {
     const repositoryRoot = resolve(import.meta.dirname, '../../../..');
-    const pages = [
-      'spaces/index.tsx',
-      'spaces/new.tsx',
-      'spaces/[spaceId]/overview.tsx',
-      'spaces/[spaceId]/sources.tsx',
-      'spaces/[spaceId]/segments.tsx',
-      'spaces/[spaceId]/tags.tsx',
-      'spaces/[spaceId]/access.tsx',
-      'spaces/[spaceId]/jobs.tsx',
-      'system/status.tsx',
-    ];
+    const pages = ['dataset/list/index.tsx', 'dataset/detail/index.tsx'];
     for (const page of pages) {
       const source = readFileSync(resolve(repositoryRoot, 'projects/app/src/pages', page), 'utf8');
       expect(source, page).not.toContain('useKnowledgeRequest');

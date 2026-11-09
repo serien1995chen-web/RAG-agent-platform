@@ -228,8 +228,6 @@ export type {
   KnowledgeDataTableProps,
   TablePagination,
 } from './components/data-table';
-export { KnowledgeAppShell } from './components/knowledge-shell';
-export type { ShellLocation } from './components/knowledge-shell';
 export { S10UsageDashboard } from './components/s10-usage-dashboard';
 export { S10AuditPanel } from './components/s10-audit-panel';
 export type { S10AuditFilters } from './components/s10-audit-panel';
@@ -326,4 +324,50 @@ export type {
 } from './query/use-cursor-knowledge-query';
 export { knowledgeGlobalStyles, knowledgeTheme, KnowledgeUiProvider } from './theme';
 export { knowledgeThemeTokens } from './theme';
+
+export { CapabilityUnavailableError, productApi, productErrorView } from './product/api';
+export { DatasetListPage } from './product/dataset-list-page';
+export { DatasetDetailPage } from './product/dataset-detail-page';
+export type { DatasetDetailQuery } from './product/dataset-detail-page';
+export { ProductAppShell } from './product/shell';
+export { FastGptProductProvider } from './product/theme';
+export { productTokens } from './product/tokens';
+export {
+  ProductButton,
+  ProductCheckbox,
+  ProductEmpty,
+  ProductError,
+  ProductField,
+  ProductIconButton,
+  ProductInput,
+  ProductMenu,
+  ProductMenuItem,
+  ProductModal,
+  ProductPage,
+  ProductPageHeader,
+  ProductSearchBox,
+  ProductSelect,
+  ProductSkeleton,
+  ProductStat,
+  ProductTextarea,
+  ProductTypeIcon,
+  formatBytes,
+  productTypeOf,
+  useProductToast,
+} from './product/ui';
+export type {
+  Acl,
+  BatchResult,
+  Collaborator,
+  Connector,
+  Directory,
+  FileTicket,
+  Job,
+  KnowledgeSpace,
+  Model,
+  ModelBinding,
+  Segment,
+  Source,
+  Tag,
+} from './product/types';
 export type { KnowledgeThemeTokens } from './theme';

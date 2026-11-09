@@ -35,14 +35,13 @@ describe('TEST-SEARCH-001/002/004/005/007/009-BLOCK S7 contract gate', () => {
       : (runtime.operations ?? []).map((entry) => entry.operationId);
     expect(runtimeIds).toEqual(expect.arrayContaining([...S7_OPERATIONS]));
     expect(deferred).not.toEqual(expect.arrayContaining([...S7_OPERATIONS]));
-    expect(existsSync(resolve(root, 'projects/app/src/pages/spaces/[spaceId]/search.tsx'))).toBe(
-      true,
-    );
-    const shell = readFileSync(
-      resolve(root, 'packages/web/src/components/knowledge-shell.tsx'),
+    expect(existsSync(resolve(root, 'projects/app/src/pages/dataset/detail/index.tsx'))).toBe(true);
+    const detail = readFileSync(
+      resolve(root, 'packages/web/src/product/dataset-detail-page.tsx'),
       'utf8',
     );
-    expect(shell).toContain('/search');
+    expect(detail).toContain('搜索测试');
+    expect(detail).toContain("changeTab('test')");
   });
 
   it('keeps route mode, body mode and strict public fields closed', () => {
