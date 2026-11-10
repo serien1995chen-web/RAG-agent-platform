@@ -468,6 +468,46 @@ describe('B01 lifecycle desktop behavior', () => {
     }
   });
 
+  it('L1-B01-KB-003-UI03 confirms drag movement and refreshes the target folder', async () => {
+    const { context, page } = await newPage(ownerCookie);
+    const folder = await createSpace(`拖放目标 ${suffix}`, 'folder');
+    const folderId = folder.payload.data?.id ?? '';
+    const child = await createSpace(`拖放资源 ${suffix}`, 'space', folderId);
+    const childId = child.payload.data?.id ?? '';
+
+    await api(`/v1/knowledge/spaces/${childId}/move`, 'POST', {
+      targetParentId: null,
+      version: child.payload.data?.version,
+    });
+    try {
+      await page.goto(`${ownerApp.baseUrl}/dataset/list`, { waitUntil: 'networkidle' });
+      const sourceCard = page.locator('.kb2-kb-card').filter({ hasText: `拖放资源 ${suffix}` });
+      const targetCard = page.locator('.kb2-kb-card').filter({ hasText: `拖放目标 ${suffix}` });
+      await sourceCard.dragTo(targetCard);
+      await playwrightExpect(page.getByRole('dialog', { name: /确认移动/ })).toBeVisible();
+      await playwrightExpect(page.getByText(/继承目标文件夹的访问权限/)).toBeVisible();
+      await page.getByRole('button', { name: '取消' }).click();
+      await page.getByRole('button', { name: `拖放目标 ${suffix} 文件夹` }).click();
+      await page.waitForURL(`**/dataset/list?parentId=${folderId}`);
+      await playwrightExpect(page.getByText(`拖放资源 ${suffix}`, { exact: true })).toHaveCount(0);
+      await page.goBack({ waitUntil: 'networkidle' });
+      await page
+        .locator('.kb2-kb-card')
+        .filter({ hasText: `拖放资源 ${suffix}` })
+        .dragTo(page.locator('.kb2-kb-card').filter({ hasText: `拖放目标 ${suffix}` }));
+      await page.getByRole('button', { name: '确认移动' }).click();
+      await page.getByRole('button', { name: `拖放目标 ${suffix} 文件夹` }).click();
+      await page.waitForURL(`**/dataset/list?parentId=${folderId}`);
+      await capture('L1-B01-KB-003-UI03-drag', page, async () => {
+        await playwrightExpect(page.getByText(`拖放资源 ${suffix}`, { exact: true })).toBeVisible();
+      });
+    } finally {
+      if (childId) await deleteSpace(childId);
+      if (folderId) await deleteSpace(folderId);
+      await context.close();
+    }
+  });
+
   it('L1-B01-KB-001-A01 hides create controls from a read-only workspace member', async () => {
     const { context, page } = await newPage(viewerCookie);
     try {
