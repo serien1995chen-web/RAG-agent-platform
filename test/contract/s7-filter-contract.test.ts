@@ -76,4 +76,17 @@ describe('TEST-X-TAG-FILTER-TYPES contract and regex budget', () => {
     );
     expect(zero.allowedSourceIds).toEqual([]);
   });
+
+  it('L1-B02-COL-003-Q01 拒绝未知 operator 和恶意 regex 且简单 regex 满足 50ms 边界', () => {
+    expect(
+      SearchFilterApiSchema.safeParse({
+        logic: 'AND',
+        conditions: [{ tagId, tagType: 'string', operator: '$arbitrary', value: 'x' }],
+      }).success,
+    ).toBe(false);
+    expect(() => assertSafeTagRegex('(a+)+$')).toThrowError();
+    const startedAt = performance.now();
+    expect(assertSafeTagRegex('^support$').test('support')).toBe(true);
+    expect(performance.now() - startedAt).toBeLessThanOrEqual(50);
+  });
 });

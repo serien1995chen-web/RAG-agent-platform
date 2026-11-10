@@ -1,0 +1,444 @@
+{
+  "schemaVersion": 1,
+  "groupId": "B02",
+  "runId": "b02-20261110-222751-fa22e8a",
+  "scope": ["COL-001", "COL-002", "COL-003"],
+  "fastgpt": {
+    "version": "4.17.4",
+    "root": "/mnt/d/Fastgpt/FastGPT",
+    "gitMetadata": "absent",
+    "appManifestSha256": "3887440d738c05504cdba692be2142467de41a0ac7e11f828506f474bfc63d3c"
+  },
+  "baselineOverride": {
+    "frozenManualVersion": "4.17.3",
+    "frozenManualManifestSha256": "125a9378b939b2cf0cd7412ea976448dc7fb619336888ff9ac0d41b3624b231a",
+    "decision": "User explicitly approved using the current local FastGPT 4.17.4 source tree as the B02 behavior reference.",
+    "reporting": "Evidence for this run must say 4.17.4 and must not be represented as 4.17.3 evidence."
+  },
+  "authority": [
+    "user decision",
+    "FastGPT 4.17.4 user-observable behavior",
+    "FastGPT desktop interaction specification",
+    "KnowledgeBase-System-Design.md only for this project's interfaces and persistence",
+    "Cloud evidence only when local source and specification remain ambiguous"
+  ],
+  "mapping": {
+    "Directory": "FastGPT nested Dataset folder / folder Collection",
+    "Source": "FastGPT non-folder Collection",
+    "Tag": "FastGPT dataset-scoped Collection tag definition and value"
+  },
+  "capabilities": {
+    "COL-001": {
+      "responsibility": "Create, navigate, list and delete directories plus file and virtual Sources while preserving hierarchy and permissions.",
+      "rows": [
+        {
+          "subcase": "P01",
+          "operation": "Create root/child/grandchild directories, file Source and virtual text Source; navigate into Directory and Source; return; refresh.",
+          "fastgptSource": [
+            "projects/app/src/pages/api/core/dataset/folder/create.ts:28",
+            "projects/app/src/pages/api/core/dataset/collection/create.ts:21",
+            "projects/app/src/pages/api/core/dataset/collection/listV2.ts:164",
+            "projects/app/src/pages/api/core/dataset/collection/paths.ts:70",
+            "projects/app/src/pageComponents/dataset/detail/CollectionCard/index.tsx:497"
+          ],
+          "behaviorIds": ["KB-COLLECTION-002", "KB-COLLECTION-020", "KB-COLLECTION-021", "KB-COLLECTION-030", "KB-COLLECTION-031", "KB-COLLECTION-034"],
+          "visibleResult": "Rows show Directory and Source type/name/path; Directory opens the nested list; Source opens Data; browser refresh preserves valid route context.",
+          "stateTransition": "No parent -> Directory depth 0 -> child depth 1 -> Source with stable parent; navigation and refresh do not create resources.",
+          "persistence": "Directory parent/path/depth/version and Source directory/kind/name/version persist; list/detail read the same IDs.",
+          "permission": "Directory/Source creation requires write access to the containing scope.",
+          "projectMapping": "API-DIRECTORY-CREATE/GET/LIST and API-SOURCE-CREATE/GET/LIST backed by KnowledgeDirectory and KnowledgeSource.",
+          "allowedDifference": "Layout, labels and component structure may differ; the same objects and navigation goals must exist.",
+          "ambiguity": null,
+          "decision": "MATCH"
+        },
+        {
+          "subcase": "N01",
+          "operation": "Submit empty/long names, invalid/cross-space parent, cycles, excessive depth, sibling duplicate names, invalid kind and repeated delete.",
+          "fastgptSource": [
+            "projects/app/src/pages/api/core/dataset/folder/create.ts:33",
+            "projects/app/src/pages/api/core/dataset/folder/create.ts:50",
+            "projects/app/src/pages/api/core/dataset/collection/create.ts:21",
+            "projects/app/src/pages/api/core/dataset/collection/update.ts:110",
+            "packages/service/core/dataset/collection/schema.ts:103"
+          ],
+          "behaviorIds": ["KB-COLLECTION-031", "KB-COLLECTION-034", "KB-COLLECTION-133", "KB-DETAIL-034"],
+          "visibleResult": "Invalid targets fail without partial writes or orphan children. FastGPT displays an empty list for an invalid parent query. FastGPT folder creation has no sibling-name uniqueness lookup.",
+          "stateTransition": "Rejected requests leave all existing versions and hierarchy unchanged; duplicate valid names produce independent IDs in FastGPT.",
+          "persistence": "Rejected parent/name/depth/kind inputs write neither object nor child; non-empty Directory deletion removes the selected subtree collection IDs.",
+          "permission": "Parent read/write and tenant ownership are checked before create/delete.",
+          "projectMapping": "API validation errors use KNOWLEDGE_VALIDATION_FAILED, KNOWLEDGE_CONFLICT or existence-hiding KNOWLEDGE_NOT_FOUND.",
+          "allowedDifference": "Project error keys and 403/404 existence policy may differ; duplicate-name behavior must follow observed FastGPT behavior.",
+          "ambiguity": null,
+          "decision": "MATCH"
+        },
+        {
+          "subcase": "A01",
+          "operation": "Read/create/delete with a foreign workspace, reader-only actor, non-owner manager and forged IDs.",
+          "fastgptSource": [
+            "projects/app/src/pages/api/core/dataset/folder/create.ts:32",
+            "projects/app/src/pages/api/core/dataset/collection/delete.ts:28",
+            "packages/service/support/permission/dataset/auth.ts"
+          ],
+          "behaviorIds": ["KB-COLLECTION-044", "KB-COLLECTION-046", "KB-COLLECTION-130", "KB-DETAIL-034"],
+          "visibleResult": "Foreign objects are absent and rejected without exposing names; create is hidden/forbidden without write; delete requires ownership.",
+          "stateTransition": "Unauthorized requests do not change state.",
+          "persistence": "No foreign ACL, object, audit success or Outbox event is written.",
+          "permission": "Workspace tenant guard plus read/write/manage/owner checks.",
+          "projectMapping": "TenantContext and AccessPort; Directory/Source APIs must fail closed.",
+          "allowedDifference": "Project may return 403 or non-disclosing 404; project CAS and audit remain mandatory.",
+          "ambiguity": null,
+          "decision": "MATCH"
+        },
+        {
+          "subcase": "S01",
+          "operation": "Inspect hierarchy, Source fields, audit, ACL, Outbox, Segment pointers and tag values after create/move/delete.",
+          "fastgptSource": [
+            "projects/app/src/pages/api/core/dataset/collection/delete.ts:52",
+            "packages/service/core/dataset/collection/utils.ts",
+            "projects/app/src/pages/api/core/dataset/collection/paths.ts:47"
+          ],
+          "behaviorIds": ["KB-COLLECTION-002", "KB-COLLECTION-046", "KB-COLLECTION-133"],
+          "visibleResult": "After refresh the hierarchy and remaining rows match the committed mutation; deleting one Source leaves its siblings.",
+          "stateTransition": "Create writes active resources; delete enters deleting/deleted and removes the selected Directory subtree.",
+          "persistence": "Delete Job and Outbox are transactional; worker cleanup removes descendants, tag values, ACLs and Segment pointers.",
+          "permission": "Owner-only delete; audit records the actor and safe before/after facts.",
+          "projectMapping": "KnowledgeDirectory, KnowledgeSource, KnowledgeJob, KnowledgeOutboxEvent, KnowledgeAuditEvent, KnowledgeTagValue and KnowledgeSegment.",
+          "allowedDifference": "Soft delete plus asynchronous Job/Outbox is a project mechanism; user-visible completion must be equivalent.",
+          "ambiguity": null,
+          "decision": "MATCH"
+        },
+        {
+          "subcase": "C01",
+          "operation": "Concurrent sibling creation and same-version updates; retry idempotent Source creation.",
+          "fastgptSource": [
+            "projects/app/src/pages/api/core/dataset/folder/create.ts:28",
+            "projects/app/src/pages/api/core/dataset/collection/create.ts:21"
+          ],
+          "behaviorIds": ["KB-COLLECTION-031", "KB-COLLECTION-034"],
+          "visibleResult": "Every successful request creates at most one visible resource; stale versions get a recoverable conflict.",
+          "stateTransition": "At most one same-version directory update commits; duplicate Source idempotency returns/reuses the same object.",
+          "persistence": "CAS version increments once per committed mutation; no duplicate children from retries.",
+          "permission": "Same authorization applies to every concurrent attempt.",
+          "projectMapping": "Project version CAS and idempotency key contracts are mandatory even where FastGPT has no equivalent version field.",
+          "allowedDifference": "Project uses version CAS and idempotency; non-duplicate-name behavior still follows FastGPT.",
+          "ambiguity": null,
+          "decision": "MATCH"
+        },
+        {
+          "subcase": "F01",
+          "operation": "Inject parse enqueue failure after Source creation and transient delete failure; retry.",
+          "fastgptSource": [
+            "projects/app/src/pages/api/core/dataset/collection/create.ts:21",
+            "projects/app/src/pages/api/core/dataset/collection/delete.ts:52"
+          ],
+          "behaviorIds": ["KB-COLLECTION-100", "KB-COLLECTION-102", "KB-COLLECTION-105"],
+          "visibleResult": "A created Source remains queryable with a failed/retryable status; failed deletion can be retried without duplicate effects.",
+          "stateTransition": "draft/queued -> failed; delete failure retains resource, retry reaches deleting/deleted.",
+          "persistence": "No disappearing Source, duplicate delete Job, duplicate audit or duplicate Outbox event.",
+          "permission": "Retry uses the same actor and permission checks as the original operation.",
+          "projectMapping": "S06 Job state machine, Outbox idempotency and delete compensation.",
+          "allowedDifference": "Project may expose failure through Job error/messageKey rather than FastGPT Toast text.",
+          "ambiguity": null,
+          "decision": "MATCH"
+        },
+        {
+          "subcase": "UI01",
+          "operation": "Open empty Directory, use new/import entries, click Directory/Source rows, toggle controls/search, confirm delete and refresh.",
+          "fastgptSource": [
+            "projects/app/src/pageComponents/dataset/detail/CollectionCard/index.tsx:497",
+            "projects/app/src/pageComponents/dataset/detail/CollectionCard/index.tsx:735",
+            "projects/app/src/pageComponents/dataset/detail/CollectionCard/EmptyCollectionTip.tsx:10"
+          ],
+          "behaviorIds": ["KB-COLLECTION-007", "KB-COLLECTION-013", "KB-COLLECTION-014", "KB-COLLECTION-020", "KB-COLLECTION-021", "KB-COLLECTION-024", "KB-COLLECTION-133"],
+          "visibleResult": "Directory and Source row clicks navigate; row controls do not; empty state and create/import access are clear; delete confirmation names the target.",
+          "stateTransition": "URL parentId/collectionId changes only for row navigation; refresh restores valid context.",
+          "persistence": "UI mutations refresh the committed list; canceled dialogs make no writes.",
+          "permission": "Create/import/delete controls are hidden or disabled according to permission.",
+          "projectMapping": "Product dataset-detail page and Playwright UI.",
+          "allowedDifference": "Layout and wording may differ; these same actions and outcomes are required.",
+          "ambiguity": null,
+          "decision": "MATCH"
+        }
+      ]
+    },
+    "COL-002": {
+      "responsibility": "List, search, inspect, navigate, synchronize and rebuild Sources while preserving the last valid state.",
+      "rows": [
+        {
+          "subcase": "P01",
+          "operation": "Paginate/filter the Source list, inspect typed/status/path metadata, open Source detail, run local sync/rebuild and refresh.",
+          "fastgptSource": [
+            "projects/app/src/pages/api/core/dataset/collection/listV2.ts:164",
+            "projects/app/src/pages/api/core/dataset/collection/detail.ts",
+            "projects/app/src/pages/api/core/dataset/collection/sync.ts:21",
+            "projects/app/src/pages/api/core/dataset/training/rebuildEmbedding.ts:39"
+          ],
+          "behaviorIds": ["KB-COLLECTION-001", "KB-COLLECTION-003", "KB-COLLECTION-008", "KB-COLLECTION-010", "KB-COLLECTION-041", "KB-COLLECTION-100", "KB-COLLECTION-101"],
+          "visibleResult": "List/detail show type, name, quantity/size, status, tags, path and ID; sync/rebuild becomes visible as a task and reaches a terminal state.",
+          "stateTransition": "queued -> parsing/indexing/rebuilding -> ready, partial or failed; refresh preserves valid Source/Job context.",
+          "persistence": "Source status/version/update time and Job progress agree; successful rebuild exposes a new index version.",
+          "permission": "Read for list/detail; write for sync/rebuild.",
+          "projectMapping": "API-SOURCE-LIST/GET, API-CONNECTOR-SYNC, API-JOB-CREATE/GET, S06 processing and Segment index pointers.",
+          "allowedDifference": "Project may separate connector sync and deterministic Provider adapters; the observable source and job states must match.",
+          "ambiguity": null,
+          "decision": "MATCH"
+        },
+        {
+          "subcase": "N01",
+          "operation": "Request missing Source, invalid path/pagination/cursor, unsupported sync, active duplicate sync/rebuild and invalid state transition.",
+          "fastgptSource": [
+            "projects/app/src/pages/api/core/dataset/collection/listV2.ts:164",
+            "projects/app/src/pages/api/core/dataset/collection/sync.ts:14",
+            "projects/app/src/pages/api/core/dataset/training/rebuildEmbedding.ts:60"
+          ],
+          "behaviorIds": ["KB-COLLECTION-038", "KB-COLLECTION-041", "KB-COLLECTION-125", "KB-DETAIL-034"],
+          "visibleResult": "Invalid requests fail clearly and never appear as an empty successful list or ready state; active sync hides/forbids a second trigger.",
+          "stateTransition": "Invalid operation leaves status unchanged; duplicate request returns one active Job or explicit conflict.",
+          "persistence": "No cursor advance, new parallel writer, ready status or old pointer replacement on rejection.",
+          "permission": "Unsupported or unauthorized sync is rejected before queue side effects.",
+          "projectMapping": "API validation, Connector/JOB state machine and cursor CAS.",
+          "allowedDifference": "Project stable error keys may replace FastGPT prose.",
+          "ambiguity": null,
+          "decision": "MATCH"
+        },
+        {
+          "subcase": "A01",
+          "operation": "Cross-workspace Source/Directory/Job IDs; reader attempting sync/rebuild; revoked permission reading stale Job/detail.",
+          "fastgptSource": [
+            "projects/app/src/pages/api/core/dataset/collection/listV2.ts:187",
+            "projects/app/src/pages/api/core/dataset/collection/sync.ts:24",
+            "projects/app/src/pages/api/core/dataset/training/rebuildEmbedding.ts:39"
+          ],
+          "behaviorIds": ["KB-COLLECTION-024", "KB-COLLECTION-025", "KB-COLLECTION-041", "KB-INFO-043"],
+          "visibleResult": "Foreign and revoked resources remain invisible; a reader can inspect but cannot mutate.",
+          "stateTransition": "No unauthorized state transition.",
+          "persistence": "No foreign write/audit/Job; filters cannot widen the visible set.",
+          "permission": "Tenant isolation and read/write authorization.",
+          "projectMapping": "TenantContext, AccessPort, repository workspace predicates.",
+          "allowedDifference": "404 versus 403 is allowed when existence is not disclosed.",
+          "ambiguity": null,
+          "decision": "MATCH"
+        },
+        {
+          "subcase": "S01",
+          "operation": "Compare list snapshots before/after reads and inspect sync cursor, rebuild Job, old/new Segment pointers and versions.",
+          "fastgptSource": [
+            "projects/app/src/pages/api/core/dataset/collection/sync.ts:14",
+            "projects/app/src/pages/api/core/dataset/training/rebuildEmbedding.ts:82"
+          ],
+          "behaviorIds": ["KB-COLLECTION-041", "KB-COLLECTION-100", "KB-COLLECTION-101"],
+          "visibleResult": "Reads do not change data; successful sync/rebuild eventually shows the new state while old state stays usable until commit.",
+          "stateTransition": "List/detail read-only; sync preflight -> Job; rebuild stages vectors -> transactional pointer switch.",
+          "persistence": "Cursor advances only on committed sync; Source/Job/segment version and pointer updates agree.",
+          "permission": "Only authorized writers create Jobs or advance cursors.",
+          "projectMapping": "KnowledgeConnectorCursor, KnowledgeJob, KnowledgeSegment.indexes and repository transactions.",
+          "allowedDifference": "Project's transaction/Outbox details are internal.",
+          "ambiguity": null,
+          "decision": "MATCH"
+        },
+        {
+          "subcase": "C01",
+          "operation": "Duplicate and concurrent sync/rebuild requests with same/different idempotency keys.",
+          "fastgptSource": [
+            "projects/app/src/pages/api/core/dataset/training/rebuildEmbedding.ts:60",
+            "projects/app/src/service/core/dataset/collection/utils.ts"
+          ],
+          "behaviorIds": ["KB-COLLECTION-041", "KB-COLLECTION-100", "KB-COLLECTION-125"],
+          "visibleResult": "Only one active writer is presented; duplicate request returns the same active Job or a recoverable conflict.",
+          "stateTransition": "Exactly one sync/rebuild transition wins; overlapping sync/rebuild cannot overwrite each other.",
+          "persistence": "No duplicate Job/Outbox/cursor advance; result contains no mixed old/new version.",
+          "permission": "Each concurrent request is independently authorized.",
+          "projectMapping": "Connector preflight/idempotency and Job CAS.",
+          "allowedDifference": "Same-task replay versus explicit conflict may follow the project's non-weakening contract.",
+          "ambiguity": null,
+          "decision": "MATCH"
+        },
+        {
+          "subcase": "F01",
+          "operation": "Inject Provider/worker failure during sync and rebuild; retry and observe old index availability and cursor.",
+          "fastgptSource": [
+            "projects/app/src/pages/api/core/dataset/collection/sync.ts:14",
+            "projects/app/src/pages/api/core/dataset/training/rebuildEmbedding.ts:60"
+          ],
+          "behaviorIds": ["KB-COLLECTION-102", "KB-COLLECTION-105", "KB-COLLECTION-126"],
+          "visibleResult": "Failure is distinguishable from success; retry is available; old successful content remains usable after rebuild failure.",
+          "stateTransition": "active -> syncing/rebuilding -> failed; retry -> queued/running -> ready or failed.",
+          "persistence": "Last successful pointer/cursor remains, failed attempt is recorded, retry does not double-advance.",
+          "permission": "Only an authorized writer can retry.",
+          "projectMapping": "S06 retry/recovery, deterministic local Provider Port and transactional pointer switch.",
+          "allowedDifference": "Failure detail location may differ; success/failure distinction and old-state preservation are required.",
+          "ambiguity": null,
+          "decision": "MATCH"
+        },
+        {
+          "subcase": "UI01",
+          "operation": "Observe loading, empty, status tags, path back, active sync disabled state, failure details, background refresh and invalid deep links.",
+          "fastgptSource": [
+            "projects/app/src/pageComponents/dataset/detail/CollectionCard/TrainingStates.tsx:201",
+            "projects/app/src/pageComponents/dataset/detail/CollectionCard/Header.tsx:60",
+            "projects/app/src/pageComponents/dataset/detail/CollectionCard/Context.tsx:78"
+          ],
+          "behaviorIds": ["KB-COLLECTION-009", "KB-COLLECTION-013", "KB-COLLECTION-100", "KB-COLLECTION-101", "KB-COLLECTION-102", "KB-COLLECTION-106", "KB-COLLECTION-125", "KB-COLLECTION-126", "KB-DETAIL-034"],
+          "visibleResult": "Users can distinguish loading/empty/queued/syncing/ready/failed; active tasks cannot be retriggered; failure and invalid deep-link recovery are visible.",
+          "stateTransition": "UI follows server status and refreshes valid current context.",
+          "persistence": "UI state is derived from committed API data; refresh reconstructs valid route and status.",
+          "permission": "Read-only users see state but not write actions.",
+          "projectMapping": "Product collection/detail UI, Job polling and invalid-route normalization.",
+          "allowedDifference": "Layout, skeleton and wording may differ.",
+          "ambiguity": null,
+          "decision": "MATCH"
+        }
+      ]
+    },
+    "COL-003": {
+      "responsibility": "Define and manage typed tags, assign/remove them individually or in batch, and filter Sources accurately.",
+      "rows": [
+        {
+          "subcase": "P01",
+          "operation": "Create string/number/datetime/array tags, assign single and batch values, append/overwrite/remove/clear, refresh and filter.",
+          "fastgptSource": [
+            "packages/global/core/dataset/type.ts:284",
+            "packages/global/core/dataset/type.ts:493",
+            "projects/app/src/pages/api/core/dataset/collection/update.ts:170",
+            "packages/service/core/dataset/collection/tagFilter.ts:12"
+          ],
+          "behaviorIds": ["KB-COLLECTION-070", "KB-COLLECTION-080", "KB-COLLECTION-090", "KB-COLLECTION-092", "KB-COLLECTION-093", "KB-COLLECTION-094", "KB-COLLECTION-096"],
+          "visibleResult": "Tag definitions and Source values persist after refresh; list/detail show typed values; filters return the correct Sources/counts.",
+          "stateTransition": "Definition active; assignment adds/replaces/removes a Source-specific value; refresh reconstructs committed state.",
+          "persistence": "Only target Source tagValues change; tag definition type/options/required/version persist.",
+          "permission": "Manage for definitions; Source write for assignment.",
+          "projectMapping": "API-TAG-CREATE/LIST/GET/VALUES/APPLY and KnowledgeTag/KnowledgeTagValue/KnowledgeSource.tagValues.",
+          "allowedDifference": "String tag creation may be API-only in FastGPT UI; this project may expose a different control.",
+          "ambiguity": null,
+          "decision": "MATCH"
+        },
+        {
+          "subcase": "N01",
+          "operation": "Reject duplicate key, invalid type/options/operator, missing required value, type mismatch, empty/long label, referenced deletion and unsafe regex.",
+          "fastgptSource": [
+            "packages/global/core/dataset/type.ts:493",
+            "packages/global/core/dataset/constants.ts:224",
+            "projects/app/src/pageComponents/dataset/detail/CollectionCard/TagManageModal.tsx:272",
+            "projects/app/src/pageComponents/dataset/detail/CollectionCard/TagCommon.tsx:100"
+          ],
+          "behaviorIds": ["KB-COLLECTION-071", "KB-COLLECTION-074", "KB-COLLECTION-076", "KB-COLLECTION-077", "KB-COLLECTION-078", "KB-COLLECTION-084"],
+          "visibleResult": "Invalid data remains editable and is rejected with a clear recoverable error; deleting a referenced tag follows the confirmed cascade behavior.",
+          "stateTransition": "Rejected definitions/values do not change; deleting a definition removes its assigned values after confirmation.",
+          "persistence": "No dangling tagValue or half-applied option; deletion is intentional, not silent on a failed update.",
+          "permission": "Manage for definition deletion; write for Source value change.",
+          "projectMapping": "Tag validation and transactional definition deletion.",
+          "allowedDifference": "Stable messageKey/params may replace FastGPT prose.",
+          "ambiguity": null,
+          "decision": "MATCH"
+        },
+        {
+          "subcase": "A01",
+          "operation": "Cross-tenant tagId/sourceId, reader batch assignment, no-manage definition mutation and Source-without-write assignment.",
+          "fastgptSource": [
+            "projects/app/src/pages/api/core/dataset/collection/update.ts:110",
+            "projects/app/src/pageComponents/dataset/detail/CollectionCard/CollectionTagBatchModal.tsx:96"
+          ],
+          "behaviorIds": ["KB-COLLECTION-045", "KB-COLLECTION-053", "KB-COLLECTION-080"],
+          "visibleResult": "Unauthorized definitions/values are unavailable; foreign IDs are not disclosed.",
+          "stateTransition": "No unauthorized definition or Source tag value changes.",
+          "persistence": "No cross-tenant tagValue/audit write.",
+          "permission": "Tenant guard plus manage/write checks.",
+          "projectMapping": "TenantContext and AccessPort.",
+          "allowedDifference": "403/404 existence-hiding policy may follow project safety rules.",
+          "ambiguity": null,
+          "decision": "MATCH"
+        },
+        {
+          "subcase": "S01",
+          "operation": "Snapshot tag definitions, Source tag values, audits and other Sources before/after update/clear/delete.",
+          "fastgptSource": [
+            "projects/app/src/pages/api/core/dataset/collection/update.ts:160",
+            "packages/global/core/dataset/type.ts:244"
+          ],
+          "behaviorIds": ["KB-COLLECTION-074", "KB-COLLECTION-085", "KB-COLLECTION-096"],
+          "visibleResult": "Only the target Source changes; old values remain traceable; deleting a tag leaves no dangling visible value.",
+          "stateTransition": "Set/overwrite/remove updates source version; delete definition cascades to values.",
+          "persistence": "KnowledgeTagValue and embedded tagValues converge under one transaction; audit captures safe before/after.",
+          "permission": "Authorized manage/write actors only.",
+          "projectMapping": "KnowledgeTag, KnowledgeTagValue, KnowledgeSource.tagValues and KnowledgeAuditEvent.",
+          "allowedDifference": "Internal normalized valueKey may differ.",
+          "ambiguity": null,
+          "decision": "MATCH"
+        },
+        {
+          "subcase": "C01",
+          "operation": "Concurrent append/overwrite on one Source and retry of a partially failed batch.",
+          "fastgptSource": [
+            "projects/app/src/pages/api/core/dataset/collection/update.ts:110",
+            "projects/app/src/pageComponents/dataset/detail/CollectionCard/CollectionTagBatchModal.tsx:96"
+          ],
+          "behaviorIds": ["KB-COLLECTION-092", "KB-COLLECTION-096", "KB-COLLECTION-097"],
+          "visibleResult": "Final value is deterministic; array retry does not duplicate values; overwrite does not mix old values.",
+          "stateTransition": "One CAS winner commits each expected Source version; stale writer gets conflict.",
+          "persistence": "No duplicate tagValues or element duplicates; successful batch items remain.",
+          "permission": "Every concurrent item is independently authorized.",
+          "projectMapping": "Project source-version CAS and unique tag/source index.",
+          "allowedDifference": "Project may require an explicit Source version where FastGPT does not.",
+          "ambiguity": null,
+          "decision": "MATCH"
+        },
+        {
+          "subcase": "F01",
+          "operation": "Apply a batch with valid and invalid Source/tag items; return per-item results and retry failures.",
+          "fastgptSource": [
+            "projects/app/src/pageComponents/dataset/detail/CollectionCard/CollectionTagBatchModal.tsx:96",
+            "projects/app/src/pages/api/core/dataset/collection/update.ts:110"
+          ],
+          "behaviorIds": ["KB-COLLECTION-096", "KB-COLLECTION-097", "KB-XROUTE-002"],
+          "visibleResult": "Partial failure is visible and does not masquerade as full success; successful items persist.",
+          "stateTransition": "Per-item success/failure; failed items remain retryable.",
+          "persistence": "Successful tag values commit without reapplying on retry; failed items write no value.",
+          "permission": "Mixed batch cannot smuggle an unauthorized item.",
+          "projectMapping": "API-TAG-APPLY per-item validation/result contract.",
+          "allowedDifference": "Project 207/explicit partial code may be used.",
+          "ambiguity": null,
+          "decision": "MATCH"
+        },
+        {
+          "subcase": "Q01",
+          "operation": "Exercise four tag types, operators, empty/unassigned/multi-value semantics, safe regex and missing definitions.",
+          "fastgptSource": [
+            "packages/global/core/dataset/constants.ts:168",
+            "packages/global/core/dataset/constants.ts:224",
+            "packages/global/core/dataset/constants.ts:303",
+            "packages/service/core/dataset/collection/tagFilter.ts:12"
+          ],
+          "behaviorIds": ["KB-COLLECTION-011", "KB-COLLECTION-013", "KB-COLLECTION-076", "KB-DATA-.../tag-metadata"],
+          "visibleResult": "Type-specific operators and combination logic match FastGPT; unsafe regex is rejected before DB access and simple regex completes within 50ms.",
+          "stateTransition": "Read-only filter evaluation; no business mutation.",
+          "persistence": "No query write; missing definition is non-matching, not an accidental match.",
+          "permission": "Filtering cannot widen the accessible Source set.",
+          "projectMapping": "TEST-X-TAG-FILTER-TYPES in packages/search and project filter contract.",
+          "allowedDifference": "Project has stricter regex safety and explicit stable validation errors.",
+          "ambiguity": null,
+          "decision": "MATCH"
+        },
+        {
+          "subcase": "UI01",
+          "operation": "Use tag manager, typed value input, options/required state, assign/remove, delete confirmation, filter empty and failure recovery.",
+          "fastgptSource": [
+            "projects/app/src/pageComponents/dataset/detail/CollectionCard/TagManageModal.tsx:272",
+            "projects/app/src/pageComponents/dataset/detail/CollectionCard/TagValueInputs.tsx:713",
+            "projects/app/src/pageComponents/dataset/detail/CollectionCard/CollectionTagSetModal.tsx:26",
+            "projects/app/src/pageComponents/dataset/detail/CollectionCard/CollectionTagBatchModal.tsx:96"
+          ],
+          "behaviorIds": ["KB-COLLECTION-070", "KB-COLLECTION-071", "KB-COLLECTION-074", "KB-COLLECTION-080", "KB-COLLECTION-084", "KB-COLLECTION-090", "KB-COLLECTION-094", "KB-COLLECTION-097"],
+          "visibleResult": "Users can define, edit and assign typed tags; incomplete rows prevent submit; failed saves keep the editor and values; refresh shows committed data.",
+          "stateTransition": "Modal draft -> disabled/loading -> successful close+refresh or recoverable error.",
+          "persistence": "Only confirmed mutations persist; canceled/error dialogs do not write.",
+          "permission": "Manage/write controls are hidden or rejected for read-only users.",
+          "projectMapping": "Product tag manager/assignment/batch dialogs and filter controls.",
+          "allowedDifference": "Layout and component names may differ; type/append/overwrite/remove/refresh effects are required.",
+          "ambiguity": null,
+          "decision": "MATCH"
+        }
+      ]
+    }
+  },
+  "blockedReference": []
+}
