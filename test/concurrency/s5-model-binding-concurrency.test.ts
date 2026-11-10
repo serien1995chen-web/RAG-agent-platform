@@ -53,7 +53,7 @@ afterAll(async () => {
 });
 
 describe('S5 model binding CAS concurrency', () => {
-  it('allows exactly one same-version replacement and rolls back the loser', async () => {
+  it('L1-B01-KB-002-C01 allows exactly one same-version replacement and rolls back the loser', async () => {
     const space = await catalog.createSpace(
       {
         kind: 'space',

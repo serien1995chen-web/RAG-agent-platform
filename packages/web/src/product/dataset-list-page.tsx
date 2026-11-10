@@ -24,6 +24,7 @@ import {
   listCollaborators,
   moveSpace,
   productApi,
+  productSession,
   removeCollaborator,
   updateSpace,
 } from './api';
@@ -180,6 +181,13 @@ export function DatasetListPage(props: { parentId: string }) {
     queryKey: ['kb-product', 'spaces', sort],
     queryFn: () => productApi.listSpaces(sort),
   });
+  const sessionQuery = useQuery({
+    queryKey: ['kb-product', 'session'],
+    queryFn: productSession,
+  });
+  const canCreate =
+    sessionQuery.data?.isWorkspaceOwner === true ||
+    sessionQuery.data?.scopes.includes('knowledge:write') === true;
   const allSpaces = spacesQuery.data ?? [];
   const currentFolder = allSpaces.find((space) => space.id === parentId);
   const currentPath = breadcrumbSpacePath(allSpaces, currentFolder);
@@ -474,11 +482,11 @@ export function DatasetListPage(props: { parentId: string }) {
       setBatchResult(result);
       const failedIds = result.items.filter((item) => !item.success).map((item) => item.id);
       setSelectedIds(failedIds);
+      setBatchMoveOpen(false);
+      setBatchDeleteOpen(false);
+      setBatchDeleteText('');
       if (result.failed === 0) {
         setBatchMode(false);
-        setBatchMoveOpen(false);
-        setBatchDeleteOpen(false);
-        setBatchDeleteText('');
         toast.success(action === 'move' ? '移动成功' : '删除成功');
       } else if (result.succeeded === 0) {
         toast.error(new Error(action === 'move' ? '移动失败' : '删除失败'));
@@ -496,11 +504,32 @@ export function DatasetListPage(props: { parentId: string }) {
 
   const runExport = async (space: KnowledgeSpace) => {
     setMenuOpenId(null);
+    const pendingWindow = window.open('about:blank', '_blank');
+    if (pendingWindow) pendingWindow.opener = null;
     try {
-      const ticket = await exportSpace(space.id);
-      window.open(ticket.url, '_blank', 'noopener,noreferrer');
-      toast.success('导出已开始');
+      let job = await exportSpace(space.id);
+      const deadline = Date.now() + 30_000;
+      while (['queued', 'running', 'retry_wait', 'paused'].includes(job.status)) {
+        if (Date.now() >= deadline) throw new Error('导出任务等待超时');
+        await new Promise((resolveWait) => window.setTimeout(resolveWait, 500));
+        job = await productApi.getJob(job.jobId);
+      }
+      if (job.status !== 'succeeded') throw new Error('导出任务失败');
+      const blobId = String(job.result?.objectBlobRefId ?? '');
+      if (!blobId) throw new Error('导出结果缺少对象引用');
+      const ticket = await productApi.downloadFile(blobId);
+      if (pendingWindow) {
+        pendingWindow.location.replace(ticket.url);
+      } else {
+        const link = document.createElement('a');
+        link.href = ticket.url;
+        link.target = '_blank';
+        link.rel = 'noopener noreferrer';
+        link.click();
+      }
+      toast.success('导出完成');
     } catch (error) {
+      pendingWindow?.close();
       toast.error(error);
     }
   };
@@ -591,33 +620,35 @@ export function DatasetListPage(props: { parentId: string }) {
                 <CheckIcon boxSize={3.5} />
                 批量管理
               </ProductButton>
-              <div className="kb2-new-wrap">
-                <ProductButton
-                  tone="primary"
-                  onClick={() => setCreateMenuOpen((value) => !value)}
-                  aria-expanded={createMenuOpen}
-                  aria-haspopup="menu"
-                >
-                  <AddIcon boxSize={3.5} />
-                  新建
-                </ProductButton>
-                <ProductMenu
-                  open={createMenuOpen}
-                  onClose={() => setCreateMenuOpen(false)}
-                  align="right"
-                >
-                  {CREATE_OPTIONS.map((option) => (
-                    <ProductMenuItem
-                      key={option.type}
-                      icon={<option.icon boxSize={3.5} />}
-                      hint={option.description}
-                      onClick={() => openCreate(option.type)}
-                    >
-                      {option.title}
-                    </ProductMenuItem>
-                  ))}
-                </ProductMenu>
-              </div>
+              {canCreate ? (
+                <div className="kb2-new-wrap">
+                  <ProductButton
+                    tone="primary"
+                    onClick={() => setCreateMenuOpen((value) => !value)}
+                    aria-expanded={createMenuOpen}
+                    aria-haspopup="menu"
+                  >
+                    <AddIcon boxSize={3.5} />
+                    新建
+                  </ProductButton>
+                  <ProductMenu
+                    open={createMenuOpen}
+                    onClose={() => setCreateMenuOpen(false)}
+                    align="right"
+                  >
+                    {CREATE_OPTIONS.map((option) => (
+                      <ProductMenuItem
+                        key={option.type}
+                        icon={<option.icon boxSize={3.5} />}
+                        hint={option.description}
+                        onClick={() => openCreate(option.type)}
+                      >
+                        {option.title}
+                      </ProductMenuItem>
+                    ))}
+                  </ProductMenu>
+                </div>
+              ) : null}
             </>
           }
         />
@@ -712,10 +743,12 @@ export function DatasetListPage(props: { parentId: string }) {
                     : '创建一个知识库，或先建立文件夹整理后续资源。'
                 }
                 action={
-                  <ProductButton tone="primary" onClick={() => openCreate('general')}>
-                    <AddIcon boxSize={3.5} />
-                    创建知识库
-                  </ProductButton>
+                  canCreate ? (
+                    <ProductButton tone="primary" onClick={() => openCreate('general')}>
+                      <AddIcon boxSize={3.5} />
+                      创建知识库
+                    </ProductButton>
+                  ) : undefined
                 }
               />
             ) : (
@@ -1025,7 +1058,7 @@ export function DatasetListPage(props: { parentId: string }) {
               ref={createNameRef}
               value={createName}
               onChange={(event) => setCreateName(event.target.value)}
-              maxLength={120}
+              maxLength={30}
               placeholder={`输入${createLabel(createType)}名称`}
               required
             />
@@ -1161,7 +1194,7 @@ export function DatasetListPage(props: { parentId: string }) {
               ref={editNameRef}
               value={editName}
               onChange={(event) => setEditName(event.target.value)}
-              maxLength={120}
+              maxLength={30}
               required
             />
           </ProductField>
@@ -1365,6 +1398,18 @@ function PermissionDialog(props: { target: KnowledgeSpace | null; onClose: () =>
   const [role, setRole] = useState<'read' | 'write' | 'manage'>('read');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
+  const [transferOpen, setTransferOpen] = useState(false);
+  const [transferMemberId, setTransferMemberId] = useState('');
+  const session = useQuery({
+    queryKey: ['kb-product', 'session'],
+    queryFn: productSession,
+    enabled: Boolean(props.target),
+  });
+  const currentSpace = useQuery({
+    queryKey: ['kb-product', 'space', props.target?.id],
+    queryFn: () => productApi.getSpace(props.target!.id),
+    enabled: Boolean(props.target),
+  });
   const collaborators = useQuery({
     queryKey: ['kb-product', 'collaborators', props.target?.id],
     queryFn: () => listCollaborators(props.target!.id),
@@ -1380,6 +1425,8 @@ function PermissionDialog(props: { target: KnowledgeSpace | null; onClose: () =>
     setMemberId('');
     setRole('read');
     setError(null);
+    setTransferOpen(false);
+    setTransferMemberId('');
   }, [props.target]);
 
   const add = async (event: FormEvent) => {
@@ -1392,6 +1439,7 @@ function PermissionDialog(props: { target: KnowledgeSpace | null; onClose: () =>
       await Promise.all([
         collaborators.refetch(),
         acl.refetch(),
+        currentSpace.refetch(),
         queryClient.invalidateQueries({ queryKey: ['kb-product', 'spaces'] }),
       ]);
       setMemberId('');
@@ -1417,6 +1465,42 @@ function PermissionDialog(props: { target: KnowledgeSpace | null; onClose: () =>
       setBusy(false);
     }
   };
+
+  const transfer = async () => {
+    if (!props.target || !transferMemberId || !currentSpace.data) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await productApi.transferSpaceOwnership(
+        props.target.id,
+        transferMemberId,
+        currentSpace.data.version,
+      );
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['kb-product', 'spaces'] }),
+        queryClient.invalidateQueries({ queryKey: ['kb-product', 'space', props.target.id] }),
+        queryClient.invalidateQueries({
+          queryKey: ['kb-product', 'collaborators', props.target.id],
+        }),
+        queryClient.invalidateQueries({
+          queryKey: ['kb-product', 'acl', 'space', props.target.id],
+        }),
+      ]);
+      toast.success('所有权已转移');
+      props.onClose();
+    } catch (caught) {
+      setError(caught);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const ownerId = currentSpace.data?.ownershipMemberId ?? props.target?.ownershipMemberId;
+  const canTransfer =
+    Boolean(session.data) && (session.data!.isWorkspaceOwner || session.data!.memberId === ownerId);
+  const transferCandidates = (collaborators.data?.items ?? []).filter(
+    (item) => item.status === 'active' && item.role === 'manage' && item.memberId !== ownerId,
+  );
 
   return (
     <ProductModal
@@ -1485,6 +1569,46 @@ function PermissionDialog(props: { target: KnowledgeSpace | null; onClose: () =>
             ))
         )}
       </div>
+      {canTransfer ? (
+        <div className="kb2-permission-transfer">
+          <ProductButton
+            tone="danger"
+            aria-expanded={transferOpen}
+            onClick={() => setTransferOpen((value) => !value)}
+          >
+            转移所有权
+          </ProductButton>
+          {transferOpen ? (
+            <div className="kb2-form-grid">
+              <ProductField label="新所有者">
+                <ProductSelect
+                  value={transferMemberId}
+                  onChange={(event) => setTransferMemberId(event.target.value)}
+                  disabled={transferCandidates.length === 0}
+                >
+                  <option value="">
+                    {transferCandidates.length === 0 ? '暂无满足条件的协作者' : '选择可管理协作者'}
+                  </option>
+                  {transferCandidates.map((item) => (
+                    <option key={item.memberId} value={item.memberId}>
+                      {item.memberId}
+                    </option>
+                  ))}
+                </ProductSelect>
+              </ProductField>
+              <p className="kb2-table-muted">转移后您的 Owner 权限不会保留。</p>
+              <ProductButton
+                tone="danger"
+                busy={busy}
+                disabled={!transferMemberId}
+                onClick={() => void transfer()}
+              >
+                确认转移所有权
+              </ProductButton>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
     </ProductModal>
   );
 }

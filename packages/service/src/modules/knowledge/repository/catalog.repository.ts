@@ -54,6 +54,7 @@ function spaceDto(document: Plain<KnowledgeSpaceDoc>, parentPath?: string[]) {
     accessMode: document.accessMode,
     sourceAclMode: document.sourceAclMode,
     sourcePermissionEnabled: document.sourcePermissionEnabled,
+    modelBindings: document.modelBindings,
     referenceRevision: document.referenceRevision,
     status: document.status,
     version: document.version,
@@ -165,6 +166,13 @@ export interface CreateSpaceInput {
   accessMode: 'workspace' | 'restricted';
   sourceAclMode: 'inherited' | 'enforced';
   sourcePermissionEnabled?: boolean;
+  modelBindings?: Array<{
+    modelType: 'llm' | 'embedding' | 'rerank' | 'vlm' | 'stt' | 'tts';
+    modelId: string;
+    displayName: string;
+    requiredCapabilities: string[];
+    status: 'active' | 'disabled';
+  }>;
 }
 
 export interface CreateDirectoryInput {
@@ -230,8 +238,36 @@ export class KnowledgeCatalogRepository {
 
   async createSpace(input: CreateSpaceInput, context: TenantContext) {
     requireWorkspaceId(context);
+    if (input.kind !== 'space' && input.kind !== 'folder') {
+      throw tenantError(context, 'KNOWLEDGE_VALIDATION_FAILED', {
+        field: 'kind',
+        allowed: ['space', 'folder'],
+      });
+    }
+    if (input.accessMode !== 'workspace' && input.accessMode !== 'restricted') {
+      throw tenantError(context, 'KNOWLEDGE_VALIDATION_FAILED', {
+        field: 'accessMode',
+        allowed: ['workspace', 'restricted'],
+      });
+    }
+    if (input.sourceAclMode !== 'inherited' && input.sourceAclMode !== 'enforced') {
+      throw tenantError(context, 'KNOWLEDGE_VALIDATION_FAILED', {
+        field: 'sourceAclMode',
+        allowed: ['inherited', 'enforced'],
+      });
+    }
+    if (
+      input.sourcePermissionEnabled !== undefined &&
+      typeof input.sourcePermissionEnabled !== 'boolean'
+    ) {
+      throw tenantError(context, 'KNOWLEDGE_VALIDATION_FAILED', {
+        field: 'sourcePermissionEnabled',
+        reason: 'boolean_required',
+      });
+    }
     const name = assertResourceName(input.name, 'name', 120, context);
     let parentSpaceId: Types.ObjectId | null = null;
+    let parentPath: Types.ObjectId[] = [];
     if (input.parentSpaceId) {
       parentSpaceId = objectIdOf(input.parentSpaceId, context, 'parentSpaceId');
       const parent = await this.spaces.findOne({
@@ -239,33 +275,90 @@ export class KnowledgeCatalogRepository {
         _id: parentSpaceId,
       });
       if (!parent) throw tenantError(context, 'KNOWLEDGE_NOT_FOUND');
-      if (parent.kind !== 'folder') throw tenantError(context);
+      if (parent.kind !== 'folder') {
+        throw tenantError(context, 'KNOWLEDGE_VALIDATION_FAILED', {
+          field: 'parentSpaceId',
+          reason: 'folder_required',
+        });
+      }
+      parentPath = [
+        ...(await this.spaceAncestorIds(parent, context)),
+        parent._id as Types.ObjectId,
+      ];
     }
-    const created = await this.spaces.create({
-      workspaceId: context.workspaceId,
-      knowledgeSpaceId: null,
-      version: 1,
-      deletedAt: null,
-      createdByMemberId: context.memberId,
-      updatedByMemberId: context.memberId,
-      kind: input.kind,
-      parentSpaceId,
-      name,
-      normalizedName: name.toLocaleLowerCase('en-US'),
-      description: input.description ?? '',
-      iconKey: input.iconKey ?? 'book-open',
-      ownershipMemberId: context.memberId,
-      accessMode: input.accessMode,
-      sourceAclMode: input.sourceAclMode,
-      sourcePermissionEnabled: input.sourcePermissionEnabled ?? true,
-      referenceRevision: 0,
-      permissionRevision: 0,
-      modelBindings: {},
-      defaultChunking: {},
-      status: 'active',
-    });
-    const plain = created as unknown as Plain<KnowledgeSpaceDoc>;
-    return spaceDto(plain);
+    assertDirectoryDepth(parentPath.length, context);
+    const models = registerKnowledgeModels(this.connection);
+    const session = await this.connection.startSession();
+    try {
+      let created!: Plain<KnowledgeSpaceDoc>;
+      await session.withTransaction(async () => {
+        const modelBindings = Object.fromEntries(
+          (input.modelBindings ?? []).map((binding) => [
+            binding.modelType,
+            {
+              modelId: binding.modelId,
+              displayName: binding.displayName,
+              requiredCapabilities: binding.requiredCapabilities,
+              status: binding.status,
+            },
+          ]),
+        );
+        const documents = await this.spaces.create(
+          [
+            {
+              workspaceId: context.workspaceId,
+              knowledgeSpaceId: null,
+              version: 1,
+              deletedAt: null,
+              createdByMemberId: context.memberId,
+              updatedByMemberId: context.memberId,
+              kind: input.kind,
+              parentSpaceId,
+              name,
+              normalizedName: name.toLocaleLowerCase('en-US'),
+              description: input.description ?? '',
+              iconKey: input.iconKey ?? 'book-open',
+              ownershipMemberId: context.memberId,
+              accessMode: input.accessMode,
+              sourceAclMode: input.sourceAclMode,
+              sourcePermissionEnabled: input.sourcePermissionEnabled ?? true,
+              referenceRevision: 0,
+              permissionRevision: 0,
+              modelBindings,
+              defaultChunking: {},
+              status: 'active',
+            },
+          ],
+          { session },
+        );
+        created = documents[0]!.toObject() as Plain<KnowledgeSpaceDoc>;
+        if (input.kind === 'space' && (input.modelBindings?.length ?? 0) > 0) {
+          const now = new Date();
+          await models.KnowledgeModelBinding.create(
+            input.modelBindings!.map((binding) => ({
+              workspaceId: context.workspaceId,
+              knowledgeSpaceId: created._id,
+              version: 1,
+              deletedAt: null,
+              createdByMemberId: context.memberId,
+              updatedByMemberId: context.memberId,
+              modelType: binding.modelType,
+              modelId: binding.modelId,
+              displayName: binding.displayName,
+              requiredCapabilities: binding.requiredCapabilities,
+              status: binding.status,
+              activeQueryModelId: null,
+              activeQueryDimension: null,
+              authorizedAt: now,
+            })),
+            { session, ordered: true },
+          );
+        }
+      });
+      return spaceDto(created, parentPath.map(String));
+    } finally {
+      await session.endSession();
+    }
   }
 
   async getSpace(spaceId: string, context: TenantContext) {
@@ -276,13 +369,42 @@ export class KnowledgeCatalogRepository {
       })
       .lean()) as unknown as Plain<KnowledgeSpaceDoc> | null;
     if (!doc) throw tenantError(context, 'KNOWLEDGE_NOT_FOUND');
-    return spaceDto(doc);
+    return spaceDto(doc, (await this.spaceAncestorIds(doc, context)).map(String));
   }
 
   async updateSpace(spaceId: string, input: Record<string, unknown>, context: TenantContext) {
     requireWorkspaceId(context);
     const version = Number(input.version);
     if (!Number.isInteger(version) || version < 1) throw tenantError(context);
+    if (
+      input.accessMode !== undefined &&
+      input.accessMode !== 'workspace' &&
+      input.accessMode !== 'restricted'
+    ) {
+      throw tenantError(context, 'KNOWLEDGE_VALIDATION_FAILED', {
+        field: 'accessMode',
+        allowed: ['workspace', 'restricted'],
+      });
+    }
+    if (
+      input.sourceAclMode !== undefined &&
+      input.sourceAclMode !== 'inherited' &&
+      input.sourceAclMode !== 'enforced'
+    ) {
+      throw tenantError(context, 'KNOWLEDGE_VALIDATION_FAILED', {
+        field: 'sourceAclMode',
+        allowed: ['inherited', 'enforced'],
+      });
+    }
+    if (
+      input.sourcePermissionEnabled !== undefined &&
+      typeof input.sourcePermissionEnabled !== 'boolean'
+    ) {
+      throw tenantError(context, 'KNOWLEDGE_VALIDATION_FAILED', {
+        field: 'sourcePermissionEnabled',
+        reason: 'boolean_required',
+      });
+    }
     const update: Record<string, unknown> = {};
     for (const field of [
       'description',
@@ -308,6 +430,7 @@ export class KnowledgeCatalogRepository {
 
   async deleteSpace(spaceId: string, input: Record<string, unknown>, context: TenantContext) {
     requireWorkspaceId(context);
+    const models = registerKnowledgeModels(this.connection);
     const version = Number(input.version);
     const expectedReferenceRevision = Number(input.expectedReferenceRevision);
     const objectId = objectIdOf(spaceId, context, 'spaceId');
@@ -352,6 +475,41 @@ export class KnowledgeCatalogRepository {
             $set: {
               status: 'deleting',
               deletedAt: new Date(),
+              updatedByMemberId: context.memberId,
+            },
+            $inc: { version: 1 },
+          },
+          { session },
+        );
+        const deletedAt = new Date();
+        await models.KnowledgeResourcePermission.updateMany(
+          {
+            workspaceId: context.workspaceId,
+            resourceType: 'space',
+            resourceId: objectId,
+            deletedAt: null,
+          },
+          {
+            $set: {
+              deletedAt,
+              updatedByMemberId: context.memberId,
+            },
+            $inc: { version: 1 },
+          },
+          { session },
+        );
+        await models.KnowledgeCollaborator.updateMany(
+          {
+            workspaceId: context.workspaceId,
+            knowledgeSpaceId: objectId,
+            status: 'active',
+            deletedAt: null,
+          },
+          {
+            $set: {
+              deletedAt,
+              revokedAt: deletedAt,
+              status: 'revoked',
               updatedByMemberId: context.memberId,
             },
             $inc: { version: 1 },

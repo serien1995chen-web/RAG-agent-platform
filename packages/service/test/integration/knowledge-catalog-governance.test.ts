@@ -295,18 +295,16 @@ describe('TEST-KB-003-BLOCK catalog governance', () => {
     const duplicateSpaceTarget = await folder(`Duplicate space target ${suffix}`);
     await folder(`Duplicate space name ${suffix}`, duplicateSpaceTarget.id);
     const duplicateSpaceCandidate = await folder(`Duplicate space name ${suffix}`);
-    await expect(
-      catalog.moveSpace(
-        duplicateSpaceCandidate.id,
-        { targetParentId: duplicateSpaceTarget.id, version: duplicateSpaceCandidate.version },
-        context,
-      ),
-    ).rejects.toMatchObject({
-      problem: { error: { code: 'KNOWLEDGE_CONFLICT' } },
-    });
-    expect((await catalog.getSpace(duplicateSpaceCandidate.id, context)).version).toBe(
-      duplicateSpaceCandidate.version,
+    const sameNameMoved = await catalog.moveSpace(
+      duplicateSpaceCandidate.id,
+      { targetParentId: duplicateSpaceTarget.id, version: duplicateSpaceCandidate.version },
+      context,
     );
+    expect(sameNameMoved).toMatchObject({
+      name: `Duplicate space name ${suffix}`,
+      parentSpaceId: duplicateSpaceTarget.id,
+      version: duplicateSpaceCandidate.version + 1,
+    });
 
     const foreignSpace = await space(`Foreign move space ${suffix}`);
     const foreignDirectory = await directory(foreignSpace.id, `Foreign target ${suffix}`);
@@ -330,7 +328,14 @@ describe('TEST-KB-003-BLOCK catalog governance', () => {
       workspaceId,
       action: { $in: ['space.move', 'directory.move', 'source.move'] },
     });
-    expect(auditCount).toBe(0);
+    expect(auditCount).toBe(1);
+    expect(
+      await connection.models.KnowledgeAuditEvent.countDocuments({
+        workspaceId,
+        action: 'space.move',
+        resourceId: duplicateSpaceCandidate.id,
+      }),
+    ).toBe(1);
   });
 
   it('returns 207 for a mixed batch and keeps successful items committed', async () => {

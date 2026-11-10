@@ -965,6 +965,21 @@ export class KnowledgeAccessRepository {
     const session = await this.connection.startSession();
     try {
       await session.withTransaction(async () => {
+        const eligible = await this.collaborators
+          .findOne({
+            workspaceId: context.workspaceId,
+            knowledgeSpaceId: resource.knowledgeSpaceId,
+            memberId: targetMemberId,
+            status: 'active',
+            deletedAt: null,
+          })
+          .session(session);
+        if (!eligible) {
+          throw tenantError(context, 'KNOWLEDGE_VALIDATION_FAILED', {
+            field: 'targetMemberId',
+            reason: 'member_not_eligible',
+          });
+        }
         const filter = {
           _id: resource.resourceId,
           workspaceId: context.workspaceId,

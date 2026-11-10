@@ -59,6 +59,8 @@ export async function startS4App(input: {
   workspaceId: string;
   memberId: string;
   authToken: string;
+  scopes?: string;
+  isWorkspaceOwner?: boolean;
 }): Promise<S4AppHarness> {
   const port = await freePort();
   const baseUrl = `http://127.0.0.1:${port}`;
@@ -97,8 +99,9 @@ export async function startS4App(input: {
       API_KEY_HMAC_SECRET_FILE: `${process.cwd()}/test/fixtures/s10/api-key-hmac.secret`,
       KB_MOCK_WORKSPACE_ID: input.workspaceId,
       KB_MOCK_MEMBER_ID: input.memberId,
-      KB_MOCK_SCOPES: 'knowledge:read,knowledge:write,knowledge:manage,knowledge:admin',
-      KB_MOCK_WORKSPACE_OWNER: 'true',
+      KB_MOCK_SCOPES:
+        input.scopes ?? 'knowledge:read,knowledge:write,knowledge:manage,knowledge:admin',
+      KB_MOCK_WORKSPACE_OWNER: String(input.isWorkspaceOwner ?? true),
       KB_EXTERNAL_MODEL_MODE: 'mock',
       KB_EXTERNAL_OCR_MODE: 'mock',
       KB_EXTERNAL_CONNECTOR_MODE: 'mock',

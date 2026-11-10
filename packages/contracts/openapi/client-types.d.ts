@@ -451,7 +451,7 @@ export interface SchemaPropertyMap {
   "JobList": "items" | "pageInfo";
   "JobStatus": never;
   "JobStep": "attempts" | "compensationState" | "externalEvidence" | "status" | "stepKey";
-  "KnowledgeSpace": "accessMode" | "createdAt" | "description" | "iconKey" | "id" | "kind" | "name" | "ownershipMemberId" | "parentPath" | "parentSpaceId" | "referenceRevision" | "sourceAclMode" | "sourcePermissionEnabled" | "status" | "updatedAt" | "version" | "workspaceId";
+  "KnowledgeSpace": "accessMode" | "createdAt" | "description" | "iconKey" | "id" | "kind" | "modelBindings" | "name" | "ownershipMemberId" | "parentPath" | "parentSpaceId" | "referenceRevision" | "sourceAclMode" | "sourcePermissionEnabled" | "status" | "updatedAt" | "version" | "workspaceId";
   "KnowledgeSpaceBatchAction": "action" | "ids" | "targetParentId" | "versions";
   "KnowledgeSpaceCreate": "accessMode" | "description" | "iconKey" | "kind" | "name" | "parentSpaceId" | "sourceAclMode" | "sourcePermissionEnabled";
   "KnowledgeSpaceDeleteRequest": "expectedReferenceRevision" | "referenceStrategy" | "version";

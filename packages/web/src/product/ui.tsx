@@ -17,6 +17,10 @@ import {
   WarningIcon,
 } from '@chakra-ui/icons';
 import {
+  Alert,
+  AlertDescription,
+  AlertIcon,
+  AlertTitle,
   Box,
   Flex,
   Modal,
@@ -38,6 +42,7 @@ import type {
 } from 'react';
 import { forwardRef } from 'react';
 import { productErrorView } from './api';
+import { productTokens } from './tokens';
 
 export {
   AddIcon,
@@ -309,22 +314,44 @@ export function ProductMenuItem(props: {
 
 export function useProductToast() {
   const toast = useToast();
+  const render = (status: 'success' | 'warning' | 'error', title: string, description?: string) => (
+    <Alert
+      status={status}
+      bg={productTokens.colors.ink}
+      color={productTokens.colors.surface}
+      borderRadius={productTokens.radius.panel}
+    >
+      <AlertIcon color={productTokens.colors.surface} />
+      <Box flex="1">
+        <AlertTitle>{title}</AlertTitle>
+        {description ? <AlertDescription>{description}</AlertDescription> : null}
+      </Box>
+    </Alert>
+  );
   return {
     success(title: string) {
-      toast({ title, status: 'success', duration: 3200, isClosable: true, position: 'top' });
+      toast({
+        duration: 3200,
+        isClosable: true,
+        position: 'top',
+        render: () => render('success', title),
+      });
     },
     warning(title: string) {
-      toast({ title, status: 'warning', duration: 4500, isClosable: true, position: 'top' });
+      toast({
+        duration: 4500,
+        isClosable: true,
+        position: 'top',
+        render: () => render('warning', title),
+      });
     },
     error(error: unknown) {
       const view = productErrorView(error);
       toast({
-        title: view.message,
-        description: view.code,
-        status: 'error',
         duration: 5200,
         isClosable: true,
         position: 'top',
+        render: () => render('error', view.message, view.code),
       });
     },
   };

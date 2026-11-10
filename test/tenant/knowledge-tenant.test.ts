@@ -1,11 +1,18 @@
 import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
+  KnowledgeAccessRepository,
+  KnowledgeApplication,
   KnowledgeArchiveRepository,
+  KnowledgeAuditRepository,
   KnowledgeCatalogRepository,
   KnowledgeObjectRefRepository,
   KnowledgeReferenceRepository,
+  KnowledgeTagRepository,
 } from '../../packages/service/src/modules/knowledge';
+import { S5ModelBindingApplication } from '../../packages/service/src/modules/knowledge/application/s5-model-binding.application';
+import type { ModelCatalogPort } from '../../packages/service/src/modules/knowledge/application/s5-model-ports';
+import { S5ModelBindingRepository } from '../../packages/service/src/modules/knowledge/repository/s5-model-binding.repository';
 import { createKnowledgeMongoConnection } from '../../packages/service/src/shared/runtime/knowledge-connections';
 import {
   ensureKnowledgeCollections,
@@ -27,6 +34,8 @@ let repository: KnowledgeCatalogRepository;
 let references: KnowledgeReferenceRepository;
 let archive: KnowledgeArchiveRepository;
 let objectRefs: KnowledgeObjectRefRepository;
+let application: KnowledgeApplication;
+let modelBindings: S5ModelBindingApplication;
 
 function context(workspaceId: string): TenantContext {
   return {
@@ -45,6 +54,34 @@ beforeAll(async () => {
   references = new KnowledgeReferenceRepository(connection);
   archive = new KnowledgeArchiveRepository(connection);
   objectRefs = new KnowledgeObjectRefRepository(connection);
+  const access = new KnowledgeAccessRepository(connection);
+  const modelCatalog = {
+    async listModels() {
+      return [
+        {
+          modelId: 'tenant-model',
+          displayName: 'Tenant model',
+          type: 'llm',
+          capabilities: ['chat'],
+        },
+      ];
+    },
+  } as ModelCatalogPort;
+  modelBindings = new S5ModelBindingApplication(
+    new S5ModelBindingRepository(connection),
+    modelCatalog,
+    access,
+  );
+  application = new KnowledgeApplication(
+    repository,
+    new KnowledgeTagRepository(connection),
+    access,
+    archive,
+    undefined,
+    undefined,
+    references,
+    new KnowledgeAuditRepository(connection),
+  );
 }, 60_000);
 
 afterAll(async () => {
@@ -269,5 +306,63 @@ describe('workspace tenant boundary', () => {
         workspaceId: workspaceB,
       }),
     ).toBe(0);
+  });
+
+  it('L1-B01-KB-001-A01 hides update/delete and model-binding access from a foreign workspace', async () => {
+    const ownerA = { ...context(workspaceA), isWorkspaceOwner: true };
+    const ownerB = { ...context(workspaceB), isWorkspaceOwner: true };
+    const created = (
+      await application.dispatch({
+        operationId: 'API-SPACE-CREATE',
+        params: {},
+        query: {},
+        body: {
+          kind: 'space',
+          name: `Tenant B01 ${suffix}`,
+          accessMode: 'workspace',
+          sourceAclMode: 'inherited',
+          sourcePermissionEnabled: true,
+        },
+        context: ownerA,
+      })
+    ).data as { id: string; version: number };
+
+    for (const operation of [
+      {
+        operationId: 'API-SPACE-UPDATE',
+        params: { spaceId: created.id },
+        query: {},
+        body: { version: created.version, name: 'foreign update' },
+      },
+      {
+        operationId: 'API-SPACE-DELETE',
+        params: { spaceId: created.id },
+        query: {},
+        body: {
+          version: created.version,
+          expectedReferenceRevision: 0,
+          referenceStrategy: 'block',
+        },
+      },
+      {
+        operationId: 'API-MODEL-BINDING-GET',
+        params: { spaceId: created.id },
+        query: {},
+        body: {},
+        viaModelApplication: true,
+      },
+    ] as const) {
+      const target = 'viaModelApplication' in operation ? modelBindings : application;
+      const error = await target
+        .dispatch({ ...operation, headers: {}, context: ownerB })
+        .catch((caught) => caught);
+      expect(error).toMatchObject({
+        problem: { error: { code: 'KNOWLEDGE_NOT_FOUND' } },
+      });
+    }
+    expect(await repository.getSpace(created.id, ownerA)).toMatchObject({
+      name: `Tenant B01 ${suffix}`,
+      version: created.version,
+    });
   });
 });

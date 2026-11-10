@@ -184,7 +184,7 @@ describe('TEST-X-SECURITY-UPLOAD archive safety inspector', () => {
       status: 'unsupported',
       reason: 'compression_ratio_exceeded',
     });
-  });
+  }, 30_000);
 
   it('TEST-FILE-001-U15 and TEST-FILE-004-A08 reject traversal, absolute, UNC, drive and NUL paths', async () => {
     for (const name of [

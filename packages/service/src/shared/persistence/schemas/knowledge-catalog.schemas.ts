@@ -60,9 +60,8 @@ KnowledgeSpaceSchema.pre('validate', function normalizeName(next) {
 });
 
 defineKnowledgeIndex(KnowledgeSpaceSchema, {
-  name: 'ux_space_sibling_name',
+  name: 'ix_space_sibling_name',
   key: { workspaceId: 1, parentSpaceId: 1, normalizedName: 1, deletedAt: 1 },
-  options: { unique: true },
 });
 defineKnowledgeIndex(KnowledgeSpaceSchema, {
   name: 'ix_space_workspace_updated',

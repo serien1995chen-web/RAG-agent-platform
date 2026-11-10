@@ -1,11 +1,13 @@
 import { randomUUID } from 'node:crypto';
 import mongoose from 'mongoose';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { createKnowledgeError } from '@kb/contracts';
 import { KnowledgeCatalogRepository } from '../../src/modules/knowledge';
 import type { AccessPort } from '../../src/modules/knowledge/application/ports';
 import { S5ModelBindingApplication } from '../../src/modules/knowledge/application/s5-model-binding.application';
 import { S5MockModelCatalog } from '../../src/modules/knowledge/adapter/s5-aiproxy-catalog.adapter';
 import { S5ModelBindingRepository } from '../../src/modules/knowledge/repository/s5-model-binding.repository';
+import type { ModelCatalogPort } from '../../src/modules/knowledge/application/s5-model-ports';
 import { registerKnowledgeModels } from '../../src/shared/persistence/schemas/knowledge-index';
 import type { TenantContext } from '../../src/shared/persistence/knowledge/tenant';
 
@@ -119,7 +121,7 @@ afterAll(async () => {
 });
 
 describe('TEST-KB-002-BLOCK Space model bindings', () => {
-  it('atomically replaces zero through six bindings and mirrors Space state', async () => {
+  it('L1-B01-KB-002-P01 atomically replaces zero through six bindings and mirrors Space state', async () => {
     const space = await createSpace(`Bindings ${suffix}`);
     const updated = await application.dispatch({
       operationId: 'API-MODEL-BINDING-UPDATE',
@@ -170,7 +172,7 @@ describe('TEST-KB-002-BLOCK Space model bindings', () => {
     ).toBe(0);
   });
 
-  it('rejects invalid capability before the transaction and leaves all state unchanged', async () => {
+  it('L1-B01-KB-002-N01 rejects invalid capability before the transaction and leaves all state unchanged', async () => {
     const space = await createSpace(`Invalid ${suffix}`);
     const invalid = bindings();
     invalid[1] = {
@@ -193,7 +195,7 @@ describe('TEST-KB-002-BLOCK Space model bindings', () => {
     expect((await models.KnowledgeSpace.findById(space.id).lean())?.version).toBe(space.version);
   });
 
-  it('returns conflict for stale Space versions', async () => {
+  it('L1-B01-KB-002-C01 returns conflict for stale Space versions', async () => {
     const space = await createSpace(`Conflict ${suffix}`);
     await application.dispatch({
       operationId: 'API-MODEL-BINDING-UPDATE',
@@ -215,7 +217,7 @@ describe('TEST-KB-002-BLOCK Space model bindings', () => {
     });
   });
 
-  it('returns a deterministic binding order and does not leak another workspace', async () => {
+  it('L1-B01-KB-002-A01 returns a deterministic binding order and does not leak another workspace', async () => {
     const space = await createSpace(`Read ${suffix}`);
     await application.dispatch({
       operationId: 'API-MODEL-BINDING-UPDATE',
@@ -238,5 +240,94 @@ describe('TEST-KB-002-BLOCK Space model bindings', () => {
       .list(space.id, { ...context, workspaceId: `other_${suffix}`, memberId: 'other' })
       .catch((error) => error);
     expect(other).toEqual([]);
+  });
+
+  it('L1-B01-KB-002-N02 rejects a model that is absent from the authorized catalog', async () => {
+    const space = await createSpace(`Unauthorized model ${suffix}`);
+    const unauthorizedApplication = new S5ModelBindingApplication(
+      new S5ModelBindingRepository(connection),
+      {
+        async listModels() {
+          return [
+            {
+              ...bindings()[0],
+              modelId: 'unauthorized-llm',
+              type: 'llm',
+              capabilities: ['chat'],
+              authorized: false,
+            },
+          ];
+        },
+      } as ModelCatalogPort,
+      access,
+    );
+    await expect(
+      unauthorizedApplication.dispatch({
+        operationId: 'API-MODEL-BINDING-UPDATE',
+        params: { spaceId: space.id },
+        query: {},
+        body: {
+          version: space.version,
+          bindings: [
+            {
+              ...bindings()[0]!,
+              modelId: 'unauthorized-llm',
+            },
+          ],
+        },
+        context,
+      }),
+    ).rejects.toMatchObject({
+      problem: {
+        error: {
+          code: 'KNOWLEDGE_VALIDATION_FAILED',
+          details: { field: 'modelId', reason: 'not_in_authorized_catalog' },
+        },
+      },
+    });
+    expect(
+      await connection.models.KnowledgeModelBinding.countDocuments({
+        workspaceId,
+        knowledgeSpaceId: space.id,
+      }),
+    ).toBe(0);
+  });
+
+  it('L1-B01-KB-002-F01 leaves no authorized binding when model catalog access fails', async () => {
+    const space = await createSpace(`Catalog failure ${suffix}`);
+    const failingApplication = new S5ModelBindingApplication(
+      new S5ModelBindingRepository(connection),
+      {
+        async listModels() {
+          throw createKnowledgeError({
+            code: 'KNOWLEDGE_DEPENDENCY_TIMEOUT',
+            requestId: context.requestId,
+            traceId: context.traceId,
+            details: { dependency: 'model_catalog' },
+          });
+        },
+      } as ModelCatalogPort,
+      access,
+    );
+    await expect(
+      failingApplication.dispatch({
+        operationId: 'API-MODEL-BINDING-UPDATE',
+        params: { spaceId: space.id },
+        query: {},
+        body: { version: space.version, bindings: bindings() },
+        context,
+      }),
+    ).rejects.toMatchObject({
+      problem: { error: { code: 'KNOWLEDGE_DEPENDENCY_TIMEOUT' } },
+    });
+    expect(
+      await connection.models.KnowledgeModelBinding.countDocuments({
+        workspaceId,
+        knowledgeSpaceId: space.id,
+      }),
+    ).toBe(0);
+    expect((await connection.models.KnowledgeSpace.findById(space.id).lean())?.version).toBe(
+      space.version,
+    );
   });
 });

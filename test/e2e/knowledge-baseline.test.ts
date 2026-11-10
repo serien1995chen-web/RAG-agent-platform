@@ -858,6 +858,10 @@ describe.sequential('knowledge architecture baseline E2E', () => {
       params: { spaceId: scenario.spaceId, memberId: collaboratorMemberId },
     });
 
+    await callApi('API-COLLABORATOR-CREATE', {
+      params: { spaceId: scenario.spaceId },
+      body: { memberId: `mem_e2e_directory_owner_${suffix}`, role: 'manage' },
+    });
     await callApi('API-RESOURCE-OWNERSHIP-TRANSFER', {
       params: { resourceType: 'directory', resourceId: scenario.directoryId },
       body: {
@@ -866,14 +870,18 @@ describe.sequential('knowledge architecture baseline E2E', () => {
       },
     });
 
-    const spaceBeforeTransfer = asObject(
+    await callApi('API-COLLABORATOR-CREATE', {
+      params: { spaceId: scenario.spaceId },
+      body: { memberId: `mem_e2e_space_owner_${suffix}`, role: 'manage' },
+    });
+    const spaceBeforeOwnership = asObject(
       await callApi('API-SPACE-GET', { params: { spaceId: scenario.spaceId } }),
     );
     const transferredSpace = asObject(
       await callApi('API-OWNERSHIP-TRANSFER', {
         params: { spaceId: scenario.spaceId },
         body: {
-          version: asNumber(spaceBeforeTransfer.version, 'space.version'),
+          version: asNumber(spaceBeforeOwnership.version, 'space.version'),
           targetMemberId: `mem_e2e_space_owner_${suffix}`,
         },
       }),

@@ -206,12 +206,31 @@ export function batchSpaces(
 }
 
 export function exportSpace(spaceId: string) {
+  return knowledgeRequest<Job>(`/v1/knowledge/spaces/${encodeURIComponent(spaceId)}/exports`, {
+    method: 'POST',
+    idempotencyKey: key(),
+    body: { format: 'zip' },
+  });
+}
+
+export function downloadFile(blobId: string) {
   return knowledgeRequest<FileTicket>(
-    `/v1/knowledge/spaces/${encodeURIComponent(spaceId)}/exports`,
+    `/v1/knowledge/files/${encodeURIComponent(blobId)}/download`,
     {
       method: 'POST',
       idempotencyKey: key(),
-      body: { format: 'zip' },
+      body: { disposition: 'attachment' },
+    },
+  );
+}
+
+export function transferSpaceOwnership(spaceId: string, targetMemberId: string, version: number) {
+  return knowledgeRequest<KnowledgeSpace>(
+    `/v1/knowledge/spaces/${encodeURIComponent(spaceId)}/ownership-transfer`,
+    {
+      method: 'POST',
+      idempotencyKey: key(),
+      body: { targetMemberId, version },
     },
   );
 }
@@ -884,6 +903,8 @@ export const productApi = {
   moveSpace,
   batchSpaces,
   exportSpace,
+  downloadFile,
+  transferSpaceOwnership,
   listDirectories,
   createDirectory,
   updateDirectory,

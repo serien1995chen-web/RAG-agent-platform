@@ -20207,6 +20207,10 @@
               true
             ]
           },
+          "modelBindings": {
+            "type": "object",
+            "additionalProperties": true
+          },
           "referenceRevision": {
             "type": "integer",
             "minimum": 0,
