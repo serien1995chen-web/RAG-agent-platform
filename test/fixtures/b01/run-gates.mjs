@@ -18,11 +18,19 @@ const commands = [
   ['knowledge-check-runtime', 'pnpm knowledge:check-runtime'],
   ['unit', 'pnpm test:unit'],
   ['contract', 'pnpm test:contract'],
+  [
+    'b01-service-targeted',
+    'pnpm --filter @kb/service exec vitest run test/integration/kb-b01-lifecycle.test.ts test/integration/knowledge-catalog-governance.test.ts test/integration/s5-model-binding.test.ts',
+  ],
   ['integration', 'pnpm test:integration'],
   ['tenant', 'pnpm test:tenant'],
   ['concurrency', 'pnpm test:concurrency'],
   ['build', 'pnpm build'],
   ['build-workers', 'pnpm build:workers'],
+  [
+    'b01-e2e-targeted',
+    'pnpm exec vitest run --config test/e2e/vitest.config.ts test/e2e/kb-b01-lifecycle.test.ts',
+  ],
   ['e2e', 'pnpm test:e2e'],
 ];
 

@@ -89,6 +89,15 @@ async function createRealKey(
 
 async function seedIndex() {
   const models = registerKnowledgeModels(connections.mongo);
+  await models.KnowledgeModelBinding.deleteMany({
+    workspaceId,
+    knowledgeSpaceId: {
+      $in: [
+        new connections.mongo.base.Types.ObjectId(mainSpaceId),
+        new connections.mongo.base.Types.ObjectId(emptySpaceId),
+      ],
+    },
+  });
   await models.KnowledgeModelBinding.create({
     workspaceId,
     knowledgeSpaceId: new connections.mongo.base.Types.ObjectId(mainSpaceId),

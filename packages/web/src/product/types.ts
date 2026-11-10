@@ -21,6 +21,7 @@ export interface KnowledgeSpace {
   accessMode: 'workspace' | 'restricted';
   sourceAclMode: 'inherited' | 'enforced';
   sourcePermissionEnabled: boolean;
+  modelBindings?: Record<string, unknown>;
   referenceRevision: number;
   status: string;
   version: number;

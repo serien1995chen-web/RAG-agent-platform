@@ -153,6 +153,10 @@ async function request(
 async function seedBindings() {
   const models = registerKnowledgeModels(connection);
   const now = new Date();
+  await models.KnowledgeModelBinding.deleteMany({
+    workspaceId,
+    knowledgeSpaceId: new connection.base.Types.ObjectId(spaceId),
+  });
   await models.KnowledgeModelBinding.create([
     {
       workspaceId,

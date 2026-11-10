@@ -81,6 +81,13 @@ export interface CreateSpacePortInput {
   accessMode: 'workspace' | 'restricted';
   sourceAclMode: 'inherited' | 'enforced';
   sourcePermissionEnabled?: boolean;
+  modelBindings?: Array<{
+    modelType: 'llm' | 'embedding' | 'rerank' | 'vlm' | 'stt' | 'tts';
+    modelId: string;
+    displayName: string;
+    requiredCapabilities: string[];
+    status: 'active' | 'disabled';
+  }>;
 }
 
 export interface CreateDirectoryPortInput {

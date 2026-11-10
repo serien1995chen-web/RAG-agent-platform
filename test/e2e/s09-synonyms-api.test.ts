@@ -131,6 +131,10 @@ beforeAll(async () => {
   }
   connection = await createKnowledgeMongoConnection(uri.toString());
   const models = registerKnowledgeModels(connection);
+  await models.KnowledgeModelBinding.deleteMany({
+    workspaceId,
+    knowledgeSpaceId: new connection.base.Types.ObjectId(spaceId),
+  });
   await models.KnowledgeModelBinding.create({
     workspaceId,
     knowledgeSpaceId: new connection.base.Types.ObjectId(spaceId),

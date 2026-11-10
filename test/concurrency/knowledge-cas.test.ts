@@ -292,24 +292,35 @@ describe('Mongo CAS concurrency', () => {
       },
       context,
     );
-    const transfer = (targetMemberId: string) =>
+    for (const targetMemberId of [`member-a-${suffix}`, `member-b-${suffix}`]) {
+      await application.dispatch({
+        operationId: 'API-COLLABORATOR-CREATE',
+        params: { spaceId: resource.id },
+        query: {},
+        headers: {},
+        body: { memberId: targetMemberId, role: 'manage' },
+        context,
+      });
+    }
+    const current = await repository.getSpace(resource.id, context);
+    const transferAtCurrentVersion = (targetMemberId: string) =>
       application.dispatch({
         operationId: 'API-OWNERSHIP-TRANSFER',
         params: { spaceId: resource.id },
         query: {},
         headers: {},
-        body: { targetMemberId, version: resource.version },
+        body: { targetMemberId, version: current.version },
         context,
       });
     const outcomes = await Promise.allSettled([
-      transfer(`member-a-${suffix}`),
-      transfer(`member-b-${suffix}`),
+      transferAtCurrentVersion(`member-a-${suffix}`),
+      transferAtCurrentVersion(`member-b-${suffix}`),
     ]);
     expect(outcomes.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
     expect(outcomes.filter((result) => result.status === 'rejected')).toHaveLength(1);
     const transferred = await repository.getSpace(resource.id, context);
     expect([`member-a-${suffix}`, `member-b-${suffix}`]).toContain(transferred.ownershipMemberId);
-    expect(transferred.version).toBe(resource.version + 1);
+    expect(transferred.version).toBe(current.version + 1);
     expect(
       await connection.models.KnowledgeResourcePermission.countDocuments({
         workspaceId,

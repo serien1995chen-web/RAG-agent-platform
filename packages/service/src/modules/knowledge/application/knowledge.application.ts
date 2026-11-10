@@ -200,6 +200,35 @@ export class KnowledgeApplication {
     return { id: input.id, success: false, code: failureCode };
   }
 
+  private async defaultModelBindings(context: TenantContext) {
+    if (!this.s5Models) return [];
+    const models = await this.s5Models.dispatch({
+      operationId: 'API-MODEL-LIST',
+      params: {},
+      query: { limit: '200' },
+      body: {},
+      context,
+    });
+    const items = Array.isArray((models.data as { items?: unknown[] }).items)
+      ? ((models.data as { items: Array<Record<string, unknown>> }).items ?? [])
+      : [];
+    return (['embedding', 'llm'] as const).flatMap((modelType) => {
+      const model = items.find((item) => item.type === modelType && item.authorized === true);
+      if (!model) return [];
+      return [
+        {
+          modelType,
+          modelId: String(model.modelId),
+          displayName: String(model.displayName),
+          requiredCapabilities: Array.isArray(model.capabilities)
+            ? model.capabilities.map(String)
+            : [],
+          status: 'active' as const,
+        },
+      ];
+    });
+  }
+
   async dispatch(input: KnowledgeOperationInput): Promise<KnowledgeOperationResult> {
     const { context, params } = input;
     if (isS10Operation(input.operationId)) {
@@ -321,6 +350,7 @@ export class KnowledgeApplication {
               typeof body.sourcePermissionEnabled === 'boolean'
                 ? body.sourcePermissionEnabled
                 : true,
+            modelBindings: body.kind === 'space' ? await this.defaultModelBindings(context) : [],
           },
           context,
         );

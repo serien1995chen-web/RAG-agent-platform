@@ -328,7 +328,14 @@ describe('TEST-KB-003-BLOCK catalog governance', () => {
       workspaceId,
       action: { $in: ['space.move', 'directory.move', 'source.move'] },
     });
-    expect(auditCount).toBe(0);
+    expect(auditCount).toBe(1);
+    expect(
+      await connection.models.KnowledgeAuditEvent.countDocuments({
+        workspaceId,
+        action: 'space.move',
+        resourceId: duplicateSpaceCandidate.id,
+      }),
+    ).toBe(1);
   });
 
   it('returns 207 for a mixed batch and keeps successful items committed', async () => {

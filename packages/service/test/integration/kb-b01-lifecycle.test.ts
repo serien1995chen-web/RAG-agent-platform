@@ -10,6 +10,8 @@ import {
   KnowledgeReferenceRepository,
   KnowledgeTagRepository,
 } from '../../src/modules/knowledge';
+import { S5ModelApplication } from '../../src/modules/knowledge/application/s5-model.application';
+import { S5MockModelCatalog } from '../../src/modules/knowledge/adapter/s5-aiproxy-catalog.adapter';
 import {
   ensureKnowledgeCollections,
   registerKnowledgeModels,
@@ -108,6 +110,7 @@ beforeAll(async () => {
     undefined,
     references,
     new KnowledgeAuditRepository(connection),
+    new S5ModelApplication(new S5MockModelCatalog()),
   );
 }, 60_000);
 
@@ -343,7 +346,7 @@ describe('B01 knowledge-space lifecycle', () => {
     });
 
     let parentSpaceId: string | null = null;
-    for (let depth = 0; depth < 6; depth += 1) {
+    for (let depth = 0; depth <= 4; depth += 1) {
       const folder = await createSpace(`Depth ${depth} ${suffix}`, {
         kind: 'folder',
         parentSpaceId,

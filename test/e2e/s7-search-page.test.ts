@@ -81,6 +81,10 @@ async function request(
 
 async function seedS6Index(tenant: TenantContext) {
   const models = registerKnowledgeModels(connection);
+  await models.KnowledgeModelBinding.deleteMany({
+    workspaceId,
+    knowledgeSpaceId: new connection.base.Types.ObjectId(spaceId),
+  });
   await models.KnowledgeModelBinding.create({
     workspaceId,
     knowledgeSpaceId: new connection.base.Types.ObjectId(spaceId),

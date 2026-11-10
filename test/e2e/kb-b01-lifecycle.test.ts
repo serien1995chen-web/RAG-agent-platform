@@ -371,12 +371,29 @@ describe('B01 lifecycle desktop behavior', () => {
     const { context, page } = await newPage(ownerCookie);
     const created = await createSpace(`所有权入口 ${suffix}`);
     const id = created.payload.data?.id ?? '';
+    const targetMemberId = `mem_b01_transfer_target_${suffix}`;
     try {
+      const collaborator = await api(`/v1/knowledge/spaces/${id}/collaborators`, 'POST', {
+        memberId: targetMemberId,
+        role: 'manage',
+      });
+      expect(collaborator.status).toBe(201);
       await page.goto(`${ownerApp.baseUrl}/dataset/list`, { waitUntil: 'networkidle' });
       await page.getByRole('button', { name: `所有权入口 ${suffix} 的更多操作` }).click();
       await page.getByRole('menuitem', { name: '权限' }).click();
       await capture('L1-B01-KB-003-UI01-ownership', page, async () => {
-        await playwrightExpect(page.getByRole('button', { name: '转移所有权' })).toBeVisible();
+        await page.getByRole('button', { name: '转移所有权' }).click();
+        await page.getByLabel('新所有者').selectOption(targetMemberId);
+        const transferResponse = page.waitForResponse(
+          (response) =>
+            response.request().method() === 'POST' &&
+            new URL(response.url()).pathname === `/v1/knowledge/spaces/${id}/ownership-transfer`,
+        );
+        await page.getByRole('button', { name: '确认转移所有权' }).click();
+        expect((await transferResponse).status()).toBe(200);
+        await playwrightExpect(
+          page.locator('.kb2-kb-card__footer').getByText(targetMemberId, { exact: true }),
+        ).toBeVisible();
       });
     } finally {
       if (id) await deleteSpace(id);
@@ -446,21 +463,68 @@ describe('B01 lifecycle desktop behavior', () => {
     const id = created.payload.data?.id ?? '';
     try {
       await page.goto(`${ownerApp.baseUrl}/dataset/list`, { waitUntil: 'networkidle' });
+      await page.route('**/v1/knowledge/jobs/*', async (route) => {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            success: true,
+            data: {
+              jobId: 'job-export-b01',
+              workspaceId,
+              knowledgeSpaceId: id,
+              kind: 'export',
+              status: 'succeeded',
+              result: { objectBlobRefId: 'blob-export-b01' },
+              progress: { stage: 'succeeded', completed: 1, total: 1, percent: 100 },
+              resourceType: 'space',
+              resourceId: id,
+              version: 1,
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
+            },
+            traceId: `trace-export-job-${suffix}`.padEnd(32, '0').slice(0, 32),
+            requestId: `request-export-job-${suffix}`,
+          }),
+        });
+      });
+      await page.route('**/v1/knowledge/files/blob-export-b01/download', async (route) => {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            success: true,
+            data: {
+              ticketId: 'ticket-export-b01',
+              url: `${ownerApp.baseUrl}/export-b01.zip`,
+              expiresAt: new Date(Date.now() + 60_000).toISOString(),
+            },
+            traceId: `trace-export-ticket-${suffix}`.padEnd(32, '0').slice(0, 32),
+            requestId: `request-export-ticket-${suffix}`,
+          }),
+        });
+      });
+      await page.route('**/export-b01.zip', (route) =>
+        route.fulfill({ status: 200, contentType: 'application/zip', body: 'PK' }),
+      );
       await page.getByRole('button', { name: `导出票据 ${suffix} 的更多操作` }).click();
       const responsePromise = page.waitForResponse(
         (response) =>
           response.request().method() === 'POST' &&
           new URL(response.url()).pathname === `/v1/knowledge/spaces/${id}/exports`,
       );
+      const popupPromise = page.waitForEvent('popup');
       await page.getByRole('menuitem', { name: '导出' }).click();
       const response = await responsePromise;
+      const popup = await popupPromise;
+      await popup.waitForURL('**/export-b01.zip');
       const payload = (await response.json()) as {
         data: { jobId?: string; status?: string; url?: string; ticketId?: string };
       };
       await capture('L1-B01-KB-003-UI02-export', page, async () => {
         expect(response.status()).toBe(202);
         expect(payload.data).toMatchObject({ status: 'queued' });
-        expect(payload.data.url ?? payload.data.ticketId).toEqual(expect.any(String));
+        expect(popup.url()).toContain('/export-b01.zip');
       });
     } finally {
       if (id) await deleteSpace(id);
