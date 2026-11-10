@@ -397,7 +397,9 @@ describe('TEST-ING-001-BLOCK C1 import submission', () => {
       aggregateType: 'job',
       status: 'pending',
     });
-    expect(await connection.models.KnowledgeJob.countDocuments({ kind: 'parse' })).toBe(0);
+    expect(
+      await connection.models.KnowledgeJob.countDocuments({ workspaceId, kind: 'parse' }),
+    ).toBe(0);
     expect(await connection.models.KnowledgeSegment.countDocuments({ workspaceId })).toBe(0);
   });
 
