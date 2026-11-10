@@ -138,4 +138,32 @@ describe('FastGPT product detail module', () => {
     expect(sourceStatusView('indexing')).toEqual({ label: '索引中', tone: 'purple' });
     expect(sourceStatusView('failed')).toEqual({ label: '训练异常', tone: 'danger' });
   });
+
+  it('L1-B02-COL-003-UI01 四类标签显示与筛选状态保持可读并正确映射异步 Source 状态', () => {
+    const tags = [
+      { ...tag('tag-s', '部门'), tagType: 'string' as const, options: ['support'] },
+      { ...tag('tag-n', '优先级'), tagType: 'number' as const, options: null },
+      { ...tag('tag-d', '发布日期'), tagType: 'datetime' as const, options: null },
+      tag('tag-a', '地区', ['cn', 'apac']),
+    ];
+    const item = source('1', '多类型标签来源', {
+      tagValues: [
+        { tagId: 'tag-s', valueKey: 'support', value: 'support' },
+        { tagId: 'tag-n', valueKey: '3', value: 3 },
+        { tagId: 'tag-d', valueKey: '1000', value: 1_000 },
+        { tagId: 'tag-a', valueKey: 'cn', value: ['cn'] },
+      ],
+    });
+    expect(tagValuesForSource(item, tags)).toEqual([
+      { id: 'tag-s', label: '部门', value: 'support' },
+      { id: 'tag-n', label: '优先级', value: '3' },
+      { id: 'tag-d', label: '发布日期', value: '1000' },
+      { id: 'tag-a', label: '地区', value: 'cn' },
+    ]);
+    expect(filterSourceRows([item], { search: '', tagId: 'tag-a', tagValue: 'cn' })).toHaveLength(
+      1,
+    );
+    expect(sourceStatusView('queued')).toEqual({ label: '排队中', tone: 'warning' });
+    expect(sourceStatusView('rebuilding')).toEqual({ label: '重建中', tone: 'purple' });
+  });
 });

@@ -164,4 +164,40 @@ describe('TEST-X-TAG-FILTER-TYPES S7 SearchFilter truth table', () => {
     expect(() => assertSafeTagRegex('(a+)+$')).toThrowError();
     expect(assertSafeTagRegex('^support$')).toBeInstanceOf(RegExp);
   });
+
+  it('L1-B02-COL-003-Q01 四类标签、缺失定义和恶意 regex 边界不扩大匹配集合', () => {
+    const map = new Map(definitions.map((entry) => [entry.tagId, entry]));
+    expect(
+      evaluateTagCondition(
+        { tagId: tagIds.number, tagType: 'number', operator: '$lte', value: 5 },
+        facts(),
+        map,
+      ),
+    ).toBe(true);
+    expect(
+      evaluateTagCondition(
+        { tagId: tagIds.datetime, tagType: 'datetime', operator: '$eq', value: 1_000 },
+        facts(),
+        map,
+      ),
+    ).toBe(true);
+    expect(
+      evaluateTagCondition(
+        { tagId: tagIds.array, tagType: 'array', operator: '$is', value: ['a', 'b'] },
+        facts(),
+        map,
+      ),
+    ).toBe(true);
+    expect(
+      evaluateTagCondition(
+        { tagId: tagIds.missing, tagType: 'array', operator: '$empty', value: undefined },
+        facts(),
+        map,
+      ),
+    ).toBe(false);
+    expect(() => assertSafeTagRegex('(a|aa)+$')).toThrowError();
+    const startedAt = performance.now();
+    expect(assertSafeTagRegex('^support$').test('support')).toBe(true);
+    expect(performance.now() - startedAt).toBeLessThanOrEqual(50);
+  });
 });
