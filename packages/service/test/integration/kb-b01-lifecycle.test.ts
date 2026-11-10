@@ -439,6 +439,11 @@ describe('B01 knowledge-space lifecycle', () => {
         expect.objectContaining({ principalId: memberId, permission: 'owner' }),
       ]),
     );
+    await expect(
+      access.assertPermission('space', resource.id, 'manage', owner),
+    ).rejects.toMatchObject({
+      problem: { error: { code: 'KNOWLEDGE_NOT_FOUND' } },
+    });
   });
 
   it('L1-B01-KB-003-N01 rejects an ineligible ownership target', async () => {
