@@ -201,6 +201,7 @@ export interface BatchResult {
   failed: number;
   items: Array<{
     id: string;
+    tagId?: string;
     success: boolean;
     code?: string;
     version?: number;

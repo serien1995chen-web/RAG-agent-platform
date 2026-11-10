@@ -509,7 +509,7 @@ export interface SchemaPropertyMap {
   "SynonymToggle": "enabled" | "version";
   "Tag": "id" | "key" | "knowledgeSpaceId" | "label" | "options" | "required" | "status" | "tagType" | "version" | "workspaceId";
   "TagArrayFilterCondition": "operator" | "tagId" | "tagType" | "value";
-  "TagAssignmentBatch": "items";
+  "TagAssignmentBatch": "items" | "sourceVersions";
   "TagCreate": "key" | "label" | "options" | "required" | "tagType";
   "TagDatetimeFilterCondition": "operator" | "tagId" | "tagType" | "value";
   "TagList": "items";
@@ -651,7 +651,7 @@ export interface RequiredSchemaPropertyMap {
   "SynonymToggle": "enabled" | "version";
   "Tag": "id" | "key" | "knowledgeSpaceId" | "label" | "options" | "required" | "status" | "tagType" | "version" | "workspaceId";
   "TagArrayFilterCondition": "operator" | "tagId" | "tagType";
-  "TagAssignmentBatch": "items";
+  "TagAssignmentBatch": "items" | "sourceVersions";
   "TagCreate": "key" | "label" | "required" | "tagType";
   "TagDatetimeFilterCondition": "operator" | "tagId" | "tagType";
   "TagList": "items";

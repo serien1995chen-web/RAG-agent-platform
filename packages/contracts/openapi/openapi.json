@@ -24463,7 +24463,8 @@
       "TagAssignmentBatch": {
         "type": "object",
         "required": [
-          "items"
+          "items",
+          "sourceVersions"
         ],
         "properties": {
           "items": {
@@ -24514,6 +24515,15 @@
                   ]
                 }
               }
+            }
+          },
+          "sourceVersions": {
+            "type": "object",
+            "minProperties": 1,
+            "maxProperties": 200,
+            "additionalProperties": {
+              "type": "integer",
+              "minimum": 1
             }
           }
         }

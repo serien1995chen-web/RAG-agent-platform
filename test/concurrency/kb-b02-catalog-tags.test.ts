@@ -219,21 +219,29 @@ describe('L1 B02 catalog and tag concurrency', () => {
         },
       })
     ).data as { id: string };
-    const apply = (value: string[]) =>
+    const apply = (value: string[], sourceVersion: number) =>
       run({
         operationId: 'API-TAG-APPLY',
-        body: { items: [{ sourceId: target.id, tagId: tag.id, value }] },
+        body: {
+          items: [{ sourceId: target.id, tagId: tag.id, value }],
+          sourceVersions: { [target.id]: sourceVersion },
+        },
       });
-    const outcomes = await Promise.allSettled([apply(['a']), apply(['b'])]);
-    expect(outcomes.filter((entry) => entry.status === 'fulfilled')).toHaveLength(1);
-    expect(outcomes.filter((entry) => entry.status === 'rejected')).toHaveLength(1);
-    const rejected = outcomes.find((entry) => entry.status === 'rejected');
-    if (rejected?.status === 'rejected') {
-      expect(rejected.reason).toMatchObject({
-        problem: { error: { code: 'KNOWLEDGE_CONFLICT' } },
-      });
-    }
-    await apply(['a', 'a']);
+    const outcomes = await Promise.all([
+      apply(['a'], target.version),
+      apply(['b'], target.version),
+    ]);
+    expect(outcomes.map((outcome) => outcome.status).sort()).toEqual([200, 207]);
+    const conflicts = outcomes.flatMap((outcome) =>
+      (outcome.data as { items?: Array<{ success: boolean; code?: string }> }).items?.filter(
+        (item) => !item.success && item.code === 'KNOWLEDGE_CONFLICT',
+      ),
+    );
+    expect(conflicts).toHaveLength(1);
+    const current = await catalog.getSource(target.id, context);
+    expect(current.version).toBe(target.version + 1);
+    const retried = await apply(['a', 'a'], current.version);
+    expect(retried.status).toBe(200);
     const detail = await catalog.getSource(target.id, context);
     expect(detail.tagValues).toEqual([expect.objectContaining({ tagId: tag.id, value: ['a'] })]);
   });

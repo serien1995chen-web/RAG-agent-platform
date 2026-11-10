@@ -483,16 +483,27 @@ export function DatasetDetailPage(props: {
     setBatchBusy(true);
     setBatchError(null);
     try {
-      await applyTags(
+      const result = await applyTags(
         selectedSources.map((source) => ({
           sourceId: source.id,
           tagId: batchTag.id,
           value: parseTagInput(batchTag, batchTagValue),
         })),
+        Object.fromEntries(selectedSources.map((source) => [source.id, source.version])),
       );
       await invalidateCollection();
-      setBatchDialog(null);
-      toast.success('标签设置成功');
+      if (result.failed > 0) {
+        setBatchError(
+          new Error(
+            `批量标签部分失败：成功 ${result.succeeded}，失败 ${result.failed}。请重试失败项。`,
+          ),
+        );
+        setSelectedSourceIds(result.items.filter((item) => !item.success).map((item) => item.id));
+        toast.warning('批量标签部分失败');
+      } else {
+        setBatchDialog(null);
+        toast.success('标签设置成功');
+      }
     } catch (error) {
       setBatchError(error);
     } finally {
@@ -540,13 +551,19 @@ export function DatasetDetailPage(props: {
     setTagAssignmentBusy(true);
     setTagAssignmentError(null);
     try {
-      await applyTags([
-        {
-          sourceId: tagAssignmentTarget.id,
-          tagId: assignmentTag.id,
-          value: parseTagInput(assignmentTag, tagAssignmentValue),
-        },
-      ]);
+      const result = await applyTags(
+        [
+          {
+            sourceId: tagAssignmentTarget.id,
+            tagId: assignmentTag.id,
+            value: parseTagInput(assignmentTag, tagAssignmentValue),
+          },
+        ],
+        { [tagAssignmentTarget.id]: tagAssignmentTarget.version },
+      );
+      if (result.failed > 0) {
+        throw new Error(result.items.find((item) => !item.success)?.code ?? '标签设置失败');
+      }
       await invalidateCollection();
       setTagAssignmentTarget(null);
       toast.success('标签设置成功');

@@ -745,6 +745,9 @@ describe.sequential('knowledge architecture baseline E2E', () => {
       }),
     );
     expect(valuesTag.options).toContain('archived');
+    const sourceBeforeTag = asObject(
+      await callApi('API-SOURCE-GET', { params: { sourceId: scenario.sourceId } }),
+    );
     await callApi('API-TAG-APPLY', {
       body: {
         items: [
@@ -754,6 +757,9 @@ describe.sequential('knowledge architecture baseline E2E', () => {
             value: 'approved',
           },
         ],
+        sourceVersions: {
+          [scenario.sourceId]: asNumber(sourceBeforeTag.version, 'sourceBeforeTag.version'),
+        },
       },
     });
 

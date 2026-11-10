@@ -975,7 +975,8 @@ export class KnowledgeApplication {
           const source = await this.catalog.getSource(String(item.sourceId ?? ''), context);
           await this.access.assertPermission('source', source.id, 'write', context);
         }
-        return { status: 200, data: await this.tags.apply(body, context) };
+        const applied = await this.tags.apply(body, context);
+        return { status: applied.failed > 0 ? 207 : 200, data: applied };
       }
       case 'API-ACL-GET':
         return {

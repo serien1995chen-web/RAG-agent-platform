@@ -566,11 +566,14 @@ export function deleteTag(tag: Tag) {
   });
 }
 
-export function applyTags(items: Array<{ sourceId: string; tagId: string; value: unknown }>) {
-  return knowledgeRequest<{ affectedIds: string[] }>('/v1/knowledge/sources/tag-assignments', {
+export function applyTags(
+  items: Array<{ sourceId: string; tagId: string; value: unknown }>,
+  sourceVersions: Record<string, number>,
+) {
+  return knowledgeRequest<BatchResult>('/v1/knowledge/sources/tag-assignments', {
     method: 'POST',
     idempotencyKey: key(),
-    body: { items },
+    body: { items, sourceVersions },
   });
 }
 

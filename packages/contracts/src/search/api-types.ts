@@ -43,11 +43,41 @@ function requiresValue(operator: string): boolean {
   return operator !== '$empty' && operator !== '$notEmpty';
 }
 
+function hasOverlappingQuantifiedAlternation(pattern: string): boolean {
+  const groups = /\((?:[^()\\]|\\.)*\)(?:[*+]|\{\d*,?\d*\})/g;
+  for (const group of pattern.matchAll(groups)) {
+    const value = group[0];
+    const open = value.indexOf('(');
+    const close = value.lastIndexOf(')');
+    const alternatives = value
+      .slice(open + 1, close)
+      .replace(/^\?:/, '')
+      .split('|')
+      .map((item) => item.replace(/^\(\?:/, '').replace(/^\^|\$$/g, ''))
+      .filter(Boolean);
+    for (let left = 0; left < alternatives.length; left += 1) {
+      for (let right = left + 1; right < alternatives.length; right += 1) {
+        const first = alternatives[left]!;
+        const second = alternatives[right]!;
+        if (
+          first.startsWith(second) ||
+          second.startsWith(first) ||
+          [...first][0] === [...second][0]
+        ) {
+          return true;
+        }
+      }
+    }
+  }
+  return false;
+}
+
 export function isRe2CompatibleRegexSubset(pattern: string): boolean {
   const length = [...pattern].length;
   if (length < 1 || length > 64) return false;
   if (/\\[1-9]|\\k<|\\g<|\(\?P=|\(\?R|\(\?0|\(\?[=!<]|\(\?>/.test(pattern)) return false;
   if (/(?:\*|\+|\?|\{[^}]+\})\+/.test(pattern)) return false;
+  if (hasOverlappingQuantifiedAlternation(pattern)) return false;
   try {
     new RegExp(pattern, 'u');
     return true;

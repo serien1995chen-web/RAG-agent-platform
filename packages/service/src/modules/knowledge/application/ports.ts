@@ -210,6 +210,19 @@ export interface CatalogPort {
   deleteSegment(segmentId: string, context: TenantContext): Promise<Record<string, unknown>>;
 }
 
+export interface TagApplyResult {
+  code?: 'KNOWLEDGE_PARTIAL_SUCCESS';
+  requested: number;
+  succeeded: number;
+  failed: number;
+  items: Array<{
+    id: string;
+    tagId: string;
+    success: boolean;
+    code?: string;
+  }>;
+}
+
 export interface TagPort {
   list(spaceId: string, context: TenantContext): Promise<{ items: TagView[] }>;
   create(spaceId: string, input: Record<string, unknown>, context: TenantContext): Promise<TagView>;
@@ -221,7 +234,7 @@ export interface TagPort {
     input: Record<string, unknown>,
     context: TenantContext,
   ): Promise<TagView>;
-  apply(input: Record<string, unknown>, context: TenantContext): Promise<Record<string, unknown>>;
+  apply(input: Record<string, unknown>, context: TenantContext): Promise<TagApplyResult>;
 }
 
 export interface AccessPort {

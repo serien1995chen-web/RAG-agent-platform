@@ -101,8 +101,13 @@ async function seed() {
     options: ['support', 'sales'],
   });
   tagId = tag.id;
+  const taggedSource = await api<{ version: number }>(
+    `/v1/knowledge/sources/${rootSourceOneId}`,
+    'GET',
+  );
   await api('/v1/knowledge/sources/tag-assignments', 'POST', {
     items: [{ sourceId: rootSourceOneId, tagId, value: ['support'] }],
+    sourceVersions: { [rootSourceOneId]: taggedSource.version },
   });
   const seededSources = await api<{
     items: Array<{

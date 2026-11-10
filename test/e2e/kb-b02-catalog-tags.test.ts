@@ -24,6 +24,8 @@ let leafDirectoryId = '';
 let rootSourceId = '';
 let childSourceId = '';
 let leafSourceId = '';
+let rootSourceVersion = 1;
+let childSourceVersion = 1;
 let stringTagId = '';
 let arrayTagId = '';
 
@@ -63,7 +65,7 @@ async function createDirectory(name: string, parentDirectoryId: string | null) {
 }
 
 async function createSource(name: string, kind: 'file' | 'text', directoryId: string | null) {
-  return api<{ id: string }>(`/v1/knowledge/spaces/${spaceId}/sources`, 'POST', {
+  return api<{ id: string; version: number }>(`/v1/knowledge/spaces/${spaceId}/sources`, 'POST', {
     kind,
     name,
     directoryId,
@@ -87,8 +89,12 @@ async function seed() {
   rootDirectoryId = (await createDirectory(`一级目录 ${suffix}`, null)).id;
   childDirectoryId = (await createDirectory(`二级目录 ${suffix}`, rootDirectoryId)).id;
   leafDirectoryId = (await createDirectory(`三级目录 ${suffix}`, childDirectoryId)).id;
-  rootSourceId = (await createSource(`根文件 ${suffix}`, 'file', null)).id;
-  childSourceId = (await createSource(`二级文本 ${suffix}`, 'text', childDirectoryId)).id;
+  const rootSource = await createSource(`根文件 ${suffix}`, 'file', null);
+  rootSourceId = rootSource.id;
+  rootSourceVersion = rootSource.version;
+  const childSource = await createSource(`二级文本 ${suffix}`, 'text', childDirectoryId);
+  childSourceId = childSource.id;
+  childSourceVersion = childSource.version;
   leafSourceId = (await createSource(`三级文件 ${suffix}`, 'file', leafDirectoryId)).id;
 
   stringTagId = (
@@ -115,6 +121,10 @@ async function seed() {
       { sourceId: rootSourceId, tagId: arrayTagId, value: ['cn'] },
       { sourceId: childSourceId, tagId: stringTagId, value: 'sales' },
     ],
+    sourceVersions: {
+      [rootSourceId]: rootSourceVersion,
+      [childSourceId]: childSourceVersion,
+    },
   });
 }
 

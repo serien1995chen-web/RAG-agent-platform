@@ -584,6 +584,10 @@ describe('L1 B02 Directory, Source and Tag integration', () => {
           { sourceId: first.id, tagId: arrayTag.id, value: ['cn', 'apac', 'cn'] },
           { sourceId: second.id, tagId: stringTag.id, value: 'sales' },
         ],
+        sourceVersions: {
+          [first.id]: first.version,
+          [second.id]: second.version,
+        },
       },
     });
     const firstSource = (
@@ -620,7 +624,7 @@ describe('L1 B02 Directory, Source and Tag integration', () => {
         label: '重复键二',
         tagType: 'number',
       }),
-    ).rejects.toMatchObject({ problem: { error: { code: 'KNOWLEDGE_VALIDATION_FAILED' } } });
+    ).rejects.toMatchObject({ problem: { error: { code: 'KNOWLEDGE_CONFLICT' } } });
 
     const required = await createTag(space.id, {
       key: `required_${suffix.slice(0, 8)}`,
@@ -633,12 +637,53 @@ describe('L1 B02 Directory, Source and Tag integration', () => {
     await expect(
       run({
         operationId: 'API-TAG-APPLY',
-        body: { items: [{ sourceId: source.id, tagId: required.id, value: null }] },
+        body: { items: [{ sourceId: source.id, tagId: required.id, value: 'yes' }] },
       }),
-    ).rejects.toMatchObject({ problem: { error: { code: 'KNOWLEDGE_VALIDATION_FAILED' } } });
+    ).rejects.toMatchObject({
+      problem: {
+        error: {
+          code: 'KNOWLEDGE_VALIDATION_FAILED',
+          details: { field: 'sourceVersions' },
+        },
+      },
+    });
+    const assigned = await run({
+      operationId: 'API-TAG-APPLY',
+      body: {
+        items: [{ sourceId: source.id, tagId: required.id, value: 'yes' }],
+        sourceVersions: { [source.id]: source.version },
+      },
+    });
+    expect(assigned.status).toBe(200);
+    const current = (
+      await run({
+        operationId: 'API-SOURCE-GET',
+        params: { sourceId: source.id },
+      })
+    ).data as { version: number };
+    const removal = await run({
+      operationId: 'API-TAG-APPLY',
+      body: {
+        items: [{ sourceId: source.id, tagId: required.id, value: null }],
+        sourceVersions: { [source.id]: current.version },
+      },
+    });
+    expect(removal.status).toBe(207);
+    expect(removal.data).toMatchObject({
+      code: 'KNOWLEDGE_PARTIAL_SUCCESS',
+      failed: 1,
+      items: [
+        expect.objectContaining({
+          id: source.id,
+          tagId: required.id,
+          success: false,
+          code: 'KNOWLEDGE_CONFLICT',
+        }),
+      ],
+    });
   });
 
-  it('L1-B02-COL-003-N01 required 标签在 Source 上未赋值时保持不一致状态可被检出', async () => {
+  it('L1-B02-COL-003-N01 required 标签清空失败时保留原值并允许其他标签继续处理', async () => {
     const space = await createSpace();
     const source = await createSource(space.id, `必填缺失来源 ${suffix}`);
     const required = await createTag(space.id, {
@@ -647,13 +692,35 @@ describe('L1 B02 Directory, Source and Tag integration', () => {
       tagType: 'number',
       required: true,
     });
+    const assigned = await run({
+      operationId: 'API-TAG-APPLY',
+      body: {
+        items: [{ sourceId: source.id, tagId: required.id, value: 1 }],
+        sourceVersions: { [source.id]: source.version },
+      },
+    });
+    expect(assigned.status).toBe(200);
+    const current = (
+      await run({
+        operationId: 'API-SOURCE-GET',
+        params: { sourceId: source.id },
+      })
+    ).data as { version: number; tagValues: Array<{ tagId: string }> };
+    const removal = await run({
+      operationId: 'API-TAG-APPLY',
+      body: {
+        items: [{ sourceId: source.id, tagId: required.id, value: null }],
+        sourceVersions: { [source.id]: current.version },
+      },
+    });
+    expect(removal.status).toBe(207);
     const detail = (
       await run({
         operationId: 'API-SOURCE-GET',
         params: { sourceId: source.id },
       })
     ).data as { tagValues: Array<{ tagId: string }> };
-    expect(detail.tagValues.some((entry) => entry.tagId === required.id)).toBe(true);
+    expect(detail.tagValues).toEqual([expect.objectContaining({ tagId: required.id })]);
   });
 
   it('L1-B02-COL-003-A01 跨租户 tagId 和只读成员打标均被拒绝且不泄露目标值', async () => {
@@ -672,7 +739,10 @@ describe('L1 B02 Directory, Source and Tag integration', () => {
     await expect(
       run({
         operationId: 'API-TAG-APPLY',
-        body: { items: [{ sourceId: source.id, tagId: foreignTag.id, value: 1 }] },
+        body: {
+          items: [{ sourceId: source.id, tagId: foreignTag.id, value: 1 }],
+          sourceVersions: { [source.id]: source.version },
+        },
         context: readerContext,
       }),
     ).rejects.toMatchObject({
@@ -703,6 +773,10 @@ describe('L1 B02 Directory, Source and Tag integration', () => {
           { sourceId: second.id, tagId: tag.id, value: 'b' },
           { sourceId: first.id, tagId: other.id, value: 9 },
         ],
+        sourceVersions: {
+          [first.id]: first.version,
+          [second.id]: second.version,
+        },
       },
     });
     await run({ operationId: 'API-TAG-DELETE', params: { tagId: tag.id } });
@@ -731,17 +805,26 @@ describe('L1 B02 Directory, Source and Tag integration', () => {
       label: '批量标签',
       tagType: 'number',
     });
-    const result = (
-      await run({
-        operationId: 'API-TAG-APPLY',
-        body: {
-          items: [
-            { sourceId: valid.id, tagId: tag.id, value: 1 },
-            { sourceId: invalid.id, tagId: new mongoose.Types.ObjectId().toString(), value: 2 },
-          ],
+    const response = await run({
+      operationId: 'API-TAG-APPLY',
+      body: {
+        items: [
+          { sourceId: valid.id, tagId: tag.id, value: 1 },
+          { sourceId: invalid.id, tagId: new mongoose.Types.ObjectId().toString(), value: 2 },
+        ],
+        sourceVersions: {
+          [valid.id]: valid.version,
+          [invalid.id]: invalid.version,
         },
-      })
-    ).data as { requested: number; succeeded: number; failed: number; items: unknown[] };
+      },
+    });
+    expect(response.status).toBe(207);
+    const result = response.data as {
+      requested: number;
+      succeeded: number;
+      failed: number;
+      items: unknown[];
+    };
     expect(result).toMatchObject({ requested: 2, succeeded: 1, failed: 1 });
     expect(result.items).toEqual(
       expect.arrayContaining([
@@ -749,5 +832,19 @@ describe('L1 B02 Directory, Source and Tag integration', () => {
         expect.objectContaining({ id: invalid.id, success: false }),
       ]),
     );
+    const validAfter = (
+      await run({
+        operationId: 'API-SOURCE-GET',
+        params: { sourceId: valid.id },
+      })
+    ).data as { tagValues: Array<{ tagId: string }> };
+    const invalidAfter = (
+      await run({
+        operationId: 'API-SOURCE-GET',
+        params: { sourceId: invalid.id },
+      })
+    ).data as { tagValues: Array<{ tagId: string }> };
+    expect(validAfter.tagValues).toEqual([expect.objectContaining({ tagId: tag.id })]);
+    expect(invalidAfter.tagValues).toEqual([]);
   });
 });

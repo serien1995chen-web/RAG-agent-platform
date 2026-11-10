@@ -113,7 +113,7 @@ KnowledgeDirectorySchema.pre('validate', function normalizeName(next) {
 });
 
 defineKnowledgeIndex(KnowledgeDirectorySchema, {
-  name: 'ux_directory_sibling_name',
+  name: 'ix_directory_sibling_name',
   key: {
     workspaceId: 1,
     knowledgeSpaceId: 1,
@@ -121,7 +121,6 @@ defineKnowledgeIndex(KnowledgeDirectorySchema, {
     normalizedName: 1,
     deletedAt: 1,
   },
-  options: { unique: true },
 });
 defineKnowledgeIndex(KnowledgeDirectorySchema, {
   name: 'ix_directory_tree',

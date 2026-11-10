@@ -85,6 +85,8 @@ describe('TEST-X-TAG-FILTER-TYPES contract and regex budget', () => {
       }).success,
     ).toBe(false);
     expect(() => assertSafeTagRegex('(a+)+$')).toThrowError();
+    expect(() => assertSafeTagRegex('(a|aa)+$')).toThrowError();
+    expect(assertSafeTagRegex('(a|b)+$')).toBeInstanceOf(RegExp);
     const startedAt = performance.now();
     expect(assertSafeTagRegex('^support$').test('support')).toBe(true);
     expect(performance.now() - startedAt).toBeLessThanOrEqual(50);
