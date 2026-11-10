@@ -41,7 +41,7 @@ describe('FastGPT product list module', () => {
     expect(productTokens.radius.page).toBe('16px');
   });
 
-  it('filters by real name, owner and type while retaining folders', () => {
+  it('L1-B01-KB-002-UI01 filters by real name, owner and type while retaining folders', () => {
     const rows = [
       space('1', '研发资料'),
       space('2', '客服资料', { ownershipMemberId: 'mem_support', iconKey: 'connector:feishu' }),
@@ -65,7 +65,7 @@ describe('FastGPT product list module', () => {
     ).toEqual(['2']);
   });
 
-  it('builds a real folder path and rejects descendant move targets', () => {
+  it('L1-B01-KB-003-UI01 builds a real folder path and rejects descendant move targets', () => {
     const root = space('root', '根目录', { kind: 'folder', iconKey: 'folder' });
     const child = space('child', '子目录', {
       kind: 'folder',
@@ -81,8 +81,25 @@ describe('FastGPT product list module', () => {
     expect(descendantSpaceIds(spaces, 'root')).toEqual(new Set(['child', 'leaf']));
   });
 
-  it('uses FastGPT confirmation text for single and batch deletion', () => {
+  it('L1-B01-KB-001-UI01 uses FastGPT confirmation text for single and batch deletion', () => {
     expect(batchDeleteConfirmation([space('1', '单库')])).toBe('单库');
     expect(batchDeleteConfirmation([space('1', 'A'), space('2', 'B')])).toBe('确认删除');
+  });
+
+  it('L1-B01-KB-001-N01 keeps sibling duplicate names as independent selectable rows', () => {
+    const rows = [
+      space('duplicate-a', '同名知识库'),
+      space('duplicate-b', '同名知识库'),
+      space('different', '其他知识库'),
+    ];
+    expect(
+      filterAndSortSpaces(rows, {
+        search: '同名知识库',
+        type: 'general',
+        owner: '',
+        sort: '-updatedAt',
+      }).map((item) => item.id),
+    ).toEqual(['duplicate-a', 'duplicate-b']);
+    expect(batchDeleteConfirmation(rows.slice(0, 2))).toBe('确认删除');
   });
 });

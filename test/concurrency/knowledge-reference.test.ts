@@ -43,7 +43,7 @@ afterAll(async () => {
 });
 
 describe('reference revision concurrency', () => {
-  it('converges concurrent identical revisions to one active binding and one revision increment', async () => {
+  it('L1-B01-KB-003-C01 converges concurrent identical revisions to one active binding', async () => {
     const target = await catalog.createSpace(
       {
         kind: 'space',

@@ -1,0 +1,241 @@
+{
+  "schemaVersion": 1,
+  "groupId": "B01",
+  "scope": ["KB-001", "KB-002", "KB-003"],
+  "fastgpt": {
+    "version": "4.17.3",
+    "root": "/mnt/d/Fastgpt/FastGPT",
+    "gitMetadata": "absent"
+  },
+  "authority": [
+    "user decision",
+    "FastGPT 4.17.3 user-observable behavior",
+    "frontend behavior specification",
+    "project design only for internal contracts and persistence",
+    "Cloud evidence only when the local sources remain ambiguous"
+  ],
+  "capabilities": {
+    "KB-001": {
+      "responsibility": "create, list, inspect, update and delete a knowledge space",
+      "rows": [
+        {
+          "subcase": "P01",
+          "operation": "create -> list -> detail -> rename -> refresh -> delete",
+          "fastgptSource": [
+            "projects/app/src/pages/api/core/dataset/create.ts:30",
+            "projects/app/src/pages/api/core/dataset/detail.ts",
+            "projects/app/src/pages/api/core/dataset/update.ts:30",
+            "projects/app/src/pages/api/core/dataset/delete.ts"
+          ],
+          "behaviorIds": ["KB-LIST-036", "KB-LIST-064", "KB-INFO-010", "KB-INFO-011", "KB-LIST-074"],
+          "visibleResult": "new card and detail use one stable ID; edits survive refresh; deleted resource disappears",
+          "stateTransition": "active -> active(version+1) -> deleting/deleted",
+          "persistence": "knowledge_spaces, default ACL, delete Job and Outbox; no duplicate audit on replay",
+          "permission": "creator/owner can manage; unauthorized actors receive existence-hiding errors",
+          "allowedDifference": "layout, component organization and localized wording may differ",
+          "decision": "MATCH"
+        },
+        {
+          "subcase": "N01",
+          "operation": "create two sibling spaces with the same name",
+          "fastgptSource": [
+            "projects/app/src/pages/api/core/dataset/create.ts:30",
+            "projects/app/src/pages/api/core/dataset/create.ts:102"
+          ],
+          "behaviorIds": ["KB-LIST-039", "REF-001"],
+          "visibleResult": "both cards remain after refresh and can be operated independently",
+          "stateTransition": "two independent active resources",
+          "persistence": "two distinct Space IDs may share workspaceId, parentSpaceId and normalizedName while active",
+          "permission": "same permission rules apply independently",
+          "allowedDifference": "none; a duplicate-name conflict is a compatibility failure",
+          "decision": "MATCH"
+        },
+        {
+          "subcase": "N02",
+          "operation": "submit empty/long names, unknown kind, invalid ACL enum, deprecated clear values and unknown fields",
+          "fastgptSource": [
+            "packages/global/openapi/core/dataset/api.ts:31",
+            "packages/global/openapi/core/dataset/api.ts:409",
+            "projects/app/src/pageComponents/dataset/list/CreateModal.tsx:166"
+          ],
+          "behaviorIds": ["KB-LIST-030", "KB-LIST-031", "KB-LIST-035", "KB-LIST-040", "VR-003", "VR-012"],
+          "visibleResult": "invalid required inputs stay in the form with a recoverable error; UI name entry is capped at 30 characters",
+          "stateTransition": "no resource is created for rejected input",
+          "persistence": "unknown keys from the FastGPT Zod object are ignored and are not persisted; current project API caps direct names at 120 characters",
+          "permission": "validation runs after authentication and before persistence",
+          "allowedDifference": "project may report its own stable messageKey and use a different form layout",
+          "decision": "MATCH"
+        },
+        {
+          "subcase": "A01",
+          "operation": "read, update and delete another workspace resource and omit TenantContext",
+          "fastgptSource": [
+            "projects/app/src/pages/api/core/dataset/detail.ts",
+            "projects/app/src/pages/api/core/dataset/list.ts:32"
+          ],
+          "behaviorIds": ["KB-LIST-024", "KB-LIST-082"],
+          "visibleResult": "foreign data is absent and errors do not disclose the resource name or existence",
+          "stateTransition": "unchanged",
+          "persistence": "no foreign write or audit"; 
+          "permission": "fail closed when workspace context is missing",
+          "allowedDifference": "project must use its repository and ACL contracts",
+          "decision": "MATCH"
+        },
+        {
+          "subcase": "S01",
+          "operation": "create and delete a Space and inspect ACL, Job, Outbox and audit facts",
+          "fastgptSource": [
+            "projects/app/src/pages/api/core/dataset/create.ts:96",
+            "projects/app/src/service/core/dataset/delete.ts"
+          ],
+          "behaviorIds": ["KB-LIST-036", "KB-LIST-074"],
+          "visibleResult": "create and delete complete atomically from the user's perspective",
+          "stateTransition": "active -> deleting; ACL no longer active",
+          "persistence": "default permission and delete Job/Outbox/audit are written once; failures leave no half-created resource or orphan",
+          "permission": "owner/manage actions",
+          "allowedDifference": "soft delete and Job/Outbox are project persistence mechanisms",
+          "decision": "MATCH"
+        }
+      ]
+    },
+    "KB-002": {
+      "responsibility": "folders, ordinary space type, model defaults and settings",
+      "rows": [
+        {
+          "subcase": "P01",
+          "operation": "create folder and child; inspect type/path; bind authorized models; refresh",
+          "fastgptSource": [
+            "projects/app/src/pages/api/core/dataset/folder/create.ts:26",
+            "projects/app/src/pageComponents/dataset/list/CreateModal.tsx:34",
+            "projects/app/src/pages/api/core/dataset/update.ts:30"
+          ],
+          "behaviorIds": ["KB-LIST-050", "KB-LIST-052", "KB-LIST-032", "KB-INFO-003", "KB-INFO-020", "KB-INFO-024", "KB-INFO-025"],
+          "visibleResult": "folder and child show the correct type/path; model selections persist after refresh",
+          "stateTransition": "create defaults then versioned model update",
+          "persistence": "Space parent/type/modelBindings and model binding documents persist",
+          "permission": "write on parent and manage on Space",
+          "allowedDifference": "project may organize settings in a dedicated Info panel",
+          "decision": "MATCH"
+        },
+        {
+          "subcase": "N01",
+          "operation": "missing/cyclic/too-deep parent; unauthorized/type-incompatible model; explicit clear",
+          "fastgptSource": [
+            "projects/app/src/pages/api/core/dataset/folder/create.ts:49",
+            "packages/service/common/parentFolder/depth.ts",
+            "projects/app/src/pages/api/core/dataset/update.ts:96",
+            "projects/app/src/pages/api/core/dataset/create.ts:67"
+          ],
+          "behaviorIds": ["KB-LIST-023", "KB-INFO-020", "KB-INFO-022", "KB-INFO-025", "KB-INFO-027"],
+          "visibleResult": "invalid targets/models are rejected with an actionable message; explicit optional-model clear persists",
+          "stateTransition": "unchanged on validation failure",
+          "persistence": "no partial parent/model/audit write",
+          "permission": "parent write and authorized model catalog required",
+          "allowedDifference": "control placement and message wording may differ",
+          "decision": "MATCH"
+        },
+        {
+          "subcase": "A01",
+          "operation": "attach to another tenant parent or model and create under a parent without write permission",
+          "fastgptSource": [
+            "projects/app/src/pages/api/core/dataset/folder/create.ts:32",
+            "projects/app/src/pages/api/core/dataset/create.ts:49"
+          ],
+          "behaviorIds": ["KB-LIST-024", "KB-INFO-063"],
+          "visibleResult": "foreign parent/model details are not disclosed and no child is written",
+          "stateTransition": "unchanged",
+          "persistence": "no cross-workspace child, grant or audit",
+          "permission": "tenant and ACL guards fail closed",
+          "allowedDifference": "project may use 403 or 404 according to existence-hiding policy",
+          "decision": "MATCH"
+        },
+        {
+          "subcase": "S01",
+          "operation": "persist parent, type, model bindings, settings and audit",
+          "fastgptSource": [
+            "projects/app/src/pages/api/core/dataset/create.ts:96",
+            "projects/app/src/pages/api/core/dataset/update.ts:199"
+          ],
+          "behaviorIds": ["KB-INFO-005", "KB-INFO-011", "KB-INFO-024"],
+          "visibleResult": "saved summary is stable after refresh",
+          "stateTransition": "version and permission revision increase only where applicable",
+          "persistence": "Space and model binding changes commit together; failed catalog/write leaves no false authorized state",
+          "permission": "manage-level mutation",
+          "allowedDifference": "internal collection names follow project design",
+          "decision": "MATCH"
+        }
+      ]
+    },
+    "KB-003": {
+      "responsibility": "move, batch actions, export, references and ownership",
+      "rows": [
+        {
+          "subcase": "P01",
+          "operation": "single/drag/batch move, batch delete, export and ownership transfer",
+          "fastgptSource": [
+            "projects/app/src/pages/api/core/dataset/batch/move.ts:16",
+            "projects/app/src/pages/api/core/dataset/batch/delete.ts:16",
+            "projects/app/src/pages/api/core/dataset/update.ts:69",
+            "projects/app/src/pages/api/core/dataset/exportAll.ts"
+          ],
+          "behaviorIds": ["KB-LIST-075", "KB-LIST-092", "KB-LIST-104", "KB-LIST-073", "KB-LIST-114"],
+          "visibleResult": "successful items appear at target; failures stay at source; export starts a valid Job/ticket lifecycle; new owner is displayed",
+          "stateTransition": "parent/version updates; delete enters delete flow; Job queued -> succeeded",
+          "persistence": "path/parent/version, batch item results, ACL/owner/audit and object references are consistent",
+          "permission": "source write, target write, manage/owner as appropriate",
+          "allowedDifference": "project's export Job/ticket UI may differ from FastGPT's immediate CSV behavior",
+          "decision": "MATCH"
+        },
+        {
+          "subcase": "N01",
+          "operation": "move to self/descendant/invalid/stale target; stale referenceRevision; ineligible owner; over-limit batch; repeated cancel",
+          "fastgptSource": [
+            "projects/app/src/service/core/dataset/move.ts",
+            "projects/app/src/pages/api/core/dataset/batch/move.ts:16",
+            "packages/global/openapi/common/batch/api.ts:20",
+            "packages/global/openapi/core/dataset/api.ts:296"
+          ],
+          "behaviorIds": ["KB-LIST-095", "KB-LIST-101", "KB-LIST-102", "KB-LIST-103"],
+          "visibleResult": "invalid actions produce explainable errors; no valid item is rolled back because another item failed",
+          "stateTransition": "failed item unchanged; valid batch items remain committed",
+          "persistence": "no partial privileged write and no stale revision mutation",
+          "permission": "batch cannot smuggle an unauthorized item through a valid one",
+          "allowedDifference": "project may return 207 with stable per-item codes",
+          "decision": "MATCH"
+        },
+        {
+          "subcase": "A01",
+          "operation": "move without target write permission; non-owner transfer; cross-tenant target",
+          "fastgptSource": [
+            "projects/app/src/service/core/dataset/move.ts",
+            "projects/app/src/components/support/permission/ChangeOwnerModal/index.tsx:17"
+          ],
+          "behaviorIds": ["KB-LIST-071", "KB-LIST-072"],
+          "visibleResult": "forbidden actions are unavailable or rejected without leaking foreign resources",
+          "stateTransition": "unchanged",
+          "persistence": "no parent, owner or audit mutation",
+          "permission": "target write and owner-only transfer",
+          "allowedDifference": "project may hide entries based on its permission summary",
+          "decision": "MATCH"
+        },
+        {
+          "subcase": "S01",
+          "operation": "inspect move path/audit, batch item results, active reference, detach and ownership ACL",
+          "fastgptSource": [
+            "projects/app/src/service/core/dataset/move.ts",
+            "projects/app/src/service/core/dataset/delete.ts",
+            "packages/web/i18n/zh-CN/common.json:1041"
+          ],
+          "behaviorIds": ["KB-XROUTE-002", "KB-XROUTE-003", "KB-LIST-114"],
+          "visibleResult": "new parent is visible after refresh; active references block delete; after transfer old owner is not owner",
+          "stateTransition": "version and permissionRevision increase transactionally",
+          "persistence": "owner path, ACL and audit converge in one transaction; detach requires latest referenceRevision",
+          "permission": "no retained ownership for old owner",
+          "allowedDifference": "continued read access may follow the new resource ACL but not owner-only actions",
+          "decision": "MATCH"
+        }
+      ]
+    }
+  },
+  "blockedReference": []
+}

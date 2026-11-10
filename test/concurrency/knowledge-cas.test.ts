@@ -280,4 +280,45 @@ describe('Mongo CAS concurrency', () => {
     expect([targetA.id, targetB.id]).toContain(String(moved.parentSpaceId));
     expect(moved.version).toBe(resource.version + 1);
   });
+
+  it('L1-B01-KB-003-C01 allows exactly one same-version ownership transfer', async () => {
+    const resource = await repository.createSpace(
+      {
+        kind: 'space',
+        name: `Ownership CAS ${suffix}`,
+        accessMode: 'workspace',
+        sourceAclMode: 'enforced',
+        sourcePermissionEnabled: true,
+      },
+      context,
+    );
+    const transfer = (targetMemberId: string) =>
+      application.dispatch({
+        operationId: 'API-OWNERSHIP-TRANSFER',
+        params: { spaceId: resource.id },
+        query: {},
+        headers: {},
+        body: { targetMemberId, version: resource.version },
+        context,
+      });
+    const outcomes = await Promise.allSettled([
+      transfer(`member-a-${suffix}`),
+      transfer(`member-b-${suffix}`),
+    ]);
+    expect(outcomes.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
+    expect(outcomes.filter((result) => result.status === 'rejected')).toHaveLength(1);
+    const transferred = await repository.getSpace(resource.id, context);
+    expect([`member-a-${suffix}`, `member-b-${suffix}`]).toContain(transferred.ownershipMemberId);
+    expect(transferred.version).toBe(resource.version + 1);
+    expect(
+      await connection.models.KnowledgeResourcePermission.countDocuments({
+        workspaceId,
+        resourceType: 'space',
+        resourceId: resource.id,
+        principalType: 'member',
+        permission: 'owner',
+        deletedAt: null,
+      }),
+    ).toBe(1);
+  });
 });
