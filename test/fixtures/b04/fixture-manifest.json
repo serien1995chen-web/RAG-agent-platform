@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 1,
+  "runId": "20261112-b04-phase-a",
+  "timezone": "Asia/Shanghai",
+  "projectBaseline": {
+    "originMain": "38a4cbc9a225cbb8514dec9ce1bfba27ee980ca3",
+    "branch": "codex/kb-b04-segment-index-validation-20261111"
+  },
+  "reference": {
+    "fastgptVersion": "4.17.4",
+    "appPackageSha256": "3887440d738c05504cdba692be2142467de41a0ac7e11f828506f474bfc63d3c",
+    "replacementForFrozenVersion": "4.17.3",
+    "approvedByUser": true
+  },
+  "inputHashes": {
+    "knowledgeBaseSystemDesign": "8e5e7300c651c4fe0478b87fc3572add52f95c3e49c8f15700b45bb8c690a26d",
+    "layer1Manual": "2f7099667d501b5e708d2f59501ab4c50a9357003bda8eaab58b63e0a49f4ed0",
+    "frontendBehaviorSpec": "26d3e570785b54cde57822ecf9f07eaa576f717c6d870aa1373a794d68c734ac",
+    "pnpmLock": "b6478a453e4383e9d73839da809111eb6c4d584fea9a050bc5d3ba761a9f961c",
+    "releaseImages": "aa77525cdcc985cf6e9ab9ab6140b38c9bb65f720f065f2bbe21a31fd6f3c0aa"
+  },
+  "fastgptSourceHashes": {
+    "projects/app/src/pageComponents/dataset/detail/DataCard.tsx": "2ea8a683180ba3504d742bb434ab2c515f937d9e3cfe0a6d9d9d29932bcc04d9",
+    "projects/app/src/pageComponents/dataset/detail/components/InputDataModal/useInputDataModal.ts": "ea88d1b7e28580a21e515c785b96fff3472f674068924260d09a6a70a21e8d5e",
+    "projects/app/src/pageComponents/dataset/detail/components/InputDataModal/IndexInputPanel.tsx": "da457bc25674942c422cab23afbb7b0fe56fa92c36aebc4c965069c079583a19",
+    "projects/app/src/web/core/dataset/hooks/useIndexingDataRefresh.ts": "76b0dc0d8a357e6a8412b7995ded37c10373c63ad655c849052b20715cbe5892",
+    "packages/global/core/dataset/data/constants.ts": "3637d16af53d7c4b4363206e7b6548697d1e576e7252e28003da5644b41f74c8",
+    "packages/global/core/dataset/data/utils.ts": "803c2ed185ac3c8b41ef1bc090d540d67239fc534fc0dbe260d9c806394b3c84"
+  },
+  "seededState": {
+    "segmentsPerSource": 3,
+    "systemIndexType": "default",
+    "customIndexType": "custom",
+    "vectorProfiles": ["768", "1024", "1536", "3072"],
+    "requiredRoles": ["Owner", "Manager", "Editor", "Viewer", "Non-member"],
+    "viewports": [{ "width": 1440, "height": 900, "locale": "zh-CN" }]
+  }
+}

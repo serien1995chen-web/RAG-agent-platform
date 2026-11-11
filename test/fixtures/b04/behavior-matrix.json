@@ -1,0 +1,146 @@
+{
+  "schemaVersion": 1,
+  "batch": "B04",
+  "reference": {
+    "application": "FastGPT",
+    "version": "4.17.4",
+    "sourceRoot": "/mnt/d/Fastgpt/FastGPT",
+    "approvedByUser": true,
+    "historicalBehaviorSpecVersion": "4.17.3"
+  },
+  "capabilities": [
+    {
+      "capabilityId": "DATA-001",
+      "responsibility": "Segment list, detail, update, delete, and search-enabled state",
+      "fastgptSources": [
+        "projects/app/src/pageComponents/dataset/detail/DataCard.tsx:103",
+        "projects/app/src/pageComponents/dataset/detail/DataCard.tsx:342",
+        "projects/app/src/pageComponents/dataset/detail/DataCard.tsx:367",
+        "projects/app/src/pages/api/core/dataset/data/update.ts",
+        "projects/app/src/pages/api/core/dataset/data/delete.ts"
+      ],
+      "frontendBehaviorIds": [
+        "KB-DATA-001",
+        "KB-DATA-002",
+        "KB-GLOBAL-011",
+        "KB-GLOBAL-017",
+        "KB-GLOBAL-018"
+      ],
+      "userOperation": "List, open, edit, toggle search, and delete a data block",
+      "observableResult": "Cards retain stable identity, edits persist after refresh, processing cards reject edits, and deleting one card does not affect siblings",
+      "stateTransitions": [
+        "pending -> indexing -> indexed",
+        "indexed -> rebuilding -> indexed",
+        "indexed -> rebuilding -> rebuild_failed"
+      ],
+      "persistence": [
+        "question",
+        "answer",
+        "metadata",
+        "searchEnabled",
+        "version",
+        "soft-deleted target Segment",
+        "delete Job and Outbox event"
+      ],
+      "permissions": [
+        "read for details and list",
+        "write for update and search state",
+        "manage for delete",
+        "workspace and Source ACL enforced"
+      ],
+      "ourOperations": [
+        "API-SEGMENT-LIST",
+        "API-SEGMENT-GET",
+        "API-SEGMENT-UPDATE",
+        "API-SEGMENT-DELETE",
+        "API-SEGMENT-BATCH"
+      ],
+      "ourDtos": ["Segment", "SegmentList", "SegmentUpdate", "SegmentBatchAction"],
+      "allowedDifference": "The console uses the product Data route and may organize controls differently",
+      "decision": "MATCH",
+      "cloudRequest": null
+    },
+    {
+      "capabilityId": "DATA-002",
+      "responsibility": "System and custom indexes, metadata, and history",
+      "fastgptSources": [
+        "packages/global/core/dataset/data/constants.ts:3",
+        "packages/global/core/dataset/data/utils.ts:3",
+        "projects/app/src/pageComponents/dataset/detail/components/InputDataModal/IndexInputPanel.tsx:89",
+        "projects/app/src/pageComponents/dataset/detail/components/InputDataModal/IndexInputPanel.tsx:95",
+        "projects/app/src/pageComponents/dataset/detail/components/InputDataModal/useInputDataModal.ts:88",
+        "projects/app/src/pageComponents/dataset/detail/components/InputDataModal/useInputDataModal.ts:226"
+      ],
+      "frontendBehaviorIds": ["KB-DATA-035", "KB-DATA-051", "KB-DATA-053", "KB-DATA-054"],
+      "userOperation": "Add, edit, fold, and delete custom indexes while viewing system indexes read-only",
+      "observableResult": "Custom index text persists, generated system indexes cannot be edited or deleted, and history survives refresh",
+      "stateTransitions": ["indexed -> pending -> indexing -> indexed"],
+      "persistence": [
+        "custom index text",
+        "index count",
+        "index version",
+        "history",
+        "vectorId",
+        "index Job"
+      ],
+      "permissions": [
+        "write for custom index mutations",
+        "default system index is read-only",
+        "workspace and Source ACL enforced"
+      ],
+      "ourOperations": [
+        "API-SEGMENT-HISTORY",
+        "API-SEGMENT-INDEX-CREATE",
+        "API-SEGMENT-INDEX-UPDATE",
+        "API-SEGMENT-INDEX-DELETE",
+        "API-SEGMENT-REINDEX"
+      ],
+      "ourDtos": ["SegmentIndex", "SegmentIndexUpsert", "SegmentHistory", "SegmentHistoryList"],
+      "allowedDifference": "The console may use explicit save instead of FastGPT autosave while preserving final-value semantics",
+      "decision": "MATCH",
+      "cloudRequest": null
+    },
+    {
+      "capabilityId": "DATA-003",
+      "responsibility": "Index status, history versions, and failure reasons",
+      "fastgptSources": [
+        "packages/global/core/dataset/data/constants.ts:13",
+        "packages/global/core/dataset/data/constants.ts:63",
+        "projects/app/src/web/core/dataset/hooks/useIndexingDataRefresh.ts:10",
+        "projects/app/src/web/core/dataset/hooks/useIndexingDataRefresh.ts:30",
+        "projects/app/src/pageComponents/dataset/detail/DataCard.tsx:342"
+      ],
+      "frontendBehaviorIds": [
+        "KB-GLOBAL-011",
+        "KB-GLOBAL-017",
+        "KB-GLOBAL-018",
+        "KB-DATA-055"
+      ],
+      "userOperation": "Observe indexing and rebuild status, open failure information, and recover after refresh",
+      "observableResult": "Distinct status labels are visible, processing cards are protected, failure details remain available, and polling resumes safely",
+      "stateTransitions": [
+        "pending -> indexing -> indexed",
+        "indexed -> rebuilding -> indexed",
+        "indexed -> rebuilding -> rebuild_failed"
+      ],
+      "persistence": [
+        "Segment indexStatus",
+        "indexErrorCode",
+        "Job status and steps",
+        "attemptEpoch",
+        "fencingToken",
+        "last successful index"
+      ],
+      "permissions": [
+        "read status and safe failure reason",
+        "no internal stack, secret, or foreign-tenant detail",
+        "stale workers cannot publish a terminal state"
+      ],
+      "ourOperations": ["API-SEGMENT-GET", "API-SEGMENT-HISTORY", "API-SEGMENT-REINDEX", "API-JOB-GET"],
+      "ourDtos": ["Segment", "Job", "SegmentHistoryList"],
+      "allowedDifference": "Status and failure details may be placed in a different panel while remaining discoverable",
+      "decision": "MATCH",
+      "cloudRequest": null
+    }
+  ]
+}
