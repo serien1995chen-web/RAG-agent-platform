@@ -194,7 +194,7 @@ jobs:
 
   e2e:
     name: e2e
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 35
     services:
       redis:
@@ -293,19 +293,6 @@ jobs:
           done
           docker logs kb-ci-minio
           exit 1
-      - name: Install Chromium system dependencies
-        timeout-minutes: 10
-        run: |
-          for attempt in 1 2; do
-            if timeout 240 pnpm exec playwright install-deps chromium; then
-              exit 0
-            fi
-            if [ "$attempt" = "2" ]; then
-              exit 1
-            fi
-            echo "::warning::Playwright system dependency installation failed; retrying."
-            sleep 5
-          done
       - name: Install Chromium headless shell
         timeout-minutes: 14
         env:
