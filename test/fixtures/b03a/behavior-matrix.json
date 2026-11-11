@@ -1,0 +1,421 @@
+{
+  "schemaVersion": 1,
+  "capabilityScope": 3,
+  "candidateBaseSha": "89c722d14e6e81c16e81f77d8b4e376ee73e2ade",
+  "fastGptVersion": "4.17.3",
+  "authority": [
+    "user-current-decision",
+    "FastGPT-4.17.3-source-and-tests",
+    "FastGPT-frontend-behavior-spec",
+    "knowledge-system-design-and-current-repository"
+  ],
+  "capabilities": [
+    {
+      "capabilityId": "COL-004",
+      "responsibility": "Space, Directory, Source ACL enable, detach, resume and disable",
+      "fastGptEvidence": [
+        {
+          "file": "projects/app/src/pages/api/core/dataset/enableCollectionPermission.ts",
+          "lines": "14-44"
+        },
+        {
+          "file": "projects/app/src/pages/api/core/dataset/disableCollectionPermission.ts",
+          "lines": "14-42"
+        },
+        {
+          "file": "packages/service/support/permission/collection/enable.ts",
+          "lines": "14-292"
+        },
+        {
+          "file": "packages/service/test/support/permission/collection/enableCollectionPermissions.test.ts",
+          "lines": "208-269,404-483"
+        },
+        {
+          "file": "projects/app/src/pageComponents/dataset/detail/Info/index.tsx",
+          "lines": "74-90,450-476"
+        }
+      ],
+      "frontendBehaviorIds": [
+        "KB-COLLECTION-044",
+        "KB-INFO-040",
+        "KB-INFO-041",
+        "KB-INFO-042",
+        "KB-INFO-043",
+        "KB-INFO-044"
+      ],
+      "cases": [
+        {
+          "subTestId": "L1-B03-COL-004-P01",
+          "operation": "disabled -> inherited -> independent -> inherited -> disabled",
+          "observable": "Each legal transition changes the returned state and permission revision; refresh reads the persisted state.",
+          "storage": "ACL entries, snapshot, resource state and audit converge in one transaction.",
+          "contract": [
+            "API-PERMISSION-ENABLE",
+            "API-PERMISSION-DETACH",
+            "API-PERMISSION-RESUME",
+            "API-PERMISSION-DISABLE",
+            "API-ACL-GET"
+          ],
+          "conclusion": "MATCH"
+        },
+        {
+          "subTestId": "L1-B03-COL-004-P02",
+          "operation": "Update and resume ACL for Space and Directory",
+          "observable": "Override returns independent state and entries; resume returns inherited state and removes local entries.",
+          "storage": "Resource permissionRevision increments and audit records the transition.",
+          "contract": [
+            "API-ACL-UPDATE",
+            "API-ACL-RESUME",
+            "API-ACL-GET"
+          ],
+          "conclusion": "MATCH"
+        },
+        {
+          "subTestId": "L1-B03-COL-004-N01",
+          "operation": "Illegal transition, stale permission revision and disabled Source ACL edit",
+          "observable": "Knowledge conflict or validation error; no partial state is written.",
+          "storage": "ACL and collaborator rows do not change on rejection.",
+          "contract": [
+            "PermissionTransition",
+            "ACLUpdate"
+          ],
+          "conclusion": "MATCH"
+        },
+        {
+          "subTestId": "L1-B03-COL-004-A01",
+          "operation": "Read, edit, resume or transfer a resource from another workspace",
+          "observable": "Stable not-found or forbidden response without parent, name or existence leakage.",
+          "storage": "No cross-workspace ACL write.",
+          "contract": [
+            "API-ACL-GET",
+            "API-ACL-UPDATE",
+            "API-ACL-RESUME"
+          ],
+          "conclusion": "MATCH"
+        },
+        {
+          "subTestId": "L1-B03-COL-004-S01",
+          "operation": "Persist legal ACL transitions and inspect canonical collections",
+          "observable": "The refreshed ACL summary agrees with persisted entries and revision.",
+          "storage": "knowledge_resource_permissions, permissionRevision, snapshotVersion and audit change consistently.",
+          "contract": [
+            "ACL",
+            "KnowledgeSource.permissionState",
+            "KnowledgeSource.permissionRevision"
+          ],
+          "conclusion": "MATCH"
+        },
+        {
+          "subTestId": "L1-B03-COL-004-C01",
+          "operation": "Concurrent ACL updates, detach, resume and disable using one revision",
+          "observable": "Exactly one mutation succeeds; all stale writers receive conflict.",
+          "storage": "One explainable final revision without interleaved ACL entries.",
+          "contract": [
+            "ACLUpdate.version",
+            "PermissionTransition.expectedPermissionRevision"
+          ],
+          "conclusion": "MATCH"
+        },
+        {
+          "subTestId": "L1-B03-COL-004-F01",
+          "operation": "Inject audit failure inside an ACL transaction and repeat resume",
+          "observable": "The failed transaction rolls back; repeated resume is idempotent.",
+          "storage": "No orphan ACL or duplicate audit and an explainable snapshot outcome.",
+          "contract": [
+            "API-ACL-UPDATE",
+            "API-PERMISSION-RESUME"
+          ],
+          "conclusion": "MATCH"
+        },
+        {
+          "subTestId": "L1-B03-COL-004-UI01",
+          "operation": "Open Source permission configuration and exercise state actions",
+          "observable": "Manage users can enable, detach, resume and disable; loading, failure and refreshed summaries are visible.",
+          "storage": "UI refresh reflects ACL revision and state.",
+          "contract": [
+            "API-ACL-GET",
+            "API-PERMISSION-*"
+          ],
+          "conclusion": "INTENTIONAL_DIFFERENCE"
+        },
+        {
+          "subTestId": "L1-B03-COL-004-UI02",
+          "operation": "Open the management surface as Viewer or Non-member",
+          "observable": "No editable management entry or submit control is available.",
+          "storage": "No mutation request is sent.",
+          "contract": [
+            "KB-COLLECTION-044",
+            "KB-INFO-040",
+            "KB-INFO-050"
+          ],
+          "conclusion": "MATCH"
+        }
+      ]
+    },
+    {
+      "capabilityId": "AUTH-002",
+      "responsibility": "owner/read/write/manage role matrix and inheritance",
+      "fastGptEvidence": [
+        {
+          "file": "packages/service/support/permission/dataset/auth.ts",
+          "lines": "permission resolution and owner/manager caps"
+        },
+        {
+          "file": "packages/service/test/support/permission/dataset/auth.test.ts",
+          "lines": "95-470"
+        },
+        {
+          "file": "packages/service/support/permission/resourcePermissionPolicy.ts",
+          "lines": "26-127"
+        },
+        {
+          "file": "packages/service/test/support/permission/inheritPermission.test.ts",
+          "lines": "62-165,337-390"
+        },
+        {
+          "file": "projects/app/src/components/support/permission/MemberModal.tsx",
+          "lines": "43-160"
+        }
+      ],
+      "frontendBehaviorIds": [
+        "KB-LIST-110",
+        "KB-LIST-111",
+        "KB-LIST-112",
+        "KB-LIST-113",
+        "KB-INFO-050",
+        "KB-INFO-051",
+        "KB-INFO-052",
+        "KB-COLLECTION-044"
+      ],
+      "cases": [
+        {
+          "subTestId": "L1-B03-AUTH-002-P01",
+          "operation": "Owner, manage, write, read and non-member actions across Space, Directory and Source",
+          "observable": "The strongest effective role controls read, write, manage, delete and ownership actions.",
+          "storage": "Effective role is derived from the current parent snapshot and local override.",
+          "contract": [
+            "API-SPACE-GET",
+            "API-DIRECTORY-*",
+            "API-SOURCE-*",
+            "API-ACL-*"
+          ],
+          "conclusion": "MATCH"
+        },
+        {
+          "subTestId": "L1-B03-AUTH-002-P02",
+          "operation": "Nested inherited Source under a parent Directory override",
+          "observable": "The Source receives the nearest ancestor override.",
+          "storage": "Effective ACL reads the nearest materialized ancestor.",
+          "contract": [
+            "ACL.permissionState",
+            "ACL.entries"
+          ],
+          "conclusion": "MATCH"
+        },
+        {
+          "subTestId": "L1-B03-AUTH-002-N01",
+          "operation": "Unknown role, stale inheritance revision, owner self-demotion and duplicate collaborator",
+          "observable": "Validation or conflict error with no silent overwrite.",
+          "storage": "No partial ACL or collaborator row.",
+          "contract": [
+            "CollaboratorCreate",
+            "CollaboratorUpdate",
+            "ACLUpdate"
+          ],
+          "conclusion": "MATCH"
+        },
+        {
+          "subTestId": "L1-B03-AUTH-002-A01",
+          "operation": "Child resource attempts to bypass parent or workspace denial",
+          "observable": "Final permission remains denied and resource existence is not leaked.",
+          "storage": "No denied-request ACL mutation.",
+          "contract": [
+            "API-SOURCE-GET",
+            "API-DIRECTORY-GET",
+            "API-ACL-GET"
+          ],
+          "conclusion": "MATCH"
+        },
+        {
+          "subTestId": "L1-B03-AUTH-002-S01",
+          "operation": "Change collaborator role and inspect audit and revision",
+          "observable": "Role changes after refresh and old role no longer authorizes.",
+          "storage": "ACL entry, collaborator row, permissionRevision and audit agree.",
+          "contract": [
+            "API-COLLABORATOR-UPDATE"
+          ],
+          "conclusion": "MATCH"
+        },
+        {
+          "subTestId": "L1-B03-AUTH-002-C01",
+          "operation": "Concurrent role changes and child writes during inheritance changes",
+          "observable": "Only a request with the current revision succeeds.",
+          "storage": "Final ACL revision explains all accepted changes.",
+          "contract": [
+            "CollaboratorUpdate.version",
+            "ACLUpdate.version"
+          ],
+          "conclusion": "MATCH"
+        },
+        {
+          "subTestId": "L1-B03-AUTH-002-F01",
+          "operation": "Fail ACL audit write and replay permission side effects",
+          "observable": "No success is returned before the ACL transaction commits.",
+          "storage": "No duplicate audit or permission event.",
+          "contract": [
+            "API-ACL-UPDATE"
+          ],
+          "conclusion": "MATCH"
+        },
+        {
+          "subTestId": "L1-B03-AUTH-002-Q01",
+          "operation": "Exhaust role by action and inspect repository query scoping",
+          "observable": "No role is sampled as a substitute for the full matrix.",
+          "storage": "Queries include workspaceId and conflict errors are stable.",
+          "contract": [
+            "repository access filters"
+          ],
+          "conclusion": "MATCH"
+        },
+        {
+          "subTestId": "L1-B03-AUTH-002-UI01",
+          "operation": "Render operations as Viewer and as non-member",
+          "observable": "Create, edit, manage, delete and ownership entries are absent or disabled.",
+          "storage": "No unauthorized UI request.",
+          "contract": [
+            "KB-LIST-110",
+            "KB-LIST-112",
+            "KB-INFO-050",
+            "KB-INFO-052"
+          ],
+          "conclusion": "MATCH"
+        }
+      ]
+    },
+    {
+      "capabilityId": "AUTH-004",
+      "responsibility": "Creator, Workspace Owner, collaborator and ownership transfer",
+      "fastGptEvidence": [
+        {
+          "file": "projects/app/src/components/support/permission/ConfigPerModal/index.tsx",
+          "lines": "25-114"
+        },
+        {
+          "file": "projects/app/src/components/support/permission/MemberManager/MemberModal.tsx",
+          "lines": "43-160,197-215"
+        },
+        {
+          "file": "projects/app/src/pageComponents/dataset/list/List.tsx",
+          "lines": "548-578"
+        },
+        {
+          "file": "packages/service/test/support/permission/dataset/auth.test.ts",
+          "lines": "119-148,335-398"
+        }
+      ],
+      "frontendBehaviorIds": [
+        "KB-LIST-110",
+        "KB-LIST-112",
+        "KB-LIST-114",
+        "KB-LIST-115",
+        "KB-INFO-050",
+        "KB-INFO-052",
+        "KB-INFO-053",
+        "KB-INFO-055"
+      ],
+      "cases": [
+        {
+          "subTestId": "L1-B03-AUTH-004-P01",
+          "operation": "Create a Space then transfer ownership to an active qualified collaborator",
+          "observable": "Creator is initial owner; target becomes the only owner after refresh.",
+          "storage": "ownershipMemberId, owner ACL, collaborator state and audit converge.",
+          "contract": [
+            "API-SPACE-CREATE",
+            "API-OWNERSHIP-TRANSFER",
+            "API-ACL-GET"
+          ],
+          "conclusion": "MATCH"
+        },
+        {
+          "subTestId": "L1-B03-AUTH-004-N01",
+          "operation": "Self-transfer, read-only or revoked target, stale revision and duplicate request",
+          "observable": "Invalid target and stale request are rejected without changing the owner.",
+          "storage": "Failure rolls back the entire transfer.",
+          "contract": [
+            "OwnershipTransfer"
+          ],
+          "conclusion": "MATCH"
+        },
+        {
+          "subTestId": "L1-B03-AUTH-004-A01",
+          "operation": "Non-owner transfer and cross-workspace target ID",
+          "observable": "Transfer is denied and target membership details are not disclosed.",
+          "storage": "No ownership or ACL mutation.",
+          "contract": [
+            "API-OWNERSHIP-TRANSFER",
+            "API-RESOURCE-OWNERSHIP-TRANSFER"
+          ],
+          "conclusion": "MATCH"
+        },
+        {
+          "subTestId": "L1-B03-AUTH-004-S01",
+          "operation": "Transfer a resource and inspect all required owner facts",
+          "observable": "Exactly one active owner exists.",
+          "storage": "Resource owner, old/new owner ACL, affected descendants and audit are consistent.",
+          "contract": [
+            "ACL",
+            "KnowledgeCollaborator"
+          ],
+          "conclusion": "MATCH"
+        },
+        {
+          "subTestId": "L1-B03-AUTH-004-C01",
+          "operation": "Concurrent transfer versus transfer or ACL update at one version",
+          "observable": "Exactly one request succeeds and stale requests return conflict.",
+          "storage": "No second owner or unexplainable revision.",
+          "contract": [
+            "OwnershipTransfer.version"
+          ],
+          "conclusion": "MATCH"
+        },
+        {
+          "subTestId": "L1-B03-AUTH-004-F01",
+          "operation": "Replay transfer-related side effects after delivery failure",
+          "observable": "Retry is safe and does not create a second owner.",
+          "storage": "One owner ACL and one logical ownership audit.",
+          "contract": [
+            "ownership audit and Outbox replay"
+          ],
+          "conclusion": "MATCH"
+        },
+        {
+          "subTestId": "L1-B03-AUTH-004-UI01",
+          "operation": "Open current owner, choose target, confirm and refresh",
+          "observable": "Owner change succeeds with loading, visible failure recovery and refreshed menus.",
+          "storage": "The UI summary reads the new owner and ACL after refresh.",
+          "contract": [
+            "KB-LIST-114",
+            "KB-LIST-115",
+            "KB-INFO-053",
+            "KB-INFO-055"
+          ],
+          "conclusion": "INTENTIONAL_DIFFERENCE"
+        }
+      ]
+    }
+  ],
+  "unresolved": [
+    {
+      "behavior": "Organization and group collaborator eligibility for ownership transfer",
+      "reason": "The local FastGPT UI exposes org/group collaborator entries, but ownership transfer handlers are Pro-only and absent from the frozen local source.",
+      "status": "BLOCKED_REFERENCE",
+      "cloudRequestId": "CLOUD-L1-AUTH-004-001"
+    },
+    {
+      "behavior": "Resume inheritance from a root resource with no parent",
+      "reason": "The user requires rejection when no inheritance relationship exists; the local FastGPT test explicitly allows root dataset resume.",
+      "status": "INTENTIONAL_DIFFERENCE",
+      "decision": "Follow the current user security decision and require rejection when there is no inheritable parent."
+    }
+  ]
+}
