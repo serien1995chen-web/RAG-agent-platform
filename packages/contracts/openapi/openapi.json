@@ -21479,6 +21479,7 @@
                   "enum": [
                     "member",
                     "group",
+                    "org",
                     "workspace"
                   ]
                 },
@@ -24558,6 +24559,7 @@
                   "enum": [
                     "member",
                     "group",
+                    "org",
                     "workspace"
                   ]
                 },

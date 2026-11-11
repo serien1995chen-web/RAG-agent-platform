@@ -48,7 +48,19 @@ export function requireWorkspaceId(context: TenantContext): string {
       reason: 'required',
     });
   }
+  requireMemberId(context);
   return workspaceId;
+}
+
+export function requireMemberId(context: TenantContext): string {
+  const memberId = context.memberId?.trim();
+  if (!memberId) {
+    throw tenantError(context, 'KNOWLEDGE_VALIDATION_FAILED', {
+      field: 'memberId',
+      reason: 'required',
+    });
+  }
+  return memberId;
 }
 
 export function workspaceFilter(

@@ -324,8 +324,13 @@ export class KnowledgeApplication {
         const visible = [];
         for (const item of page.items) {
           try {
-            await this.access.assertPermission('space', item.id, 'read', context);
-            visible.push(item);
+            const authorization = await this.access.assertPermission(
+              'space',
+              item.id,
+              'read',
+              context,
+            );
+            visible.push({ ...item, effectivePermission: authorization.effectivePermission });
           } catch {
             // Cross-resource ACL is a visibility filter, not a partial-success result.
           }
@@ -368,8 +373,19 @@ export class KnowledgeApplication {
         return { status: 201, data: created };
       }
       case 'API-SPACE-GET': {
-        await this.access.assertPermission('space', params.spaceId ?? '', 'read', context);
-        return { status: 200, data: await this.catalog.getSpace(params.spaceId ?? '', context) };
+        const authorization = await this.access.assertPermission(
+          'space',
+          params.spaceId ?? '',
+          'read',
+          context,
+        );
+        return {
+          status: 200,
+          data: {
+            ...(await this.catalog.getSpace(params.spaceId ?? '', context)),
+            effectivePermission: authorization.effectivePermission,
+          },
+        };
       }
       case 'API-SPACE-REFERENCES': {
         await this.requireExistingPermission('space', params.spaceId ?? '', 'read', context);
@@ -599,13 +615,28 @@ export class KnowledgeApplication {
       }
       case 'API-DIRECTORY-LIST': {
         await this.access.assertPermission('space', params.spaceId ?? '', 'read', context);
+        const page = await this.catalog.listDirectories(
+          params.spaceId ?? '',
+          pageQuery(input.query),
+          context,
+        );
+        const items = [];
+        for (const item of page.items) {
+          try {
+            const authorization = await this.access.assertPermission(
+              'directory',
+              item.id,
+              'read',
+              context,
+            );
+            items.push({ ...item, effectivePermission: authorization.effectivePermission });
+          } catch {
+            // Directory ACL is a visibility filter.
+          }
+        }
         return {
           status: 200,
-          data: await this.catalog.listDirectories(
-            params.spaceId ?? '',
-            pageQuery(input.query),
-            context,
-          ),
+          data: { ...page, items },
         };
       }
       case 'API-DIRECTORY-CREATE': {
@@ -623,10 +654,18 @@ export class KnowledgeApplication {
         };
       }
       case 'API-DIRECTORY-GET': {
-        await this.access.assertPermission('directory', params.directoryId ?? '', 'read', context);
+        const authorization = await this.access.assertPermission(
+          'directory',
+          params.directoryId ?? '',
+          'read',
+          context,
+        );
         return {
           status: 200,
-          data: await this.catalog.getDirectory(params.directoryId ?? '', context),
+          data: {
+            ...(await this.catalog.getDirectory(params.directoryId ?? '', context)),
+            effectivePermission: authorization.effectivePermission,
+          },
         };
       }
       case 'API-DIRECTORY-UPDATE': {
@@ -665,13 +704,28 @@ export class KnowledgeApplication {
       }
       case 'API-SOURCE-LIST': {
         await this.access.assertPermission('space', params.spaceId ?? '', 'read', context);
+        const page = await this.catalog.listSources(
+          params.spaceId ?? '',
+          pageQuery(input.query),
+          context,
+        );
+        const items = [];
+        for (const item of page.items) {
+          try {
+            const authorization = await this.access.assertPermission(
+              'source',
+              item.id,
+              'read',
+              context,
+            );
+            items.push({ ...item, effectivePermission: authorization.effectivePermission });
+          } catch {
+            // Independent Source ACL is a visibility filter.
+          }
+        }
         return {
           status: 200,
-          data: await this.catalog.listSources(
-            params.spaceId ?? '',
-            pageQuery(input.query),
-            context,
-          ),
+          data: { ...page, items },
         };
       }
       case 'API-SOURCE-CREATE': {
@@ -705,10 +759,18 @@ export class KnowledgeApplication {
         };
       }
       case 'API-SOURCE-GET': {
-        await this.access.assertPermission('source', params.sourceId ?? '', 'read', context);
+        const authorization = await this.access.assertPermission(
+          'source',
+          params.sourceId ?? '',
+          'read',
+          context,
+        );
         return {
           status: 200,
-          data: await this.catalog.getSource(params.sourceId ?? '', context),
+          data: {
+            ...(await this.catalog.getSource(params.sourceId ?? '', context)),
+            effectivePermission: authorization.effectivePermission,
+          },
         };
       }
       case 'API-SOURCE-UPDATE': {
@@ -1037,13 +1099,22 @@ export class KnowledgeApplication {
           data: await this.catalog.getSpace(params.spaceId ?? '', context),
         };
       case 'API-RESOURCE-OWNERSHIP-TRANSFER':
+        await this.access.transferOwnership(
+          resourceTypeOf(params.resourceType, context),
+          params.resourceId ?? '',
+          body,
+          context,
+        );
         return {
           status: 200,
-          data: await this.access.transferOwnership(
+          data: await this.access.getAcl(
             resourceTypeOf(params.resourceType, context),
             params.resourceId ?? '',
-            body,
-            context,
+            {
+              ...context,
+              memberId: String(body.targetMemberId ?? ''),
+              isWorkspaceOwner: false,
+            },
           ),
         };
       case 'API-PERMISSION-ENABLE':

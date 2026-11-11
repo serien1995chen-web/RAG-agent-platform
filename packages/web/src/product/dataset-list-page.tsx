@@ -28,7 +28,7 @@ import {
   removeCollaborator,
   updateSpace,
 } from './api';
-import type { Acl, BatchResult, Collaborator, KnowledgeSpace } from './types';
+import type { Acl, BatchResult, Collaborator, KnowledgeSpace, PermissionLevel } from './types';
 import { ProductAppShell } from './shell';
 import {
   ProductButton,
@@ -66,6 +66,10 @@ import {
 type CreatableType = 'general' | 'folder' | 'api' | 'feishu' | 'yuque' | 'dingtalk';
 
 const PAGE_SIZE = 30;
+
+function permissionRank(permission: PermissionLevel | null | undefined): number {
+  return permission ? { read: 10, write: 20, manage: 30, owner: 40 }[permission] : 0;
+}
 
 const CREATE_OPTIONS: Array<{
   type: CreatableType;
@@ -758,6 +762,17 @@ export function DatasetListPage(props: { parentId: string }) {
                     const type = productTypeOf(space.kind === 'folder' ? 'folder' : space.iconKey);
                     const status = spaceStatusView(space.status);
                     const selected = selectedIds.includes(space.id);
+                    const effectivePermission =
+                      sessionQuery.data?.isWorkspaceOwner ||
+                      sessionQuery.data?.memberId === space.ownershipMemberId
+                        ? 'owner'
+                        : (space.effectivePermission ?? null);
+                    const permissionRank = effectivePermission
+                      ? { read: 10, write: 20, manage: 30, owner: 40 }[effectivePermission]
+                      : 0;
+                    const canWrite = permissionRank >= 20;
+                    const canManage = permissionRank >= 30;
+                    const canOwn = permissionRank >= 40;
                     return (
                       <article
                         key={space.id}
@@ -770,7 +785,7 @@ export function DatasetListPage(props: { parentId: string }) {
                         ]
                           .filter(Boolean)
                           .join(' ')}
-                        draggable={!batchMode}
+                        draggable={!batchMode && canWrite}
                         onDragStart={(event: DragEvent<HTMLElement>) => {
                           setDraggingId(space.id);
                           event.dataTransfer.effectAllowed = 'move';
@@ -837,7 +852,7 @@ export function DatasetListPage(props: { parentId: string }) {
                             <strong title={space.name}>{space.name}</strong>
                             <span>{type.label}</span>
                           </button>
-                          {!batchMode ? (
+                          {!batchMode && canWrite ? (
                             <div className="kb2-kb-card__menu-wrap">
                               <ProductIconButton
                                 label={`${space.name} 的更多操作`}
@@ -855,32 +870,38 @@ export function DatasetListPage(props: { parentId: string }) {
                                 onClose={() => setMenuOpenId(null)}
                                 align="right"
                               >
-                                <ProductMenuItem
-                                  icon={<EditIcon boxSize={3.5} />}
-                                  onClick={() => openEdit(space)}
-                                >
-                                  编辑信息
-                                </ProductMenuItem>
-                                <ProductMenuItem
-                                  icon={<CopyIcon boxSize={3.5} />}
-                                  onClick={() => {
-                                    setMenuOpenId(null);
-                                    setMoveTarget(space);
-                                    setMoveParentId(space.parentSpaceId ?? '');
-                                    setMoveError(null);
-                                  }}
-                                >
-                                  移动
-                                </ProductMenuItem>
-                                <ProductMenuItem
-                                  icon={<LockIcon boxSize={3.5} />}
-                                  onClick={() => {
-                                    setMenuOpenId(null);
-                                    setPermissionTarget(space);
-                                  }}
-                                >
-                                  权限
-                                </ProductMenuItem>
+                                {canWrite ? (
+                                  <ProductMenuItem
+                                    icon={<EditIcon boxSize={3.5} />}
+                                    onClick={() => openEdit(space)}
+                                  >
+                                    编辑信息
+                                  </ProductMenuItem>
+                                ) : null}
+                                {canWrite ? (
+                                  <ProductMenuItem
+                                    icon={<CopyIcon boxSize={3.5} />}
+                                    onClick={() => {
+                                      setMenuOpenId(null);
+                                      setMoveTarget(space);
+                                      setMoveParentId(space.parentSpaceId ?? '');
+                                      setMoveError(null);
+                                    }}
+                                  >
+                                    移动
+                                  </ProductMenuItem>
+                                ) : null}
+                                {canManage ? (
+                                  <ProductMenuItem
+                                    icon={<LockIcon boxSize={3.5} />}
+                                    onClick={() => {
+                                      setMenuOpenId(null);
+                                      setPermissionTarget(space);
+                                    }}
+                                  >
+                                    权限
+                                  </ProductMenuItem>
+                                ) : null}
                                 {space.kind === 'space' ? (
                                   <ProductMenuItem
                                     icon={<DownloadIcon boxSize={3.5} />}
@@ -889,18 +910,20 @@ export function DatasetListPage(props: { parentId: string }) {
                                     导出
                                   </ProductMenuItem>
                                 ) : null}
-                                <ProductMenuItem
-                                  icon={<DeleteIcon boxSize={3.5} />}
-                                  danger
-                                  onClick={() => {
-                                    setMenuOpenId(null);
-                                    setDeleteTarget(space);
-                                    setDeleteText('');
-                                    setDeleteError(null);
-                                  }}
-                                >
-                                  删除
-                                </ProductMenuItem>
+                                {canOwn ? (
+                                  <ProductMenuItem
+                                    icon={<DeleteIcon boxSize={3.5} />}
+                                    danger
+                                    onClick={() => {
+                                      setMenuOpenId(null);
+                                      setDeleteTarget(space);
+                                      setDeleteText('');
+                                      setDeleteError(null);
+                                    }}
+                                  >
+                                    删除
+                                  </ProductMenuItem>
+                                ) : null}
                               </ProductMenu>
                             </div>
                           ) : null}
@@ -939,40 +962,48 @@ export function DatasetListPage(props: { parentId: string }) {
               </div>
               <p>{currentFolder.description || '这个文件夹还没有介绍。'}</p>
               <div className="kb2-folder-panel__actions">
-                <ProductButton size="sm" onClick={() => openEdit(currentFolder)}>
-                  <EditIcon boxSize={3.5} />
-                  编辑
-                </ProductButton>
-                <ProductButton
-                  size="sm"
-                  onClick={() => {
-                    setMoveTarget(currentFolder);
-                    setMoveParentId(currentFolder.parentSpaceId ?? '');
-                  }}
-                >
-                  <CopyIcon boxSize={3.5} />
-                  移动
-                </ProductButton>
-                <ProductButton
-                  size="sm"
-                  tone="danger"
-                  onClick={() => setPermissionTarget(currentFolder)}
-                >
-                  <LockIcon boxSize={3.5} />
-                  权限
-                </ProductButton>
-                <ProductButton
-                  size="sm"
-                  tone="danger"
-                  onClick={() => {
-                    setDeleteTarget(currentFolder);
-                    setDeleteText('');
-                    setDeleteError(null);
-                  }}
-                >
-                  <DeleteIcon boxSize={3.5} />
-                  删除
-                </ProductButton>
+                {permissionRank(currentFolder.effectivePermission) >= 20 ? (
+                  <>
+                    <ProductButton size="sm" onClick={() => openEdit(currentFolder)}>
+                      <EditIcon boxSize={3.5} />
+                      编辑
+                    </ProductButton>
+                    <ProductButton
+                      size="sm"
+                      onClick={() => {
+                        setMoveTarget(currentFolder);
+                        setMoveParentId(currentFolder.parentSpaceId ?? '');
+                      }}
+                    >
+                      <CopyIcon boxSize={3.5} />
+                      移动
+                    </ProductButton>
+                  </>
+                ) : null}
+                {permissionRank(currentFolder.effectivePermission) >= 30 ? (
+                  <ProductButton
+                    size="sm"
+                    tone="danger"
+                    onClick={() => setPermissionTarget(currentFolder)}
+                  >
+                    <LockIcon boxSize={3.5} />
+                    权限
+                  </ProductButton>
+                ) : null}
+                {permissionRank(currentFolder.effectivePermission) >= 40 ? (
+                  <ProductButton
+                    size="sm"
+                    tone="danger"
+                    onClick={() => {
+                      setDeleteTarget(currentFolder);
+                      setDeleteText('');
+                      setDeleteError(null);
+                    }}
+                  >
+                    <DeleteIcon boxSize={3.5} />
+                    删除
+                  </ProductButton>
+                ) : null}
               </div>
               <dl className="kb2-folder-panel__meta">
                 <div>

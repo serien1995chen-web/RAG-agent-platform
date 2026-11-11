@@ -13,6 +13,7 @@ import type {
   KnowledgeResourcePermissionDoc,
 } from '../../../shared/persistence/schemas/knowledge-access.schemas';
 import type { TenantContext } from '../../../shared/persistence/knowledge/tenant';
+import { createKnowledgeOutboxEvent } from '../../../shared/persistence/knowledge/outbox';
 import {
   objectIdOf,
   requireWorkspaceId,
@@ -38,14 +39,43 @@ interface ResourceAccess {
   ownershipMemberId: string;
   version: number;
   permissionRevision: number;
+  snapshotVersion: number;
   permissionState: SourcePermissionState;
   parentDirectoryId: Types.ObjectId | null;
+  parentSpaceId: Types.ObjectId | null;
+  sourcePermissionEnabled: boolean;
 }
 
 interface AclEntry {
-  principalType: 'member' | 'group' | 'workspace';
+  principalType: 'member' | 'group' | 'org' | 'workspace';
   principalId: string;
   permission: PermissionLevel;
+}
+
+type PrincipalMembershipContext = TenantContext & {
+  groupIds?: readonly string[];
+  orgIds?: readonly string[];
+};
+
+export interface KnowledgePrincipalDirectoryPort {
+  isActiveMember(workspaceId: string, memberId: string): Promise<boolean>;
+}
+
+export class StaticKnowledgePrincipalDirectory implements KnowledgePrincipalDirectoryPort {
+  private readonly members: ReadonlySet<string>;
+
+  constructor(entries: readonly { workspaceId: string; memberId: string }[]) {
+    this.members = new Set(entries.map((entry) => `${entry.workspaceId}:${entry.memberId}`));
+  }
+
+  async isActiveMember(workspaceId: string, memberId: string): Promise<boolean> {
+    return this.members.has(`${workspaceId}:${memberId}`);
+  }
+}
+
+function membershipIds(context: TenantContext, key: 'groupIds' | 'orgIds'): ReadonlySet<string> {
+  const values = (context as PrincipalMembershipContext)[key];
+  return new Set((values ?? []).map(String));
 }
 
 function permissionDto(document: Plain<KnowledgeResourcePermissionDoc>) {
@@ -70,6 +100,23 @@ function auditEventId(): string {
   return randomUUID();
 }
 
+function duplicateKeyConflict(error: unknown, context: TenantContext): unknown {
+  if (
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    (error as { code?: unknown }).code === 11000
+  ) {
+    return createKnowledgeError({
+      code: 'KNOWLEDGE_CONFLICT',
+      requestId: context.requestId,
+      traceId: context.traceId,
+      details: { reason: 'duplicate_collaborator' },
+    });
+  }
+  return error;
+}
+
 export class KnowledgeAccessRepository {
   private readonly spaces: Model<KnowledgeSpaceDoc>;
   private readonly directories: Model<KnowledgeDirectoryDoc>;
@@ -78,7 +125,10 @@ export class KnowledgeAccessRepository {
   private readonly collaborators: Model<KnowledgeCollaboratorDoc>;
   private readonly audits: Model<KnowledgeAuditEventDoc>;
 
-  constructor(private readonly connection: Connection) {
+  constructor(
+    private readonly connection: Connection,
+    private readonly principalDirectory?: KnowledgePrincipalDirectoryPort,
+  ) {
     const models = registerKnowledgeModels(connection);
     this.spaces = models.KnowledgeSpace as Model<KnowledgeSpaceDoc>;
     this.directories = models.KnowledgeDirectory as Model<KnowledgeDirectoryDoc>;
@@ -110,8 +160,12 @@ export class KnowledgeAccessRepository {
         ownershipMemberId: doc.ownershipMemberId,
         version: doc.version,
         permissionRevision: doc.permissionRevision,
-        permissionState: doc.accessMode === 'restricted' ? 'independent' : 'inherited',
+        snapshotVersion: doc.aclSnapshotVersion ?? 1,
+        permissionState:
+          doc.permissionState ?? (doc.accessMode === 'restricted' ? 'independent' : 'inherited'),
         parentDirectoryId: null,
+        parentSpaceId: doc.parentSpaceId,
+        sourcePermissionEnabled: doc.sourcePermissionEnabled,
       };
     }
     if (resourceType === 'directory') {
@@ -131,8 +185,11 @@ export class KnowledgeAccessRepository {
         ownershipMemberId: doc.ownershipMemberId,
         version: doc.version,
         permissionRevision: doc.permissionRevision,
+        snapshotVersion: doc.aclSnapshotVersion ?? 1,
         permissionState: doc.aclMode === 'override' ? 'independent' : 'inherited',
         parentDirectoryId: doc.parentDirectoryId,
+        parentSpaceId: null,
+        sourcePermissionEnabled: true,
       };
     }
     const doc = await this.sources.findOne({
@@ -157,9 +214,23 @@ export class KnowledgeAccessRepository {
       ownershipMemberId: doc.ownershipMemberId,
       version: doc.version,
       permissionRevision: doc.permissionRevision,
+      snapshotVersion: doc.aclSnapshotVersion ?? 1,
       permissionState: space.sourcePermissionEnabled ? doc.permissionState : 'disabled',
       parentDirectoryId: doc.directoryId,
+      parentSpaceId: null,
+      sourcePermissionEnabled: space.sourcePermissionEnabled,
     };
+  }
+
+  private async assertEligibleMember(memberId: string, context: TenantContext): Promise<void> {
+    if (!this.principalDirectory) return;
+    const eligible = await this.principalDirectory.isActiveMember(context.workspaceId, memberId);
+    if (!eligible) {
+      throw tenantError(context, 'KNOWLEDGE_VALIDATION_FAILED', {
+        field: 'memberId',
+        reason: 'member_not_eligible',
+      });
+    }
   }
 
   private async localEntries(
@@ -226,28 +297,26 @@ export class KnowledgeAccessRepository {
   }
 
   async getAcl(resourceType: AclResourceType, resourceId: string, context: TenantContext) {
-    await this.assertPermission(resourceType, resourceId, 'read', context);
-    const resource = await this.resolveResource(resourceType, resourceId, context);
+    const resource = await this.assertPermission(resourceType, resourceId, 'read', context);
+    if (resource.resourceType === 'source' && !resource.sourcePermissionEnabled) {
+      throw createKnowledgeError({
+        code: 'KNOWLEDGE_CONFLICT',
+        requestId: context.requestId,
+        traceId: context.traceId,
+        details: { field: 'permissionState', reason: 'source_permission_disabled' },
+      });
+    }
     const entries =
       resource.permissionState === 'independent'
         ? await this.localEntries(resourceType, resource.resourceId, context)
         : await this.effectiveEntries(resource, context);
-    const snapshots = await this.permissions
-      .find({
-        workspaceId: context.workspaceId,
-        resourceType,
-        resourceId: resource.resourceId,
-        deletedAt: null,
-      })
-      .select({ snapshotVersion: 1 })
-      .lean();
     return {
       resourceType,
       resourceId,
       inheritMode: resource.permissionState === 'independent' ? 'override' : 'inherit',
       permissionState: resource.permissionState,
       permissionRevision: resource.permissionRevision,
-      snapshotVersion: Math.max(1, ...snapshots.map((entry) => entry.snapshotVersion)),
+      snapshotVersion: resource.snapshotVersion,
       entries,
     };
   }
@@ -258,6 +327,14 @@ export class KnowledgeAccessRepository {
     context: TenantContext,
   ) {
     const resource = await this.resolveResource(resourceType, resourceId, context);
+    if (resource.resourceType === 'source' && !resource.sourcePermissionEnabled) {
+      throw createKnowledgeError({
+        code: 'KNOWLEDGE_CONFLICT',
+        requestId: context.requestId,
+        traceId: context.traceId,
+        details: { field: 'permissionState', reason: 'source_permission_disabled' },
+      });
+    }
     const entries =
       resource.permissionState === 'independent'
         ? await this.localEntries(resourceType, resource.resourceId, context)
@@ -274,7 +351,7 @@ export class KnowledgeAccessRepository {
     resourceId: string,
     required: PermissionLevel,
     context: TenantContext,
-  ): Promise<ResourceAccess> {
+  ): Promise<ResourceAccess & { effectivePermission: PermissionLevel }> {
     const resource = await this.resolveResource(resourceType, resourceId, context);
     if (
       context.apiKeySpaceIds?.length &&
@@ -288,12 +365,16 @@ export class KnowledgeAccessRepository {
       });
     }
     if (context.isWorkspaceOwner || resource.ownershipMemberId === context.memberId) {
-      return resource;
+      return { ...resource, effectivePermission: 'owner' };
     }
+    const groupIds = membershipIds(context, 'groupIds');
+    const orgIds = membershipIds(context, 'orgIds');
     const entries = await this.effectiveEntries(resource, context);
     const strongest = entries.reduce<PermissionLevel | null>((current, entry) => {
       const applies =
         (entry.principalType === 'member' && entry.principalId === context.memberId) ||
+        (entry.principalType === 'group' && groupIds.has(entry.principalId)) ||
+        (entry.principalType === 'org' && orgIds.has(entry.principalId)) ||
         (entry.principalType === 'workspace' && entry.principalId === context.workspaceId);
       if (!applies) return current;
       return current === null || PERMISSION_LEVEL[entry.permission] > PERMISSION_LEVEL[current]
@@ -303,7 +384,7 @@ export class KnowledgeAccessRepository {
     if (!permissionAllows(strongest, required)) {
       throw tenantError(context, 'KNOWLEDGE_NOT_FOUND');
     }
-    return resource;
+    return { ...resource, effectivePermission: strongest! };
   }
 
   async batchAuthorizeSources(sourceIds: readonly string[], context: TenantContext) {
@@ -407,7 +488,7 @@ export class KnowledgeAccessRepository {
   ): Promise<void> {
     const update =
       resource.resourceType === 'space'
-        ? { sourceAclMode: permissionState === 'independent' ? 'enforced' : 'inherited' }
+        ? { permissionState }
         : resource.resourceType === 'directory'
           ? { aclMode: permissionState === 'independent' ? 'override' : 'inherited' }
           : { permissionState };
@@ -419,7 +500,7 @@ export class KnowledgeAccessRepository {
     };
     const mutation = {
       $set: { ...update, updatedByMemberId: context.memberId },
-      $inc: { version: 1, permissionRevision: 1 },
+      $inc: { version: 1, permissionRevision: 1, aclSnapshotVersion: 1 },
     };
     const result =
       resource.resourceType === 'space'
@@ -480,28 +561,78 @@ export class KnowledgeAccessRepository {
     context: TenantContext,
   ) {
     const resource = await this.assertPermission(resourceType, resourceId, 'manage', context);
+    if (resource.resourceType === 'source') {
+      if (!resource.sourcePermissionEnabled) {
+        throw createKnowledgeError({
+          code: 'KNOWLEDGE_CONFLICT',
+          requestId: context.requestId,
+          traceId: context.traceId,
+          details: { field: 'permissionState', reason: 'source_permission_disabled' },
+        });
+      }
+      if (resource.permissionState === 'disabled') {
+        throw createKnowledgeError({
+          code: 'KNOWLEDGE_CONFLICT',
+          requestId: context.requestId,
+          traceId: context.traceId,
+          details: { field: 'permissionState', reason: 'enable_required' },
+        });
+      }
+    }
     const expectedVersion = Number(input.version);
     if (!Number.isInteger(expectedVersion) || expectedVersion < 1) throw tenantError(context);
     if (!Array.isArray(input.entries)) throw tenantError(context);
     const entries = input.entries.map((raw) => {
       const entry = raw as Record<string, unknown>;
       const permission = entry.permission as PermissionLevel;
+      const principalType = entry.principalType as AclEntry['principalType'];
+      if (!['member', 'group', 'org', 'workspace'].includes(principalType)) {
+        throw tenantError(context, 'KNOWLEDGE_VALIDATION_FAILED', {
+          field: 'principalType',
+        });
+      }
       if (!['read', 'write', 'manage', 'owner'].includes(permission)) throw tenantError(context);
       return {
-        principalType: entry.principalType as AclEntry['principalType'],
+        principalType,
         principalId: String(entry.principalId),
         permission,
       };
     }) as AclEntry[];
-    const inheritMode = input.inheritMode === 'override' ? 'override' : 'inherit';
+    if (input.inheritMode !== 'override' && input.inheritMode !== 'inherit') {
+      throw tenantError(context, 'KNOWLEDGE_VALIDATION_FAILED', { field: 'inheritMode' });
+    }
+    const principalKeys = entries.map((entry) => `${entry.principalType}:${entry.principalId}`);
+    if (new Set(principalKeys).size !== principalKeys.length) {
+      throw tenantError(context, 'KNOWLEDGE_VALIDATION_FAILED', {
+        field: 'entries',
+        reason: 'duplicate_principal',
+      });
+    }
+    const inheritMode = input.inheritMode;
     const permissionState = this.stateForMode(inheritMode);
+    if (
+      permissionState === 'independent' &&
+      !entries.some(
+        (entry) =>
+          entry.principalType === 'member' &&
+          entry.principalId === resource.ownershipMemberId &&
+          entry.permission === 'owner',
+      )
+    ) {
+      entries.unshift({
+        principalType: 'member',
+        principalId: resource.ownershipMemberId,
+        permission: 'owner',
+      });
+    }
+    const snapshotVersion = resource.snapshotVersion + 1;
     const session = await this.connection.startSession();
     try {
       await session.withTransaction(async () => {
         await this.replaceLocalEntries(
           resource,
           permissionState === 'independent' ? entries : [],
-          resource.permissionRevision + 2,
+          snapshotVersion,
           context,
           session,
         );
@@ -539,8 +670,43 @@ export class KnowledgeAccessRepository {
     context: TenantContext,
   ) {
     const resource = await this.assertPermission(resourceType, resourceId, 'manage', context);
+    if (resource.resourceType === 'source' && !resource.sourcePermissionEnabled) {
+      throw createKnowledgeError({
+        code: 'KNOWLEDGE_CONFLICT',
+        requestId: context.requestId,
+        traceId: context.traceId,
+        details: { field: 'permissionState', reason: 'source_permission_disabled' },
+      });
+    }
     const expectedVersion = Number(input.version);
     if (!Number.isInteger(expectedVersion) || expectedVersion < 1) throw tenantError(context);
+    if (resourceType === 'space' && !resource.parentSpaceId) {
+      throw createKnowledgeError({
+        code: 'KNOWLEDGE_CONFLICT',
+        requestId: context.requestId,
+        traceId: context.traceId,
+        details: { field: 'parentSpaceId', reason: 'no_inherited_parent' },
+      });
+    }
+    if (resource.permissionState === 'inherited') {
+      if (expectedVersion !== resource.version) {
+        throw createKnowledgeError({
+          code: 'KNOWLEDGE_CONFLICT',
+          requestId: context.requestId,
+          traceId: context.traceId,
+          details: { field: 'version' },
+        });
+      }
+      return this.getAcl(resourceType, resourceId, context);
+    }
+    if (resource.permissionState !== 'independent') {
+      throw createKnowledgeError({
+        code: 'KNOWLEDGE_CONFLICT',
+        requestId: context.requestId,
+        traceId: context.traceId,
+        details: { field: 'permissionState', state: resource.permissionState },
+      });
+    }
     const session = await this.connection.startSession();
     try {
       await session.withTransaction(async () => {
@@ -619,6 +785,14 @@ export class KnowledgeAccessRepository {
     context: TenantContext,
   ) {
     const resource = await this.assertPermission('source', sourceId, 'manage', context);
+    if (!resource.sourcePermissionEnabled) {
+      throw createKnowledgeError({
+        code: 'KNOWLEDGE_CONFLICT',
+        requestId: context.requestId,
+        traceId: context.traceId,
+        details: { field: 'permissionState', reason: 'source_permission_disabled' },
+      });
+    }
     if (Number(input.expectedPermissionRevision) !== resource.permissionRevision) {
       throw createKnowledgeError({
         code: 'KNOWLEDGE_CONFLICT',
@@ -626,6 +800,17 @@ export class KnowledgeAccessRepository {
         traceId: context.traceId,
         details: { field: 'expectedPermissionRevision' },
       });
+    }
+    if (action === 'resume' && resource.permissionState === 'inherited') {
+      if (Number(input.version) !== resource.version) {
+        throw createKnowledgeError({
+          code: 'KNOWLEDGE_CONFLICT',
+          requestId: context.requestId,
+          traceId: context.traceId,
+          details: { field: 'version' },
+        });
+      }
+      return this.getAcl('source', sourceId, context);
     }
     const next = transitionSourcePermission(resource.permissionState, action, context);
     const expectedVersion = Number(input.version);
@@ -643,7 +828,7 @@ export class KnowledgeAccessRepository {
           await this.replaceLocalEntries(
             resource,
             inherited,
-            resource.permissionRevision + 2,
+            resource.snapshotVersion + 1,
             context,
             session,
           );
@@ -670,7 +855,7 @@ export class KnowledgeAccessRepository {
               permissionState: next,
               updatedByMemberId: context.memberId,
             },
-            $inc: { version: 1, permissionRevision: 1 },
+            $inc: { version: 1, permissionRevision: 1, aclSnapshotVersion: 1 },
           },
           { session },
         );
@@ -703,7 +888,21 @@ export class KnowledgeAccessRepository {
   }
 
   async listCollaborators(spaceId: string, context: TenantContext) {
-    await this.assertPermission('space', spaceId, 'read', context);
+    try {
+      await this.assertPermission('space', spaceId, 'manage', context);
+    } catch (error) {
+      try {
+        await this.assertPermission('space', spaceId, 'read', context);
+      } catch {
+        throw error;
+      }
+      throw createKnowledgeError({
+        code: 'KNOWLEDGE_FORBIDDEN',
+        requestId: context.requestId,
+        traceId: context.traceId,
+        details: { required: 'manage' },
+      });
+    }
     const docs = (await this.collaborators
       .find({
         workspaceId: context.workspaceId,
@@ -720,6 +919,7 @@ export class KnowledgeAccessRepository {
     resource: ResourceAccess,
     memberId: string,
     role: PermissionLevel,
+    snapshotVersion: number,
     context: TenantContext,
     session: ClientSession,
   ) {
@@ -735,14 +935,12 @@ export class KnowledgeAccessRepository {
         $set: {
           knowledgeSpaceId: resource.knowledgeSpaceId,
           permission: role,
+          snapshotVersion,
           inheritMode: 'override',
           deletedAt: null,
           updatedByMemberId: context.memberId,
         },
-        $setOnInsert: {
-          createdByMemberId: context.memberId,
-          snapshotVersion: resource.permissionRevision + 2,
-        },
+        $setOnInsert: { createdByMemberId: context.memberId },
         $inc: { version: 1 },
       },
       { upsert: true, session },
@@ -758,7 +956,7 @@ export class KnowledgeAccessRepository {
       { _id: resource.resourceId, workspaceId: context.workspaceId, deletedAt: null },
       {
         $set: { updatedByMemberId: context.memberId },
-        $inc: { version: 1, permissionRevision: 1 },
+        $inc: { version: 1, permissionRevision: 1, aclSnapshotVersion: 1 },
       },
       { session },
     );
@@ -773,55 +971,111 @@ export class KnowledgeAccessRepository {
     const resource = await this.assertPermission('space', spaceId, 'manage', context);
     const memberId = String(input.memberId ?? '');
     const role = input.role as PermissionLevel;
-    if (!memberId || !['read', 'write', 'manage'].includes(role)) throw tenantError(context);
+    if (!memberId || !['read', 'write', 'manage'].includes(role)) {
+      throw tenantError(context, 'KNOWLEDGE_VALIDATION_FAILED', {
+        ...(!memberId ? { field: 'memberId' } : { field: 'role' }),
+      });
+    }
+    if (resource.ownershipMemberId === memberId) {
+      throw tenantError(context, 'KNOWLEDGE_VALIDATION_FAILED', {
+        field: 'memberId',
+        reason: 'owner_is_immutable',
+      });
+    }
+    await this.assertEligibleMember(memberId, context);
     const session = await this.connection.startSession();
     try {
-      await session.withTransaction(async () => {
-        await this.collaborators.create(
-          [
+      const snapshotVersion = resource.snapshotVersion + 1;
+      try {
+        await session.withTransaction(async () => {
+          const existing = await this.collaborators
+            .findOne({
+              workspaceId: context.workspaceId,
+              knowledgeSpaceId: resource.knowledgeSpaceId,
+              memberId,
+            })
+            .session(session);
+          if (existing?.status === 'active' && existing.deletedAt === null) {
+            throw createKnowledgeError({
+              code: 'KNOWLEDGE_CONFLICT',
+              requestId: context.requestId,
+              traceId: context.traceId,
+              details: { reason: 'duplicate_collaborator' },
+            });
+          }
+          const now = new Date();
+          if (existing) {
+            await this.collaborators.updateOne(
+              {
+                workspaceId: context.workspaceId,
+                knowledgeSpaceId: resource.knowledgeSpaceId,
+                memberId,
+              },
+              {
+                $set: {
+                  role,
+                  status: 'active',
+                  grantedAt: now,
+                  grantedByMemberId: context.memberId,
+                  revokedAt: null,
+                  deletedAt: null,
+                  updatedByMemberId: context.memberId,
+                },
+                $inc: { version: 1 },
+              },
+              { session },
+            );
+          } else {
+            await this.collaborators.create(
+              [
+                {
+                  workspaceId: context.workspaceId,
+                  knowledgeSpaceId: resource.knowledgeSpaceId,
+                  version: 1,
+                  deletedAt: null,
+                  createdByMemberId: context.memberId,
+                  updatedByMemberId: context.memberId,
+                  memberId,
+                  role,
+                  status: 'active',
+                  grantedAt: now,
+                  grantedByMemberId: context.memberId,
+                  revokedAt: null,
+                },
+              ],
+              { session, ordered: true },
+            );
+          }
+          await this.upsertCollaboratorPermission(
+            resource,
+            memberId,
+            role,
+            snapshotVersion,
+            context,
+            session,
+          );
+          await this.bumpSpacePermissionRevision(resource, context, session);
+          await this.writeAudit(
             {
               workspaceId: context.workspaceId,
               knowledgeSpaceId: resource.knowledgeSpaceId,
-              version: 1,
-              deletedAt: null,
-              createdByMemberId: context.memberId,
-              updatedByMemberId: context.memberId,
-              memberId,
-              role,
-              status: 'active',
-              grantedAt: new Date(),
-              grantedByMemberId: context.memberId,
-              revokedAt: null,
+              action: 'collaborator.create',
+              resourceType: 'space',
+              resourceId: spaceId,
+              outcome: 'succeeded',
+              safeDiff: { memberId, role },
             },
-          ],
-          { session },
-        );
-        await this.upsertCollaboratorPermission(resource, memberId, role, context, session);
-        await this.bumpSpacePermissionRevision(resource, context, session);
-        await this.writeAudit(
-          {
-            workspaceId: context.workspaceId,
-            knowledgeSpaceId: resource.knowledgeSpaceId,
-            action: 'collaborator.create',
-            resourceType: 'space',
-            resourceId: spaceId,
-            outcome: 'succeeded',
-            safeDiff: { memberId, role },
-          },
-          context,
-          session,
-        );
-      });
+            context,
+            session,
+          );
+        });
+      } catch (error) {
+        throw duplicateKeyConflict(error, context);
+      }
     } finally {
       await session.endSession();
     }
-    return {
-      memberId,
-      role,
-      status: 'active' as const,
-      grantedAt: new Date().toISOString(),
-      version: 1,
-    };
+    return this.getCollaborator(spaceId, memberId, context);
   }
 
   async updateCollaborator(
@@ -836,8 +1090,15 @@ export class KnowledgeAccessRepository {
     if (!['read', 'write', 'manage'].includes(role) || !Number.isInteger(expectedVersion)) {
       throw tenantError(context);
     }
+    if (resource.ownershipMemberId === memberId) {
+      throw tenantError(context, 'KNOWLEDGE_VALIDATION_FAILED', {
+        field: 'memberId',
+        reason: 'owner_is_immutable',
+      });
+    }
     const session = await this.connection.startSession();
     try {
+      const snapshotVersion = resource.snapshotVersion + 1;
       await session.withTransaction(async () => {
         const result = await this.collaborators.updateOne(
           {
@@ -862,7 +1123,14 @@ export class KnowledgeAccessRepository {
             details: { memberId, expectedVersion },
           });
         }
-        await this.upsertCollaboratorPermission(resource, memberId, role, context, session);
+        await this.upsertCollaboratorPermission(
+          resource,
+          memberId,
+          role,
+          snapshotVersion,
+          context,
+          session,
+        );
         await this.bumpSpacePermissionRevision(resource, context, session);
         await this.writeAudit(
           {
@@ -898,6 +1166,12 @@ export class KnowledgeAccessRepository {
 
   async deleteCollaborator(spaceId: string, memberId: string, context: TenantContext) {
     const resource = await this.assertPermission('space', spaceId, 'manage', context);
+    if (resource.ownershipMemberId === memberId) {
+      throw tenantError(context, 'KNOWLEDGE_VALIDATION_FAILED', {
+        field: 'memberId',
+        reason: 'owner_is_immutable',
+      });
+    }
     const session = await this.connection.startSession();
     try {
       await session.withTransaction(async () => {
@@ -961,7 +1235,17 @@ export class KnowledgeAccessRepository {
     const resource = await this.assertPermission(resourceType, resourceId, 'owner', context);
     const targetMemberId = String(input.targetMemberId ?? '');
     const expectedVersion = Number(input.version);
-    if (!targetMemberId || !Number.isInteger(expectedVersion)) throw tenantError(context);
+    if (!targetMemberId || !Number.isInteger(expectedVersion)) {
+      throw tenantError(context, 'KNOWLEDGE_VALIDATION_FAILED', {
+        field: !targetMemberId ? 'targetMemberId' : 'version',
+      });
+    }
+    if (targetMemberId === resource.ownershipMemberId) {
+      throw tenantError(context, 'KNOWLEDGE_VALIDATION_FAILED', {
+        field: 'targetMemberId',
+        reason: 'already_owner',
+      });
+    }
     const session = await this.connection.startSession();
     try {
       await session.withTransaction(async () => {
@@ -972,6 +1256,7 @@ export class KnowledgeAccessRepository {
             memberId: targetMemberId,
             status: 'active',
             deletedAt: null,
+            role: 'manage',
           })
           .session(session);
         if (!eligible) {
@@ -991,7 +1276,7 @@ export class KnowledgeAccessRepository {
             ownershipMemberId: targetMemberId,
             updatedByMemberId: context.memberId,
           },
-          $inc: { version: 1, permissionRevision: 1 },
+          $inc: { version: 1, permissionRevision: 1, aclSnapshotVersion: 1 },
         };
         const result =
           resourceType === 'space'
@@ -1007,40 +1292,131 @@ export class KnowledgeAccessRepository {
             details: { field: 'version' },
           });
         }
-        await this.permissions.deleteOne(
+        const descendantDirectories =
+          resourceType === 'space'
+            ? await this.directories
+                .find({
+                  workspaceId: context.workspaceId,
+                  knowledgeSpaceId: resource.knowledgeSpaceId,
+                  deletedAt: null,
+                })
+                .select({ _id: 1, aclMode: 1 })
+                .session(session)
+                .lean()
+            : [];
+        const descendantSources =
+          resourceType === 'space'
+            ? await this.sources
+                .find({
+                  workspaceId: context.workspaceId,
+                  knowledgeSpaceId: resource.knowledgeSpaceId,
+                  deletedAt: null,
+                })
+                .select({ _id: 1, permissionState: 1 })
+                .session(session)
+                .lean()
+            : [];
+        if (resourceType === 'space') {
+          await this.directories.updateMany(
+            {
+              workspaceId: context.workspaceId,
+              knowledgeSpaceId: resource.knowledgeSpaceId,
+              deletedAt: null,
+            },
+            {
+              $set: {
+                ownershipMemberId: targetMemberId,
+                updatedByMemberId: context.memberId,
+              },
+              $inc: { version: 1, permissionRevision: 1, aclSnapshotVersion: 1 },
+            },
+            { session },
+          );
+          await this.sources.updateMany(
+            {
+              workspaceId: context.workspaceId,
+              knowledgeSpaceId: resource.knowledgeSpaceId,
+              deletedAt: null,
+            },
+            {
+              $set: {
+                ownershipMemberId: targetMemberId,
+                updatedByMemberId: context.memberId,
+              },
+              $inc: { version: 1, permissionRevision: 1, aclSnapshotVersion: 1 },
+            },
+            { session },
+          );
+        }
+        const ownerResourceTypes =
+          resourceType === 'space' ? ['space', 'directory', 'source'] : [resourceType];
+        await this.permissions.deleteMany(
           {
             workspaceId: context.workspaceId,
-            resourceType,
-            resourceId: resource.resourceId,
+            knowledgeSpaceId: resource.knowledgeSpaceId,
+            resourceType: { $in: ownerResourceTypes },
             principalType: 'member',
             principalId: resource.ownershipMemberId,
+            permission: 'owner',
           },
           { session },
         );
-        await this.permissions.updateOne(
+        const ownerTargets: Array<{
+          resourceType: AclResourceType;
+          resourceId: Types.ObjectId;
+          snapshotVersion: number;
+        }> = [
           {
-            workspaceId: context.workspaceId,
             resourceType,
             resourceId: resource.resourceId,
-            principalType: 'member',
-            principalId: targetMemberId,
+            snapshotVersion: resource.snapshotVersion + 1,
           },
-          {
-            $set: {
-              knowledgeSpaceId: resource.knowledgeSpaceId,
-              permission: 'owner',
-              inheritMode: 'override',
-              deletedAt: null,
-              updatedByMemberId: context.memberId,
-            },
-            $setOnInsert: {
-              createdByMemberId: context.memberId,
-              snapshotVersion: resource.permissionRevision + 2,
-            },
-            $inc: { version: 1 },
-          },
-          { upsert: true, session },
-        );
+          ...descendantDirectories
+            .filter((item) => item.aclMode === 'override')
+            .map((item) => ({
+              resourceType: 'directory' as const,
+              resourceId: item._id,
+              snapshotVersion: resource.snapshotVersion + 1,
+            })),
+          ...descendantSources
+            .filter((item) => item.permissionState === 'independent')
+            .map((item) => ({
+              resourceType: 'source' as const,
+              resourceId: item._id,
+              snapshotVersion: resource.snapshotVersion + 1,
+            })),
+        ];
+        if (ownerTargets.length > 0) {
+          await this.permissions.bulkWrite(
+            ownerTargets.map((target) => ({
+              updateOne: {
+                filter: {
+                  workspaceId: context.workspaceId,
+                  resourceType: target.resourceType,
+                  resourceId: target.resourceId,
+                  principalType: 'member',
+                  principalId: targetMemberId,
+                },
+                update: {
+                  $set: {
+                    knowledgeSpaceId: resource.knowledgeSpaceId,
+                    permission: 'owner',
+                    inheritMode: 'override',
+                    deletedAt: null,
+                    updatedByMemberId: context.memberId,
+                    snapshotVersion: target.snapshotVersion,
+                  },
+                  $setOnInsert: {
+                    createdByMemberId: context.memberId,
+                  },
+                  $inc: { version: 1 },
+                },
+                upsert: true,
+              },
+            })),
+            { session },
+          );
+        }
         await this.writeAudit(
           {
             workspaceId: context.workspaceId,
@@ -1054,10 +1430,29 @@ export class KnowledgeAccessRepository {
           context,
           session,
         );
+        await createKnowledgeOutboxEvent(
+          this.connection,
+          {
+            workspaceId: context.workspaceId,
+            knowledgeSpaceId: String(resource.knowledgeSpaceId),
+            eventType: 'permission.ownership.transfer',
+            aggregateType: resourceType,
+            aggregateId: resourceId,
+            queue: 'knowledge-index',
+            payload: {
+              resourceType,
+              resourceId,
+              fromMemberId: resource.ownershipMemberId,
+              toMemberId: targetMemberId,
+              permissionRevision: resource.permissionRevision + 1,
+            },
+          },
+          context,
+          session,
+        );
       });
     } finally {
       await session.endSession();
     }
-    return this.getAcl(resourceType, resourceId, context);
   }
 }

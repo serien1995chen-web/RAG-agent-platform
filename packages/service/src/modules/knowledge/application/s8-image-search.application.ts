@@ -31,6 +31,16 @@ interface ChatCompletionEnvelope {
   choices: Array<{ message: { content: string } }>;
 }
 
+interface TextRecallResult {
+  candidates: AuthorizedCandidate[];
+  partial: boolean;
+  degradedCodes: string[];
+  rerankApplied: boolean;
+  filterSummary?: { conditionCount: number; conditionHash: string };
+  usage: { inputTokens: number; outputTokens: number };
+  error?: unknown;
+}
+
 function validationError(context: TenantContext, details: Record<string, unknown>) {
   return createKnowledgeError({
     code: 'KNOWLEDGE_VALIDATION_FAILED',
@@ -48,6 +58,52 @@ function problemCode(error: unknown): string {
     ? String((error as { problem: { error: { code: string } } }).problem.error.code)
     : 'KNOWLEDGE_INTERNAL_ERROR';
 }
+
+function failureFingerprint(error: unknown): {
+  errorName: string;
+  errorCode?: string;
+  errorIssuePaths?: string[];
+} {
+  const rawCode =
+    typeof error === 'object' && error !== null && 'code' in error
+      ? (error as { code?: unknown }).code
+      : undefined;
+  const rawIssues =
+    typeof error === 'object' && error !== null && 'issues' in error
+      ? (error as { issues?: unknown }).issues
+      : undefined;
+  const problem = problemCode(error);
+  const errorCode =
+    typeof rawCode === 'string' || typeof rawCode === 'number'
+      ? String(rawCode)
+      : problem !== 'KNOWLEDGE_INTERNAL_ERROR'
+        ? problem
+        : undefined;
+  return {
+    errorName: error instanceof Error ? error.name : typeof error,
+    ...(errorCode ? { errorCode } : {}),
+    ...(Array.isArray(rawIssues)
+      ? {
+          errorIssuePaths: rawIssues.slice(0, 8).flatMap((issue) => {
+            if (typeof issue !== 'object' || issue === null) return [];
+            const path = 'path' in issue && Array.isArray(issue.path) ? issue.path.join('.') : '';
+            const code = 'code' in issue && typeof issue.code === 'string' ? issue.code : 'unknown';
+            return [path ? `${path}:${code}` : code];
+          }),
+        }
+      : {}),
+  };
+}
+
+type ImageSearchFailureChannel =
+  | 'caption'
+  | 'image_vector'
+  | 'text'
+  | 'finalize'
+  | 'authorization'
+  | 'citation'
+  | 'response'
+  | 'unknown';
 
 function recoverableImageRecallFailure(error: unknown): boolean {
   const code = problemCode(error);
@@ -333,7 +389,7 @@ export class S8ImageSearchApplication {
           limit: 100,
           options: { timeoutMs: 5_000 },
         },
-        { requestId: context.requestId, workspaceId: context.workspaceId },
+        context,
       );
       const candidates = hits.map(
         (hit, index): Candidate => ({
@@ -510,43 +566,55 @@ export class S8ImageSearchApplication {
     const startedAt = Date.now();
     const searchId = this.input.searchIdFactory?.() ?? `search_${randomUUID()}`;
     const degraded: string[] = [];
-    try {
-      const [caption, imageVectors, text] = await Promise.all([
-        this.captionCandidates(request, compiled.allowedSourceIds, context),
-        this.imageVectorCandidates(request, compiled.allowedSourceIds, context),
-        compiled.emptyMatch
-          ? Promise.resolve({
+    let failureChannel: ImageSearchFailureChannel = 'unknown';
+    const observe = <T>(channel: ImageSearchFailureChannel, operation: Promise<T>): Promise<T> =>
+      operation.catch((error: unknown) => {
+        failureChannel = channel;
+        throw error;
+      });
+    const textRecall: Promise<TextRecallResult> = compiled.emptyMatch
+      ? Promise.resolve({
+          candidates: [],
+          partial: false,
+          degradedCodes: [],
+          rerankApplied: false,
+          usage: { inputTokens: 0, outputTokens: 0 },
+        })
+      : this.input.search
+          .collectCandidates({
+            request: {
+              knowledgeSpaceId: request.knowledgeSpaceId,
+              query: request.query,
+              tokenBudget: request.tokenBudget,
+              similarity: request.similarity,
+              embeddingWeight: request.embeddingWeight,
+              usingRerank: request.usingRerank,
+              rerankWeight: request.rerankWeight,
+              ...(request.filters ? { filters: request.filters } : {}),
+            },
+            knowledgeSpaceIds: [request.knowledgeSpaceId],
+            mode: 'hybrid',
+            context,
+            limit: 20,
+          })
+          .catch(
+            (error: unknown): TextRecallResult => ({
               candidates: [],
-              partial: false,
-              degradedCodes: [],
+              partial: true,
+              degradedCodes: ['text_recall_failed'],
               rerankApplied: false,
               usage: { inputTokens: 0, outputTokens: 0 },
-            })
-          : this.input.search
-              .collectCandidates({
-                request: {
-                  knowledgeSpaceId: request.knowledgeSpaceId,
-                  query: request.query,
-                  tokenBudget: request.tokenBudget,
-                  similarity: request.similarity,
-                  embeddingWeight: request.embeddingWeight,
-                  usingRerank: request.usingRerank,
-                  rerankWeight: request.rerankWeight,
-                  ...(request.filters ? { filters: request.filters } : {}),
-                },
-                knowledgeSpaceIds: [request.knowledgeSpaceId],
-                mode: 'hybrid',
-                context,
-                limit: 20,
-              })
-              .catch((error: unknown) => ({
-                candidates: [],
-                partial: true,
-                degradedCodes: ['text_recall_failed'],
-                rerankApplied: false,
-                usage: { inputTokens: 0, outputTokens: 0 },
-                error,
-              })),
+              error,
+            }),
+          );
+    try {
+      const [caption, imageVectors, text] = await Promise.all([
+        observe('caption', this.captionCandidates(request, compiled.allowedSourceIds, context)),
+        observe(
+          'image_vector',
+          this.imageVectorCandidates(request, compiled.allowedSourceIds, context),
+        ),
+        observe('text', textRecall),
       ]);
       if (caption.failed) degraded.push('image_caption_recall_failed');
       if (imageVectors.failed) degraded.push('image_vector_recall_failed');
@@ -571,6 +639,7 @@ export class S8ImageSearchApplication {
           details: { reason: 'empty_result' },
         });
       }
+      failureChannel = 'finalize';
       const imageBlock = fuseImageChannels(caption.candidates, imageVectors.candidates);
       const textBlock = text.candidates.filter(
         (candidate) => candidate.segment.imageBlobRefId === null,
@@ -586,6 +655,7 @@ export class S8ImageSearchApplication {
         knowledgeSpaceIds: [request.knowledgeSpaceId],
       });
       const finalized = finalizeSearchCandidates(internal, fused, text.rerankApplied);
+      failureChannel = 'authorization';
       const candidates: AuthorizedCandidate[] = [];
       for (const candidate of finalized.items) {
         const current = await this.input.authorization.reauthorizeCitation(
@@ -605,6 +675,7 @@ export class S8ImageSearchApplication {
         imageVectors.failed ||
         text.partial ||
         degraded.includes('image_candidate_acl_rejected');
+      failureChannel = 'citation';
       const citations = await this.input.citations.issueWithAudit(
         {
           searchId,
@@ -619,6 +690,7 @@ export class S8ImageSearchApplication {
         },
         context,
       );
+      failureChannel = 'response';
       return this.response({
         searchId,
         request,
@@ -630,6 +702,7 @@ export class S8ImageSearchApplication {
         rerankApplied: text.rerankApplied,
       });
     } catch (error) {
+      const fingerprint = failureFingerprint(error);
       await this.input.audits.appendSearch(
         {
           searchId,
@@ -641,6 +714,10 @@ export class S8ImageSearchApplication {
           degradedCodes: degraded,
           durationMs: Date.now() - startedAt,
           failureCode: problemCode(error),
+          failureChannel,
+          errorName: fingerprint.errorName,
+          ...(fingerprint.errorCode ? { errorCode: fingerprint.errorCode } : {}),
+          ...(fingerprint.errorIssuePaths ? { errorIssuePaths: fingerprint.errorIssuePaths } : {}),
         },
         context,
       );

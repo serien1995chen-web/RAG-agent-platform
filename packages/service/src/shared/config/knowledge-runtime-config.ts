@@ -31,6 +31,7 @@ const EnvironmentSchema = z.object({
   KB_MOCK_AUTH_TOKEN: z.string().min(16).optional(),
   KB_MOCK_WORKSPACE_ID: z.string().min(1).max(64).optional(),
   KB_MOCK_MEMBER_ID: z.string().min(1).max(128).optional(),
+  KB_MOCK_MEMBER_IDS: z.string().optional(),
   KB_MOCK_SCOPES: z.string().default('knowledge:read,knowledge:write,knowledge:manage'),
   KB_MOCK_WORKSPACE_OWNER: z.enum(['true', 'false']).default('false'),
   API_KEY_HMAC_SECRET_FILE: z.string().trim().min(1).optional(),
@@ -56,6 +57,7 @@ export interface KnowledgeMockAuthConfig {
   token: string;
   workspaceId: string;
   memberId: string;
+  workspaceMemberIds?: string[];
   scopes: string[];
   isWorkspaceOwner: boolean;
 }
@@ -163,6 +165,14 @@ export function loadKnowledgeRuntimeConfig(
     data.KB_MOCK_MEMBER_ID,
   ];
   const fixtureComplete = fixtureFields.every((value) => value !== undefined);
+  const configuredWorkspaceMemberIds = [
+    ...new Set(
+      (data.KB_MOCK_MEMBER_IDS ?? '')
+        .split(',')
+        .map((memberId) => memberId.trim())
+        .filter(Boolean),
+    ),
+  ];
   const auth =
     data.KB_AUTH_MODE === 'iam'
       ? ({ mode: 'iam' } as const)
@@ -173,6 +183,13 @@ export function loadKnowledgeRuntimeConfig(
               token: data.KB_MOCK_AUTH_TOKEN!,
               workspaceId: data.KB_MOCK_WORKSPACE_ID!,
               memberId: data.KB_MOCK_MEMBER_ID!,
+              ...(configuredWorkspaceMemberIds.length > 0
+                ? {
+                    workspaceMemberIds: [
+                      ...new Set([data.KB_MOCK_MEMBER_ID!, ...configuredWorkspaceMemberIds]),
+                    ],
+                  }
+                : {}),
               scopes: data.KB_MOCK_SCOPES.split(',')
                 .map((scope) => scope.trim())
                 .filter(Boolean),

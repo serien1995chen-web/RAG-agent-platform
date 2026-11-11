@@ -69,7 +69,11 @@ export type {
   SourcePermissionAction,
   SourcePermissionState,
 } from './domain';
-export { KnowledgeAccessRepository } from './repository/access.repository';
+export {
+  KnowledgeAccessRepository,
+  StaticKnowledgePrincipalDirectory,
+  type KnowledgePrincipalDirectoryPort,
+} from './repository/access.repository';
 export { S10ApiKeyRepository } from './repository/s10-api-key.repository';
 export { S10OperationsRepository } from './repository/s10-operations.repository';
 export { KnowledgeQuotaGate } from './adapter/s10-quota.adapter';

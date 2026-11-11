@@ -194,8 +194,8 @@ jobs:
 
   e2e:
     name: e2e
-    runs-on: ubuntu-latest
-    timeout-minutes: 25
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
     services:
       redis:
         image: redis:7.2-alpine
@@ -230,6 +230,7 @@ jobs:
           restore-keys: |
             next-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml', 'projects/app/next.config.ts') }}-
       - name: Restore Playwright cache
+        id: playwright-cache
         uses: actions/cache@v4
         with:
           path: ~/.cache/ms-playwright
@@ -292,8 +293,21 @@ jobs:
           done
           docker logs kb-ci-minio
           exit 1
-      - name: Install Chromium
-        run: pnpm exec playwright install --with-deps chromium
+      - name: Install Chromium headless shell
+        timeout-minutes: 14
+        env:
+          PLAYWRIGHT_DOWNLOAD_CONNECTION_TIMEOUT: '120000'
+        run: |
+          for attempt in 1 2 3; do
+            if timeout 240 pnpm exec playwright install --only-shell --no-progress chromium; then
+              exit 0
+            fi
+            if [ "$attempt" = "3" ]; then
+              exit 1
+            fi
+            echo "::warning::Chromium headless shell installation failed; retrying."
+            sleep 5
+          done
       - name: End-to-end tests
         run: pnpm test:e2e
       - name: Stop test containers

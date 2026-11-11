@@ -18,6 +18,8 @@ export interface KnowledgeSpaceDoc extends WorkspaceFields {
   accessMode: 'workspace' | 'restricted';
   sourceAclMode: 'inherited' | 'enforced';
   sourcePermissionEnabled: boolean;
+  permissionState: 'disabled' | 'inherited' | 'independent';
+  aclSnapshotVersion: number;
   referenceRevision: number;
   permissionRevision: number;
   modelBindings: Record<string, unknown>;
@@ -40,6 +42,13 @@ export const KnowledgeSpaceSchema = new Schema(
     accessMode: { type: String, enum: ['workspace', 'restricted'], required: true },
     sourceAclMode: { type: String, enum: ['inherited', 'enforced'], required: true },
     sourcePermissionEnabled: { type: Boolean, required: true, default: true },
+    permissionState: {
+      type: String,
+      enum: ['disabled', 'inherited', 'independent'],
+      required: true,
+      default: 'inherited',
+    },
+    aclSnapshotVersion: { type: Number, required: true, min: 1, default: 1 },
     referenceRevision: { type: Number, required: true, min: 0, default: 0 },
     permissionRevision: { type: Number, required: true, min: 0, default: 0 },
     modelBindings: { type: Schema.Types.Mixed, required: true, default: {} },
@@ -81,6 +90,7 @@ export interface KnowledgeDirectoryDoc extends WorkspaceFields {
   sortOrder: number;
   aclMode: 'inherited' | 'override';
   permissionRevision: number;
+  aclSnapshotVersion: number;
   ownershipMemberId: string;
   createdAt: Date;
   updatedAt: Date;
@@ -102,6 +112,7 @@ export const KnowledgeDirectorySchema = new Schema(
       default: 'inherited',
     },
     permissionRevision: { type: Number, required: true, min: 0, default: 0 },
+    aclSnapshotVersion: { type: Number, required: true, min: 1, default: 1 },
     ownershipMemberId: { type: String, required: true },
   },
   knowledgeSchemaOptions('knowledge_directories'),
@@ -169,6 +180,7 @@ export interface KnowledgeSourceDoc extends WorkspaceFields {
   searchEnabled: boolean;
   permissionState: 'disabled' | 'inherited' | 'independent';
   permissionRevision: number;
+  aclSnapshotVersion: number;
   ownershipMemberId: string;
   metadata: Record<string, unknown>;
   tagValues: Array<{ tagId: Types.ObjectId; valueKey: string; value: unknown }>;
@@ -240,6 +252,7 @@ export const KnowledgeSourceSchema = new Schema(
       default: 'disabled',
     },
     permissionRevision: { type: Number, required: true, min: 0, default: 0 },
+    aclSnapshotVersion: { type: Number, required: true, min: 1, default: 1 },
     ownershipMemberId: { type: String, required: true },
     metadata: { type: Schema.Types.Mixed, required: true, default: {} },
     tagValues: { type: [Schema.Types.Mixed], required: true, default: [] },

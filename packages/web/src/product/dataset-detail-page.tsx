@@ -30,6 +30,7 @@ import {
   downloadSource,
   getAcl,
   getConnector,
+  getSource,
   listCollaborators,
   moveDirectory,
   moveSource,
@@ -67,6 +68,7 @@ import type {
   KnowledgeSpace,
   Model,
   ModelBinding,
+  PermissionLevel,
   Source,
   Tag,
 } from './types';
@@ -107,6 +109,10 @@ export interface DatasetDetailQuery {
 type DetailQueryChange = (query: DatasetDetailQuery, options?: { replace?: boolean }) => void;
 
 const ACTIVE_JOB_STATUSES = new Set(['queued', 'running', 'retry_wait', 'paused']);
+
+function permissionRank(permission: PermissionLevel | null | undefined): number {
+  return permission ? { read: 10, write: 20, manage: 30, owner: 40 }[permission] : 0;
+}
 
 export function DatasetDetailPage(props: {
   query: DatasetDetailQuery;
@@ -158,6 +164,7 @@ export function DatasetDetailPage(props: {
     kind: 'space' | 'directory' | 'source';
     id: string;
     name: string;
+    version: number;
     source?: Source;
   } | null>(null);
   const [editDatasetOpen, setEditDatasetOpen] = useState(false);
@@ -794,7 +801,13 @@ export function DatasetDetailPage(props: {
               sources={sources}
               onEdit={openEditDataset}
               onPermission={() =>
-                space && setPermissionTarget({ kind: 'space', id: space.id, name: space.name })
+                space &&
+                setPermissionTarget({
+                  kind: 'space',
+                  id: space.id,
+                  name: space.name,
+                  version: space.version,
+                })
               }
               onSourcePermissionChange={(enabled) => void toggleSourcePermission(enabled)}
               onChanged={() => void invalidateCollection()}
@@ -959,100 +972,119 @@ export function DatasetDetailPage(props: {
                       </tr>
                     </thead>
                     <tbody>
-                      {currentDirectories.map((directory) => (
-                        <tr key={directory.id} className="kb2-directory-row">
-                          <td className="kb2-collection-table__check" />
-                          <td>
-                            <button
-                              type="button"
-                              className="kb2-collection-name kb2-reset-button"
-                              onClick={() =>
-                                navigate({
-                                  datasetId,
-                                  currentTab: 'collectionCard',
-                                  parentId: directory.id,
-                                })
-                              }
-                            >
-                              <ProductTypeIcon kind="folder" />
-                              <span>
-                                <strong>{directory.name}</strong>
-                                <small>目录 · 深度 {directory.depth}</small>
-                              </span>
-                            </button>
-                          </td>
-                          <td>—</td>
-                          <td>文件夹</td>
-                          <td>—</td>
-                          <td>
-                            <StatusTag value="目录" tone="neutral" />
-                          </td>
-                          <td>—</td>
-                          <td>
-                            <div className="kb2-row-actions">
-                              <ProductIconButton
-                                label={`${directory.name} 的目录操作`}
+                      {currentDirectories.map((directory) => {
+                        const canWrite = permissionRank(directory.effectivePermission) >= 20;
+                        const canManage = permissionRank(directory.effectivePermission) >= 30;
+                        const canOwn = permissionRank(directory.effectivePermission) >= 40;
+                        return (
+                          <tr key={directory.id} className="kb2-directory-row">
+                            <td className="kb2-collection-table__check" />
+                            <td>
+                              <button
+                                type="button"
+                                className="kb2-collection-name kb2-reset-button"
                                 onClick={() =>
-                                  setRowMenuId(rowMenuId === directory.id ? null : directory.id)
+                                  navigate({
+                                    datasetId,
+                                    currentTab: 'collectionCard',
+                                    parentId: directory.id,
+                                  })
                                 }
                               >
-                                <span className="kb2-more-dots">···</span>
-                              </ProductIconButton>
-                              <ProductMenu
-                                open={rowMenuId === directory.id}
-                                onClose={() => setRowMenuId(null)}
-                              >
-                                <ProductMenuItem
-                                  icon={<EditIcon boxSize={3.5} />}
-                                  onClick={() => {
-                                    setRowMenuId(null);
-                                    openDirectory(directory);
-                                  }}
-                                >
-                                  编辑目录
-                                </ProductMenuItem>
-                                <ProductMenuItem
-                                  icon={<CopyIcon boxSize={3.5} />}
-                                  onClick={() => {
-                                    setRowMenuId(null);
-                                    openMoveDirectory(directory);
-                                  }}
-                                >
-                                  移动
-                                </ProductMenuItem>
-                                <ProductMenuItem
-                                  icon={<LockIcon boxSize={3.5} />}
-                                  onClick={() => {
-                                    setRowMenuId(null);
-                                    setPermissionTarget({
-                                      kind: 'directory',
-                                      id: directory.id,
-                                      name: directory.name,
-                                    });
-                                  }}
-                                >
-                                  权限
-                                </ProductMenuItem>
-                                <ProductMenuItem
-                                  icon={<DeleteIcon boxSize={3.5} />}
-                                  danger
-                                  onClick={() => {
-                                    setRowMenuId(null);
-                                    setDeleteDirectoryTarget(directory);
-                                    setDeleteError(null);
-                                  }}
-                                >
-                                  删除目录
-                                </ProductMenuItem>
-                              </ProductMenu>
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
+                                <ProductTypeIcon kind="folder" />
+                                <span>
+                                  <strong>{directory.name}</strong>
+                                  <small>目录 · 深度 {directory.depth}</small>
+                                </span>
+                              </button>
+                            </td>
+                            <td>—</td>
+                            <td>文件夹</td>
+                            <td>—</td>
+                            <td>
+                              <StatusTag value="目录" tone="neutral" />
+                            </td>
+                            <td>—</td>
+                            <td>
+                              {canWrite ? (
+                                <div className="kb2-row-actions">
+                                  <ProductIconButton
+                                    label={`${directory.name} 的目录操作`}
+                                    onClick={() =>
+                                      setRowMenuId(rowMenuId === directory.id ? null : directory.id)
+                                    }
+                                  >
+                                    <span className="kb2-more-dots">···</span>
+                                  </ProductIconButton>
+                                  <ProductMenu
+                                    open={rowMenuId === directory.id}
+                                    onClose={() => setRowMenuId(null)}
+                                  >
+                                    {canWrite ? (
+                                      <ProductMenuItem
+                                        icon={<EditIcon boxSize={3.5} />}
+                                        onClick={() => {
+                                          setRowMenuId(null);
+                                          openDirectory(directory);
+                                        }}
+                                      >
+                                        编辑目录
+                                      </ProductMenuItem>
+                                    ) : null}
+                                    {canWrite ? (
+                                      <ProductMenuItem
+                                        icon={<CopyIcon boxSize={3.5} />}
+                                        onClick={() => {
+                                          setRowMenuId(null);
+                                          openMoveDirectory(directory);
+                                        }}
+                                      >
+                                        移动
+                                      </ProductMenuItem>
+                                    ) : null}
+                                    {canManage ? (
+                                      <ProductMenuItem
+                                        icon={<LockIcon boxSize={3.5} />}
+                                        onClick={() => {
+                                          setRowMenuId(null);
+                                          setPermissionTarget({
+                                            kind: 'directory',
+                                            id: directory.id,
+                                            name: directory.name,
+                                            version: directory.version,
+                                          });
+                                        }}
+                                      >
+                                        权限
+                                      </ProductMenuItem>
+                                    ) : null}
+                                    {canOwn ? (
+                                      <ProductMenuItem
+                                        icon={<DeleteIcon boxSize={3.5} />}
+                                        danger
+                                        onClick={() => {
+                                          setRowMenuId(null);
+                                          setDeleteDirectoryTarget(directory);
+                                          setDeleteError(null);
+                                        }}
+                                      >
+                                        删除目录
+                                      </ProductMenuItem>
+                                    ) : null}
+                                  </ProductMenu>
+                                </div>
+                              ) : null}
+                            </td>
+                          </tr>
+                        );
+                      })}
                       {currentSources.map((source) => {
                         const status = sourceStatusView(source.processingStatus);
                         const sourceTags = tagValuesForSource(source, tags);
                         const job = latestJobs.get(source.id);
+                        const canWrite = permissionRank(source.effectivePermission) >= 20;
+                        const canManage = permissionRank(source.effectivePermission) >= 30;
+                        const canOwn = permissionRank(source.effectivePermission) >= 40;
                         return (
                           <tr key={source.id}>
                             <td className="kb2-collection-table__check">
@@ -1123,7 +1155,7 @@ export function DatasetDetailPage(props: {
                                 <input
                                   type="checkbox"
                                   checked={source.searchEnabled}
-                                  disabled={sourceToggleBusyId === source.id}
+                                  disabled={sourceToggleBusyId === source.id || !canWrite}
                                   onChange={(event) =>
                                     void toggleSource(source, event.target.checked)
                                   }
@@ -1133,75 +1165,86 @@ export function DatasetDetailPage(props: {
                               </label>
                             </td>
                             <td>
-                              <div className="kb2-row-actions">
-                                <ProductIconButton
-                                  label={`${source.name} 的更多操作`}
-                                  onClick={() =>
-                                    setRowMenuId(rowMenuId === source.id ? null : source.id)
-                                  }
-                                >
-                                  <span className="kb2-more-dots">···</span>
-                                </ProductIconButton>
-                                <ProductMenu
-                                  open={rowMenuId === source.id}
-                                  onClose={() => setRowMenuId(null)}
-                                >
-                                  <ProductMenuItem
-                                    icon={<DownloadIcon boxSize={3.5} />}
-                                    onClick={() => void downloadOne(source)}
+                              {canWrite ? (
+                                <div className="kb2-row-actions">
+                                  <ProductIconButton
+                                    label={`${source.name} 的更多操作`}
+                                    onClick={() =>
+                                      setRowMenuId(rowMenuId === source.id ? null : source.id)
+                                    }
                                   >
-                                    下载原始文件
-                                  </ProductMenuItem>
-                                  <ProductMenuItem
-                                    icon={<AttachmentIcon boxSize={3.5} />}
-                                    onClick={() => openTagAssignment(source)}
+                                    <span className="kb2-more-dots">···</span>
+                                  </ProductIconButton>
+                                  <ProductMenu
+                                    open={rowMenuId === source.id}
+                                    onClose={() => setRowMenuId(null)}
                                   >
-                                    标签设置
-                                  </ProductMenuItem>
-                                  <ProductMenuItem
-                                    icon={<LockIcon boxSize={3.5} />}
-                                    onClick={() => {
-                                      setRowMenuId(null);
-                                      setPermissionTarget({
-                                        kind: 'source',
-                                        id: source.id,
-                                        name: source.name,
-                                        source,
-                                      });
-                                    }}
-                                  >
-                                    Source 权限
-                                  </ProductMenuItem>
-                                  <ProductMenuItem
-                                    icon={<CopyIcon boxSize={3.5} />}
-                                    onClick={() => openMoveSource(source)}
-                                  >
-                                    移动
-                                  </ProductMenuItem>
-                                  {job ? (
                                     <ProductMenuItem
-                                      icon={<TimeIcon boxSize={3.5} />}
-                                      onClick={() => {
-                                        setRowMenuId(null);
-                                        setTrainingSource(source);
-                                      }}
+                                      icon={<DownloadIcon boxSize={3.5} />}
+                                      onClick={() => void downloadOne(source)}
                                     >
-                                      训练详情
+                                      下载原始文件
                                     </ProductMenuItem>
-                                  ) : null}
-                                  <ProductMenuItem
-                                    icon={<DeleteIcon boxSize={3.5} />}
-                                    danger
-                                    onClick={() => {
-                                      setRowMenuId(null);
-                                      setDeleteSourceTarget(source);
-                                      setDeleteError(null);
-                                    }}
-                                  >
-                                    删除文件
-                                  </ProductMenuItem>
-                                </ProductMenu>
-                              </div>
+                                    {canWrite ? (
+                                      <ProductMenuItem
+                                        icon={<AttachmentIcon boxSize={3.5} />}
+                                        onClick={() => openTagAssignment(source)}
+                                      >
+                                        标签设置
+                                      </ProductMenuItem>
+                                    ) : null}
+                                    {canManage ? (
+                                      <ProductMenuItem
+                                        icon={<LockIcon boxSize={3.5} />}
+                                        onClick={() => {
+                                          setRowMenuId(null);
+                                          setPermissionTarget({
+                                            kind: 'source',
+                                            id: source.id,
+                                            name: source.name,
+                                            version: source.version,
+                                            source,
+                                          });
+                                        }}
+                                      >
+                                        Source 权限
+                                      </ProductMenuItem>
+                                    ) : null}
+                                    {canWrite ? (
+                                      <ProductMenuItem
+                                        icon={<CopyIcon boxSize={3.5} />}
+                                        onClick={() => openMoveSource(source)}
+                                      >
+                                        移动
+                                      </ProductMenuItem>
+                                    ) : null}
+                                    {job ? (
+                                      <ProductMenuItem
+                                        icon={<TimeIcon boxSize={3.5} />}
+                                        onClick={() => {
+                                          setRowMenuId(null);
+                                          setTrainingSource(source);
+                                        }}
+                                      >
+                                        训练详情
+                                      </ProductMenuItem>
+                                    ) : null}
+                                    {canOwn ? (
+                                      <ProductMenuItem
+                                        icon={<DeleteIcon boxSize={3.5} />}
+                                        danger
+                                        onClick={() => {
+                                          setRowMenuId(null);
+                                          setDeleteSourceTarget(source);
+                                          setDeleteError(null);
+                                        }}
+                                      >
+                                        删除文件
+                                      </ProductMenuItem>
+                                    ) : null}
+                                  </ProductMenu>
+                                </div>
+                              ) : null}
                             </td>
                           </tr>
                         );
@@ -1221,6 +1264,7 @@ export function DatasetDetailPage(props: {
                     kind: 'directory',
                     id: currentDirectory.id,
                     name: currentDirectory.name,
+                    version: currentDirectory.version,
                   })
                 }
                 onDelete={() => {
@@ -1236,7 +1280,13 @@ export function DatasetDetailPage(props: {
                 sources={sources}
                 onEdit={openEditDataset}
                 onPermission={() =>
-                  space && setPermissionTarget({ kind: 'space', id: space.id, name: space.name })
+                  space &&
+                  setPermissionTarget({
+                    kind: 'space',
+                    id: space.id,
+                    name: space.name,
+                    version: space.version,
+                  })
                 }
                 onSourcePermissionChange={(enabled) => void toggleSourcePermission(enabled)}
                 onChanged={() => void invalidateCollection()}
@@ -1685,6 +1735,7 @@ function DatasetInfoPanel(props: {
   const [connectorBusy, setConnectorBusy] = useState(false);
   const [connectorError, setConnectorError] = useState<unknown>(null);
   const type = productTypeOf(props.space?.iconKey);
+  const canManage = permissionRank(props.space?.effectivePermission) >= 30;
   const binding = (modelType: ModelBinding['modelType']) =>
     props.bindings.find((entry) => entry.modelType === modelType && entry.status === 'active');
   const connectorId = props.sources.find((source) => source.connectorId)?.connectorId;
@@ -1819,28 +1870,30 @@ function DatasetInfoPanel(props: {
             <div className="kb2-table-muted">当前知识库没有外部数据源连接器。</div>
           )}
         </div>
-        <div className="kb2-info-group">
-          <h3>权限</h3>
-          <label className="kb2-switch-row">
-            <span>
-              <strong>Source 权限</strong>
-              <small>开启后可配置每个 Source 的独立协作者</small>
-            </span>
-            <span className="kb2-switch">
-              <input
-                type="checkbox"
-                checked={props.space?.sourcePermissionEnabled ?? false}
-                onChange={(event) => props.onSourcePermissionChange(event.target.checked)}
-                aria-label="Source 权限总开关"
-              />
-              <span />
-            </span>
-          </label>
-          <ProductButton size="sm" className="kb2-full-button" onClick={props.onPermission}>
-            <LockIcon boxSize={3.5} />
-            管理知识库权限
-          </ProductButton>
-        </div>
+        {canManage ? (
+          <div className="kb2-info-group">
+            <h3>权限</h3>
+            <label className="kb2-switch-row">
+              <span>
+                <strong>Source 权限</strong>
+                <small>开启后可配置每个 Source 的独立协作者</small>
+              </span>
+              <span className="kb2-switch">
+                <input
+                  type="checkbox"
+                  checked={props.space?.sourcePermissionEnabled ?? false}
+                  onChange={(event) => props.onSourcePermissionChange(event.target.checked)}
+                  aria-label="Source 权限总开关"
+                />
+                <span />
+              </span>
+            </label>
+            <ProductButton size="sm" className="kb2-full-button" onClick={props.onPermission}>
+              <LockIcon boxSize={3.5} />
+              管理知识库权限
+            </ProductButton>
+          </div>
+        ) : null}
       </aside>
 
       <ProductModal
@@ -1919,6 +1972,9 @@ function DirectoryInfoPanel(props: {
   onPermission: () => void;
   onDelete: () => void;
 }) {
+  const canWrite = permissionRank(props.directory.effectivePermission) >= 20;
+  const canManage = permissionRank(props.directory.effectivePermission) >= 30;
+  const canOwn = permissionRank(props.directory.effectivePermission) >= 40;
   return (
     <aside className="kb2-info-panel" aria-label="目录信息">
       <div className="kb2-info-panel__headline">
@@ -1928,24 +1984,30 @@ function DirectoryInfoPanel(props: {
           <StatusTag value={`层级 ${props.directory.depth}`} tone="warning" />
         </div>
       </div>
-      <div className="kb2-folder-panel__actions">
-        <ProductButton size="sm" onClick={props.onEdit}>
-          <EditIcon boxSize={3.5} />
-          编辑
-        </ProductButton>
-        <ProductButton size="sm" onClick={props.onMove}>
-          <CopyIcon boxSize={3.5} />
-          移动
-        </ProductButton>
-        <ProductButton size="sm" onClick={props.onPermission}>
-          <LockIcon boxSize={3.5} />
-          权限
-        </ProductButton>
-        <ProductButton size="sm" tone="danger" onClick={props.onDelete}>
-          <DeleteIcon boxSize={3.5} />
-          删除
-        </ProductButton>
-      </div>
+      {canWrite ? (
+        <div className="kb2-folder-panel__actions">
+          <ProductButton size="sm" onClick={props.onEdit}>
+            <EditIcon boxSize={3.5} />
+            编辑
+          </ProductButton>
+          <ProductButton size="sm" onClick={props.onMove}>
+            <CopyIcon boxSize={3.5} />
+            移动
+          </ProductButton>
+          {canManage ? (
+            <ProductButton size="sm" onClick={props.onPermission}>
+              <LockIcon boxSize={3.5} />
+              权限
+            </ProductButton>
+          ) : null}
+          {canOwn ? (
+            <ProductButton size="sm" tone="danger" onClick={props.onDelete}>
+              <DeleteIcon boxSize={3.5} />
+              删除
+            </ProductButton>
+          ) : null}
+        </div>
+      ) : null}
       <div className="kb2-info-group">
         <h3>目录信息</h3>
         <InfoLine label="目录 ID" value={props.directory.id} mono />
@@ -2236,6 +2298,7 @@ function ResourcePermissionDialog(props: {
     kind: 'space' | 'directory' | 'source';
     id: string;
     name: string;
+    version: number;
     source?: Source;
   } | null;
   space?: KnowledgeSpace;
@@ -2251,6 +2314,9 @@ function ResourcePermissionDialog(props: {
     useState<Acl['entries'][number]['principalType']>('member');
   const [principalId, setPrincipalId] = useState('');
   const [permission, setPermission] = useState<Acl['entries'][number]['permission']>('read');
+  const [activeVersion, setActiveVersion] = useState(0);
+  const [activeSource, setActiveSource] = useState<Source | null>(null);
+  const [pendingTransition, setPendingTransition] = useState<'disable' | 'detach' | null>(null);
   const acl = useQuery({
     queryKey: ['kb-product', 'acl', props.target?.kind, props.target?.id],
     queryFn: () => getAcl(props.target!.kind, props.target!.id),
@@ -2266,6 +2332,9 @@ function ResourcePermissionDialog(props: {
     setError(null);
     setMemberId('');
     setPrincipalId('');
+    setActiveVersion(props.target?.version ?? 0);
+    setActiveSource(props.target?.source ?? null);
+    setPendingTransition(null);
   }, [props.target]);
 
   const addSpaceCollaborator = async (event: FormEvent) => {
@@ -2308,17 +2377,26 @@ function ResourcePermissionDialog(props: {
     setBusy(true);
     setError(null);
     try {
-      await updateAcl(props.target.kind, props.target.id, {
-        inheritMode: 'override',
-        permissionState: 'independent',
-        permissionRevision: acl.data.permissionRevision,
-        snapshotVersion: acl.data.snapshotVersion,
-        entries: [
-          ...acl.data.entries,
-          { principalType, principalId: principalId.trim(), permission },
-        ],
-      });
+      await updateAcl(
+        props.target.kind,
+        props.target.id,
+        {
+          inheritMode: 'override',
+          entries: [
+            ...acl.data.entries,
+            { principalType, principalId: principalId.trim(), permission },
+          ],
+        },
+        activeVersion,
+      );
       await acl.refetch();
+      if (props.target.kind === 'source' && activeSource) {
+        const refreshed = await getSource(activeSource.id);
+        setActiveSource(refreshed);
+        setActiveVersion(refreshed.version);
+      } else {
+        setActiveVersion((value) => value + 1);
+      }
       props.onChanged();
       setPrincipalId('');
       toast.success('权限条目已添加');
@@ -2330,11 +2408,14 @@ function ResourcePermissionDialog(props: {
   };
 
   const transition = async (action: 'enable' | 'disable' | 'detach' | 'resume-inherit') => {
-    if (!props.target?.source) return;
+    if (!activeSource) return;
     setBusy(true);
     setError(null);
     try {
-      await transitionSourcePermission(props.target.source, action);
+      await transitionSourcePermission(activeSource, action);
+      const refreshed = await getSource(activeSource.id);
+      setActiveSource(refreshed);
+      setActiveVersion(refreshed.version);
       await acl.refetch();
       props.onChanged();
       toast.success('Source 权限状态已更新');
@@ -2345,151 +2426,210 @@ function ResourcePermissionDialog(props: {
     }
   };
 
+  const requestTransition = (action: 'enable' | 'disable' | 'detach' | 'resume-inherit') => {
+    if (action === 'disable' || action === 'detach') {
+      setPendingTransition(action);
+      return;
+    }
+    void transition(action);
+  };
+
   return (
-    <ProductModal
-      open={Boolean(props.target)}
-      title="权限配置"
-      description={props.target?.name}
-      size="lg"
-      onClose={() => !busy && props.onClose()}
-    >
-      <ProductError error={error ?? acl.error ?? collaborators.error} />
-      <div className="kb2-note">
-        {acl.data
-          ? `ACL：${acl.data.permissionState} / ${acl.data.inheritMode} · 权限版本 ${acl.data.permissionRevision}`
-          : '正在读取 ACL'}
-      </div>
-      {props.target?.kind === 'source' && props.target.source ? (
-        <div className="kb2-permission-actions">
-          <ProductButton size="sm" busy={busy} onClick={() => void transition('enable')}>
-            启用独立权限
-          </ProductButton>
-          <ProductButton size="sm" busy={busy} onClick={() => void transition('resume-inherit')}>
-            恢复继承
-          </ProductButton>
-          <ProductButton
-            size="sm"
-            tone="danger"
-            busy={busy}
-            onClick={() => void transition('disable')}
-          >
-            关闭 Source 权限
-          </ProductButton>
-          <ProductButton
-            size="sm"
-            tone="danger"
-            busy={busy}
-            onClick={() => void transition('detach')}
-          >
-            解除权限
-          </ProductButton>
+    <>
+      <ProductModal
+        open={Boolean(props.target)}
+        title="权限配置"
+        description={props.target?.name}
+        size="lg"
+        onClose={() => !busy && props.onClose()}
+      >
+        <ProductError error={error ?? acl.error ?? collaborators.error} />
+        <div className="kb2-note">
+          {acl.data
+            ? `ACL：${acl.data.permissionState} / ${acl.data.inheritMode} · 权限版本 ${acl.data.permissionRevision}`
+            : '正在读取 ACL'}
         </div>
-      ) : null}
-      {props.target?.kind === 'space' ? (
-        <>
-          <form className="kb2-permission-add" onSubmit={addSpaceCollaborator}>
-            <ProductField label="成员 ID">
-              <ProductInput
-                value={memberId}
-                onChange={(event) => setMemberId(event.target.value)}
-                placeholder="输入成员标识"
-              />
-            </ProductField>
-            <ProductField label="角色">
-              <ProductSelect
-                value={role}
-                onChange={(event) => setRole(event.target.value as Collaborator['role'])}
-              >
-                <option value="read">只读</option>
-                <option value="write">可写</option>
-                <option value="manage">可管理</option>
-              </ProductSelect>
-            </ProductField>
-            <ProductButton type="submit" tone="primary" busy={busy} disabled={!memberId.trim()}>
-              添加
+        {props.target?.kind === 'source' && activeSource ? (
+          <div className="kb2-permission-actions">
+            {!props.space?.sourcePermissionEnabled ? (
+              <p className="kb2-table-muted">请先在知识库信息中开启 Source 权限总开关。</p>
+            ) : acl.data?.permissionState === 'disabled' ? (
+              <ProductButton size="sm" busy={busy} onClick={() => requestTransition('enable')}>
+                启用 Source 权限
+              </ProductButton>
+            ) : acl.data?.permissionState === 'inherited' ? (
+              <>
+                <ProductButton size="sm" busy={busy} onClick={() => requestTransition('detach')}>
+                  解除继承
+                </ProductButton>
+                <ProductButton
+                  size="sm"
+                  tone="danger"
+                  busy={busy}
+                  onClick={() => requestTransition('disable')}
+                >
+                  关闭 Source 权限
+                </ProductButton>
+              </>
+            ) : acl.data?.permissionState === 'independent' ? (
+              <>
+                <ProductButton
+                  size="sm"
+                  busy={busy}
+                  onClick={() => requestTransition('resume-inherit')}
+                >
+                  恢复继承
+                </ProductButton>
+                <ProductButton
+                  size="sm"
+                  tone="danger"
+                  busy={busy}
+                  onClick={() => requestTransition('disable')}
+                >
+                  关闭 Source 权限
+                </ProductButton>
+              </>
+            ) : null}
+          </div>
+        ) : null}
+        {props.target?.kind === 'space' ? (
+          <>
+            <form className="kb2-permission-add" onSubmit={addSpaceCollaborator}>
+              <ProductField label="成员 ID">
+                <ProductInput
+                  value={memberId}
+                  onChange={(event) => setMemberId(event.target.value)}
+                  placeholder="输入成员标识"
+                />
+              </ProductField>
+              <ProductField label="角色">
+                <ProductSelect
+                  value={role}
+                  onChange={(event) => setRole(event.target.value as Collaborator['role'])}
+                >
+                  <option value="read">只读</option>
+                  <option value="write">可写</option>
+                  <option value="manage">可管理</option>
+                </ProductSelect>
+              </ProductField>
+              <ProductButton type="submit" tone="primary" busy={busy} disabled={!memberId.trim()}>
+                添加
+              </ProductButton>
+            </form>
+            <div className="kb2-tag-manager-list">
+              {(collaborators.data?.items ?? [])
+                .filter((item) => item.status === 'active')
+                .map((item) => (
+                  <div className="kb2-tag-manager-row" key={item.memberId}>
+                    <span>
+                      <strong>{item.memberId}</strong>
+                      <small>
+                        {item.role} · {formatDate(item.grantedAt)}
+                      </small>
+                    </span>
+                    <StatusTag value={item.role} tone="info" />
+                    <ProductIconButton
+                      label={`移除协作者 ${item.memberId}`}
+                      tone="danger"
+                      onClick={() => void removeSpaceCollaborator(item)}
+                    >
+                      <DeleteIcon boxSize={3.5} />
+                    </ProductIconButton>
+                  </div>
+                ))}
+            </div>
+          </>
+        ) : null}
+        <div className="kb2-divider" />
+        <h3 className="kb2-dialog-section-title">ACL 条目</h3>
+        <div className="kb2-tag-manager-list">
+          {(acl.data?.entries ?? []).map((entry, index) => (
+            <div
+              className="kb2-tag-manager-row"
+              key={`${entry.principalType}-${entry.principalId}-${index}`}
+            >
+              <span>
+                <strong>{entry.principalId}</strong>
+                <small>{entry.principalType}</small>
+              </span>
+              <StatusTag value={entry.permission} tone="info" />
+            </div>
+          ))}
+        </div>
+        <form className="kb2-acl-add" onSubmit={addAclEntry}>
+          <ProductField label="主体类型">
+            <ProductSelect
+              value={principalType}
+              onChange={(event) =>
+                setPrincipalType(event.target.value as Acl['entries'][number]['principalType'])
+              }
+            >
+              <option value="member">成员</option>
+              <option value="group">群组</option>
+              <option value="org">组织</option>
+              <option value="workspace">工作区</option>
+            </ProductSelect>
+          </ProductField>
+          <ProductField label="主体 ID">
+            <ProductInput
+              value={principalId}
+              onChange={(event) => setPrincipalId(event.target.value)}
+            />
+          </ProductField>
+          <ProductField label="权限">
+            <ProductSelect
+              value={permission}
+              onChange={(event) =>
+                setPermission(event.target.value as Acl['entries'][number]['permission'])
+              }
+            >
+              <option value="read">只读</option>
+              <option value="write">可写</option>
+              <option value="manage">可管理</option>
+            </ProductSelect>
+          </ProductField>
+          <ProductButton
+            type="submit"
+            tone="primary"
+            busy={busy}
+            disabled={!principalId.trim() || !acl.data}
+          >
+            添加 ACL
+          </ProductButton>
+        </form>
+      </ProductModal>
+      <ProductModal
+        open={pendingTransition !== null}
+        title="确认权限变更"
+        description={
+          pendingTransition === 'detach'
+            ? '解除继承后，该 Source 将使用独立 ACL。'
+            : '关闭后，该 Source 的独立协作者配置将被清空。'
+        }
+        onClose={() => !busy && setPendingTransition(null)}
+        footer={
+          <>
+            <ProductButton onClick={() => setPendingTransition(null)} disabled={busy}>
+              取消
             </ProductButton>
-          </form>
-          <div className="kb2-tag-manager-list">
-            {(collaborators.data?.items ?? [])
-              .filter((item) => item.status === 'active')
-              .map((item) => (
-                <div className="kb2-tag-manager-row" key={item.memberId}>
-                  <span>
-                    <strong>{item.memberId}</strong>
-                    <small>
-                      {item.role} · {formatDate(item.grantedAt)}
-                    </small>
-                  </span>
-                  <StatusTag value={item.role} tone="info" />
-                  <ProductIconButton
-                    label={`移除协作者 ${item.memberId}`}
-                    tone="danger"
-                    onClick={() => void removeSpaceCollaborator(item)}
-                  >
-                    <DeleteIcon boxSize={3.5} />
-                  </ProductIconButton>
-                </div>
-              ))}
-          </div>
-        </>
-      ) : null}
-      <div className="kb2-divider" />
-      <h3 className="kb2-dialog-section-title">ACL 条目</h3>
-      <div className="kb2-tag-manager-list">
-        {(acl.data?.entries ?? []).map((entry, index) => (
-          <div
-            className="kb2-tag-manager-row"
-            key={`${entry.principalType}-${entry.principalId}-${index}`}
-          >
-            <span>
-              <strong>{entry.principalId}</strong>
-              <small>{entry.principalType}</small>
-            </span>
-            <StatusTag value={entry.permission} tone="info" />
-          </div>
-        ))}
-      </div>
-      <form className="kb2-acl-add" onSubmit={addAclEntry}>
-        <ProductField label="主体类型">
-          <ProductSelect
-            value={principalType}
-            onChange={(event) =>
-              setPrincipalType(event.target.value as Acl['entries'][number]['principalType'])
-            }
-          >
-            <option value="member">成员</option>
-            <option value="group">群组</option>
-            <option value="workspace">工作区</option>
-          </ProductSelect>
-        </ProductField>
-        <ProductField label="主体 ID">
-          <ProductInput
-            value={principalId}
-            onChange={(event) => setPrincipalId(event.target.value)}
-          />
-        </ProductField>
-        <ProductField label="权限">
-          <ProductSelect
-            value={permission}
-            onChange={(event) =>
-              setPermission(event.target.value as Acl['entries'][number]['permission'])
-            }
-          >
-            <option value="read">只读</option>
-            <option value="write">可写</option>
-            <option value="manage">可管理</option>
-          </ProductSelect>
-        </ProductField>
-        <ProductButton
-          type="submit"
-          tone="primary"
-          busy={busy}
-          disabled={!principalId.trim() || !acl.data}
-        >
-          添加 ACL
-        </ProductButton>
-      </form>
-    </ProductModal>
+            <ProductButton
+              tone="danger"
+              busy={busy}
+              onClick={() => {
+                if (!pendingTransition) return;
+                const action = pendingTransition;
+                setPendingTransition(null);
+                void transition(action);
+              }}
+            >
+              确认
+            </ProductButton>
+          </>
+        }
+      >
+        <p className="kb2-confirm-copy">请确认继续执行该权限变更。</p>
+      </ProductModal>
+    </>
   );
 }
 
