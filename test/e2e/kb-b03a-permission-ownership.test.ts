@@ -175,10 +175,20 @@ describe('B03A ACL and ownership desktop behavior', () => {
       await openSourcePermission(page, spaceId, sourceName);
       await capture('L1-B03-COL-004-UI01', page, async () => {
         for (const step of [
-          { button: '启用独立权限', endpoint: 'enable', state: 'inherited / inherit' },
-          { button: '解除权限', endpoint: 'detach', state: 'independent / override' },
+          { button: '启用 Source 权限', endpoint: 'enable', state: 'inherited / inherit' },
+          {
+            button: '解除继承',
+            endpoint: 'detach',
+            state: 'independent / override',
+            confirm: true,
+          },
           { button: '恢复继承', endpoint: 'resume-inherit', state: 'inherited / inherit' },
-          { button: '关闭 Source 权限', endpoint: 'disable', state: 'disabled / inherit' },
+          {
+            button: '关闭 Source 权限',
+            endpoint: 'disable',
+            state: 'disabled / inherit',
+            confirm: true,
+          },
         ]) {
           const response = page.waitForResponse(
             (item) =>
@@ -187,6 +197,12 @@ describe('B03A ACL and ownership desktop behavior', () => {
                 `/v1/knowledge/sources/${source.payload.data?.id}/permissions/${step.endpoint}`,
           );
           await page.getByRole('button', { name: step.button }).click();
+          if ('confirm' in step && step.confirm) {
+            await page
+              .getByRole('dialog', { name: '确认权限变更' })
+              .getByRole('button', { name: '确认' })
+              .click();
+          }
           expect((await response).status(), step.button).toBe(200);
           await playwrightExpect(page.getByText(step.state, { exact: false })).toBeVisible();
         }
@@ -226,7 +242,7 @@ describe('B03A ACL and ownership desktop behavior', () => {
             }),
           }),
       );
-      await page.getByRole('button', { name: '启用独立权限' }).click();
+      await page.getByRole('button', { name: '启用 Source 权限' }).click();
       await capture('L1-B03-COL-004-UI02', page, async () => {
         const dialog = page.getByRole('dialog', { name: '权限配置' });
         await playwrightExpect(dialog).toBeVisible();

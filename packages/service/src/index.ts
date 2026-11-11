@@ -75,6 +75,7 @@ export {
   FixtureScopedAuthPort,
   FixtureQuotaGatePort,
   KnowledgeAccessRepository,
+  StaticKnowledgePrincipalDirectory,
   S10ApiKeyRepository,
   S10OperationsRepository,
   KnowledgeQuotaGate,

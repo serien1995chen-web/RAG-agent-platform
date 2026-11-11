@@ -399,18 +399,16 @@ export function updateAcl(
   resourceId: string,
   input: {
     inheritMode: Acl['inheritMode'];
-    permissionState: Acl['permissionState'];
-    permissionRevision: number;
-    snapshotVersion: number;
     entries: Acl['entries'];
   },
+  version: number,
 ) {
   return knowledgeRequest<Acl>(
     `/v1/knowledge/resources/${resourceType}/${encodeURIComponent(resourceId)}/acl`,
     {
       method: 'PUT',
       idempotencyKey: key(),
-      body: input,
+      body: { inheritMode: input.inheritMode, entries: input.entries, version },
     },
   );
 }
@@ -650,7 +648,7 @@ export function updateCollaborator(
     {
       method: 'PATCH',
       idempotencyKey: key(),
-      body: { role, version: 1 },
+      body: { role, version: collaborator.version },
     },
   );
 }

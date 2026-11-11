@@ -74,6 +74,9 @@ function directoryDto(document: Plain<KnowledgeDirectoryDoc>, parentPath?: strin
     path: document.path.map(String),
     depth: document.depth,
     aclMode: document.aclMode,
+    permissionRevision: document.permissionRevision,
+    aclSnapshotVersion: document.aclSnapshotVersion ?? 1,
+    ownershipMemberId: document.ownershipMemberId,
     version: document.version,
     ...(parentPath ? { parentPath } : {}),
   };
@@ -98,6 +101,8 @@ function sourceDto(document: Plain<KnowledgeSourceDoc>, parentPath?: string[]) {
     searchEnabled: document.searchEnabled,
     permissionState: document.permissionState,
     permissionRevision: document.permissionRevision,
+    aclSnapshotVersion: document.aclSnapshotVersion ?? 1,
+    ownershipMemberId: document.ownershipMemberId,
     tagValues: document.tagValues.map((entry) => ({
       tagId: String(entry.tagId),
       valueKey: entry.valueKey,
@@ -322,6 +327,8 @@ export class KnowledgeCatalogRepository {
               accessMode: input.accessMode,
               sourceAclMode: input.sourceAclMode,
               sourcePermissionEnabled: input.sourcePermissionEnabled ?? true,
+              permissionState: input.accessMode === 'restricted' ? 'independent' : 'inherited',
+              aclSnapshotVersion: 1,
               referenceRevision: 0,
               permissionRevision: 0,
               modelBindings,
@@ -1005,6 +1012,7 @@ export class KnowledgeCatalogRepository {
       sortOrder: 0,
       aclMode: 'inherited',
       permissionRevision: 0,
+      aclSnapshotVersion: 1,
       ownershipMemberId: context.memberId,
     });
     return directoryDto(created as unknown as Plain<KnowledgeDirectoryDoc>);
@@ -1201,6 +1209,7 @@ export class KnowledgeCatalogRepository {
       searchEnabled: input.searchEnabled ?? true,
       permissionState: 'disabled',
       permissionRevision: 0,
+      aclSnapshotVersion: 1,
       ownershipMemberId: context.memberId,
       metadata: input.metadata ?? {},
       tagValues: [],

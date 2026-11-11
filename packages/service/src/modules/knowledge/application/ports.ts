@@ -243,7 +243,7 @@ export interface AccessPort {
     resourceId: string,
     required: PermissionLevel,
     context: TenantContext,
-  ): Promise<unknown>;
+  ): Promise<{ effectivePermission: PermissionLevel }>;
   getAcl(
     resourceType: AclResourceType,
     resourceId: string,
@@ -288,7 +288,7 @@ export interface AccessPort {
     resourceId: string,
     input: Record<string, unknown>,
     context: TenantContext,
-  ): Promise<AclView>;
+  ): Promise<void>;
   transitionSourcePermission(
     sourceId: string,
     action: SourcePermissionAction,

@@ -95,6 +95,7 @@ import {
   KnowledgeMockAuthProvider,
   KnowledgeApiKeyAuthProvider,
   KnowledgeCompositeAuthProvider,
+  StaticKnowledgePrincipalDirectory,
   KnowledgeQuotaGate,
   KnowledgeScopedAuthAdapter,
   KnowledgeSharedUsageAdapter,
@@ -249,7 +250,19 @@ async function bootstrapRuntime(): Promise<TelemetryKnowledgeApiRuntime> {
   });
 
   const catalog = new KnowledgeCatalogRepository(mongo);
-  const access = new KnowledgeAccessRepository(mongo);
+  const workspaceMemberIds =
+    config.auth.mode === 'mock' ? config.auth.fixture.workspaceMemberIds : undefined;
+  const access = new KnowledgeAccessRepository(
+    mongo,
+    workspaceMemberIds?.length
+      ? new StaticKnowledgePrincipalDirectory(
+          workspaceMemberIds.map((memberId) => ({
+            workspaceId: config.auth.mode === 'mock' ? config.auth.fixture.workspaceId : '',
+            memberId,
+          })),
+        )
+      : undefined,
+  );
   const objectRefs = new KnowledgeObjectRefRepository(mongo);
   const s5RuntimeEnv = loadS5RuntimeEnvironment();
   const s5AiproxyConfig = loadS5AiproxyConfig(s5RuntimeEnv);

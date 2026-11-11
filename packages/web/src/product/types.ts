@@ -8,6 +8,8 @@ export interface PageResult<T> {
   pageInfo?: PageInfo;
 }
 
+export type PermissionLevel = 'read' | 'write' | 'manage' | 'owner';
+
 export interface KnowledgeSpace {
   id: string;
   workspaceId: string;
@@ -21,6 +23,7 @@ export interface KnowledgeSpace {
   accessMode: 'workspace' | 'restricted';
   sourceAclMode: 'inherited' | 'enforced';
   sourcePermissionEnabled: boolean;
+  effectivePermission?: PermissionLevel;
   modelBindings?: Record<string, unknown>;
   referenceRevision: number;
   status: string;
@@ -39,6 +42,10 @@ export interface Directory {
   parentPath?: string[];
   depth: number;
   aclMode: 'inherited' | 'override';
+  permissionRevision?: number;
+  aclSnapshotVersion?: number;
+  ownershipMemberId?: string;
+  effectivePermission?: PermissionLevel;
   version: number;
 }
 
@@ -79,6 +86,9 @@ export interface Source {
   searchEnabled: boolean;
   permissionState: string;
   permissionRevision: number;
+  aclSnapshotVersion?: number;
+  ownershipMemberId?: string;
+  effectivePermission?: PermissionLevel;
   segmentCount?: number;
   tagValues?: SourceTagValue[];
   version: number;
@@ -178,6 +188,7 @@ export interface Collaborator {
   role: 'read' | 'write' | 'manage' | 'owner';
   status: 'active' | 'revoked';
   grantedAt: string;
+  version: number;
 }
 
 export interface Acl {
@@ -188,7 +199,7 @@ export interface Acl {
   permissionRevision: number;
   snapshotVersion: number;
   entries: Array<{
-    principalType: 'member' | 'group' | 'workspace';
+    principalType: 'member' | 'group' | 'org' | 'workspace';
     principalId: string;
     permission: 'read' | 'write' | 'manage' | 'owner';
   }>;

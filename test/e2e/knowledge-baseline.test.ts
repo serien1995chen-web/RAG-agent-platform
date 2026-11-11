@@ -812,6 +812,17 @@ describe.sequential('knowledge architecture baseline E2E', () => {
       },
     });
     source = asObject(await callApi('API-SOURCE-GET', { params: { sourceId: scenario.sourceId } }));
+    await callApi('API-PERMISSION-ENABLE', {
+      params: { sourceId: scenario.sourceId },
+      body: {
+        version: asNumber(source.version, 'source.version'),
+        expectedPermissionRevision: asNumber(
+          source.permissionRevision,
+          'source.permissionRevision',
+        ),
+      },
+    });
+    source = asObject(await callApi('API-SOURCE-GET', { params: { sourceId: scenario.sourceId } }));
 
     await callApi('API-ACL-GET', {
       params: { resourceType: 'source', resourceId: scenario.sourceId },

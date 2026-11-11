@@ -6,7 +6,7 @@ import type { WorkspaceFields } from '../knowledge/tenant';
 export interface KnowledgeResourcePermissionDoc extends WorkspaceFields {
   resourceType: 'space' | 'directory' | 'source';
   resourceId: Types.ObjectId;
-  principalType: 'member' | 'group' | 'workspace';
+  principalType: 'member' | 'group' | 'org' | 'workspace';
   principalId: string;
   permission: 'read' | 'write' | 'manage' | 'owner';
   inheritMode: 'inherit' | 'override';
@@ -26,7 +26,7 @@ export const KnowledgeResourcePermissionSchema = new Schema(
     resourceId: { type: Schema.Types.ObjectId, required: true },
     principalType: {
       type: String,
-      enum: ['member', 'group', 'workspace'],
+      enum: ['member', 'group', 'org', 'workspace'],
       required: true,
     },
     principalId: { type: String, required: true },

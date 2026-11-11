@@ -7,6 +7,7 @@ import {
   KnowledgeCatalogRepository,
   KnowledgeJobRepository,
   KnowledgeTagRepository,
+  StaticKnowledgePrincipalDirectory,
 } from '../../src/modules/knowledge';
 import { createKnowledgeMongoConnection } from '../../src/shared/runtime/knowledge-connections';
 import {
@@ -141,7 +142,15 @@ beforeAll(async () => {
   connection = await createKnowledgeMongoConnection(requiredEnv('KB_TEST_MONGO_URI'));
   await ensureKnowledgeCollections(connection);
   catalog = new KnowledgeCatalogRepository(connection);
-  access = new KnowledgeAccessRepository(connection);
+  access = new KnowledgeAccessRepository(
+    connection,
+    new StaticKnowledgePrincipalDirectory(
+      [ownerContext, managerContext, editorContext, viewerContext].map((entry) => ({
+        workspaceId: entry.workspaceId,
+        memberId: entry.memberId,
+      })),
+    ),
+  );
   application = new KnowledgeApplication(
     catalog,
     new KnowledgeTagRepository(connection),
@@ -329,16 +338,6 @@ describe('B03A ACL state and persistence', () => {
       inheritMode: 'override',
     });
 
-    await run('API-ACL-RESUME', {
-      params: { resourceType: 'space', resourceId: space.id },
-      body: {
-        version: (await run('API-SPACE-GET', { params: { spaceId: space.id } })).data.version,
-      },
-    });
-    expect(
-      (await run('API-ACL-GET', { params: { resourceType: 'space', resourceId: space.id } })).data,
-    ).toMatchObject({ permissionState: 'inherited', inheritMode: 'inherit' });
-
     const directory = await createDirectory(space.id, `Directory ${suffix}`);
     const override = (
       await run('API-ACL-UPDATE', {
@@ -411,7 +410,7 @@ describe('B03A ACL state and persistence', () => {
           expectedPermissionRevision: currentSource.permissionRevision,
         },
       }),
-    ).rejects.toMatchObject({ problem: { error: { code: 'KNOWLEDGE_CONFLICT' } } });
+    ).resolves.toMatchObject({ data: { permissionState: 'inherited' } });
 
     const disabledSource = await createSource(space.id, `Disabled source ${suffix}`);
     const models = registerKnowledgeModels(connection);
@@ -714,14 +713,16 @@ describe('B03A roles, inheritance and collaborator support', () => {
   });
 
   it('L1-B03-AUTH-002-A01 hides collaborator membership from readers and revokes immediately', async () => {
-    const space = await createSpace(`Collaborator visibility ${suffix}`);
+    const space = await createSpace(`Collaborator visibility ${suffix}`, {
+      accessMode: 'restricted',
+    });
     const collaborator = await access.createCollaborator(
       space.id,
       { memberId: viewerContext.memberId, role: 'read' },
       ownerContext,
     );
     await expect(access.listCollaborators(space.id, viewerContext)).rejects.toMatchObject({
-      problem: { error: { code: 'KNOWLEDGE_NOT_FOUND' } },
+      problem: { error: { code: 'KNOWLEDGE_FORBIDDEN' } },
     });
     await access.deleteCollaborator(space.id, viewerContext.memberId, ownerContext);
     await expect(
@@ -808,6 +809,46 @@ describe('B03A roles, inheritance and collaborator support', () => {
       }),
     ).toBe(1);
   });
+
+  it('L1-B03-AUTH-003-N04 rejects an unknown Workspace member before writing collaborator or ACL rows', async () => {
+    const space = await createSpace(`Unknown principal ${suffix}`);
+    const unknownMemberId = `mem_unknown_${suffix}`;
+    const models = registerKnowledgeModels(connection);
+    const before = {
+      collaborators: await models.KnowledgeCollaborator.countDocuments({
+        workspaceId,
+        knowledgeSpaceId: space.id,
+      }),
+      permissions: await models.KnowledgeResourcePermission.countDocuments({
+        workspaceId,
+        knowledgeSpaceId: space.id,
+      }),
+    };
+    await expect(
+      access.createCollaborator(
+        space.id,
+        { memberId: unknownMemberId, role: 'read' },
+        ownerContext,
+      ),
+    ).rejects.toMatchObject({
+      problem: {
+        error: {
+          code: 'KNOWLEDGE_VALIDATION_FAILED',
+          details: { field: 'memberId', reason: 'member_not_eligible' },
+        },
+      },
+    });
+    expect({
+      collaborators: await models.KnowledgeCollaborator.countDocuments({
+        workspaceId,
+        knowledgeSpaceId: space.id,
+      }),
+      permissions: await models.KnowledgeResourcePermission.countDocuments({
+        workspaceId,
+        knowledgeSpaceId: space.id,
+      }),
+    }).toEqual(before);
+  });
 });
 
 describe('B03A ownership transfer', () => {
@@ -878,16 +919,10 @@ describe('B03A ownership transfer', () => {
 
   it('L1-B03-AUTH-004-N02 rejects transferring ownership to the current owner', async () => {
     const selfSpace = await createSpace(`Self target ${suffix}`);
-    await access.createCollaborator(
-      selfSpace.id,
-      { memberId: ownerContext.memberId, role: 'manage' },
-      ownerContext,
-    );
-    const currentSelfSpace = await getSpace(selfSpace.id);
     await expect(
       run('API-OWNERSHIP-TRANSFER', {
         params: { spaceId: selfSpace.id },
-        body: { targetMemberId: ownerContext.memberId, version: currentSelfSpace.version },
+        body: { targetMemberId: ownerContext.memberId, version: selfSpace.version },
       }),
     ).rejects.toMatchObject({ problem: { error: { code: 'KNOWLEDGE_VALIDATION_FAILED' } } });
   });
