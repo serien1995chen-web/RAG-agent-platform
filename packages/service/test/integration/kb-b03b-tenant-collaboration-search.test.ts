@@ -486,4 +486,101 @@ describe('L1 B03B tenant, collaboration, ACL snapshot and final search authoriza
       state: 'active',
     });
   });
+
+  it('L1-B03-AUTH-002-A01 角色从 read 更新为 write 后最终检索仍按最新 ACL 放行', async () => {
+    const fixture = await harness.createSearchFixture();
+    const collaborator = await harness.access.createCollaborator(
+      fixture.space.id,
+      { memberId: harness.readerA.memberId, role: 'read' },
+      harness.ownerA,
+    );
+    expect((await harness.hydrate(fixture.candidate, harness.readerA)).items).toHaveLength(1);
+    await harness.access.updateCollaborator(
+      fixture.space.id,
+      harness.readerA.memberId,
+      { role: 'write', version: collaborator.version },
+      harness.ownerA,
+    );
+    const hydrated = await harness.hydrate(fixture.candidate, harness.readerA);
+    expect(hydrated.items[0]).toMatchObject({
+      sourceId: fixture.source.id,
+    });
+  });
+
+  it('L1-B03-AUTH-004-A01 所有权转移后新 Owner 可搜索管理且旧 Owner 不再管理', async () => {
+    const fixture = await harness.createSearchFixture();
+    await harness.access.createCollaborator(
+      fixture.space.id,
+      { memberId: harness.managerA.memberId, role: 'manage' },
+      harness.ownerA,
+    );
+    const latest = await harness.catalog.getSpace(fixture.space.id, harness.ownerA);
+    const transferError = await harness.access
+      .transferOwnership(
+        'space',
+        fixture.space.id,
+        { targetMemberId: harness.managerA.memberId, version: latest.version },
+        harness.ownerA,
+      )
+      .catch((error) => error);
+    const newOwnerCanManage = await harness.access
+      .assertPermission('space', fixture.space.id, 'owner', harness.managerA)
+      .then(
+        () => true,
+        () => false,
+      );
+    const oldOwnerCanManage = await harness.access
+      .assertPermission('space', fixture.space.id, 'manage', harness.ownerA)
+      .then(
+        () => true,
+        () => false,
+      );
+    const hydrated = await harness.hydrate(fixture.candidate, harness.managerA);
+    expect(newOwnerCanManage).toBe(true);
+    expect(oldOwnerCanManage).toBe(false);
+    expect(hydrated.items).toHaveLength(1);
+    expect(transferError).toBeUndefined();
+  });
+
+  it('L1-B03-COL-004-A01 搜索关闭的 Source 不进入最终检索结果', async () => {
+    const space = await harness.createSpace(harness.ownerA);
+    const source = await harness.createSource(space.id, harness.ownerA, {
+      searchEnabled: false,
+    });
+    const segment = await harness.catalog.createSegment(
+      source.id,
+      {
+        question: `disabled source ${harness.suffix}`,
+        answer: `disabled answer ${harness.suffix}`,
+        searchEnabled: true,
+      },
+      harness.ownerA,
+    );
+    await harness.models.KnowledgeSegment.updateOne(
+      {
+        workspaceId: harness.workspaceA,
+        _id: new Types.ObjectId(segment.id),
+      },
+      {
+        $set: {
+          indexStatus: 'indexed',
+          fullTextVersion: 1,
+        },
+      },
+    );
+    const hydrated = await harness.hydrate(
+      {
+        docId: `${space.id}:${segment.id}`,
+        segmentId: segment.id,
+        sourceId: source.id,
+        knowledgeSpaceId: space.id,
+        score: 0.99,
+        scores: [{ type: 'embedding', score: 0.99 }],
+        text: `disabled source ${harness.suffix}`,
+        fullTextVersion: 1,
+      },
+      harness.ownerA,
+    );
+    expect(hydrated).toMatchObject({ items: [], rejected: 1 });
+  });
 });
