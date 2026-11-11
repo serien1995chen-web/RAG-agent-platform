@@ -1,6 +1,11 @@
 import { createKnowledgeError } from '@kb/contracts';
 import { Types, type Model } from 'mongoose';
-import { requireWorkspaceId, type TenantContext, type WorkspaceFields } from './tenant';
+import {
+  requireWorkspaceId,
+  tenantError,
+  type TenantContext,
+  type WorkspaceFields,
+} from './tenant';
 
 export interface CasUpdateInput {
   id: string;
@@ -41,6 +46,17 @@ export async function workspaceCasUpdate<TDoc extends WorkspaceFields>(
     { new: true, runValidators: true },
   );
   if (!updated) {
+    const existing = await model
+      .findOne({
+        _id: new Types.ObjectId(input.id),
+        workspaceId,
+        deletedAt: null,
+      })
+      .select({ _id: 1 })
+      .lean();
+    if (!existing) {
+      throw tenantError(context, 'KNOWLEDGE_NOT_FOUND');
+    }
     throw createKnowledgeError({
       code: 'KNOWLEDGE_CONFLICT',
       requestId: context.requestId,

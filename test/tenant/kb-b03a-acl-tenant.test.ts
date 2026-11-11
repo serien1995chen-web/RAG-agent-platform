@@ -14,6 +14,7 @@ import {
   registerKnowledgeModels,
 } from '../../packages/service/src/shared/persistence/schemas/knowledge-index';
 import type { TenantContext } from '../../packages/service/src/shared/persistence/knowledge/tenant';
+import { workspaceFilter } from '../../packages/service/src/shared/persistence/knowledge/tenant';
 
 function requiredEnv(name: string): string {
   const value = process.env[name]?.trim();
@@ -235,5 +236,39 @@ describe('B03A ACL tenant guard', () => {
         },
       },
     });
+  });
+
+  it('L1-B03-AUTH-001-N01 rejects missing member before repository filtering or writes', async () => {
+    expect(() =>
+      workspaceFilter({
+        ...ownerA,
+        memberId: ' ',
+      }),
+    ).toThrow(
+      expect.objectContaining({
+        problem: expect.objectContaining({
+          error: expect.objectContaining({
+            code: 'KNOWLEDGE_VALIDATION_FAILED',
+            details: expect.objectContaining({ field: 'memberId' }),
+          }),
+        }),
+      }),
+    );
+  });
+
+  it('L1-B03-AUTH-001-A01 returns not-found for cross-workspace update without changing the resource', async () => {
+    const fixture = await seed();
+    const models = registerKnowledgeModels(connection);
+    const before = await models.KnowledgeSpace.findById(fixture.space.id).lean();
+    await expect(
+      run('API-SPACE-UPDATE', {
+        params: { spaceId: fixture.space.id },
+        body: { version: fixture.space.version, name: 'cross workspace mutation' },
+        context: ownerB,
+      }),
+    ).rejects.toMatchObject({
+      problem: { error: { code: 'KNOWLEDGE_NOT_FOUND' } },
+    });
+    expect(await models.KnowledgeSpace.findById(fixture.space.id).lean()).toEqual(before);
   });
 });
