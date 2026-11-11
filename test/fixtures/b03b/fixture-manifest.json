@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "groupId": "B03",
+  "capabilities": ["AUTH-001", "AUTH-003"],
+  "workspaceModel": {
+    "workspaceA": "restricted source owner with Manager and Reader actors",
+    "workspaceB": "foreign owner used for cross-tenant denial checks"
+  },
+  "sourceStates": ["disabled", "inherited", "independent", "deleted"],
+  "permissionActors": ["owner", "manager", "reader", "non-member", "group", "foreign-owner"],
+  "searchFixture": {
+    "segmentIndexStatus": "indexed",
+    "candidateVersion": 1,
+    "expectedFinalAuthorization": "hydrate against current ACL revision"
+  },
+  "objectFixture": {
+    "provider": "minio",
+    "purpose": "source",
+    "ticketBinding": "workspaceId, memberId, blobId and sourceId"
+  },
+  "queueFixture": {
+    "kind": "export",
+    "scope": "space",
+    "workspaceScoped": true
+  },
+  "testFiles": [
+    "packages/service/test/integration/kb-b03b-tenant-collaboration-search.test.ts",
+    "test/tenant/kb-b03b-tenant-guard.test.ts",
+    "test/security/kb-b03b-tenant-context.test.ts",
+    "test/concurrency/kb-b03b-search-acl.test.ts",
+    "test/e2e/kb-b03b-collaboration-search.test.ts"
+  ]
+}
