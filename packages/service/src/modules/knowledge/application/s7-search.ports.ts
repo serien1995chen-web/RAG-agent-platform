@@ -71,7 +71,7 @@ export interface S7FullTextSearchPort {
       limit: number;
       options: { timeoutMs: number };
     },
-    context: { requestId: string; workspaceId: string },
+    context: { requestId: string; workspaceId: string; memberId: string },
   ): Promise<S7FullTextHit[]>;
 }
 

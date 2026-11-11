@@ -333,7 +333,11 @@ export class S8ImageSearchApplication {
           limit: 100,
           options: { timeoutMs: 5_000 },
         },
-        { requestId: context.requestId, workspaceId: context.workspaceId },
+        {
+          requestId: context.requestId,
+          workspaceId: context.workspaceId,
+          memberId: context.memberId,
+        },
       );
       const candidates = hits.map(
         (hit, index): Candidate => ({

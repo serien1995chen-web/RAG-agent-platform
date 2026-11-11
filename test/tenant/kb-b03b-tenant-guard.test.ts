@@ -68,6 +68,24 @@ describe('L1 B03B tenant guard and repository audit', () => {
     });
   });
 
+  it('L1-B03-AUTH-001-N03 空 Member 上下文在 repository 过滤前 fail closed', async () => {
+    expect(() =>
+      workspaceFilter({
+        ...harness.ownerA,
+        memberId: ' ',
+      }),
+    ).toThrow(
+      expect.objectContaining({
+        problem: expect.objectContaining({
+          error: expect.objectContaining({
+            code: 'KNOWLEDGE_VALIDATION_FAILED',
+            details: expect.objectContaining({ field: 'memberId' }),
+          }),
+        }),
+      }),
+    );
+  });
+
   it('L1-B03-AUTH-001-A01 双 Workspace 列表详情队列对象和聚合不互相混用', async () => {
     const spaceA = await harness.createSpace(harness.ownerA);
     const sourceA = await harness.createSource(spaceA.id, harness.ownerA);
@@ -199,6 +217,21 @@ describe('L1 B03B tenant guard and repository audit', () => {
     }).lean();
     expect(after?.version).toBe(before?.version);
     expect(after?.name).toBe(before?.name);
+
+    const local = await harness.createSpace(harness.ownerA);
+    await expect(
+      harness.catalog.updateSpace(
+        local.id,
+        { version: local.version + 1, name: 'stale local update' },
+        harness.ownerA,
+      ),
+    ).rejects.toMatchObject({
+      problem: { error: { code: 'KNOWLEDGE_CONFLICT' } },
+    });
+    await expect(harness.catalog.getSpace(local.id, harness.ownerA)).resolves.toMatchObject({
+      name: `B03B space ${harness.suffix}`,
+      version: local.version,
+    });
   });
 
   it('L1-B03-AUTH-001-Q01 repository aggregate 静态扫描可证明 tenant 条件', async () => {
