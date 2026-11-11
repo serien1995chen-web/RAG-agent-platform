@@ -535,6 +535,48 @@ describe('B04 Segment CRUD, indexes and status', () => {
     expect(await models.KnowledgeJob.countDocuments({ workspaceId })).toBe(jobCount);
   });
 
+  it('L1-B04-DATA-002-N03 invalid index ID and empty text fail before persistence', async () => {
+    const segmentId = await seedSegment({ order: 0, question: 'invalid index target' });
+    await expect(
+      segmentIndexes.upsert(
+        segmentId,
+        {
+          indexId: 'contains spaces',
+          type: 'custom',
+          text: 'valid text',
+          modelId: 'mock-embedding-768',
+          version: 3,
+        },
+        'create',
+        context,
+      ),
+    ).rejects.toMatchObject({ problem: { error: { code: 'KNOWLEDGE_VALIDATION_FAILED' } } });
+    await expect(
+      segmentIndexes.upsert(
+        segmentId,
+        {
+          indexId: 'custom_empty',
+          type: 'custom',
+          text: '   ',
+          modelId: 'mock-embedding-768',
+          version: 3,
+        },
+        'create',
+        context,
+      ),
+    ).rejects.toMatchObject({ problem: { error: { code: 'KNOWLEDGE_VALIDATION_FAILED' } } });
+    expect(await catalog.getSegment(segmentId, context)).toMatchObject({
+      version: 3,
+      indexes: [],
+    });
+  });
+
+  it('L1-B04-DATA-003-N03 malformed Job ID fails closed without BSON internals', async () => {
+    await expect(jobs.getRaw('not-a-job-id', context)).rejects.toMatchObject({
+      problem: { error: { code: 'KNOWLEDGE_VALIDATION_FAILED' } },
+    });
+  });
+
   it('L1-B04-DATA-001-S02 Segment and parent Source search switches reject semantic and full-text candidates', async () => {
     const models = registerKnowledgeModels(connection);
     const searchSpaceId = new mongoose.Types.ObjectId();
