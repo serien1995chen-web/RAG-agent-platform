@@ -179,8 +179,8 @@ async function processS6Index(targetSegmentId: Types.ObjectId, text: string) {
   const current = await segmentIndexes.upsert(
     String(targetSegmentId),
     {
-      indexId: 'default',
-      type: 'default',
+      indexId: 'primary',
+      type: 'custom',
       text,
       modelId: 'mock-embedding-768',
       version: 1,
@@ -244,7 +244,7 @@ async function processS6Index(targetSegmentId: Types.ObjectId, text: string) {
   expect(indexed?.indexStatus).toBe('indexed');
   expect(indexed?.fullTextVersion).toBeGreaterThan(0);
   expect(indexed?.indexes[0]).toMatchObject({
-    indexId: 'default',
+    indexId: 'primary',
     modelId: 'mock-embedding-768',
     dimension: 768,
   });

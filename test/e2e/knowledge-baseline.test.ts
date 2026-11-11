@@ -88,6 +88,7 @@ const scenario: {
   directoryId?: string;
   sourceId?: string;
   segmentId?: string;
+  segmentVersion?: number;
   tagId?: string;
   sourceDeleteJobId?: string;
   blobId?: string;
@@ -700,13 +701,16 @@ describe.sequential('knowledge architecture baseline E2E', () => {
     );
     scenario.segmentId = asString(createdSegment.id, 'segment.id');
     await callApi('API-SEGMENT-GET', { params: { segmentId: scenario.segmentId } });
-    await callApi('API-SEGMENT-UPDATE', {
-      params: { segmentId: scenario.segmentId },
-      body: {
-        version: asNumber(createdSegment.version, 'segment.version'),
-        answer: 'The production HTTP runtime uses real Mongo, Redis, pgvector and MinIO.',
-      },
-    });
+    const updatedSegment = asObject(
+      await callApi('API-SEGMENT-UPDATE', {
+        params: { segmentId: scenario.segmentId },
+        body: {
+          version: asNumber(createdSegment.version, 'segment.version'),
+          answer: 'The production HTTP runtime uses real Mongo, Redis, pgvector and MinIO.',
+        },
+      }),
+    );
+    scenario.segmentVersion = asNumber(updatedSegment.version, 'segment.version.updated');
 
     await callApi('API-TAG-LIST', {
       params: { spaceId: scenario.spaceId },
@@ -2641,6 +2645,7 @@ describe.sequential('knowledge architecture baseline E2E', () => {
   it('finishes the delete paths, reads Jobs and proves all 65 baseline operations ran', async () => {
     await callApi('API-SEGMENT-DELETE', {
       params: { segmentId: requiredId(scenario.segmentId, 'segmentId') },
+      body: { version: asNumber(scenario.segmentVersion, 'segment.version') },
     });
     const sourceDelete = asObject(
       await callApi('API-SOURCE-DELETE', {

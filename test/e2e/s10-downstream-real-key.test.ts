@@ -136,8 +136,8 @@ async function seedIndex() {
   await indexes.upsert(
     segmentId,
     {
-      indexId: 'default',
-      type: 'default',
+      indexId: 'primary',
+      type: 'custom',
       text: 'Refunds take five business days.',
       modelId: 'mock-embedding-768',
       version: 1,

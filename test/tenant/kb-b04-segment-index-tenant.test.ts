@@ -10,6 +10,7 @@ import {
   KnowledgeAccessRepository,
   KnowledgeJobExecutionRepository,
   KnowledgeSegmentIndexRepository,
+  S06JobApplication,
 } from '../../packages/service/src/modules/knowledge';
 import { createKnowledgeMongoConnection } from '../../packages/service/src/shared/runtime/knowledge-connections';
 import type { TenantContext } from '../../packages/service/src/shared/persistence/knowledge/tenant';
@@ -155,7 +156,7 @@ describe('B04 tenant isolation', () => {
     ).rejects.toMatchObject({
       problem: { error: { code: expect.stringMatching(/KNOWLEDGE_(NOT_FOUND|CONFLICT)/) } },
     });
-    await expect(catalog.deleteSegment(segmentIdText, contextB)).rejects.toMatchObject({
+    await expect(catalog.deleteSegment(segmentIdText, contextB, 3)).rejects.toMatchObject({
       problem: { error: { code: 'KNOWLEDGE_NOT_FOUND' } },
     });
     expect(await catalog.getSegment(segmentIdText, contextA)).toMatchObject({
@@ -286,6 +287,17 @@ describe('B04 tenant isolation', () => {
     ).resolves.toMatchObject({ effectivePermission: 'write' });
     await expect(
       access.assertPermission('source', sourceId, 'manage', asMember(editorId)),
+    ).rejects.toMatchObject({ problem: { error: { code: 'KNOWLEDGE_NOT_FOUND' } } });
+    const batchApplication = new S06JobApplication(jobs, segmentIndexes, catalog, access);
+    await expect(
+      batchApplication.dispatch({
+        operationId: 'API-SEGMENT-BATCH',
+        params: {},
+        query: {},
+        headers: {},
+        body: { action: 'delete', items: [{ id: segmentId, version: 3 }] },
+        context: asMember(editorId),
+      }),
     ).rejects.toMatchObject({ problem: { error: { code: 'KNOWLEDGE_NOT_FOUND' } } });
     await expect(
       access.assertPermission('source', sourceId, 'manage', asMember(managerId)),

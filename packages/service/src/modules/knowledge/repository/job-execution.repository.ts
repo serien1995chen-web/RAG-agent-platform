@@ -12,6 +12,7 @@ import type { KnowledgeConnectorDoc } from '../../../shared/persistence/schemas/
 import { createKnowledgeOutboxEvent } from '../../../shared/persistence/knowledge/outbox';
 import { withMongoTransaction } from '../../../shared/persistence/with-mongo-transaction';
 import {
+  objectIdOf,
   requireWorkspaceId,
   tenantError,
   type TenantContext,
@@ -294,7 +295,7 @@ export class KnowledgeJobExecutionRepository {
   async getRaw(jobId: string, context: TenantContext) {
     const document = await this.jobs
       .findOne({
-        _id: jobId,
+        _id: objectIdOf(jobId, context, 'jobId'),
         workspaceId: requireWorkspaceId(context),
         deletedAt: null,
       })
@@ -310,7 +311,7 @@ export class KnowledgeJobExecutionRepository {
     const now = new Date();
     const job = await this.jobs.findOneAndUpdate(
       {
-        _id: input.jobId,
+        _id: objectIdOf(input.jobId, context, 'jobId'),
         workspaceId: requireWorkspaceId(context),
         deletedAt: null,
         status: 'queued',
@@ -343,7 +344,7 @@ export class KnowledgeJobExecutionRepository {
   ) {
     const updated = await this.jobs.findOneAndUpdate(
       {
-        _id: jobId,
+        _id: objectIdOf(jobId, context, 'jobId'),
         workspaceId: requireWorkspaceId(context),
         version: expectedVersion,
         status: 'leased',
@@ -378,7 +379,7 @@ export class KnowledgeJobExecutionRepository {
     const now = new Date();
     const updated = await this.jobs.findOneAndUpdate(
       {
-        _id: jobId,
+        _id: objectIdOf(jobId, context, 'jobId'),
         workspaceId: requireWorkspaceId(context),
         version: expectedVersion,
         status: { $in: ['leased', 'running'] },
@@ -408,7 +409,7 @@ export class KnowledgeJobExecutionRepository {
   ) {
     const current = await this.jobs
       .findOne({
-        _id: jobId,
+        _id: objectIdOf(jobId, context, 'jobId'),
         workspaceId: requireWorkspaceId(context),
         version: expectedVersion,
         status: 'running',
@@ -430,7 +431,7 @@ export class KnowledgeJobExecutionRepository {
     };
     const updated = await this.jobs.findOneAndUpdate(
       {
-        _id: jobId,
+        _id: objectIdOf(jobId, context, 'jobId'),
         workspaceId: requireWorkspaceId(context),
         version: current.version,
         status: 'running',
@@ -468,7 +469,7 @@ export class KnowledgeJobExecutionRepository {
     context: TenantContext,
   ) {
     const current = await this.jobs.findOne({
-      _id: jobId,
+      _id: objectIdOf(jobId, context, 'jobId'),
       workspaceId: requireWorkspaceId(context),
       version: expectedVersion,
       status: 'running',
@@ -528,7 +529,7 @@ export class KnowledgeJobExecutionRepository {
   ) {
     const current = await this.jobs
       .findOne({
-        _id: jobId,
+        _id: objectIdOf(jobId, context, 'jobId'),
         workspaceId: requireWorkspaceId(context),
         status: { $in: ['leased', 'running'] },
         deletedAt: null,
@@ -538,7 +539,7 @@ export class KnowledgeJobExecutionRepository {
     const priorResult = (current.result ?? {}) as Record<string, unknown>;
     const updated = await this.jobs.findOneAndUpdate(
       {
-        _id: jobId,
+        _id: objectIdOf(jobId, context, 'jobId'),
         workspaceId: requireWorkspaceId(context),
         version: current.version,
         status: { $in: ['leased', 'running'] },
@@ -831,7 +832,7 @@ export class KnowledgeJobExecutionRepository {
     return withMongoTransaction(this.connection, async (session) => {
       const root = await this.jobs
         .findOne({
-          _id: jobId,
+          _id: objectIdOf(jobId, context, 'jobId'),
           workspaceId: requireWorkspaceId(context),
           version: expectedVersion,
           deletedAt: null,

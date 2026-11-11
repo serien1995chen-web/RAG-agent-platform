@@ -284,7 +284,7 @@ describe('B04 Segment CRUD, indexes and status', () => {
       { question: 'updated safely', answer: 'sibling isolation', version: 3 },
       context,
     );
-    const deleted = await catalog.deleteSegment(first, context);
+    const deleted = await catalog.deleteSegment(first, context, 3);
     expect(deleted).toMatchObject({ id: first, status: 'accepted' });
     expect((await catalog.getSegment(second, context)).question).toBe('updated safely');
     expect(await catalog.getSegment(third, context)).toEqual(beforeThird);

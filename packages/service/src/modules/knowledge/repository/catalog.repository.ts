@@ -1473,6 +1473,8 @@ export class KnowledgeCatalogRepository {
           answer: current.answer,
           changedAt: new Date(),
           changedByMemberId: context.memberId,
+          operation: 'segment.update',
+          indexes: current.indexes.map((index) => ({ ...index })),
         },
       ].slice(-20);
       update.history = history;
@@ -1485,7 +1487,7 @@ export class KnowledgeCatalogRepository {
     return segmentDto(updated as unknown as Plain<KnowledgeSegmentDoc>);
   }
 
-  async deleteSegment(segmentId: string, context: TenantContext) {
+  async deleteSegment(segmentId: string, context: TenantContext, expectedVersion: number) {
     requireWorkspaceId(context);
     const objectId = objectIdOf(segmentId, context, 'segmentId');
     const session = await this.connection.startSession();
@@ -1500,6 +1502,14 @@ export class KnowledgeCatalogRepository {
           })
           .session(session);
         if (!segment) throw tenantError(context, 'KNOWLEDGE_NOT_FOUND');
+        if (segment.version !== expectedVersion) {
+          throw tenantError(context, 'KNOWLEDGE_CONFLICT', {
+            reason: 'version_conflict',
+            segmentId,
+            expectedVersion,
+            actualVersion: segment.version,
+          });
+        }
         await this.segments.updateOne(
           { _id: objectId, workspaceId: context.workspaceId, version: segment.version },
           {

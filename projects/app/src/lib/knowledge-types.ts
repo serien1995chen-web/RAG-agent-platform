@@ -91,6 +91,10 @@ export interface SegmentHistoryRecord {
   answer: string;
   changedAt: string;
   changedByMemberId: string;
+  operation?: 'segment.update' | 'index.create' | 'index.update' | 'index.delete' | 'index.reindex';
+  indexId?: string;
+  indexes?: SegmentIndexRecord[];
+  nextIndexes?: SegmentIndexRecord[];
 }
 
 export interface TagRecord {

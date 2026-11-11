@@ -22,6 +22,7 @@ type Plain<T> = T & { _id: Types.ObjectId; version: number };
 
 const INDEX_TYPES = ['default', 'custom', 'question', 'summary'] as const;
 const INDEX_ID = /^[a-zA-Z0-9_-]{1,64}$/;
+const SYSTEM_INDEX_IDS = new Set(['default']);
 
 function validation(context: TenantContext, details: Record<string, unknown>) {
   return createKnowledgeError({
@@ -39,6 +40,46 @@ function conflict(context: TenantContext, details: Record<string, unknown>) {
     traceId: context.traceId,
     details,
   });
+}
+
+function forbidden(context: TenantContext, details: Record<string, unknown>) {
+  return createKnowledgeError({
+    code: 'KNOWLEDGE_FORBIDDEN',
+    requestId: context.requestId,
+    traceId: context.traceId,
+    details,
+  });
+}
+
+function isSystemIndex(index: Pick<SegmentIndexValue, 'indexId' | 'type'>) {
+  return index.type !== 'custom' || SYSTEM_INDEX_IDS.has(index.indexId);
+}
+
+function appendHistory(
+  segment: Plain<KnowledgeSegmentDoc>,
+  context: TenantContext,
+  input: {
+    operation: string;
+    indexId?: string;
+    nextIndexes?: SegmentIndexValue[];
+  },
+) {
+  return [
+    ...segment.history,
+    {
+      version: segment.version,
+      question: segment.question,
+      answer: segment.answer,
+      changedAt: new Date(),
+      changedByMemberId: context.memberId,
+      operation: input.operation,
+      ...(input.indexId ? { indexId: input.indexId } : {}),
+      indexes: segment.indexes.map((index) => ({ ...index })),
+      ...(input.nextIndexes
+        ? { nextIndexes: input.nextIndexes.map((index) => ({ ...index })) }
+        : {}),
+    },
+  ].slice(-20);
 }
 
 function segmentDto(document: Plain<KnowledgeSegmentDoc>) {
@@ -98,6 +139,9 @@ export class KnowledgeSegmentIndexRepository {
     }
     if (!INDEX_TYPES.includes(input.type)) {
       throw validation(context, { field: 'type' });
+    }
+    if (input.type !== 'custom' || SYSTEM_INDEX_IDS.has(input.indexId)) {
+      throw validation(context, { field: 'type', reason: 'generated_index_read_only' });
     }
     if (!input.text.trim()) throw validation(context, { field: 'text', reason: 'required' });
     const catalog = await this.models.listModels({
@@ -163,11 +207,18 @@ export class KnowledgeSegmentIndexRepository {
           .lean<Plain<KnowledgeSegmentDoc>>();
         if (!segment) throw conflict(context, { reason: 'version_conflict', segmentId });
         const exists = segment.indexes.some((index) => index.indexId === input.indexId);
+        const existing = segment.indexes.find((index) => index.indexId === input.indexId);
         if (mode === 'create' && exists) {
           throw conflict(context, { reason: 'index_exists', indexId: input.indexId });
         }
         if (mode === 'update' && !exists) {
           throw tenantError(context, 'KNOWLEDGE_NOT_FOUND', { indexId: input.indexId });
+        }
+        if (mode === 'update' && existing && isSystemIndex(existing)) {
+          throw forbidden(context, {
+            reason: 'generated_index_read_only',
+            indexId: input.indexId,
+          });
         }
         const nextVersion = segment.version + 1;
         const nextIndex = await this.resolveIndex(segment, input, nextVersion, context);
@@ -185,6 +236,11 @@ export class KnowledgeSegmentIndexRepository {
           {
             $set: {
               indexes,
+              history: appendHistory(segment, context, {
+                operation: mode === 'create' ? 'index.create' : 'index.update',
+                indexId: input.indexId,
+                nextIndexes: indexes,
+              }),
               indexStatus: 'pending',
               indexErrorCode: null,
               updatedByMemberId: context.memberId,
@@ -242,6 +298,12 @@ export class KnowledgeSegmentIndexRepository {
         if (!segment) throw conflict(context, { reason: 'version_conflict', segmentId });
         const index = segment.indexes.find((candidate) => candidate.indexId === indexId);
         if (!index) throw tenantError(context, 'KNOWLEDGE_NOT_FOUND', { indexId });
+        if (isSystemIndex(index)) {
+          throw forbidden(context, {
+            reason: 'generated_index_read_only',
+            indexId,
+          });
+        }
         const job = await this.jobs.createInSession(
           {
             kind: 'index',
@@ -265,6 +327,11 @@ export class KnowledgeSegmentIndexRepository {
           { _id: segment._id, workspaceId, version: segment.version },
           {
             $set: {
+              history: appendHistory(
+                segment.toObject() as unknown as Plain<KnowledgeSegmentDoc>,
+                context,
+                { operation: 'index.delete', indexId },
+              ),
               indexStatus: 'rebuilding',
               indexErrorCode: null,
               updatedByMemberId: context.memberId,
@@ -328,6 +395,10 @@ export class KnowledgeSegmentIndexRepository {
           { _id: segment._id, workspaceId, version: segment.version },
           {
             $set: {
+              history: appendHistory(segment, context, {
+                operation: 'index.reindex',
+                nextIndexes: segment.indexes,
+              }),
               indexStatus: 'rebuilding',
               indexErrorCode: null,
               updatedByMemberId: context.memberId,

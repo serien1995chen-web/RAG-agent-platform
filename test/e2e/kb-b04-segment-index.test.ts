@@ -332,12 +332,16 @@ describe.sequential('B04 product Data UI', () => {
   });
 
   it('L1-B04-DATA-002-UI02 persisted Segment and index history is discoverable from the Data editor', async () => {
+    await registerKnowledgeModels(connection).KnowledgeSegment.updateOne(
+      { _id: indexedSegmentId, workspaceId },
+      { $set: { indexStatus: 'indexed', indexErrorCode: null } },
+    );
     const context = await newContext();
     const page = await context.newPage();
     await gotoData(page);
     await page.getByRole('button', { name: '编辑数据块 1' }).click();
     const editor = page.locator('.kb2-modal').filter({ hasText: '编辑数据 #1' });
-    await page.screenshot({ path: join(resultDir, 'b04-history-missing.png'), fullPage: true });
+    await page.screenshot({ path: join(resultDir, 'b04-history.png'), fullPage: true });
     await playwrightExpect(
       editor.getByRole('heading', { name: /编辑历史|历史版本/ }),
     ).toBeVisible();
@@ -371,6 +375,22 @@ describe.sequential('B04 product Data UI', () => {
       },
     );
     expect([400, 403, 409]).toContain(updateResponse.status);
+    const deleteResponse = await fetch(
+      `${app.baseUrl}/v1/knowledge/segments/${failedSegmentId}/indexes/default`,
+      {
+        method: 'DELETE',
+        headers: {
+          ...apiHeaders({
+            authToken,
+            workspaceId,
+            idempotencyKey: `b04-system-index-delete-${suffix}`,
+          }),
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({ version: failedSegment.data.version }),
+      },
+    );
+    expect([400, 403, 409]).toContain(deleteResponse.status);
   });
 
   it('L1-B04-DATA-003-UI01 failure reason and Job status detail are discoverable after reopening a failed Segment', async () => {

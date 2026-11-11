@@ -38,14 +38,18 @@ interface S6CatalogPort {
     input: S6CreateSegmentInput,
     context: TenantContext,
   ): Promise<S6SegmentView>;
-  deleteSegment(segmentId: string, context: TenantContext): Promise<Record<string, unknown>>;
+  deleteSegment(
+    segmentId: string,
+    context: TenantContext,
+    expectedVersion: number,
+  ): Promise<Record<string, unknown>>;
 }
 
 interface S6AccessPort {
   assertPermission(
     resourceType: 'source' | 'space',
     resourceId: string,
-    permission: 'read' | 'write',
+    permission: 'read' | 'write' | 'manage',
     context: TenantContext,
   ): Promise<unknown>;
 }
@@ -440,12 +444,18 @@ export class S06JobApplication {
           String(item.id ?? item.segmentId ?? ''),
           input.context,
         );
-        await this.access.assertPermission('source', segment.sourceId, 'write', input.context);
+        await this.access.assertPermission(
+          'source',
+          segment.sourceId,
+          action === 'delete' ? 'manage' : 'write',
+          input.context,
+        );
       }
     }
     const results: Array<Record<string, unknown>> = [];
     for (const [index, item] of records.entries()) {
       const id = String(item.id ?? item.segmentId ?? '');
+      const version = Number(item.version);
       try {
         if (action === 'upsert') {
           if (item.id) {
@@ -478,7 +488,10 @@ export class S06JobApplication {
             results.push({ id: segment.id, success: true, version: segment.version });
           }
         } else if (action === 'delete') {
-          await this.catalog.deleteSegment(id, input.context);
+          if (!Number.isInteger(version) || version < 1) {
+            throw validation(input.context, { field: `items[${index}].version` });
+          }
+          await this.catalog.deleteSegment(id, input.context, version);
           results.push({ id, success: true });
         } else {
           const result = await this.segmentIndexes.reindex(

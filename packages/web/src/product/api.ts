@@ -22,6 +22,7 @@ import type {
   PageResult,
   SearchResponse,
   Segment,
+  SegmentHistory,
   Source,
   Tag,
 } from './types';
@@ -466,6 +467,12 @@ export function deleteSegment(segment: Segment) {
     idempotencyKey: key(),
     body: { version: segment.version },
   });
+}
+
+export function getSegmentHistory(segmentId: string) {
+  return knowledgeRequest<{ items: SegmentHistory[] }>(
+    `/v1/knowledge/segments/${encodeURIComponent(segmentId)}/history`,
+  );
 }
 
 export function createSegmentIndex(
@@ -928,6 +935,7 @@ export const productApi = {
   createSegment,
   updateSegment,
   deleteSegment,
+  getSegmentHistory,
   createSegmentIndex,
   updateSegmentIndex,
   deleteSegmentIndex,

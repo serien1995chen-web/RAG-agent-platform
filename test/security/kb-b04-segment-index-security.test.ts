@@ -169,7 +169,7 @@ describe('B04 input and tenant security', () => {
 
   it('L1-B04-DATA-003-N02 malformed or missing Job lookup cannot expose internal storage details', async () => {
     await expect(jobs.getRaw('not-a-job-id', context)).rejects.toMatchObject({
-      problem: { error: { code: 'KNOWLEDGE_NOT_FOUND' } },
+      problem: { error: { code: 'KNOWLEDGE_VALIDATION_FAILED' } },
     });
     const missingJobId = new connection.base.Types.ObjectId().toString();
     await expect(jobs.getRaw(missingJobId, context)).rejects.toMatchObject({
