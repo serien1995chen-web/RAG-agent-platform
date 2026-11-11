@@ -25,6 +25,7 @@
   },
   "testFiles": [
     "packages/service/test/integration/kb-b03b-tenant-collaboration-search.test.ts",
+    "packages/service/test/integration/kb-b03b-tenant-security.test.ts",
     "test/tenant/kb-b03b-tenant-guard.test.ts",
     "test/security/kb-b03b-tenant-context.test.ts",
     "test/concurrency/kb-b03b-search-acl.test.ts",
