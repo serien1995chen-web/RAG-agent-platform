@@ -284,6 +284,10 @@ export class S7CitationRepository implements S7CitationPersistencePort, S7Search
       filterSummary?: { conditionCount: number; conditionHash: string };
       queryExpansionSummary?: Record<string, unknown>;
       failureCode?: string;
+      failureChannel?: string;
+      errorName?: string;
+      errorCode?: string;
+      errorIssuePaths?: readonly string[];
     },
     context: TenantContext,
   ): Promise<void> {
@@ -311,6 +315,10 @@ export class S7CitationRepository implements S7CitationPersistencePort, S7Search
             spaces: [],
           },
           failureCode: input.failureCode ?? null,
+          failureChannel: input.failureChannel ?? null,
+          errorName: input.errorName ?? null,
+          errorCode: input.errorCode ?? null,
+          errorIssuePaths: input.errorIssuePaths ? [...input.errorIssuePaths] : [],
         },
       },
       context,

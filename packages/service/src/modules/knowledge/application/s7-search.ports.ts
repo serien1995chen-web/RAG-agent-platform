@@ -151,6 +151,10 @@ export interface S7SearchAuditPort {
       queryExpansions?: readonly SearchQueryExpansionResult[];
       queryExpansionSummary?: Record<string, unknown>;
       failureCode?: string;
+      failureChannel?: string;
+      errorName?: string;
+      errorCode?: string;
+      errorIssuePaths?: readonly string[];
     },
     context: TenantContext,
   ): Promise<void>;
