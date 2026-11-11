@@ -489,7 +489,7 @@ export interface SchemaPropertyMap {
   "Segment": "answer" | "content" | "fullTextTokens" | "fullTextVersion" | "id" | "imageBlobRefId" | "indexErrorCode" | "indexStatus" | "indexes" | "knowledgeSpaceId" | "metadata" | "order" | "question" | "searchEnabled" | "sourceId" | "sourceVersion" | "version" | "workspaceId";
   "SegmentBatchAction": "action" | "items";
   "SegmentCreate": "answer" | "indexes" | "metadata" | "question" | "searchEnabled";
-  "SegmentHistory": "answer" | "changedAt" | "changedByMemberId" | "question" | "version";
+  "SegmentHistory": "answer" | "changedAt" | "changedByMemberId" | "indexId" | "indexes" | "nextIndexes" | "operation" | "question" | "version";
   "SegmentHistoryList": "items";
   "SegmentIndex": "dimension" | "indexId" | "modelId" | "storageType" | "text" | "type" | "vectorId" | "vectorProfile" | "version";
   "SegmentIndexUpsert": "indexId" | "modelId" | "text" | "type" | "version";

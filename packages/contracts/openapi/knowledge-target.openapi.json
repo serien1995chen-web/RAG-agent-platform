@@ -4807,7 +4807,27 @@
               "knowledge:manage"
             ]
           }
-        ]
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "version"
+                ],
+                "properties": {
+                  "version": {
+                    "type": "integer",
+                    "minimum": 1
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        }
       }
     },
     "/v1/knowledge/segments/batch-actions": {
@@ -20867,6 +20887,31 @@
             "examples": [
               "mem_01JABCDEF"
             ]
+          },
+          "operation": {
+            "type": "string",
+            "enum": [
+              "segment.update",
+              "index.create",
+              "index.update",
+              "index.delete",
+              "index.reindex"
+            ]
+          },
+          "indexId": {
+            "type": "string"
+          },
+          "indexes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SegmentIndex"
+            }
+          },
+          "nextIndexes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SegmentIndex"
+            }
           }
         }
       },

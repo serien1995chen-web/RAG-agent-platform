@@ -150,8 +150,8 @@ describe('S6 Jobs and Segment E2E', () => {
       method: 'POST',
       idempotencyKey: `s6-index-create-${suffix}`,
       body: {
-        indexId: 'default',
-        type: 'default',
+        indexId: 'primary',
+        type: 'custom',
         text: 'Refunds are processed within five business days.',
         modelId: 'mock-embedding-1024',
         version: updatedSegment.version,
@@ -161,12 +161,12 @@ describe('S6 Jobs and Segment E2E', () => {
     const indexedSegment = index.payload.data as { version: number; indexes: unknown[] };
     expect(indexedSegment.indexes).toHaveLength(1);
 
-    const mismatchedIndex = await request(`/v1/knowledge/segments/${segmentId}/indexes/default`, {
+    const mismatchedIndex = await request(`/v1/knowledge/segments/${segmentId}/indexes/primary`, {
       method: 'PATCH',
       idempotencyKey: `s6-index-mismatch-${suffix}`,
       body: {
         indexId: 'different',
-        type: 'default',
+        type: 'custom',
         text: 'Mismatched index body.',
         modelId: 'mock-embedding-1024',
         version: indexedSegment.version,
@@ -174,12 +174,12 @@ describe('S6 Jobs and Segment E2E', () => {
     });
     expect(mismatchedIndex.response.status).toBe(400);
 
-    const indexUpdate = await request(`/v1/knowledge/segments/${segmentId}/indexes/default`, {
+    const indexUpdate = await request(`/v1/knowledge/segments/${segmentId}/indexes/primary`, {
       method: 'PATCH',
       idempotencyKey: `s6-index-update-${suffix}`,
       body: {
-        indexId: 'default',
-        type: 'default',
+        indexId: 'primary',
+        type: 'custom',
         text: 'Updated refund indexing text.',
         modelId: 'mock-embedding-1024',
         version: indexedSegment.version,

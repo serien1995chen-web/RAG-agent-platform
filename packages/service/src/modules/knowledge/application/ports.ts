@@ -207,7 +207,11 @@ export interface CatalogPort {
     input: Record<string, unknown>,
     context: TenantContext,
   ): Promise<SegmentView>;
-  deleteSegment(segmentId: string, context: TenantContext): Promise<Record<string, unknown>>;
+  deleteSegment(
+    segmentId: string,
+    context: TenantContext,
+    expectedVersion: number,
+  ): Promise<Record<string, unknown>>;
 }
 
 export interface TagApplyResult {

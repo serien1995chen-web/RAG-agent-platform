@@ -127,6 +127,18 @@ export interface Segment {
   fullTextVersion?: number;
 }
 
+export interface SegmentHistory {
+  version: number;
+  question: string;
+  answer: string;
+  changedAt: string;
+  changedByMemberId: string;
+  operation?: 'segment.update' | 'index.create' | 'index.update' | 'index.delete' | 'index.reindex';
+  indexId?: string;
+  indexes?: SegmentIndex[];
+  nextIndexes?: SegmentIndex[];
+}
+
 export interface Tag {
   id: string;
   workspaceId: string;

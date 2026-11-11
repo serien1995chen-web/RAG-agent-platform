@@ -30,7 +30,7 @@ import {
   sourceKindLabel,
   sourceStatusView,
 } from './dataset-detail-state';
-import type { BatchResult, KnowledgeSpace, Segment } from './types';
+import type { BatchResult, KnowledgeSpace, Segment, SegmentHistory } from './types';
 import {
   ProductButton,
   ProductCheckbox,
@@ -91,6 +91,7 @@ export function DataWorkspace(props: {
   const [batchDeleteOpen, setBatchDeleteOpen] = useState(false);
   const [batchDeleteText, setBatchDeleteText] = useState('');
   const [capabilityMessage, setCapabilityMessage] = useState('');
+  const [failureDetailOpen, setFailureDetailOpen] = useState(false);
 
   const sourceQuery = useQuery({
     queryKey: ['kb-product', 'source', props.sourceId],
@@ -124,6 +125,16 @@ export function DataWorkspace(props: {
     queryFn: () => productApi.listTags(props.space!.id),
     enabled: Boolean(props.space?.id),
   });
+  const historyQuery = useQuery({
+    queryKey: ['kb-product', 'segment-history', editingSegment?.id],
+    queryFn: () => productApi.getSegmentHistory(editingSegment!.id),
+    enabled: Boolean(editingSegment?.id),
+  });
+  const failureJobsQuery = useQuery({
+    queryKey: ['kb-product', 'jobs'],
+    queryFn: () => productApi.listJobs(),
+    enabled: failureDetailOpen && Boolean(editingSegment?.id),
+  });
 
   const source = sourceQuery.data;
   const segments = segmentsQuery.data ?? [];
@@ -150,6 +161,10 @@ export function DataWorkspace(props: {
   const selectedSegments = segments.filter((segment) => selectedIds.includes(segment.id));
   const indexedCount = segments.filter((segment) => segment.indexStatus === 'indexed').length;
   const status = sourceStatusView(source?.processingStatus ?? '');
+  const history = historyQuery.data?.items ?? [];
+  const failureJob = failureJobsQuery.data?.find(
+    (job) => job.resourceType === 'segment' && job.resourceId === editingSegment?.id,
+  );
 
   const invalidate = async () => {
     await Promise.all([
@@ -159,6 +174,9 @@ export function DataWorkspace(props: {
         queryKey: ['kb-product', 'sources', source?.knowledgeSpaceId],
       }),
       queryClient.invalidateQueries({ queryKey: ['kb-product', 'jobs'] }),
+      queryClient.invalidateQueries({
+        queryKey: ['kb-product', 'segment-history', editingSegment?.id],
+      }),
     ]);
   };
 
@@ -179,11 +197,12 @@ export function DataWorkspace(props: {
     setIndexDrafts({});
     setEditorError(null);
     setIndexError(null);
+    setFailureDetailOpen(false);
     setEditorOpen(true);
   };
 
   const openEdit = (segment: Segment) => {
-    if (['pending', 'indexing', 'rebuilding', 'rebuild_failed'].includes(segment.indexStatus)) {
+    if (['pending', 'indexing', 'rebuilding'].includes(segment.indexStatus)) {
       toast.warning('数据索引中，暂不可更改');
       return;
     }
@@ -196,6 +215,7 @@ export function DataWorkspace(props: {
     setIndexDrafts(Object.fromEntries(segment.indexes.map((index) => [index.indexId, index.text])));
     setEditorError(null);
     setIndexError(null);
+    setFailureDetailOpen(false);
     setEditorOpen(true);
   };
 
@@ -668,12 +688,47 @@ export function DataWorkspace(props: {
               <span>参与检索</span>
             </label>
             <ProductError error={editorError} />
+            {editingSegment ? (
+              <section className="kb2-history-panel" aria-labelledby="kb2-segment-history-title">
+                <div className="kb2-history-panel__head">
+                  <h3 id="kb2-segment-history-title">编辑历史</h3>
+                  <span>{history.length} 条</span>
+                </div>
+                <ProductError
+                  error={historyQuery.error}
+                  onRetry={() => void historyQuery.refetch()}
+                />
+                {historyQuery.isLoading ? (
+                  <ProductSkeleton rows={2} />
+                ) : history.length === 0 ? (
+                  <p className="kb2-table-muted">暂无可追溯的历史记录。</p>
+                ) : (
+                  <div className="kb2-history-list">
+                    {history.map((entry) => (
+                      <HistoryItem
+                        key={`${entry.version}-${entry.changedAt}-${entry.operation ?? 'history'}`}
+                        entry={entry}
+                      />
+                    ))}
+                  </div>
+                )}
+              </section>
+            ) : null}
           </form>
           <aside className="kb2-index-panel">
             <div className="kb2-index-panel__head">
               <h3>索引 {editingSegment?.indexes.length ?? 0}</h3>
               <span>系统索引只读</span>
             </div>
+            {editingSegment && ['error', 'rebuild_failed'].includes(editingSegment.indexStatus) ? (
+              <section className="kb2-failure-panel" aria-labelledby="kb2-failure-title">
+                <h3 id="kb2-failure-title">索引失败</h3>
+                <code>{editingSegment.indexErrorCode ?? 'KNOWLEDGE_UNKNOWN_INDEX_FAILURE'}</code>
+                <ProductButton size="sm" onClick={() => setFailureDetailOpen(true)}>
+                  训练详情
+                </ProductButton>
+              </section>
+            ) : null}
             {editingSegment?.indexes.map((index) => (
               <div className="kb2-index-row" key={index.indexId}>
                 <div>
@@ -752,6 +807,59 @@ export function DataWorkspace(props: {
       </ProductModal>
 
       <ProductModal
+        open={failureDetailOpen}
+        title="训练详情"
+        description={editingSegment ? `数据 #${editingSegment.order + 1}` : undefined}
+        onClose={() => setFailureDetailOpen(false)}
+      >
+        <ProductError
+          error={failureJobsQuery.error}
+          onRetry={() => void failureJobsQuery.refetch()}
+        />
+        {failureJobsQuery.isLoading ? (
+          <ProductSkeleton rows={3} />
+        ) : failureJob ? (
+          <div className="kb2-job-detail">
+            <div>
+              <span>Job</span>
+              <code>{failureJob.jobId}</code>
+            </div>
+            <div>
+              <span>状态</span>
+              <strong>{failureJob.status}</strong>
+            </div>
+            <div>
+              <span>错误码</span>
+              <code>{failureJob.error?.code ?? editingSegment?.indexErrorCode ?? '—'}</code>
+            </div>
+            <div>
+              <span>更新时间</span>
+              <strong>{new Date(failureJob.updatedAt).toLocaleString('zh-CN')}</strong>
+            </div>
+            <h3>执行步骤</h3>
+            {failureJob.steps?.length ? (
+              <ul>
+                {failureJob.steps.map((step, index) => {
+                  const error = step.error as { code?: unknown } | null | undefined;
+                  return (
+                    <li key={`${String(step.stepKey ?? index)}-${index}`}>
+                      <strong>{String(step.stepKey ?? `步骤 ${index + 1}`)}</strong>
+                      <span>{String(step.status ?? 'unknown')}</span>
+                      {error?.code ? <code>{String(error.code)}</code> : null}
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : (
+              <p className="kb2-table-muted">该 Job 没有可展示的步骤记录。</p>
+            )}
+          </div>
+        ) : (
+          <p className="kb2-table-muted">暂无可展示的 Job 详情。</p>
+        )}
+      </ProductModal>
+
+      <ProductModal
         open={Boolean(deleteTarget)}
         title="删除数据"
         description="删除后无法自动恢复。"
@@ -810,6 +918,46 @@ export function DataWorkspace(props: {
       </ProductModal>
     </ProductPage>
   );
+}
+
+function HistoryItem(props: { entry: SegmentHistory }) {
+  const indexIds = [
+    ...new Set([
+      ...(props.entry.indexes ?? []).map((index) => index.indexId),
+      ...(props.entry.nextIndexes ?? []).map((index) => index.indexId),
+    ]),
+  ];
+  return (
+    <article className="kb2-history-item">
+      <div>
+        <strong>v{props.entry.version}</strong>
+        <span>{historyOperationLabel(props.entry.operation)}</span>
+        <time dateTime={props.entry.changedAt}>
+          {new Date(props.entry.changedAt).toLocaleString('zh-CN')}
+        </time>
+      </div>
+      <p>{props.entry.question || '空问题'}</p>
+      {props.entry.answer ? <p>{props.entry.answer}</p> : null}
+      <small>操作者 {props.entry.changedByMemberId}</small>
+      {indexIds.length > 0 ? (
+        <small>
+          索引变化：
+          {indexIds
+            .map((indexId) => (props.entry.indexId === indexId ? `[${indexId}]` : indexId))
+            .join('、')}
+        </small>
+      ) : null}
+    </article>
+  );
+}
+
+function historyOperationLabel(operation?: SegmentHistory['operation']) {
+  if (operation === 'segment.update') return '编辑内容';
+  if (operation === 'index.create') return '新增索引';
+  if (operation === 'index.update') return '更新索引';
+  if (operation === 'index.delete') return '删除索引';
+  if (operation === 'index.reindex') return '重建索引';
+  return '编辑记录';
 }
 
 function SegmentImage(props: { blobId: string; alt: string }) {

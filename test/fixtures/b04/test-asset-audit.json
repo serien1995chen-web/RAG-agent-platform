@@ -1,0 +1,96 @@
+{
+  "schemaVersion": 1,
+  "batch": "B04",
+  "assets": [
+    {
+      "path": "packages/service/test/integration/s6-processing.integration.test.ts",
+      "classification": "REUSE",
+      "reason": "Covers real Outbox, BullMQ, parse and index worker processing for the B04 dependency chain."
+    },
+    {
+      "path": "packages/service/test/integration/s6-processing-failure.integration.test.ts",
+      "classification": "REUSE",
+      "reason": "Covers failure propagation without replacing the latest successful index."
+    },
+    {
+      "path": "packages/service/test/integration/s6-job-execution.integration.test.ts",
+      "classification": "REUSE",
+      "reason": "Covers Job state, retry and execution behavior used by Segment indexing."
+    },
+    {
+      "path": "packages/service/test/integration/s6-rebuild-sync-cleanup.integration.test.ts",
+      "classification": "REUSE",
+      "reason": "Covers all four pgvector profiles, rebuild and cleanup with real PostgreSQL/pgvector."
+    },
+    {
+      "path": "test/tenant/s6-job-index-tenant.test.ts",
+      "classification": "REUSE",
+      "reason": "Covers existing Job, subtree and Segment history tenant isolation."
+    },
+    {
+      "path": "test/concurrency/s6-job-fencing.test.ts",
+      "classification": "REUSE",
+      "reason": "Covers one-of-two Job claims under concurrency."
+    },
+    {
+      "path": "test/fault/s6-worker-restart.test.ts",
+      "classification": "REUSE",
+      "reason": "Covers expired lease recovery and stale worker rejection."
+    },
+    {
+      "path": "test/contract/s6-job-index-contract.test.ts",
+      "classification": "REUSE",
+      "reason": "Covers current Segment, history and index public schema contracts."
+    },
+    {
+      "path": "test/e2e/fastgpt-product-data-import.test.ts",
+      "classification": "EXTEND",
+      "reason": "Provides the current product Data entry and API harness; B04 adds deeper CRUD, index, status, history and fault assertions."
+    },
+    {
+      "path": "test/e2e/fastgpt-product-detail.test.ts",
+      "classification": "REUSE",
+      "reason": "Confirms the current product detail route and Collection deep-link context used by B04."
+    },
+    {
+      "path": "test/e2e/s6-jobs-segments.test.ts",
+      "classification": "STALE",
+      "reason": "The two legacy Segment-edit UI cases remain skipped after the old /spaces/.../segments page redirected to the product Data surface."
+    },
+    {
+      "path": "packages/service/test/integration/kb-b04-segment-index.test.ts",
+      "classification": "NEW",
+      "reason": "B04-specific repository integration coverage for CRUD isolation, index lifecycle, history, status, profiles and search switches."
+    },
+    {
+      "path": "test/tenant/kb-b04-segment-index-tenant.test.ts",
+      "classification": "NEW",
+      "reason": "B04-specific cross-workspace and role boundary coverage."
+    },
+    {
+      "path": "test/concurrency/kb-b04-segment-index.test.ts",
+      "classification": "NEW",
+      "reason": "B04-specific ready-versus-late-failure competition."
+    },
+    {
+      "path": "test/fault/kb-b04-segment-index-fault.test.ts",
+      "classification": "NEW",
+      "reason": "B04-specific restart, requeue and duplicate retry side-effect coverage."
+    },
+    {
+      "path": "test/security/kb-b04-segment-index-security.test.ts",
+      "classification": "NEW",
+      "reason": "B04-specific malformed input, invalid index and missing tenant coverage."
+    },
+    {
+      "path": "packages/web/test/unit/kb-b04-segment-index-ui.test.ts",
+      "classification": "NEW",
+      "reason": "B04-specific Data card and latest Job state projections."
+    },
+    {
+      "path": "test/e2e/kb-b04-segment-index.test.ts",
+      "classification": "NEW",
+      "reason": "Real 1440x900 zh-CN product Data coverage for CRUD, indexes, history, failure details, polling, a11y and direct API guards."
+    }
+  ]
+}

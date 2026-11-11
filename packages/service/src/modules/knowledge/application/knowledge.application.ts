@@ -63,6 +63,19 @@ function objectBody(value: unknown, context: TenantContext): Record<string, unkn
   return value as Record<string, unknown>;
 }
 
+function requiredVersion(value: unknown, context: TenantContext): number {
+  const version = Number((value as Record<string, unknown> | null | undefined)?.version);
+  if (!Number.isInteger(version) || version < 1) {
+    throw createKnowledgeError({
+      code: 'KNOWLEDGE_VALIDATION_FAILED',
+      requestId: context.requestId,
+      traceId: context.traceId,
+      details: { field: 'version' },
+    });
+  }
+  return version;
+}
+
 function firstQuery(
   query: Readonly<Record<string, string | string[] | undefined>>,
   name: string,
@@ -984,9 +997,14 @@ export class KnowledgeApplication {
       case 'API-SEGMENT-DELETE': {
         const segment = await this.catalog.getSegment(params.segmentId ?? '', context);
         await this.access.assertPermission('source', segment.sourceId, 'manage', context);
+        const deleteBody = objectBody(body, context);
         return {
           status: 202,
-          data: await this.catalog.deleteSegment(params.segmentId ?? '', context),
+          data: await this.catalog.deleteSegment(
+            params.segmentId ?? '',
+            context,
+            requiredVersion(deleteBody, context),
+          ),
         };
       }
       case 'API-TAG-LIST': {

@@ -210,8 +210,8 @@ async function seedTextIndex(context: TenantContext) {
   await indexes.upsert(
     textSegmentId,
     {
-      indexId: 'default',
-      type: 'default',
+      indexId: 'primary',
+      type: 'custom',
       text: 'Refunds take five business days.',
       modelId: 'mock-embedding-768',
       version: 1,
