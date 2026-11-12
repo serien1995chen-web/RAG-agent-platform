@@ -117,6 +117,19 @@ describe('TEST-X-S4-IDEMPOTENCY', () => {
     expect(await connection.models.KnowledgeOutboxEvent.countDocuments({ workspaceId })).toBe(1);
   });
 
+  it('L1-B05-ING-002-C01 coalesces 10 concurrent custom-text confirmations into one business Job', async () => {
+    const shared = command(`b05-text-concurrent-${suffix}`, 'B05 same raw text');
+    const results = await Promise.all(
+      Array.from({ length: 10 }, () => repository.submit(shared, context)),
+    );
+    expect(new Set(results.map((result) => result.parentJobId)).size).toBe(1);
+    expect(new Set(results.map((result) => result.sourceIds[0])).size).toBe(1);
+    expect(results.filter((result) => result.replayed)).toHaveLength(9);
+    expect(await connection.models.KnowledgeJob.countDocuments({ workspaceId })).toBe(1);
+    expect(await connection.models.KnowledgeSource.countDocuments({ workspaceId })).toBe(1);
+    expect(await connection.models.KnowledgeOutboxEvent.countDocuments({ workspaceId })).toBe(1);
+  });
+
   it('TEST-DOWN-004-U04 allows only one side of a concurrent different-body conflict', async () => {
     const key = `different-${suffix}`;
     const outcomes = await Promise.allSettled([

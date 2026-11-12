@@ -8,7 +8,10 @@ import {
   KnowledgeAuditRepository,
   KnowledgeCatalogRepository,
   KnowledgeJobRepository,
+  KnowledgeJobExecutionRepository,
+  KnowledgeSegmentIndexRepository,
   KnowledgeTagRepository,
+  S06JobApplication,
 } from '../../src/modules/knowledge';
 import {
   ensureKnowledgeCollections,
@@ -78,8 +81,20 @@ beforeAll(async () => {
   });
   await connection.asPromise();
   await ensureKnowledgeCollections(connection);
+  const catalog = new KnowledgeCatalogRepository(connection);
+  const jobExecution = new KnowledgeJobExecutionRepository(connection);
+  const s06 = new S06JobApplication(
+    jobExecution,
+    new KnowledgeSegmentIndexRepository(connection, jobExecution, {
+      async listModels() {
+        return [];
+      },
+    }),
+    catalog,
+    new KnowledgeAccessRepository(connection),
+  );
   application = new KnowledgeApplication(
-    new KnowledgeCatalogRepository(connection),
+    catalog,
     new KnowledgeTagRepository(connection),
     new KnowledgeAccessRepository(connection),
     new KnowledgeJobRepository(connection),
@@ -87,6 +102,9 @@ beforeAll(async () => {
     undefined,
     undefined,
     new KnowledgeAuditRepository(connection),
+    undefined,
+    undefined,
+    s06,
   );
   jobs = new KnowledgeJobRepository(connection);
 }, 60_000);

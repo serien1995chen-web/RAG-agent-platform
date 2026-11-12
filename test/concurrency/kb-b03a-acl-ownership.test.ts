@@ -32,6 +32,12 @@ const ownerContext: TenantContext = {
   scopes: ['knowledge:read', 'knowledge:write', 'knowledge:manage', 'knowledge:admin'],
   isWorkspaceOwner: false,
 };
+const workspaceAdminContext: TenantContext = {
+  ...ownerContext,
+  memberId: `mem_admin_${suffix}`,
+  requestId: `req_admin_${suffix}`,
+  isWorkspaceOwner: true,
+};
 
 let connection: Awaited<ReturnType<typeof createKnowledgeMongoConnection>>;
 let catalog: KnowledgeCatalogRepository;
@@ -273,7 +279,13 @@ describe('B03A ACL and ownership concurrency', () => {
     ]);
     expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
     expect(results.filter((result) => result.status === 'rejected')).toHaveLength(1);
-    const finalSpace = (await run('API-SPACE-GET', { params: { spaceId: space.id } })).data;
+    const finalSpace = (
+      await run('API-SPACE-GET', {
+        params: { spaceId: space.id },
+        // Ownership transfer intentionally removes the original owner's access.
+        context: workspaceAdminContext,
+      })
+    ).data;
     expect(finalSpace.version).toBe(currentSpace.version + 1);
   });
 });

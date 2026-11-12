@@ -16,6 +16,7 @@ import { useMemo, useState, type FormEvent } from 'react';
 import { S7MarkdownRenderer } from '../components/s7-markdown-renderer';
 import {
   batchSegments,
+  batchUpsertSegments,
   createSegment,
   createSegmentIndex,
   deleteSegment,
@@ -79,6 +80,9 @@ export function DataWorkspace(props: {
   const [editorError, setEditorError] = useState<unknown>(null);
   const [newIndexText, setNewIndexText] = useState('');
   const [newIndexModelId, setNewIndexModelId] = useState('');
+  const [createIndexes, setCreateIndexes] = useState<
+    Array<{ indexId: string; text: string; modelId: string }>
+  >([]);
   const [indexDrafts, setIndexDrafts] = useState<Record<string, string>>({});
   const [indexBusy, setIndexBusy] = useState(false);
   const [indexError, setIndexError] = useState<unknown>(null);
@@ -88,6 +92,9 @@ export function DataWorkspace(props: {
   const [batchBusy, setBatchBusy] = useState(false);
   const [batchError, setBatchError] = useState<unknown>(null);
   const [batchResult, setBatchResult] = useState<BatchResult | null>(null);
+  const [batchUpsertOpen, setBatchUpsertOpen] = useState(false);
+  const [batchUpsertText, setBatchUpsertText] = useState('');
+  const [batchRetryTexts, setBatchRetryTexts] = useState<string[]>([]);
   const [batchDeleteOpen, setBatchDeleteOpen] = useState(false);
   const [batchDeleteText, setBatchDeleteText] = useState('');
   const [capabilityMessage, setCapabilityMessage] = useState('');
@@ -165,6 +172,8 @@ export function DataWorkspace(props: {
   const failureJob = failureJobsQuery.data?.find(
     (job) => job.resourceType === 'segment' && job.resourceId === editingSegment?.id,
   );
+  const canSubmitEditor =
+    Boolean(question.trim()) && (editorMode !== 'qa' || Boolean(answer.trim())) && !editorBusy;
 
   const invalidate = async () => {
     await Promise.all([
@@ -194,6 +203,7 @@ export function DataWorkspace(props: {
     setSearchEnabled(true);
     setNewIndexText('');
     setNewIndexModelId(embeddingModelId);
+    setCreateIndexes([]);
     setIndexDrafts({});
     setEditorError(null);
     setIndexError(null);
@@ -221,7 +231,7 @@ export function DataWorkspace(props: {
 
   const saveSegment = async (event: FormEvent) => {
     event.preventDefault();
-    if (!question.trim()) return;
+    if (!canSubmitEditor) return;
     setEditorBusy(true);
     setEditorError(null);
     try {
@@ -235,11 +245,19 @@ export function DataWorkspace(props: {
         await createSegment(props.sourceId, {
           question,
           answer: editorMode === 'qa' ? answer : question,
+          segmentType: editorMode === 'qa' ? 'qa' : 'chunk',
           searchEnabled,
+          indexes: createIndexes.map((index) => ({
+            indexId: index.indexId,
+            type: 'custom' as const,
+            text: index.text,
+            modelId: index.modelId,
+          })),
         });
       }
       await invalidate();
       setEditorOpen(false);
+      setCreateIndexes([]);
       toast.success(editingSegment ? '数据已更新' : '数据已插入');
     } catch (caught) {
       setEditorError(caught);
@@ -287,6 +305,48 @@ export function DataWorkspace(props: {
     }
   };
 
+  const runBatchUpsert = async (retryTexts?: string[]) => {
+    const texts = (retryTexts ?? batchUpsertText.split(/\r?\n/))
+      .map((entry) => entry.trim())
+      .filter(Boolean);
+    if (texts.length === 0 || texts.length > 200) return;
+    setBatchBusy(true);
+    setBatchError(null);
+    setBatchResult(null);
+    try {
+      const result = await batchUpsertSegments(
+        props.sourceId,
+        texts.map((text) => ({
+          question: text,
+          answer: text,
+          segmentType: 'chunk' as const,
+          searchEnabled: true,
+        })),
+      );
+      setBatchResult(result);
+      const failedIndexes = result.items
+        .filter((item) => !item.success)
+        .map((item) => item.index)
+        .filter((index): index is number => index !== undefined);
+      setBatchRetryTexts(
+        failedIndexes
+          .map((index) => texts[index])
+          .filter((value): value is string => Boolean(value)),
+      );
+      await invalidate();
+      if (result.failed === 0) {
+        toast.success(`已提交 ${result.succeeded} 项`);
+        setBatchUpsertText('');
+      } else {
+        toast.warning('批量插入部分失败');
+      }
+    } catch (caught) {
+      setBatchError(caught);
+    } finally {
+      setBatchBusy(false);
+    }
+  };
+
   const addIndex = async () => {
     if (!editingSegment || !newIndexText.trim() || !newIndexModelId) return;
     setIndexBusy(true);
@@ -309,6 +369,20 @@ export function DataWorkspace(props: {
     } finally {
       setIndexBusy(false);
     }
+  };
+
+  const addCreateIndex = () => {
+    const text = newIndexText.trim();
+    if (!text || !newIndexModelId) return;
+    setCreateIndexes((current) => [
+      ...current,
+      {
+        indexId: `custom_${Date.now().toString(36)}`,
+        text,
+        modelId: newIndexModelId,
+      },
+    ]);
+    setNewIndexText('');
   };
 
   const saveIndex = async (index: Segment['indexes'][number]) => {
@@ -588,6 +662,17 @@ export function DataWorkspace(props: {
       {batchMode && selectedIds.length > 0 ? (
         <div className="kb2-batch-bar" role="region" aria-label="Data 批量操作">
           <span className="kb2-batch-bar__count">已选择 {selectedIds.length} 条数据</span>
+          <ProductButton
+            busy={batchBusy}
+            onClick={() => {
+              setBatchError(null);
+              setBatchResult(null);
+              setBatchRetryTexts([]);
+              setBatchUpsertOpen(true);
+            }}
+          >
+            批量插入
+          </ProductButton>
           <ProductButton busy={batchBusy} onClick={() => void runBatch('reindex')}>
             重建索引
           </ProductButton>
@@ -601,7 +686,7 @@ export function DataWorkspace(props: {
           >
             批量删除
           </ProductButton>
-          <ProductButton tone="ghost" onClick={() => setSelectedIds([])}>
+          <ProductButton tone="secondary" onClick={() => setSelectedIds([])}>
             清空选择
           </ProductButton>
         </div>
@@ -626,6 +711,7 @@ export function DataWorkspace(props: {
             <ProductButton
               tone="primary"
               busy={editorBusy}
+              disabled={!canSubmitEditor}
               onClick={() =>
                 (
                   document.getElementById('kb2-segment-form') as HTMLFormElement | null
@@ -717,7 +803,7 @@ export function DataWorkspace(props: {
           </form>
           <aside className="kb2-index-panel">
             <div className="kb2-index-panel__head">
-              <h3>索引 {editingSegment?.indexes.length ?? 0}</h3>
+              <h3>索引 {editingSegment?.indexes.length ?? createIndexes.length}</h3>
               <span>系统索引只读</span>
             </div>
             {editingSegment && ['error', 'rebuild_failed'].includes(editingSegment.indexStatus) ? (
@@ -765,43 +851,63 @@ export function DataWorkspace(props: {
                 ) : null}
               </div>
             ))}
-            {editingSegment ? (
-              <div className="kb2-index-create">
-                <ProductField label="自定义索引">
-                  <ProductTextarea
-                    value={newIndexText}
-                    onChange={(event) => setNewIndexText(event.target.value)}
-                    rows={3}
-                  />
-                </ProductField>
-                <ProductField label="向量模型">
-                  <ProductSelect
-                    value={newIndexModelId}
-                    onChange={(event) => setNewIndexModelId(event.target.value)}
-                  >
-                    <option value="">选择模型</option>
-                    {models
-                      .filter((model) => model.type === 'embedding' && model.authorized)
-                      .map((model) => (
-                        <option key={model.modelId} value={model.modelId}>
-                          {model.displayName}
-                        </option>
-                      ))}
-                  </ProductSelect>
-                </ProductField>
-                <ProductButton
-                  size="sm"
-                  busy={indexBusy}
-                  disabled={!newIndexText.trim() || !newIndexModelId}
-                  onClick={() => void addIndex()}
+            {!editingSegment
+              ? createIndexes.map((index) => (
+                  <div className="kb2-index-row" key={index.indexId}>
+                    <div>
+                      <strong>custom</strong>
+                      <small>{index.modelId}</small>
+                    </div>
+                    <p>{index.text}</p>
+                    <div className="kb2-inline-actions">
+                      <ProductIconButton
+                        label="删除索引草稿"
+                        tone="danger"
+                        onClick={() =>
+                          setCreateIndexes((current) =>
+                            current.filter((entry) => entry.indexId !== index.indexId),
+                          )
+                        }
+                      >
+                        <DeleteIcon boxSize={3.5} />
+                      </ProductIconButton>
+                    </div>
+                  </div>
+                ))
+              : null}
+            <div className="kb2-index-create">
+              <ProductField label="自定义索引">
+                <ProductTextarea
+                  value={newIndexText}
+                  onChange={(event) => setNewIndexText(event.target.value)}
+                  rows={3}
+                />
+              </ProductField>
+              <ProductField label="向量模型">
+                <ProductSelect
+                  value={newIndexModelId}
+                  onChange={(event) => setNewIndexModelId(event.target.value)}
                 >
-                  添加索引
-                </ProductButton>
-                <ProductError error={indexError} />
-              </div>
-            ) : (
-              <div className="kb2-table-muted">新数据保存后可继续管理索引。</div>
-            )}
+                  <option value="">选择模型</option>
+                  {models
+                    .filter((model) => model.type === 'embedding' && model.authorized)
+                    .map((model) => (
+                      <option key={model.modelId} value={model.modelId}>
+                        {model.displayName}
+                      </option>
+                    ))}
+                </ProductSelect>
+              </ProductField>
+              <ProductButton
+                size="sm"
+                busy={indexBusy}
+                disabled={!newIndexText.trim() || !newIndexModelId}
+                onClick={() => (editingSegment ? void addIndex() : addCreateIndex())}
+              >
+                {editingSegment ? '添加索引' : '新增索引'}
+              </ProductButton>
+              <ProductError error={indexError} />
+            </div>
           </aside>
         </div>
       </ProductModal>
@@ -879,6 +985,93 @@ export function DataWorkspace(props: {
           确认删除数据块 <strong>#{deleteTarget?.order ? deleteTarget.order + 1 : ''}</strong>？
         </p>
         <ProductError error={deleteError} />
+      </ProductModal>
+
+      <ProductModal
+        open={batchUpsertOpen}
+        title="批量插入数据"
+        description={`目标：${source?.name ?? props.sourceId}`}
+        size="lg"
+        onClose={() => !batchBusy && setBatchUpsertOpen(false)}
+        footer={
+          <>
+            <ProductButton disabled={batchBusy} onClick={() => setBatchUpsertOpen(false)}>
+              关闭
+            </ProductButton>
+            {batchRetryTexts.length > 0 ? (
+              <ProductButton busy={batchBusy} onClick={() => void runBatchUpsert(batchRetryTexts)}>
+                重试失败项（{batchRetryTexts.length}）
+              </ProductButton>
+            ) : null}
+            <ProductButton
+              tone="primary"
+              busy={batchBusy}
+              disabled={
+                batchUpsertText
+                  .split(/\r?\n/)
+                  .map((entry) => entry.trim())
+                  .filter(Boolean).length === 0
+              }
+              onClick={() => void runBatchUpsert()}
+            >
+              提交批量插入
+            </ProductButton>
+          </>
+        }
+      >
+        <div className="kb2-batch-upsert">
+          <ProductField label="批量分块内容（每行一条）">
+            <ProductTextarea
+              value={batchUpsertText}
+              onChange={(event) => {
+                setBatchUpsertText(event.target.value);
+                setBatchResult(null);
+                setBatchRetryTexts([]);
+              }}
+              rows={8}
+            />
+          </ProductField>
+          {batchBusy ? (
+            <div role="status" className="kb2-note">
+              <Spinner size="sm" /> 正在向目标 Source 提交批量请求…
+            </div>
+          ) : null}
+          <ProductError error={batchError} />
+          {batchResult ? (
+            <section aria-label="批量插入结果">
+              <div className="kb2-info-group">
+                <div className="kb2-info-line">
+                  <span>处理结果</span>
+                  <strong>
+                    共 {batchResult.requested} 项，成功 {batchResult.succeeded}，失败{' '}
+                    {batchResult.failed}
+                  </strong>
+                </div>
+              </div>
+              <div className="kb2-table" role="table" aria-label="批量插入逐项结果">
+                {batchResult.items.map((item, index) => (
+                  <div
+                    className="kb2-catalog-row"
+                    role="row"
+                    key={`${item.id}-${item.index ?? index}`}
+                  >
+                    <span role="cell">第 {(item.index ?? index) + 1} 项</span>
+                    <StatusTag
+                      value={item.success ? '已提交索引' : (item.code ?? '失败')}
+                      tone={item.success ? 'success' : 'danger'}
+                      dot
+                    />
+                    {item.jobIds?.length || item.jobId ? (
+                      <small role="cell">
+                        Job {(item.jobIds ?? [item.jobId]).filter(Boolean).join(', ')}
+                      </small>
+                    ) : null}
+                  </div>
+                ))}
+              </div>
+            </section>
+          ) : null}
+        </div>
       </ProductModal>
 
       <ProductModal

@@ -66,6 +66,14 @@ export const PROVIDER_SCOPE_PROFILES = Object.freeze({
   }),
 });
 
+export const PROVIDER_SCENARIOS = Object.freeze({
+  's11-aiproxy-real': Object.freeze(['aiproxy']),
+  's11-aiproxy-catalog-preflight': Object.freeze(['aiproxy']),
+  's11-provider-quota': Object.freeze(['aiproxy']),
+  's11-ocr-real': Object.freeze(['ocr-somark', 'ocr-textin', 'ocr-doc2x']),
+  's11-connectors-real': Object.freeze(['feishu']),
+});
+
 const OCR_PROVIDERS = new Set(['ocr-sangfor', 'ocr-somark', 'ocr-textin', 'ocr-doc2x']);
 
 function valueOf(env, name) {
@@ -119,14 +127,68 @@ function profileFailure(provider, raw) {
   };
 }
 
-export function checkEnvironment(env = process.env) {
+export function resolveProviderScenario(scenario) {
+  const normalized = scenario?.trim() || null;
+  if (!normalized) return null;
+  return PROVIDER_SCENARIOS[normalized] ? normalized : null;
+}
+
+export function parseProviderInputArgs(argv = []) {
+  const parsed = { json: false, scenario: undefined };
+  let scenarioSeen = false;
+  for (const arg of argv) {
+    if (arg === '--json') {
+      if (parsed.json) {
+        return { error: 'PROVIDER_INPUT_INVALID: --json specified more than once' };
+      }
+      parsed.json = true;
+      continue;
+    }
+    if (arg.startsWith('--scenario=')) {
+      if (scenarioSeen) {
+        return { error: 'PROVIDER_SCENARIO_INVALID: scenario specified more than once' };
+      }
+      scenarioSeen = true;
+      const scenario = arg.slice('--scenario='.length).trim();
+      if (!scenario) {
+        return { error: 'PROVIDER_SCENARIO_INVALID: scenario must not be empty' };
+      }
+      if (!resolveProviderScenario(scenario)) {
+        return { error: `PROVIDER_SCENARIO_INVALID: unknown scenario ${scenario}` };
+      }
+      parsed.scenario = scenario;
+      continue;
+    }
+    return { error: `PROVIDER_INPUT_INVALID: unsupported argument ${arg}` };
+  }
+  return { value: parsed };
+}
+
+export function checkEnvironment(env = process.env, options = {}) {
   const providers = [];
+  const scenario = options.scenario?.trim() || null;
+  const resolvedScenario = resolveProviderScenario(scenario);
+  const scenarioProviders = resolvedScenario ? PROVIDER_SCENARIOS[resolvedScenario] : null;
+  if (scenario && !scenarioProviders) {
+    return {
+      status: 'BLOCKED',
+      scopeProfile: valueOf(env, 'S11_SCOPE_PROFILE') || 'canonical-v1',
+      scenario,
+      mode: valueOf(env, 'S11_PROVIDER_MODE') || null,
+      profileVersion: 's11-provider-inputs-v1',
+      providers: [],
+      missingFields: [],
+      invalidFields: [`scenario.${scenario}`],
+      deferredProviders: [],
+    };
+  }
   const scopeProfileName = valueOf(env, 'S11_SCOPE_PROFILE') || 'canonical-v1';
   const scopeProfile = PROVIDER_SCOPE_PROFILES[scopeProfileName];
   if (!scopeProfile) {
     return {
       status: 'BLOCKED',
       scopeProfile: scopeProfileName,
+      scenario,
       mode: valueOf(env, 'S11_PROVIDER_MODE') || null,
       profileVersion: 's11-provider-inputs-v1',
       providers: [],
@@ -157,6 +219,7 @@ export function checkEnvironment(env = process.env) {
     });
   }
   for (const [provider, names] of Object.entries(REQUIRED_PROVIDER_ENV)) {
+    if (scenarioProviders && !scenarioProviders.includes(provider)) continue;
     if (scopeProfile.deferredProviders.includes(provider)) {
       providers.push({
         provider,
@@ -233,6 +296,7 @@ export function checkEnvironment(env = process.env) {
         ? 'SCOPED_BLOCKED'
         : 'BLOCKED',
     scopeProfile: scopeProfileName,
+    scenario,
     mode: valueOf(env, 'S11_PROVIDER_MODE') || null,
     profileVersion: 's11-provider-inputs-v1',
     providers,
@@ -248,11 +312,12 @@ export function checkEnvironment(env = process.env) {
   };
 }
 
-export function safeProviderSummary(env = process.env) {
-  const result = checkEnvironment(env);
+export function safeProviderSummary(env = process.env, options = {}) {
+  const result = checkEnvironment(env, options);
   return {
     status: result.status,
     scopeProfile: result.scopeProfile,
+    scenario: result.scenario,
     mode: result.mode,
     profileVersion: result.profileVersion,
     providers: result.providers.map((provider) => ({
@@ -273,12 +338,13 @@ export function safeProviderSummary(env = process.env) {
 const isMain =
   process.argv[1] !== undefined && import.meta.url === pathToFileURL(process.argv[1]).href;
 if (isMain) {
-  if (!process.argv.slice(2).every((arg) => arg === '--json')) {
-    console.error('PROVIDER_INPUT_INVALID: only --json is supported');
+  const parsed = parseProviderInputArgs(process.argv.slice(2));
+  if (parsed.error) {
+    console.error(parsed.error);
     process.exit(1);
   }
-  const result = safeProviderSummary();
-  if (process.argv.includes('--json')) {
+  const result = safeProviderSummary(process.env, { scenario: parsed.value.scenario });
+  if (parsed.value.json) {
     console.log(JSON.stringify(result, null, 2));
   } else {
     console.log(`${result.status} ${result.providers.length} providers`);

@@ -280,7 +280,8 @@ describe('FastGPT product module 3 Data and Import', () => {
     await page.getByLabel('名称').fill(`手工导入 ${suffix}`);
     await page.getByLabel('文本内容').fill('这是一段通过真实导入 API 提交的文本。');
     await page.getByRole('button', { name: '下一步' }).click();
-    await playwrightExpect(page.getByText(/当前合同没有“导入前分块预览”接口/)).toBeVisible();
+    await playwrightExpect(page.getByText('分块数量', { exact: true })).toBeVisible();
+    await playwrightExpect(page.getByText('这是一段通过真实导入 API 提交的文本。')).toBeVisible();
     await page.getByRole('button', { name: '下一步' }).click();
     const textImport = page.waitForResponse(
       (response) =>

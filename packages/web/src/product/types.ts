@@ -224,10 +224,13 @@ export interface BatchResult {
   failed: number;
   items: Array<{
     id: string;
+    index?: number;
     tagId?: string;
     success: boolean;
     code?: string;
     version?: number;
+    jobId?: string;
+    jobIds?: string[];
     parentPath?: string[];
   }>;
 }

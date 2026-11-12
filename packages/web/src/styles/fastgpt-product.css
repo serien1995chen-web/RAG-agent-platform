@@ -2375,6 +2375,36 @@ a:hover {
   font-size: 11px;
 }
 
+.kb2-chunk-preview-list {
+  display: grid;
+  gap: 8px;
+  max-height: 360px;
+  overflow: auto;
+}
+
+.kb2-chunk-preview {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr);
+  gap: 8px;
+  padding: 10px;
+  color: var(--kb2-ink);
+  background: var(--kb2-surface);
+  border: 1px solid var(--kb2-line-soft);
+  border-radius: 6px;
+  overflow-wrap: anywhere;
+}
+
+.kb2-chunk-preview > span {
+  color: var(--kb2-muted);
+  font-family: var(--kb2-mono);
+  font-size: 11px;
+}
+
+.kb2-batch-upsert {
+  display: grid;
+  gap: 14px;
+}
+
 .kb2-import-connect {
   display: grid;
   gap: 12px;

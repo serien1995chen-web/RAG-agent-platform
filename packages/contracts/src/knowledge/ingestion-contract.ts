@@ -182,6 +182,7 @@ export const ImportTextSchema = z
     name: z.string().min(1).max(240),
     text: z.string().max(10_000_000),
     chunking: ChunkingSettingsSchema,
+    dryRun: z.boolean().default(false),
   })
   .strict();
 

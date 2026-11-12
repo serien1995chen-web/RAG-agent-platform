@@ -87,6 +87,23 @@ interface SegmentIndexUpsertInput {
 }
 
 interface S6SegmentIndexPort {
+  createSegment(
+    sourceId: string,
+    input: {
+      question: string;
+      answer: string;
+      segmentType: 'chunk' | 'qa';
+      searchEnabled?: boolean;
+      metadata?: Record<string, unknown>;
+      indexes?: readonly {
+        indexId: string;
+        type: 'custom';
+        text: string;
+        modelId: string;
+      }[];
+    },
+    context: TenantContext,
+  ): Promise<{ jobId: string; jobIds: string[] } & Record<string, unknown>>;
   upsert(
     segmentId: string,
     input: SegmentIndexUpsertInput,
@@ -112,6 +129,7 @@ interface S6SegmentIndexPort {
 }
 
 export const S06_OPERATION_IDS = Object.freeze([
+  'API-SEGMENT-CREATE',
   'API-JOB-CREATE',
   'API-JOB-RETRY',
   'API-JOB-CANCEL',
@@ -140,6 +158,94 @@ const JOB_RESOURCE: Record<
   fulltext: ['segment'],
   rebuild: ['source', 'space'],
 };
+
+const SEGMENT_INDEX_KEYS = ['indexId', 'type', 'text', 'modelId'] as const;
+
+function normalizeSegmentType(
+  value: unknown,
+  answer: string,
+  context: TenantContext,
+): 'chunk' | 'qa' {
+  if (value !== undefined && value !== 'chunk' && value !== 'qa') {
+    throw validation(context, { field: 'segmentType', allowed: ['chunk', 'qa'] });
+  }
+  return (value as 'chunk' | 'qa' | undefined) ?? (answer.trim() ? 'qa' : 'chunk');
+}
+
+function normalizeIndexes(value: unknown, context: TenantContext) {
+  if (value === undefined) return [];
+  if (!Array.isArray(value) || value.length > 100) {
+    throw validation(context, { field: 'indexes', maxItems: 100 });
+  }
+  const seen = new Set<string>();
+  return value.map((raw, index) => {
+    if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) {
+      throw validation(context, { field: `indexes[${index}]`, reason: 'object_required' });
+    }
+    const candidate = raw as Record<string, unknown>;
+    assertKeys(candidate, SEGMENT_INDEX_KEYS, [], context);
+    if (candidate.type !== 'custom') {
+      throw validation(context, { field: `indexes[${index}].type`, allowed: ['custom'] });
+    }
+    const indexId = String(candidate.indexId ?? '');
+    if (seen.has(indexId)) {
+      throw validation(context, { field: `indexes[${index}].indexId`, reason: 'unique' });
+    }
+    seen.add(indexId);
+    const text = String(candidate.text ?? '').trim();
+    const modelId = String(candidate.modelId ?? '');
+    if (!text) throw validation(context, { field: `indexes[${index}].text`, reason: 'required' });
+    if (!modelId) {
+      throw validation(context, { field: `indexes[${index}].modelId`, reason: 'required' });
+    }
+    return {
+      indexId,
+      type: 'custom' as const,
+      text,
+      modelId,
+    };
+  });
+}
+
+function normalizeSegmentCreate(body: Record<string, unknown>, context: TenantContext) {
+  assertKeys(
+    body,
+    ['question'],
+    ['answer', 'segmentType', 'searchEnabled', 'metadata', 'indexes'],
+    context,
+  );
+  const question = String(body.question ?? '').trim();
+  const answer = String(body.answer ?? '').trim();
+  if (!question) throw validation(context, { field: 'question', reason: 'required' });
+  if (question.length > 100_000) {
+    throw validation(context, { field: 'question', maxLength: 100_000 });
+  }
+  if (answer.length > 100_000) {
+    throw validation(context, { field: 'answer', maxLength: 100_000 });
+  }
+  const segmentType = normalizeSegmentType(body.segmentType, answer, context);
+  if (segmentType === 'qa' && !answer) {
+    throw validation(context, { field: 'answer', reason: 'required', segmentType });
+  }
+  const storedAnswer = segmentType === 'chunk' && !answer ? question : answer;
+  if (body.searchEnabled !== undefined && typeof body.searchEnabled !== 'boolean') {
+    throw validation(context, { field: 'searchEnabled', reason: 'boolean_required' });
+  }
+  if (
+    body.metadata !== undefined &&
+    (typeof body.metadata !== 'object' || body.metadata === null || Array.isArray(body.metadata))
+  ) {
+    throw validation(context, { field: 'metadata', reason: 'object_required' });
+  }
+  return {
+    question,
+    answer: storedAnswer,
+    segmentType,
+    ...(typeof body.searchEnabled === 'boolean' ? { searchEnabled: body.searchEnabled } : {}),
+    ...(body.metadata ? { metadata: body.metadata as Record<string, unknown> } : {}),
+    indexes: normalizeIndexes(body.indexes, context),
+  };
+}
 
 export function isS06Operation(operationId: string): boolean {
   return S06_OPERATION_SET.has(operationId);
@@ -258,6 +364,16 @@ export class S06JobApplication {
     private readonly catalog: S6CatalogPort,
     private readonly access: S6AccessPort,
   ) {}
+
+  private async createSegment(input: KnowledgeOperationInput): Promise<KnowledgeOperationResult> {
+    const sourceId = String(input.params.sourceId ?? '');
+    await this.access.assertPermission('source', sourceId, 'write', input.context);
+    const parsed = normalizeSegmentCreate(bodyObject(input.body, input.context), input.context);
+    return {
+      status: 201,
+      data: await this.segmentIndexes.createSegment(sourceId, parsed, input.context),
+    };
+  }
 
   private async createJob(input: KnowledgeOperationInput): Promise<KnowledgeOperationResult> {
     const context = input.context;
@@ -428,6 +544,48 @@ export class S06JobApplication {
     });
     for (const [index, item] of records.entries()) {
       if (action === 'upsert') {
+        if (item.id) {
+          assertKeys(
+            item,
+            ['id', 'version'],
+            ['question', 'answer', 'segmentType', 'metadata', 'searchEnabled'],
+            input.context,
+          );
+          if (item.question !== undefined && !String(item.question).trim()) {
+            throw validation(input.context, {
+              field: `items[${index}].question`,
+              reason: 'required',
+            });
+          }
+          if (
+            item.segmentType === 'qa' &&
+            item.answer !== undefined &&
+            !String(item.answer).trim()
+          ) {
+            throw validation(input.context, {
+              field: `items[${index}].answer`,
+              reason: 'required',
+              segmentType: 'qa',
+            });
+          }
+          if (
+            item.segmentType !== undefined &&
+            item.segmentType !== 'chunk' &&
+            item.segmentType !== 'qa'
+          ) {
+            throw validation(input.context, {
+              field: `items[${index}].segmentType`,
+              allowed: ['chunk', 'qa'],
+            });
+          }
+        } else {
+          const { sourceId: rawSourceId, ...createBody } = item;
+          const sourceId = String(rawSourceId ?? '');
+          normalizeSegmentCreate(createBody, input.context);
+          if (!/^[a-f0-9]{24}$/.test(sourceId)) {
+            throw validation(input.context, { field: `items[${index}].sourceId` });
+          }
+        }
         const sourceId = item.id ? null : String(item.sourceId ?? '');
         if (!item.id && !/^[a-f0-9]{24}$/.test(sourceId ?? '')) {
           throw validation(input.context, { field: `items[${index}].sourceId` });
@@ -440,6 +598,18 @@ export class S06JobApplication {
           await this.access.assertPermission('source', sourceId!, 'write', input.context);
         }
       } else {
+        assertKeys(
+          item,
+          ['version'],
+          action === 'reindex' ? ['id', 'segmentId', 'reason', 'modelId'] : ['id', 'segmentId'],
+          input.context,
+        );
+        if (!item.id && !item.segmentId) {
+          throw validation(input.context, {
+            field: `items[${index}].id`,
+            reason: 'required',
+          });
+        }
         const segment = await this.catalog.getSegment(
           String(item.id ?? item.segmentId ?? ''),
           input.context,
@@ -470,29 +640,40 @@ export class S06JobApplication {
               },
               input.context,
             );
-            results.push({ id, success: true, version: segment.version });
-          } else {
-            const segment = await this.catalog.createSegment(
-              String(item.sourceId),
-              {
-                question: String(item.question ?? ''),
-                answer: String(item.answer ?? ''),
-                searchEnabled: item.searchEnabled !== false,
-                metadata:
-                  typeof item.metadata === 'object' && item.metadata !== null
-                    ? (item.metadata as Record<string, unknown>)
-                    : {},
-              },
+            const indexed = await this.segmentIndexes.reindex(
+              id,
+              { reason: 'manual', version: segment.version },
               input.context,
             );
-            results.push({ id: segment.id, success: true, version: segment.version });
+            const latest = await this.catalog.getSegment(id, input.context);
+            results.push({
+              index,
+              id,
+              success: true,
+              version: Number(latest.version),
+              jobId: indexed.jobId,
+            });
+          } else {
+            const { sourceId, ...createBody } = item;
+            const segment = await this.segmentIndexes.createSegment(
+              String(sourceId),
+              normalizeSegmentCreate(createBody, input.context),
+              input.context,
+            );
+            results.push({
+              index,
+              id: String(segment.id),
+              success: true,
+              version: Number(segment.version),
+              jobIds: segment.jobIds,
+            });
           }
         } else if (action === 'delete') {
           if (!Number.isInteger(version) || version < 1) {
             throw validation(input.context, { field: `items[${index}].version` });
           }
           await this.catalog.deleteSegment(id, input.context, version);
-          results.push({ id, success: true });
+          results.push({ index, id, success: true });
         } else {
           const result = await this.segmentIndexes.reindex(
             id,
@@ -503,10 +684,11 @@ export class S06JobApplication {
             },
             input.context,
           );
-          results.push({ id, success: true, jobId: result.jobId });
+          results.push({ index, id, success: true, jobId: result.jobId });
         }
       } catch (error) {
         results.push({
+          index,
           id: id || `items[${index}]`,
           success: false,
           code:
@@ -535,6 +717,8 @@ export class S06JobApplication {
 
   async dispatch(input: KnowledgeOperationInput): Promise<KnowledgeOperationResult> {
     switch (input.operationId) {
+      case 'API-SEGMENT-CREATE':
+        return this.createSegment(input);
       case 'API-JOB-CREATE':
         return this.createJob(input);
       case 'API-JOB-RETRY':

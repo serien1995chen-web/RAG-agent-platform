@@ -958,26 +958,6 @@ export class KnowledgeApplication {
           ),
         };
       }
-      case 'API-SEGMENT-CREATE': {
-        await this.access.assertPermission('source', params.sourceId ?? '', 'write', context);
-        return {
-          status: 201,
-          data: await this.catalog.createSegment(
-            params.sourceId ?? '',
-            {
-              question: String(body.question ?? ''),
-              answer: String(body.answer ?? ''),
-              searchEnabled: typeof body.searchEnabled === 'boolean' ? body.searchEnabled : true,
-              metadata:
-                typeof body.metadata === 'object' && body.metadata !== null
-                  ? (body.metadata as Record<string, unknown>)
-                  : {},
-              indexes: Array.isArray(body.indexes) ? (body.indexes as never) : undefined,
-            },
-            context,
-          ),
-        };
-      }
       case 'API-SEGMENT-GET': {
         const segment = await this.catalog.getSegment(params.segmentId ?? '', context);
         await this.access.assertPermission('source', segment.sourceId, 'read', context);

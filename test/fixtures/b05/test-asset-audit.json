@@ -1,0 +1,112 @@
+{
+  "schemaVersion": 1,
+  "batch": "B05",
+  "scope": ["DATA-004", "ING-002"],
+  "assets": [
+    {
+      "path": "packages/service/test/integration/knowledge-application.test.ts",
+      "classification": "REUSE",
+      "reason": "Real Mongo coverage for Space, Source, Segment, ACL, CAS, Job and Outbox fundamentals."
+    },
+    {
+      "path": "packages/service/test/integration/knowledge-import.test.ts",
+      "classification": "EXTEND",
+      "reason": "Reused for real transaction, compensation and text validation; B05 adds exact raw-text hash, Source/ObjectRef, settings snapshot and rollback cases."
+    },
+    {
+      "path": "packages/service/test/integration/kb-b04-segment-index.test.ts",
+      "classification": "REUSE",
+      "reason": "Covers Segment index lifecycle, CAS, history, failure state and final index projection."
+    },
+    {
+      "path": "packages/service/test/integration/s6-processing.integration.test.ts",
+      "classification": "REUSE",
+      "reason": "Covers real parse and index worker processing, pgvector writes and Job execution."
+    },
+    {
+      "path": "test/tenant/kb-b04-segment-index-tenant.test.ts",
+      "classification": "REUSE",
+      "reason": "Covers foreign-resource hiding and Viewer/Editor/Manager boundaries reused by DATA-004."
+    },
+    {
+      "path": "test/concurrency/knowledge-import-idempotency.test.ts",
+      "classification": "EXTEND",
+      "reason": "Already covers concurrent custom-text submission; B05 adds an explicit capability ID and one-business-Job assertion."
+    },
+    {
+      "path": "test/fault/knowledge-import-fault.test.ts",
+      "classification": "REUSE",
+      "reason": "Reused for SSRF and provider failure classification; B05 transaction rollback is asserted in the import integration suite."
+    },
+    {
+      "path": "test/security/kb-b04-segment-index-security.test.ts",
+      "classification": "REUSE",
+      "reason": "Covers malformed Segment/Job identifiers and missing tenant context."
+    },
+    {
+      "path": "test/contract/s6-job-index-contract.test.ts",
+      "classification": "REUSE",
+      "reason": "Covers public Segment, index and Job schema continuity."
+    },
+    {
+      "path": "test/e2e/fastgpt-product-data-import.test.ts",
+      "classification": "EXTEND",
+      "reason": "Current product route and real API harness; B05 adds stronger pre-save index, batch-upsert, preview and recovery assertions."
+    },
+    {
+      "path": "packages/web/test/unit/import-workbench.test.ts",
+      "classification": "STALE",
+      "reason": "Tests the legacy workbench contract, not the current product Import route used by B05."
+    },
+    {
+      "path": "test/e2e/s6-jobs-segments.test.ts",
+      "classification": "STALE",
+      "reason": "Legacy skipped Segment page cases no longer prove the product Data surface."
+    },
+    {
+      "path": "packages/service/test/integration/kb-b05-manual-data.test.ts",
+      "classification": "NEW",
+      "reason": "B05 direct insert, batch limits, partial retry and missing index-side-effect evidence."
+    },
+    {
+      "path": "test/tenant/kb-b05-manual-data-tenant.test.ts",
+      "classification": "NEW",
+      "reason": "B05 cross-tenant batch and role boundary evidence."
+    },
+    {
+      "path": "test/security/kb-b05-manual-data-security.test.ts",
+      "classification": "NEW",
+      "reason": "B05 text-size, strict chunking and tenant fail-closed evidence."
+    },
+    {
+      "path": "test/contract/kb-b05-manual-data-contract.test.ts",
+      "classification": "NEW",
+      "reason": "B05 runtime operation and strict request schema audit."
+    },
+    {
+      "path": "test/e2e/kb-b05-manual-data.test.ts",
+      "classification": "NEW",
+      "reason": "B05 1440x900 zh-CN product UI, batch, preview, persistence, network, console and axe coverage."
+    }
+  ],
+  "staleAssertions": [
+    {
+      "path": "packages/web/src/product/import-workspace.tsx",
+      "behavior": "导入前预览显示“当前合同没有接口”占位",
+      "classification": "STALE",
+      "b05Action": "Register a defect unless a cross-batch preview contract is explicitly accepted."
+    },
+    {
+      "path": "packages/web/src/product/data-workspace.tsx",
+      "behavior": "批量管理仅提供删除和重建",
+      "classification": "STALE",
+      "b05Action": "Require a batch upsert UI path with per-item progress and retry."
+    },
+    {
+      "path": "packages/service/src/modules/knowledge/application/knowledge.application.ts",
+      "behavior": "单条 Segment 创建返回 pending，当前实现未创建索引 Job",
+      "classification": "UNRESOLVED",
+      "b05Action": "Confirm through runtime assertions before registering the defect."
+    }
+  ]
+}

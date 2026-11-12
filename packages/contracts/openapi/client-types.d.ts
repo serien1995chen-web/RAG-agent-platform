@@ -444,7 +444,7 @@ export interface SchemaPropertyMap {
   "ImportBackup": "conflictStrategy" | "directoryId" | "dryRun" | "uploadId";
   "ImportFiles": "chunking" | "directoryId" | "parseConfig" | "parseProvider" | "uploadIds";
   "ImportTemplate": "directoryId" | "uploadId";
-  "ImportText": "chunking" | "directoryId" | "name" | "text";
+  "ImportText": "chunking" | "directoryId" | "dryRun" | "knowledgeSpaceId" | "name" | "text";
   "ImportUrl": "directoryId" | "selector" | "url";
   "Job": "attemptEpoch" | "attempts" | "availableAt" | "cancelRequestedAt" | "createdAt" | "error" | "heartbeatAt" | "inputSnapshot" | "jobId" | "kind" | "knowledgeSpaceId" | "leaseExpiresAt" | "leaseOwner" | "maxAttempts" | "pausedAt" | "priority" | "progress" | "resourceId" | "resourceType" | "result" | "status" | "steps" | "updatedAt" | "version" | "workspaceId";
   "JobCreate": "inputSnapshot" | "kind" | "priority" | "resourceId" | "resourceType";
@@ -488,7 +488,7 @@ export interface SchemaPropertyMap {
   "SearchResponse": "degraded" | "durationMs" | "items" | "mode" | "partial" | "rerankApplied" | "searchId";
   "Segment": "answer" | "content" | "fullTextTokens" | "fullTextVersion" | "id" | "imageBlobRefId" | "indexErrorCode" | "indexStatus" | "indexes" | "knowledgeSpaceId" | "metadata" | "order" | "question" | "searchEnabled" | "sourceId" | "sourceVersion" | "version" | "workspaceId";
   "SegmentBatchAction": "action" | "items";
-  "SegmentCreate": "answer" | "indexes" | "metadata" | "question" | "searchEnabled";
+  "SegmentCreate": "answer" | "indexes" | "metadata" | "question" | "searchEnabled" | "segmentType";
   "SegmentHistory": "answer" | "changedAt" | "changedByMemberId" | "indexId" | "indexes" | "nextIndexes" | "operation" | "question" | "version";
   "SegmentHistoryList": "items";
   "SegmentIndex": "dimension" | "indexId" | "modelId" | "storageType" | "text" | "type" | "vectorId" | "vectorProfile" | "version";

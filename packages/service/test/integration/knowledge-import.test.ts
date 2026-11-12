@@ -8,7 +8,7 @@ import {
 } from '../../src/shared/persistence/schemas/knowledge-index';
 import type { TenantContext } from '../../src/shared/persistence/knowledge/tenant';
 import type { ImportSubmissionCommand } from '../../src/modules/knowledge/application/ingestion.ports';
-import { requestHashOf } from '../../src/modules/knowledge/domain/import-submission';
+import { requestHashOf, sha256Of } from '../../src/modules/knowledge/domain/import-submission';
 import {
   FixtureQuotaGatePort,
   FixtureScopedAuthPort,
@@ -199,7 +199,7 @@ function ingestionApplication(
         key: input.key,
         size: input.body.byteLength,
         etag: 'etag-created',
-        sha256: requestHashOf(Array.from(input.body)),
+        sha256: sha256Of(input.body),
       };
     },
     async getObject(_bucket: string, key: string) {
@@ -1226,5 +1226,214 @@ describe('S4 import entry workflows', () => {
     expect(await connection.models.KnowledgeSource.findById(firstSource!._id).lean()).toMatchObject(
       { version: 3, sourceVersion: 3 },
     );
+  });
+
+  it('L1-B05-ING-002-P01/S01 preserves raw text hash, Source, Job, Outbox, and audit facts', async () => {
+    const counters = newCounters();
+    const ingestion = ingestionApplication('template', { counters });
+    const text = ['# 人工文本验收', '', '第一行中文 English', '第二行保持换行', 'emoji 🙌🚀'].join(
+      '\n',
+    );
+    const result = await ingestion.dispatch({
+      operationId: 'API-IMPORT-TEXT',
+      params: { spaceId },
+      query: {},
+      headers: { 'idempotency-key': `b05-text-preserve-${suffix}-01` },
+      body: {
+        knowledgeSpaceId: spaceId,
+        name: `B05 原文 ${suffix}.md`,
+        directoryId: null,
+        text,
+        chunking: {
+          trainingType: 'chunk',
+          chunkSettingMode: 'custom',
+          chunkSplitMode: 'paragraph',
+          chunkSize: 512,
+        },
+      },
+      context,
+    });
+    expect(result.status).toBe(202);
+    expect(counters.puts).toHaveLength(1);
+    const objectKey = counters.puts[0]!;
+    expect(Buffer.from(objectBytes.get(objectKey) ?? new Uint8Array()).toString('utf8')).toBe(text);
+
+    const source = await connection.models.KnowledgeSource.findOne({ workspaceId }).lean();
+    expect(source).not.toBeNull();
+    expect(source).toMatchObject({
+      name: `B05 原文 ${suffix}.md`,
+      kind: 'text',
+      contentHash: sha256Of(text),
+      sourceVersion: 1,
+    });
+    const objectRef = await connection.models.KnowledgeObjectRef.findById(source!.blobRefId).lean();
+    expect(objectRef).toMatchObject({
+      workspaceId,
+      sourceId: source!._id,
+      purpose: 'source',
+      sha256: sha256Of(text),
+      sizeBytes: Buffer.byteLength(text, 'utf8'),
+      state: 'active',
+    });
+
+    const job = await connection.models.KnowledgeJob.findById(
+      (result.data as { jobId: string }).jobId,
+    ).lean();
+    expect(job).toMatchObject({
+      kind: 'import',
+      resourceType: 'space',
+      inputSnapshot: {
+        importKind: 'text',
+        chunkingConfigSnapshot: {
+          trainingType: 'chunk',
+          chunkSettingMode: 'custom',
+          chunkSplitMode: 'paragraph',
+          chunkSize: 512,
+        },
+      },
+    });
+    expect(await connection.models.KnowledgeOutboxEvent.countDocuments({ workspaceId })).toBe(1);
+    expect(
+      await connection.models.KnowledgeAuditEvent.countDocuments({
+        workspaceId,
+        resourceType: 'job',
+        resourceId: (result.data as { jobId: string }).jobId,
+      }),
+    ).toBe(1);
+  });
+
+  it('L1-B05-ING-002-N01/C01 rejects invalid chunking and distinguishes content/name/idempotency cases', async () => {
+    const counters = newCounters();
+    const ingestion = ingestionApplication('template', { counters });
+    const base = {
+      operationId: 'API-IMPORT-TEXT' as const,
+      params: { spaceId },
+      query: {},
+      context,
+    };
+    const invalid = await ingestion
+      .dispatch({
+        ...base,
+        headers: { 'idempotency-key': `b05-text-invalid-${suffix}-01` },
+        body: {
+          knowledgeSpaceId: spaceId,
+          name: 'invalid',
+          directoryId: null,
+          text: 'body',
+          chunking: {
+            trainingType: 'chunk',
+            chunkSettingMode: 'custom',
+            chunkSplitMode: 'paragraph',
+            chunkSize: 1,
+            paragraphChunkMinSize: 2048,
+          },
+        },
+      })
+      .catch((error) => error);
+    expect(invalid).toMatchObject({
+      problem: { error: { code: 'KNOWLEDGE_VALIDATION_FAILED' } },
+    });
+    expect(await connection.models.KnowledgeSource.countDocuments({ workspaceId })).toBe(0);
+
+    const firstBody = {
+      knowledgeSpaceId: spaceId,
+      name: '同名内容 A',
+      directoryId: null,
+      text: '相同内容 kept exactly',
+      chunking: { trainingType: 'chunk' as const, chunkSettingMode: 'auto' as const },
+    };
+    const firstKey = `b05-text-idem-${suffix}-0001`;
+    const first = await ingestion.dispatch({
+      ...base,
+      headers: { 'idempotency-key': firstKey },
+      body: firstBody,
+    });
+    const replay = await ingestion.dispatch({
+      ...base,
+      headers: { 'idempotency-key': firstKey },
+      body: firstBody,
+    });
+    expect((replay.data as { jobId: string }).jobId).toBe((first.data as { jobId: string }).jobId);
+
+    const sameContent = await ingestion.dispatch({
+      ...base,
+      headers: { 'idempotency-key': `b05-text-idem-${suffix}-0002` },
+      body: { ...firstBody, name: '同名内容 B' },
+    });
+    expect((sameContent.data as { jobId: string }).jobId).not.toBe(
+      (first.data as { jobId: string }).jobId,
+    );
+    const conflict = await ingestion
+      .dispatch({
+        ...base,
+        headers: { 'idempotency-key': firstKey },
+        body: { ...firstBody, text: 'different body' },
+      })
+      .catch((error) => error);
+    expect(conflict).toMatchObject({ problem: { error: { code: 'KNOWLEDGE_CONFLICT' } } });
+    expect(await connection.models.KnowledgeSource.countDocuments({ workspaceId })).toBe(2);
+    expect(counters.puts).toHaveLength(2);
+  });
+
+  it('L1-B05-ING-002-UI01 returns deterministic text preview without persistence', async () => {
+    const counters = newCounters();
+    const ingestion = ingestionApplication('template', { counters });
+    const text = '第一段\n\n第二段';
+    const result = await ingestion.dispatch({
+      operationId: 'API-IMPORT-TEXT',
+      params: { spaceId },
+      query: {},
+      headers: { 'idempotency-key': `b05-text-preview-${suffix}-01` },
+      body: {
+        knowledgeSpaceId: spaceId,
+        name: 'B05 Preview.md',
+        directoryId: null,
+        text,
+        dryRun: true,
+        chunking: {
+          trainingType: 'chunk',
+          chunkSettingMode: 'custom',
+          chunkSplitMode: 'paragraph',
+          chunkSize: 512,
+        },
+      },
+      context,
+    });
+    expect(result).toMatchObject({
+      status: 200,
+      data: {
+        name: 'B05 Preview.md',
+        totalChunks: 1,
+        chunks: [
+          { index: 0, text: expect.stringContaining('第一段'), contentHash: expect.any(String) },
+        ],
+        truncated: false,
+      },
+    });
+    expect(counters.puts).toHaveLength(0);
+    expect(await connection.models.KnowledgeSource.countDocuments({ workspaceId })).toBe(0);
+    expect(await connection.models.KnowledgeJob.countDocuments({ workspaceId })).toBe(0);
+    expect(await connection.models.KnowledgeOutboxEvent.countDocuments({ workspaceId })).toBe(0);
+  });
+
+  it('L1-B05-ING-002-F01 rolls back Source, Job, audit, and Outbox on transaction failure', async () => {
+    const failing = new KnowledgeImportRepository(connection, {
+      beforeOutbox() {
+        throw new Error('b05-injected-outbox-failure');
+      },
+    });
+    await expect(
+      failing.submit(
+        command({
+          key: `b05-text-rollback-${suffix}-01`,
+          body: { text: 'rollback me' },
+        }),
+        context,
+      ),
+    ).rejects.toThrow('b05-injected-outbox-failure');
+    expect(await connection.models.KnowledgeSource.countDocuments({ workspaceId })).toBe(0);
+    expect(await connection.models.KnowledgeJob.countDocuments({ workspaceId })).toBe(0);
+    expect(await connection.models.KnowledgeAuditEvent.countDocuments({ workspaceId })).toBe(0);
+    expect(await connection.models.KnowledgeOutboxEvent.countDocuments({ workspaceId })).toBe(0);
   });
 });

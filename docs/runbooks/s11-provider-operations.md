@@ -55,13 +55,36 @@ bodies, connection strings or object keys.
 ## Preflight
 
 ```bash
-S11_SCOPE_PROFILE=knowledge-usability-v1 \
-  node scripts/check-provider-inputs.mjs --json
+set -a
+. ~/.config/rag-agent-platform/s11-provider.env
+set +a
+
+node scripts/check-provider-inputs.mjs \
+  --scenario=s11-aiproxy-real --json
 
 S11_SCOPE_PROFILE=knowledge-usability-v1 \
 AIPROXY_MODE=openai \
   node scripts/probe-aiproxy-catalog.mjs
 ```
+
+Provider preflight is scenario-scoped:
+
+| Scenario                        | Required providers                    |
+| ------------------------------- | ------------------------------------- |
+| `s11-aiproxy-real`              | AIProxy                               |
+| `s11-aiproxy-catalog-preflight` | AIProxy                               |
+| `s11-provider-quota`            | AIProxy                               |
+| `s11-ocr-real`                  | Somark, TextIn, Doc2X                 |
+| `s11-connectors-real`           | Feishu                                |
+| no scenario                     | Full `knowledge-usability-v1` profile |
+
+An AIProxy scenario does not require OCR or Feishu credentials. Without a
+scenario, the CLI still reports the full profile so release-wide readiness
+cannot be overstated.
+
+The input CLI accepts `--json` plus at most one
+`--scenario=<known-scenario>`. Empty, repeated or unknown scenarios and
+unsupported arguments fail with exit code `1`.
 
 The catalog probe reports configured IDs that are present in both the provider
 catalog and the approved internal profile. Missing aliases require user
