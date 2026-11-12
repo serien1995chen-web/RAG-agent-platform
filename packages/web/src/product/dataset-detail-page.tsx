@@ -16,7 +16,7 @@ import {
   WarningIcon,
 } from '@chakra-ui/icons';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useState, type FormEvent, type RefObject } from 'react';
 import {
   addCollaborator,
   applyTags,
@@ -34,6 +34,8 @@ import {
   listCollaborators,
   moveDirectory,
   moveSource,
+  previewFile,
+  previewSource,
   productApi,
   removeCollaborator,
   retryJob,
@@ -111,6 +113,13 @@ type DetailQueryChange = (query: DatasetDetailQuery, options?: { replace?: boole
 
 const ACTIVE_JOB_STATUSES = new Set(['queued', 'running', 'retry_wait', 'paused']);
 
+type SourcePreviewView =
+  | { kind: 'image'; url: string; expiresAt: string }
+  | {
+      kind: 'text';
+      sections: Array<{ title?: string; text: string; page?: number }>;
+    };
+
 function permissionRank(permission: PermissionLevel | null | undefined): number {
   return permission ? { read: 10, write: 20, manage: 30, owner: 40 }[permission] : 0;
 }
@@ -130,6 +139,11 @@ export function DatasetDetailPage(props: {
   const [batchMode, setBatchMode] = useState(false);
   const [selectedSourceIds, setSelectedSourceIds] = useState<string[]>([]);
   const [rowMenuId, setRowMenuId] = useState<string | null>(null);
+  const [previewSourceTarget, setPreviewSourceTarget] = useState<Source | null>(null);
+  const [previewRequest, setPreviewRequest] = useState(0);
+  const [previewTriggerElement, setPreviewTriggerElement] = useState<HTMLButtonElement | null>(
+    null,
+  );
   const [sourceToggleBusyId, setSourceToggleBusyId] = useState<string | null>(null);
   const [sourceError, setSourceError] = useState<unknown>(null);
   const [directoryForm, setDirectoryForm] = useState<{
@@ -191,6 +205,25 @@ export function DatasetDetailPage(props: {
     enabled: Boolean(datasetId),
     refetchInterval: (data) => (data?.some(hasActiveSourceStatus) ? 10_000 : false),
     refetchIntervalInBackground: false,
+  });
+  const sourcePreviewQuery = useQuery<SourcePreviewView>({
+    queryKey: [
+      'kb-product',
+      'source-preview',
+      previewSourceTarget?.id,
+      previewSourceTarget?.blobRefId,
+      previewRequest,
+    ],
+    queryFn: async () => {
+      const source = previewSourceTarget!;
+      if (source.mimeType?.startsWith('image/')) {
+        if (!source.blobRefId) throw new Error('图片 Source 缺少可读取对象。');
+        const ticket = await previewFile(source.blobRefId);
+        return { kind: 'image', url: ticket.url, expiresAt: ticket.expiresAt };
+      }
+      return { kind: 'text', ...(await previewSource(source.id)) };
+    },
+    enabled: Boolean(previewSourceTarget),
   });
   const tagsQuery = useQuery({
     queryKey: ['kb-product', 'tags', datasetId],
@@ -1097,6 +1130,7 @@ export function DatasetDetailPage(props: {
                         const status = sourceStatusView(source.processingStatus);
                         const sourceTags = tagValuesForSource(source, tags);
                         const job = latestJobs.get(source.id);
+                        const canRead = permissionRank(source.effectivePermission) >= 10;
                         const canWrite = permissionRank(source.effectivePermission) >= 20;
                         const canManage = permissionRank(source.effectivePermission) >= 30;
                         const canOwn = permissionRank(source.effectivePermission) >= 40;
@@ -1180,8 +1214,20 @@ export function DatasetDetailPage(props: {
                               </label>
                             </td>
                             <td>
-                              {canWrite ? (
+                              {canRead ? (
                                 <div className="kb2-row-actions">
+                                  <ProductButton
+                                    size="sm"
+                                    tone="ghost"
+                                    aria-label={`预览 ${source.name}`}
+                                    onClick={(event) => {
+                                      setPreviewTriggerElement(event.currentTarget);
+                                      setPreviewSourceTarget(source);
+                                      setPreviewRequest((value) => value + 1);
+                                    }}
+                                  >
+                                    预览
+                                  </ProductButton>
                                   <ProductIconButton
                                     label={`${source.name} 的更多操作`}
                                     onClick={() =>
@@ -1693,6 +1739,17 @@ export function DatasetDetailPage(props: {
         </form>
       </ProductModal>
 
+      <SourcePreviewDialog
+        source={previewSourceTarget}
+        query={sourcePreviewQuery}
+        finalFocusRef={{ current: previewTriggerElement }}
+        onClose={() => setPreviewSourceTarget(null)}
+        onRetry={() => setPreviewRequest((value) => value + 1)}
+        onDownload={() => {
+          if (previewSourceTarget) void downloadOne(previewSourceTarget);
+        }}
+      />
+
       <TrainingDialog
         source={trainingSource}
         job={trainingSource ? latestJobs.get(trainingSource.id) : undefined}
@@ -1700,6 +1757,93 @@ export function DatasetDetailPage(props: {
         onRetried={() => void invalidateCollection()}
       />
     </ProductAppShell>
+  );
+}
+
+function SourcePreviewDialog(props: {
+  source: Source | null;
+  query: {
+    data?: SourcePreviewView;
+    error: unknown;
+    isLoading: boolean;
+  };
+  finalFocusRef: RefObject<HTMLButtonElement | null>;
+  onClose: () => void;
+  onRetry: () => void;
+  onDownload: () => void;
+}) {
+  const [imageError, setImageError] = useState<unknown>(null);
+  useEffect(() => setImageError(null), [props.query.data]);
+
+  const emptyText =
+    props.query.data?.kind === 'text' &&
+    props.query.data.sections.every((section) => section.text.trim().length === 0);
+
+  return (
+    <ProductModal
+      open={Boolean(props.source)}
+      title="预览原始内容"
+      description={props.source?.name}
+      size="xl"
+      finalFocusRef={props.finalFocusRef}
+      onClose={props.onClose}
+      footer={
+        <ProductButton tone="secondary" onClick={props.onDownload}>
+          <DownloadIcon boxSize={3.5} />
+          下载原始文件
+        </ProductButton>
+      }
+    >
+      {props.query.isLoading ? <ProductSkeleton rows={4} /> : null}
+      {!props.query.isLoading && props.query.error ? (
+        <ProductError error={props.query.error} onRetry={props.onRetry} />
+      ) : null}
+      {!props.query.isLoading && props.query.data?.kind === 'image' ? (
+        imageError ? (
+          <div className="kb2-source-preview-error">
+            <ProductError error={imageError} />
+            <ProductButton
+              size="sm"
+              onClick={() => {
+                setImageError(null);
+                props.onRetry();
+              }}
+            >
+              重新获取预览链接
+            </ProductButton>
+          </div>
+        ) : (
+          <img
+            key={props.query.data.url}
+            className="kb2-source-preview-image"
+            src={props.query.data.url}
+            alt={`${props.source?.name ?? 'Source'} 图片预览`}
+            onError={() => setImageError(new Error('图片预览链接已失效，请重新获取。'))}
+          />
+        )
+      ) : null}
+      {!props.query.isLoading && emptyText ? (
+        <ProductEmpty
+          title="暂无可预览文本"
+          description="该 Source 的原文为空，解析结果可能仍在生成。"
+        />
+      ) : null}
+      {!props.query.isLoading && props.query.data?.kind === 'text' && !emptyText ? (
+        <div className="kb2-source-preview">
+          {props.query.data.sections.map((section, index) => (
+            <article key={`${section.page ?? section.title ?? 'section'}-${index}`}>
+              {section.title || section.page !== undefined ? (
+                <h3>
+                  {section.title}
+                  {section.page !== undefined ? ` · 第 ${section.page + 1} 页` : ''}
+                </h3>
+              ) : null}
+              <p>{section.text}</p>
+            </article>
+          ))}
+        </div>
+      ) : null}
+    </ProductModal>
   );
 }
 

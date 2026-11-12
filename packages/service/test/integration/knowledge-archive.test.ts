@@ -19,6 +19,7 @@ import {
   KNOWLEDGE_SCHEMA_REGISTRY,
   ensureKnowledgeCollections,
 } from '../../src/shared/persistence/schemas/knowledge-index';
+import { KnowledgeAuditRepository } from '../../src/shared/persistence/knowledge/audit';
 import type { TenantContext } from '../../src/shared/persistence/knowledge/tenant';
 import type { KnowledgeRuntimeConfig } from '../../src/shared/config/knowledge-runtime-config';
 import { knowledgeObjectKey } from '../../../../sdk/storage/src/object-store-contract';
@@ -51,7 +52,7 @@ const catalog = {
 } as unknown as CatalogPort;
 const access = {
   async assertPermission() {
-    return { allowed: true };
+    return { effectivePermission: 'read' as const, permissionRevision: 0 };
   },
 } as unknown as AccessPort;
 
@@ -164,7 +165,15 @@ beforeAll(async () => {
     'http://127.0.0.1:3010',
     () => ticketNowMs,
   );
-  files = new FileApplication(objectRefs, objectStore, catalog, access, fileTickets);
+  files = new FileApplication(
+    objectRefs,
+    objectStore,
+    catalog,
+    access,
+    fileTickets,
+    undefined,
+    new KnowledgeAuditRepository(connection),
+  );
 }, 60_000);
 
 afterAll(async () => {
@@ -463,10 +472,7 @@ describe('TEST-FILE-004-BLOCK source archive worker', () => {
     );
     const ticket = new URL(issued.url).searchParams.get('ticket');
     expect(ticket).not.toBeNull();
-    const ticketed = await files.content(result.objectBlobRefId, 'bytes=0-3', ticket, {
-      ...context,
-      workspaceId: 'ticket',
-    });
+    const ticketed = await files.content(result.objectBlobRefId, 'bytes=0-3', ticket, context);
     expect(ticketed).toMatchObject({
       contentType: 'application/zip',
       disposition: 'attachment',
@@ -479,10 +485,7 @@ describe('TEST-FILE-004-BLOCK source archive worker', () => {
 
     ticketNowMs += 2_000;
     await expect(
-      files.content(result.objectBlobRefId, null, ticket, {
-        ...context,
-        workspaceId: 'ticket',
-      }),
+      files.content(result.objectBlobRefId, null, ticket, context),
     ).rejects.toMatchObject({
       problem: {
         error: {

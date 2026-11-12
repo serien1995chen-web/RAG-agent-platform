@@ -18,6 +18,7 @@ import type {
 } from '../../../packages/service/src/modules/knowledge/application/ports';
 import { createKnowledgeError } from '../../../packages/contracts/src/errors/knowledge-errors';
 import type { TenantContext } from '../../../packages/service/src/shared/persistence/knowledge/tenant';
+import { KnowledgeAuditRepository } from '../../../packages/service/src/shared/persistence/knowledge/audit';
 
 const TICKET_SECRET = 'b06a-shared-ticket-secret-at-least-32-bytes-long';
 
@@ -117,7 +118,7 @@ export async function createB06aEnv(prefix: string): Promise<B06aEnv> {
           details: { resourceType, action },
         });
       }
-      return { allowed: true };
+      return { effectivePermission: 'read' as const, permissionRevision: 0 };
     },
   } as unknown as AccessPort;
   const files = new FileApplication(
@@ -127,6 +128,7 @@ export async function createB06aEnv(prefix: string): Promise<B06aEnv> {
     access,
     new FileTicketService(TICKET_SECRET, 'http://127.0.0.1:3010'),
     new ObjectStoreArchiveSafetyAdapter(store),
+    new KnowledgeAuditRepository(connection),
   );
   const env: B06aEnv = {
     suffix,

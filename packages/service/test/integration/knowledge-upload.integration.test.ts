@@ -20,6 +20,7 @@ import {
   KNOWLEDGE_SCHEMA_REGISTRY,
   ensureKnowledgeCollections,
 } from '../../src/shared/persistence/schemas/knowledge-index';
+import { KnowledgeAuditRepository } from '../../src/shared/persistence/knowledge/audit';
 import type { TenantContext } from '../../src/shared/persistence/knowledge/tenant';
 
 const suffix = randomUUID().replaceAll('-', '').slice(0, 12);
@@ -107,7 +108,7 @@ const assertPermission = vi.fn(async (resourceType: string, resourceId: string) 
       traceId: context.traceId,
     });
   }
-  return { allowed: true };
+  return { effectivePermission: 'read' as const, permissionRevision: 0 };
 });
 const access = {
   assertPermission,
@@ -177,6 +178,7 @@ beforeAll(async () => {
     'integration-file-ticket-secret-at-least-32-bytes',
     'http://127.0.0.1:3010',
   );
+  const audits = new KnowledgeAuditRepository(connection);
   files = new FileApplication(
     repository,
     objectStore,
@@ -184,6 +186,7 @@ beforeAll(async () => {
     access,
     fileTickets,
     new ObjectStoreArchiveSafetyAdapter(objectStore),
+    audits,
   );
   lifecycle = new ObjectLifecycleService(repository, objectStore, 500);
 }, 60_000);
@@ -613,21 +616,13 @@ describe('TEST-FILE-001-BLOCK upload session', () => {
       completed.sha256,
     );
 
-    const ticketed = await files.content(completed.blobId, null, ticket, {
-      ...context,
-      workspaceId: 'ticket',
-      memberId: 'file-ticket',
-    });
+    const ticketed = await files.content(completed.blobId, null, ticket, context);
     const ticketChunks: Buffer[] = [];
     for await (const chunk of ticketed.body) ticketChunks.push(Buffer.from(chunk));
     expect(Buffer.concat(ticketChunks)).toEqual(original);
     deniedSources.add(String(source._id));
     const revokedTicket = await files
-      .content(completed.blobId, null, ticket, {
-        ...context,
-        workspaceId: 'ticket',
-        memberId: 'file-ticket',
-      })
+      .content(completed.blobId, null, ticket, context)
       .catch((error: unknown) => error);
     expect(errorCode(revokedTicket)).toBe('KNOWLEDGE_FORBIDDEN');
     expect(assertPermission).toHaveBeenCalled();
@@ -950,11 +945,25 @@ describe('TEST-FILE-001-BLOCK upload session', () => {
       objectStore,
       fileTickets,
       new ObjectStoreArchiveSafetyAdapter(objectStore),
+      new KnowledgeAuditRepository(connection),
     );
     const sourcePreview = await sourceFiles.preview(String(source._id), context);
     expect(sourcePreview.sections[0]?.text).toBe(body.toString());
     const sourceDownload = await sourceFiles.download(String(source._id), context);
     expect(sourceDownload.disposition).toBe('attachment');
+    const ticketAudit = await connection.models.KnowledgeAuditEvent.findOne({
+      workspaceId: context.workspaceId,
+      action: 'file.ticket.issue',
+      resourceType: 'file',
+      resourceId: String(source.blobRefId),
+      outcome: 'succeeded',
+    }).lean();
+    expect(ticketAudit).toMatchObject({
+      actorMemberId: context.memberId,
+      requestId: context.requestId,
+      traceId: context.traceId,
+    });
+    expect(JSON.stringify(ticketAudit?.safeDiff)).not.toMatch(/ticket=|objectKey|bucket/i);
 
     const otherBody = Buffer.from('other source binding');
     const otherUpload = await putSingle(otherBody.byteLength, 'other.txt', otherBody);
@@ -1055,11 +1064,7 @@ describe('TEST-FILE-001-BLOCK upload session', () => {
     });
     const ticket = new URL(issued.url).searchParams.get('ticket');
     expect(ticket).not.toBeNull();
-    const content = await files.content(completed.blobId, null, ticket, {
-      ...context,
-      workspaceId: 'ticket',
-      memberId: 'ticket-reader',
-    });
+    const content = await files.content(completed.blobId, null, ticket, context);
     const chunks: Buffer[] = [];
     for await (const chunk of content.body) chunks.push(Buffer.from(chunk));
     expect(Buffer.concat(chunks)).toEqual(imageBytes);
@@ -1084,8 +1089,7 @@ describe('TEST-FILE-001-BLOCK upload session', () => {
     const denied = await files
       .content(completed.blobId, null, otherTicket, {
         ...context,
-        workspaceId: 'ticket',
-        memberId: 'ticket-reader',
+        memberId: `${context.memberId}_other`,
       })
       .catch((error: unknown) => error);
     expect(errorCode(denied)).toBe('KNOWLEDGE_NOT_FOUND');
@@ -1137,7 +1141,7 @@ describe('TEST-FILE-001-BLOCK upload session', () => {
             traceId: context.traceId,
           });
         }
-        return { allowed: true };
+        return { effectivePermission: 'read' as const, permissionRevision: 0 };
       },
     } as unknown as AccessPort;
     const deniedSources = new SourceFileApplication(
@@ -1148,6 +1152,7 @@ describe('TEST-FILE-001-BLOCK upload session', () => {
       objectStore,
       fileTickets,
       new ObjectStoreArchiveSafetyAdapter(objectStore),
+      new KnowledgeAuditRepository(connection),
     );
 
     const previewError = await deniedSources

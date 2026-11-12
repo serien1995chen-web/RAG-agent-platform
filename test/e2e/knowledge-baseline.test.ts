@@ -2605,7 +2605,11 @@ describe.sequential('knowledge architecture baseline E2E', () => {
     covered.add('API-FILE-CONTENT');
     const ticketUrl = asString(filePreview.url, 'filePreview.url');
     const ticketContent = await fetch(ticketUrl, {
-      headers: { range: 'bytes=0-9' },
+      headers: {
+        authorization: `Bearer ${authToken}`,
+        'x-workspace-id': workspaceId,
+        range: 'bytes=0-9',
+      },
     });
     expect(ticketContent.status).toBe(206);
     expect((await ticketContent.arrayBuffer()).byteLength).toBe(10);

@@ -126,7 +126,8 @@ export interface KnowledgeAuditEventDoc extends WorkspaceFields {
     | 'segment'
     | 'job'
     | 'connector'
-    | 'api_key';
+    | 'api_key'
+    | 'file';
   resourceId: string;
   outcome: 'allowed' | 'denied' | 'succeeded' | 'failed';
   traceId: string;
@@ -150,7 +151,17 @@ export const KnowledgeAuditEventSchema = new Schema(
     apiKeyPrefix: { type: String, default: null },
     resourceType: {
       type: String,
-      enum: ['workspace', 'space', 'directory', 'source', 'segment', 'job', 'connector', 'api_key'],
+      enum: [
+        'workspace',
+        'space',
+        'directory',
+        'source',
+        'segment',
+        'job',
+        'connector',
+        'api_key',
+        'file',
+      ],
       required: true,
     },
     resourceId: { type: String, required: true },

@@ -1228,8 +1228,6 @@ export class KnowledgeApplication {
           data: {
             blobId: completed.blobId,
             workspaceId: completed.workspaceId,
-            bucket: completed.bucket,
-            objectKey: completed.objectKey,
             state: completed.state,
             sizeBytes: completed.sizeBytes,
             etag: completed.etag,

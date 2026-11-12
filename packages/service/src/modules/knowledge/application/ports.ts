@@ -247,7 +247,7 @@ export interface AccessPort {
     resourceId: string,
     required: PermissionLevel,
     context: TenantContext,
-  ): Promise<{ effectivePermission: PermissionLevel }>;
+  ): Promise<{ effectivePermission: PermissionLevel; permissionRevision?: number }>;
   getAcl(
     resourceType: AclResourceType,
     resourceId: string,
@@ -314,7 +314,8 @@ export interface AuditPort {
         | 'segment'
         | 'job'
         | 'connector'
-        | 'api_key';
+        | 'api_key'
+        | 'file';
       resourceId: string;
       outcome: 'allowed' | 'denied' | 'succeeded' | 'failed';
       safeDiff: Record<string, unknown>;

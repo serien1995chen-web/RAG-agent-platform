@@ -13,7 +13,7 @@ const workspaceId = 'ws_b06a_e2e_' + suffix;
 const memberId = 'mem_b06a_e2e_' + suffix;
 const authToken = 'b06a-e2e-' + suffix;
 const readToken = 'b06a-e2e-read-' + suffix;
-const resultDir = join(root, 'test-results', 'b06a', 'b06a-20261112-224414', 'e2e');
+const resultDir = join(root, 'test-results', 'b06a', 'b06a-20261113-0058-phaseb', 'e2e');
 
 let app: B06aAppHarness;
 let readApp: B06aAppHarness;
@@ -113,6 +113,46 @@ async function sources(): Promise<Array<{ id: string; name: string; processingSt
   return page.items;
 }
 
+async function uploadAndImport(input: {
+  name: string;
+  mimeType: string;
+  body: Buffer;
+}): Promise<void> {
+  const session = await api<{ uploadId: string }>('/v1/knowledge/uploads', 'POST', {
+    knowledgeSpaceId: datasetId,
+    name: input.name,
+    mimeType: input.mimeType,
+    sizeBytes: input.body.byteLength,
+  });
+  const presigned = await api<{ uploads: Array<{ url: string; headers: Record<string, string> }> }>(
+    '/v1/knowledge/uploads/' + session.uploadId + '/presign',
+    'POST',
+    { partNumbers: [1] },
+  );
+  const put = await fetch(presigned.uploads[0]!.url, {
+    method: 'PUT',
+    headers: presigned.uploads[0]!.headers,
+    body: input.body,
+  });
+  expect(put.status).toBe(200);
+  await fetch(app.baseUrl + '/v1/knowledge/uploads/' + session.uploadId + '/complete', {
+    method: 'POST',
+    headers: { ...headers(authToken), 'content-type': 'application/json' },
+    body: JSON.stringify({ parts: [] }),
+  }).then(async (response) => {
+    expect(response.status).toBe(200);
+  });
+  await api('/v1/knowledge/spaces/' + datasetId + '/imports/files', 'POST', {
+    uploadIds: [session.uploadId],
+    parseProvider: 'liteparse',
+    parseConfig: {},
+    chunking: {
+      trainingType: input.mimeType.startsWith('image/') ? 'imageParse' : 'chunk',
+      chunkSettingMode: 'auto',
+    },
+  });
+}
+
 async function openImport(page: Page) {
   await page.goto(
     app.baseUrl + '/dataset/detail?datasetId=' + datasetId + '&currentTab=import&source=fileCustom',
@@ -173,6 +213,41 @@ afterAll(async () => {
 }, 60_000);
 
 describe('L1-B06-ING-001 product upload flow', () => {
+  it('B06B-FILE-003-001 Upload Complete exposes only public blob fields', async () => {
+    const name = 'b06b-dto-' + suffix + '.txt';
+    const session = await api<{ uploadId: string }>('/v1/knowledge/uploads', 'POST', {
+      knowledgeSpaceId: datasetId,
+      name,
+      mimeType: 'text/plain',
+      sizeBytes: Buffer.byteLength('public dto body'),
+    });
+    const presigned = await api<{
+      uploads: Array<{ url: string; headers: Record<string, string> }>;
+    }>('/v1/knowledge/uploads/' + session.uploadId + '/presign', 'POST', { partNumbers: [1] });
+    const put = await fetch(presigned.uploads[0]!.url, {
+      method: 'PUT',
+      headers: presigned.uploads[0]!.headers,
+      body: Buffer.from('public dto body'),
+    });
+    expect(put.status).toBe(200);
+    const completed = await fetch(
+      app.baseUrl + '/v1/knowledge/uploads/' + session.uploadId + '/complete',
+      {
+        method: 'POST',
+        headers: { ...headers(authToken), 'content-type': 'application/json' },
+        body: JSON.stringify({ parts: [] }),
+      },
+    );
+    const payload = (await completed.json()) as {
+      data: Record<string, unknown>;
+    };
+    expect(completed.status).toBe(200);
+    expect(Object.keys(payload.data).sort()).toEqual(
+      ['blobId', 'etag', 'sizeBytes', 'state', 'workspaceId'].sort(),
+    );
+    expect(JSON.stringify(payload)).not.toMatch(/"bucket"|"objectKey"|kb-test\/ws\//);
+  });
+
   it('L1-B06-ING-001-P01 L1-B06-ING-001-UI01 上传文本文件由真实 Worker 完成解析并在刷新后可见', async () => {
     const context = await browser.newContext({
       viewport: { width: 1200, height: 900 },
@@ -239,6 +314,15 @@ describe('L1-B06-ING-001 product upload flow', () => {
     await context.addCookies([cookie]);
     const page = await context.newPage();
     page.setDefaultTimeout(30_000);
+    let uploadInitCount = 0;
+    page.on('request', (request) => {
+      if (
+        request.method() === 'POST' &&
+        new URL(request.url()).pathname === '/v1/knowledge/uploads'
+      ) {
+        uploadInitCount += 1;
+      }
+    });
     const goodName = 'b06a-mixed-' + suffix + '.txt';
     const badName = 'b06a-mixed-' + suffix + '.exe';
     await openImport(page);
@@ -253,9 +337,18 @@ describe('L1-B06-ING-001 product upload flow', () => {
       timeout: 30_000,
     });
     const badRow = page.locator('.kb2-upload-row').filter({ hasText: badName });
+    await playwrightExpect(badRow.getByRole('button', { name: '重试' })).toBeVisible({
+      timeout: 60_000,
+    });
     await shot(page, 'n01-mixed-upload.png');
     const badRowText = await badRow.innerText().catch(() => '');
     const nextEnabledWithSuccess = await page.getByRole('button', { name: '下一步' }).isEnabled();
+    const initCountBeforeRetry = uploadInitCount;
+    await badRow.getByRole('button', { name: '重试' }).click();
+    await playwrightExpect
+      .poll(() => uploadInitCount, { timeout: 30_000 })
+      .toBe(initCountBeforeRetry + 1);
+    await playwrightExpect(badRow).toContainText(badName);
     await context.close();
 
     const onlyBad = await browser.newContext({
@@ -283,7 +376,7 @@ describe('L1-B06-ING-001 product upload flow', () => {
     await onlyBad.close();
     expect(
       {
-        perRowReason: /不支持|失败|无法/i.test(badRowText),
+        perRowReason: /不受支持|不支持|失败|无法|KNOWLEDGE_/i.test(badRowText),
         nextEnabledWithSuccess,
         nextDisabledWhenAllFailed,
       },
@@ -304,6 +397,7 @@ describe('L1-B06-ING-001 product upload flow', () => {
     const page = await context.newPage();
     page.setDefaultTimeout(30_000);
     const name = 'b06a-cancel-' + suffix + '.txt';
+    const survivingName = 'b06a-cancel-survives-' + suffix + '.txt';
     await page.route('http://127.0.0.1:9000/**', async (route) => {
       await new Promise((resolveWait) => setTimeout(resolveWait, 1_500));
       await route.continue();
@@ -313,17 +407,35 @@ describe('L1-B06-ING-001 product upload flow', () => {
       (response) =>
         response.request().method() === 'POST' && response.url().endsWith('/v1/knowledge/uploads'),
     );
-    await page.locator('input[type="file"]').setInputFiles({
-      name,
-      mimeType: 'text/plain',
-      buffer: Buffer.alloc(9 * 1024 * 1024, 0x61),
-    });
+    await page.locator('input[type="file"]').setInputFiles([
+      {
+        name,
+        mimeType: 'text/plain',
+        buffer: Buffer.alloc(9 * 1024 * 1024, 0x61),
+      },
+      {
+        name: survivingName,
+        mimeType: 'text/plain',
+        buffer: Buffer.alloc(9 * 1024 * 1024, 0x62),
+      },
+    ]);
     const init = await initPromise;
     const initPayload = (await init.json()) as { data: { uploadId: string } };
     const uploadId = initPayload.data.uploadId;
-    const cancel = page.getByRole('button', { name: '取消上传' });
+    const cancel = page.getByRole('button', { name: '取消上传 ' + name });
     await playwrightExpect(cancel).toBeVisible({ timeout: 15_000 });
+    const survivingInitPromise = page.waitForResponse(
+      (response) =>
+        response.request().method() === 'POST' && response.url().endsWith('/v1/knowledge/uploads'),
+    );
     await cancel.click();
+    const survivingInit = await survivingInitPromise;
+    const survivingId = ((await survivingInit.json()) as { data: { uploadId: string } }).data
+      .uploadId;
+    const survivingRow = page.locator('.kb2-upload-row').filter({ hasText: survivingName });
+    await playwrightExpect(survivingRow.getByText('completed', { exact: true })).toBeVisible({
+      timeout: 60_000,
+    });
 
     let status = '';
     const deadline = Date.now() + 60_000;
@@ -335,7 +447,11 @@ describe('L1-B06-ING-001 product upload flow', () => {
     }
     await shot(page, 'file001-cancel-upload.png');
     expect(status, 'cancel during upload must abort the server session').toBe('aborted');
+    expect(
+      (await api<{ status: string }>('/v1/knowledge/uploads/' + survivingId, 'GET')).status,
+    ).toBe('completed');
     expect((await sources()).some((source) => source.name === name)).toBe(false);
+    expect((await sources()).some((source) => source.name === survivingName)).toBe(false);
     await context.close();
   }, 240_000);
 
@@ -408,6 +524,13 @@ describe('L1-B06-ING-001 product upload flow', () => {
     };
     const downloadStatus = downloadResponse.status;
     const ticketUrl = downloadBody.data?.url ?? '';
+    const ticketWithoutAuth = await fetch(ticketUrl);
+    expect(ticketWithoutAuth.status).toBe(401);
+    const ticketWithReadSession = await fetch(ticketUrl, {
+      headers: { cookie: `${readCookie.name}=${readCookie.value}` },
+    });
+    expect(ticketWithReadSession.status).toBe(200);
+    expect((await ticketWithReadSession.text()).length).toBeGreaterThan(0);
 
     const context = await browser.newContext({
       viewport: { width: 1200, height: 900 },
@@ -424,7 +547,8 @@ describe('L1-B06-ING-001 product upload flow', () => {
     const row = page.getByRole('row').filter({ hasText: created!.name });
     await playwrightExpect(row).toHaveCount(1);
     await shot(page, 'file003-readonly-detail.png');
-    const previewEntryCount = await row.getByRole('button', { name: '预览' }).count();
+    const previewEntry = row.getByRole('button', { name: '预览' });
+    const previewEntryCount = await previewEntry.count();
     const downloadEntryCount = await row.getByRole('button', { name: /更多操作|下载/ }).count();
     expect(
       {
@@ -442,6 +566,14 @@ describe('L1-B06-ING-001 product upload flow', () => {
       previewEntryCount: 1,
       downloadEntryCount: 1,
     });
+    await previewEntry.click();
+    const dialog = page.getByRole('dialog', { name: /预览原始内容/ });
+    await playwrightExpect(dialog).toBeVisible();
+    await playwrightExpect(dialog.getByText(/B06A e2e upload body/i)).toBeVisible();
+    await dialog.getByRole('button', { name: '关闭弹窗' }).click();
+    await playwrightExpect(previewEntry).toBeFocused();
+    await row.getByRole('button', { name: /更多操作/ }).click();
+    await playwrightExpect(row.getByRole('menuitem', { name: /下载原始文件/ })).toBeVisible();
     expect(ticketUrl).toContain('/v1/knowledge/files/');
     for (const url of [...networkUrls, ticketUrl]) {
       expect(url).not.toContain('source/unbound');
@@ -451,6 +583,93 @@ describe('L1-B06-ING-001 product upload flow', () => {
     expect(JSON.stringify(downloadBody)).not.toContain('kb-test/ws/');
     await context.close();
   }, 240_000);
+
+  it('L1-B06-FILE-003-UI01 图片预览失败后可重新获取 ticket 并恢复', async () => {
+    const name = 'b06a-image-' + suffix + '.png';
+    await uploadAndImport({
+      name,
+      mimeType: 'image/png',
+      body: Buffer.from(
+        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
+        'base64',
+      ),
+    });
+    await playwrightExpect
+      .poll(async () => (await sources()).some((source) => source.name === name), {
+        timeout: 30_000,
+      })
+      .toBe(true);
+
+    const context = await browser.newContext({
+      viewport: { width: 1200, height: 900 },
+      locale: 'zh-CN',
+    });
+    await context.addCookies([readCookie]);
+    const page = await context.newPage();
+    page.setDefaultTimeout(30_000);
+    let failFirstContent = true;
+    await page.route(/\/v1\/knowledge\/files\/[^/]+\/content/, async (route) => {
+      if (!failFirstContent) {
+        await route.continue();
+        return;
+      }
+      failFirstContent = false;
+      await route.fulfill({
+        status: 403,
+        contentType: 'application/json',
+        body: JSON.stringify({ success: false, error: { code: 'KNOWLEDGE_FORBIDDEN' } }),
+      });
+    });
+    await page.goto(readApp.baseUrl + '/dataset/detail?datasetId=' + datasetId, {
+      waitUntil: 'networkidle',
+    });
+    const row = page.getByRole('row').filter({ hasText: name });
+    const trigger = row.getByRole('button', { name: '预览' });
+    await trigger.click();
+    const dialog = page.getByRole('dialog');
+    await shot(page, 'file003-image-preview.png');
+    await playwrightExpect(dialog.getByRole('button', { name: '重新获取预览链接' })).toBeVisible();
+    await dialog.getByRole('button', { name: '重新获取预览链接' }).click();
+    const image = dialog.getByRole('img', { name: `${name} 图片预览` });
+    await playwrightExpect(image).toBeVisible();
+    await playwrightExpect
+      .poll(() => image.evaluate((element: HTMLImageElement) => element.naturalWidth))
+      .toBeGreaterThan(0);
+    await dialog.getByRole('button', { name: '关闭弹窗' }).click();
+    await playwrightExpect(trigger).toBeFocused();
+    await context.close();
+  }, 240_000);
+
+  it('L1-B06-FILE-003-UI01 空 rawText 显示明确空态而不是空白弹窗', async () => {
+    const name = 'b06a-empty-' + suffix + '.txt';
+    await uploadAndImport({
+      name,
+      mimeType: 'text/plain',
+      body: Buffer.from('   \n\t', 'utf8'),
+    });
+    await playwrightExpect
+      .poll(async () => (await sources()).some((source) => source.name === name), {
+        timeout: 30_000,
+      })
+      .toBe(true);
+
+    const context = await browser.newContext({
+      viewport: { width: 1200, height: 900 },
+      locale: 'zh-CN',
+    });
+    await context.addCookies([readCookie]);
+    const page = await context.newPage();
+    page.setDefaultTimeout(30_000);
+    await page.goto(readApp.baseUrl + '/dataset/detail?datasetId=' + datasetId, {
+      waitUntil: 'networkidle',
+    });
+    const row = page.getByRole('row').filter({ hasText: name });
+    await row.getByRole('button', { name: '预览' }).click();
+    const dialog = page.getByRole('dialog');
+    await playwrightExpect(dialog.getByText('暂无可预览文本')).toBeVisible();
+    await shot(page, 'file003-empty-raw-text.png');
+    await context.close();
+  }, 180_000);
 
   it('TEST-X-FRONTEND-A11Y TEST-X-SECRET-LEAK TEST-X-SCOPE-GUARD 导入页满足可访问性与范围守卫', async () => {
     const context = await browser.newContext({

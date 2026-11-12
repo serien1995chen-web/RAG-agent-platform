@@ -3735,7 +3735,7 @@
             "example": "8c45a1f2-0ee1-4e21-937b-1a2e4c2f0921"
           }
         ],
-        "x-required-scope": "knowledge:write",
+        "x-required-scope": "knowledge:read",
         "x-rate-limit": "30 QPS/workspace",
         "x-timeout-ms": 15000,
         "x-audit": true,
@@ -11874,7 +11874,7 @@
             "example": "8c45a1f2-0ee1-4e21-937b-1a2e4c2f0921"
           }
         ],
-        "x-required-scope": "knowledge:write",
+        "x-required-scope": "knowledge:read",
         "x-rate-limit": "30 QPS/workspace",
         "x-timeout-ms": 15000,
         "x-audit": true,
@@ -12163,7 +12163,7 @@
             "example": "8c45a1f2-0ee1-4e21-937b-1a2e4c2f0921"
           }
         ],
-        "x-required-scope": "knowledge:write",
+        "x-required-scope": "knowledge:read",
         "x-rate-limit": "30 QPS/workspace",
         "x-timeout-ms": 15000,
         "x-audit": true,
@@ -21922,8 +21922,6 @@
         "required": [
           "blobId",
           "workspaceId",
-          "bucket",
-          "objectKey",
           "state",
           "sizeBytes",
           "etag"
@@ -21942,18 +21940,6 @@
             "maxLength": 64,
             "examples": [
               "ws_acme_cn"
-            ]
-          },
-          "bucket": {
-            "type": "string",
-            "examples": [
-              "knowledge-private"
-            ]
-          },
-          "objectKey": {
-            "type": "string",
-            "examples": [
-              "ws/ws_acme_cn/space/65f1e5b2a1c9d4b7e8f01234/source/65f1e5b2a1c9d4b7e8f05678/raw/65f1e5b2a1c9d4b7e8f09abc/support-playbook.pdf"
             ]
           },
           "state": {

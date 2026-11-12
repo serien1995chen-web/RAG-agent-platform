@@ -37,6 +37,7 @@ import type {
   ButtonHTMLAttributes,
   InputHTMLAttributes,
   ReactNode,
+  RefObject,
   SelectHTMLAttributes,
   TextareaHTMLAttributes,
 } from 'react';
@@ -237,6 +238,7 @@ export function ProductModal(props: {
   children: ReactNode;
   footer?: ReactNode;
   size?: 'sm' | 'md' | 'lg' | 'xl';
+  finalFocusRef?: RefObject<HTMLButtonElement | null>;
 }) {
   return (
     <Modal
@@ -246,6 +248,8 @@ export function ProductModal(props: {
       size={props.size ?? 'md'}
       closeOnOverlayClick={false}
       motionPreset="scale"
+      finalFocusRef={props.finalFocusRef}
+      returnFocusOnClose={Boolean(props.finalFocusRef)}
     >
       <ModalOverlay bg="rgba(17,24,36,.36)" backdropFilter="blur(2px)" />
       <ModalContent className="kb2-modal" role="dialog" aria-modal="true">

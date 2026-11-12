@@ -14,7 +14,7 @@ import {
 } from '@chakra-ui/icons';
 import { Spinner } from '@chakra-ui/react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { S7MarkdownRenderer } from '../components/s7-markdown-renderer';
 import {
   apiLibraryCatalog,
@@ -28,12 +28,14 @@ import {
   importUrl,
   previewImportText,
   productApi,
+  productErrorView,
 } from './api';
 import {
   ProductButton,
   ProductEmpty,
   ProductError,
   ProductField,
+  ProductIconButton,
   ProductInput,
   ProductPage,
   ProductPageHeader,
@@ -60,10 +62,12 @@ type ImportKind =
   | 'retraining';
 
 interface ImportedUpload {
+  rowId: string;
   id: string;
   name: string;
   progress: number;
   phase: KnowledgeFileUploadState['phase'];
+  error: unknown;
 }
 
 const IMPORT_OPTIONS: Array<{
@@ -138,7 +142,8 @@ export function ImportWorkspace(props: {
   const [chunkSplitMode, setChunkSplitMode] = useState<'paragraph' | 'size' | 'char'>('paragraph');
   const [uploaded, setUploaded] = useState<ImportedUpload[]>([]);
   const [uploading, setUploading] = useState(false);
-  const [uploadAbort, setUploadAbort] = useState<AbortController | null>(null);
+  const uploadControllers = useRef(new Map<string, AbortController>());
+  const uploadFilesByRow = useRef(new Map<string, File>());
   const [textName, setTextName] = useState('');
   const [textBody, setTextBody] = useState('');
   const [url, setUrl] = useState('');
@@ -202,9 +207,12 @@ export function ImportWorkspace(props: {
   });
 
   const activeOption = IMPORT_OPTIONS.find((option) => option.kind === kind)!;
+  const completedUploads = uploaded.filter(
+    (item) => item.phase === 'completed' && Boolean(item.id),
+  );
   const uploadsReady =
-    (['local', 'image'].includes(kind) && uploaded.length > 0) ||
-    (['template', 'backup'].includes(kind) && uploaded.length === 1) ||
+    (['local', 'image'].includes(kind) && completedUploads.length > 0) ||
+    (['template', 'backup'].includes(kind) && completedUploads.length === 1) ||
     (kind === 'text' && Boolean(textName.trim()) && Boolean(textBody.trim())) ||
     (kind === 'url' && Boolean(url.trim())) ||
     (kind === 'api' && apiSelected.length > 0) ||
@@ -227,52 +235,115 @@ export function ImportWorkspace(props: {
     setTrainingType(next === 'image' ? 'imageParse' : 'chunk');
   };
 
+  const uploadOne = async (rowId: string, file: File) => {
+    const controller = new AbortController();
+    uploadControllers.current.set(rowId, controller);
+    setUploading(true);
+    try {
+      let uploadId = '';
+      await knowledgeMultipartUpload(file, {
+        knowledgeSpaceId: props.spaceId,
+        signal: controller.signal,
+        onState: (state) => {
+          if (state.uploadId) uploadId = state.uploadId;
+          setUploaded((current) =>
+            current.map((item) =>
+              item.rowId === rowId
+                ? {
+                    ...item,
+                    id: uploadId || item.id,
+                    progress: state.progress,
+                    phase: state.phase,
+                    error: state.error,
+                  }
+                : item,
+            ),
+          );
+        },
+      });
+      if (!uploadId) throw new Error('上传完成但未返回 uploadId');
+      setUploaded((current) =>
+        current.map((item) =>
+          item.rowId === rowId
+            ? {
+                ...item,
+                id: uploadId,
+                progress: 100,
+                phase: 'completed',
+                error: null,
+              }
+            : item,
+        ),
+      );
+    } catch (caught) {
+      const aborted =
+        controller.signal.aborted ||
+        (caught instanceof DOMException && caught.name === 'AbortError');
+      setUploaded((current) =>
+        current.map((item) =>
+          item.rowId === rowId
+            ? {
+                ...item,
+                phase: aborted ? 'aborted' : 'error',
+                error: aborted ? null : caught,
+              }
+            : item,
+        ),
+      );
+    } finally {
+      uploadControllers.current.delete(rowId);
+      setUploading(uploadControllers.current.size > 0);
+    }
+  };
+
   const uploadFiles = async (files: FileList | null) => {
     if (!files?.length) return;
-    setUploading(true);
-    const controller = new AbortController();
-    setUploadAbort(controller);
     setError(null);
-    try {
-      const nextUploads: ImportedUpload[] = [];
-      for (const file of Array.from(files)) {
-        let uploadId = '';
-        await knowledgeMultipartUpload(file, {
-          knowledgeSpaceId: props.spaceId,
-          signal: controller.signal,
-          onState: (state) => {
-            if (state.uploadId) uploadId = state.uploadId;
-            setUploaded((current) => {
-              const entry: ImportedUpload = {
-                id: uploadId,
-                name: file.name,
-                progress: state.progress,
-                phase: state.phase,
-              };
-              return [...current.filter((item) => item.name !== file.name), entry];
-            });
-          },
-        });
-        if (!uploadId) throw new Error('上传完成但未返回 uploadId');
-        nextUploads.push({
-          id: uploadId,
-          name: file.name,
-          progress: 100,
-          phase: 'completed',
-        });
-      }
-      setUploaded((current) => [
-        ...current.filter((item) => !nextUploads.some((next) => next.name === item.name)),
-        ...nextUploads,
-      ]);
-    } catch (caught) {
-      if (!(caught instanceof DOMException && caught.name === 'AbortError')) {
-        setError(caught);
-      }
-    } finally {
-      setUploading(false);
-      setUploadAbort(null);
+    const rows = Array.from(files).map((file) => ({
+      rowId: globalThis.crypto.randomUUID(),
+      file,
+    }));
+    for (const row of rows) uploadFilesByRow.current.set(row.rowId, row.file);
+    setUploaded((current) => [
+      ...current,
+      ...rows.map(({ rowId, file }) => ({
+        rowId,
+        id: '',
+        name: file.name,
+        progress: 0,
+        phase: 'initializing' as const,
+        error: null,
+      })),
+    ]);
+    for (const row of rows) {
+      await uploadOne(row.rowId, row.file);
     }
+  };
+
+  const retryUpload = async (item: ImportedUpload) => {
+    const file = uploadFilesByRow.current.get(item.rowId);
+    if (!file) return;
+    setUploaded((current) =>
+      current.map((row) =>
+        row.rowId === item.rowId
+          ? { ...row, id: '', progress: 0, phase: 'initializing', error: null }
+          : row,
+      ),
+    );
+    await uploadOne(item.rowId, file);
+  };
+
+  const cancelUpload = (rowId: string) => {
+    uploadControllers.current.get(rowId)?.abort();
+  };
+
+  const removeUpload = (rowId: string) => {
+    uploadFilesByRow.current.delete(rowId);
+    setUploaded((current) => current.filter((item) => item.rowId !== rowId));
+  };
+
+  const cancelAllUploads = () => {
+    for (const controller of uploadControllers.current.values()) controller.abort();
   };
 
   const browseApi = async () => {
@@ -315,7 +386,7 @@ export function ImportWorkspace(props: {
       let job: Job;
       if (kind === 'local' || kind === 'image') {
         job = await importFiles(props.spaceId, {
-          uploadIds: uploaded.map((item) => item.id),
+          uploadIds: completedUploads.map((item) => item.id),
           directoryId: directoryId || null,
           parseProvider,
           chunking,
@@ -335,12 +406,12 @@ export function ImportWorkspace(props: {
         });
       } else if (kind === 'template') {
         job = await importTemplate(props.spaceId, {
-          uploadId: uploaded[0]!.id,
+          uploadId: completedUploads[0]!.id,
           directoryId: directoryId || null,
         });
       } else if (kind === 'backup') {
         job = await importBackup(props.spaceId, {
-          uploadId: uploaded[0]!.id,
+          uploadId: completedUploads[0]!.id,
           directoryId: directoryId || null,
           dryRun,
           conflictStrategy,
@@ -378,7 +449,7 @@ export function ImportWorkspace(props: {
 
   const preview = previewSummary({
     kind,
-    uploaded,
+    uploaded: completedUploads,
     textName,
     textBody,
     url,
@@ -449,7 +520,7 @@ export function ImportWorkspace(props: {
 
         <main className="kb2-import-main">
           {step === 0 ? (
-            <div className="kb2-import-source-grid" role="list" aria-label="导入来源">
+            <div className="kb2-import-source-grid" role="group" aria-label="导入来源">
               {IMPORT_OPTIONS.map((option) => {
                 const Icon = option.icon;
                 return (
@@ -499,32 +570,62 @@ export function ImportWorkspace(props: {
 
               {uploaded.length > 0 ? (
                 <div className="kb2-upload-list">
-                  {uploaded.map((item) => (
-                    <div className="kb2-upload-row" key={item.name}>
-                      <span>
-                        <strong>{item.name}</strong>
-                        <small>{item.phase}</small>
-                      </span>
-                      <div className="kb2-progress-track">
-                        <span style={{ width: `${item.progress}%` }} />
-                      </div>
-                      <ProductButton
-                        size="sm"
-                        tone="ghost"
-                        onClick={() =>
-                          setUploaded((current) =>
-                            current.filter((entry) => entry.name !== item.name),
-                          )
-                        }
+                  {uploaded.map((item) => {
+                    const errorView = item.error ? productErrorView(item.error) : null;
+                    const active = ['initializing', 'uploading', 'completing'].includes(item.phase);
+                    return (
+                      <div
+                        className={`kb2-upload-row${item.phase === 'error' ? ' kb2-upload-row--error' : ''}`}
+                        key={item.rowId}
+                        aria-label={`上传文件 ${item.name}`}
                       >
-                        <CloseIcon boxSize={3} />
-                      </ProductButton>
-                    </div>
-                  ))}
+                        <span>
+                          <strong>{item.name}</strong>
+                          <small className="kb2-upload-row__status">
+                            {errorView
+                              ? `${errorView.message} · ${errorView.code}${
+                                  errorView.traceId ? ` · Trace ${errorView.traceId}` : ''
+                                }`
+                              : item.phase}
+                          </small>
+                        </span>
+                        <div className="kb2-progress-track">
+                          <span style={{ width: `${item.progress}%` }} />
+                        </div>
+                        <div className="kb2-upload-row__actions">
+                          {active ? (
+                            <ProductButton
+                              size="sm"
+                              tone="danger"
+                              aria-label={`取消上传 ${item.name}`}
+                              onClick={() => cancelUpload(item.rowId)}
+                            >
+                              取消
+                            </ProductButton>
+                          ) : item.phase === 'error' ? (
+                            <ProductButton
+                              size="sm"
+                              tone="secondary"
+                              onClick={() => void retryUpload(item)}
+                            >
+                              重试
+                            </ProductButton>
+                          ) : null}
+                          <ProductIconButton
+                            label={`移除 ${item.name}`}
+                            tone="neutral"
+                            onClick={() => removeUpload(item.rowId)}
+                          >
+                            <CloseIcon boxSize={3} />
+                          </ProductIconButton>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               ) : null}
               {uploading ? (
-                <ProductButton size="sm" tone="danger" onClick={() => uploadAbort?.abort()}>
+                <ProductButton size="sm" tone="danger" onClick={cancelAllUploads}>
                   取消上传
                 </ProductButton>
               ) : null}

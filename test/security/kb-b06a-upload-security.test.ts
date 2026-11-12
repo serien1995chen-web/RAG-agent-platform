@@ -224,5 +224,13 @@ describe('TEST-X-SECURITY-UPLOAD upload entry', () => {
       )
       .catch((error: unknown) => error);
     expect(errorCode(foreignPrefix)).toBe('KNOWLEDGE_NOT_FOUND');
+
+    const prefix = 'ws/' + env.workspaceId + '/space/' + env.spaceId + '/';
+    for (const key of [prefix + 'control\u0000.txt', prefix + 'a'.repeat(2048)]) {
+      const invalid = await env.store
+        .headObject(env.store.bucket, key, env.storageContext())
+        .catch((error: unknown) => error);
+      expect(errorCode(invalid)).toBe('KNOWLEDGE_NOT_FOUND');
+    }
   });
 });

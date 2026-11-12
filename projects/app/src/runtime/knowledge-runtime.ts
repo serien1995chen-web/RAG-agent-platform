@@ -766,6 +766,7 @@ async function bootstrapRuntime(): Promise<TelemetryKnowledgeApiRuntime> {
     },
   });
   const archiveSafety = new ObjectStoreArchiveSafetyAdapter(objectStore);
+  const audits = new KnowledgeAuditRepository(mongo);
   const files = new FileApplication(
     objectRefs,
     objectStore,
@@ -773,10 +774,10 @@ async function bootstrapRuntime(): Promise<TelemetryKnowledgeApiRuntime> {
     access,
     fileTickets,
     archiveSafety,
+    audits,
   );
   const jobs = new KnowledgeArchiveRepository(mongo);
   const references = new KnowledgeReferenceRepository(mongo);
-  const audits = new KnowledgeAuditRepository(mongo);
   const sourceFiles = new SourceFileApplication(
     catalog,
     jobs,
@@ -785,6 +786,7 @@ async function bootstrapRuntime(): Promise<TelemetryKnowledgeApiRuntime> {
     objectStore,
     fileTickets,
     archiveSafety,
+    audits,
   );
   const objectLifecycle = new ObjectLifecycleService(objectRefs, objectStore);
   const s10Inventory = new S10ObjectInventoryAdapter(mongo, pool);

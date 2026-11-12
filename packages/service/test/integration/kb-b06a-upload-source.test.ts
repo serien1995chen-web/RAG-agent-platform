@@ -17,6 +17,7 @@ import { KnowledgeIngestionContentAdapter } from '../../src/modules/knowledge/ad
 import { KnowledgeObjectRefRepository } from '../../src/modules/knowledge/repository/object-ref.repository';
 import { KnowledgeImportRepository } from '../../src/modules/knowledge/repository/import.repository';
 import { S5ArtifactRepository } from '../../src/modules/knowledge/repository/s5-artifact.repository';
+import { KnowledgeAuditRepository } from '../../src/shared/persistence/knowledge/audit';
 import {
   KNOWLEDGE_SCHEMA_REGISTRY,
   ensureKnowledgeCollections,
@@ -25,6 +26,7 @@ import {
 import type { TenantContext } from '../../src/shared/persistence/knowledge/tenant';
 import type {
   AccessPort,
+  AuditPort,
   CatalogPort,
   ObjectRefView,
 } from '../../src/modules/knowledge/application/ports';
@@ -55,6 +57,7 @@ let connection: mongoose.Connection;
 let objectStore: MinioKnowledgeObjectStore;
 let repository: KnowledgeObjectRefRepository;
 let files: FileApplication;
+let audits: KnowledgeAuditRepository;
 let imports: KnowledgeImportRepository;
 let ingestion: S04IngestionApplication;
 let lifecycle: ObjectLifecycleService;
@@ -83,7 +86,7 @@ const access = {
         traceId: context.traceId,
       });
     }
-    return { allowed: true };
+    return { effectivePermission: 'read' as const, permissionRevision: 0 };
   },
 } as unknown as AccessPort;
 
@@ -281,6 +284,7 @@ beforeAll(async () => {
   });
   repository = new KnowledgeObjectRefRepository(connection);
   imports = new KnowledgeImportRepository(connection);
+  audits = new KnowledgeAuditRepository(connection);
   files = new FileApplication(
     repository,
     objectStore,
@@ -291,6 +295,7 @@ beforeAll(async () => {
       'http://127.0.0.1:3010',
     ),
     new ObjectStoreArchiveSafetyAdapter(objectStore),
+    audits,
   );
   ingestion = ingestionApplication();
   lifecycle = new ObjectLifecycleService(repository, objectStore, 500);
@@ -931,5 +936,134 @@ describe('TEST-ING-001-BLOCK upload to Source', () => {
     );
     expect(repeat.blobId).toBe(completed.blobId);
     expect(repeat.etag).toBe(completed.etag);
+  });
+
+  it('B06B-FILE-003-002 B06B-FILE-003-003 ticket is actor-bound and writes a redacted audit', async () => {
+    const uploaded = await uploadObject({
+      name: 'ticket-audit-' + suffix + '.txt',
+      mimeType: 'text/plain',
+      body: Buffer.from('ticket audit body', 'utf8'),
+    });
+    await dispatchImport({
+      body: importBody([uploaded.uploadId]),
+      key: 'b06b-ticket-audit-' + suffix,
+    });
+    const source = await connection.models.KnowledgeSource.findOne({
+      workspaceId,
+      blobRefId: new mongoose.Types.ObjectId(uploaded.uploadId),
+    }).lean();
+    expect(source).not.toBeNull();
+
+    const preview = await files.preview(uploaded.completed.blobId, { ttlSeconds: 60 }, context);
+    const ticket = new URL(preview.url).searchParams.get('ticket');
+    expect(ticket).toBeTruthy();
+
+    const audit = await connection.models.KnowledgeAuditEvent.findOne({
+      workspaceId,
+      action: 'file.ticket.issue',
+      resourceType: 'file',
+      resourceId: uploaded.completed.blobId,
+      outcome: 'succeeded',
+    }).lean();
+    expect(audit).toMatchObject({
+      requestId: context.requestId,
+      traceId: context.traceId,
+      actorMemberId: memberId,
+    });
+    expect(JSON.stringify(audit?.safeDiff)).not.toMatch(/objectKey|bucket|ticket=|kb-test/i);
+
+    const siblingContext = { ...context, memberId: memberId + '_sibling' };
+    const denied = await files
+      .content(uploaded.completed.blobId, null, ticket!, siblingContext)
+      .catch((error: unknown) => error);
+    expect(errorCode(denied)).toBe('KNOWLEDGE_FORBIDDEN');
+
+    const sameMember = await files.content(uploaded.completed.blobId, null, ticket!, context);
+    for await (const _chunk of sameMember.body) {
+      // Drain the stream so the real MinIO response is released.
+    }
+
+    const failingAuditFiles = new FileApplication(
+      repository,
+      objectStore,
+      catalog,
+      access,
+      new FileTicketService(
+        'b06a-failing-audit-ticket-secret-at-least-32-bytes',
+        'http://127.0.0.1:3010',
+      ),
+      undefined,
+      {
+        async appendStandalone() {
+          throw new Error('audit unavailable');
+        },
+      } as AuditPort,
+    );
+    const auditUnavailable = await failingAuditFiles
+      .preview(uploaded.completed.blobId, { ttlSeconds: 60 }, context)
+      .catch((error: unknown) => error);
+    expect(errorCode(auditUnavailable)).toBe('KNOWLEDGE_DEPENDENCY_UNAVAILABLE');
+  });
+
+  it('B06B-FILE-003-004 rechecks permissionRevision before the first response byte', async () => {
+    const uploaded = await uploadObject({
+      name: 'acl-race-' + suffix + '.txt',
+      mimeType: 'text/plain',
+      body: Buffer.from('acl race body', 'utf8'),
+    });
+    await dispatchImport({
+      body: importBody([uploaded.uploadId]),
+      key: 'b06b-acl-race-' + suffix,
+    });
+
+    let started!: () => void;
+    let release!: () => void;
+    const startedPromise = new Promise<void>((resolve) => {
+      started = resolve;
+    });
+    const releasePromise = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let revision = 0;
+    const gatedAccess = {
+      async assertPermission() {
+        revision += 1;
+        return { effectivePermission: 'read' as const, permissionRevision: revision };
+      },
+    } as unknown as AccessPort;
+    const gatedStore = new Proxy(objectStore, {
+      get(target, property, receiver) {
+        if (property === 'getObject') {
+          return async (
+            bucket: string,
+            key: string,
+            range: string | null,
+            storage: Parameters<typeof target.getObject>[3],
+          ) => {
+            started();
+            await releasePromise;
+            return target.getObject(bucket, key, range, storage);
+          };
+        }
+        const value = Reflect.get(target, property, receiver);
+        return typeof value === 'function' ? value.bind(target) : value;
+      },
+    });
+    const gatedFiles = new FileApplication(
+      repository,
+      gatedStore,
+      catalog,
+      gatedAccess,
+      undefined,
+      undefined,
+      audits,
+    );
+
+    const read = gatedFiles
+      .content(uploaded.completed.blobId, null, null, context)
+      .catch((error: unknown) => error);
+    await startedPromise;
+    release();
+    expect(errorCode(await read)).toBe('KNOWLEDGE_NOT_FOUND');
   });
 });
