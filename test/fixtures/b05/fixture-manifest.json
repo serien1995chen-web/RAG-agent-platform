@@ -1,0 +1,92 @@
+{
+  "schemaVersion": 1,
+  "batch": "B05",
+  "seed": "b05-manual-20261112",
+  "timezone": "Asia/Shanghai",
+  "reference": {
+    "fastgptVersion": "4.17.4",
+    "fastgptAppPackageSha256": "3887440d738c05504cdba692be2142467de41a0ac7e11f828506f474bfc63d3c",
+    "fastgptBaselineRebaselinedByUser": true,
+    "b01Reference": "WAIVED_BY_USER"
+  },
+  "workspaces": ["workspace_a", "workspace_b"],
+  "directories": ["directory_a", "directory_b"],
+  "roles": ["Owner", "Manager", "Editor", "Viewer", "Non-member"],
+  "sourceKinds": ["text"],
+  "fixtures": [
+    {
+      "id": "ing-002-rich-text",
+      "name": "B05 原文.md",
+      "text": "# 人工文本验收\n\n第一行中文 English\n第二行保持换行\nemoji 🙌🚀",
+      "purpose": "Markdown, newline, Chinese, English and emoji exact-content preservation"
+    },
+    {
+      "id": "ing-002-preview-text",
+      "name": "B05 Preview.md",
+      "text": "第一段\n\n第二段",
+      "purpose": "Import preview content"
+    },
+    {
+      "id": "data-004-chunk",
+      "name": "chunk",
+      "text": "第一项 B05 分块\n\n第一项答案",
+      "purpose": "Single chunk insertion"
+    },
+    {
+      "id": "data-004-qa",
+      "name": "qa",
+      "text": "第二项 B05 问题\n第二项回答",
+      "purpose": "Single QA insertion"
+    },
+    {
+      "id": "data-004-batch-200",
+      "name": "batch-200",
+      "text": "B05 batch item 0..199",
+      "purpose": "Accepted batch boundary"
+    },
+    {
+      "id": "data-004-batch-201",
+      "name": "batch-201",
+      "text": "B05 batch item 0..200",
+      "purpose": "Rejected batch boundary"
+    }
+  ],
+  "assets": [
+    {
+      "path": "packages/service/test/integration/kb-b05-manual-data.test.ts",
+      "sha256": "3d27f8aaccb0fef07b6ec2a29e70d0de3f6953960b25bfa9bdbc6c51342d6681"
+    },
+    {
+      "path": "test/tenant/kb-b05-manual-data-tenant.test.ts",
+      "sha256": "00d9eda0add6e271c111b98363be710fc8a82937d7ae2f87fc3227c8783f22db"
+    },
+    {
+      "path": "test/security/kb-b05-manual-data-security.test.ts",
+      "sha256": "2ca5c8c1a5aae95100305c0a59a3a6b9cf9b8584c707e73375a273de41166571"
+    },
+    {
+      "path": "test/contract/kb-b05-manual-data-contract.test.ts",
+      "sha256": "166aa7f6eb997583897dd865e49858912711f1a231dd1a14d42f174f162d569c"
+    },
+    {
+      "path": "test/e2e/kb-b05-manual-data.test.ts",
+      "sha256": "845858fd3d18b1cf0e516709f2998614c36337e43353a8a8f060475975d86367"
+    },
+    {
+      "path": "test/fixtures/b05/behavior-matrix.json",
+      "sha256": "e0acbd0fe6556ba26438fc777b3fbdedcf3581f0d6ff12e1530246aae4b361a0"
+    },
+    {
+      "path": "test/fixtures/b05/test-asset-audit.json",
+      "sha256": "64965cdfe37a4e913e9de4a720a5897299d09bcec1b5ef3014b76395389fdf1e"
+    },
+    {
+      "path": "test/fixtures/b05/run-gates.mjs",
+      "sha256": "8bb8e087b9bcbe77de7a62d6b44fb8ae7c6c7eb10352d0f9250b8723fb83e6c2"
+    },
+    {
+      "path": "test/fixtures/b05/reconcile.mjs",
+      "sha256": "10de1212cb5e31e99a2551d8a8b199d01dee66c0d9bd341dcd4f886de5c8a6bb"
+    }
+  ]
+}

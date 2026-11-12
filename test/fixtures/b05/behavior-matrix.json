@@ -1,0 +1,144 @@
+{
+  "schemaVersion": 1,
+  "batch": "B05",
+  "scope": ["DATA-004", "ING-002"],
+  "reference": {
+    "application": "FastGPT",
+    "version": "4.17.4",
+    "sourceRoot": "/mnt/d/Fastgpt/FastGPT",
+    "approvedByUser": true,
+    "rebaselinedInput": {
+      "projects/app/package.json": "3887440d738c05504cdba692be2142467de41a0ac7e11f828506f474bfc63d3c"
+    }
+  },
+  "capabilities": [
+    {
+      "capabilityId": "DATA-004",
+      "fastgptSources": [
+        "projects/app/src/pages/api/core/dataset/data/insertData.ts:27",
+        "projects/app/src/pages/api/core/dataset/data/pushData.ts:29",
+        "projects/app/src/pageComponents/dataset/detail/components/InputDataModal/useInputDataModal.ts:127",
+        "projects/app/src/pageComponents/dataset/detail/components/InputDataModal/useInputDataModal.ts:318",
+        "projects/app/src/pageComponents/dataset/detail/components/InputDataModal/DataInputPanel.tsx:46",
+        "projects/app/src/pageComponents/dataset/detail/components/InputDataModal/IndexInputPanel.tsx:19"
+      ],
+      "fastgptTests": [
+        "projects/app/test/api/core/dataset/data/insertData.test.ts:74",
+        "projects/app/test/api/core/dataset/data/pushData.test.ts:63"
+      ],
+      "frontendBehaviorIds": [
+        "KB-DATA-030",
+        "KB-DATA-032",
+        "KB-DATA-034",
+        "KB-DATA-035",
+        "KB-DATA-037",
+        "KB-DATA-040",
+        "KB-DATA-042",
+        "KB-DATA-050",
+        "KB-DATA-051",
+        "KB-DATA-059",
+        "KB-DATA-090",
+        "KB-DATA-091",
+        "KB-DATA-092",
+        "KB-DATA-093",
+        "KB-IMPORT-133",
+        "KB-IMPORT-136",
+        "KB-IMPORT-140",
+        "KB-XROUTE-006"
+      ],
+      "input": "Insert one chunk or QA item, or submit a bounded batch of items with optional custom indexes.",
+      "userResult": "Data appears in the current Source, indexing completes, searchable content becomes available, and batch partial failure is visible and retryable.",
+      "stateTransitions": [
+        "pending -> indexing -> indexed",
+        "indexed -> rebuilding -> indexed",
+        "indexed -> rebuilding -> rebuild_failed"
+      ],
+      "persistence": [
+        "knowledge_segments",
+        "knowledge_jobs",
+        "knowledge_job_steps",
+        "pgvector profile row",
+        "fullTextTokens",
+        "knowledge_audit_events",
+        "knowledge_outbox_events"
+      ],
+      "permissions": [
+        "source read for list",
+        "source write for create/update/reindex",
+        "source manage for delete",
+        "workspace tenant guard on every item"
+      ],
+      "ourOperations": [
+        "API-SEGMENT-CREATE",
+        "API-SEGMENT-LIST",
+        "API-SEGMENT-BATCH",
+        "API-SEGMENT-REINDEX",
+        "API-JOB-GET"
+      ],
+      "ourDtos": ["SegmentCreate", "Segment", "SegmentBatchAction", "BatchResult", "Job"],
+      "compatibility": {
+        "decision": "INTENTIONAL_DIFFERENCE",
+        "allowedDifference": "FastGPT may complete one synchronous insert without a business Job; our asynchronous path must reach an equivalent indexed result and retain Job/Step traceability.",
+        "reason": "The Job is an allowed internal difference, but runtime evidence shows the required indexed/searchable and batch-progress results are not reached."
+      }
+    },
+    {
+      "capabilityId": "ING-002",
+      "fastgptSources": [
+        "projects/app/src/pageComponents/dataset/detail/Import/diffSource/FileCustomText.tsx:32",
+        "projects/app/src/pageComponents/dataset/detail/Import/commonProgress/PreviewData.tsx:20",
+        "projects/app/src/pageComponents/dataset/detail/Import/commonProgress/Upload.tsx:25",
+        "projects/app/src/pages/api/core/dataset/collection/create/text.ts:15"
+      ],
+      "fastgptTests": [],
+      "frontendBehaviorIds": [
+        "KB-IMPORT-003",
+        "KB-IMPORT-050",
+        "KB-IMPORT-051",
+        "KB-IMPORT-052",
+        "KB-IMPORT-053",
+        "KB-IMPORT-120",
+        "KB-IMPORT-124",
+        "KB-IMPORT-125",
+        "KB-IMPORT-126",
+        "KB-IMPORT-130",
+        "KB-IMPORT-132",
+        "KB-IMPORT-133",
+        "KB-IMPORT-136",
+        "KB-IMPORT-138",
+        "KB-IMPORT-140",
+        "KB-IMPORT-142"
+      ],
+      "input": "A Source name and raw text with parser/chunking settings, optional target directory and Idempotency-Key.",
+      "userResult": "The custom text can be previewed, confirmed, listed as a text Source, processed, reopened after refresh, and retried safely after failure.",
+      "stateTransitions": [
+        "draft -> queued -> parsing -> indexing -> ready",
+        "queued -> failed",
+        "failed -> retry_wait -> queued"
+      ],
+      "persistence": [
+        "knowledge_sources",
+        "knowledge_object_refs",
+        "rawText object",
+        "contentHash",
+        "parse/chunking snapshots",
+        "knowledge_jobs",
+        "knowledge_outbox_events",
+        "knowledge_audit_events"
+      ],
+      "permissions": [
+        "knowledge:write scope",
+        "directory and Source write ACL",
+        "workspace tenant guard",
+        "no URL or query parameter ACL bypass"
+      ],
+      "ourOperations": ["API-IMPORT-TEXT", "API-JOB-GET", "API-SOURCE-GET", "API-SOURCE-PREVIEW"],
+      "ourDtos": ["ImportText", "Source", "Job", "ChunkingSettings"],
+      "compatibility": {
+        "decision": "INTENTIONAL_DIFFERENCE",
+        "allowedDifference": "Source creation is asynchronous and may expose a Job, but the final user-visible Source, raw text, preview and result must be equivalent.",
+        "reason": "Asynchronous Source/Job creation is allowed and persisted correctly; preview and refresh recovery remain user-visible failures."
+      }
+    }
+  ]
+}
