@@ -2,14 +2,14 @@
 import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { isAbsolute, join, relative, resolve } from 'node:path';
-import { checkEnvironment } from './check-provider-inputs.mjs';
+import { checkEnvironment, resolveProviderScenario } from './check-provider-inputs.mjs';
 import { probeCatalog } from './probe-aiproxy-catalog.mjs';
 
 const repositoryRoot = resolve(import.meta.dirname, '..');
 
-function requestedScenario(argv) {
-  const separator = argv.indexOf('--');
-  return separator >= 0 ? argv.slice(separator + 1).join(' ') : '';
+export function requestedScenario(argv) {
+  const args = argv[0] === '--' ? argv.slice(1) : argv;
+  return args.join(' ').trim();
 }
 
 const SCENARIO_EVIDENCE = Object.freeze({
@@ -92,7 +92,12 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
     console.error('SCOPED_BLOCKED: S11_SCOPE_PROFILE=knowledge-usability-v1 is required');
     return 2;
   }
-  const inputs = checkEnvironment(env);
+  const scenario = requestedScenario(argv);
+  if (scenario && !resolveProviderScenario(scenario)) {
+    console.error(`PROVIDER_SCENARIO_INVALID: unknown scenario ${scenario}`);
+    return 1;
+  }
+  const inputs = checkEnvironment(env, { scenario });
   if (inputs.status !== 'READY') {
     console.error(
       `SCOPED_BLOCKED: ${inputs.missingFields.length + inputs.invalidFields.length} provider fields`,
@@ -106,8 +111,7 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
     return 2;
   }
 
-  const scenario = requestedScenario(argv);
-  if (!scenario || scenario.includes('s11-aiproxy-catalog-preflight')) {
+  if (!scenario || scenario === 's11-aiproxy-catalog-preflight') {
     const catalog = await probeCatalog(env);
     if (catalog.status !== 'READY') {
       console.error(catalog.code);
