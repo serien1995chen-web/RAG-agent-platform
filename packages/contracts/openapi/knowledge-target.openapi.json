@@ -8621,6 +8621,83 @@
         "x-audit": true,
         "x-downstream-allowed": false,
         "responses": {
+          "200": {
+            "description": "文本切分预览",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "success",
+                    "data",
+                    "traceId",
+                    "requestId"
+                  ],
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "const": true
+                    },
+                    "data": {
+                      "type": "object",
+                      "required": [
+                        "name",
+                        "contentHash",
+                        "totalChunks",
+                        "chunks",
+                        "truncated"
+                      ],
+                      "properties": {
+                        "name": {
+                          "type": "string"
+                        },
+                        "contentHash": {
+                          "type": "string"
+                        },
+                        "totalChunks": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "chunks": {
+                          "type": "array",
+                          "maxItems": 100,
+                          "items": {
+                            "type": "object",
+                            "required": [
+                              "index",
+                              "text",
+                              "contentHash"
+                            ],
+                            "properties": {
+                              "index": {
+                                "type": "integer",
+                                "minimum": 0
+                              },
+                              "text": {
+                                "type": "string"
+                              },
+                              "contentHash": {
+                                "type": "string"
+                              }
+                            }
+                          }
+                        },
+                        "truncated": {
+                          "type": "boolean"
+                        }
+                      }
+                    },
+                    "traceId": {
+                      "type": "string"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
           "202": {
             "description": "异步任务",
             "content": {
@@ -23410,6 +23487,19 @@
                     "type": "string",
                     "pattern": "^[a-f0-9]{24}$"
                   }
+                },
+                "index": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "jobId": {
+                  "type": "string"
+                },
+                "jobIds": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
                 }
               }
             }
@@ -24114,10 +24204,92 @@
             "maxItems": 200,
             "items": {
               "type": "object",
-              "additionalProperties": true
+              "additionalProperties": false,
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "segmentId": {
+                  "type": "string"
+                },
+                "sourceId": {
+                  "type": "string"
+                },
+                "version": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "question": {
+                  "type": "string",
+                  "maxLength": 100000
+                },
+                "answer": {
+                  "type": "string",
+                  "maxLength": 100000
+                },
+                "segmentType": {
+                  "type": "string",
+                  "enum": [
+                    "chunk",
+                    "qa"
+                  ],
+                  "default": "chunk"
+                },
+                "searchEnabled": {
+                  "type": "boolean"
+                },
+                "metadata": {
+                  "type": "object",
+                  "additionalProperties": true
+                },
+                "indexes": {
+                  "type": "array",
+                  "maxItems": 100,
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "indexId",
+                      "type",
+                      "text",
+                      "modelId"
+                    ],
+                    "properties": {
+                      "indexId": {
+                        "type": "string",
+                        "pattern": "^[a-zA-Z0-9_-]{1,64}$"
+                      },
+                      "type": {
+                        "type": "string",
+                        "const": "custom"
+                      },
+                      "text": {
+                        "type": "string",
+                        "maxLength": 100000
+                      },
+                      "modelId": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                },
+                "reason": {
+                  "type": "string",
+                  "enum": [
+                    "manual",
+                    "model_change",
+                    "synonym_change",
+                    "repair"
+                  ]
+                },
+                "modelId": {
+                  "type": "string"
+                }
+              }
             }
           }
-        }
+        },
+        "additionalProperties": false
       },
       "ExportCreate": {
         "type": "object",
@@ -24290,8 +24462,17 @@
             "items": {
               "$ref": "#/components/schemas/SegmentIndex"
             }
+          },
+          "segmentType": {
+            "type": "string",
+            "enum": [
+              "chunk",
+              "qa"
+            ],
+            "default": "chunk"
           }
-        }
+        },
+        "additionalProperties": false
       },
       "SegmentUpdate": {
         "type": "object",
@@ -25168,8 +25349,17 @@
           },
           "chunking": {
             "$ref": "#/components/schemas/ChunkingSettings"
+          },
+          "knowledgeSpaceId": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{24}$"
+          },
+          "dryRun": {
+            "type": "boolean",
+            "default": false
           }
-        }
+        },
+        "additionalProperties": false
       },
       "ImportUrl": {
         "type": "object",

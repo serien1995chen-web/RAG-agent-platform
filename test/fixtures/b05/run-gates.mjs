@@ -39,6 +39,10 @@ const commands = [
     `pnpm --filter @kb/service exec vitest run test/integration/knowledge-import.test.ts -t "L1-B05-ING-002" ${reporters('b05-service-ing')}`,
   ],
   [
+    'b05-s6-processing',
+    `pnpm --filter @kb/service exec vitest run test/integration/s6-processing.integration.test.ts -t "L1-B05-DATA-004" ${reporters('b05-s6-processing')}`,
+  ],
+  [
     'b05-tenant',
     `pnpm exec vitest run --config test/tenant/vitest.config.ts test/tenant/kb-b05-manual-data-tenant.test.ts ${reporters('b05-tenant')}`,
   ],
@@ -57,6 +61,14 @@ const commands = [
   [
     'b05-e2e',
     `B05_RESULT_DIR=${join(outputDir, 'ui')} pnpm exec vitest run --config test/e2e/vitest.config.ts test/e2e/kb-b05-manual-data.test.ts ${reporters('b05-e2e')}`,
+  ],
+  [
+    'regression-product-data-import',
+    'pnpm exec vitest run --config test/e2e/vitest.config.ts test/e2e/fastgpt-product-data-import.test.ts',
+  ],
+  [
+    'regression-s6-jobs-segments',
+    'pnpm exec vitest run --config test/e2e/vitest.config.ts test/e2e/s6-jobs-segments.test.ts',
   ],
   [
     'provider-real',

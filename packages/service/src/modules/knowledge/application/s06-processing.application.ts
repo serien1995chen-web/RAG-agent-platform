@@ -621,7 +621,7 @@ export class S06ProcessingApplication {
       | undefined;
     const existing =
       segment.indexes.find((candidate) => candidate.indexId === (supplied?.indexId ?? 'default')) ??
-      segment.indexes[0];
+      (operation === 'create' ? undefined : segment.indexes[0]);
     const bindings = await this.input.bindings.list(String(segment.knowledgeSpaceId), context);
     const requestedModelId = String(
       job.inputSnapshot.modelId ??

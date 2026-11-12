@@ -208,6 +208,7 @@ describe('B05 DATA-004 and ING-002 product UI', () => {
     await evidence(page, 'data-empty-editor-failure-state', network);
     await playwrightExpect(modal.getByRole('button', { name: '插入', exact: true })).toBeDisabled();
     await page.keyboard.press('Escape');
+    await page.waitForTimeout(350);
     const axe = await new AxeBuilder({ page }).analyze();
     expect(
       axe.violations.filter(
@@ -235,9 +236,11 @@ describe('B05 DATA-004 and ING-002 product UI', () => {
     const modal = page.locator('.kb2-modal');
     await evidence(page, 'data-presave-index-missing', network);
     await playwrightExpect(modal.getByRole('button', { name: '新增索引' })).toBeVisible();
-    await modal.getByRole('button', { name: '新增索引' }).click();
     await playwrightExpect(modal.getByLabel('自定义索引')).toBeVisible();
     await modal.getByLabel('自定义索引').fill('B05 pre-save custom index');
+    await playwrightExpect(modal.getByRole('button', { name: '新增索引' })).toBeEnabled();
+    await modal.getByRole('button', { name: '新增索引' }).click();
+    await modal.getByLabel('分块内容').fill('B05 pre-save chunk content');
     await modal.getByRole('button', { name: '插入', exact: true }).click();
     await playwrightExpect(page.getByText('数据已插入')).toBeVisible();
     await playwrightExpect(page.getByText('B05 pre-save custom index')).toBeVisible();
@@ -264,8 +267,59 @@ describe('B05 DATA-004 and ING-002 product UI', () => {
     await playwrightExpect(
       page.getByRole('button', { name: /批量插入|批量更新|批量处理/ }),
     ).toBeVisible();
+    await page.getByRole('button', { name: '批量插入' }).click();
+    const batchModal = page.getByRole('dialog', { name: '批量插入数据' });
+    await playwrightExpect(batchModal.getByText(`目标：B05 Data Source ${suffix}`)).toBeVisible();
+    await batchModal.getByLabel('批量分块内容（每行一条）').fill('批量成功项\n批量失败项');
+    let firstRequestCount = 0;
+    await page.route('**/v1/knowledge/segments/batch-actions', async (route) => {
+      const body = route.request().postDataJSON() as { items?: unknown[] };
+      firstRequestCount = body.items?.length ?? 0;
+      await route.fulfill({
+        status: 207,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          success: true,
+          data: {
+            code: 'KNOWLEDGE_PARTIAL_SUCCESS',
+            requested: 2,
+            succeeded: 1,
+            failed: 1,
+            items: [
+              { id: 'mock-success', index: 0, success: true, version: 1, jobIds: ['mock-job-1'] },
+              {
+                id: 'items[1]',
+                index: 1,
+                success: false,
+                code: 'KNOWLEDGE_VALIDATION_FAILED',
+              },
+            ],
+          },
+          traceId: 'b05-e2e-mock-trace',
+          requestId: 'b05-e2e-mock-request',
+        }),
+      });
+    });
+    await batchModal.getByRole('button', { name: '提交批量插入' }).click();
+    await playwrightExpect(batchModal.getByText(/成功 1，失败 1/)).toBeVisible();
+    await playwrightExpect(batchModal.getByRole('button', { name: /重试失败项/ })).toBeVisible();
+    expect(firstRequestCount).toBe(2);
+    await evidence(page, 'data-batch-partial', network);
+
+    await page.unroute('**/v1/knowledge/segments/batch-actions');
+    const retryResponse = page.waitForResponse(
+      (response) =>
+        response.request().method() === 'POST' &&
+        response.url().endsWith('/v1/knowledge/segments/batch-actions'),
+    );
+    await batchModal.getByRole('button', { name: /重试失败项/ }).click();
+    const retried = await retryResponse;
+    const retriedBody = retried.request().postDataJSON() as { items?: unknown[] };
+    expect(retried.status()).toBe(200);
+    expect(retriedBody.items).toHaveLength(1);
+    await playwrightExpect(batchModal.getByText(/成功 1，失败 0/)).toBeVisible();
     await a11yAndConsole(page, consoleErrors);
-    await evidence(page, 'data-batch-upsert-missing', network);
+    await evidence(page, 'data-batch-retry-success', network);
     await context.close();
   });
 
@@ -351,6 +405,7 @@ describe('B05 DATA-004 and ING-002 product UI', () => {
 });
 
 async function a11yAndConsole(page: Page, consoleErrors: string[]) {
+  await page.waitForTimeout(350);
   const axe = await new AxeBuilder({ page }).analyze();
   expect(
     axe.violations.filter(

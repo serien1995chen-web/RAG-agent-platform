@@ -104,6 +104,7 @@ export interface DatasetDetailQuery {
   parentId?: string;
   collectionId?: string;
   source?: string;
+  importJobId?: string;
 }
 
 type DetailQueryChange = (query: DatasetDetailQuery, options?: { replace?: boolean }) => void;
@@ -686,6 +687,7 @@ export function DatasetDetailPage(props: {
           initialDirectoryId={props.query.parentId}
           initialSource={props.query.source}
           collectionId={props.query.collectionId}
+          initialJobId={props.query.importJobId}
           onExit={() =>
             navigate(
               {
@@ -699,6 +701,19 @@ export function DatasetDetailPage(props: {
           onImported={() => {
             void invalidateCollection();
           }}
+          onJobStarted={(jobId) =>
+            navigate(
+              {
+                datasetId,
+                currentTab: 'import',
+                ...(props.query.parentId ? { parentId: props.query.parentId } : {}),
+                ...(props.query.collectionId ? { collectionId: props.query.collectionId } : {}),
+                ...(props.query.source ? { source: props.query.source } : {}),
+                importJobId: jobId,
+              },
+              true,
+            )
+          }
         />
       </ProductAppShell>
     );

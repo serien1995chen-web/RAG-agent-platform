@@ -166,12 +166,26 @@ afterAll(async () => {
 
 describe('B05 DATA-004 direct Segment creation and batch processing', () => {
   it('L1-B05-DATA-004-P01 creates chunk and QA items, lists them, and reaches a searchable index', async () => {
-    const chunk = await catalog.createSegment(sourceId, segmentInput(1), context);
-    const qa = await catalog.createSegment(
-      sourceId,
-      { ...segmentInput(2), metadata: { mode: 'qa' } },
-      context,
-    );
+    const chunk = (
+      await s06.dispatch({
+        operationId: 'API-SEGMENT-CREATE',
+        params: { sourceId },
+        query: {},
+        headers: {},
+        body: { ...segmentInput(1), segmentType: 'chunk' },
+        context,
+      })
+    ).data as { id: string };
+    const qa = (
+      await s06.dispatch({
+        operationId: 'API-SEGMENT-CREATE',
+        params: { sourceId },
+        query: {},
+        headers: {},
+        body: { ...segmentInput(2), metadata: { mode: 'qa' }, segmentType: 'qa' },
+        context,
+      })
+    ).data as { id: string };
     const list = await catalog.listSegments(sourceId, { limit: 20, sort: 'order' }, context);
     expect(list.items.map((item) => item.id)).toEqual([chunk.id, qa.id]);
     expect(list.items.map((item) => item.indexStatus)).toEqual(['pending', 'pending']);
@@ -187,10 +201,9 @@ describe('B05 DATA-004 direct Segment creation and batch processing', () => {
       'each asynchronous Segment create must own a traceable index Job',
     ).toBe(2);
     expect(
-      await models.KnowledgeSegment.countDocuments({
+      await models.KnowledgeOutboxEvent.countDocuments({
         workspaceId,
-        _id: { $in: [chunk.id, qa.id] },
-        'indexes.vectorId': { $exists: true, $ne: null },
+        aggregateType: 'job',
       }),
     ).toBe(2);
   });
@@ -204,20 +217,64 @@ describe('B05 DATA-004 direct Segment creation and batch processing', () => {
         headers: {},
         body: {
           action: 'upsert',
-          items: [{ sourceId, question: '问题', answer: '' }],
+          items: [{ sourceId, question: '问题', answer: '', segmentType: 'qa' }],
         },
         context,
       })
       .catch((error) => error);
     expect(emptyAnswer).toMatchObject({
-      status: 207,
-      data: {
-        failed: 1,
-        items: [{ success: false, code: 'KNOWLEDGE_VALIDATION_FAILED' }],
+      problem: {
+        error: {
+          code: 'KNOWLEDGE_VALIDATION_FAILED',
+          details: { field: 'answer', reason: 'required', segmentType: 'qa' },
+        },
       },
     });
     const models = registerKnowledgeModels(connection);
     expect(await models.KnowledgeSegment.countDocuments({ workspaceId })).toBe(0);
+  });
+
+  it('L1-B05-DATA-004-P02 persists a pre-save custom index and creates one index Job per index target', async () => {
+    const result = await s06.dispatch({
+      operationId: 'API-SEGMENT-CREATE',
+      params: { sourceId },
+      query: {},
+      headers: {},
+      body: {
+        question: 'B05 custom index source text',
+        answer: '',
+        segmentType: 'chunk',
+        indexes: [
+          {
+            indexId: 'custom_b05',
+            type: 'custom',
+            text: 'B05 custom searchable index',
+            modelId: 'mock-embedding-1024',
+          },
+        ],
+      },
+      context,
+    });
+    expect(result.status).toBe(201);
+    expect(result.data).toMatchObject({
+      jobIds: expect.arrayContaining([expect.any(String)]),
+      indexes: [
+        expect.objectContaining({
+          indexId: 'custom_b05',
+          type: 'custom',
+          modelId: 'mock-embedding-1024',
+        }),
+      ],
+    });
+    expect((result.data as { jobIds: string[] }).jobIds).toHaveLength(2);
+    const models = registerKnowledgeModels(connection);
+    expect(
+      await models.KnowledgeJob.countDocuments({
+        workspaceId,
+        kind: 'index',
+        resourceId: (result.data as { id: string }).id,
+      }),
+    ).toBe(2);
   });
 
   it('L1-B05-DATA-004-N03 rejects unknown item fields before persistence', async () => {
@@ -397,12 +454,27 @@ describe('B05 DATA-004 direct Segment creation and batch processing', () => {
     });
     expect(await catalog.getSegment(existing.id, context)).toMatchObject({
       question: 'retry succeeds once',
-      version: 2,
+      version: 3,
     });
   });
 
   it('L1-B05-DATA-004-S01 records Segment, Job, Outbox, audit, and final index evidence', async () => {
-    const created = await catalog.createSegment(sourceId, segmentInput(20), context);
+    const created = (
+      await s06.dispatch({
+        operationId: 'API-SEGMENT-CREATE',
+        params: { sourceId },
+        query: {},
+        headers: {},
+        body: { ...segmentInput(20), segmentType: 'chunk' },
+        context,
+      })
+    ).data as {
+      id: string;
+      version: number;
+      question: string;
+      answer: string;
+      indexStatus: string;
+    };
     const models = registerKnowledgeModels(connection);
     const job = await models.KnowledgeJob.findOne({
       workspaceId,

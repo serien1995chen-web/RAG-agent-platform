@@ -12,6 +12,7 @@ import {
   ImportUrlSchema,
   createKnowledgeError,
 } from '@kb/contracts';
+import { chunkText, toChunkPolicy } from '@kb/chunk';
 import type { QueuePort } from '@kb/dal';
 import { z } from 'zod';
 import type { TenantContext } from '../../../../shared/persistence/knowledge/tenant';
@@ -462,6 +463,19 @@ export class S04IngestionApplication {
         }
         await assertWriteAccess(this.dependencies, targetSpaceId, input.context);
         const text = assertNonEmptyText(body.text, input.context);
+        if (body.dryRun) {
+          const preview = chunkText({ text, policy: toChunkPolicy(body.chunking) });
+          return {
+            status: 200,
+            data: {
+              name: body.name,
+              contentHash: sha256Of(text),
+              totalChunks: preview.chunks.length,
+              chunks: preview.chunks.slice(0, 100),
+              truncated: preview.chunks.length > 100,
+            },
+          };
+        }
         const idempotency = idempotencyKey(input);
         const requestHash = operationHash(input);
         const replay = await preflightImport({

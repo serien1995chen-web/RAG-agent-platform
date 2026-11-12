@@ -12,8 +12,10 @@ import {
   TimeIcon,
   WarningIcon,
 } from '@chakra-ui/icons';
+import { Spinner } from '@chakra-ui/react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
+import { S7MarkdownRenderer } from '../components/s7-markdown-renderer';
 import {
   apiLibraryCatalog,
   connectorCatalog,
@@ -24,6 +26,7 @@ import {
   importTemplate,
   importText,
   importUrl,
+  previewImportText,
   productApi,
 } from './api';
 import {
@@ -115,14 +118,16 @@ export function ImportWorkspace(props: {
   initialDirectoryId?: string;
   initialSource?: string;
   collectionId?: string;
+  initialJobId?: string;
   onExit: () => void;
   onImported: () => void;
+  onJobStarted?: (jobId: string) => void;
 }) {
   const toast = useProductToast();
   const queryClient = useQueryClient();
   const initialKind = normalizeImportKind(props.initialSource);
   const [kind, setKind] = useState<ImportKind>(initialKind);
-  const [step, setStep] = useState(initialKind === 'retraining' ? 1 : 0);
+  const [step, setStep] = useState(props.initialJobId ? 3 : initialKind === 'retraining' ? 1 : 0);
   const [directoryId, setDirectoryId] = useState(props.initialDirectoryId ?? '');
   const [parseProvider, setParseProvider] = useState('liteparse');
   const [trainingType, setTrainingType] = useState<'chunk' | 'qa' | 'imageParse'>(
@@ -150,7 +155,7 @@ export function ImportWorkspace(props: {
   const [connectorSelected, setConnectorSelected] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
-  const [jobId, setJobId] = useState('');
+  const [jobId, setJobId] = useState(props.initialJobId ?? '');
   const [submitError, setSubmitError] = useState<unknown>(null);
 
   const directoriesQuery = useQuery<Directory[]>({
@@ -167,7 +172,6 @@ export function ImportWorkspace(props: {
         : false,
     refetchIntervalInBackground: false,
   });
-
   const chunking = useMemo(
     () => ({
       trainingType,
@@ -177,6 +181,25 @@ export function ImportWorkspace(props: {
     }),
     [chunkSettingMode, chunkSize, chunkSplitMode, trainingType],
   );
+  const previewQuery = useQuery({
+    queryKey: [
+      'kb-product',
+      'import-preview',
+      props.spaceId,
+      textName,
+      textBody,
+      directoryId,
+      chunking,
+    ],
+    queryFn: () =>
+      previewImportText(props.spaceId, {
+        name: textName.trim(),
+        text: textBody,
+        directoryId: directoryId || null,
+        chunking,
+      }),
+    enabled: step === 2 && kind === 'text' && Boolean(textName.trim()) && Boolean(textBody.trim()),
+  });
 
   const activeOption = IMPORT_OPTIONS.find((option) => option.kind === kind)!;
   const uploadsReady =
@@ -339,6 +362,7 @@ export function ImportWorkspace(props: {
       }
       setJobId(job.jobId);
       setStep(3);
+      props.onJobStarted?.(job.jobId);
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['kb-product', 'sources', props.spaceId] }),
         queryClient.invalidateQueries({ queryKey: ['kb-product', 'jobs', props.spaceId] }),
@@ -362,6 +386,12 @@ export function ImportWorkspace(props: {
     connectorSelected,
     collectionId: props.collectionId,
   });
+  const previewReady =
+    step !== 2 ||
+    kind !== 'text' ||
+    (!previewQuery.isLoading &&
+      !previewQuery.error &&
+      Boolean(previewQuery.data && previewQuery.data.totalChunks > 0));
 
   return (
     <ProductPage className="kb2-import-page">
@@ -709,11 +739,11 @@ export function ImportWorkspace(props: {
                   <p>{preview.description}</p>
                 </div>
               </div>
-              <dl className="kb2-info-group">
+              <div className="kb2-info-group">
                 {preview.rows.map((row) => (
                   <InfoRow key={row.label} label={row.label} value={row.value} />
                 ))}
-              </dl>
+              </div>
               {kind === 'retraining' ? (
                 <div className="kb2-error-panel" role="alert">
                   <WarningIcon boxSize={4} />
@@ -722,10 +752,46 @@ export function ImportWorkspace(props: {
                     <span>未提交任何重训练请求。</span>
                   </div>
                 </div>
+              ) : kind === 'text' ? (
+                <section aria-label="文本分块预览">
+                  <ProductError
+                    error={previewQuery.error}
+                    onRetry={() => void previewQuery.refetch()}
+                  />
+                  {previewQuery.isLoading ? (
+                    <div className="kb2-center-state">
+                      <Spinner size="sm" /> 正在生成真实分块预览…
+                    </div>
+                  ) : previewQuery.data ? (
+                    <>
+                      <div className="kb2-info-group">
+                        <InfoRow label="分块数量" value={String(previewQuery.data.totalChunks)} />
+                        <InfoRow label="内容哈希" value={previewQuery.data.contentHash} />
+                      </div>
+                      <div className="kb2-chunk-preview-list">
+                        {previewQuery.data.chunks.map((chunk) => (
+                          <article className="kb2-chunk-preview" key={chunk.index}>
+                            <span>#{chunk.index + 1}</span>
+                            <S7MarkdownRenderer>{chunk.text}</S7MarkdownRenderer>
+                          </article>
+                        ))}
+                      </div>
+                      {previewQuery.data.truncated ? (
+                        <p className="kb2-table-muted">
+                          仅展示前 {previewQuery.data.chunks.length} 个分块。
+                        </p>
+                      ) : null}
+                    </>
+                  ) : (
+                    <ProductEmpty
+                      title="没有可预览内容"
+                      description="返回上一步检查名称和原始文本。"
+                    />
+                  )}
+                </section>
               ) : (
                 <div className="kb2-note">
-                  当前合同没有“导入前分块预览”接口。这里展示的是真实输入摘要；分块结果只会在提交导入后由服务端
-                  Job 和 Data 列表返回。
+                  此处展示真实输入摘要；提交后由服务端 Job 返回处理状态和 Data 结果。
                 </div>
               )}
             </div>
@@ -771,7 +837,7 @@ export function ImportWorkspace(props: {
             {step < 3 ? (
               <ProductButton
                 tone="primary"
-                disabled={step === 1 && !uploadsReady}
+                disabled={(step === 1 && !uploadsReady) || (step === 2 && !previewReady)}
                 onClick={() => setStep((value) => value + 1)}
               >
                 下一步

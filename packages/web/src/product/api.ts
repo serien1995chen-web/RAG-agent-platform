@@ -438,7 +438,18 @@ export function listSegments(sourceId: string) {
 
 export function createSegment(
   sourceId: string,
-  input: { question: string; answer: string; searchEnabled?: boolean },
+  input: {
+    question: string;
+    answer: string;
+    segmentType?: 'chunk' | 'qa';
+    searchEnabled?: boolean;
+    indexes?: Array<{
+      indexId: string;
+      type: 'custom';
+      text: string;
+      modelId: string;
+    }>;
+  },
 ) {
   return knowledgeRequest<Segment>(
     `/v1/knowledge/sources/${encodeURIComponent(sourceId)}/segments`,
@@ -448,6 +459,25 @@ export function createSegment(
       body: { ...input, searchEnabled: input.searchEnabled ?? true },
     },
   );
+}
+
+export function batchUpsertSegments(
+  sourceId: string,
+  items: Array<{
+    question: string;
+    answer: string;
+    segmentType: 'chunk';
+    searchEnabled?: boolean;
+  }>,
+) {
+  return knowledgeRequest<BatchResult>('/v1/knowledge/segments/batch-actions', {
+    method: 'POST',
+    idempotencyKey: key(),
+    body: {
+      action: 'upsert',
+      items: items.map((item) => ({ sourceId, ...item })),
+    },
+  });
 }
 
 export function updateSegment(
@@ -810,6 +840,44 @@ export function importText(
       chunking: input.chunking,
     },
   });
+}
+
+export interface ImportTextPreview {
+  name: string;
+  contentHash: string;
+  totalChunks: number;
+  chunks: Array<{
+    index: number;
+    text: string;
+    contentHash: string;
+  }>;
+  truncated: boolean;
+}
+
+export function previewImportText(
+  spaceId: string,
+  input: {
+    name: string;
+    text: string;
+    directoryId?: string | null;
+    chunking: Record<string, unknown>;
+  },
+) {
+  return knowledgeRequest<ImportTextPreview>(
+    `/v1/knowledge/spaces/${encodeURIComponent(spaceId)}/imports/text`,
+    {
+      method: 'POST',
+      idempotencyKey: key(),
+      body: {
+        knowledgeSpaceId: spaceId,
+        name: input.name,
+        text: input.text,
+        directoryId: input.directoryId ?? null,
+        chunking: input.chunking,
+        dryRun: true,
+      },
+    },
+  );
 }
 
 export function importUrl(

@@ -77,9 +77,9 @@
       ],
       "ourDtos": ["SegmentCreate", "Segment", "SegmentBatchAction", "BatchResult", "Job"],
       "compatibility": {
-        "decision": "INTENTIONAL_DIFFERENCE",
+        "decision": "MATCH",
         "allowedDifference": "FastGPT may complete one synchronous insert without a business Job; our asynchronous path must reach an equivalent indexed result and retain Job/Step traceability.",
-        "reason": "The Job is an allowed internal difference, but runtime evidence shows the required indexed/searchable and batch-progress results are not reached."
+        "reason": "Asynchronous Job creation is an allowed internal difference; B05 runtime evidence now reaches indexed/searchable results, batch progress and failed-item retry."
       }
     },
     {
@@ -135,9 +135,9 @@
       "ourOperations": ["API-IMPORT-TEXT", "API-JOB-GET", "API-SOURCE-GET", "API-SOURCE-PREVIEW"],
       "ourDtos": ["ImportText", "Source", "Job", "ChunkingSettings"],
       "compatibility": {
-        "decision": "INTENTIONAL_DIFFERENCE",
+        "decision": "MATCH",
         "allowedDifference": "Source creation is asynchronous and may expose a Job, but the final user-visible Source, raw text, preview and result must be equivalent.",
-        "reason": "Asynchronous Source/Job creation is allowed and persisted correctly; preview and refresh recovery remain user-visible failures."
+        "reason": "Asynchronous Source/Job creation is allowed; text preview, exact hash, persisted Job state and refresh recovery now match the required user-visible flow."
       }
     }
   ]

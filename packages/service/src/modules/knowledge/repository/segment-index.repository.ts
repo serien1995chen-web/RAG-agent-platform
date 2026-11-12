@@ -1,7 +1,8 @@
 import { createHash } from 'node:crypto';
 import { createKnowledgeError } from '@kb/contracts';
-import type { Connection, Model, Types } from 'mongoose';
+import { Types, type Connection, type Model } from 'mongoose';
 import { registerKnowledgeModels } from '../../../shared/persistence/schemas/knowledge-index';
+import { KnowledgeAuditRepository } from '../../../shared/persistence/knowledge/audit';
 import type {
   KnowledgeSegmentDoc,
   KnowledgeSourceDoc,
@@ -114,9 +115,24 @@ export interface SegmentIndexUpsertInput {
   version: number;
 }
 
+export interface CreateSegmentWithIndexInput {
+  question: string;
+  answer: string;
+  segmentType: 'chunk' | 'qa';
+  searchEnabled?: boolean;
+  metadata?: Record<string, unknown>;
+  indexes?: readonly {
+    indexId: string;
+    type: 'custom';
+    text: string;
+    modelId: string;
+  }[];
+}
+
 export class KnowledgeSegmentIndexRepository {
   private readonly segments: Model<KnowledgeSegmentDoc>;
   private readonly sources: Model<KnowledgeSourceDoc>;
+  private readonly audits: KnowledgeAuditRepository;
 
   constructor(
     private readonly connection: Connection,
@@ -126,6 +142,7 @@ export class KnowledgeSegmentIndexRepository {
     const registered = registerKnowledgeModels(connection);
     this.segments = registered.KnowledgeSegment;
     this.sources = registered.KnowledgeSource;
+    this.audits = new KnowledgeAuditRepository(connection);
   }
 
   private async resolveIndex(
@@ -183,6 +200,178 @@ export class KnowledgeSegmentIndexRepository {
       text: input.text,
       version: nextVersion,
     };
+  }
+
+  async createSegment(
+    sourceId: string,
+    input: CreateSegmentWithIndexInput,
+    context: TenantContext,
+  ) {
+    const workspaceId = requireWorkspaceId(context);
+    const question = input.question.trim();
+    const providedAnswer = input.answer.trim();
+    if (!question) throw validation(context, { field: 'question', reason: 'required' });
+    if (!['chunk', 'qa'].includes(input.segmentType)) {
+      throw validation(context, { field: 'segmentType', allowed: ['chunk', 'qa'] });
+    }
+    if (input.segmentType === 'qa' && !providedAnswer) {
+      throw validation(context, { field: 'answer', reason: 'required', segmentType: 'qa' });
+    }
+    const answer = input.segmentType === 'chunk' && !providedAnswer ? question : providedAnswer;
+    const session = await this.connection.startSession();
+    try {
+      let result:
+        | (ReturnType<typeof segmentDto> & {
+            jobId: string;
+            jobIds: string[];
+          })
+        | undefined;
+      await session.withTransaction(async () => {
+        const source = await this.sources
+          .findOne({
+            _id: objectIdOf(sourceId, context, 'sourceId'),
+            workspaceId,
+            deletedAt: null,
+          })
+          .session(session)
+          .lean<Plain<KnowledgeSourceDoc> | null>();
+        if (!source) throw tenantError(context, 'KNOWLEDGE_NOT_FOUND', { sourceId });
+        if (!source.knowledgeSpaceId) {
+          throw tenantError(context, 'KNOWLEDGE_NOT_FOUND', { sourceId });
+        }
+        const last = await this.segments
+          .findOne({ workspaceId, sourceId: source._id, deletedAt: null })
+          .sort({ order: -1 })
+          .session(session)
+          .lean<Pick<KnowledgeSegmentDoc, 'order'> | null>();
+        const segmentId = new Types.ObjectId();
+        const draft = {
+          _id: segmentId,
+          workspaceId,
+          knowledgeSpaceId: source.knowledgeSpaceId,
+          version: 1,
+          deletedAt: null,
+          createdByMemberId: context.memberId,
+          updatedByMemberId: context.memberId,
+          sourceId: source._id,
+          sourceVersion: source.sourceVersion,
+          searchEnabled: source.searchEnabled && (input.searchEnabled ?? true),
+          order: last ? last.order + 1 : 0,
+          question,
+          answer,
+          content: `${question}\n${answer}`.trim(),
+          fullTextTokens: '',
+          fullTextVersion: 0,
+          metadata: input.metadata ?? {},
+          history: [],
+          indexes: [] as SegmentIndexValue[],
+          indexStatus: 'pending' as const,
+          indexErrorCode: null,
+          imageBlobRefId: null,
+          imageDescription: null,
+          synonymVersion: 0,
+        } as unknown as Plain<KnowledgeSegmentDoc>;
+        const seen = new Set<string>();
+        for (const [index, candidate] of (input.indexes ?? []).entries()) {
+          if (seen.has(candidate.indexId)) {
+            throw validation(context, {
+              field: `indexes[${index}].indexId`,
+              reason: 'unique',
+            });
+          }
+          seen.add(candidate.indexId);
+          draft.indexes.push(
+            await this.resolveIndex(
+              draft as unknown as Plain<KnowledgeSegmentDoc>,
+              {
+                indexId: candidate.indexId,
+                type: 'custom',
+                text: candidate.text,
+                modelId: candidate.modelId,
+                version: 1,
+              },
+              1,
+              context,
+            ),
+          );
+        }
+        await this.segments.create([draft], { session, ordered: true });
+        const jobs = [];
+        jobs.push(
+          await this.jobs.createInSession(
+            {
+              kind: 'index',
+              resourceType: 'segment',
+              resourceId: String(segmentId),
+              knowledgeSpaceId: String(source.knowledgeSpaceId),
+              inputSnapshot: {
+                operation: 'create',
+                sourceVersion: source.sourceVersion,
+                segmentVersion: 1,
+              },
+              priority: 5,
+              idempotencyKey: `index:${segmentId}:default:1`,
+            },
+            context,
+            session,
+          ),
+        );
+        for (const index of draft.indexes) {
+          jobs.push(
+            await this.jobs.createInSession(
+              {
+                kind: 'index',
+                resourceType: 'segment',
+                resourceId: String(segmentId),
+                knowledgeSpaceId: String(source.knowledgeSpaceId),
+                inputSnapshot: {
+                  operation: 'create',
+                  sourceVersion: source.sourceVersion,
+                  segmentVersion: 1,
+                  index: {
+                    indexId: index.indexId,
+                    type: index.type,
+                    modelId: index.modelId,
+                    text: index.text,
+                  },
+                },
+                priority: 5,
+                idempotencyKey: `index:${segmentId}:${index.indexId}:1`,
+              },
+              context,
+              session,
+            ),
+          );
+        }
+        await this.audits.append(
+          {
+            knowledgeSpaceId: String(source.knowledgeSpaceId),
+            action: 'segment.create',
+            resourceType: 'segment',
+            resourceId: String(segmentId),
+            outcome: 'succeeded',
+            safeDiff: {
+              sourceId,
+              segmentType: input.segmentType,
+              indexCount: draft.indexes.length,
+              jobIds: jobs.map((job) => job.jobId),
+            },
+          },
+          context,
+          session,
+        );
+        const created = segmentDto(draft as unknown as Plain<KnowledgeSegmentDoc>);
+        result = {
+          ...created,
+          jobId: jobs[0]!.jobId,
+          jobIds: jobs.map((job) => job.jobId),
+        };
+      });
+      if (!result) throw tenantError(context);
+      return result;
+    } finally {
+      await session.endSession();
+    }
   }
 
   async upsert(

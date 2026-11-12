@@ -2183,7 +2183,7 @@
       "path": "/v1/knowledge/spaces/{spaceId}/imports/text",
       "group": "import",
       "requestSchema": "ImportText",
-      "responseSchema": "Job",
+      "responseSchema": null,
       "scopes": [
         "knowledge:write"
       ],

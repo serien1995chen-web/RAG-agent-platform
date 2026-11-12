@@ -1375,6 +1375,47 @@ describe('S4 import entry workflows', () => {
     expect(counters.puts).toHaveLength(2);
   });
 
+  it('L1-B05-ING-002-UI01 returns deterministic text preview without persistence', async () => {
+    const counters = newCounters();
+    const ingestion = ingestionApplication('template', { counters });
+    const text = '第一段\n\n第二段';
+    const result = await ingestion.dispatch({
+      operationId: 'API-IMPORT-TEXT',
+      params: { spaceId },
+      query: {},
+      headers: { 'idempotency-key': `b05-text-preview-${suffix}-01` },
+      body: {
+        knowledgeSpaceId: spaceId,
+        name: 'B05 Preview.md',
+        directoryId: null,
+        text,
+        dryRun: true,
+        chunking: {
+          trainingType: 'chunk',
+          chunkSettingMode: 'custom',
+          chunkSplitMode: 'paragraph',
+          chunkSize: 512,
+        },
+      },
+      context,
+    });
+    expect(result).toMatchObject({
+      status: 200,
+      data: {
+        name: 'B05 Preview.md',
+        totalChunks: 1,
+        chunks: [
+          { index: 0, text: expect.stringContaining('第一段'), contentHash: expect.any(String) },
+        ],
+        truncated: false,
+      },
+    });
+    expect(counters.puts).toHaveLength(0);
+    expect(await connection.models.KnowledgeSource.countDocuments({ workspaceId })).toBe(0);
+    expect(await connection.models.KnowledgeJob.countDocuments({ workspaceId })).toBe(0);
+    expect(await connection.models.KnowledgeOutboxEvent.countDocuments({ workspaceId })).toBe(0);
+  });
+
   it('L1-B05-ING-002-F01 rolls back Source, Job, audit, and Outbox on transaction failure', async () => {
     const failing = new KnowledgeImportRepository(connection, {
       beforeOutbox() {

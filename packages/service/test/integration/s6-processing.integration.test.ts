@@ -21,6 +21,7 @@ import { S06ProcessingApplication } from '../../src/modules/knowledge/applicatio
 import { S5ProcessingApplication } from '../../src/modules/knowledge/application/s5-processing.application';
 import { KnowledgeFullTextRepository } from '../../src/modules/knowledge/repository/fulltext.repository';
 import { KnowledgeJobExecutionRepository } from '../../src/modules/knowledge/repository/job-execution.repository';
+import { KnowledgeSegmentIndexRepository } from '../../src/modules/knowledge/repository/segment-index.repository';
 import { S6ProcessingRepository } from '../../src/modules/knowledge/repository/s06-processing.repository';
 import { S5ArtifactRepository } from '../../src/modules/knowledge/repository/s5-artifact.repository';
 import type { TenantContext } from '../../src/shared/persistence/knowledge/tenant';
@@ -51,7 +52,22 @@ let objectStore: MinioKnowledgeObjectStore;
 let processing: S06ProcessingApplication;
 let redis: Redis;
 let queueAdapter: BullMqQueueAdapter;
+let segmentIndexes: KnowledgeSegmentIndexRepository;
 const redisPrefix = `kb-s6-chain-${suffix}`;
+const modelCatalog = {
+  async listModels() {
+    return [
+      {
+        modelId: 's6-embedding-768',
+        displayName: 'S6 embedding',
+        type: 'embedding' as const,
+        capabilities: ['text-embedding', 'dimension:768'],
+        dimension: 768 as const,
+        authorized: true,
+      },
+    ];
+  },
+};
 
 beforeAll(async () => {
   const mongoUri = new URL(requiredEnv('KB_TEST_MONGO_URI'));
@@ -170,6 +186,7 @@ beforeAll(async () => {
     expiresAt: new Date(now.getTime() + 86_400_000),
   });
   const jobs = new KnowledgeJobExecutionRepository(connection);
+  segmentIndexes = new KnowledgeSegmentIndexRepository(connection, jobs, modelCatalog);
   const artifacts = new S5ArtifactRepository(connection, {
     provider: objectStore.provider,
     bucket: objectStore.bucket,
@@ -206,20 +223,7 @@ beforeAll(async () => {
     processing: new S5ProcessingApplication(),
     vectors: new KnowledgeVectorRepository(pool),
     fulltext: new KnowledgeFullTextRepository(connection),
-    models: {
-      async listModels() {
-        return [
-          {
-            modelId: 's6-embedding-768',
-            displayName: 'S6 embedding',
-            type: 'embedding',
-            capabilities: ['text-embedding', 'dimension:768'],
-            dimension: 768,
-            authorized: true,
-          },
-        ];
-      },
-    },
+    models: modelCatalog,
     bindings: {
       async list() {
         return [
@@ -543,4 +547,43 @@ describe('S6 C1/C2/C3 processing chain', () => {
       await Promise.all(workers.map((worker) => worker.close()));
     }
   }, 60_000);
+
+  it('L1-B05-DATA-004-P01 creates a traceable index Job and reaches vector/full-text projection', async () => {
+    const created = await segmentIndexes.createSegment(
+      String(sourceId),
+      {
+        question: 'B05 direct insert searchable text',
+        answer: '',
+        segmentType: 'chunk',
+        searchEnabled: true,
+        metadata: {},
+      },
+      context,
+    );
+    const jobId = created.jobId;
+    const outcome = await processing.handleQueue(
+      'knowledge-index',
+      jobId,
+      `b05-index-worker-${suffix}`,
+      context,
+    );
+    expect(outcome).toBe('succeeded');
+    const models = registerKnowledgeModels(connection);
+    const segment = await models.KnowledgeSegment.findOne({
+      workspaceId,
+      question: 'B05 direct insert searchable text',
+    }).lean();
+    expect(segment).toMatchObject({
+      indexStatus: 'indexed',
+      indexErrorCode: null,
+    });
+    expect(segment?.fullTextTokens.length).toBeGreaterThan(0);
+    const vector = await pool.query(
+      'SELECT id FROM knowledge_segment_vectors_768 WHERE workspace_id = $1 AND segment_id = $2',
+      [workspaceId, String(segment?._id)],
+    );
+    expect(vector.rows).toHaveLength(1);
+    const job = await models.KnowledgeJob.findById(jobId).lean();
+    expect(job?.status).toBe('succeeded');
+  }, 30_000);
 });

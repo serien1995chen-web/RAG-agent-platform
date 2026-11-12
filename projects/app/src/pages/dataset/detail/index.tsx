@@ -19,6 +19,7 @@ export default function DatasetDetailRoute() {
   const parentId = queryValue(router.query.parentId);
   const collectionId = queryValue(router.query.collectionId);
   const source = queryValue(router.query.source);
+  const importJobId = queryValue(router.query.importJobId);
 
   if (!router.isReady) {
     return (
@@ -42,6 +43,7 @@ export default function DatasetDetailRoute() {
           ...(parentId ? { parentId } : {}),
           ...(collectionId ? { collectionId } : {}),
           ...(source ? { source } : {}),
+          ...(importJobId ? { importJobId } : {}),
         }}
         onQueryChange={(next: DatasetDetailQuery, options) => {
           const query = Object.fromEntries(

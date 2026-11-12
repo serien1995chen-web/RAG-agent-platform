@@ -54,7 +54,7 @@
   "assets": [
     {
       "path": "packages/service/test/integration/kb-b05-manual-data.test.ts",
-      "sha256": "3d27f8aaccb0fef07b6ec2a29e70d0de3f6953960b25bfa9bdbc6c51342d6681"
+      "sha256": "2bdd77c7123b7946befab9c69f04e06ce6d9ac2e3e7a1ee6db82bd9ff654c8e5"
     },
     {
       "path": "test/tenant/kb-b05-manual-data-tenant.test.ts",
@@ -70,11 +70,11 @@
     },
     {
       "path": "test/e2e/kb-b05-manual-data.test.ts",
-      "sha256": "845858fd3d18b1cf0e516709f2998614c36337e43353a8a8f060475975d86367"
+      "sha256": "9ccfe9d40153a4625df4eb539f099ef6e234b054435d4d454fa171f19ac5f4c6"
     },
     {
       "path": "test/fixtures/b05/behavior-matrix.json",
-      "sha256": "e0acbd0fe6556ba26438fc777b3fbdedcf3581f0d6ff12e1530246aae4b361a0"
+      "sha256": "9d4c05c9f311dda2d50825e54c485edeba25848ac9ae96ba3c932d3924d5f33a"
     },
     {
       "path": "test/fixtures/b05/test-asset-audit.json",
@@ -82,7 +82,7 @@
     },
     {
       "path": "test/fixtures/b05/run-gates.mjs",
-      "sha256": "8bb8e087b9bcbe77de7a62d6b44fb8ae7c6c7eb10352d0f9250b8723fb83e6c2"
+      "sha256": "041278fe7579c012bff9a6310f14dfdb921759d9e6f50d714c8a2f31a516f32c"
     },
     {
       "path": "test/fixtures/b05/reconcile.mjs",
