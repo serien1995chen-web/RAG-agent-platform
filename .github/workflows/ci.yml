@@ -25,7 +25,7 @@ env:
   KB_TEST_S3_ACCESS_KEY: minioadmin
   KB_TEST_S3_SECRET_KEY: minioadmin
   CI_MONGO_IMAGE: mongo:5.0.32
-  CI_MINIO_IMAGE: registry.cn-hangzhou.aliyuncs.com/fastgpt/minio:RELEASE.2025-09-07T16-13-09Z@sha256:a63b19df59e6ec7c02ebba6e7a1097b7e032da7947b18db7ff67dae8e84fd44d
+  CI_MINIO_IMAGE: minio/minio:RELEASE.2025-09-07T16-13-09Z
   NEXT_TELEMETRY_DISABLED: '1'
   TURBO_TELEMETRY_DISABLED: '1'
 
@@ -76,8 +76,6 @@ jobs:
         run: pnpm test:unit
       - name: Contract tests
         run: pnpm test:contract
-      - name: Security tests
-        run: pnpm test:security
       - name: Build application
         run: pnpm build
       - name: Build worker
@@ -126,7 +124,17 @@ jobs:
         run: pnpm install --frozen-lockfile --prefer-offline
       - name: Start and initialize Mongo replica set
         run: |
-          timeout 180 docker pull "$CI_MONGO_IMAGE"
+          for attempt in 1 2 3; do
+            if timeout 180 docker pull "$CI_MONGO_IMAGE"; then
+              break
+            fi
+            if [ "$attempt" = "3" ]; then
+              echo "::error::Mongo image pull failed after three attempts."
+              exit 1
+            fi
+            echo "::warning::Mongo image pull failed; retrying."
+            sleep 5
+          done
           docker run --detach --name kb-ci-mongo \
             --publish 27017:27017 \
             "$CI_MONGO_IMAGE" --replSet rs0 --bind_ip_all
@@ -165,7 +173,17 @@ jobs:
           exit 1
       - name: Start MinIO
         run: |
-          timeout 600 docker pull "$CI_MINIO_IMAGE"
+          for attempt in 1 2 3; do
+            if timeout 180 docker pull "$CI_MINIO_IMAGE"; then
+              break
+            fi
+            if [ "$attempt" = "3" ]; then
+              echo "::error::MinIO image pull failed after three attempts."
+              exit 1
+            fi
+            echo "::warning::MinIO image pull failed; retrying."
+            sleep 5
+          done
           docker run --detach --name kb-ci-minio \
             --publish 9000:9000 \
             --env MINIO_ROOT_USER=minioadmin \
@@ -188,6 +206,8 @@ jobs:
         run: pnpm test:concurrency
       - name: Fault tests
         run: pnpm test:fault
+      - name: Security tests
+        run: pnpm test:security
       - name: Stop test containers
         if: always()
         run: docker rm --force kb-ci-mongo kb-ci-minio >/dev/null 2>&1 || true
@@ -239,7 +259,17 @@ jobs:
         run: pnpm install --frozen-lockfile --prefer-offline
       - name: Start and initialize Mongo replica set
         run: |
-          timeout 180 docker pull "$CI_MONGO_IMAGE"
+          for attempt in 1 2 3; do
+            if timeout 180 docker pull "$CI_MONGO_IMAGE"; then
+              break
+            fi
+            if [ "$attempt" = "3" ]; then
+              echo "::error::Mongo image pull failed after three attempts."
+              exit 1
+            fi
+            echo "::warning::Mongo image pull failed; retrying."
+            sleep 5
+          done
           docker run --detach --name kb-ci-mongo \
             --publish 27017:27017 \
             "$CI_MONGO_IMAGE" --replSet rs0 --bind_ip_all
@@ -278,7 +308,17 @@ jobs:
           exit 1
       - name: Start MinIO
         run: |
-          timeout 600 docker pull "$CI_MINIO_IMAGE"
+          for attempt in 1 2 3; do
+            if timeout 180 docker pull "$CI_MINIO_IMAGE"; then
+              break
+            fi
+            if [ "$attempt" = "3" ]; then
+              echo "::error::MinIO image pull failed after three attempts."
+              exit 1
+            fi
+            echo "::warning::MinIO image pull failed; retrying."
+            sleep 5
+          done
           docker run --detach --name kb-ci-minio \
             --publish 9000:9000 \
             --env MINIO_ROOT_USER=minioadmin \
