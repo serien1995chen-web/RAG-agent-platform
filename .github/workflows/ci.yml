@@ -352,6 +352,14 @@ jobs:
             echo "::warning::Chromium headless shell installation failed; retrying."
             sleep 5
           done
+      - name: Build application
+        run: pnpm build
+      - name: Build worker
+        run: pnpm build:workers
+      - name: Verify e2e build artifacts
+        run: |
+          test -s projects/app/.next/BUILD_ID
+          test -s projects/app/dist/workers/worker.mjs
       - name: End-to-end tests
         run: pnpm test:e2e
       - name: Stop test containers
