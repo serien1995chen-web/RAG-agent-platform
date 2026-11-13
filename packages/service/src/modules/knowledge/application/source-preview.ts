@@ -4,6 +4,7 @@ import type { TenantContext } from '../../../shared/persistence/knowledge/tenant
 import type {
   AccessPort,
   ArchiveSafetyPort,
+  AuditPort,
   CatalogPort,
   FileTicketPort,
   JobPort,
@@ -90,12 +91,43 @@ export class SourceFileApplication {
     private readonly objectStore: ObjectStoreApplicationPort,
     private readonly tickets: FileTicketPort,
     private readonly archiveSafety?: ArchiveSafetyPort,
+    private readonly audit?: AuditPort,
   ) {}
 
   private async source(sourceId: string, context: TenantContext): Promise<SourceView> {
     const source = await this.catalog.getSource(sourceId, context);
     await this.access.assertPermission('source', sourceId, 'read', context);
     return source;
+  }
+
+  private async appendTicketAudit(
+    ref: ObjectRefView,
+    context: TenantContext,
+    outcome: 'succeeded' | 'denied',
+  ): Promise<void> {
+    if (!this.audit) {
+      throw createKnowledgeError({
+        code: 'KNOWLEDGE_INTERNAL_ERROR',
+        requestId: context.requestId,
+        traceId: context.traceId,
+        details: { reason: 'file_ticket_audit_missing' },
+      });
+    }
+    await this.audit.appendStandalone(
+      {
+        knowledgeSpaceId: ref.knowledgeSpaceId,
+        action: 'file.ticket.issue',
+        resourceType: 'file',
+        resourceId: ref.blobId,
+        outcome,
+        safeDiff: {
+          sourceId: ref.sourceId,
+          disposition: 'attachment',
+          ttlSeconds: 300,
+        },
+      },
+      context,
+    );
   }
 
   private async textFromObject(
@@ -218,6 +250,16 @@ export class SourceFileApplication {
       context.requestId,
       context.traceId,
     );
+    try {
+      await this.appendTicketAudit(ref, context, 'succeeded');
+    } catch {
+      throw createKnowledgeError({
+        code: 'KNOWLEDGE_DEPENDENCY_UNAVAILABLE',
+        requestId: context.requestId,
+        traceId: context.traceId,
+        details: { dependency: 'audit', operation: 'file_ticket_issue' },
+      });
+    }
     return {
       ticketId: createHash('sha256').update(issued.url).digest('hex').slice(0, 24),
       url: issued.url,

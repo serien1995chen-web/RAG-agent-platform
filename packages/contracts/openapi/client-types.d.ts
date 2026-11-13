@@ -468,7 +468,7 @@ export interface SchemaPropertyMap {
   "ModelValidationResult": "capabilities" | "modelId" | "modelType" | "valid";
   "MoveResource": "targetParentId" | "version";
   "MultiSpaceSearchRequest": never;
-  "ObjectBlobReference": "blobId" | "bucket" | "etag" | "objectKey" | "sizeBytes" | "state" | "workspaceId";
+  "ObjectBlobReference": "blobId" | "etag" | "sizeBytes" | "state" | "workspaceId";
   "OpenApiDocument": never;
   "OperationResult": "id" | "jobId" | "status";
   "OpsStatus": "connectorProbe" | "connectorProbes" | "dependencies" | "modelProbe" | "queueDepth" | "queueLag" | "queueProbe" | "reconciliation" | "securityChecks" | "status" | "storage" | "vector";
@@ -610,7 +610,7 @@ export interface RequiredSchemaPropertyMap {
   "ModelValidationResult": "capabilities" | "modelId" | "modelType" | "valid";
   "MoveResource": "targetParentId" | "version";
   "MultiSpaceSearchRequest": never;
-  "ObjectBlobReference": "blobId" | "bucket" | "etag" | "objectKey" | "sizeBytes" | "state" | "workspaceId";
+  "ObjectBlobReference": "blobId" | "etag" | "sizeBytes" | "state" | "workspaceId";
   "OpenApiDocument": never;
   "OperationResult": "id" | "status";
   "OpsStatus": "connectorProbe" | "connectorProbes" | "dependencies" | "modelProbe" | "queueDepth" | "queueLag" | "queueProbe" | "reconciliation" | "securityChecks" | "status" | "storage" | "vector";

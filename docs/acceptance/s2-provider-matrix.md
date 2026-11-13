@@ -27,4 +27,4 @@ All adapters implement `ObjectStorePort`:
 
 Provider 404 maps to `KNOWLEDGE_NOT_FOUND`; 403/5xx maps to `KNOWLEDGE_DEPENDENCY_UNAVAILABLE`; timeout maps to `KNOWLEDGE_DEPENDENCY_TIMEOUT`; malformed responses map to `KNOWLEDGE_PROVIDER_CONTRACT_INVALID`.
 
-No API response, error detail or log includes a bucket secret, provider access key, signed URL or raw object key except the canonical `ObjectBlobReference` returned by Upload Complete.
+No API response, error detail or log includes a bucket secret, provider access key, signed URL, bucket name, or raw object key. Upload Complete returns only `blobId`, `workspaceId`, `state`, `sizeBytes`, and `etag`.

@@ -36,7 +36,8 @@ export interface KnowledgeAuditInput {
     | 'segment'
     | 'job'
     | 'connector'
-    | 'api_key';
+    | 'api_key'
+    | 'file';
   resourceId: string;
   outcome: 'allowed' | 'denied' | 'succeeded' | 'failed';
   safeDiff: Record<string, unknown>;

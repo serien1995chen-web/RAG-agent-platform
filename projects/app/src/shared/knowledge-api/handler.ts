@@ -324,14 +324,12 @@ export function createKnowledgeApiHandler(): NextApiHandler {
             : request.query.ticket
           : undefined;
       const isTicketAuth = route.operationId === 'API-FILE-CONTENT' && Boolean(ticketValue);
-      const skipAuthentication = isPublic || isTicketAuth;
+      const skipAuthentication = isPublic;
       const subject = skipAuthentication
         ? {
             authType: 'jwt' as const,
-            memberId: isTicketAuth ? 'file-ticket' : 'public',
-            workspaceIds: [
-              isTicketAuth ? 'ticket' : (header(request, 'x-workspace-id') ?? 'public'),
-            ],
+            memberId: 'public',
+            workspaceIds: [header(request, 'x-workspace-id') ?? 'public'],
             scopes: ['knowledge:read'],
           }
         : await runtime.authenticate(request, {
@@ -340,11 +338,15 @@ export function createKnowledgeApiHandler(): NextApiHandler {
             traceId,
           });
       const workspaceId = skipAuthentication
-        ? isTicketAuth
-          ? 'ticket'
-          : (header(request, 'x-workspace-id') ?? firstWorkspaceId(subject) ?? 'public')
-        : resolveWorkspace(request, subject, requestId, traceId);
-      if (!isTicketAuth) assertScopes(route, subject, requestId, traceId);
+        ? (header(request, 'x-workspace-id') ?? firstWorkspaceId(subject) ?? 'public')
+        : isTicketAuth && !header(request, 'x-workspace-id')?.trim()
+          ? (() => {
+              const ticketWorkspaceId = firstWorkspaceId(subject);
+              if (!ticketWorkspaceId) throw forbidden(requestId, traceId);
+              return ticketWorkspaceId;
+            })()
+          : resolveWorkspace(request, subject, requestId, traceId);
+      if (!skipAuthentication) assertScopes(route, subject, requestId, traceId);
 
       let ticketVerificationError: unknown = null;
       let ticketWorkspaceId: string | null = null;

@@ -203,6 +203,15 @@ export const KNOWLEDGE_OBJECT_PROVIDERS = [
 ] as const satisfies readonly KnowledgeObjectProvider[];
 
 const EXACT_HTTP_RANGE = /^bytes=(\d+)-(\d+)$/;
+const MAX_OBJECT_KEY_BYTES = 1024;
+
+function hasObjectKeyControlCharacter(key: string): boolean {
+  for (let index = 0; index < key.length; index += 1) {
+    const code = key.charCodeAt(index);
+    if (code <= 0x1f || code === 0x7f) return true;
+  }
+  return false;
+}
 
 export function safeKeySegment(value: string): string {
   const safe = value.replace(/[^A-Za-z0-9._-]/g, '_');
@@ -364,7 +373,9 @@ export function assertKnowledgeObjectKey(key: string, context: KnowledgeObjectCo
     key.startsWith('/') ||
     key.includes('..') ||
     key.includes('\\') ||
-    key.includes('//')
+    key.includes('//') ||
+    hasObjectKeyControlCharacter(key) ||
+    Buffer.byteLength(key, 'utf8') > MAX_OBJECT_KEY_BYTES
   ) {
     throw objectStoreError('KNOWLEDGE_NOT_FOUND', context, {
       objectKeyHash: objectKeyHash(key),

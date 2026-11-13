@@ -56,7 +56,7 @@ function normalizeVector(vector: readonly number[]): { vector: number[]; norm: n
   const squares = vector.reduce((total, value) => total + value * value, 0);
   const norm = Math.sqrt(squares);
   if (norm === 0) return { vector: [], norm: 0 };
-  return { vector: vector.map((value) => value / norm), norm };
+  return { vector: vector.map((value) => value / norm), norm: 1 };
 }
 
 function vectorLiteral(vector: readonly number[]): string {

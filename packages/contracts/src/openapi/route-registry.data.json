@@ -448,7 +448,7 @@
       "requestSchema": "FileTicketRequest",
       "responseSchema": "FileTicket",
       "scopes": [
-        "knowledge:write"
+        "knowledge:read"
       ],
       "idempotent": true,
       "rateLimit": "30 QPS/workspace",
@@ -472,7 +472,7 @@
       "requestSchema": "FileTicketRequest",
       "responseSchema": "FileTicket",
       "scopes": [
-        "knowledge:write"
+        "knowledge:read"
       ],
       "idempotent": true,
       "rateLimit": "30 QPS/workspace",
@@ -1432,7 +1432,7 @@
       "requestSchema": "DownloadRequest",
       "responseSchema": "FileTicket",
       "scopes": [
-        "knowledge:write"
+        "knowledge:read"
       ],
       "idempotent": true,
       "rateLimit": "30 QPS/workspace",

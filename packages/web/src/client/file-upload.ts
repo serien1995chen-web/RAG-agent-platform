@@ -40,8 +40,6 @@ export interface UploadedPart {
 export interface ObjectBlobReference {
   blobId: string;
   workspaceId: string;
-  bucket: string;
-  objectKey: string;
   state: 'pending' | 'active' | 'deleting' | 'deleted';
   sizeBytes: number;
   etag: string;

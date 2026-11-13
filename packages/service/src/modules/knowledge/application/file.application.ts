@@ -5,6 +5,7 @@ import type {
   AccessPort,
   ArchiveSafetyPort,
   ArchiveSafetyResult,
+  AuditPort,
   CatalogPort,
   FileBinaryResult,
   FileTicketDisposition,
@@ -281,6 +282,7 @@ export class FileApplication {
     private readonly access: AccessPort,
     private readonly tickets?: FileTicketPort,
     private readonly archiveSafety?: ArchiveSafetyPort,
+    private readonly audit?: AuditPort,
   ) {}
 
   private async session(uploadId: string, context: TenantContext): Promise<UploadSessionView> {
@@ -731,17 +733,73 @@ export class FileApplication {
     return session;
   }
 
-  private async assertFileReadable(ref: ObjectRefView, context: TenantContext): Promise<void> {
+  private async assertFileReadable(
+    ref: ObjectRefView,
+    context: TenantContext,
+  ): Promise<{
+    resourceType: 'source' | 'space';
+    resourceId: string;
+    permissionRevision?: number;
+  }> {
     if (ref.state !== 'active') throw notFound(context);
     if (ref.sourceId) {
-      await this.access.assertPermission('source', ref.sourceId, 'read', context);
-      return;
+      const access = await this.access.assertPermission('source', ref.sourceId, 'read', context);
+      return {
+        resourceType: 'source',
+        resourceId: ref.sourceId,
+        ...(access.permissionRevision === undefined
+          ? {}
+          : { permissionRevision: access.permissionRevision }),
+      };
     }
     if (ref.purpose === 'export' && ref.knowledgeSpaceId) {
-      await this.access.assertPermission('space', ref.knowledgeSpaceId, 'read', context);
-      return;
+      const access = await this.access.assertPermission(
+        'space',
+        ref.knowledgeSpaceId,
+        'read',
+        context,
+      );
+      return {
+        resourceType: 'space',
+        resourceId: ref.knowledgeSpaceId,
+        ...(access.permissionRevision === undefined
+          ? {}
+          : { permissionRevision: access.permissionRevision }),
+      };
     }
     throw notFound(context);
+  }
+
+  private async appendTicketAudit(
+    ref: ObjectRefView,
+    disposition: FileTicketDisposition,
+    ttlSeconds: number,
+    outcome: 'succeeded' | 'denied',
+    context: TenantContext,
+  ): Promise<void> {
+    if (!this.audit) {
+      throw createKnowledgeError({
+        code: 'KNOWLEDGE_INTERNAL_ERROR',
+        requestId: context.requestId,
+        traceId: context.traceId,
+        details: { reason: 'file_ticket_audit_missing' },
+      });
+    }
+    await this.audit.appendStandalone(
+      {
+        knowledgeSpaceId: ref.knowledgeSpaceId,
+        action: 'file.ticket.issue',
+        resourceType: 'file',
+        resourceId: ref.blobId,
+        outcome,
+        safeDiff: {
+          sourceId: ref.sourceId,
+          disposition,
+          ttlSeconds,
+        },
+      },
+      context,
+    );
   }
 
   private async ticketFor(
@@ -750,17 +808,26 @@ export class FileApplication {
     ttlSeconds: number,
     context: TenantContext,
   ): Promise<{ url: string; expiresAt: string }> {
-    if (!this.tickets) {
+    if (!this.tickets || !this.audit) {
       throw createKnowledgeError({
         code: 'KNOWLEDGE_INTERNAL_ERROR',
         requestId: context.requestId,
         traceId: context.traceId,
-        details: { reason: 'file_ticket_service_missing' },
+        details: {
+          reason: this.tickets ? 'file_ticket_audit_missing' : 'file_ticket_service_missing',
+        },
       });
     }
     const ref = await this.objectRefs.findObjectRef(blobId, context);
     if (!ref) throw notFound(context);
-    await this.assertFileReadable(ref, context);
+    try {
+      await this.assertFileReadable(ref, context);
+    } catch (error) {
+      await this.appendTicketAudit(ref, disposition, ttlSeconds, 'denied', context).catch(
+        () => undefined,
+      );
+      throw error;
+    }
     const issued = this.tickets.issue(
       {
         workspaceId: ref.workspaceId,
@@ -777,6 +844,16 @@ export class FileApplication {
       context.requestId,
       context.traceId,
     );
+    try {
+      await this.appendTicketAudit(ref, disposition, ttlSeconds, 'succeeded', context);
+    } catch {
+      throw createKnowledgeError({
+        code: 'KNOWLEDGE_DEPENDENCY_UNAVAILABLE',
+        requestId: context.requestId,
+        traceId: context.traceId,
+        details: { dependency: 'audit', operation: 'file_ticket_issue' },
+      });
+    }
     return { url: issued.url, expiresAt: issued.expiresAt };
   }
 
@@ -830,7 +907,6 @@ export class FileApplication {
     ticket: string | null,
     context: TenantContext,
   ): Promise<FileBinaryResult> {
-    let effectiveContext = context;
     let disposition: FileTicketDisposition = 'inline';
     let claims: ReturnType<FileTicketPort['verify']> | null = null;
     if (ticket) {
@@ -845,29 +921,23 @@ export class FileApplication {
       claims = this.tickets.verify(ticket, context.requestId, context.traceId);
       if (
         claims.blobId !== blobId ||
-        (context.workspaceId !== 'ticket' && claims.workspaceId !== context.workspaceId)
+        claims.workspaceId !== context.workspaceId ||
+        claims.memberId !== context.memberId
       ) {
         throw createKnowledgeError({
           code: 'KNOWLEDGE_FORBIDDEN',
           requestId: context.requestId,
           traceId: context.traceId,
-          details: { reason: 'ticket_scope_mismatch' },
+          details: { reason: 'ticket_subject_mismatch' },
         });
       }
-      effectiveContext = {
-        ...context,
-        workspaceId: claims.workspaceId,
-        memberId: claims.memberId,
-        isWorkspaceOwner: claims.isWorkspaceOwner,
-        scopes: [...claims.scopes],
-      };
       disposition = claims.disposition;
     }
-    const ref = await this.objectRefs.findObjectRef(blobId, effectiveContext);
-    if (!ref) throw notFound(effectiveContext);
+    const ref = await this.objectRefs.findObjectRef(blobId, context);
+    if (!ref) throw notFound(context);
     if (ticket) {
-      if (!claims) throw notFound(effectiveContext);
-      if (claims.workspaceId !== ref.workspaceId) throw notFound(effectiveContext);
+      if (!claims) throw notFound(context);
+      if (claims.workspaceId !== ref.workspaceId) throw notFound(context);
       if (claims.sourceId !== ref.sourceId) {
         throw createKnowledgeError({
           code: 'KNOWLEDGE_FORBIDDEN',
@@ -892,15 +962,42 @@ export class FileApplication {
       ref.sourceId === null &&
       ref.createdByMemberId === claims.memberId &&
       ref.knowledgeSpaceId === claims.knowledgeSpaceId;
+    let authorization:
+      | {
+          resourceType: 'source' | 'space';
+          resourceId: string;
+          permissionRevision?: number;
+        }
+      | undefined;
     if (!unboundQueryImage) {
-      await this.assertFileReadable(ref, effectiveContext);
+      authorization = await this.assertFileReadable(ref, context);
     }
     const object = await this.objectStore.getObject(
       this.objectStore.bucket,
       ref.objectKey,
       range,
-      storageContext(effectiveContext, ref.knowledgeSpaceId),
+      storageContext(context, ref.knowledgeSpaceId),
     );
+    if (authorization) {
+      try {
+        const current = await this.access.assertPermission(
+          authorization.resourceType,
+          authorization.resourceId,
+          'read',
+          context,
+        );
+        if (
+          authorization.permissionRevision === undefined ||
+          current.permissionRevision !== authorization.permissionRevision
+        ) {
+          throw notFound(context);
+        }
+      } catch (error) {
+        const stream = object.body as AsyncIterable<Uint8Array> & { destroy?: () => void };
+        stream.destroy?.();
+        throw error;
+      }
+    }
     return {
       body: object.body,
       size: object.size,

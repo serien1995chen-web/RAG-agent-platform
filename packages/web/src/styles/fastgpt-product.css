@@ -2304,13 +2304,18 @@ a:hover {
 .kb2-upload-row {
   min-height: 48px;
   display: grid;
-  grid-template-columns: minmax(120px, 0.8fr) minmax(120px, 1fr) 30px;
+  grid-template-columns: minmax(150px, 0.9fr) minmax(120px, 1fr) auto;
   align-items: center;
   gap: 12px;
   padding: 8px 10px;
   background: var(--kb2-surface-muted);
   border: 1px solid var(--kb2-line-soft);
   border-radius: 7px;
+}
+
+.kb2-upload-row--error {
+  border-color: color-mix(in srgb, var(--kb2-danger) 42%, var(--kb2-line-soft));
+  background: color-mix(in srgb, var(--kb2-danger) 5%, var(--kb2-surface-muted));
 }
 
 .kb2-upload-row > span:first-child {
@@ -2330,6 +2335,17 @@ a:hover {
 .kb2-upload-row small {
   color: var(--kb2-muted);
   font-size: 10px;
+}
+
+.kb2-upload-row--error .kb2-upload-row__status {
+  color: var(--kb2-danger);
+}
+
+.kb2-upload-row__actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
 }
 
 .kb2-import-settings {
@@ -2611,6 +2627,49 @@ a:hover {
   max-height: 300px;
   margin: 8px auto;
   border-radius: 7px;
+}
+
+.kb2-source-preview {
+  display: grid;
+  gap: 12px;
+  max-height: 68vh;
+  overflow: auto;
+}
+
+.kb2-source-preview article {
+  padding: 12px 14px;
+  background: var(--kb2-surface-muted);
+  border: 1px solid var(--kb2-line-soft);
+  border-radius: 8px;
+}
+
+.kb2-source-preview h3 {
+  margin: 0 0 8px;
+  color: var(--kb2-ink);
+  font-size: 12px;
+}
+
+.kb2-source-preview p {
+  margin: 0;
+  color: var(--kb2-ink-soft);
+  font-size: 13px;
+  line-height: 1.75;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.kb2-source-preview-image {
+  display: block;
+  max-width: 100%;
+  max-height: 68vh;
+  margin: 0 auto;
+  border-radius: 8px;
+}
+
+.kb2-source-preview-error {
+  display: grid;
+  justify-items: start;
+  gap: 12px;
 }
 
 .kb2-meta-panel {

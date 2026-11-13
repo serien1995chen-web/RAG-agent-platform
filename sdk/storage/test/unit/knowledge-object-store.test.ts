@@ -77,6 +77,34 @@ describe('knowledge object store contract', () => {
     expect(() => assertKnowledgeObjectKey('ws/other/space/space_unit/source/a', context)).toThrow();
   });
 
+  it('rejects control characters and keys longer than 1024 UTF-8 bytes before provider calls', () => {
+    const prefix = 'ws/ws_unit/space/space_unit/';
+    const boundary = prefix + 'a'.repeat(1024 - Buffer.byteLength(prefix, 'utf8'));
+
+    expect(() => assertKnowledgeObjectKey(`${prefix}control\u0000.txt`, context)).toThrowError(
+      expect.objectContaining({
+        problem: expect.objectContaining({
+          error: expect.objectContaining({ code: 'KNOWLEDGE_NOT_FOUND' }),
+        }),
+      }),
+    );
+    expect(() => assertKnowledgeObjectKey(`${prefix}control\u007F.txt`, context)).toThrowError(
+      expect.objectContaining({
+        problem: expect.objectContaining({
+          error: expect.objectContaining({ code: 'KNOWLEDGE_NOT_FOUND' }),
+        }),
+      }),
+    );
+    expect(() => assertKnowledgeObjectKey(boundary, context)).not.toThrow();
+    expect(() => assertKnowledgeObjectKey(`${boundary}a`, context)).toThrowError(
+      expect.objectContaining({
+        problem: expect.objectContaining({
+          error: expect.objectContaining({ code: 'KNOWLEDGE_NOT_FOUND' }),
+        }),
+      }),
+    );
+  });
+
   it('accepts exact single ranges and rejects unsatisfied ranges', () => {
     expect(parseSingleRange('bytes=10-19', 20, context)).toEqual({
       start: 10,

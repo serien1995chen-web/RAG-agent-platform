@@ -76,8 +76,6 @@ jobs:
         run: pnpm test:unit
       - name: Contract tests
         run: pnpm test:contract
-      - name: Security tests
-        run: pnpm test:security
       - name: Build application
         run: pnpm build
       - name: Build worker
@@ -88,7 +86,7 @@ jobs:
   integration:
     name: integration
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 35
     services:
       redis:
         image: redis:7.2-alpine
@@ -126,7 +124,17 @@ jobs:
         run: pnpm install --frozen-lockfile --prefer-offline
       - name: Start and initialize Mongo replica set
         run: |
-          timeout 180 docker pull "$CI_MONGO_IMAGE"
+          for attempt in 1 2 3; do
+            if timeout 180 docker pull "$CI_MONGO_IMAGE"; then
+              break
+            fi
+            if [ "$attempt" = "3" ]; then
+              echo "::error::Mongo image pull failed after three attempts."
+              exit 1
+            fi
+            echo "::warning::Mongo image pull failed; retrying."
+            sleep 5
+          done
           docker run --detach --name kb-ci-mongo \
             --publish 27017:27017 \
             "$CI_MONGO_IMAGE" --replSet rs0 --bind_ip_all
@@ -165,7 +173,19 @@ jobs:
           exit 1
       - name: Start MinIO
         run: |
-          timeout 600 docker pull "$CI_MINIO_IMAGE"
+          if ! docker image inspect "$CI_MINIO_IMAGE" >/dev/null 2>&1; then
+            for attempt in 1 2; do
+              if timeout 600 docker pull "$CI_MINIO_IMAGE"; then
+                break
+              fi
+              if [ "$attempt" = "2" ]; then
+                echo "::error::MinIO image pull failed after two attempts."
+                exit 1
+              fi
+              echo "::warning::MinIO image pull failed; retrying in 30 seconds."
+              sleep 30
+            done
+          fi
           docker run --detach --name kb-ci-minio \
             --publish 9000:9000 \
             --env MINIO_ROOT_USER=minioadmin \
@@ -188,6 +208,8 @@ jobs:
         run: pnpm test:concurrency
       - name: Fault tests
         run: pnpm test:fault
+      - name: Security tests
+        run: pnpm test:security
       - name: Stop test containers
         if: always()
         run: docker rm --force kb-ci-mongo kb-ci-minio >/dev/null 2>&1 || true
@@ -195,7 +217,7 @@ jobs:
   e2e:
     name: e2e
     runs-on: ubuntu-24.04
-    timeout-minutes: 35
+    timeout-minutes: 45
     services:
       redis:
         image: redis:7.2-alpine
@@ -239,7 +261,17 @@ jobs:
         run: pnpm install --frozen-lockfile --prefer-offline
       - name: Start and initialize Mongo replica set
         run: |
-          timeout 180 docker pull "$CI_MONGO_IMAGE"
+          for attempt in 1 2 3; do
+            if timeout 180 docker pull "$CI_MONGO_IMAGE"; then
+              break
+            fi
+            if [ "$attempt" = "3" ]; then
+              echo "::error::Mongo image pull failed after three attempts."
+              exit 1
+            fi
+            echo "::warning::Mongo image pull failed; retrying."
+            sleep 5
+          done
           docker run --detach --name kb-ci-mongo \
             --publish 27017:27017 \
             "$CI_MONGO_IMAGE" --replSet rs0 --bind_ip_all
@@ -278,7 +310,19 @@ jobs:
           exit 1
       - name: Start MinIO
         run: |
-          timeout 600 docker pull "$CI_MINIO_IMAGE"
+          if ! docker image inspect "$CI_MINIO_IMAGE" >/dev/null 2>&1; then
+            for attempt in 1 2; do
+              if timeout 600 docker pull "$CI_MINIO_IMAGE"; then
+                break
+              fi
+              if [ "$attempt" = "2" ]; then
+                echo "::error::MinIO image pull failed after two attempts."
+                exit 1
+              fi
+              echo "::warning::MinIO image pull failed; retrying in 30 seconds."
+              sleep 30
+            done
+          fi
           docker run --detach --name kb-ci-minio \
             --publish 9000:9000 \
             --env MINIO_ROOT_USER=minioadmin \
@@ -308,6 +352,14 @@ jobs:
             echo "::warning::Chromium headless shell installation failed; retrying."
             sleep 5
           done
+      - name: Build application
+        run: pnpm build
+      - name: Build worker
+        run: pnpm build:workers
+      - name: Verify e2e build artifacts
+        run: |
+          test -s projects/app/.next/BUILD_ID
+          test -s projects/app/dist/workers/worker.mjs
       - name: End-to-end tests
         run: pnpm test:e2e
       - name: Stop test containers
