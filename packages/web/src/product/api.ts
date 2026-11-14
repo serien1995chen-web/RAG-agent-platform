@@ -368,12 +368,23 @@ export function downloadSource(sourceId: string) {
 }
 
 export function archiveSources(spaceId: string, sourceIds: string[]) {
-  return knowledgeRequest<FileTicket>(
+  return knowledgeRequest<Job>(
     `/v1/knowledge/spaces/${encodeURIComponent(spaceId)}/source-archives`,
     {
       method: 'POST',
       idempotencyKey: key(),
       body: { sourceIds },
+    },
+  );
+}
+
+export function downloadFileTicket(blobId: string) {
+  return knowledgeRequest<FileTicket>(
+    `/v1/knowledge/files/${encodeURIComponent(blobId)}/download`,
+    {
+      method: 'POST',
+      idempotencyKey: key(),
+      body: { ttlSeconds: 300 },
     },
   );
 }
