@@ -757,6 +757,7 @@ describe('L1-B07 OPS-004 archive lifecycle reconciliation', () => {
       await page.getByRole('button', { name: '批量下载' }).click();
       await page.waitForTimeout(2_000);
       await page.screenshot({ path: join(resultDir, 'archive-ui-after-click.png') });
+      await expect(downloadPromise).resolves.toBeTruthy();
       await writeFile(
         join(resultDir, 'archive-ui-network.json'),
         `${JSON.stringify(
@@ -764,13 +765,12 @@ describe('L1-B07 OPS-004 archive lifecycle reconciliation', () => {
             pagePath: new URL(page.url()).pathname,
             selectedSourceIds: [first.id, second.id],
             archiveResponses,
-            downloadObserved: false,
+            downloadObserved: true,
           },
           null,
           2,
         )}\n`,
       );
-      await expect(downloadPromise).resolves.toBeTruthy();
       expect(new URL(page.url()).pathname).toBe('/dataset/detail');
       await page.screenshot({ path: join(resultDir, 'archive-ui-download.png') });
     } finally {
