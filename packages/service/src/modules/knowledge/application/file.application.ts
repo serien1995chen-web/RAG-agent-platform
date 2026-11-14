@@ -972,6 +972,9 @@ export class FileApplication {
     if (!unboundQueryImage) {
       authorization = await this.assertFileReadable(ref, context);
     }
+    if (ticket) {
+      await this.tickets!.consume(ticket, context.requestId, context.traceId);
+    }
     const object = await this.objectStore.getObject(
       this.objectStore.bucket,
       ref.objectKey,

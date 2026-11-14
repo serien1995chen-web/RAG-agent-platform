@@ -1,4 +1,4 @@
-import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
+import { createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import { createKnowledgeError } from '@kb/contracts';
 
 export type FileTicketDisposition = 'inline' | 'attachment';
@@ -22,6 +22,28 @@ export interface FileTicketResult {
   expiresAt: string;
 }
 
+export interface FileTicketAtomicStore {
+  consumeOnce(key: string, ttlMs: number): Promise<boolean>;
+}
+
+class InMemoryFileTicketAtomicStore implements FileTicketAtomicStore {
+  private readonly consumed = new Map<string, number>();
+
+  async consumeOnce(key: string, ttlMs: number): Promise<boolean> {
+    const now = Date.now();
+    for (const [candidate, expiresAt] of this.consumed) {
+      if (expiresAt <= now) this.consumed.delete(candidate);
+    }
+    if ((this.consumed.get(key) ?? 0) > now) return false;
+    this.consumed.set(key, now + ttlMs);
+    return true;
+  }
+}
+
+function ticketConsumeKey(ticket: string): string {
+  return `ticket:${createHash('sha256').update(ticket).digest('hex')}`;
+}
+
 function base64url(value: string | Buffer): string {
   return Buffer.from(value).toString('base64url');
 }
@@ -43,6 +65,7 @@ export class FileTicketService {
     secretRefValue: string,
     publicBaseUrl: string,
     private readonly now: () => number = Date.now,
+    private readonly atomicStore: FileTicketAtomicStore = new InMemoryFileTicketAtomicStore(),
   ) {
     if (secretRefValue.length < 32) {
       throw ticketError('KNOWLEDGE_VALIDATION_FAILED', 'config', 'config', {
@@ -143,6 +166,33 @@ export class FileTicketService {
     if (Date.parse(claims.expiresAt) <= this.now()) {
       throw ticketError('KNOWLEDGE_FORBIDDEN', requestId, traceId, {
         reason: 'ticket_expired',
+      });
+    }
+    return claims;
+  }
+
+  async consume(ticket: string, requestId: string, traceId: string): Promise<FileTicketClaims> {
+    const claims = this.verify(ticket, requestId, traceId);
+    const remainingMs = Date.parse(claims.expiresAt) - this.now();
+    if (remainingMs <= 0) {
+      throw ticketError('KNOWLEDGE_FORBIDDEN', requestId, traceId, {
+        reason: 'ticket_expired',
+      });
+    }
+    let consumed: boolean;
+    try {
+      consumed = await this.atomicStore.consumeOnce(ticketConsumeKey(ticket), remainingMs);
+    } catch {
+      throw createKnowledgeError({
+        code: 'KNOWLEDGE_DEPENDENCY_UNAVAILABLE',
+        requestId,
+        traceId,
+        details: { dependency: 'redis', operation: 'file_ticket_consume' },
+      });
+    }
+    if (!consumed) {
+      throw ticketError('KNOWLEDGE_FORBIDDEN', requestId, traceId, {
+        reason: 'ticket_consumed',
       });
     }
     return claims;

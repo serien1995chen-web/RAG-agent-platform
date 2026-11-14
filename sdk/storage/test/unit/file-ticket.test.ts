@@ -74,4 +74,42 @@ describe('file ticket service', () => {
       }),
     );
   });
+
+  it('atomically consumes a valid ticket once', async () => {
+    const service = new FileTicketService(
+      'file-ticket-secret-that-is-at-least-32-bytes',
+      'https://knowledge.example.invalid',
+    );
+    const issued = service.issue(
+      {
+        workspaceId: 'ws_ticket',
+        memberId: 'mem_ticket',
+        isWorkspaceOwner: false,
+        scopes: ['knowledge:read'],
+        blobId: '65f1e5b2a1c9d4b7e8f09abc',
+        sourceId: null,
+        knowledgeSpaceId: '65f1e5b2a1c9d4b7e8f01234',
+        disposition: 'attachment',
+        ttlSeconds: 60,
+      },
+      'request-ticket',
+      'trace-ticket',
+    );
+    await expect(
+      service.consume(issued.ticket, 'request-ticket', 'trace-ticket'),
+    ).resolves.toMatchObject({
+      workspaceId: 'ws_ticket',
+      memberId: 'mem_ticket',
+    });
+    await expect(
+      service.consume(issued.ticket, 'request-ticket', 'trace-ticket'),
+    ).rejects.toMatchObject({
+      problem: {
+        error: {
+          code: 'KNOWLEDGE_FORBIDDEN',
+          details: { reason: 'ticket_consumed' },
+        },
+      },
+    });
+  });
 });

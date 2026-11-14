@@ -665,6 +665,7 @@ export interface FileTicketPort {
     traceId: string,
   ): { url: string; ticket: string; expiresAt: string };
   verify(ticket: string, requestId: string, traceId: string): FileTicketClaims;
+  consume(ticket: string, requestId: string, traceId: string): Promise<FileTicketClaims>;
 }
 
 export interface FileBinaryResult {

@@ -122,7 +122,10 @@ import {
   type TenantContext,
 } from '@kb/service';
 import { mergeExpansions } from '@kb/search';
-import { FileTicketService } from '../../../../sdk/storage/src/file-ticket';
+import {
+  FileTicketService,
+  type FileTicketAtomicStore,
+} from '../../../../sdk/storage/src/file-ticket';
 import { MinioKnowledgeObjectStore } from '../../../../sdk/storage/src/providers/minio';
 import {
   createDefaultDocumentParser,
@@ -176,6 +179,23 @@ interface TelemetryKnowledgeApiRuntime extends KnowledgeApiRuntime {
 }
 
 let runtimePromise: Promise<TelemetryKnowledgeApiRuntime> | undefined;
+
+class RedisFileTicketAtomicStore implements FileTicketAtomicStore {
+  constructor(
+    private readonly redis: Awaited<ReturnType<typeof createKnowledgeConnections>>['redis'],
+  ) {}
+
+  async consumeOnce(key: string, ttlMs: number): Promise<boolean> {
+    const result = await this.redis.set(
+      `kb:file-ticket:${key}`,
+      'consumed',
+      'PX',
+      Math.max(1, ttlMs),
+      'NX',
+    );
+    return result === 'OK';
+  }
+}
 
 function timeout<T>(promise: Promise<T>, timeoutMs: number, name: string): Promise<T> {
   let timer: NodeJS.Timeout | undefined;
@@ -434,6 +454,8 @@ async function bootstrapRuntime(): Promise<TelemetryKnowledgeApiRuntime> {
   const fileTickets = new FileTicketService(
     resolveSecretRef(config.fileTicketSecretRef),
     config.filePublicBaseUrl,
+    Date.now,
+    new RedisFileTicketAtomicStore(redis),
   );
   const imageTickets = new S8FileTicketAdapter(fileTickets);
   const imageIndexes = new S8ImageIndexRepository(mongo);

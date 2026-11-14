@@ -692,6 +692,36 @@ describe('L1-B07 OPS-004 archive lifecycle reconciliation', () => {
     expect(second.status).toBe(403);
   }, 180_000);
 
+  it('L1-B07-FILE-004-C02 allows only one concurrent ticket consumer', async () => {
+    const source = await uploadSource(`ticket-race-${suffix}.txt`, 'ticket race is single winner');
+    const job = await archiveSources([source.id]);
+    const blobId = job.result?.objectBlobRefId;
+    expect(blobId).toBeTypeOf('string');
+    const ticket = await api<{ url: string; expiresAt: string }>(
+      `/v1/knowledge/files/${blobId}/download`,
+      'POST',
+      { ttlSeconds: 300 },
+    );
+    const cookieHeader = `${cookie.name}=${cookie.value}`;
+    const responses = await Promise.all([
+      fetch(ticket.url, { headers: { cookie: cookieHeader } }),
+      fetch(ticket.url, { headers: { cookie: cookieHeader } }),
+    ]);
+    await Promise.all(responses.map((response) => response.arrayBuffer()));
+    await writeFile(
+      join(resultDir, 'ticket-concurrent-consumers.json'),
+      `${JSON.stringify(
+        {
+          statuses: responses.map((response) => response.status).sort(),
+          expiresAt: ticket.expiresAt,
+        },
+        null,
+        2,
+      )}\n`,
+    );
+    expect(responses.map((response) => response.status).sort()).toEqual([200, 403]);
+  }, 180_000);
+
   it('L1-B07-FILE-004-UI01 downloads the selected Sources without leaving the list', async () => {
     const first = await uploadSource(`ui-archive-a-${suffix}.txt`, 'ui archive a');
     const second = await uploadSource(`ui-archive-b-${suffix}.txt`, 'ui archive b');
