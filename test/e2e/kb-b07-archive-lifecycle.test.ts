@@ -494,8 +494,12 @@ describe('L1-B07 OPS-004 archive lifecycle reconciliation', () => {
       `${JSON.stringify(
         {
           cleanupJobId: cleanupJob.jobId,
+          cleanupTraceId: cleanup.payload.traceId,
+          cleanupRequestId: cleanup.payload.requestId,
           cleanupResult: cleanupJob.result,
           reconcileJobId: reconcileJob.jobId,
+          reconcileTraceId: reconcile.payload.traceId,
+          reconcileRequestId: reconcile.payload.requestId,
           reconcileResult: reconcileJob.result,
           expected: { scanned: 2, missing: 1 },
           actual: objectResult,
@@ -632,6 +636,8 @@ describe('L1-B07 OPS-004 archive lifecycle reconciliation', () => {
       `${JSON.stringify(
         {
           jobId: reconcileJob.jobId,
+          traceId: reconcile.payload.traceId,
+          requestId: reconcile.payload.requestId,
           blobId,
           physicalObjectSize: headBefore.size,
           stateBefore: artifact?.state,
@@ -656,11 +662,14 @@ describe('L1-B07 OPS-004 archive lifecycle reconciliation', () => {
     const job = await archiveSources([source.id]);
     const blobId = job.result?.objectBlobRefId;
     expect(blobId).toBeTypeOf('string');
-    const ticket = await api<{ url: string; expiresAt: string }>(
+    const ticketResponse = await request<{ url: string; expiresAt: string }>(
       `/v1/knowledge/files/${blobId}/download`,
       'POST',
       { ttlSeconds: 300 },
     );
+    expect(ticketResponse.status).toBe(200);
+    expect(ticketResponse.payload.success).toBe(true);
+    const ticket = ticketResponse.payload.data!;
     const cookieHeader = `${cookie.name}=${cookie.value}`;
     const first = await fetch(ticket.url, { headers: { cookie: cookieHeader } });
     expect(first.status).toBe(200);
@@ -669,7 +678,13 @@ describe('L1-B07 OPS-004 archive lifecycle reconciliation', () => {
     await writeFile(
       join(resultDir, 'ticket-reuse-status.json'),
       `${JSON.stringify(
-        { first: first.status, second: second.status, expiresAt: ticket.expiresAt },
+        {
+          first: first.status,
+          second: second.status,
+          expiresAt: ticket.expiresAt,
+          traceId: ticketResponse.payload.traceId,
+          requestId: ticketResponse.payload.requestId,
+        },
         null,
         2,
       )}\n`,
