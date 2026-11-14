@@ -137,16 +137,15 @@ function parseMetadata(
 
 function csvRows(input: ParseImportTemplateInput, requestId: string, traceId: string): unknown[][] {
   const Papa = load('papaparse') as unknown as PapaModule;
-  const parsed = Papa.parse<unknown[]>(decodeUtf8(input.bytes, requestId, traceId), {
-    skipEmptyLines: 'greedy',
-  });
-  if (parsed.errors.length > 0) {
+  const parsed = Papa.parse<unknown[]>(decodeUtf8(input.bytes, requestId, traceId));
+  const structuralErrors = parsed.errors.filter((error) => error.code !== 'UndetectableDelimiter');
+  if (structuralErrors.length > 0) {
     fail(
       requestId,
       traceId,
       'KNOWLEDGE_UNSUPPORTED_CONTENT',
       null,
-      parsed.errors[0]?.code ?? 'csv_parse_failed',
+      structuralErrors[0]?.code ?? 'csv_parse_failed',
     );
   }
   return parsed.data;
@@ -159,10 +158,28 @@ function xlsxRows(
 ): unknown[][] {
   try {
     const workbook = XLSX.read(input.bytes, { type: 'array', cellFormula: true });
+    if (workbook.SheetNames.length !== 1) {
+      return fail(
+        requestId,
+        traceId,
+        'KNOWLEDGE_UNSUPPORTED_CONTENT',
+        null,
+        'exactly_one_worksheet_required',
+      );
+    }
     const sheetName = workbook.SheetNames[0];
     if (!sheetName) return [];
     const sheet = workbook.Sheets[sheetName];
     if (!sheet) return [];
+    if ((sheet['!merges']?.length ?? 0) > 0) {
+      return fail(
+        requestId,
+        traceId,
+        'KNOWLEDGE_UNSUPPORTED_CONTENT',
+        null,
+        'merged_cells_forbidden',
+      );
+    }
     for (const [address, cell] of Object.entries(sheet)) {
       if (address.startsWith('!')) continue;
       const value = cell as { f?: string };
@@ -192,13 +209,7 @@ export function parseImportTemplate(
   input: ParseImportTemplateInput & { requestId: string; traceId: string },
 ): ImportTemplateResult {
   const extension = input.fileName.split('.').pop()?.toLowerCase();
-  const format =
-    extension === 'csv' || input.mimeType === 'text/csv'
-      ? 'csv'
-      : extension === 'xlsx' ||
-          input.mimeType === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-        ? 'xlsx'
-        : null;
+  const format = extension === 'csv' ? 'csv' : extension === 'xlsx' ? 'xlsx' : null;
   if (!format) {
     return fail(
       input.requestId,
@@ -206,6 +217,30 @@ export function parseImportTemplate(
       'KNOWLEDGE_UNSUPPORTED_CONTENT',
       null,
       'csv_or_xlsx_required',
+    );
+  }
+  const zipMagic =
+    input.bytes.byteLength >= 4 &&
+    input.bytes[0] === 0x50 &&
+    input.bytes[1] === 0x4b &&
+    input.bytes[2] === 0x03 &&
+    input.bytes[3] === 0x04;
+  if (format === 'csv' && zipMagic) {
+    return fail(
+      input.requestId,
+      input.traceId,
+      'KNOWLEDGE_UNSUPPORTED_CONTENT',
+      null,
+      'csv_content_required',
+    );
+  }
+  if (format === 'xlsx' && !zipMagic) {
+    return fail(
+      input.requestId,
+      input.traceId,
+      'KNOWLEDGE_UNSUPPORTED_CONTENT',
+      null,
+      'xlsx_container_required',
     );
   }
   const rows =
@@ -222,9 +257,7 @@ export function parseImportTemplate(
     );
   }
   const headers = (rows[0] ?? []).map(normalizeHeader);
-  const required = input.backup
-    ? ['q', 'a', 'index', 'metadata', 'schemaVersion'.toLowerCase()]
-    : ['q', 'a'];
+  const required = ['q', 'a'];
   if (headers.length > IMPORT_TEMPLATE_LIMITS.maxColumns) {
     return fail(
       input.requestId,
@@ -244,10 +277,21 @@ export function parseImportTemplate(
       `missing_headers:${missing.join(',')}`,
     );
   }
+  const allowedHeaders = new Set(['q', 'a', 'index', 'indexes', 'metadata', 'schemaversion']);
+  const unknownHeader = headers.find((header) => !allowedHeaders.has(header));
+  if (unknownHeader !== undefined) {
+    return fail(
+      input.requestId,
+      input.traceId,
+      'KNOWLEDGE_UNSUPPORTED_CONTENT',
+      1,
+      `unknown_header:${unknownHeader}`,
+    );
+  }
   const seen = new Set<string>();
   for (const header of headers) {
     if (!header) continue;
-    if (seen.has(header) && header !== 'index') {
+    if (seen.has(header) && header !== 'index' && header !== 'indexes') {
       return fail(
         input.requestId,
         input.traceId,
@@ -281,15 +325,32 @@ export function parseImportTemplate(
       'max_non_empty_cells_exceeded',
     );
   }
-  const indexesOf = (value: unknown): string[] =>
-    String(value ?? '')
-      .split(/[|,]/)
+  const questionColumn = headers.indexOf('q');
+  const answerColumn = headers.indexOf('a');
+  const metadataColumn = headers.indexOf('metadata');
+  const schemaVersionColumn = headers.indexOf('schemaversion');
+  const indexColumns = headers.flatMap((header, column) =>
+    header === 'index' || header === 'indexes' ? [column] : [],
+  );
+  const legacyIndexesStart =
+    metadataColumn < 0 &&
+    schemaVersionColumn < 0 &&
+    indexColumns.length === 1 &&
+    headers[indexColumns[0]!] === 'indexes'
+      ? indexColumns[0]
+      : undefined;
+  const indexesOf = (row: unknown[]): string[] =>
+    (legacyIndexesStart === undefined
+      ? indexColumns.map((column) => row[column])
+      : row.slice(legacyIndexesStart)
+    )
+      .flatMap((value) => String(value ?? '').split(/[|,]/))
       .map((entry) => entry.trim())
       .filter(Boolean);
   const parsedRows: ImportTemplateRow[] = [];
-  const primaryKeys = new Set<string>();
   for (const [index, row] of body.entries()) {
     const rowNumber = index + 2;
+    if (row.every((cell) => String(cell ?? '').trim() === '')) continue;
     if (row.some(isFormulaInjection)) {
       return fail(
         input.requestId,
@@ -299,30 +360,12 @@ export function parseImportTemplate(
         'formula_cell_forbidden',
       );
     }
-    const cells = Object.fromEntries(headers.map((header, column) => [header, row[column]]));
-    const question = String(cells.q ?? '').trim();
-    const answer = String(cells.a ?? '').trim();
-    if (!question) {
-      return fail(
-        input.requestId,
-        input.traceId,
-        'KNOWLEDGE_UNSUPPORTED_CONTENT',
-        rowNumber,
-        'empty_question',
-      );
-    }
-    if (primaryKeys.has(question)) {
-      return fail(
-        input.requestId,
-        input.traceId,
-        'KNOWLEDGE_UNSUPPORTED_CONTENT',
-        rowNumber,
-        'duplicate_primary_key',
-      );
-    }
-    primaryKeys.add(question);
-    const schemaText = String(cells.schemaversion ?? '').trim();
-    if (input.backup && schemaText === '') {
+    const question = String(row[questionColumn] ?? '').trim();
+    const answer = String(row[answerColumn] ?? '').trim();
+    if (!question && !answer) continue;
+    const schemaText =
+      schemaVersionColumn >= 0 ? String(row[schemaVersionColumn] ?? '').trim() : '';
+    if (schemaVersionColumn >= 0 && schemaText === '') {
       return fail(
         input.requestId,
         input.traceId,
@@ -331,8 +374,8 @@ export function parseImportTemplate(
         'schema_version_required',
       );
     }
-    const schemaVersion = Number(schemaText);
-    if (input.backup && (!Number.isInteger(schemaVersion) || schemaVersion !== 1)) {
+    const schemaVersion = schemaVersionColumn >= 0 ? Number(schemaText) : 1;
+    if (schemaVersionColumn >= 0 && (!Number.isInteger(schemaVersion) || schemaVersion !== 1)) {
       return fail(
         input.requestId,
         input.traceId,
@@ -345,9 +388,9 @@ export function parseImportTemplate(
       rowNumber,
       question,
       answer,
-      indexes: indexesOf(cells.index),
+      indexes: indexesOf(row),
       metadata: parseMetadata(
-        String(cells.metadata ?? ''),
+        metadataColumn >= 0 ? String(row[metadataColumn] ?? '') : '',
         rowNumber,
         input.requestId,
         input.traceId,

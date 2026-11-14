@@ -340,7 +340,7 @@ export interface JobPort {
       spaceId: string;
       sourceIds: string[];
       idempotencyKey: string;
-      format?: 'zip';
+      format?: 'zip' | 'csv';
       exportScope?: 'sources' | 'space';
       sourceVersions?: Record<string, number>;
     },

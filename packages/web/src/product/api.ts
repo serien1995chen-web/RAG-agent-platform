@@ -206,11 +206,11 @@ export function batchSpaces(
   });
 }
 
-export function exportSpace(spaceId: string) {
+export function exportSpace(spaceId: string, format: 'zip' | 'csv' = 'zip') {
   return knowledgeRequest<Job>(`/v1/knowledge/spaces/${encodeURIComponent(spaceId)}/exports`, {
     method: 'POST',
     idempotencyKey: key(),
-    body: { format: 'zip' },
+    body: { format },
   });
 }
 
@@ -920,6 +920,48 @@ export function importTemplate(
   );
 }
 
+export interface ImportTemplatePreview {
+  format: 'csv' | 'xlsx';
+  headers: string[];
+  rowCount: number;
+  rows: Array<{
+    rowNumber: number;
+    question: string;
+    answer: string;
+    indexes: string[];
+    metadata: Record<string, unknown>;
+    schemaVersion: number;
+  }>;
+  conflicts?: Array<{
+    rowNumber: number;
+    existingSourceId: string;
+    existingVersion: number;
+  }>;
+  actions?: Array<{
+    rowNumber: number;
+    action: 'create' | 'fail' | 'skip' | 'overwrite';
+  }>;
+  truncated: boolean;
+}
+
+export function previewImportTemplate(
+  spaceId: string,
+  input: { uploadId: string; directoryId?: string | null },
+) {
+  return knowledgeRequest<ImportTemplatePreview>(
+    `/v1/knowledge/spaces/${encodeURIComponent(spaceId)}/imports/template`,
+    {
+      method: 'POST',
+      idempotencyKey: key(),
+      body: {
+        uploadId: input.uploadId,
+        directoryId: input.directoryId ?? null,
+        previewOnly: true,
+      },
+    },
+  );
+}
+
 export function importBackup(
   spaceId: string,
   input: {
@@ -938,6 +980,30 @@ export function importBackup(
         uploadId: input.uploadId,
         directoryId: input.directoryId ?? null,
         dryRun: input.dryRun,
+        conflictStrategy: input.conflictStrategy,
+      },
+    },
+  );
+}
+
+export function previewImportBackup(
+  spaceId: string,
+  input: {
+    uploadId: string;
+    directoryId?: string | null;
+    conflictStrategy: 'fail' | 'skip' | 'overwrite';
+  },
+) {
+  return knowledgeRequest<ImportTemplatePreview>(
+    `/v1/knowledge/spaces/${encodeURIComponent(spaceId)}/imports/backup`,
+    {
+      method: 'POST',
+      idempotencyKey: key(),
+      body: {
+        uploadId: input.uploadId,
+        directoryId: input.directoryId ?? null,
+        previewOnly: true,
+        dryRun: false,
         conflictStrategy: input.conflictStrategy,
       },
     },

@@ -21,6 +21,13 @@ const XLSX = createRequire(new URL('../../packages/parse/package.json', import.m
   write(workbook: unknown, options: { type: 'array'; bookType: 'xlsx' }): ArrayBuffer;
 };
 
+const Redis = createRequire(new URL('../../packages/dal/package.json', import.meta.url))(
+  'ioredis',
+) as new (url: string) => {
+  flushdb(): Promise<unknown>;
+  quit(): Promise<unknown>;
+};
+
 const root = resolve(import.meta.dirname, '../..');
 const runId =
   process.env.KB_B08_RUN_ID?.trim() ||
@@ -33,6 +40,7 @@ const suffix = randomUUID().replaceAll('-', '').slice(0, 12);
 const workspaceId = `ws_b08_e2e_${suffix}`;
 const memberId = `mem_b08_e2e_${suffix}`;
 const authToken = `b08-e2e-${suffix}`;
+const b08RedisUrl = process.env.KB_B08_TEST_REDIS_URL?.trim() || 'redis://127.0.0.1:6379/14';
 
 let app: B06aAppHarness;
 let browser: Browser;
@@ -112,6 +120,22 @@ async function waitForJob(jobId: string, timeoutMs = 120_000): Promise<Record<st
   return last;
 }
 
+async function jobFailureEvidence(job: Record<string, unknown>): Promise<string> {
+  const childIds = Array.isArray((job.result as Record<string, unknown> | undefined)?.childJobIds)
+    ? ((job.result as { childJobIds: unknown[] }).childJobIds || []).map(String)
+    : [];
+  const children = await Promise.all(
+    childIds.map((childId) => api<Record<string, unknown>>(`/v1/knowledge/jobs/${childId}`, 'GET')),
+  );
+  return JSON.stringify({ job, children });
+}
+
+async function expectJobSucceeded(job: Record<string, unknown>) {
+  expect(job.status, job.status === 'succeeded' ? undefined : await jobFailureEvidence(job)).toBe(
+    'succeeded',
+  );
+}
+
 async function listSources(): Promise<
   Array<{ id: string; name: string; kind: string; processingStatus: string }>
 > {
@@ -177,7 +201,7 @@ function xlsxBytes(): Uint8Array {
     workbook,
     XLSX.utils.aoa_to_sheet([
       ['q', 'a', 'index', 'metadata'],
-      ['表格问题', '表格答案', '表格索引', { source: 'xlsx' }],
+      ['表格问题', '表格答案', '表格索引', '{"source":"xlsx"}'],
     ]),
     'QA',
   );
@@ -187,6 +211,15 @@ function xlsxBytes(): Uint8Array {
 async function recordFixture(name: string, bytes: Uint8Array): Promise<string> {
   await writeFile(join(resultDir, name), bytes);
   return createHash('sha256').update(bytes).digest('hex');
+}
+
+async function flushB08Redis(url: string): Promise<void> {
+  const redis = new Redis(url);
+  try {
+    await redis.flushdb();
+  } finally {
+    await redis.quit();
+  }
 }
 
 async function openTemplateImport(page: Awaited<ReturnType<Browser['newPage']>>) {
@@ -199,8 +232,9 @@ async function openTemplateImport(page: Awaited<ReturnType<Browser['newPage']>>)
 }
 
 beforeAll(async () => {
+  // Keep B08 queue traffic isolated from other E2E files that may leave workers draining their queues.
+  await flushB08Redis(b08RedisUrl);
   process.env.KB_TEST_MONGO_URI ??= 'mongodb://127.0.0.1:27017/kb_b08_e2e?replicaSet=rs0';
-  process.env.KB_TEST_REDIS_URL ??= 'redis://127.0.0.1:6379/0';
   process.env.KB_TEST_PG_URL ??= 'postgresql://kb:kb_dev_password@127.0.0.1:5432/kb';
   process.env.KB_TEST_S3_ENDPOINT ??= 'http://127.0.0.1:9000';
   process.env.KB_TEST_S3_REGION ??= 'us-east-1';
@@ -231,7 +265,14 @@ beforeAll(async () => {
     join(resultDir, 'fixtures.json'),
     `${JSON.stringify({ runId, suffix, fixtures: fixtureHashes }, null, 2)}\n`,
   );
-  app = await startB06aApp({ suffix, workspaceId, memberId, authToken, withWorker: true });
+  app = await startB06aApp({
+    suffix,
+    workspaceId,
+    memberId,
+    authToken,
+    withWorker: true,
+    redisUrl: b08RedisUrl,
+  });
   cookie = await consoleCookie({ baseUrl: app.baseUrl, authToken, workspaceId });
   const space = await api<{ id: string }>('/v1/knowledge/spaces', 'POST', {
     kind: 'space',
@@ -262,6 +303,7 @@ afterAll(async () => {
     await writeFile(join(resultDir, 'app-and-worker.log'), `${app.output()}\n`);
   }
   await app?.close();
+  await flushB08Redis(b08RedisUrl);
 }, 60_000);
 
 describe('TEST-ING-004-BLOCK and TEST-ING-005-BLOCK with the real Worker', () => {
@@ -294,7 +336,7 @@ describe('TEST-ING-004-BLOCK and TEST-ING-005-BLOCK with the real Worker', () =>
       expect(submitted.response.status, JSON.stringify(submitted.payload)).toBe(202);
       const jobId = String((submitted.payload.data as { jobId?: string } | undefined)?.jobId ?? '');
       const job = await waitForJob(jobId);
-      expect(job.status, JSON.stringify(job)).toBe('succeeded');
+      await expectJobSucceeded(job);
       const imported = (await listSources()).find((source) => source.name.includes(name));
       expect(imported).toBeTruthy();
       const segments = await listSegments(imported!.id);
@@ -305,9 +347,18 @@ describe('TEST-ING-004-BLOCK and TEST-ING-005-BLOCK with the real Worker', () =>
         answer: name.endsWith('.csv') ? '第一答案,含逗号' : '表格答案',
         metadata: { source: name.endsWith('.csv') ? 'csv' : 'xlsx' },
       });
-      expect(segments[0]?.indexes.map((index) => index.text)).toEqual([
-        name.endsWith('.csv') ? '索引一' : '表格索引',
-      ]);
+      expect(
+        segments[0]?.indexes.filter((index) => index.type === 'custom').map((index) => index.text),
+      ).toEqual([name.endsWith('.csv') ? '索引一' : '表格索引']);
+      expect(
+        await connection.models.KnowledgeObjectRef.countDocuments({
+          workspaceId,
+          knowledgeSpaceId: spaceId,
+          purpose: 'source',
+          sourceId: null,
+          state: 'active',
+        }),
+      ).toBe(0);
     },
     150_000,
   );
@@ -347,17 +398,30 @@ describe('TEST-ING-004-BLOCK and TEST-ING-005-BLOCK with the real Worker', () =>
       (restored.payload.data as { jobId?: string } | undefined)?.jobId ?? '',
     );
     const restoreJob = await waitForJob(restoreJobId);
-    expect(restoreJob.status, JSON.stringify(restoreJob)).toBe('succeeded');
+    await expectJobSucceeded(restoreJob);
     const source = (await listSources()).find((entry) => entry.name === '备份问题');
     expect(source).toBeTruthy();
-    expect(await listSegments(source!.id)).toEqual([
-      expect.objectContaining({
-        question: '备份问题',
-        answer: '备份答案',
-        metadata: { source: 'backup' },
-        indexes: [expect.objectContaining({ text: '备份索引' })],
+    const restoredSegments = await listSegments(source!.id);
+    expect(restoredSegments).toHaveLength(1);
+    expect(restoredSegments[0]).toMatchObject({
+      question: '备份问题',
+      answer: '备份答案',
+      metadata: { source: 'backup' },
+    });
+    expect(
+      restoredSegments[0]?.indexes
+        .filter((index) => index.type === 'custom')
+        .map((index) => index.text),
+    ).toEqual(['备份索引']);
+    expect(
+      await connection.models.KnowledgeObjectRef.countDocuments({
+        workspaceId,
+        knowledgeSpaceId: spaceId,
+        purpose: 'source',
+        sourceId: null,
+        state: 'active',
       }),
-    ]);
+    ).toBe(0);
   }, 150_000);
 
   it('TEST-X-BACKUP-RESTORE exports a product artifact that the product backup entry can restore', async () => {
@@ -378,10 +442,10 @@ describe('TEST-ING-004-BLOCK and TEST-ING-005-BLOCK with the real Worker', () =>
     const exported = await api<{ jobId: string }>(
       `/v1/knowledge/spaces/${spaceId}/exports`,
       'POST',
-      { format: 'zip', sourceIds: [source.id] },
+      { format: 'csv', sourceIds: [source.id] },
     );
     const exportJob = await waitForJob(exported.jobId);
-    expect(exportJob.status, JSON.stringify(exportJob)).toBe('succeeded');
+    await expectJobSucceeded(exportJob);
     const blobId = (exportJob.result as { objectBlobRefId?: string } | undefined)?.objectBlobRefId;
     expect(blobId).toBeTruthy();
     const ticket = await api<{ url: string }>(
@@ -399,18 +463,18 @@ describe('TEST-ING-004-BLOCK and TEST-ING-005-BLOCK with the real Worker', () =>
     await archivePage.evaluate((url) => {
       const anchor = document.createElement('a');
       anchor.href = url;
-      anchor.download = 'product-backup.zip';
+      anchor.download = 'product-backup.csv';
       document.body.appendChild(anchor);
       anchor.click();
       anchor.remove();
     }, ticket.url);
-    const archivePath = join(resultDir, `product-backup-${suffix}.zip`);
+    const archivePath = join(resultDir, `product-backup-${suffix}.csv`);
     await (await downloaded).saveAs(archivePath);
     const archiveBytes = await readFile(archivePath);
     await archiveContext.close();
     const archived = await uploadFile({
-      name: `product-backup-${suffix}.zip`,
-      mimeType: 'application/zip',
+      name: `product-backup-${suffix}.csv`,
+      mimeType: 'text/csv',
       bytes: new Uint8Array(archiveBytes),
     });
     expect(archived.completeStatus).toBe(200);
@@ -420,7 +484,34 @@ describe('TEST-ING-004-BLOCK and TEST-ING-005-BLOCK with the real Worker', () =>
       dryRun: true,
       conflictStrategy: 'fail',
     });
-    expect(restored.response.status).toBe(202);
+    expect(restored.response.status, JSON.stringify(restored.payload)).toBe(202);
+    const dryRunJobId = String(
+      (restored.payload.data as { jobId?: string } | undefined)?.jobId ?? '',
+    );
+    const dryRunJob = await waitForJob(dryRunJobId);
+    expect(dryRunJob).toMatchObject({ status: 'succeeded', result: { dryRun: true } });
+
+    const actual = await rawApi(`/v1/knowledge/spaces/${spaceId}/imports/backup`, 'POST', {
+      uploadId: archived.uploadId,
+      directoryId: null,
+      dryRun: false,
+      conflictStrategy: 'fail',
+    });
+    expect(actual.response.status, JSON.stringify(actual.payload)).toBe(202);
+    const actualJobId = String(
+      (actual.payload.data as { jobId?: string } | undefined)?.jobId ?? '',
+    );
+    const actualJob = await waitForJob(actualJobId);
+    await expectJobSucceeded(actualJob);
+    const restoredSource = (await listSources()).find((entry) => entry.name === '往返问题');
+    expect(restoredSource).toBeTruthy();
+    expect(await listSegments(restoredSource!.id)).toEqual([
+      expect.objectContaining({
+        question: '往返问题',
+        answer: '往返答案',
+        metadata: { source: 'roundtrip' },
+      }),
+    ]);
   }, 180_000);
 
   it('L1-B08-ING-004-UI01 exposes template download, structured preview and accessibility', async () => {
@@ -475,6 +566,7 @@ describe('TEST-ING-004-BLOCK and TEST-ING-005-BLOCK with the real Worker', () =>
     );
     await page.getByRole('button', { name: /备份导入/ }).click();
     await page.getByRole('button', { name: '下一步' }).click();
+    await playwrightExpect(page.getByText('下载空间 CSV 备份', { exact: true })).toBeVisible();
     await page.locator('input[type=file]').setInputFiles({
       name: `ui-backup-${suffix}.csv`,
       mimeType: 'text/csv',

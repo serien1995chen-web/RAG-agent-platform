@@ -11,6 +11,7 @@ import type {
   S6ProcessingStorePort,
   S6SegmentRecord,
   S6ConnectorSyncPort,
+  S6StructuredImportPort,
   S6VectorPort,
 } from './s06-processing-ports';
 import { tenantError } from '../../../shared/persistence/knowledge/tenant';
@@ -91,6 +92,24 @@ function errorCode(error: unknown): string {
   return 'KNOWLEDGE_INTERNAL_ERROR';
 }
 
+function errorDetails(error: unknown): Record<string, unknown> | null {
+  if (
+    typeof error === 'object' &&
+    error !== null &&
+    'problem' in error &&
+    typeof (error as { problem?: { error?: { details?: unknown } } }).problem?.error?.details ===
+      'object'
+  ) {
+    return (error as { problem: { error: { details: Record<string, unknown> } } }).problem.error
+      .details;
+  }
+  return null;
+}
+
+function customIndexIdOf(text: string): string {
+  return `custom-${createHash('sha256').update(text, 'utf8').digest('hex').slice(0, 24)}`;
+}
+
 export class S06ProcessingApplication {
   constructor(
     private readonly input: {
@@ -103,6 +122,7 @@ export class S06ProcessingApplication {
       models: ModelCatalogPort;
       bindings: Pick<ModelBindingRepositoryPort, 'list'>;
       port: S6ProcessingPort;
+      structuredImport?: S6StructuredImportPort;
       sync?: S6ConnectorSyncPort;
       caption?: S8CaptionExecutorPort;
       synonymRebuild?: Pick<S09RebuildApplication, 'handleQueue'>;
@@ -250,6 +270,7 @@ export class S06ProcessingApplication {
         isRetryable(error),
         errorCode(error),
         context,
+        errorDetails(error),
       );
       if (queue === 'knowledge-caption' && failed.status !== 'retry_wait' && this.input.caption) {
         await this.input.caption.markFinalFailure(raw, context).catch(() => undefined);
@@ -404,6 +425,7 @@ export class S06ProcessingApplication {
         isRetryable(error),
         errorCode(error),
         context,
+        errorDetails(error),
       );
       return failed.status === 'dead_letter' ? 'dead_letter' : 'retry';
     }
@@ -459,18 +481,15 @@ export class S06ProcessingApplication {
       },
       context,
     );
-    const processed = await this.input.processing.process({
-      workspaceId: context.workspaceId,
-      knowledgeSpaceId: source.knowledgeSpaceId,
-      sourceId,
-      sourceName: source.name,
-      sourceVersion: artifact.sourceVersion,
-      rawText: parsed.rawText,
-      artifact,
-      settings: job.inputSnapshot.chunking as ChunkingSettings,
-      context,
-    });
-    const qaByHash = new Map(processed.qaItems.map((item) => [item.sourceChunkHash, item]));
+    const structured =
+      (source.kind === 'template' || source.kind === 'backup') && this.input.structuredImport
+        ? await this.input.structuredImport.parse({
+            source,
+            requestId: context.requestId,
+            traceId: context.traceId,
+            context,
+          })
+        : null;
     const rows: Array<{
       order: number;
       question: string;
@@ -478,35 +497,65 @@ export class S06ProcessingApplication {
       content: string;
       metadata?: Record<string, unknown>;
     }> = [];
-    const chunking = job.inputSnapshot.chunking as ChunkingSettings | undefined;
-    const enhancementMetadata =
-      processed.evidence.partial === true ? { enhancementPartial: true } : undefined;
-    for (const chunk of processed.chunks) {
-      const qaItems = processed.qaItems.filter(
-        (item) => item.sourceChunkHash === chunk.contentHash,
-      );
-      if (qaItems.length === 0 || chunking?.trainingType === 'chunk') {
+    let diagnostics: Array<{ severity: 'info' | 'warning' | 'error'; code: string }> = [];
+    let qaCount = 0;
+    let fallbackUsed = false;
+    if (structured) {
+      for (const [order, row] of structured.rows.entries()) {
         rows.push({
-          order: rows.length,
-          question: chunk.text,
-          answer: chunk.text,
-          content: chunk.text,
-          ...(enhancementMetadata ? { metadata: enhancementMetadata } : {}),
+          order,
+          question: row.question,
+          answer: row.answer,
+          content: [row.question, row.answer].filter(Boolean).join('\n\n'),
+          metadata: row.metadata,
         });
       }
-      if (qaItems.length > 0) {
-        for (const item of qaItems) {
+    } else {
+      const processed = await this.input.processing.process({
+        workspaceId: context.workspaceId,
+        knowledgeSpaceId: source.knowledgeSpaceId,
+        sourceId,
+        sourceName: source.name,
+        sourceVersion: artifact.sourceVersion,
+        rawText: parsed.rawText,
+        artifact,
+        settings: job.inputSnapshot.chunking as ChunkingSettings,
+        context,
+      });
+      const qaByHash = new Map(processed.qaItems.map((item) => [item.sourceChunkHash, item]));
+      const chunking = job.inputSnapshot.chunking as ChunkingSettings | undefined;
+      const enhancementMetadata =
+        processed.evidence.partial === true ? { enhancementPartial: true } : undefined;
+      for (const chunk of processed.chunks) {
+        const qaItems = processed.qaItems.filter(
+          (item) => item.sourceChunkHash === chunk.contentHash,
+        );
+        if (qaItems.length === 0 || chunking?.trainingType === 'chunk') {
           rows.push({
             order: rows.length,
-            question: item.q,
-            answer: item.a,
-            content: `${item.q}\n${item.a}`.trim(),
+            question: chunk.text,
+            answer: chunk.text,
+            content: chunk.text,
             ...(enhancementMetadata ? { metadata: enhancementMetadata } : {}),
           });
         }
+        if (qaItems.length > 0) {
+          for (const item of qaItems) {
+            rows.push({
+              order: rows.length,
+              question: item.q,
+              answer: item.a,
+              content: `${item.q}\n${item.a}`.trim(),
+              ...(enhancementMetadata ? { metadata: enhancementMetadata } : {}),
+            });
+          }
+        }
       }
+      diagnostics = processed.diagnostics;
+      qaCount = qaByHash.size;
+      fallbackUsed = processed.evidence.fallbackUsed;
     }
-    if (rows.length === 0) {
+    if (rows.length === 0 && !structured) {
       throw createKnowledgeError({
         code: 'KNOWLEDGE_UNSUPPORTED_CONTENT',
         requestId: context.requestId,
@@ -521,7 +570,7 @@ export class S06ProcessingApplication {
     await this.input.store.softDeleteSegmentsAfterOrder(sourceId, rows.length, context);
     const rootJobId = String(job.inputSnapshot.rootJobId ?? job._id);
     const indexJobIds: string[] = [];
-    for (const segmentId of segmentIds) {
+    for (const [index, segmentId] of segmentIds.entries()) {
       const child = await this.input.jobs.createChild(
         {
           kind: 'index',
@@ -533,6 +582,7 @@ export class S06ProcessingApplication {
             sourceVersion: artifact.sourceVersion,
             rootJobId,
             parentJobId: String(job._id),
+            structuredIndexes: structured?.rows[index]?.indexes ?? [],
           },
           rootJobId,
           parentJobId: String(job._id),
@@ -545,7 +595,7 @@ export class S06ProcessingApplication {
     }
     await this.input.store.updateSourceStatus(
       sourceId,
-      'indexing',
+      indexJobIds.length > 0 ? 'indexing' : 'ready',
       context,
       artifact.sourceVersion,
     );
@@ -557,30 +607,33 @@ export class S06ProcessingApplication {
         idempotencyKey: `segments:${sourceId}:${artifact.sourceVersion}`,
         evidence: {
           segmentIds,
-          parserVersion: processed.evidence.parserVersion,
-          rawTextHash: processed.evidence.rawTextHash,
-          chunkingConfigHash: processed.evidence.chunkingConfigHash,
-          qaPromptVersion: processed.evidence.qaPromptVersion,
-          qaCount: qaByHash.size,
-          fallbackUsed: processed.evidence.fallbackUsed,
+          parserVersion: parsed.parserVersion,
+          rawTextHash: artifact.evidence.rawTextHash,
+          chunkingConfigHash: String(job.inputSnapshot.configHash ?? ''),
+          qaPromptVersion: null,
+          qaCount,
+          fallbackUsed,
+          structuredImport: Boolean(structured),
         },
       },
       context,
     );
-    await this.input.jobs.releaseWaitingForChildren(String(job._id), indexJobIds, context, {
-      segmentIds,
-    });
+    if (indexJobIds.length > 0) {
+      await this.input.jobs.releaseWaitingForChildren(String(job._id), indexJobIds, context, {
+        segmentIds,
+      });
+    }
     return {
       result: {
         rawTextBlobId: artifact.rawTextObjectRef.blobId,
         parserVersion: parsed.parserVersion,
         contentHash: parsed.contentHash,
-        diagnostics: processed.diagnostics,
+        diagnostics,
         childJobIds: indexJobIds,
         segmentIds,
       },
       value: segmentIds,
-      waitingForChildren: true,
+      waitingForChildren: indexJobIds.length > 0,
     };
   }
 
@@ -777,6 +830,18 @@ export class S06ProcessingApplication {
       },
       context,
     );
+    if (!supplied && operation === 'index') {
+      const structuredIndexes = Array.isArray(job.inputSnapshot.structuredIndexes)
+        ? [
+            ...new Set(job.inputSnapshot.structuredIndexes.map(String).map((text) => text.trim())),
+          ].filter(Boolean)
+        : [];
+      for (const text of structuredIndexes) {
+        const current = await this.input.store.getSegment(segmentId, context);
+        if (!current) throw tenantError(context, 'KNOWLEDGE_NOT_FOUND', { segmentId });
+        await this.applyCustomIndex(job, current, text, context);
+      }
+    }
     await this.refreshSourceIndexStatus(segment.sourceId, context);
     return {
       result: {
@@ -787,6 +852,141 @@ export class S06ProcessingApplication {
       },
       value: indexId,
     };
+  }
+
+  private async applyCustomIndex(
+    job: S6JobRecord,
+    segment: S6SegmentRecord,
+    text: string,
+    context: TenantContext,
+  ) {
+    const indexId = customIndexIdOf(text);
+    if (segment.indexes.some((index) => index.indexId === indexId)) return;
+    const bindings = await this.input.bindings.list(String(segment.knowledgeSpaceId), context);
+    const requestedModelId =
+      segment.indexes.find((index) => index.indexId === 'default')?.modelId ??
+      bindings.find((binding) => binding.modelType === 'embedding' && binding.status === 'active')
+        ?.modelId ??
+      '';
+    const catalog = await this.input.models.listModels({
+      workspaceId: context.workspaceId,
+      requestId: context.requestId,
+      traceId: context.traceId,
+    });
+    const model = catalog.find(
+      (candidate) =>
+        candidate.modelId === requestedModelId &&
+        candidate.type === 'embedding' &&
+        candidate.authorized &&
+        candidate.dimension !== null,
+    );
+    if (!model || model.dimension === null) {
+      throw createKnowledgeError({
+        code: 'KNOWLEDGE_VALIDATION_FAILED',
+        requestId: context.requestId,
+        traceId: context.traceId,
+        details: { field: 'embeddingModelId', reason: 'binding_required' },
+      });
+    }
+    const indexVersion = segment.version + 2;
+    const contentHash = createHash('sha256').update(text, 'utf8').digest('hex');
+    const vectors = await this.input.port.embed(
+      {
+        modelId: model.modelId,
+        dimension: model.dimension,
+        texts: [text],
+        knowledgeSpaceId: segment.knowledgeSpaceId,
+        sourceId: segment.sourceId,
+      },
+      context,
+    );
+    const vector = vectors[0];
+    if (!vector) {
+      throw createKnowledgeError({
+        code: 'KNOWLEDGE_MODEL_FAILED',
+        requestId: context.requestId,
+        traceId: context.traceId,
+        retryable: true,
+        details: { reason: 'embedding_empty' },
+      });
+    }
+    const written = await this.input.vectors.insert(
+      [
+        {
+          workspaceId: context.workspaceId,
+          knowledgeSpaceId: segment.knowledgeSpaceId,
+          sourceId: segment.sourceId,
+          segmentId: segment.id,
+          indexId,
+          embeddingModelId: model.modelId,
+          dimension: model.dimension,
+          vector,
+          searchEnabled: segment.searchEnabled,
+          contentHash,
+          version: indexVersion,
+        },
+      ],
+      context,
+    );
+    const projected = await this.input.fulltext.project(
+      {
+        segmentId: segment.id,
+        sourceVersion: segment.sourceVersion,
+        indexVersion,
+        question: segment.question,
+        answer: segment.answer,
+        content: segment.content,
+        ...(typeof segment.metadata.title === 'string' ? { title: segment.metadata.title } : {}),
+        searchEnabled: segment.searchEnabled,
+        expectedVersion: segment.version,
+      },
+      context,
+    );
+    const profile = this.input.vectors
+      .listProfiles()
+      .find((item) => item.dimension === model.dimension);
+    if (!profile) {
+      throw createKnowledgeError({
+        code: 'KNOWLEDGE_INTERNAL_ERROR',
+        requestId: context.requestId,
+        traceId: context.traceId,
+        details: { reason: 'vector_profile_missing', dimension: model.dimension },
+      });
+    }
+    const switched = await this.input.store.switchSegmentIndex(
+      {
+        segmentId: segment.id,
+        expectedVersion: projected.segmentVersion,
+        fullTextVersion: indexVersion,
+        indexes: [
+          ...segment.indexes.filter((index) => index.indexId !== indexId),
+          {
+            indexId,
+            type: 'custom',
+            modelId: model.modelId,
+            dimension: model.dimension,
+            storageType: profile.storageType,
+            vectorProfile: profile.tableName,
+            vectorId: written.vectorIds[0]!,
+            text,
+            version: indexVersion,
+          },
+        ],
+      },
+      context,
+    );
+    if (!switched)
+      throw tenantError(context, 'KNOWLEDGE_CONFLICT', { segmentId: segment.id, indexId });
+    await this.input.jobs.setStep(
+      {
+        jobId: String(job._id),
+        stepKey: `custom-index:${indexId}`,
+        status: 'succeeded',
+        idempotencyKey: `custom-index:${segment.id}:${indexId}:${indexVersion}`,
+        evidence: { indexId, vectorId: written.vectorIds[0], indexVersion },
+      },
+      context,
+    );
   }
 
   private async processRebuild(job: S6JobRecord, context: TenantContext) {

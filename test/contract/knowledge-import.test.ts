@@ -71,10 +71,15 @@ describe('S4 import contract', () => {
   });
 
   it('exposes backup dry-run/conflict fields and Job result plan fields', () => {
+    const template = openapi.components.schemas.ImportTemplate as {
+      properties: Record<string, { default?: unknown }>;
+    };
     const backup = openapi.components.schemas.ImportBackup as {
       properties: Record<string, { default?: unknown; enum?: string[] }>;
     };
+    expect(template.properties.previewOnly?.default).toBe(false);
     expect(backup.properties.dryRun?.default).toBe(false);
+    expect(backup.properties.previewOnly?.default).toBe(false);
     expect(backup.properties.conflictStrategy?.enum).toEqual(['fail', 'skip', 'overwrite']);
     const result = (
       openapi.components.schemas.Job as {
@@ -84,5 +89,20 @@ describe('S4 import contract', () => {
     expect(result.properties).toHaveProperty('dryRun');
     expect(result.properties).toHaveProperty('conflicts');
     expect(result.properties).toHaveProperty('actions');
+  });
+
+  it('supports structured previews and the CSV restore round-trip', () => {
+    const templatePath = openapi.paths['/v1/knowledge/spaces/{spaceId}/imports/template']?.post as {
+      responses: Record<string, unknown>;
+    };
+    const backupPath = openapi.paths['/v1/knowledge/spaces/{spaceId}/imports/backup']?.post as {
+      responses: Record<string, unknown>;
+    };
+    const exportSchema = openapi.components.schemas.ExportCreate as {
+      properties: { format: { enum: string[] } };
+    };
+    expect(templatePath.responses).toHaveProperty('200');
+    expect(backupPath.responses).toHaveProperty('200');
+    expect(exportSchema.properties.format.enum).toEqual(['zip', 'csv']);
   });
 });

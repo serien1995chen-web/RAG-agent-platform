@@ -198,6 +198,7 @@ export const ImportTemplateSchema = z
   .object({
     uploadId: z.string().min(1),
     directoryId: ObjectIdSchema.nullable().optional(),
+    previewOnly: z.boolean().default(false),
   })
   .strict();
 
@@ -206,6 +207,7 @@ export const ImportBackupSchema = z
     uploadId: z.string().min(1),
     directoryId: ObjectIdSchema.nullable().optional(),
     dryRun: z.boolean().default(false),
+    previewOnly: z.boolean().default(false),
     conflictStrategy: z.enum(['fail', 'skip', 'overwrite']).default('fail'),
   })
   .strict();

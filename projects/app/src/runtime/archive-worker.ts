@@ -123,6 +123,58 @@ function reserveName(used: Set<string>, requested: string): string {
   return candidate;
 }
 
+function csvCell(value: unknown): string {
+  const raw = String(value ?? '');
+  const text = /^[=+@]|^-(?!\d+(?:\.\d+)?(?:e[+-]?\d+)?$)/i.test(raw.trimStart()) ? `'${raw}` : raw;
+  return /[",\r\n]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
+}
+
+function buildCsvBackup(segments: Array<Record<string, unknown>>): Uint8Array {
+  const indexed = segments.map((segment) => ({
+    question: String(segment.question ?? ''),
+    answer: String(segment.answer ?? ''),
+    indexes: Array.isArray(segment.indexes)
+      ? segment.indexes
+          .filter(
+            (index): index is { type?: unknown; text?: unknown } =>
+              typeof index === 'object' && index !== null,
+          )
+          .filter((index) => index.type === 'custom')
+          .map((index) => String(index.text ?? '').trim())
+          .filter(Boolean)
+      : [],
+    metadata:
+      typeof segment.metadata === 'object' &&
+      segment.metadata !== null &&
+      !Array.isArray(segment.metadata)
+        ? (segment.metadata as Record<string, unknown>)
+        : {},
+  }));
+  const maxIndexes = Math.max(1, ...indexed.map((segment) => segment.indexes.length));
+  const header = [
+    'q',
+    'a',
+    ...Array.from({ length: maxIndexes }, () => 'index'),
+    'metadata',
+    'schemaVersion',
+  ];
+  const lines = [
+    header.map(csvCell).join(','),
+    ...indexed.map((segment) =>
+      [
+        segment.question,
+        segment.answer,
+        ...Array.from({ length: maxIndexes }, (_, index) => segment.indexes[index] ?? ''),
+        JSON.stringify(segment.metadata),
+        1,
+      ]
+        .map(csvCell)
+        .join(','),
+    ),
+  ];
+  return Buffer.concat([Buffer.from('\ufeff'), Buffer.from(lines.join('\r\n'), 'utf8')]);
+}
+
 function objectContext(context: TenantContext, knowledgeSpaceId: string): KnowledgeObjectContext {
   return {
     workspaceId: context.workspaceId,
@@ -562,6 +614,10 @@ export class KnowledgeArchiveWorker {
         ? (job.inputSnapshot as Record<string, unknown>)
         : {};
     if (snapshot.exportScope === 'space') {
+      if (snapshot.format === 'csv') {
+        await this.processCsvExport(job, snapshot, context);
+        return;
+      }
       await this.processSpaceExport(job, snapshot, context);
       return;
     }
@@ -792,6 +848,154 @@ export class KnowledgeArchiveWorker {
       throw error;
     } finally {
       await rm(zip.directory, { recursive: true, force: true });
+    }
+  }
+
+  private async processCsvExport(
+    job: Record<string, unknown>,
+    snapshot: Record<string, unknown>,
+    context: TenantContext,
+  ): Promise<void> {
+    const sourceIds = Array.isArray(snapshot.sourceIds)
+      ? [...new Set(snapshot.sourceIds.map(String))]
+      : [];
+    if (sourceIds.length === 0 || sourceIds.length > MAX_SOURCES) {
+      throw createKnowledgeError({
+        code: 'KNOWLEDGE_VALIDATION_FAILED',
+        requestId: context.requestId,
+        traceId: context.traceId,
+        details: { field: 'sourceIds' },
+      });
+    }
+    const spaceId = String(job.knowledgeSpaceId ?? '');
+    const storage = objectContext(context, spaceId);
+    const segments = await this.archive.segments(sourceIds, context);
+    const body = buildCsvBackup(segments as unknown as Array<Record<string, unknown>>);
+    if (body.byteLength > MAX_SOURCE_BYTES) {
+      throw createKnowledgeError({
+        code: 'KNOWLEDGE_PAYLOAD_TOO_LARGE',
+        requestId: context.requestId,
+        traceId: context.traceId,
+        details: { limitBytes: 50 * 1024 * 1024 },
+      });
+    }
+    const blobId = createHash('sha1')
+      .update(`space-csv-export:${String(job.jobId)}`)
+      .digest('hex')
+      .slice(0, 24);
+    const safeName = `backup-${spaceId}.csv`;
+    const key = knowledgeObjectKey({
+      workspaceId: context.workspaceId,
+      knowledgeSpaceId: spaceId,
+      sourceId: 'unbound',
+      purpose: 'export',
+      blobId,
+      safeName,
+    });
+    const expiresAt = new Date(Date.now() + EXPORT_TTL_MS);
+    const manifest = {
+      version: 1,
+      format: 'csv',
+      generatedAt: new Date().toISOString(),
+      sourceCount: sourceIds.length,
+      segmentCount: segments.length,
+    };
+    const existing = await this.objectRefs.findObjectRef(blobId, context);
+    if (existing?.state === 'active') {
+      await this.archive.commit(
+        {
+          jobId: String(job.jobId),
+          workerId: this.workerId,
+          attemptEpoch: Number(job.attemptEpoch),
+          fencingToken: String(job.fencingToken),
+          expectedVersion: Number(job.version),
+          result: {
+            objectBlobRefId: existing.blobId,
+            manifest,
+            sourceCount: sourceIds.length,
+            segmentCount: segments.length,
+            expiresAt: existing.expiresAt,
+          },
+          audit: {
+            knowledgeSpaceId: spaceId,
+            action: 'export.succeeded',
+            resourceType: 'space',
+            resourceId: spaceId,
+            outcome: 'succeeded',
+            safeDiff: { jobId: String(job.jobId), format: 'csv', sourceCount: sourceIds.length },
+          },
+        },
+        context,
+      );
+      return;
+    }
+    if (existing) await this.cleanupArtifact(existing, storage, context);
+    let pending: ObjectRefView | undefined;
+    try {
+      pending = await this.objectRefs.createPendingArchiveArtifact(
+        {
+          blobId,
+          knowledgeSpaceId: spaceId,
+          provider: this.objectStore.provider,
+          bucket: this.objectStore.bucket,
+          objectKey: key,
+          mimeType: 'text/csv; charset=utf-8',
+          sizeBytes: body.byteLength,
+          expiresAt,
+        },
+        context,
+      );
+      const stored = await this.objectStore.putObject(
+        {
+          key,
+          body: Readable.from(body),
+          sizeBytes: body.byteLength,
+          contentType: 'text/csv; charset=utf-8',
+          workspaceId: context.workspaceId,
+          knowledgeSpaceId: spaceId,
+          ttlExpireAt: expiresAt,
+        },
+        storage,
+      );
+      pending = await this.objectRefs.activateArchiveArtifact(
+        {
+          blobId,
+          expectedVersion: pending.version,
+          sizeBytes: stored.size,
+          etag: stored.etag,
+          sha256: stored.sha256,
+          expiresAt,
+        },
+        context,
+      );
+      await this.archive.commit(
+        {
+          jobId: String(job.jobId),
+          workerId: this.workerId,
+          attemptEpoch: Number(job.attemptEpoch),
+          fencingToken: String(job.fencingToken),
+          expectedVersion: Number(job.version),
+          result: {
+            objectBlobRefId: pending.blobId,
+            manifest,
+            sourceCount: sourceIds.length,
+            segmentCount: segments.length,
+            expiresAt: pending.expiresAt,
+          },
+          audit: {
+            knowledgeSpaceId: spaceId,
+            action: 'export.succeeded',
+            resourceType: 'space',
+            resourceId: spaceId,
+            outcome: 'succeeded',
+            safeDiff: { jobId: String(job.jobId), format: 'csv', sourceCount: sourceIds.length },
+          },
+        },
+        context,
+      );
+    } catch (error) {
+      if (pending) await this.cleanupArtifact(pending, storage, context);
+      throw error;
     }
   }
 

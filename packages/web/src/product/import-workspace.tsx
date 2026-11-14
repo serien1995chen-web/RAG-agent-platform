@@ -26,6 +26,8 @@ import {
   importTemplate,
   importText,
   importUrl,
+  previewImportBackup,
+  previewImportTemplate,
   previewImportText,
   productApi,
   productErrorView,
@@ -205,11 +207,35 @@ export function ImportWorkspace(props: {
       }),
     enabled: step === 2 && kind === 'text' && Boolean(textName.trim()) && Boolean(textBody.trim()),
   });
-
   const activeOption = IMPORT_OPTIONS.find((option) => option.kind === kind)!;
   const completedUploads = uploaded.filter(
     (item) => item.phase === 'completed' && Boolean(item.id),
   );
+  const structuredPreviewQuery = useQuery({
+    queryKey: [
+      'kb-product',
+      'structured-import-preview',
+      props.spaceId,
+      kind,
+      completedUploads[0]?.id,
+      conflictStrategy,
+    ],
+    queryFn: () => {
+      const uploadId = completedUploads[0]!.id;
+      return kind === 'backup'
+        ? previewImportBackup(props.spaceId, {
+            uploadId,
+            directoryId: directoryId || null,
+            conflictStrategy,
+          })
+        : previewImportTemplate(props.spaceId, {
+            uploadId,
+            directoryId: directoryId || null,
+          });
+    },
+    enabled:
+      step === 2 && (kind === 'template' || kind === 'backup') && completedUploads.length === 1,
+  });
   const uploadsReady =
     (['local', 'image'].includes(kind) && completedUploads.length > 0) ||
     (['template', 'backup'].includes(kind) && completedUploads.length === 1) ||
@@ -447,6 +473,72 @@ export function ImportWorkspace(props: {
     }
   };
 
+  const downloadTemplate = () => {
+    const csv = [
+      'q,a,index,index,metadata',
+      '"Who are you?","I am an AI assistant.","identity","assistant","{""source"":""template""}"',
+      '"What can you do?","I can answer questions from the imported knowledge.","help","faq","{""source"":""template""}"',
+    ].join('\r\n');
+    const url = URL.createObjectURL(new Blob([`\ufeff${csv}`], { type: 'text/csv;charset=utf-8' }));
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = 'template.csv';
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
+  };
+
+  const downloadBackup = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      let job = await productApi.exportSpace(props.spaceId, 'csv');
+      const deadline = Date.now() + 120_000;
+      while (!['succeeded', 'failed', 'dead_letter', 'cancelled'].includes(job.status)) {
+        if (Date.now() >= deadline) throw new Error('备份导出超时，请重试。');
+        await new Promise((resolveWait) => window.setTimeout(resolveWait, 1_000));
+        job = await productApi.getJob(job.jobId);
+      }
+      if (job.status !== 'succeeded') throw new Error(`备份导出失败：${job.status}`);
+      const blobId = job.result?.objectBlobRefId;
+      if (typeof blobId !== 'string') throw new Error('备份导出缺少文件结果。');
+      const ticket = await productApi.downloadFile(blobId);
+      const anchor = document.createElement('a');
+      anchor.href = ticket.url;
+      anchor.download = `knowledge-backup-${new Date().toISOString().slice(0, 10)}.csv`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+    } catch (caught) {
+      setError(caught);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const confirmDryRunRestore = async () => {
+    setBusy(true);
+    setSubmitError(null);
+    try {
+      const job = await importBackup(props.spaceId, {
+        uploadId: completedUploads[0]!.id,
+        directoryId: directoryId || null,
+        dryRun: false,
+        conflictStrategy,
+      });
+      setJobId(job.jobId);
+      props.onJobStarted?.(job.jobId);
+      await queryClient.invalidateQueries({
+        queryKey: ['kb-product', 'jobs', props.spaceId],
+      });
+    } catch (caught) {
+      setSubmitError(caught);
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const preview = previewSummary({
     kind,
     uploaded: completedUploads,
@@ -459,10 +551,15 @@ export function ImportWorkspace(props: {
   });
   const previewReady =
     step !== 2 ||
-    kind !== 'text' ||
-    (!previewQuery.isLoading &&
-      !previewQuery.error &&
-      Boolean(previewQuery.data && previewQuery.data.totalChunks > 0));
+    (kind === 'text'
+      ? !previewQuery.isLoading &&
+        !previewQuery.error &&
+        Boolean(previewQuery.data && previewQuery.data.totalChunks > 0)
+      : kind === 'template' || kind === 'backup'
+        ? !structuredPreviewQuery.isLoading &&
+          !structuredPreviewQuery.error &&
+          Boolean(structuredPreviewQuery.data)
+        : true);
 
   return (
     <ProductPage className="kb2-import-page">
@@ -566,6 +663,22 @@ export function ImportWorkspace(props: {
                       : '文件将直接上传到知识库服务，不使用本地模拟结果'}
                   </span>
                 </label>
+              ) : null}
+
+              {kind === 'template' ? (
+                <div className="kb2-inline-actions">
+                  <ProductButton onClick={downloadTemplate}>下载 CSV 模板</ProductButton>
+                  <span>字段：q、a、index（可多列）、metadata（JSON）</span>
+                </div>
+              ) : null}
+
+              {kind === 'backup' ? (
+                <div className="kb2-inline-actions">
+                  <ProductButton busy={busy} onClick={() => void downloadBackup()}>
+                    下载空间 CSV 备份
+                  </ProductButton>
+                  <span>备份包含 q、a、index、metadata 和 schemaVersion。</span>
+                </div>
               ) : null}
 
               {uploaded.length > 0 ? (
@@ -754,7 +867,7 @@ export function ImportWorkspace(props: {
                 </div>
               ) : null}
 
-              {kind !== 'url' && kind !== 'api' && !isConnectorKind(kind) ? (
+              {kind === 'local' || kind === 'image' ? (
                 <div className="kb2-import-settings">
                   <h3>训练参数</h3>
                   <div className="kb2-form-grid">
@@ -890,6 +1003,67 @@ export function ImportWorkspace(props: {
                     />
                   )}
                 </section>
+              ) : kind === 'template' || kind === 'backup' ? (
+                <section aria-label="结构化导入预览">
+                  <ProductError
+                    error={structuredPreviewQuery.error}
+                    onRetry={() => void structuredPreviewQuery.refetch()}
+                  />
+                  {structuredPreviewQuery.isLoading ? (
+                    <div className="kb2-center-state">正在解析文件并生成逐行预览…</div>
+                  ) : structuredPreviewQuery.data ? (
+                    <>
+                      <div className="kb2-info-group">
+                        <InfoRow
+                          label="格式"
+                          value={structuredPreviewQuery.data.format.toUpperCase()}
+                        />
+                        <InfoRow
+                          label="有效数据行"
+                          value={String(structuredPreviewQuery.data.rowCount)}
+                        />
+                        {kind === 'backup' ? (
+                          <InfoRow
+                            label="冲突"
+                            value={String(structuredPreviewQuery.data.conflicts?.length ?? 0)}
+                          />
+                        ) : null}
+                      </div>
+                      <div className="kb2-table-wrap">
+                        <table className="kb2-table" aria-label="模板数据预览">
+                          <thead>
+                            <tr>
+                              <th>行</th>
+                              <th>q</th>
+                              <th>a</th>
+                              <th>index</th>
+                              <th>metadata</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {structuredPreviewQuery.data.rows.map((row) => (
+                              <tr key={row.rowNumber}>
+                                <td>{row.rowNumber}</td>
+                                <td>{row.question}</td>
+                                <td>{row.answer}</td>
+                                <td>{row.indexes.join(' | ')}</td>
+                                <td>{JSON.stringify(row.metadata)}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                      {structuredPreviewQuery.data.rowCount === 0 ? (
+                        <div className="kb2-note">文件只有合法表头，不会创建虚构数据行。</div>
+                      ) : null}
+                      {structuredPreviewQuery.data.truncated ? (
+                        <div className="kb2-table-muted">仅展示前 100 行。</div>
+                      ) : null}
+                    </>
+                  ) : (
+                    <ProductEmpty title="没有可预览内容" description="返回检查上传文件。" />
+                  )}
+                </section>
               ) : (
                 <div className="kb2-note">
                   此处展示真实输入摘要；提交后由服务端 Job 返回处理状态和 Data 结果。
@@ -923,6 +1097,13 @@ export function ImportWorkspace(props: {
                   job={jobQuery.data}
                   loading={jobQuery.isLoading}
                   error={jobQuery.error}
+                  onConfirmRestore={kind === 'backup' ? confirmDryRunRestore : undefined}
+                  onResetPlan={() => {
+                    setJobId('');
+                    setStep(1);
+                  }}
+                  restoreBusy={busy}
+                  conflictStrategy={conflictStrategy}
                 />
               )}
             </div>
@@ -1002,12 +1183,32 @@ function CatalogSelector(props: {
   );
 }
 
-function JobResultView(props: { job?: Job; loading: boolean; error: unknown }) {
+function JobResultView(props: {
+  job?: Job;
+  loading: boolean;
+  error: unknown;
+  onConfirmRestore?: () => Promise<void>;
+  onResetPlan?: () => void;
+  restoreBusy?: boolean;
+  conflictStrategy?: 'fail' | 'skip' | 'overwrite';
+}) {
   if (props.error) return <ProductError error={props.error} />;
   if (props.loading || !props.job) {
     return <div className="kb2-center-state">正在读取服务端任务状态…</div>;
   }
   const partial = Boolean(props.job.result?.partial);
+  const dryRun = props.job.result?.dryRun === true;
+  const actions = Array.isArray(props.job.result?.actions)
+    ? (props.job.result.actions as Array<{ rowNumber: number; action: string }>)
+    : [];
+  const conflicts = Array.isArray(props.job.result?.conflicts)
+    ? (props.job.result.conflicts as Array<{
+        rowNumber: number;
+        existingSourceId: string;
+        existingVersion: number;
+      }>)
+    : [];
+  const actionCount = (action: string) => actions.filter((item) => item.action === action).length;
   return (
     <div className="kb2-job-result">
       <div className="kb2-job-result__head">
@@ -1041,6 +1242,54 @@ function JobResultView(props: { job?: Job; loading: boolean; error: unknown }) {
           <InfoRow label="Sources" value={String(props.job.result.sourceCount)} />
         ) : null}
       </div>
+      {dryRun ? (
+        <section className="kb2-job-plan" aria-label="恢复预览">
+          <h4>恢复预览</h4>
+          <div className="kb2-info-group">
+            <InfoRow label="新增" value={String(actionCount('create'))} />
+            <InfoRow label="冲突" value={String(conflicts.length)} />
+            <InfoRow label="跳过" value={String(actionCount('skip'))} />
+            <InfoRow label="覆盖" value={String(actionCount('overwrite'))} />
+            <InfoRow label="失败" value={String(actionCount('fail'))} />
+          </div>
+          {conflicts.length > 0 ? (
+            <div className="kb2-table-wrap">
+              <table className="kb2-table" aria-label="备份冲突报告">
+                <thead>
+                  <tr>
+                    <th>行</th>
+                    <th>现有 Source</th>
+                    <th>版本</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {conflicts.map((conflict) => (
+                    <tr key={`${conflict.rowNumber}:${conflict.existingSourceId}`}>
+                      <td>{conflict.rowNumber}</td>
+                      <td>{conflict.existingSourceId}</td>
+                      <td>{conflict.existingVersion}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : null}
+          {conflicts.length > 0 && props.conflictStrategy === 'fail' ? (
+            <>
+              <div className="kb2-note">存在冲突，请选择“跳过”或“覆盖”后重新预览。</div>
+              <ProductButton onClick={props.onResetPlan}>返回修改策略</ProductButton>
+            </>
+          ) : (
+            <ProductButton
+              tone="primary"
+              busy={props.restoreBusy}
+              onClick={() => void props.onConfirmRestore?.()}
+            >
+              确认恢复
+            </ProductButton>
+          )}
+        </section>
+      ) : null}
       {props.job.error ? (
         <div className="kb2-error-panel" role="alert">
           <WarningIcon boxSize={4} />

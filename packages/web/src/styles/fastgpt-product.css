@@ -3287,3 +3287,21 @@ a:hover {
     transition-duration: 0.01ms !important;
   }
 }
+
+.kb2-inline-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-top: 12px;
+  color: var(--kb2-text-muted, #667085);
+  font-size: 12px;
+}
+
+.kb2-job-plan {
+  display: grid;
+  gap: 12px;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--kb2-border, #e4e7ec);
+}

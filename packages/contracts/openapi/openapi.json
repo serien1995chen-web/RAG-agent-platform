@@ -9065,6 +9065,16 @@
         "x-audit": true,
         "x-downstream-allowed": false,
         "responses": {
+          "200": {
+            "description": "模板预览，不创建业务写入",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
           "202": {
             "description": "异步任务",
             "content": {
@@ -9245,6 +9255,16 @@
         "x-audit": true,
         "x-downstream-allowed": false,
         "responses": {
+          "200": {
+            "description": "备份预览，不创建业务写入",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
           "202": {
             "description": "异步任务",
             "content": {
@@ -24286,7 +24306,8 @@
           "format": {
             "type": "string",
             "enum": [
-              "zip"
+              "zip",
+              "csv"
             ],
             "default": "zip"
           },
@@ -25401,6 +25422,10 @@
                 "type": "null"
               }
             ]
+          },
+          "previewOnly": {
+            "type": "boolean",
+            "default": false
           }
         }
       },
@@ -25428,6 +25453,10 @@
             ]
           },
           "dryRun": {
+            "type": "boolean",
+            "default": false
+          },
+          "previewOnly": {
             "type": "boolean",
             "default": false
           },

@@ -1,7 +1,10 @@
 import type { Connection } from 'mongoose';
 import { createKnowledgeError } from '@kb/contracts';
 import { registerKnowledgeModels } from '../../../shared/persistence/schemas/knowledge-index';
-import type { KnowledgeSourceDoc } from '../../../shared/persistence/schemas/knowledge-catalog.schemas';
+import type {
+  KnowledgeSegmentDoc,
+  KnowledgeSourceDoc,
+} from '../../../shared/persistence/schemas/knowledge-catalog.schemas';
 import type { TenantContext } from '../../../shared/persistence/knowledge/tenant';
 import { objectIdOf, requireWorkspaceId } from '../../../shared/persistence/knowledge/tenant';
 import { KnowledgeAuditRepository } from '../../../shared/persistence/knowledge/audit';
@@ -20,6 +23,7 @@ export class KnowledgeArchiveRepository {
   private readonly spaceModel;
   private readonly directoryModel;
   private readonly sourceModel;
+  private readonly segmentModel;
   private readonly audit: KnowledgeAuditRepository;
 
   constructor(private readonly connection: Connection) {
@@ -29,6 +33,7 @@ export class KnowledgeArchiveRepository {
     this.spaceModel = models.KnowledgeSpace;
     this.directoryModel = models.KnowledgeDirectory;
     this.sourceModel = models.KnowledgeSource;
+    this.segmentModel = models.KnowledgeSegment;
     this.audit = new KnowledgeAuditRepository(connection);
   }
 
@@ -93,7 +98,7 @@ export class KnowledgeArchiveRepository {
       spaceId: string;
       sourceIds: string[];
       idempotencyKey: string;
-      format?: 'zip';
+      format?: 'zip' | 'csv';
       exportScope?: 'sources' | 'space';
       sourceVersions?: Record<string, number>;
     },
@@ -280,6 +285,22 @@ export class KnowledgeArchiveRepository {
       ...doc,
       safeName: safeName(doc.name),
     }));
+  }
+
+  async segments(
+    sourceIds: readonly string[],
+    context: TenantContext,
+  ): Promise<Array<KnowledgeSegmentDoc & { _id: unknown }>> {
+    const docs = await this.segmentModel
+      .find({
+        workspaceId: context.workspaceId,
+        sourceId: { $in: sourceIds },
+        deletedAt: null,
+      })
+      .sort({ sourceId: 1, order: 1 })
+      .limit(100_000)
+      .lean();
+    return docs as Array<KnowledgeSegmentDoc & { _id: unknown }>;
   }
 
   async space(spaceId: string, context: TenantContext) {

@@ -240,6 +240,15 @@ function ingestionApplication(
       async findObjectRef(id) {
         return uploadRefs.get(id) ?? null;
       },
+      async markDeleting(id, expectedVersion) {
+        const object = uploadRefs.get(id);
+        if (!object || object.version !== expectedVersion) {
+          throw new Error('fixture upload version conflict');
+        }
+        const deleting = { ...object, state: 'deleting' as const, version: object.version + 1 };
+        uploadRefs.set(id, deleting);
+        return deleting;
+      },
     },
     content,
     urlImport: options.dependencies?.urlImport ?? {
@@ -1265,13 +1274,70 @@ describe('S4 import entry workflows', () => {
     expect(await connection.models.KnowledgeOutboxEvent.countDocuments({ workspaceId })).toBe(0);
   });
 
-  it('TEST-ING-005-U03 overwrite stores the real source version in the parent Job snapshot', async () => {
+  it('L1-B08-ING-004/005-UI01 previews template and backup rows without business writes', async () => {
+    const templateUpload = new mongoose.Types.ObjectId().toString();
+    objectBytes.set(
+      `uploads/${templateUpload}/preview.csv`,
+      Buffer.from('q,a,index,metadata\nPreview question,,preview-index,"{}"\n'),
+    );
+    uploadRefs.set(templateUpload, uploadRef(templateUpload, 'preview.csv', 'text/csv'));
     const backupUpload = new mongoose.Types.ObjectId().toString();
     objectBytes.set(
-      `uploads/${backupUpload}/backup.csv`,
-      Buffer.from('q,a,index,metadata,schemaVersion\nBackup question,Backup answer,,"{}",1\n'),
+      `uploads/${backupUpload}/preview-backup.csv`,
+      Buffer.from('q,a\nBackup preview,Backup answer\n'),
     );
-    uploadRefs.set(backupUpload, uploadRef(backupUpload, 'backup.csv', 'text/csv'));
+    uploadRefs.set(backupUpload, uploadRef(backupUpload, 'preview-backup.csv', 'text/csv'));
+    const ingestion = ingestionApplication('template', {
+      dependencies: { templateParser: { parse: parseImportTemplate } },
+    });
+
+    const template = await ingestion.dispatch({
+      operationId: 'API-IMPORT-TEMPLATE',
+      params: { spaceId },
+      query: {},
+      headers: { 'idempotency-key': `template-preview-${suffix}-0001` },
+      body: { uploadId: templateUpload, directoryId: null, previewOnly: true },
+      context,
+    });
+    const backup = await ingestion.dispatch({
+      operationId: 'API-IMPORT-BACKUP',
+      params: { spaceId },
+      query: {},
+      headers: { 'idempotency-key': `backup-preview-${suffix}-0001` },
+      body: {
+        uploadId: backupUpload,
+        directoryId: null,
+        previewOnly: true,
+        conflictStrategy: 'fail',
+      },
+      context,
+    });
+
+    expect(template).toMatchObject({
+      status: 200,
+      data: { rowCount: 1, rows: [{ question: 'Preview question', answer: '' }] },
+    });
+    expect(backup).toMatchObject({
+      status: 200,
+      data: { rowCount: 1, rows: [{ question: 'Backup preview', answer: 'Backup answer' }] },
+    });
+    expect(await connection.models.KnowledgeSource.countDocuments({ workspaceId })).toBe(0);
+    expect(await connection.models.KnowledgeJob.countDocuments({ workspaceId })).toBe(0);
+    expect(await connection.models.KnowledgeAuditEvent.countDocuments({ workspaceId })).toBe(0);
+    expect(await connection.models.KnowledgeOutboxEvent.countDocuments({ workspaceId })).toBe(0);
+  });
+
+  it('TEST-ING-005-U03 overwrite stores the real source version in the parent Job snapshot', async () => {
+    const makeBackupUpload = () => {
+      const id = new mongoose.Types.ObjectId().toString();
+      objectBytes.set(
+        `uploads/${id}/backup.csv`,
+        Buffer.from('q,a,index,metadata,schemaVersion\nBackup question,Backup answer,,"{}",1\n'),
+      );
+      uploadRefs.set(id, uploadRef(id, 'backup.csv', 'text/csv'));
+      return id;
+    };
+    const backupUpload = makeBackupUpload();
     const backup = ingestionApplication('backup');
     const first = await backup.dispatch({
       operationId: 'API-IMPORT-BACKUP',
@@ -1290,13 +1356,14 @@ describe('S4 import entry workflows', () => {
     expect(firstSource).not.toBeNull();
     expect(firstSource?.sourceVersion).toBe(1);
 
+    const overwriteUpload = makeBackupUpload();
     const overwrite = await backup.dispatch({
       operationId: 'API-IMPORT-BACKUP',
       params: { spaceId },
       query: {},
       headers: { 'idempotency-key': `backup-overwrite-${suffix}-02` },
       body: {
-        uploadId: backupUpload,
+        uploadId: overwriteUpload,
         directoryId: null,
         dryRun: false,
         conflictStrategy: 'overwrite',
@@ -1313,6 +1380,8 @@ describe('S4 import entry workflows', () => {
     });
     expect(first.status).toBe(202);
 
+    const concurrentUploadA = makeBackupUpload();
+    const concurrentUploadB = makeBackupUpload();
     const concurrent = await Promise.allSettled([
       backup.dispatch({
         operationId: 'API-IMPORT-BACKUP',
@@ -1320,7 +1389,7 @@ describe('S4 import entry workflows', () => {
         query: {},
         headers: { 'idempotency-key': `backup-overwrite-${suffix}-03` },
         body: {
-          uploadId: backupUpload,
+          uploadId: concurrentUploadA,
           directoryId: null,
           dryRun: false,
           conflictStrategy: 'overwrite',
@@ -1333,7 +1402,7 @@ describe('S4 import entry workflows', () => {
         query: {},
         headers: { 'idempotency-key': `backup-overwrite-${suffix}-04` },
         body: {
-          uploadId: backupUpload,
+          uploadId: concurrentUploadB,
           directoryId: null,
           dryRun: false,
           conflictStrategy: 'overwrite',

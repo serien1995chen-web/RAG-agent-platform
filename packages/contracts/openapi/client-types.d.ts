@@ -441,9 +441,9 @@ export interface SchemaPropertyMap {
   "HealthStatus": "checks" | "status" | "timestamp";
   "ImageSearchRequest": never;
   "ImportApiLibrary": "config" | "credentials" | "directoryId" | "fileIds";
-  "ImportBackup": "conflictStrategy" | "directoryId" | "dryRun" | "uploadId";
+  "ImportBackup": "conflictStrategy" | "directoryId" | "dryRun" | "previewOnly" | "uploadId";
   "ImportFiles": "chunking" | "directoryId" | "parseConfig" | "parseProvider" | "uploadIds";
-  "ImportTemplate": "directoryId" | "uploadId";
+  "ImportTemplate": "directoryId" | "previewOnly" | "uploadId";
   "ImportText": "chunking" | "directoryId" | "dryRun" | "knowledgeSpaceId" | "name" | "text";
   "ImportUrl": "directoryId" | "selector" | "url";
   "Job": "attemptEpoch" | "attempts" | "availableAt" | "cancelRequestedAt" | "createdAt" | "error" | "heartbeatAt" | "inputSnapshot" | "jobId" | "kind" | "knowledgeSpaceId" | "leaseExpiresAt" | "leaseOwner" | "maxAttempts" | "pausedAt" | "priority" | "progress" | "resourceId" | "resourceType" | "result" | "status" | "steps" | "updatedAt" | "version" | "workspaceId";

@@ -537,12 +537,13 @@ export class KnowledgeApplication {
       }
       case 'API-SPACE-EXPORT': {
         await this.requireExistingPermission('space', params.spaceId ?? '', 'write', context);
-        if (body.format !== undefined && body.format !== 'zip') {
+        const format = body.format === undefined ? 'zip' : body.format;
+        if (format !== 'zip' && format !== 'csv') {
           throw createKnowledgeError({
             code: 'KNOWLEDGE_VALIDATION_FAILED',
             requestId: context.requestId,
             traceId: context.traceId,
-            details: { field: 'format', supported: ['zip'] },
+            details: { field: 'format', supported: ['zip', 'csv'] },
           });
         }
         const requestedIds = Array.isArray(body.sourceIds)
@@ -603,7 +604,7 @@ export class KnowledgeApplication {
               [
                 context.workspaceId,
                 params.spaceId ?? '',
-                'zip',
+                format,
                 sources
                   .map((source) => `${source.id}:${source.version}`)
                   .sort()
@@ -618,7 +619,7 @@ export class KnowledgeApplication {
               spaceId: params.spaceId ?? '',
               sourceIds: sources.map((source) => source.id),
               sourceVersions,
-              format: 'zip',
+              format,
               exportScope: 'space',
               idempotencyKey,
             },

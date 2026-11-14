@@ -544,6 +544,53 @@ async function bootstrapRuntime(): Promise<TelemetryKnowledgeApiRuntime> {
     bindings: s5BindingRepository,
     sync: connectorSync,
     caption: s8Caption,
+    structuredImport: {
+      async parse(input) {
+        const { context } = input;
+        const objectRef = await objectRefs.findObjectRef(input.source.blobRefId ?? '', context);
+        if (!objectRef || objectRef.state !== 'active') {
+          throw createKnowledgeError({
+            code: 'KNOWLEDGE_NOT_FOUND',
+            requestId: input.requestId,
+            traceId: input.traceId,
+            details: { blobRefId: input.source.blobRefId },
+          });
+        }
+        const object = await objectStore.getObject(objectRef.bucket, objectRef.objectKey, null, {
+          workspaceId: context.workspaceId,
+          knowledgeSpaceId: input.source.knowledgeSpaceId,
+          requestId: input.requestId,
+          traceId: input.traceId,
+        });
+        const chunks: Uint8Array[] = [];
+        let sizeBytes = 0;
+        for await (const chunk of object.body) {
+          const bytes = Buffer.from(chunk);
+          sizeBytes += bytes.byteLength;
+          if (sizeBytes > 50 * 1024 * 1024) {
+            throw createKnowledgeError({
+              code: 'KNOWLEDGE_PAYLOAD_TOO_LARGE',
+              requestId: input.requestId,
+              traceId: input.traceId,
+              details: { field: 'source', maxBytes: 50 * 1024 * 1024 },
+            });
+          }
+          chunks.push(bytes);
+        }
+        const fileName =
+          input.source.kind === 'backup' && !/\.(?:csv|xlsx)$/i.test(input.source.name)
+            ? `${input.source.name}.csv`
+            : input.source.name;
+        return parseImportTemplate({
+          fileName,
+          mimeType: input.source.mimeType,
+          bytes: Buffer.concat(chunks),
+          backup: input.source.kind === 'backup',
+          requestId: input.requestId,
+          traceId: input.traceId,
+        });
+      },
+    },
     synonymRebuild: {
       async handleQueue(jobId, workerId, context) {
         if (!s09RebuildRef.current) {
