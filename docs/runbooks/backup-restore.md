@@ -5,6 +5,9 @@
 - changeId is required for every restore rehearsal.
 - This runbook exercises the current `knowledge_*` graph only.
 - Mock backup evidence is not a real recovery drill.
+- Product-level CSV backups use `q,a,index,metadata,schemaVersion` rows and can be
+  previewed, dry-run, and restored through the import workbench. ZIP exports remain
+  archive downloads and are not treated as CSV restore input.
 
 ## Backup Inventory
 

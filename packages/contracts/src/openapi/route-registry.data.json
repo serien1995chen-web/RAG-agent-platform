@@ -2114,7 +2114,7 @@
       "path": "/v1/knowledge/spaces/{spaceId}/imports/backup",
       "group": "import",
       "requestSchema": "ImportBackup",
-      "responseSchema": "Job",
+      "responseSchema": null,
       "scopes": [
         "knowledge:write"
       ],
@@ -2160,7 +2160,7 @@
       "path": "/v1/knowledge/spaces/{spaceId}/imports/template",
       "group": "import",
       "requestSchema": "ImportTemplate",
-      "responseSchema": "Job",
+      "responseSchema": null,
       "scopes": [
         "knowledge:write"
       ],

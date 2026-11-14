@@ -42,6 +42,8 @@ function baseRuntimeEnv(input: {
   scopes?: string;
   isWorkspaceOwner?: boolean;
   port: number;
+  redisUrl?: string;
+  mongoUri?: string;
 }): NodeJS.ProcessEnv {
   return {
     ...process.env,
@@ -51,8 +53,8 @@ function baseRuntimeEnv(input: {
     KB_APP_WORKER_MODE: 'http',
     KB_PORT: String(input.port),
     KB_INSTANCE_ID: `b06a-e2e-${input.suffix}`,
-    KB_MONGO_URI: requiredEnv('KB_TEST_MONGO_URI'),
-    KB_REDIS_URL: requiredEnv('KB_TEST_REDIS_URL'),
+    KB_MONGO_URI: input.mongoUri ?? requiredEnv('KB_TEST_MONGO_URI'),
+    KB_REDIS_URL: input.redisUrl ?? requiredEnv('KB_TEST_REDIS_URL'),
     KB_PG_URL: requiredEnv('KB_TEST_PG_URL'),
     KB_S3_ENDPOINT: requiredEnv('KB_TEST_S3_ENDPOINT'),
     KB_S3_REGION: process.env.KB_TEST_S3_REGION ?? 'us-east-1',
@@ -120,6 +122,8 @@ export async function startB06aApp(input: {
   scopes?: string;
   isWorkspaceOwner?: boolean;
   withWorker?: boolean;
+  redisUrl?: string;
+  mongoUri?: string;
 }): Promise<B06aAppHarness> {
   const port = await freePort();
   const baseUrl = `http://127.0.0.1:${port}`;

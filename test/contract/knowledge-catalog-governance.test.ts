@@ -90,7 +90,10 @@ describe('S3 catalog governance contract', () => {
         sourceIds: { maxItems: number };
       };
     };
-    expect(exportCreate.properties.format).toMatchObject({ enum: ['zip'], default: 'zip' });
+    expect(exportCreate.properties.format).toMatchObject({
+      enum: ['zip', 'csv'],
+      default: 'zip',
+    });
     expect(exportCreate.properties.sourceIds.maxItems).toBe(2000);
     const exportPath = openapi.paths['/v1/knowledge/spaces/{spaceId}/exports']?.post as {
       responses: Record<string, unknown>;

@@ -109,6 +109,7 @@ export interface S6JobPort {
     retryable: boolean,
     errorCode: string,
     context: TenantContext,
+    details?: Record<string, unknown> | null,
   ): Promise<{ status: string }>;
   setStep(
     input: {
@@ -371,6 +372,24 @@ export interface S6ExternalProcessingPort {
     context: TenantContext,
   ): Promise<number[][]>;
   dispatchOutbox(context: TenantContext): Promise<boolean>;
+}
+
+export interface S6StructuredImportPort {
+  parse(input: {
+    source: S6SourceRecord;
+    requestId: string;
+    traceId: string;
+    context: TenantContext;
+  }): Promise<{
+    rows: Array<{
+      rowNumber: number;
+      question: string;
+      answer: string;
+      indexes: string[];
+      metadata: Record<string, unknown>;
+      schemaVersion: number;
+    }>;
+  }>;
 }
 
 export interface S6ConnectorSyncResult {

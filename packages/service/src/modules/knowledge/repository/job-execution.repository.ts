@@ -467,6 +467,7 @@ export class KnowledgeJobExecutionRepository {
     retryable: boolean,
     errorCode: string,
     context: TenantContext,
+    details?: Record<string, unknown> | null,
   ) {
     const current = await this.jobs.findOne({
       _id: objectIdOf(jobId, context, 'jobId'),
@@ -487,7 +488,7 @@ export class KnowledgeJobExecutionRepository {
       {
         $set: {
           status: next,
-          error: { code: errorCode, retryable },
+          error: { code: errorCode, retryable, details },
           leaseOwner: null,
           leaseExpiresAt: null,
           availableAt:

@@ -49,7 +49,7 @@ type ConnectorRepository = ConnectorRepositoryPort;
 export interface S04IngestionDependencies {
   imports: ImportRepository;
   connectors: ConnectorRepository;
-  objectRefs: Pick<ObjectRefRepositoryPort, 'findObjectRef'>;
+  objectRefs: Pick<ObjectRefRepositoryPort, 'findObjectRef' | 'markDeleting'>;
   content: IngestionContentPort;
   urlImport: UrlImportAdapterPort;
   customApi: CustomApiClientPort;
@@ -262,6 +262,15 @@ async function compensate(
   );
 }
 
+async function discardCompletedUpload(
+  dependencies: S04IngestionDependencies,
+  upload: NonNullable<Awaited<ReturnType<ObjectRefRepositoryPort['findObjectRef']>>>,
+  context: TenantContext,
+): Promise<void> {
+  if (upload.sourceId || upload.state !== 'active') return;
+  await dependencies.objectRefs.markDeleting(upload.blobId, upload.version, context);
+}
+
 function commandOf(input: {
   operation: KnowledgeOperationInput;
   knowledgeSpaceId: string;
@@ -397,6 +406,22 @@ async function fileDrafts(
 
 function backupExternalId(question: string, answer: string): string {
   return `backup:${sha256Of(`${question}\u0000${answer}`)}`;
+}
+
+function backupRowCsv(row: {
+  question: string;
+  answer: string;
+  indexes: string[];
+  metadata: Record<string, unknown>;
+}): Buffer {
+  const cell = (value: unknown) => `"${String(value ?? '').replaceAll('"', '""')}"`;
+  return Buffer.from(
+    '\ufeffq,a,index,metadata,schemaVersion\r\n' +
+      [row.question, row.answer, row.indexes.join('|'), JSON.stringify(row.metadata), 1]
+        .map(cell)
+        .join(','),
+    'utf8',
+  );
 }
 
 export class S04IngestionApplication {
@@ -603,7 +628,10 @@ export class S04IngestionApplication {
           !upload ||
           upload.knowledgeSpaceId !== targetSpaceId ||
           upload.state !== 'active' ||
-          upload.purpose !== 'source'
+          upload.purpose !== 'source' ||
+          upload.uploadStatus !== 'completed' ||
+          upload.sourceId !== null ||
+          !upload.finalObjectKey
         ) {
           throw createKnowledgeError({
             code: 'KNOWLEDGE_NOT_FOUND',
@@ -633,6 +661,19 @@ export class S04IngestionApplication {
           requestId: input.context.requestId,
           traceId: input.context.traceId,
         });
+        if (body.previewOnly) {
+          return {
+            status: 200,
+            data: {
+              format: parsed.format,
+              headers: parsed.headers,
+              rowCount: parsed.rows.length,
+              rows: parsed.rows.slice(0, 100),
+              diagnostics: parsed.diagnostics,
+              truncated: parsed.rows.length > 100,
+            },
+          };
+        }
         const material = await this.dependencies.content.materializeTemplate({
           knowledgeSpaceId: targetSpaceId,
           directoryId: body.directoryId ?? null,
@@ -659,6 +700,8 @@ export class S04IngestionApplication {
           );
           if (result.replayed) {
             await compensate(this.dependencies, [material], targetSpaceId, input.context);
+          } else {
+            await discardCompletedUpload(this.dependencies, upload, input.context);
           }
           return { status: 202, data: result.job };
         } catch (error) {
@@ -689,7 +732,10 @@ export class S04IngestionApplication {
           !upload ||
           upload.knowledgeSpaceId !== targetSpaceId ||
           upload.state !== 'active' ||
-          upload.purpose !== 'source'
+          upload.purpose !== 'source' ||
+          upload.uploadStatus !== 'completed' ||
+          upload.sourceId !== null ||
+          !upload.finalObjectKey
         ) {
           throw createKnowledgeError({
             code: 'KNOWLEDGE_NOT_FOUND',
@@ -729,10 +775,31 @@ export class S04IngestionApplication {
               (row) => backupExternalId(row.question, row.answer) === conflict.externalId,
             )?.rowNumber ?? conflict.rowNumber,
         }));
-        const actions = conflicts.map((conflict) => ({
-          rowNumber: conflict.rowNumber,
-          action: body.conflictStrategy,
-        }));
+        const conflictByExternalId = new Map(
+          conflicts.map((conflict) => [conflict.externalId, conflict]),
+        );
+        const actions = parsed.rows.map((row) => {
+          const externalId = backupExternalId(row.question, row.answer);
+          return {
+            rowNumber: row.rowNumber,
+            action: conflictByExternalId.has(externalId) ? body.conflictStrategy : 'create',
+          };
+        });
+        if (body.previewOnly) {
+          return {
+            status: 200,
+            data: {
+              format: parsed.format,
+              headers: parsed.headers,
+              rowCount: parsed.rows.length,
+              rows: parsed.rows.slice(0, 100),
+              diagnostics: parsed.diagnostics,
+              conflicts,
+              actions: actions.slice(0, 100),
+              truncated: parsed.rows.length > 100,
+            },
+          };
+        }
         if (
           body.dryRun ||
           (body.conflictStrategy === 'skip' && parsed.rows.length === conflicts.length)
@@ -760,9 +827,6 @@ export class S04IngestionApplication {
             details: { conflicts },
           });
         }
-        const conflictByExternalId = new Map(
-          conflicts.map((conflict) => [conflict.externalId, conflict]),
-        );
         const materials: IngestionContentResult[] = [];
         try {
           for (const row of parsed.rows) {
@@ -773,7 +837,7 @@ export class S04IngestionApplication {
               kind: 'backup',
               name: row.question.slice(0, 240),
               mimeType: 'text/plain; charset=utf-8',
-              bytes: Buffer.from(`${row.question}\n\n${row.answer}`, 'utf8'),
+              bytes: backupRowCsv(row),
               directoryId: body.directoryId ?? null,
               parseProvider: 'liteparse',
               metadata: {
@@ -812,6 +876,8 @@ export class S04IngestionApplication {
           );
           if (result.replayed) {
             await compensate(this.dependencies, materials, targetSpaceId, input.context);
+          } else {
+            await discardCompletedUpload(this.dependencies, upload, input.context);
           }
           return { status: 202, data: result.job };
         } catch (error) {
