@@ -828,7 +828,7 @@ export class FileApplication {
       );
       throw error;
     }
-    const issued = this.tickets.issue(
+    const issued = await this.tickets.issue(
       {
         workspaceId: ref.workspaceId,
         memberId: context.memberId,

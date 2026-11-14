@@ -2,12 +2,12 @@ import { describe, expect, it } from 'vitest';
 import { FileTicketService } from '../../src/file-ticket';
 
 describe('file ticket service', () => {
-  it('issues a configured public content URL and verifies all claims', () => {
+  it('issues a configured public content URL and verifies all claims', async () => {
     const service = new FileTicketService(
       'file-ticket-secret-that-is-at-least-32-bytes',
       'https://knowledge.example.invalid',
     );
-    const issued = service.issue(
+    const issued = await service.issue(
       {
         workspaceId: 'ws_ticket',
         memberId: 'mem_ticket',
@@ -36,14 +36,14 @@ describe('file ticket service', () => {
     });
   });
 
-  it('rejects expired and tampered tickets', () => {
+  it('rejects expired and tampered tickets', async () => {
     let now = Date.parse('2026-10-25T00:00:00.000Z');
     const service = new FileTicketService(
       'file-ticket-secret-that-is-at-least-32-bytes',
       'https://knowledge.example.invalid',
       () => now,
     );
-    const issued = service.issue(
+    const issued = await service.issue(
       {
         workspaceId: 'ws_ticket',
         memberId: 'mem_ticket',
@@ -80,7 +80,7 @@ describe('file ticket service', () => {
       'file-ticket-secret-that-is-at-least-32-bytes',
       'https://knowledge.example.invalid',
     );
-    const issued = service.issue(
+    const issued = await service.issue(
       {
         workspaceId: 'ws_ticket',
         memberId: 'mem_ticket',

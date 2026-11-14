@@ -23,19 +23,26 @@ export interface FileTicketResult {
 }
 
 export interface FileTicketAtomicStore {
-  consumeOnce(key: string, ttlMs: number): Promise<boolean>;
+  register(key: string, ttlMs: number): Promise<void>;
+  consumeOnce(key: string): Promise<boolean>;
 }
 
 class InMemoryFileTicketAtomicStore implements FileTicketAtomicStore {
   private readonly consumed = new Map<string, number>();
 
-  async consumeOnce(key: string, ttlMs: number): Promise<boolean> {
+  async register(key: string, ttlMs: number): Promise<void> {
     const now = Date.now();
+    this.consumed.set(key, now + ttlMs);
+  }
+
+  async consumeOnce(key: string): Promise<boolean> {
+    const now = Date.now();
+    const expiresAt = this.consumed.get(key) ?? 0;
     for (const [candidate, expiresAt] of this.consumed) {
       if (expiresAt <= now) this.consumed.delete(candidate);
     }
-    if ((this.consumed.get(key) ?? 0) > now) return false;
-    this.consumed.set(key, now + ttlMs);
+    if (expiresAt <= now) return false;
+    this.consumed.delete(key);
     return true;
   }
 }
@@ -84,11 +91,11 @@ export class FileTicketService {
     this.publicBaseUrl = publicBaseUrl.replace(/\/+$/, '');
   }
 
-  issue(
+  async issue(
     input: Omit<FileTicketClaims, 'expiresAt' | 'nonce'> & { ttlSeconds: number },
     requestId: string,
     traceId: string,
-  ): FileTicketResult {
+  ): Promise<FileTicketResult> {
     if (!Number.isInteger(input.ttlSeconds) || input.ttlSeconds < 1 || input.ttlSeconds > 3600) {
       throw ticketError('KNOWLEDGE_VALIDATION_FAILED', requestId, traceId, {
         field: 'ttlSeconds',
@@ -111,6 +118,17 @@ export class FileTicketService {
     const payload = base64url(JSON.stringify(claims));
     const signature = createHmac('sha256', this.secret).update(payload).digest('base64url');
     const ticket = `${payload}.${signature}`;
+    const ttlMs = Math.max(1, Date.parse(claims.expiresAt) - this.now());
+    try {
+      await this.atomicStore.register(ticketConsumeKey(ticket), ttlMs);
+    } catch {
+      throw createKnowledgeError({
+        code: 'KNOWLEDGE_DEPENDENCY_UNAVAILABLE',
+        requestId,
+        traceId,
+        details: { dependency: 'redis', operation: 'file_ticket_register' },
+      });
+    }
     return {
       url: `${this.publicBaseUrl}/v1/knowledge/files/${encodeURIComponent(
         claims.blobId,
@@ -181,7 +199,7 @@ export class FileTicketService {
     }
     let consumed: boolean;
     try {
-      consumed = await this.atomicStore.consumeOnce(ticketConsumeKey(ticket), remainingMs);
+      consumed = await this.atomicStore.consumeOnce(ticketConsumeKey(ticket));
     } catch {
       throw createKnowledgeError({
         code: 'KNOWLEDGE_DEPENDENCY_UNAVAILABLE',

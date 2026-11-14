@@ -1054,7 +1054,7 @@ describe('TEST-FILE-001-BLOCK upload session', () => {
     );
 
     const tickets = new S8FileTicketAdapter(fileTickets);
-    const issued = tickets.issueImage({
+    const issued = await tickets.issueImage({
       workspaceId: context.workspaceId,
       blobId: completed.blobId,
       sourceId: null,
@@ -1070,7 +1070,7 @@ describe('TEST-FILE-001-BLOCK upload session', () => {
     expect(Buffer.concat(chunks)).toEqual(imageBytes);
     expect(content.contentType).toBe('image/png');
 
-    const otherMember = fileTickets.issue(
+    const otherMember = await fileTickets.issue(
       {
         workspaceId: context.workspaceId,
         memberId: `${context.memberId}_other`,

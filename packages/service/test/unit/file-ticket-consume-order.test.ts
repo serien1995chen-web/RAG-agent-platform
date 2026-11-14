@@ -55,7 +55,7 @@ describe('file ticket consume ordering', () => {
       'file-ticket-secret-that-is-at-least-32-bytes',
       'https://knowledge.example.invalid',
     );
-    const issued = tickets.issue(
+    const issued = await tickets.issue(
       {
         workspaceId: context.workspaceId,
         memberId: context.memberId,

@@ -249,17 +249,19 @@ export class S8ImageSearchApplication {
   }> {
     const model = await this.input.models.resolveVisionEmbedding(request.knowledgeSpaceId, context);
     const objects = await this.queryObjects(request, context);
-    const imageTickets = objects.map((object) => {
-      const ticket = this.input.tickets.issueImage({
-        workspaceId: context.workspaceId,
-        blobId: object.blobId,
-        sourceId: object.sourceId,
-        knowledgeSpaceId: object.knowledgeSpaceId,
-        ttlSeconds: 300,
-        context,
-      });
-      return { object, ticket };
-    });
+    const imageTickets = await Promise.all(
+      objects.map(async (object) => {
+        const ticket = await this.input.tickets.issueImage({
+          workspaceId: context.workspaceId,
+          blobId: object.blobId,
+          sourceId: object.sourceId,
+          knowledgeSpaceId: object.knowledgeSpaceId,
+          ttlSeconds: 300,
+          context,
+        });
+        return { object, ticket };
+      }),
+    );
     const embeddingInput =
       model.mode === 'caption-embedding'
         ? await (async () => {

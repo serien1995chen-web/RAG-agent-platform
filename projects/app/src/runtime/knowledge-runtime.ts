@@ -184,15 +184,13 @@ class RedisFileTicketAtomicStore implements FileTicketAtomicStore {
     private readonly redis: Awaited<ReturnType<typeof createKnowledgeConnections>>['redis'],
   ) {}
 
-  async consumeOnce(key: string, ttlMs: number): Promise<boolean> {
-    const result = await this.redis.set(
-      `kb:file-ticket:${key}`,
-      'consumed',
-      'PX',
-      Math.max(1, ttlMs),
-      'NX',
-    );
-    return result === 'OK';
+  async consumeOnce(key: string): Promise<boolean> {
+    const result = await this.redis.getdel(`kb:file-ticket:${key}`);
+    return result !== null;
+  }
+
+  async register(key: string, ttlMs: number): Promise<void> {
+    await this.redis.set(`kb:file-ticket:${key}`, 'issued', 'PX', Math.max(1, ttlMs));
   }
 }
 

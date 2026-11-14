@@ -225,7 +225,7 @@ describe('knowledge fault contracts', () => {
     });
   });
 
-  it('expires export download tickets deterministically', () => {
+  it('expires export download tickets deterministically', async () => {
     let now = Date.now();
     const tickets = new FileTicketService(
       'fault-ticket-secret-at-least-32-characters',
@@ -233,7 +233,7 @@ describe('knowledge fault contracts', () => {
       () => now,
     );
     const blobId = '65f1e5b2a1c9d4b7e8f01234';
-    const issued = tickets.issue(
+    const issued = await tickets.issue(
       {
         workspaceId,
         memberId: context.memberId,

@@ -5,7 +5,7 @@ import type { FileTicketPort } from '../application/ports';
 export class S8FileTicketAdapter implements S8ImageTicketPort {
   constructor(private readonly tickets: FileTicketPort) {}
 
-  issueImage(input: Parameters<S8ImageTicketPort['issueImage']>[0]) {
+  async issueImage(input: Parameters<S8ImageTicketPort['issueImage']>[0]) {
     if (input.ttlSeconds < 60 || input.ttlSeconds > 3600) {
       throw createKnowledgeError({
         code: 'KNOWLEDGE_VALIDATION_FAILED',
