@@ -1,0 +1,73 @@
+{
+  "schemaVersion": 1,
+  "fastGptBaseline": {
+    "requestedVersion": "4.17.3",
+    "observedVersion": "4.17.4",
+    "authorization": "USER_AUTHORIZED_OBSERVED_VERSION",
+    "sourceRoot": "/mnt/d/Fastgpt/FastGPT"
+  },
+  "capabilities": [
+    {
+      "capabilityId": "ING-004",
+      "frontendBehaviorIds": [
+        "KB-COLLECTION-140",
+        "KB-COLLECTION-141",
+        "KB-COLLECTION-142",
+        "KB-COLLECTION-143",
+        "KB-IMPORT-120",
+        "KB-IMPORT-121",
+        "KB-IMPORT-130",
+        "KB-IMPORT-140",
+        "KB-IMPORT-142"
+      ],
+      "sourceRefs": [
+        "projects/app/src/pageComponents/dataset/detail/CollectionCard/TemplateImportModal.tsx:16-128",
+        "projects/app/src/pages/api/core/dataset/collection/create/template.ts:22-109",
+        "packages/service/core/dataset/importFile.ts:7-66",
+        "packages/service/core/dataset/read.ts:27-47",
+        "packages/service/core/dataset/read.ts:293-379",
+        "packages/service/core/dataset/collection/controller.ts:461-673"
+      ],
+      "operations": [
+        "CSV/XLSX single-file selection",
+        "header-only file is legal and creates no invented QA rows",
+        "repeated q values remain data rows",
+        "q-only and a-only non-empty rows are retained",
+        "repeated index columns and legacy indexes headers are accepted",
+        "XLSX requires exactly one worksheet and rejects merged cells"
+      ],
+      "tracks": ["FASTGPT_PARITY", "PRODUCT_EXTENSION", "SECURITY_INVARIANT"]
+    },
+    {
+      "capabilityId": "ING-005",
+      "frontendBehaviorIds": [
+        "KB-COLLECTION-144",
+        "KB-COLLECTION-145",
+        "KB-COLLECTION-146",
+        "KB-IMPORT-130",
+        "KB-IMPORT-133",
+        "KB-IMPORT-140"
+      ],
+      "sourceRefs": [
+        "projects/app/src/pageComponents/dataset/detail/CollectionCard/BackupImportModal.tsx:14-90",
+        "projects/app/src/pages/api/core/dataset/collection/create/backup.ts:22-109",
+        "projects/app/src/pages/api/core/dataset/collection/export.ts:108-145",
+        "packages/service/core/dataset/importFile.ts:7-66"
+      ],
+      "operations": [
+        "FastGPT single Source export is BOM-prefixed q,a CSV",
+        "backup import accepts CSV/XLSX uploads",
+        "dry-run reports conflicts without contents",
+        "fail/skip/overwrite use explicit conflict semantics",
+        "overwrite preserves old content on CAS failure",
+        "product export artifact can be imported by the product restore entry"
+      ],
+      "tracks": ["FASTGPT_PARITY", "PRODUCT_EXTENSION", "SECURITY_INVARIANT"]
+    }
+  ],
+  "allowedFrontendDifferences": [
+    "Modal versus stepper layout",
+    "Controls and wording placement",
+    "Additional structured preview and conflict diagnostics"
+  ]
+}

@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import mongoose from 'mongoose';
+import { parseImportTemplate } from '../../../parse/src/import-template';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { KnowledgeImportRepository } from '../../src/modules/knowledge/repository/import.repository';
 import {
@@ -1143,6 +1144,125 @@ describe('S4 import entry workflows', () => {
     expect(await connection.models.KnowledgeOutboxEvent.countDocuments({ workspaceId })).toBe(
       beforeOutbox,
     );
+  });
+
+  it('L1-B08-ING-004-P01/S01 uses the real CSV parser and preserves duplicate questions through submission', async () => {
+    const templateUpload = new mongoose.Types.ObjectId().toString();
+    const bytes = Buffer.from(
+      '\ufeffq,a,index,index,metadata\r\n' +
+        'Same,One,first,second,"{""source"":""csv""}"\r\n' +
+        'Same,Two,third,fourth,"{""source"":""csv""}"\r\n',
+    );
+    objectBytes.set(`uploads/${templateUpload}/template.csv`, bytes);
+    uploadRefs.set(templateUpload, uploadRef(templateUpload, 'template.csv', 'text/csv'));
+    const beforeSources = await connection.models.KnowledgeSource.countDocuments({ workspaceId });
+    const ingestion = ingestionApplication('template', {
+      dependencies: {
+        templateParser: { parse: parseImportTemplate },
+      },
+    });
+
+    const result = await ingestion.dispatch({
+      operationId: 'API-IMPORT-TEMPLATE',
+      params: { spaceId },
+      query: {},
+      headers: { 'idempotency-key': `template-real-${suffix}-0001` },
+      body: { uploadId: templateUpload, directoryId: null },
+      context,
+    });
+
+    expect(result.status).toBe(202);
+    const sources = await connection.models.KnowledgeSource.find({ workspaceId }).lean();
+    expect(sources).toHaveLength(beforeSources + 1);
+    expect(sources.at(-1)?.metadata).toMatchObject({ rowCount: 2, importKind: 'template' });
+    expect(
+      await connection.models.KnowledgeJob.countDocuments({ workspaceId, kind: 'import' }),
+    ).toBeGreaterThanOrEqual(1);
+    expect(
+      await connection.models.KnowledgeOutboxEvent.countDocuments({
+        workspaceId,
+        eventType: 'import.submit',
+      }),
+    ).toBeGreaterThanOrEqual(1);
+  });
+
+  it('L1-B08-ING-005-P01 accepts FastGPT q,a backup content and records a recoverable plan', async () => {
+    const backupUpload = new mongoose.Types.ObjectId().toString();
+    objectBytes.set(
+      `uploads/${backupUpload}/backup.csv`,
+      Buffer.from('\ufeffq,a\r\nBackup question,Backup answer\r\n'),
+    );
+    uploadRefs.set(backupUpload, uploadRef(backupUpload, 'backup.csv', 'text/csv'));
+    const ingestion = ingestionApplication('backup', {
+      dependencies: {
+        templateParser: { parse: parseImportTemplate },
+      },
+    });
+
+    const result = await ingestion.dispatch({
+      operationId: 'API-IMPORT-BACKUP',
+      params: { spaceId },
+      query: {},
+      headers: { 'idempotency-key': `backup-q-a-${suffix}-0001` },
+      body: {
+        uploadId: backupUpload,
+        directoryId: null,
+        dryRun: true,
+        conflictStrategy: 'fail',
+      },
+      context,
+    });
+
+    expect(result.status).toBe(202);
+    expect((result.data as { status: string }).status).toBe('succeeded');
+    expect(await connection.models.KnowledgeSource.countDocuments({ workspaceId })).toBe(0);
+  });
+
+  it('L1-B08-ING-004-A01 rejects cross-Space and incomplete template uploads before writes', async () => {
+    const crossSpaceUpload = new mongoose.Types.ObjectId().toString();
+    objectBytes.set(
+      `uploads/${crossSpaceUpload}/cross.csv`,
+      Buffer.from('q,a\nCross question,Cross answer\n'),
+    );
+    uploadRefs.set(crossSpaceUpload, {
+      ...uploadRef(crossSpaceUpload, 'cross.csv', 'text/csv'),
+      knowledgeSpaceId: new mongoose.Types.ObjectId().toString(),
+    });
+    const incompleteUpload = new mongoose.Types.ObjectId().toString();
+    objectBytes.set(
+      `uploads/${incompleteUpload}/incomplete.csv`,
+      Buffer.from('q,a\nIncomplete,Upload\n'),
+    );
+    uploadRefs.set(incompleteUpload, {
+      ...uploadRef(incompleteUpload, 'incomplete.csv', 'text/csv'),
+      uploadStatus: 'uploading',
+    });
+    const ingestion = ingestionApplication('template');
+
+    await expect(
+      ingestion.dispatch({
+        operationId: 'API-IMPORT-TEMPLATE',
+        params: { spaceId },
+        query: {},
+        headers: { 'idempotency-key': `template-cross-${suffix}-0001` },
+        body: { uploadId: crossSpaceUpload, directoryId: null },
+        context,
+      }),
+    ).rejects.toMatchObject({ problem: { error: { code: 'KNOWLEDGE_NOT_FOUND' } } });
+    await expect(
+      ingestion.dispatch({
+        operationId: 'API-IMPORT-TEMPLATE',
+        params: { spaceId },
+        query: {},
+        headers: { 'idempotency-key': `template-incomplete-${suffix}-0001` },
+        body: { uploadId: incompleteUpload, directoryId: null },
+        context,
+      }),
+    ).rejects.toMatchObject({ problem: { error: { code: 'KNOWLEDGE_NOT_FOUND' } } });
+
+    expect(await connection.models.KnowledgeSource.countDocuments({ workspaceId })).toBe(0);
+    expect(await connection.models.KnowledgeJob.countDocuments({ workspaceId })).toBe(0);
+    expect(await connection.models.KnowledgeOutboxEvent.countDocuments({ workspaceId })).toBe(0);
   });
 
   it('TEST-ING-005-U03 overwrite stores the real source version in the parent Job snapshot', async () => {
