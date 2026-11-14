@@ -6,6 +6,7 @@ export {
   assertKnowledgeObjectKey,
   assertKnowledgeObjectScope,
   createKnowledgeObjectStore,
+  knowledgeWorkspacePrefix,
   knowledgeObjectKey,
   safeKeySegment,
   validateObjectStoreConfig,
@@ -39,4 +40,9 @@ export { AwsS3KnowledgeObjectStore } from './providers/aws-s3';
 export { CosKnowledgeObjectStore } from './providers/cos';
 export { OssKnowledgeObjectStore } from './providers/oss';
 export { FileTicketService } from './file-ticket';
-export type { FileTicketClaims, FileTicketDisposition, FileTicketResult } from './file-ticket';
+export type {
+  FileTicketAtomicStore,
+  FileTicketClaims,
+  FileTicketDisposition,
+  FileTicketResult,
+} from './file-ticket';

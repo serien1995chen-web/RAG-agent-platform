@@ -119,7 +119,7 @@ export interface S8ImageTicketPort {
     knowledgeSpaceId: string;
     ttlSeconds: number;
     context: TenantContext;
-  }): { url: string; expiresAt: string };
+  }): Promise<{ url: string; expiresAt: string }>;
 }
 
 export interface S8ImageSearchDependencies {

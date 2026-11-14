@@ -27,9 +27,11 @@ import {
   deleteDirectory,
   deleteSource,
   deleteTag,
+  downloadFileTicket,
   downloadSource,
   getAcl,
   getConnector,
+  getJob,
   getSource,
   listCollaborators,
   moveDirectory,
@@ -169,6 +171,7 @@ export function DatasetDetailPage(props: {
   const [batchBusy, setBatchBusy] = useState(false);
   const [batchError, setBatchError] = useState<unknown>(null);
   const [batchResult, setBatchResult] = useState<BatchResult | null>(null);
+  const [archiveStage, setArchiveStage] = useState<'idle' | 'queued' | 'running' | 'ready'>('idle');
   const [tagManagerOpen, setTagManagerOpen] = useState(false);
   const [tagAssignmentTarget, setTagAssignmentTarget] = useState<Source | null>(null);
   const [tagAssignmentId, setTagAssignmentId] = useState('');
@@ -504,15 +507,38 @@ export function DatasetDetailPage(props: {
     if (selectedSources.length === 0) return;
     setBatchBusy(true);
     setBatchError(null);
+    setArchiveStage('queued');
     try {
-      const ticket = await archiveSources(
+      const queued = await archiveSources(
         datasetId,
         selectedSources.map((source) => source.id),
       );
-      window.open(ticket.url, '_blank', 'noopener,noreferrer');
-      toast.success('下载任务已开始');
+      let current = queued;
+      const deadline = Date.now() + 120_000;
+      while (current.status !== 'succeeded') {
+        if (['failed', 'dead_letter', 'cancelled'].includes(current.status)) {
+          throw new Error(`归档任务失败：${current.status}`);
+        }
+        if (Date.now() >= deadline) throw new Error('归档任务超时，请重试。');
+        setArchiveStage(current.status === 'queued' ? 'queued' : 'running');
+        await new Promise((resolveWait) => window.setTimeout(resolveWait, 1_000));
+        current = await getJob(queued.jobId);
+      }
+      const blobId = current.result?.objectBlobRefId;
+      if (typeof blobId !== 'string') throw new Error('归档结果缺少 export ObjectRef。');
+      const ticket = await downloadFileTicket(blobId);
+      const anchor = document.createElement('a');
+      anchor.href = ticket.url;
+      anchor.download = `knowledge-archive-${Date.now()}.zip`;
+      anchor.rel = 'noopener noreferrer';
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      setArchiveStage('ready');
+      toast.success('压缩包已开始下载');
     } catch (error) {
       setBatchError(error);
+      setArchiveStage('idle');
       toast.error(error);
     } finally {
       setBatchBusy(false);
@@ -961,6 +987,7 @@ export function DatasetDetailPage(props: {
                     onClick={() => {
                       setBatchMode((value) => !value);
                       setSelectedSourceIds([]);
+                      setArchiveStage('idle');
                     }}
                   >
                     <CheckIcon boxSize={3.5} />
@@ -1359,6 +1386,15 @@ export function DatasetDetailPage(props: {
         {batchMode && selectedSourceIds.length > 0 ? (
           <div className="kb2-batch-bar" role="region" aria-label="Collection 批量操作">
             <span className="kb2-batch-bar__count">已选择 {selectedSourceIds.length} 个文件</span>
+            {archiveStage !== 'idle' ? (
+              <span role="status" className="kb2-batch-bar__count">
+                {archiveStage === 'queued'
+                  ? '打包任务已排队'
+                  : archiveStage === 'running'
+                    ? '正在生成压缩包'
+                    : '压缩包已开始下载'}
+              </span>
+            ) : null}
             <ProductButton busy={batchBusy} onClick={() => void archiveSelected()}>
               <DownloadIcon boxSize={3.5} />
               批量下载

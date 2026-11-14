@@ -218,6 +218,10 @@ export function safeKeySegment(value: string): string {
   return safe.length > 0 ? safe.slice(0, 180) : 'object';
 }
 
+export function knowledgeWorkspacePrefix(workspaceId: string): string {
+  return `ws/${safeKeySegment(workspaceId)}/`;
+}
+
 export function knowledgeObjectKey(input: KnowledgeObjectKeyInput): string {
   return [
     'ws',

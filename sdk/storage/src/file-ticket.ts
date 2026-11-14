@@ -1,4 +1,4 @@
-import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
+import { createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import { createKnowledgeError } from '@kb/contracts';
 
 export type FileTicketDisposition = 'inline' | 'attachment';
@@ -22,6 +22,35 @@ export interface FileTicketResult {
   expiresAt: string;
 }
 
+export interface FileTicketAtomicStore {
+  register(key: string, ttlMs: number): Promise<void>;
+  consumeOnce(key: string): Promise<boolean>;
+}
+
+class InMemoryFileTicketAtomicStore implements FileTicketAtomicStore {
+  private readonly consumed = new Map<string, number>();
+
+  async register(key: string, ttlMs: number): Promise<void> {
+    const now = Date.now();
+    this.consumed.set(key, now + ttlMs);
+  }
+
+  async consumeOnce(key: string): Promise<boolean> {
+    const now = Date.now();
+    const expiresAt = this.consumed.get(key) ?? 0;
+    for (const [candidate, expiresAt] of this.consumed) {
+      if (expiresAt <= now) this.consumed.delete(candidate);
+    }
+    if (expiresAt <= now) return false;
+    this.consumed.delete(key);
+    return true;
+  }
+}
+
+function ticketConsumeKey(ticket: string): string {
+  return `ticket:${createHash('sha256').update(ticket).digest('hex')}`;
+}
+
 function base64url(value: string | Buffer): string {
   return Buffer.from(value).toString('base64url');
 }
@@ -43,6 +72,7 @@ export class FileTicketService {
     secretRefValue: string,
     publicBaseUrl: string,
     private readonly now: () => number = Date.now,
+    private readonly atomicStore: FileTicketAtomicStore = new InMemoryFileTicketAtomicStore(),
   ) {
     if (secretRefValue.length < 32) {
       throw ticketError('KNOWLEDGE_VALIDATION_FAILED', 'config', 'config', {
@@ -61,11 +91,11 @@ export class FileTicketService {
     this.publicBaseUrl = publicBaseUrl.replace(/\/+$/, '');
   }
 
-  issue(
+  async issue(
     input: Omit<FileTicketClaims, 'expiresAt' | 'nonce'> & { ttlSeconds: number },
     requestId: string,
     traceId: string,
-  ): FileTicketResult {
+  ): Promise<FileTicketResult> {
     if (!Number.isInteger(input.ttlSeconds) || input.ttlSeconds < 1 || input.ttlSeconds > 3600) {
       throw ticketError('KNOWLEDGE_VALIDATION_FAILED', requestId, traceId, {
         field: 'ttlSeconds',
@@ -88,6 +118,17 @@ export class FileTicketService {
     const payload = base64url(JSON.stringify(claims));
     const signature = createHmac('sha256', this.secret).update(payload).digest('base64url');
     const ticket = `${payload}.${signature}`;
+    const ttlMs = Math.max(1, Date.parse(claims.expiresAt) - this.now());
+    try {
+      await this.atomicStore.register(ticketConsumeKey(ticket), ttlMs);
+    } catch {
+      throw createKnowledgeError({
+        code: 'KNOWLEDGE_DEPENDENCY_UNAVAILABLE',
+        requestId,
+        traceId,
+        details: { dependency: 'redis', operation: 'file_ticket_register' },
+      });
+    }
     return {
       url: `${this.publicBaseUrl}/v1/knowledge/files/${encodeURIComponent(
         claims.blobId,
@@ -143,6 +184,33 @@ export class FileTicketService {
     if (Date.parse(claims.expiresAt) <= this.now()) {
       throw ticketError('KNOWLEDGE_FORBIDDEN', requestId, traceId, {
         reason: 'ticket_expired',
+      });
+    }
+    return claims;
+  }
+
+  async consume(ticket: string, requestId: string, traceId: string): Promise<FileTicketClaims> {
+    const claims = this.verify(ticket, requestId, traceId);
+    const remainingMs = Date.parse(claims.expiresAt) - this.now();
+    if (remainingMs <= 0) {
+      throw ticketError('KNOWLEDGE_FORBIDDEN', requestId, traceId, {
+        reason: 'ticket_expired',
+      });
+    }
+    let consumed: boolean;
+    try {
+      consumed = await this.atomicStore.consumeOnce(ticketConsumeKey(ticket));
+    } catch {
+      throw createKnowledgeError({
+        code: 'KNOWLEDGE_DEPENDENCY_UNAVAILABLE',
+        requestId,
+        traceId,
+        details: { dependency: 'redis', operation: 'file_ticket_consume' },
+      });
+    }
+    if (!consumed) {
+      throw ticketError('KNOWLEDGE_FORBIDDEN', requestId, traceId, {
+        reason: 'ticket_consumed',
       });
     }
     return claims;

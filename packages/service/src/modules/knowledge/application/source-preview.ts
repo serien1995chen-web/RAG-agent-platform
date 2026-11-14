@@ -235,7 +235,7 @@ export class SourceFileApplication {
       source,
       context,
     );
-    const issued = this.tickets.issue(
+    const issued = await this.tickets.issue(
       {
         workspaceId: ref.workspaceId,
         memberId: context.memberId,

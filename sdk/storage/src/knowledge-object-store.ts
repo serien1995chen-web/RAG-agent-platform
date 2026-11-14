@@ -2,6 +2,7 @@ export {
   KNOWLEDGE_OBJECT_PROVIDERS,
   assertKnowledgeObjectKey,
   assertKnowledgeObjectScope,
+  knowledgeWorkspacePrefix,
   knowledgeObjectKey,
   safeKeySegment,
 } from './object-store-contract';

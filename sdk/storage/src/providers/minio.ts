@@ -20,6 +20,7 @@ import {
   assertConfiguredBucket,
   assertKnowledgeObjectKey,
   expectedExpiry,
+  knowledgeWorkspacePrefix,
   mapObjectCopyError,
   mapObjectStoreError,
   normalizeEtag,
@@ -215,6 +216,68 @@ export class MinioKnowledgeObjectStore implements ObjectStorePort {
     } catch (error) {
       mapObjectStoreError(error, this.provider, 'headObject', context, key);
     }
+  }
+
+  async listObjects(input: {
+    prefix: string;
+    cursor: string | null;
+    limit: number;
+    context: KnowledgeObjectContext;
+  }): Promise<{
+    items: Array<{ key: string; sizeBytes: number; lastModified: string }>;
+    nextCursor: string | null;
+  }> {
+    assertConfiguredBucket(this.bucket, this.bucket, input.context);
+    if (input.prefix !== knowledgeWorkspacePrefix(input.context.workspaceId)) {
+      throw objectStoreError('KNOWLEDGE_VALIDATION_FAILED', input.context, {
+        field: 'prefix',
+        reason: 'workspace_prefix_required',
+      });
+    }
+    const limit = Math.max(1, Math.min(input.limit, 500));
+    return new Promise((resolvePage, rejectPage) => {
+      const items: Array<{ key: string; sizeBytes: number; lastModified: string }> = [];
+      let settled = false;
+      const stream = this.client.listObjectsV2(
+        this.bucket,
+        input.prefix,
+        true,
+        input.cursor ?? undefined,
+      );
+      const finish = (nextCursor: string | null) => {
+        if (settled) return;
+        settled = true;
+        resolvePage({ items, nextCursor });
+      };
+      stream.on('data', (entry) => {
+        if (settled || entry.prefix) return;
+        if (!entry.name || !Number.isSafeInteger(entry.size) || entry.size < 0) {
+          settled = true;
+          rejectPage(providerContractError(this.provider, 'listObjects', input.context));
+          stream.destroy();
+          return;
+        }
+        items.push({
+          key: entry.name,
+          sizeBytes: entry.size,
+          lastModified: entry.lastModified?.toISOString() ?? new Date(0).toISOString(),
+        });
+        if (items.length >= limit) {
+          finish(entry.name);
+          stream.destroy();
+        }
+      });
+      stream.once('end', () => finish(null));
+      stream.once('error', (error) => {
+        if (settled) return;
+        settled = true;
+        try {
+          mapObjectStoreError(error, this.provider, 'listObjects', input.context);
+        } catch (mapped) {
+          rejectPage(mapped);
+        }
+      });
+    });
   }
 
   async getObject(

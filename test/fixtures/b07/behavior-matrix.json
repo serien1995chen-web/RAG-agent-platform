@@ -1,0 +1,174 @@
+{
+  "schemaVersion": 1,
+  "batch": "B07",
+  "capabilities": ["FILE-004", "FILE-005", "OPS-004"],
+  "reference": {
+    "product": "FastGPT",
+    "version": "4.17.4",
+    "taskBaselineVersion": "4.17.3",
+    "drift": "The local read-only source reports 4.17.4. The user approved using the current source and recording this drift.",
+    "packageSha256": "3887440d738c05504cdba692be2142467de41a0ac7e11f828506f474bfc63d3c"
+  },
+  "rows": [
+    {
+      "capabilityId": "FILE-004",
+      "responsibility": "Issue a short-lived ticket after archive preflight",
+      "fastgptEvidence": [
+        "projects/app/src/pages/api/core/dataset/collection/getDownloadTicket.ts",
+        "projects/app/src/service/core/dataset/collection/archiveTicket.ts"
+      ],
+      "frontendBehaviorIds": ["KB-COLLECTION-060", "KB-COLLECTION-062"],
+      "input": "Authenticated member selects one or more readable file Sources.",
+      "expected": "The member receives a short-lived archive credential bound to the member and workspace, or a stable business error when no downloadable content exists.",
+      "stateTransition": "selection -> archive request -> queued Job -> export ObjectRef",
+      "persistence": "Archive Job, export ObjectRef, expiresAt and redacted audit event.",
+      "authorization": "Current Source read permission and workspace isolation are checked before issuance.",
+      "projectMechanism": "Source archive Job plus HMAC file ticket endpoint.",
+      "allowedDifferences": "Project-specific Job and endpoint names are allowed; the user-visible result is not.",
+      "unresolved": false,
+      "conclusion": "MATCH"
+    },
+    {
+      "capabilityId": "FILE-004",
+      "responsibility": "Acquire resource lease before consuming a ticket",
+      "fastgptEvidence": [
+        "projects/app/src/pages/api/core/dataset/collection/batchDownload.ts:36-55",
+        "projects/app/src/service/core/dataset/collection/archive.ts:95-145"
+      ],
+      "frontendBehaviorIds": ["KB-COLLECTION-063"],
+      "input": "Download while a member lease or capacity slot is temporarily unavailable.",
+      "expected": "The ticket remains usable when no streaming lease was acquired; after a successful stream starts, a consumed ticket cannot be replayed.",
+      "stateTransition": "ticket issued -> lease unavailable -> retry permitted; ticket consumed -> stream -> no replay",
+      "persistence": "Ticket consumption is atomic and only happens after lease acquisition.",
+      "authorization": "Ticket subject must match the authenticated member and workspace.",
+      "projectMechanism": "FileTicketService claims plus archived ObjectRef validation.",
+      "allowedDifferences": "Lease storage can differ, but retry and replay behavior cannot.",
+      "unresolved": false,
+      "conclusion": "MATCH"
+    },
+    {
+      "capabilityId": "FILE-004",
+      "responsibility": "Produce a valid ZIP with a traceable manifest",
+      "fastgptEvidence": [
+        "projects/app/src/service/core/dataset/collection/archive.ts",
+        "projects/app/src/service/core/dataset/collection/archiveTicket.ts:96-123"
+      ],
+      "frontendBehaviorIds": ["KB-COLLECTION-061"],
+      "input": "A successful archive Job for multiple Sources.",
+      "expected": "The browser downloads a valid ZIP; manifest Source IDs and file names match entries and content hashes match the original Sources.",
+      "stateTransition": "queued -> running -> succeeded",
+      "persistence": "Active export ObjectRef with TTL; source version, updatedAt and blobRef remain unchanged.",
+      "authorization": "Only the requesting workspace member can obtain the archive credential.",
+      "projectMechanism": "Archive Worker writes MinIO export and the file content endpoint streams it.",
+      "allowedDifferences": "ZIP directory layout may differ if manifest remains traceable.",
+      "unresolved": false,
+      "conclusion": "MATCH"
+    },
+    {
+      "capabilityId": "FILE-004",
+      "responsibility": "Expose a native browser download without leaving the list",
+      "fastgptEvidence": [
+        "projects/app/src/pageComponents/dataset/detail/CollectionCard/index.tsx:388",
+        "projects/app/src/web/core/dataset/api/collection.ts:61"
+      ],
+      "frontendBehaviorIds": ["KB-COLLECTION-060", "KB-COLLECTION-061", "KB-COLLECTION-063"],
+      "input": "Select downloadable Sources and activate batch download.",
+      "expected": "The button enters loading/disabled state, the page remains on the list, and the browser emits a native download after Job success.",
+      "stateTransition": "idle -> queued -> running -> succeeded -> download",
+      "persistence": "The page reflects the persisted Job and does not claim ready before the export exists.",
+      "authorization": "Viewers without Source read permission cannot download.",
+      "projectMechanism": "Product dataset detail page and ArchiveAction state machine.",
+      "allowedDifferences": "Layout and labels may differ; native download and recovery behavior may not.",
+      "unresolved": false,
+      "conclusion": "MATCH"
+    },
+    {
+      "capabilityId": "FILE-005",
+      "responsibility": "Delete expired pending objects while preserving active Source objects",
+      "fastgptEvidence": [
+        "packages/service/common/s3/lifecycle/cleanup.ts:10-88",
+        "packages/service/common/s3/buckets/base.ts"
+      ],
+      "frontendBehaviorIds": [],
+      "input": "TTL cleanup over expired pending, active and deleted object references.",
+      "expected": "Expired unreferenced objects are deleted, active Source objects remain, and repeated cleanup converges.",
+      "stateTransition": "pending/deleting -> deleted; active Source remains active",
+      "persistence": "ObjectRef state, physical object, Job step and audit evidence agree.",
+      "authorization": "Every repository operation carries a workspace and missing TenantContext fails closed.",
+      "projectMechanism": "ObjectLifecycleService invoked by the knowledge Worker and cleanup Job.",
+      "allowedDifferences": "Cron scheduling and table names are project-specific.",
+      "unresolved": false,
+      "conclusion": "PROJECT_MECHANISM"
+    },
+    {
+      "capabilityId": "FILE-005",
+      "responsibility": "Treat missing provider objects idempotently without hiding failures",
+      "fastgptEvidence": [
+        "packages/service/common/s3/lifecycle/cleanup.ts:15-88"
+      ],
+      "frontendBehaviorIds": [],
+      "input": "Provider delete or Multipart abort returns 404, 403, 5xx or timeout.",
+      "expected": "404 is idempotent success; 403, 5xx and timeout remain retryable and preserve evidence.",
+      "stateTransition": "deleting -> deleted on 404; deleting -> retry on retryable errors",
+      "persistence": "Failed cleanup remains recoverable and does not become a fabricated success.",
+      "authorization": "Provider calls use tenant-scoped object prefixes.",
+      "projectMechanism": "Knowledge error factory classification and ObjectLifecycleService retry counters.",
+      "allowedDifferences": "Retry timestamps and queue names may differ.",
+      "unresolved": false,
+      "conclusion": "PROJECT_MECHANISM"
+    },
+    {
+      "capabilityId": "OPS-004",
+      "responsibility": "Detect and repair orphan objects and vectors",
+      "fastgptEvidence": [
+        "projects/app/src/service/common/system/cronTask.ts:102-150",
+        "packages/service/common/s3/lifecycle/cleanup.ts"
+      ],
+      "frontendBehaviorIds": [],
+      "input": "A physical bucket object without a Mongo ObjectRef, an orphan pgvector row, and active resources.",
+      "expected": "Reconcile enumerates the bucket and vector stores, reports exact differences, removes only true orphans, and preserves active resources.",
+      "stateTransition": "cleanup -> reconcile -> repair -> second reconcile with zero differences",
+      "persistence": "Job step and audit facts record scanned, missing, repaired and residual counts.",
+      "authorization": "Workspace scope is mandatory and global operations require knowledge:admin.",
+      "projectMechanism": "Project cleanup/reconcile Jobs and object/vector inventory adapters.",
+      "allowedDifferences": "FastGPT has no equivalent global management endpoint; this is PROJECT_MECHANISM.",
+      "unresolved": false,
+      "conclusion": "PROJECT_MECHANISM"
+    },
+    {
+      "capabilityId": "OPS-004",
+      "responsibility": "Replay an eligible Outbox event exactly once",
+      "fastgptEvidence": [
+        "projects/app/src/service/common/system/cron.ts",
+        "projects/app/src/service/common/system/cronTask.ts"
+      ],
+      "frontendBehaviorIds": [],
+      "input": "Pending, failed, published and dead_letter Outbox events with replay requested concurrently.",
+      "expected": "Only an eligible event is dispatched once; duplicate replay is rejected or returns the same idempotent result.",
+      "stateTransition": "pending/failed -> publishing -> published; terminal events are not overwritten",
+      "persistence": "Job, Outbox version/publishedAt, audit and queue delivery agree.",
+      "authorization": "Cross-tenant events and Jobs are not visible or operable.",
+      "projectMechanism": "Mongo Outbox transaction, CAS replay Job and BullMQ dispatcher.",
+      "allowedDifferences": "Queue and collection names are project-specific.",
+      "unresolved": false,
+      "conclusion": "PROJECT_MECHANISM"
+    },
+    {
+      "capabilityId": "OPS-004",
+      "responsibility": "Do not report zero differences for an incomplete scan",
+      "fastgptEvidence": [
+        "projects/app/src/service/common/system/cronTask.ts:102-150"
+      ],
+      "frontendBehaviorIds": [],
+      "input": "Mongo, MinIO or pgvector partially fails during reconcile.",
+      "expected": "The Job enters retry/failure with an accurate partial-scan status and never reports zero differences for unscanned scope.",
+      "stateTransition": "running -> retry_wait/failed",
+      "persistence": "Failure classification, Job step and trace evidence are retained.",
+      "authorization": "Dependency errors do not broaden resource scope.",
+      "projectMechanism": "S10OpsWorkerApplication and project dependency classification.",
+      "allowedDifferences": "Retry schedule is project-specific.",
+      "unresolved": false,
+      "conclusion": "PROJECT_MECHANISM"
+    }
+  ]
+}

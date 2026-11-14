@@ -1,0 +1,102 @@
+{
+  "schemaVersion": 1,
+  "batch": "B07",
+  "assets": [
+    {
+      "path": "packages/service/test/integration/knowledge-archive.test.ts",
+      "status": "REUSE",
+      "coverage": ["FILE-004 admission", "real archive Worker", "ZIP safety", "export cleanup"],
+      "gap": "Direct application calls do not establish the HTTP/UI ticket and download closure."
+    },
+    {
+      "path": "packages/service/test/integration/knowledge-file-lifecycle.test.ts",
+      "status": "REUSE",
+      "coverage": ["FILE-005 pending", "active", "deleted", "Multipart", "export TTL"],
+      "gap": "Does not prove bucket-wide physical orphan enumeration."
+    },
+    {
+      "path": "packages/service/test/integration/s10-ops.test.ts",
+      "status": "EXTEND",
+      "coverage": ["cleanup Job", "reconcile Job", "Outbox replay CAS"],
+      "gap": "Repository-level assertions do not execute a real Worker over real orphan data."
+    },
+    {
+      "path": "packages/service/test/unit/s10-ops-worker.test.ts",
+      "status": "REUSE",
+      "coverage": ["fencing", "Job step commit", "unresolved cleanup handling"],
+      "gap": "Port-level test only."
+    },
+    {
+      "path": "test/fault/knowledge-file-fault.test.ts",
+      "status": "REUSE",
+      "coverage": ["provider delete failure", "Multipart abort", "archive safety"],
+      "gap": "No real S3 failure orchestration."
+    },
+    {
+      "path": "test/fault/s10-ops-fault.test.ts",
+      "status": "REUSE",
+      "coverage": ["S3 error classification", "partial reconcile"],
+      "gap": "Physical bucket scan is not exercised."
+    },
+    {
+      "path": "test/tenant/knowledge-file-tenant.test.ts",
+      "status": "REUSE",
+      "coverage": ["workspace object isolation", "cleanup isolation"],
+      "gap": "Ticket cross-subject and replay behavior is covered by the new B07 E2E."
+    },
+    {
+      "path": "test/tenant/s10-ops-tenant.test.ts",
+      "status": "REUSE",
+      "coverage": ["cross-tenant Job and audit visibility"],
+      "gap": "No real worker-level tenant race."
+    },
+    {
+      "path": "test/security/s11-upload-archive.test.ts",
+      "status": "REUSE",
+      "coverage": ["ZIP path traversal", "unsupported archive structure"],
+      "gap": "No credential-leak assertion over the full archive HTTP response."
+    },
+    {
+      "path": "test/recovery/s11-invariants.test.ts",
+      "status": "REUSE",
+      "coverage": ["before/after counts", "clean reconcile"],
+      "gap": "Fixture-level recovery assumptions, not a live B07 orphan drill."
+    },
+    {
+      "path": "test/recovery/s11-component-faults.test.ts",
+      "status": "REUSE",
+      "coverage": ["component recovery guardrails"],
+      "gap": "No live object/vector drift."
+    },
+    {
+      "path": "test/e2e/knowledge-file.test.ts",
+      "status": "STALE",
+      "coverage": ["retired UI route", "route-mocked ACC-UI-05"],
+      "gap": "All seven UI cases are skipped; the archive mock cannot prove Worker, MinIO, ticket, ZIP or ACL behavior."
+    },
+    {
+      "path": "test/e2e/s10-ops-admin.test.ts",
+      "status": "EXTEND",
+      "coverage": ["real HTTP Job submission", "system status"],
+      "gap": "Only Job submission is asserted; cleanup/reconcile/replay completion is not."
+    },
+    {
+      "path": "test/e2e/kb-b07-archive-lifecycle.test.ts",
+      "status": "NEW",
+      "coverage": ["real HTTP", "real Worker", "Mongo", "MinIO", "pgvector context", "Playwright download", "physical orphan reconcile"],
+      "gap": "Current product defects intentionally remain failing in Phase A."
+    },
+    {
+      "path": "test/fixtures/b07/behavior-matrix.json",
+      "status": "NEW",
+      "coverage": ["FastGPT to project behavior mapping"],
+      "gap": null
+    },
+    {
+      "path": "test/fixtures/b07/run-gates.mjs",
+      "status": "NEW",
+      "coverage": ["B07 baseline and cross-slice command gate"],
+      "gap": null
+    }
+  ]
+}

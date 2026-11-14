@@ -828,7 +828,7 @@ export class FileApplication {
       );
       throw error;
     }
-    const issued = this.tickets.issue(
+    const issued = await this.tickets.issue(
       {
         workspaceId: ref.workspaceId,
         memberId: context.memberId,
@@ -978,6 +978,15 @@ export class FileApplication {
       range,
       storageContext(context, ref.knowledgeSpaceId),
     );
+    if (ticket) {
+      try {
+        await this.tickets!.consume(ticket, context.requestId, context.traceId);
+      } catch (error) {
+        const stream = object.body as AsyncIterable<Uint8Array> & { destroy?: () => void };
+        stream.destroy?.();
+        throw error;
+      }
+    }
     if (authorization) {
       try {
         const current = await this.access.assertPermission(

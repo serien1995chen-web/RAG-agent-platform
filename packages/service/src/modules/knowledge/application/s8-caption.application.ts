@@ -284,7 +284,7 @@ export class S8CaptionApplication implements S8CaptionExecutorPort {
       },
       context,
     );
-    const ticket = this.input.tickets.issueImage({
+    const ticket = await this.input.tickets.issueImage({
       workspaceId: context.workspaceId,
       blobId: imageBlobRefId,
       sourceId,

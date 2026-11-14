@@ -445,4 +445,37 @@ describe('TEST-FILE-005-BLOCK object lifecycle', () => {
       problem: { error: { code: 'KNOWLEDGE_NOT_FOUND' } },
     });
   });
+
+  it('L1-B07-FILE-005-C01 converges when two cleanup batches process the same object', async () => {
+    const uploadId = await createPending(true);
+    const results = await Promise.all([
+      lifecycle.cleanup(context, new Date()),
+      lifecycle.cleanup(context, new Date()),
+    ]);
+    expect(results.reduce((total, result) => total + result.deleted, 0)).toBe(1);
+    expect(results.reduce((total, result) => total + result.retryable, 0)).toBeLessThanOrEqual(1);
+    expect((await repository.findObjectRef(uploadId, context))?.state).toBe('deleted');
+  });
+
+  it('L1-B07-FILE-005-N01 honors the batch limit and converges on a second pass', async () => {
+    await connection.models.KnowledgeObjectRef.deleteMany({
+      workspaceId,
+      state: { $in: ['pending', 'deleting'] },
+    });
+    const uploadIds = await Promise.all([
+      createPending(true),
+      createPending(true),
+      createPending(true),
+    ]);
+    const limited = new ObjectLifecycleService(repository, objectStore, 2);
+    const first = await limited.cleanup(context, new Date(), 'ttl_objects');
+    expect(first).toMatchObject({ scanned: 2, deleted: 2 });
+    const statesAfterFirst = await Promise.all(
+      uploadIds.map(async (uploadId) => (await repository.findObjectRef(uploadId, context))?.state),
+    );
+    expect(statesAfterFirst.filter((state) => state === 'deleted')).toHaveLength(2);
+    const second = await limited.cleanup(context, new Date(), 'ttl_objects');
+    expect(second.deleted).toBeGreaterThanOrEqual(1);
+    expect((await repository.findObjectRef(uploadIds[2]!, context))?.state).toBe('deleted');
+  });
 });
