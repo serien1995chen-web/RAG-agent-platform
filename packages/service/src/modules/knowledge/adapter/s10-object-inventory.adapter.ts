@@ -12,13 +12,21 @@ export interface S10InventoryObject {
   id: string;
   version: number;
   bucket: string;
+  knowledgeSpaceId: string;
   objectKey: string;
   sizeBytes: number;
   state: KnowledgeObjectRefDoc['state'];
 }
 
 export function isObjectHeadNotFound(error: unknown): boolean {
-  return error instanceof KnowledgeApiError && error.problem.error.code === 'KNOWLEDGE_NOT_FOUND';
+  if (!(error instanceof KnowledgeApiError) || error.problem.error.code !== 'KNOWLEDGE_NOT_FOUND') {
+    return false;
+  }
+  const details = error.problem.error.details;
+  return (
+    details?.operation === 'headObject' ||
+    (typeof details?.provider === 'string' && details.status === 404)
+  );
 }
 
 export class S10ObjectInventoryAdapter {
@@ -47,6 +55,7 @@ export class S10ObjectInventoryAdapter {
       id: String(document._id),
       version: document.version,
       bucket: document.bucket,
+      knowledgeSpaceId: String(document.knowledgeSpaceId),
       objectKey: document.objectKey,
       sizeBytes: document.sizeBytes,
       state: document.state,

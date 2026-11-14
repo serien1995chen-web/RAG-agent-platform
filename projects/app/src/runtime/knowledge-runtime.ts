@@ -929,7 +929,7 @@ async function bootstrapRuntime(): Promise<TelemetryKnowledgeApiRuntime> {
             try {
               await objectStore.headObject(object.bucket, object.objectKey, {
                 workspaceId: context.workspaceId,
-                knowledgeSpaceId: 'system',
+                knowledgeSpaceId: object.knowledgeSpaceId,
                 requestId: context.requestId,
                 traceId: context.traceId,
               });
