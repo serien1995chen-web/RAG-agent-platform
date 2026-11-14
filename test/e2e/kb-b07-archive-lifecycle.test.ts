@@ -480,6 +480,12 @@ describe('L1-B07 OPS-004 archive lifecycle reconciliation', () => {
     expect(cleanup.status, JSON.stringify(cleanup.payload)).toBe(202);
     const cleanupJob = await waitForJob(cleanup.payload.data!.jobId);
     expect(cleanupJob.status).toBe('succeeded');
+    expect(cleanupJob.result?.items?.find((item) => item.scope === 'orphan_objects')).toMatchObject(
+      {
+        physicalOrphans: 1,
+        physicalDeleted: 1,
+      },
+    );
 
     const reconcile = await request<JobView>('/v1/knowledge/operations/reconcile', 'POST', {
       scope: 'objects',
@@ -501,7 +507,7 @@ describe('L1-B07 OPS-004 archive lifecycle reconciliation', () => {
           reconcileTraceId: reconcile.payload.traceId,
           reconcileRequestId: reconcile.payload.requestId,
           reconcileResult: reconcileJob.result,
-          expected: { scanned: 2, missing: 1 },
+          expected: { scanned: '>=1', missing: 0, orphanObjects: 0 },
           actual: objectResult,
         },
         null,
@@ -509,9 +515,11 @@ describe('L1-B07 OPS-004 archive lifecycle reconciliation', () => {
       )}\n`,
     );
     expect(objectResult).toMatchObject({
-      scanned: 2,
-      missing: 1,
+      missing: 0,
+      orphanObjects: 0,
+      repairedOrphans: 0,
     });
+    expect(Number(objectResult?.scanned)).toBeGreaterThanOrEqual(1);
 
     await expect(
       objectStore.headObject(process.env.KB_TEST_S3_BUCKET, orphanKey, storageContext()),

@@ -1,4 +1,4 @@
-import { KnowledgeApiError } from '@kb/contracts';
+import { KnowledgeApiError, createKnowledgeError } from '@kb/contracts';
 import { Types, type Connection } from 'mongoose';
 import type { Pool } from 'pg';
 import type { TenantContext } from '../../../shared/persistence/knowledge/tenant';
@@ -14,8 +14,42 @@ export interface S10InventoryObject {
   bucket: string;
   knowledgeSpaceId: string;
   objectKey: string;
+  objectKeys: string[];
   sizeBytes: number;
   state: KnowledgeObjectRefDoc['state'];
+}
+
+export interface S10BucketObject {
+  bucket: string;
+  knowledgeSpaceId: string;
+  objectKey: string;
+  sizeBytes: number;
+  lastModified: string;
+}
+
+interface S10ObjectListStore {
+  readonly bucket: string;
+  listObjects(input: {
+    prefix: string;
+    cursor: string | null;
+    limit: number;
+    context: {
+      workspaceId: string;
+      knowledgeSpaceId: string;
+      requestId: string;
+      traceId: string;
+    };
+  }): Promise<{
+    items: Array<{ key: string; sizeBytes: number; lastModified: string }>;
+    nextCursor: string | null;
+  }>;
+}
+
+type S10ObjectRefRecord = KnowledgeObjectRefDoc & { _id: Types.ObjectId };
+
+function knowledgeWorkspacePrefix(workspaceId: string): string {
+  const safe = workspaceId.replace(/[^A-Za-z0-9._-]/g, '_').slice(0, 180) || 'object';
+  return `ws/${safe}/`;
 }
 
 export function isObjectHeadNotFound(error: unknown): boolean {
@@ -35,6 +69,7 @@ export class S10ObjectInventoryAdapter {
   constructor(
     private readonly connection: Connection,
     private readonly pool: Pool,
+    private readonly objectStore?: S10ObjectListStore,
   ) {}
 
   private models() {
@@ -57,9 +92,126 @@ export class S10ObjectInventoryAdapter {
       bucket: document.bucket,
       knowledgeSpaceId: String(document.knowledgeSpaceId),
       objectKey: document.objectKey,
+      objectKeys: [
+        ...new Set(
+          [
+            document.objectKey,
+            document.upload?.finalObjectKey,
+            document.upload?.pendingObjectKey,
+          ].filter((key): key is string => typeof key === 'string' && key.length > 0),
+        ),
+      ],
       sizeBytes: document.sizeBytes,
       state: document.state,
     }));
+  }
+
+  async listAllObjects(context: TenantContext, batchSize = 500): Promise<S10InventoryObject[]> {
+    const items: S10InventoryObject[] = [];
+    let lastId: Types.ObjectId | null = null;
+    const limit = Math.max(1, Math.min(batchSize, 500));
+    while (true) {
+      const documents: S10ObjectRefRecord[] = await this.models()
+        .KnowledgeObjectRef.find({
+          workspaceId: requireWorkspaceId(context),
+          deletedAt: null,
+          state: { $in: ['pending', 'active', 'deleting'] },
+          ...(lastId === null ? {} : { _id: { $gt: lastId } }),
+        })
+        .sort({ _id: 1 })
+        .limit(limit)
+        .lean<S10ObjectRefRecord[]>();
+      items.push(
+        ...documents.map((document) => ({
+          id: String(document._id),
+          version: document.version,
+          bucket: document.bucket,
+          knowledgeSpaceId: String(document.knowledgeSpaceId),
+          objectKey: document.objectKey,
+          objectKeys: [
+            ...new Set(
+              [
+                document.objectKey,
+                document.upload?.finalObjectKey,
+                document.upload?.pendingObjectKey,
+              ].filter((key): key is string => typeof key === 'string' && key.length > 0),
+            ),
+          ],
+          sizeBytes: document.sizeBytes,
+          state: document.state,
+        })),
+      );
+      if (documents.length < limit) return items;
+      lastId = documents[documents.length - 1]!._id;
+    }
+  }
+
+  async listBucketObjects(context: TenantContext): Promise<S10BucketObject[]> {
+    if (!this.objectStore) {
+      throw createKnowledgeError({
+        code: 'KNOWLEDGE_DEPENDENCY_UNAVAILABLE',
+        requestId: context.requestId,
+        traceId: context.traceId,
+        retryable: true,
+        details: {
+          dependency: 'object_store',
+          operation: 'listObjects',
+          reason: 'inventory_not_configured',
+        },
+      });
+    }
+    const prefix = knowledgeWorkspacePrefix(requireWorkspaceId(context));
+    const items: S10BucketObject[] = [];
+    const seenCursors = new Set<string>();
+    let cursor: string | null = null;
+    do {
+      const page = await this.objectStore.listObjects({
+        prefix,
+        cursor,
+        limit: 500,
+        context: {
+          workspaceId: context.workspaceId,
+          knowledgeSpaceId: 'system',
+          requestId: context.requestId,
+          traceId: context.traceId,
+        },
+      });
+      for (const item of page.items) {
+        const parts = item.key.split('/');
+        if (
+          parts.length < 6 ||
+          parts[0] !== 'ws' ||
+          `ws/${parts[1]}/` !== prefix ||
+          parts[2] !== 'space' ||
+          !parts[3]
+        ) {
+          throw createKnowledgeError({
+            code: 'KNOWLEDGE_PROVIDER_CONTRACT_INVALID',
+            requestId: context.requestId,
+            traceId: context.traceId,
+            details: { operation: 'listObjects', reason: 'object_key_scope_invalid' },
+          });
+        }
+        items.push({
+          bucket: this.objectStore.bucket,
+          knowledgeSpaceId: parts[3],
+          objectKey: item.key,
+          sizeBytes: item.sizeBytes,
+          lastModified: item.lastModified,
+        });
+      }
+      cursor = page.nextCursor;
+      if (cursor !== null && seenCursors.has(cursor)) {
+        throw createKnowledgeError({
+          code: 'KNOWLEDGE_PROVIDER_CONTRACT_INVALID',
+          requestId: context.requestId,
+          traceId: context.traceId,
+          details: { operation: 'listObjects', reason: 'cursor_repeated' },
+        });
+      }
+      if (cursor !== null) seenCursors.add(cursor);
+    } while (cursor !== null);
+    return items;
   }
 
   async listActiveVectorIds(context: TenantContext): Promise<string[]> {

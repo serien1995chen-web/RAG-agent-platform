@@ -6,6 +6,7 @@ export {
   assertKnowledgeObjectKey,
   assertKnowledgeObjectScope,
   createKnowledgeObjectStore,
+  knowledgeWorkspacePrefix,
   knowledgeObjectKey,
   safeKeySegment,
   validateObjectStoreConfig,

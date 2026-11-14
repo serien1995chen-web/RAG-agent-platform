@@ -103,7 +103,6 @@ import {
   S10ApiKeyRepository,
   S10OperationsRepository,
   S10ObjectInventoryAdapter,
-  isObjectHeadNotFound,
   S10OpsWorkerApplication,
   S10OperationApplication,
   S10StatusApplication,
@@ -811,7 +810,7 @@ async function bootstrapRuntime(): Promise<TelemetryKnowledgeApiRuntime> {
     audits,
   );
   const objectLifecycle = new ObjectLifecycleService(objectRefs, objectStore);
-  const s10Inventory = new S10ObjectInventoryAdapter(mongo, pool);
+  const s10Inventory = new S10ObjectInventoryAdapter(mongo, pool, objectStore);
   const s10OpsWorker = new S10OpsWorkerApplication({
     jobs: jobExecution,
     async deliverUsage({ eventId, payload, context }) {
@@ -840,7 +839,7 @@ async function bootstrapRuntime(): Promise<TelemetryKnowledgeApiRuntime> {
       const items: Array<Record<string, unknown>> = [];
       for (const current of scopes) {
         await step(current, 'running', { scope: current });
-        if (current === 'ttl_objects' || current === 'orphan_objects') {
+        if (current === 'ttl_objects') {
           const result = await objectLifecycle.cleanup(context, new Date(), current);
           diffCount += result.eligible;
           repairedCount += result.deleted;
@@ -864,6 +863,73 @@ async function bootstrapRuntime(): Promise<TelemetryKnowledgeApiRuntime> {
                 scope: current,
                 retryable: result.retryable,
                 failed: result.failed,
+              },
+            });
+          }
+        } else if (current === 'orphan_objects') {
+          const result = await objectLifecycle.cleanup(context, new Date(), current);
+          const [references, bucketObjects] = await Promise.all([
+            s10Inventory.listAllObjects(context),
+            s10Inventory.listBucketObjects(context),
+          ]);
+          const referencedKeys = new Set(references.flatMap((reference) => reference.objectKeys));
+          const physicalOrphans = bucketObjects.filter(
+            (object) => !referencedKeys.has(object.objectKey),
+          );
+          let physicalDeleted = 0;
+          for (const object of physicalOrphans) {
+            try {
+              await objectStore.deleteObject(object.objectKey, {
+                workspaceId: context.workspaceId,
+                knowledgeSpaceId: object.knowledgeSpaceId,
+                requestId: context.requestId,
+                traceId: context.traceId,
+              });
+              physicalDeleted += 1;
+            } catch (error) {
+              if (
+                error instanceof KnowledgeApiError &&
+                error.problem.error.code === 'KNOWLEDGE_NOT_FOUND'
+              ) {
+                physicalDeleted += 1;
+              } else if (
+                error instanceof KnowledgeApiError &&
+                (error.problem.error.code === 'KNOWLEDGE_DEPENDENCY_UNAVAILABLE' ||
+                  error.problem.error.code === 'KNOWLEDGE_DEPENDENCY_TIMEOUT')
+              ) {
+                retryable += 1;
+              } else {
+                deadLetter += 1;
+              }
+            }
+          }
+          diffCount += result.eligible + physicalOrphans.length;
+          repairedCount += result.deleted + physicalDeleted;
+          retryable += result.retryable;
+          deadLetter += result.failed;
+          items.push({
+            scope: current,
+            ...result,
+            bucketScanned: bucketObjects.length,
+            physicalOrphans: physicalOrphans.length,
+            physicalDeleted,
+          });
+          if (result.retryable > 0 || result.failed > 0 || retryable > 0 || deadLetter > 0) {
+            await step(current, 'failed', {
+              scope: current,
+              retryable,
+              failed: deadLetter,
+            });
+            throw createKnowledgeError({
+              code: retryable > 0 ? 'KNOWLEDGE_DEPENDENCY_UNAVAILABLE' : 'KNOWLEDGE_JOB_FAILED',
+              requestId: context.requestId,
+              traceId: context.traceId,
+              retryable: retryable > 0,
+              details: {
+                operation: 'cleanup',
+                scope: current,
+                retryable,
+                failed: deadLetter,
               },
             });
           }
@@ -923,74 +989,110 @@ async function bootstrapRuntime(): Promise<TelemetryKnowledgeApiRuntime> {
       for (const current of scopes) {
         await step(current, 'running', { scope: current, repair });
         if (current === 'objects') {
-          const objects = await s10Inventory.listObjects(context);
+          const [objects, bucketObjects] = await Promise.all([
+            s10Inventory.listAllObjects(context),
+            s10Inventory.listBucketObjects(context),
+          ]);
+          const bucketKeys = new Set(bucketObjects.map((object) => object.objectKey));
+          const referencedKeys = new Set(objects.flatMap((object) => object.objectKeys));
           let missing = 0;
           for (const object of objects) {
-            try {
-              await objectStore.headObject(object.bucket, object.objectKey, {
-                workspaceId: context.workspaceId,
-                knowledgeSpaceId: object.knowledgeSpaceId,
-                requestId: context.requestId,
-                traceId: context.traceId,
-              });
-            } catch (error) {
-              if (!isObjectHeadNotFound(error)) {
-                const errorCode =
-                  error instanceof KnowledgeApiError
-                    ? error.problem.error.code
-                    : 'KNOWLEDGE_DEPENDENCY_UNAVAILABLE';
-                await step(current, 'failed', {
-                  scope: current,
-                  repair,
-                  objectId: object.id,
-                  errorCode,
-                  reason: 'object_head_dependency_failure',
-                });
-                if (error instanceof KnowledgeApiError) throw error;
+            if (object.objectKeys.some((key) => bucketKeys.has(key))) continue;
+            missing += 1;
+            if (repair && !(await s10Inventory.activeObjectReference(object.id, context))) {
+              const updated = await registerKnowledgeModels(mongo).KnowledgeObjectRef.updateOne(
+                {
+                  workspaceId: context.workspaceId,
+                  _id: new mongo.base.Types.ObjectId(object.id),
+                  version: object.version,
+                  deletedAt: null,
+                },
+                {
+                  $set: {
+                    state: 'deleted',
+                    updatedByMemberId: context.memberId,
+                  },
+                  $inc: { version: 1 },
+                },
+              );
+              if (updated.modifiedCount !== 1) {
                 throw createKnowledgeError({
-                  code: 'KNOWLEDGE_DEPENDENCY_UNAVAILABLE',
+                  code: 'KNOWLEDGE_CONFLICT',
                   requestId: context.requestId,
                   traceId: context.traceId,
-                  retryable: true,
-                  details: {
-                    operation: 'reconcile',
-                    scope: current,
-                    objectId: object.id,
-                    reason: 'object_head_dependency_failure',
-                  },
+                  details: { scope: current, objectId: object.id, reason: 'repair_cas' },
                 });
               }
-              missing += 1;
-              if (repair && !(await s10Inventory.activeObjectReference(object.id, context))) {
-                const updated = await registerKnowledgeModels(mongo).KnowledgeObjectRef.updateOne(
-                  {
-                    workspaceId: context.workspaceId,
-                    _id: new mongo.base.Types.ObjectId(object.id),
-                    version: object.version,
-                    deletedAt: null,
-                  },
-                  {
-                    $set: {
-                      state: 'deleted',
-                      updatedByMemberId: context.memberId,
-                    },
-                    $inc: { version: 1 },
-                  },
-                );
-                if (updated.modifiedCount !== 1) {
-                  throw createKnowledgeError({
-                    code: 'KNOWLEDGE_CONFLICT',
-                    requestId: context.requestId,
-                    traceId: context.traceId,
-                    details: { scope: current, objectId: object.id, reason: 'repair_cas' },
-                  });
-                }
-                repairedCount += 1;
-              }
+              repairedCount += 1;
             }
           }
-          diffCount += missing;
-          items.push({ scope: current, scanned: objects.length, missing });
+
+          const physicalOrphans = bucketObjects.filter(
+            (object) => !referencedKeys.has(object.objectKey),
+          );
+          let repairedOrphans = 0;
+          if (repair) {
+            for (const object of physicalOrphans) {
+              try {
+                await objectStore.deleteObject(object.objectKey, {
+                  workspaceId: context.workspaceId,
+                  knowledgeSpaceId: object.knowledgeSpaceId,
+                  requestId: context.requestId,
+                  traceId: context.traceId,
+                });
+                repairedOrphans += 1;
+              } catch (error) {
+                if (
+                  error instanceof KnowledgeApiError &&
+                  error.problem.error.code === 'KNOWLEDGE_NOT_FOUND'
+                ) {
+                  repairedOrphans += 1;
+                  continue;
+                }
+                if (
+                  error instanceof KnowledgeApiError &&
+                  (error.problem.error.code === 'KNOWLEDGE_DEPENDENCY_UNAVAILABLE' ||
+                    error.problem.error.code === 'KNOWLEDGE_DEPENDENCY_TIMEOUT')
+                ) {
+                  retryable += 1;
+                  continue;
+                }
+                deadLetter += 1;
+              }
+            }
+            repairedCount += repairedOrphans;
+          }
+
+          diffCount += missing + physicalOrphans.length;
+          items.push({
+            scope: current,
+            scanned: bucketObjects.length + missing,
+            references: objects.length,
+            missing,
+            orphanObjects: physicalOrphans.length,
+            repairedOrphans,
+          });
+          if (retryable > 0 || deadLetter > 0) {
+            await step(current, 'failed', {
+              scope: current,
+              repair,
+              retryable,
+              deadLetter,
+              reason: 'orphan_object_repair_incomplete',
+            });
+            throw createKnowledgeError({
+              code: retryable > 0 ? 'KNOWLEDGE_DEPENDENCY_UNAVAILABLE' : 'KNOWLEDGE_JOB_FAILED',
+              requestId: context.requestId,
+              traceId: context.traceId,
+              retryable: retryable > 0,
+              details: {
+                operation: 'reconcile',
+                scope: current,
+                retryable,
+                deadLetter,
+              },
+            });
+          }
         } else if (current === 'vectors') {
           const [activeIds, stored] = await Promise.all([
             s10Inventory.listActiveVectorIds(context),
