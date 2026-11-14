@@ -1,0 +1,46 @@
+{
+  "schemaVersion": 1,
+  "batch": "B07",
+  "runIdPattern": "YYYYMMDD-HHmmss",
+  "seed": "b07-20261114",
+  "workspacePrefix": "ws_b07_e2e_",
+  "sourceNamePrefix": "b07-",
+  "objectKeyScope": "Tenant-derived ws/<workspaceId>/space/<spaceId>/ prefix only",
+  "fixtures": [
+    {
+      "id": "L1-B07-FILE-004-ZIP",
+      "kind": "live",
+      "description": "Two text Sources archived by the real Worker into MinIO and downloaded through a browser native download."
+    },
+    {
+      "id": "L1-B07-FILE-004-TICKET",
+      "kind": "live",
+      "description": "Short-lived archive ticket used twice under the same authenticated member and active ACL."
+    },
+    {
+      "id": "L1-B07-FILE-005-TTL",
+      "kind": "live",
+      "description": "Pending, active, deleted, deleting, Multipart and export object references with controlled expiry."
+    },
+    {
+      "id": "L1-B07-OPS-004-PHYSICAL-ORPHAN",
+      "kind": "live",
+      "description": "A real MinIO object with a valid workspace prefix and no Mongo ObjectRef."
+    },
+    {
+      "id": "L1-B07-OPS-004-ACTIVE-OBJECT",
+      "kind": "live",
+      "description": "A Source-bound object that must remain present before and after reconcile."
+    },
+    {
+      "id": "L1-B07-OPS-004-OUTBOX",
+      "kind": "reuse",
+      "description": "Pending, failed, published and dead_letter events from the existing S10 fixture helpers."
+    }
+  ],
+  "safety": {
+    "credentials": "Use test-only MinIO credentials from KB_TEST_S3_* environment variables; never persist them in evidence.",
+    "redaction": "Store traceId, requestId, hashes and objectKey hashes only; never store raw tickets or full object keys.",
+    "cleanup": "Delete workspace Mongo documents, queue jobs, pgvector rows and created MinIO objects after each run."
+  }
+}
