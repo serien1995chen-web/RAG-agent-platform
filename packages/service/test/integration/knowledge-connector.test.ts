@@ -232,6 +232,53 @@ describe('TEST-ING-007-BLOCK connector state', () => {
     expect(latest.version).toBe(connected.version + 1);
   });
 
+  it('L1-B09-ING-007-C01 creates only one active sync job for concurrent triggers', async () => {
+    const connected = await repository.connect(
+      spaceId,
+      {
+        provider: 'feishu',
+        name: 'Concurrent sync',
+        credentials: { provider: 'feishu', appId: 'id', appSecret: 'secret' },
+        config: { provider: 'feishu', folderToken: 'folder' },
+        syncEnabled: true,
+        syncIntervalMinutes: 60,
+      },
+      context,
+    );
+    const outcomes = await Promise.allSettled([
+      repository.markSyncing(
+        connected.id,
+        {
+          full: false,
+          requestHash: 'same-body',
+          idempotencyKey: `sync-concurrent-left-${suffix}`,
+        },
+        context,
+      ),
+      repository.markSyncing(
+        connected.id,
+        {
+          full: false,
+          requestHash: 'same-body',
+          idempotencyKey: `sync-concurrent-right-${suffix}`,
+        },
+        context,
+      ),
+    ]);
+
+    expect(outcomes.filter((outcome) => outcome.status === 'fulfilled')).toHaveLength(1);
+    expect(outcomes.filter((outcome) => outcome.status === 'rejected')).toHaveLength(1);
+    expect(
+      await connection.models.KnowledgeJob.countDocuments({
+        workspaceId,
+        kind: 'sync',
+        'inputSnapshot.connectorId': connected.id,
+        status: { $in: ['queued', 'running', 'retry_wait'] },
+      }),
+    ).toBe(1);
+    expect((await repository.get(connected.id, context)).status).toBe('syncing');
+  });
+
   it('TEST-X-S4-CONNECTOR-SYNC-IDEMPOTENCY scopes replay by Idempotency-Key', async () => {
     const connected = await repository.connect(
       spaceId,

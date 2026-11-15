@@ -605,3 +605,158 @@ describe('TEST-X-SECURITY-URL custom API transport', () => {
     });
   });
 });
+
+describe('L1-B09 external API public contract', () => {
+  const openapi = JSON.parse(
+    readFileSync(
+      join(process.cwd(), 'packages/contracts/openapi/knowledge-target.openapi.json'),
+      'utf8',
+    ),
+  ) as {
+    paths: Record<string, Record<string, Record<string, unknown>>>;
+    components: { schemas: Record<string, Record<string, unknown>> };
+  };
+  const runtime = JSON.parse(
+    readFileSync(
+      join(process.cwd(), 'packages/contracts/src/openapi/runtime-registry.data.json'),
+      'utf8',
+    ),
+  ) as { operations: Array<{ operationId: string; path: string; method: string }> };
+
+  it('L1-B09-API-002-Q01 exposes catalog/detail/content/preview operations as read-only strict contracts', () => {
+    const expectedOperations = new Map([
+      ['API-IMPORT-API-CATALOG', '/v1/knowledge/spaces/{spaceId}/imports/api-library/catalog'],
+      ['API-IMPORT-API-DETAIL', '/v1/knowledge/spaces/{spaceId}/imports/api-library/detail'],
+      ['API-IMPORT-API-CONTENT', '/v1/knowledge/spaces/{spaceId}/imports/api-library/content'],
+      ['API-IMPORT-API-PREVIEW', '/v1/knowledge/spaces/{spaceId}/imports/api-library/preview'],
+    ]);
+
+    const runtimeIds = new Set(runtime.operations.map((entry) => entry.operationId));
+    for (const [operationId, path] of expectedOperations) {
+      expect(runtimeIds.has(operationId), operationId).toBe(true);
+      expect(openapi.paths[path]?.post, operationId).toBeDefined();
+      expect(openapi.paths[path]?.post?.operationId, operationId).toBe(operationId);
+    }
+
+    const importOperation =
+      openapi.paths['/v1/knowledge/spaces/{spaceId}/imports/api-library']?.post;
+    expect(importOperation?.['x-required-scope']).toBe('knowledge:write');
+  });
+
+  it('L1-B09-API-002-Q02 keeps file DTOs closed and excludes storage and credential material', () => {
+    const catalog = openapi.components.schemas.ApiLibraryCatalog as {
+      additionalProperties?: boolean;
+      $defs?: Record<
+        string,
+        {
+          additionalProperties?: boolean;
+          required?: string[];
+          properties?: Record<string, unknown>;
+        }
+      >;
+    };
+    expect(catalog.additionalProperties).toBe(false);
+    for (const name of ['ApiLibraryFileDetail', 'ApiLibraryFileContent', 'ApiLibraryFilePreview']) {
+      expect(catalog.$defs?.[name]?.additionalProperties, name).toBe(false);
+    }
+    expect(catalog.$defs?.ApiLibraryFileDetail?.required).toEqual(
+      expect.arrayContaining(['fileId', 'name', 'mimeType']),
+    );
+    expect(catalog.$defs?.ApiLibraryFileContent?.required).toEqual(
+      expect.arrayContaining(['fileId', 'content', 'mimeType']),
+    );
+    expect(catalog.$defs?.ApiLibraryFilePreview?.required).toEqual(
+      expect.arrayContaining(['fileId', 'mimeType', 'previewText']),
+    );
+
+    const serialized = JSON.stringify({
+      catalog,
+      operations: Object.fromEntries(
+        [...expectedContractOperationPaths()].map(([operationId, path]) => [
+          operationId,
+          openapi.paths[path]?.post,
+        ]),
+      ),
+    });
+    for (const forbidden of [
+      'objectKey',
+      'bucket',
+      'authorization',
+      'apiKey',
+      'cookie',
+      'appSecret',
+      'connectionString',
+      'credentialCiphertext',
+    ]) {
+      expect(serialized, forbidden).not.toMatch(new RegExp(forbidden, 'i'));
+    }
+  });
+
+  it('L1-B09-API-002-P01 preserves one file identity across detail, content and preview', async () => {
+    const fileId = 'file:consistent';
+    const client = new CustomApiLibraryClient(async (url) => {
+      const parsed = new URL(url);
+      expect(parsed.searchParams.get('fileId')).toBe(fileId);
+      if (parsed.pathname.endsWith('/detail')) {
+        return {
+          status: 200,
+          body: {
+            name: 'Consistent runbook',
+            mimeType: 'text/markdown',
+            sizeBytes: 17,
+            updatedAt: '2026-11-14T00:00:00.000Z',
+          },
+        };
+      }
+      if (parsed.pathname.endsWith('/content')) {
+        return {
+          status: 200,
+          body: { content: '# Consistent runbook' },
+        };
+      }
+      return {
+        status: 200,
+        body: {
+          mimeType: 'text/markdown',
+          previewText: '# Consistent runbook',
+        },
+      };
+    });
+
+    const detail = await client.detail({ config, credentials, fileIds: [fileId], context });
+    const content = await client.content({ config, credentials, fileIds: [fileId], context });
+    const preview = await client.preview({ config, credentials, fileIds: [fileId], context });
+
+    expect(detail).toEqual([
+      expect.objectContaining({
+        fileId,
+        name: 'Consistent runbook',
+        mimeType: 'text/markdown',
+      }),
+    ]);
+    expect(content).toEqual([
+      expect.objectContaining({
+        externalId: fileId,
+        title: 'Consistent runbook',
+        mimeType: 'text/markdown',
+      }),
+    ]);
+    expect(preview).toEqual([
+      expect.objectContaining({
+        fileId,
+        mimeType: 'text/markdown',
+        previewText: '# Consistent runbook',
+      }),
+    ]);
+  });
+});
+
+function expectedContractOperationPaths(): ReadonlyMap<string, string> {
+  return new Map([
+    ['API-IMPORT-API-CATALOG', '/v1/knowledge/spaces/{spaceId}/imports/api-library/catalog'],
+    ['API-IMPORT-API-DETAIL', '/v1/knowledge/spaces/{spaceId}/imports/api-library/detail'],
+    ['API-IMPORT-API-CONTENT', '/v1/knowledge/spaces/{spaceId}/imports/api-library/content'],
+    ['API-IMPORT-API-PREVIEW', '/v1/knowledge/spaces/{spaceId}/imports/api-library/preview'],
+    ['API-IMPORT-API-LIBRARY', '/v1/knowledge/spaces/{spaceId}/imports/api-library'],
+  ]);
+}

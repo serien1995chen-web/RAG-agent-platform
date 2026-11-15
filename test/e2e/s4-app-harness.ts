@@ -61,6 +61,7 @@ export async function startS4App(input: {
   authToken: string;
   scopes?: string;
   isWorkspaceOwner?: boolean;
+  connectorMode?: 'mock' | 'real';
 }): Promise<S4AppHarness> {
   const port = await freePort();
   const baseUrl = `http://127.0.0.1:${port}`;
@@ -104,7 +105,7 @@ export async function startS4App(input: {
       KB_MOCK_WORKSPACE_OWNER: String(input.isWorkspaceOwner ?? true),
       KB_EXTERNAL_MODEL_MODE: 'mock',
       KB_EXTERNAL_OCR_MODE: 'mock',
-      KB_EXTERNAL_CONNECTOR_MODE: 'mock',
+      KB_EXTERNAL_CONNECTOR_MODE: input.connectorMode ?? 'mock',
       KB_LOG_LEVEL: 'error',
     },
     stdio: ['ignore', 'pipe', 'pipe'],

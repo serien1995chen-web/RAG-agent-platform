@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { FixtureScopedAuthPort } from '../../packages/service/src/modules/knowledge/application/operations/s04-ingestion';
+import { KnowledgeScopedAuthAdapter } from '../../packages/service/src/modules/knowledge/adapter/s10-scoped-auth.adapter';
 import { KnowledgeImportRepository } from '../../packages/service/src/modules/knowledge/repository/import.repository';
 import {
   ensureKnowledgeCollections,
@@ -128,5 +129,53 @@ describe('TEST-X-TENANT-GUARD S4 import', () => {
         requiredScope: 'knowledge:write',
       }),
     ).rejects.toMatchObject({ problem: { error: { code: 'KNOWLEDGE_FORBIDDEN' } } });
+  });
+
+  it('L1-B09-API-002-A01 enforces API-key Space scope and read access for external reads', async () => {
+    const checkedLevels: string[] = [];
+    const scoped = new KnowledgeScopedAuthAdapter({
+      async assertPermission(_resourceType: string, _resourceId: string, level: string) {
+        checkedLevels.push(level);
+      },
+    } as never);
+    const subject = {
+      authType: 'api_key' as const,
+      memberId: context.memberId,
+      workspaceIds: [workspaceId],
+      scopes: ['knowledge:read'],
+    };
+
+    await expect(
+      scoped.authorize({
+        subject,
+        workspaceId,
+        knowledgeSpaceId: spaceId,
+        requiredScope: 'knowledge:read' as never,
+        context: {
+          ...context,
+          apiKeySpaceIds: ['65f1e5b2a1c9d4b7e8f09999'],
+        },
+      }),
+    ).rejects.toMatchObject({
+      problem: {
+        error: {
+          code: 'KNOWLEDGE_FORBIDDEN',
+          details: { reason: 'api_key_space_scope' },
+        },
+      },
+    });
+    expect(checkedLevels).toEqual([]);
+
+    await scoped.authorize({
+      subject,
+      workspaceId,
+      knowledgeSpaceId: spaceId,
+      requiredScope: 'knowledge:read' as never,
+      context: {
+        ...context,
+        apiKeySpaceIds: [spaceId],
+      },
+    });
+    expect(checkedLevels).toEqual(['read']);
   });
 });
