@@ -95,15 +95,15 @@ export class B09FeishuResourceManager {
         `${this.runId}-nested`,
         this.rootFolderToken,
       );
-      this.keepDocumentToken = await this.copyDocument(
-        requiredEnv('S11_FEISHU_DOC_1'),
+      this.keepDocumentToken = await this.createDocument(
+        this.rootFolderToken,
         `${this.runId}-keep`,
-        this.rootFolderToken,
+        'B09 keep document fixture',
       );
-      this.mutateDocumentToken = await this.copyDocument(
-        requiredEnv('S11_FEISHU_DOC_2'),
-        `${this.runId}-mutate`,
+      this.mutateDocumentToken = await this.createDocument(
         this.rootFolderToken,
+        `${this.runId}-mutate`,
+        'B09 mutate document fixture',
       );
       return {
         runId: this.runId,
@@ -195,30 +195,59 @@ export class B09FeishuResourceManager {
     return payload.data.token;
   }
 
-  private async copyDocument(
-    sourceToken: string,
-    name: string,
+  private async createDocument(
     folderToken: string,
+    title: string,
+    content: string,
   ): Promise<string> {
-    const payload = await this.request<FeishuEnvelope<{ token?: string; file_token?: string }>>(
-      `${this.baseUrl}/open-apis/drive/v1/files/${encodeURIComponent(sourceToken)}/copy`,
+    const payload = await this.request<
+      FeishuEnvelope<{
+        document?: { document_id?: string; token?: string };
+        document_id?: string;
+        token?: string;
+      }>
+    >(`${this.baseUrl}/open-apis/docx/v1/documents`, {
+      method: 'POST',
+      operation: 'create_document',
+      body: { folder_token: folderToken, title },
+    });
+    const token =
+      payload.data?.document?.document_id ??
+      payload.data?.document?.token ??
+      payload.data?.document_id ??
+      payload.data?.token;
+    if (!token) throw new Error('Feishu create document returned no token');
+
+    await this.request(
+      `${this.baseUrl}/open-apis/docx/v1/documents/${encodeURIComponent(token)}/blocks/${encodeURIComponent(token)}/children`,
       {
         method: 'POST',
-        operation: 'copy_document',
-        body: { name, type: 'docx', folder_token: folderToken },
+        operation: 'create_document_content',
+        body: {
+          children: [
+            {
+              block_type: 2,
+              text: {
+                elements: [{ text_run: { content } }],
+              },
+            },
+          ],
+          index: 0,
+        },
       },
     );
-    const token = payload.data?.token ?? payload.data?.file_token;
-    if (!token) throw new Error('Feishu copy_document returned no token');
     return token;
   }
 
   private async renameDocument(token: string, name: string): Promise<string> {
-    await this.request(`${this.baseUrl}/open-apis/drive/v1/files/${encodeURIComponent(token)}`, {
-      method: 'PATCH',
-      operation: 'rename_document',
-      body: { name, type: 'docx' },
-    });
+    await this.request(
+      `${this.baseUrl}/open-apis/drive/v1/files/${encodeURIComponent(token)}?type=docx`,
+      {
+        method: 'PATCH',
+        operation: 'rename_document',
+        body: { name, type: 'docx' },
+      },
+    );
     return token;
   }
 
@@ -273,12 +302,39 @@ export class B09FeishuResourceManager {
       contentHash: text ? safeSha256(text) : null,
     });
     if (!response.ok) {
-      throw new Error(`Feishu ${input.operation} failed with status ${response.status}`);
+      let providerCode: unknown = null;
+      let providerMessage = '';
+      let providerError = '';
+      try {
+        const payload = JSON.parse(text) as {
+          code?: unknown;
+          msg?: unknown;
+          error?: unknown;
+        };
+        providerCode = payload.code ?? null;
+        providerMessage =
+          typeof payload.msg === 'string' ? payload.msg.replace(/\s+/g, ' ').slice(0, 160) : '';
+        if (payload.error && typeof payload.error === 'object' && !Array.isArray(payload.error)) {
+          const safeError = {
+            ...(payload.error as Record<string, unknown>),
+          };
+          delete safeError.log_id;
+          delete safeError.troubleshooter;
+          providerError = JSON.stringify(safeError).replace(/\s+/g, ' ').slice(0, 400);
+        }
+      } catch {
+        // Preserve the status-only error when the provider did not return JSON.
+      }
+      throw new Error(
+        `Feishu ${input.operation} failed with status ${response.status} code=${String(providerCode)} msg=${providerMessage} error=${providerError}`,
+      );
     }
     if (allowEmpty && !text) return {} as T;
     const payload = JSON.parse(text) as FeishuEnvelope<T> & T;
     if (payload.code !== undefined && payload.code !== 0) {
-      throw new Error(`Feishu ${input.operation} business error ${payload.code}`);
+      throw new Error(
+        `Feishu ${input.operation} business error ${payload.code} msg=${payload.msg ?? ''}`,
+      );
     }
     return payload;
   }

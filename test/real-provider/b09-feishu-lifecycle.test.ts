@@ -25,7 +25,7 @@ const evidenceDir =
   join(process.cwd(), 'test-results', 'b09', '20261115-140502', 'provider');
 
 describe('L1-B09 ING-007 real Feishu lifecycle', () => {
-  it('L1-B09-ING-007-Q01 records BLOCKED_PROVIDER without making calls when credentials are absent', async () => {
+  it('L1-B09-ING-007-Q01 records provider input readiness without making unsafe calls', async () => {
     const status = missing.length === 0 ? 'REAL_INPUT_READY' : 'BLOCKED_PROVIDER';
     await writeB09ProviderEvidence(evidenceDir, 'preflight.json', {
       status,
@@ -33,8 +33,11 @@ describe('L1-B09 ING-007 real Feishu lifecycle', () => {
       credentialsPrinted: false,
       realCalls: 0,
     });
-    expect(status).toBe('BLOCKED_PROVIDER');
-    expect(missing.length).toBeGreaterThan(0);
+    if (status === 'BLOCKED_PROVIDER') {
+      expect(missing.length).toBeGreaterThan(0);
+    } else {
+      expect(missing).toEqual([]);
+    }
   });
 
   it.skipIf(missing.length > 0)(
