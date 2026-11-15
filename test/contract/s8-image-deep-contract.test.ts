@@ -37,7 +37,7 @@ describe('S8 contract and runtime closure', () => {
     expect(TARGET_CONTRACT_COUNTS).toEqual({
       paths: 95,
       operations: 123,
-      schemas: 140,
+      schemas: 141,
       parameters: 8,
     });
   });

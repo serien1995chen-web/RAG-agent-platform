@@ -82,7 +82,20 @@ function directoryDto(document: Plain<KnowledgeDirectoryDoc>, parentPath?: strin
   };
 }
 
-function sourceDto(document: Plain<KnowledgeSourceDoc>, parentPath?: string[]) {
+function publicSourceMetadata(metadata: Record<string, unknown>) {
+  const result: Record<string, string> = {};
+  for (const key of ['originalUrl', 'selector', 'extractedContentHash'] as const) {
+    const value = metadata[key];
+    if (typeof value === 'string' && value.length > 0) result[key] = value;
+  }
+  return result;
+}
+
+function sourceDto(
+  document: Plain<KnowledgeSourceDoc>,
+  parentPath?: string[],
+  includeMetadata = false,
+) {
   return {
     id: String(document._id),
     workspaceId: document.workspaceId,
@@ -110,6 +123,7 @@ function sourceDto(document: Plain<KnowledgeSourceDoc>, parentPath?: string[]) {
     })),
     version: document.version,
     ...(parentPath ? { parentPath } : {}),
+    ...(includeMetadata ? { metadata: publicSourceMetadata(document.metadata) } : {}),
   };
 }
 
@@ -1225,7 +1239,7 @@ export class KnowledgeCatalogRepository {
       })
       .lean()) as unknown as Plain<KnowledgeSourceDoc> | null;
     if (!doc) throw tenantError(context, 'KNOWLEDGE_NOT_FOUND');
-    return sourceDto(doc);
+    return sourceDto(doc, undefined, true);
   }
 
   async updateSource(sourceId: string, input: Record<string, unknown>, context: TenantContext) {

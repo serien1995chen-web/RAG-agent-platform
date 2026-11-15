@@ -10,6 +10,7 @@ import {
   ImportFilesSchema,
   ImportTemplateSchema,
   ImportTextSchema,
+  ImportUrlPreviewSchema,
   ImportUrlSchema,
   createKnowledgeError,
 } from '@kb/contracts';
@@ -656,6 +657,41 @@ export class S04IngestionApplication {
         const body = parseBody(ImportUrlSchema, input);
         const targetSpaceId = spaceId(input);
         await assertWriteAccess(this.dependencies, targetSpaceId, input.context);
+        if (body.dryRun) {
+          const previewSnapshot = await this.dependencies.urlImport.fetch({
+            url: body.url,
+            selector: body.selector,
+            context: input.context,
+          });
+          if (
+            !previewSnapshot.markdown?.trim() ||
+            !previewSnapshot.contentHash ||
+            !previewSnapshot.selector?.trim()
+          ) {
+            throw createKnowledgeError({
+              code: 'KNOWLEDGE_PROVIDER_CONTRACT_INVALID',
+              requestId: input.context.requestId,
+              traceId: input.context.traceId,
+              details: { provider: 'url', reason: 'extraction_missing' },
+            });
+          }
+          const chunks = chunkText({
+            text: previewSnapshot.markdown,
+            policy: toChunkPolicy(body.chunking),
+          }).chunks;
+          return {
+            status: 200,
+            data: ImportUrlPreviewSchema.parse({
+              title: previewSnapshot.title,
+              safeUrl: previewSnapshot.safeUrl,
+              selector: previewSnapshot.selector,
+              contentHash: previewSnapshot.contentHash,
+              totalChunks: chunks.length,
+              chunks: chunks.slice(0, 10).map((chunk) => ({ q: chunk.text, a: '' })),
+              truncated: chunks.length > 10,
+            }),
+          };
+        }
         const idempotency = idempotencyKey(input);
         const requestHash = operationHash(input);
         const replay = await preflightImport({
@@ -694,6 +730,7 @@ export class S04IngestionApplication {
               directoryId: body.directoryId ?? null,
               importKind: 'url',
               sources: [material.source],
+              chunking: body.chunking as Record<string, unknown>,
               idempotencyKey: idempotency,
               requestHash,
             }),

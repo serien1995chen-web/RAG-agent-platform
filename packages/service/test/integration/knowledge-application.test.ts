@@ -181,6 +181,52 @@ describe('knowledge application runtime subset', () => {
     expectKnowledgeError(otherSpaceRead, 'KNOWLEDGE_NOT_FOUND');
   });
 
+  it('L1-B10-ING-003-011 exposes only safe webpage provenance metadata in Source detail', async () => {
+    const space = (
+      await run({
+        operationId: 'API-SPACE-CREATE',
+        body: {
+          kind: 'space',
+          name: 'Webpage metadata space',
+          accessMode: 'workspace',
+          sourceAclMode: 'inherited',
+          sourcePermissionEnabled: false,
+        },
+      })
+    ).data as { id: string };
+    const source = (
+      await run({
+        operationId: 'API-SOURCE-CREATE',
+        params: { spaceId: space.id },
+        body: {
+          kind: 'url',
+          name: 'Webpage metadata source',
+          metadata: {
+            originalUrl: 'https://public.example.test/metadata',
+            selector: 'main',
+            extractedContentHash: `sha256:${'a'.repeat(64)}`,
+            configurationHash: 'internal-configuration-hash',
+            parseConfigSnapshot: { internal: true },
+          },
+        },
+      })
+    ).data as { id: string };
+
+    const detail = (
+      await run({
+        operationId: 'API-SOURCE-GET',
+        params: { sourceId: source.id },
+      })
+    ).data as { metadata?: Record<string, string> };
+    expect(detail.metadata).toEqual({
+      originalUrl: 'https://public.example.test/metadata',
+      selector: 'main',
+      extractedContentHash: `sha256:${'a'.repeat(64)}`,
+    });
+    expect(JSON.stringify(detail)).not.toContain('internal-configuration-hash');
+    expect(JSON.stringify(detail)).not.toContain('parseConfigSnapshot');
+  });
+
   it('enforces CAS and allows exactly one concurrent mutation at the same version', async () => {
     const space = (
       await run({

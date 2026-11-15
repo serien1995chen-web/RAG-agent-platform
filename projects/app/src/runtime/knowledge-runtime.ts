@@ -128,6 +128,7 @@ import {
 import { MinioKnowledgeObjectStore } from '../../../../sdk/storage/src/providers/minio';
 import {
   createDefaultDocumentParser,
+  extractHtmlDocument,
   parseImportTemplate,
   parseSynonymFileBuffer,
   parseWithLiteParse,
@@ -626,9 +627,18 @@ async function bootstrapRuntime(): Promise<TelemetryKnowledgeApiRuntime> {
         const chunks: Uint8Array[] = [];
         for await (const chunk of object.body) chunks.push(chunk);
         const bytes = Buffer.concat(chunks.map((chunk) => Buffer.from(chunk)));
-        const extension = input.fileName.includes('.')
-          ? input.fileName.split('.').at(-1)!.toLowerCase()
-          : 'txt';
+        const urlSelector =
+          typeof input.metadata?.selector === 'string' ? input.metadata.selector : undefined;
+        const urlBase =
+          typeof input.metadata?.originalUrl === 'string' ? input.metadata.originalUrl : undefined;
+        const extension =
+          urlBase !== undefined
+            ? input.mimeType === 'text/plain'
+              ? 'txt'
+              : 'html'
+            : input.fileName.includes('.')
+              ? input.fileName.split('.').at(-1)!.toLowerCase()
+              : 'txt';
         const request = {
           workspaceId: context.workspaceId,
           knowledgeSpaceId: input.knowledgeSpaceId,
@@ -637,6 +647,10 @@ async function bootstrapRuntime(): Promise<TelemetryKnowledgeApiRuntime> {
           extension,
           mimeType: input.mimeType,
           timeoutMs: 600_000,
+          requestId: context.requestId,
+          traceId: context.traceId,
+          ...(urlSelector !== undefined ? { selector: urlSelector } : {}),
+          ...(urlBase !== undefined ? { baseUrl: urlBase } : {}),
         };
         if (input.mimeType === 'application/pdf' || extension === 'pdf') {
           return parseWithLiteParse({ request, bytes, mimeType: input.mimeType });
@@ -819,7 +833,9 @@ async function bootstrapRuntime(): Promise<TelemetryKnowledgeApiRuntime> {
     connectors: connectorRepository,
     objectRefs,
     content: ingestionContent,
-    urlImport: new KnowledgeUrlImportAdapter(),
+    urlImport: new KnowledgeUrlImportAdapter({
+      extractHtml: extractHtmlDocument,
+    }),
     customApi: new CustomApiLibraryClient(),
     providers: connectorClients,
     access,

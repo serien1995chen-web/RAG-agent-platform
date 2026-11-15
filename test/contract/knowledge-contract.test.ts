@@ -46,11 +46,11 @@ function resolvePointer(ref: string): unknown {
 }
 
 describe('knowledge target contract', () => {
-  it('freezes 95 paths, 123 operations, 140 schemas and 8 parameters', () => {
+  it('freezes 95 paths, 123 operations, 141 schemas and 8 parameters', () => {
     expect(artifacts.actualCounts).toEqual({
       paths: 95,
       operations: 123,
-      schemas: 140,
+      schemas: 141,
       parameters: 8,
     });
     expect(Object.keys(document.components.securitySchemes)).toEqual(['JWTAuth', 'APIKeyAuth']);

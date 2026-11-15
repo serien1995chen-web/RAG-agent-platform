@@ -111,4 +111,46 @@ describe('S4 import contract', () => {
     expect(backupPath.responses).toHaveProperty('200');
     expect(exportSchema.properties.format.enum).toEqual(['zip', 'csv']);
   });
+
+  it('L1-B10-ING-003-001 exposes URL preview without adding a public path', () => {
+    const urlPath = openapi.paths['/v1/knowledge/spaces/{spaceId}/imports/url']?.post as {
+      requestBody: {
+        content: {
+          'application/json': {
+            schema: { $ref: string };
+          };
+        };
+      };
+      responses: Record<string, unknown>;
+    };
+    expect(Object.keys(openapi.paths)).toHaveLength(95);
+    expect(urlPath.responses).toHaveProperty('200');
+    expect(urlPath.responses).toHaveProperty('202');
+    expect(urlPath.requestBody.content['application/json'].schema.$ref).toBe(
+      '#/components/schemas/ImportUrl',
+    );
+
+    const importUrl = openapi.components.schemas.ImportUrl as {
+      required: string[];
+      properties: Record<string, unknown>;
+    };
+    expect(importUrl.required).toEqual(['url', 'selector', 'chunking']);
+    expect(importUrl.properties).toHaveProperty('dryRun');
+    expect(importUrl.properties).toHaveProperty('chunking');
+
+    const preview = openapi.components.schemas.ImportUrlPreview as {
+      required: string[];
+      properties: { chunks: { maxItems: number } };
+    };
+    expect(preview.required).toEqual([
+      'title',
+      'safeUrl',
+      'selector',
+      'contentHash',
+      'totalChunks',
+      'chunks',
+      'truncated',
+    ]);
+    expect(preview.properties.chunks.maxItems).toBe(10);
+  });
 });

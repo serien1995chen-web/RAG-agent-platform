@@ -178,4 +178,45 @@ describe('TEST-X-TENANT-GUARD S4 import', () => {
     });
     expect(checkedLevels).toEqual(['read']);
   });
+
+  it('L1-B10-ING-003-A02/A04 rejects a cross-Workspace URL import without writes', async () => {
+    const urlCommand = command(otherWorkspaceId);
+    urlCommand.importKind = 'url';
+    urlCommand.idempotencyKey = `b10-url-tenant-${suffix}-0001`;
+    urlCommand.requestHash = requestHashOf({
+      url: 'https://public.example.test/docs',
+      selector: 'main',
+    });
+    urlCommand.sourceDrafts = [
+      {
+        id: new connection.base.Types.ObjectId().toString(),
+        kind: 'url',
+        name: 'URL tenant fixture',
+        directoryId: null,
+        blobRefId: null,
+        externalId: null,
+        connectorId: null,
+        mimeType: 'text/html',
+        sizeBytes: 64,
+        contentHash: 'b10-url-tenant-hash',
+        parseProvider: 'liteparse',
+        metadata: {
+          originalUrl: 'https://public.example.test/docs',
+          selector: 'main',
+          urlHash: requestHashOf('https://public.example.test/docs'),
+        },
+      },
+    ];
+
+    await expect(repository.submit(urlCommand, context)).rejects.toMatchObject({
+      problem: { error: { code: 'KNOWLEDGE_FORBIDDEN' } },
+    });
+    expect(await connection.models.KnowledgeSource.countDocuments({ workspaceId })).toBe(0);
+    expect(await connection.models.KnowledgeJob.countDocuments({ workspaceId })).toBe(0);
+    expect(await connection.models.KnowledgeAuditEvent.countDocuments({ workspaceId })).toBe(0);
+    expect(await connection.models.KnowledgeOutboxEvent.countDocuments({ workspaceId })).toBe(0);
+    expect(
+      await connection.models.KnowledgeSource.countDocuments({ workspaceId: otherWorkspaceId }),
+    ).toBe(0);
+  });
 });

@@ -452,6 +452,7 @@ export class S06ProcessingApplication {
         fileName: source.name,
         mimeType: source.mimeType,
         parseProvider: String(job.inputSnapshot.parseProvider ?? source.parseProvider),
+        metadata: source.metadata,
       },
       context,
     );

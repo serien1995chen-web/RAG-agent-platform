@@ -63,6 +63,8 @@ export interface ParseRequest {
   extension: string;
   mimeType?: string;
   timeoutMs: number;
+  requestId?: string;
+  traceId?: string;
 }
 
 export interface ParseResult {
@@ -145,6 +147,10 @@ export interface ParseHandlerContext {
   request: ParseRequest;
   bytes: Uint8Array;
   mimeType?: string;
+  /** URL import selector. Empty values are normalized by the URL extraction path. */
+  selector?: string;
+  /** Final validated page URL used to resolve relative links and media. */
+  baseUrl?: string;
   /** 由集成层注入；用于内嵌图片入对象存储或 PDF Provider。 */
   objectStore?: objectStoreLike;
   /** PDF 无文本层时回调（走 PdfEnhanceProviderPort）。 */

@@ -866,6 +866,16 @@ export interface ImportTextPreview {
   truncated: boolean;
 }
 
+export interface ImportUrlPreview {
+  title: string;
+  safeUrl: string;
+  selector: string;
+  contentHash: string;
+  totalChunks: number;
+  chunks: Array<{ q: string; a: string }>;
+  truncated: boolean;
+}
+
 export function previewImportText(
   spaceId: string,
   input: {
@@ -894,17 +904,53 @@ export function previewImportText(
 
 export function importUrl(
   spaceId: string,
-  input: { url: string; selector: string; directoryId?: string | null },
-) {
-  return knowledgeRequest<Job>(`/v1/knowledge/spaces/${encodeURIComponent(spaceId)}/imports/url`, {
-    method: 'POST',
-    idempotencyKey: key(),
-    body: {
-      url: input.url,
-      selector: input.selector,
-      directoryId: input.directoryId ?? null,
+  input: {
+    url: string;
+    selector: string;
+    directoryId?: string | null;
+    chunking: Record<string, unknown>;
+    idempotencyKey?: string;
+    dryRun: true;
+  },
+): Promise<ImportUrlPreview>;
+export function importUrl(
+  spaceId: string,
+  input: {
+    url: string;
+    selector: string;
+    directoryId?: string | null;
+    chunking: Record<string, unknown>;
+    idempotencyKey?: string;
+    dryRun?: false;
+  },
+): Promise<Job>;
+export function importUrl(
+  spaceId: string,
+  input: {
+    url: string;
+    selector: string;
+    directoryId?: string | null;
+    chunking: Record<string, unknown>;
+    idempotencyKey?: string;
+    dryRun?: boolean;
+  },
+): Promise<Job | ImportUrlPreview> {
+  const baseIdempotencyKey = input.idempotencyKey ?? key();
+  const idempotencyKey = input.dryRun ? `${baseIdempotencyKey}:preview` : baseIdempotencyKey;
+  return knowledgeRequest<Job | ImportUrlPreview>(
+    `/v1/knowledge/spaces/${encodeURIComponent(spaceId)}/imports/url`,
+    {
+      method: 'POST',
+      idempotencyKey,
+      body: {
+        url: input.url,
+        selector: input.selector,
+        directoryId: input.directoryId ?? null,
+        chunking: input.chunking,
+        dryRun: input.dryRun ?? false,
+      },
     },
-  });
+  );
 }
 
 export function importTemplate(

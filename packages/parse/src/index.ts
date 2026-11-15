@@ -66,6 +66,8 @@ export {
 export type { LiteParseLoader, S5LiteParseConfig } from './s5/liteparse-provider';
 export { detectAnyDocExtension } from './s5/anydoc-detector';
 export { parseOfd } from './s5/ofd-parser';
+export { convertHtmlToMarkdown, extractHtmlDocument, extractImageSources } from './parsers/html';
+export type { HtmlDocumentExtraction } from './parsers/html';
 export {
   SYNONYM_FILE_MAX_BYTES,
   parseSynonymFileBuffer,
@@ -86,6 +88,8 @@ export type {
  */
 export interface DocumentParseContext extends ParseRequest {
   bytes?: Uint8Array;
+  selector?: string;
+  baseUrl?: string;
   objectStore?: objectStoreLike;
   enhanceScannedPdf?: (bytes: Uint8Array, request: ParseRequest) => Promise<ParseResult>;
 }
@@ -97,6 +101,8 @@ function toHandlerContext(request: ParseRequest): ParseHandlerContext | null {
     request,
     bytes: context.bytes,
     mimeType: request.mimeType,
+    selector: context.selector,
+    baseUrl: context.baseUrl,
     objectStore: context.objectStore,
     enhanceScannedPdf: context.enhanceScannedPdf,
   };

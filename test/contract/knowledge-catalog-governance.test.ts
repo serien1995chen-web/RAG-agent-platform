@@ -59,7 +59,7 @@ describe('S3 catalog governance contract', () => {
 
   it('keeps contract counts frozen and exposes path/batch/export fields', () => {
     expect(Object.keys(openapi.paths)).toHaveLength(95);
-    expect(Object.keys(openapi.components.schemas)).toHaveLength(140);
+    expect(Object.keys(openapi.components.schemas)).toHaveLength(141);
     for (const schema of ['KnowledgeSpace', 'Directory', 'Source']) {
       expect(
         (openapi.components.schemas[schema]?.properties as Record<string, unknown>)?.parentPath,

@@ -3,7 +3,7 @@
   "counts": {
     "paths": 95,
     "operations": 123,
-    "schemas": 140,
+    "schemas": 141,
     "parameters": 8
   },
   "routes": [
@@ -2279,7 +2279,7 @@
       "path": "/v1/knowledge/spaces/{spaceId}/imports/url",
       "group": "import",
       "requestSchema": "ImportUrl",
-      "responseSchema": "Job",
+      "responseSchema": "ImportUrlPreview",
       "scopes": [
         "knowledge:write"
       ],

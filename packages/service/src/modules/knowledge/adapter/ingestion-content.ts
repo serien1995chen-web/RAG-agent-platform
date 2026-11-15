@@ -158,7 +158,8 @@ export class KnowledgeIngestionContentAdapter {
       metadata: {
         originalUrl: input.snapshot.safeUrl,
         urlHash: input.snapshot.urlHash,
-        selector: input.selector,
+        selector: input.snapshot.selector ?? input.selector,
+        ...(input.snapshot.contentHash ? { extractedContentHash: input.snapshot.contentHash } : {}),
       },
       context: input.context,
       knowledgeSpaceId: input.knowledgeSpaceId,
