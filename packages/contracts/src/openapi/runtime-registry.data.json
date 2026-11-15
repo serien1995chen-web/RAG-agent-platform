@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "count": 120,
+  "count": 123,
   "operations": [
     {
       "operationId": "API-HEALTH-LIVE",
@@ -1916,7 +1916,7 @@
       "requestSchema": "ConnectorCatalogRequest",
       "responseSchema": "ConnectorCatalog",
       "scopes": [
-        "knowledge:write"
+        "knowledge:read"
       ],
       "idempotent": true,
       "rateLimit": "30 QPS/workspace",
@@ -2087,7 +2087,79 @@
       "requestSchema": "ApiLibraryCatalogRequest",
       "responseSchema": "ApiLibraryCatalog",
       "scopes": [
-        "knowledge:write"
+        "knowledge:read"
+      ],
+      "idempotent": true,
+      "rateLimit": "30 QPS/workspace",
+      "timeoutMs": 30000,
+      "audit": true,
+      "downstreamAllowed": false,
+      "runtime": true,
+      "stage": "BASE",
+      "targetSection": "9.2",
+      "accId": "ACC-CAP-ING-006",
+      "capabilityIds": [
+        "ING-006",
+        "API-002"
+      ]
+    },
+    {
+      "operationId": "API-IMPORT-API-CONTENT",
+      "method": "POST",
+      "path": "/v1/knowledge/spaces/{spaceId}/imports/api-library/content",
+      "group": "import",
+      "requestSchema": "ApiLibraryFilesRequest",
+      "responseSchema": null,
+      "scopes": [
+        "knowledge:read"
+      ],
+      "idempotent": true,
+      "rateLimit": "30 QPS/workspace",
+      "timeoutMs": 30000,
+      "audit": true,
+      "downstreamAllowed": false,
+      "runtime": true,
+      "stage": "BASE",
+      "targetSection": "9.2",
+      "accId": "ACC-CAP-ING-006",
+      "capabilityIds": [
+        "ING-006",
+        "API-002"
+      ]
+    },
+    {
+      "operationId": "API-IMPORT-API-DETAIL",
+      "method": "POST",
+      "path": "/v1/knowledge/spaces/{spaceId}/imports/api-library/detail",
+      "group": "import",
+      "requestSchema": "ApiLibraryFilesRequest",
+      "responseSchema": null,
+      "scopes": [
+        "knowledge:read"
+      ],
+      "idempotent": true,
+      "rateLimit": "30 QPS/workspace",
+      "timeoutMs": 30000,
+      "audit": true,
+      "downstreamAllowed": false,
+      "runtime": true,
+      "stage": "BASE",
+      "targetSection": "9.2",
+      "accId": "ACC-CAP-ING-006",
+      "capabilityIds": [
+        "ING-006",
+        "API-002"
+      ]
+    },
+    {
+      "operationId": "API-IMPORT-API-PREVIEW",
+      "method": "POST",
+      "path": "/v1/knowledge/spaces/{spaceId}/imports/api-library/preview",
+      "group": "import",
+      "requestSchema": "ApiLibraryFilesRequest",
+      "responseSchema": null,
+      "scopes": [
+        "knowledge:read"
       ],
       "idempotent": true,
       "rateLimit": "30 QPS/workspace",

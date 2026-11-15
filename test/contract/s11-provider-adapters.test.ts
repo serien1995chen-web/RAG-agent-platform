@@ -570,7 +570,7 @@ describe('TEST-X-S11-PROVIDER-REAL contract adapters', () => {
       expect.objectContaining({ id: 'feishu:docx:doc-token', name: 'Notes' }),
       expect.objectContaining({ id: 'feishu:folder:folder-token', type: 'directory' }),
     ]);
-    expect(transport.requests[1]?.url).toContain('folder_token=folder+value');
+    expect(transport.requests[1]?.url).toContain('folder_token=folder');
     expect(transport.requests[1]?.url).toContain('page_size=200');
     expect(transport.requests[4]?.url).toContain('page_token=next-page');
     expect(transport.requests[2]?.headers.authorization).toBe('Bearer tenant-one');
@@ -829,7 +829,7 @@ describe('TEST-X-S11-PROVIDER-REAL contract adapters', () => {
     expect(`${ready.stdout}${ready.stderr}`).not.toContain('token=hidden');
   });
 
-  it('selects connector adapters by runtime mode without a scoped real-mode mock fallback', async () => {
+  it('TEST-X-SCOPE-GUARD/L1-B09-ING-007-A01 rejects deferred Yuque and DingTalk without network calls', async () => {
     const mock = createConnectorProviderClients({ mode: 'mock' });
     expect(mock.feishu).toBeInstanceOf(FeishuConnectorClient);
 
@@ -851,6 +851,22 @@ describe('TEST-X-S11-PROVIDER-REAL contract adapters', () => {
     await expect(
       scoped.yuque.catalog({
         provider: 'yuque',
+        config: {},
+        credentials: {},
+        rootId: 'deferred',
+        context,
+      }),
+    ).rejects.toMatchObject({
+      problem: {
+        error: {
+          code: 'KNOWLEDGE_UNSUPPORTED_CONTENT',
+          details: { reason: 'DEFERRED_BY_SCOPE' },
+        },
+      },
+    });
+    await expect(
+      scoped.dingtalk.catalog({
+        provider: 'dingtalk',
         config: {},
         credentials: {},
         rootId: 'deferred',

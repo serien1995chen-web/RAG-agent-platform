@@ -14,7 +14,11 @@ import type {
   S5OcrHttpRequest,
   S5OcrHttpTransportPort,
 } from '../../packages/service/src/modules/knowledge/application/s5-ocr-ports';
-import { S11ConnectorHttpClient } from '../../packages/service/src/modules/knowledge/adapter/connectors/s11-connector-http';
+import {
+  S11ConnectorHttpClient,
+  S11ConnectorTokenCache,
+  parseConnectorResponse,
+} from '../../packages/service/src/modules/knowledge/adapter/connectors/s11-connector-http';
 import type { TenantContext } from '../../packages/service/src/shared/persistence/knowledge/tenant';
 
 const context: TenantContext = {
@@ -172,5 +176,129 @@ describe('TEST-X-S11-PROVIDER-REAL provider fault classification', () => {
     );
     expect(sleeps).toEqual([5_000]);
     expect(client.evidence.map((entry) => entry.attempt)).toEqual([1, 2]);
+  });
+});
+
+describe('L1-B09 connector fault and concurrency boundaries', () => {
+  it('L1-B09-ING-007-C01 coalesces concurrent token cache misses into one provider refresh', async () => {
+    const cache = new S11ConnectorTokenCache();
+    let loads = 0;
+    const results = await Promise.all(
+      Array.from({ length: 8 }, () =>
+        cache.getOrLoad('workspace:feishu:credential', async () => {
+          loads += 1;
+          await new Promise((resolve) => setTimeout(resolve, 10));
+          return { token: 'safe-refreshed-token', expiresInSeconds: 7_200 };
+        }),
+      ),
+    );
+
+    expect(results).toEqual(Array.from({ length: 8 }, () => 'safe-refreshed-token'));
+    expect(loads).toBe(1);
+  });
+
+  it('L1-B09-ING-007-F02 limits invalid schema repair to one bounded re-read', async () => {
+    let requests = 0;
+    await expect(
+      parseConnectorResponse(
+        async () => {
+          requests += 1;
+          return {
+            status: 200,
+            headers: {},
+            data: { data: { files: 'not-an-array' } },
+          };
+        },
+        (value) => {
+          const data = (value as { data?: { files?: unknown } }).data;
+          if (!Array.isArray(data?.files)) throw new Error('files must be an array');
+          return data.files;
+        },
+        { provider: 'feishu', context },
+      ),
+    ).rejects.toMatchObject({
+      problem: {
+        error: {
+          code: 'KNOWLEDGE_PROVIDER_CONTRACT_INVALID',
+          details: {
+            provider: 'feishu',
+            schemaRetries: 1,
+          },
+        },
+      },
+    });
+    expect(requests).toBe(2);
+  });
+
+  it('L1-B09-ING-007-N02 does not retry auth failures and caps 429 retries at five attempts', async () => {
+    const authTransport = new QueueTransport<
+      Parameters<S11ConnectorHttpClient['request']>[0],
+      S5HttpResponse
+    >([{ status: 401, headers: {}, data: {} }]);
+    const authSleep = vi.fn();
+    const authClient = new S11ConnectorHttpClient({
+      provider: 'feishu',
+      transport: authTransport as never,
+      sleep: authSleep,
+    });
+    await expect(
+      authClient.request(
+        {
+          method: 'GET',
+          url: 'https://open.feishu.cn/open-apis/drive/v1/files?folder_token=safe',
+          headers: { authorization: 'Bearer safe-token' },
+        },
+        context,
+      ),
+    ).rejects.toMatchObject({
+      problem: {
+        error: {
+          code: 'KNOWLEDGE_DEPENDENCY_UNAVAILABLE',
+          retryable: false,
+          details: { providerStatus: 401, errorKind: 'auth' },
+        },
+      },
+    });
+    expect(authTransport.requests).toHaveLength(1);
+    expect(authSleep).not.toHaveBeenCalled();
+
+    const limitedTransport = new QueueTransport<
+      Parameters<S11ConnectorHttpClient['request']>[0],
+      S5HttpResponse
+    >(
+      Array.from({ length: 5 }, () => ({
+        status: 429,
+        headers: {},
+        data: {},
+      })),
+    );
+    const sleeps: number[] = [];
+    const limitedClient = new S11ConnectorHttpClient({
+      provider: 'feishu',
+      transport: limitedTransport as never,
+      sleep: async (ms) => {
+        sleeps.push(ms);
+      },
+    });
+    await expect(
+      limitedClient.request(
+        {
+          method: 'GET',
+          url: 'https://open.feishu.cn/open-apis/drive/v1/files?folder_token=safe',
+          headers: { authorization: 'Bearer safe-token' },
+        },
+        context,
+      ),
+    ).rejects.toMatchObject({
+      problem: {
+        error: {
+          code: 'KNOWLEDGE_RATE_LIMITED',
+          retryable: true,
+          details: { attempts: 5 },
+        },
+      },
+    });
+    expect(sleeps).toEqual([5_000, 10_000, 20_000, 40_000]);
+    expect(limitedTransport.requests).toHaveLength(5);
   });
 });

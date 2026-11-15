@@ -36,10 +36,18 @@ describe('S4 import workbench contract', () => {
     expect(connectorProviderForKind('text')).toBeNull();
   });
 
-  it('ACC-UI-05/06 selects catalog documents without manual ID entry', () => {
+  it('L1-B09-ING-006-P01/C01 keeps stable ids when catalog names refresh', () => {
     expect(toggleIdSelection('', 'file:1', true)).toBe('file:1');
     expect(toggleIdSelection('file:1', 'file:2', true)).toBe('file:1, file:2');
     expect(toggleIdSelection('file:1, file:2', 'file:1', false)).toBe('file:2');
     expect(toggleIdSelection('doc:1', 'doc:1', true)).toBe('doc:1');
+    const selectedBeforeRefresh = 'file:1, file:2';
+    const refreshedCatalog = [
+      { id: 'file:1', name: 'Renamed one', type: 'document' },
+      { id: 'file:2', name: 'Renamed two', type: 'document' },
+    ];
+    expect(
+      refreshedCatalog.filter((item) => splitIds(selectedBeforeRefresh).includes(item.id)),
+    ).toEqual(refreshedCatalog);
   });
 });

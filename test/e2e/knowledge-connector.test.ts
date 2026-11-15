@@ -110,24 +110,25 @@ describe('TEST-ING-007-BLOCK and ACC-UI-06 connector', () => {
     expect(document?.status).toBe('syncing');
   });
 
-  it.skip('renders connector settings safely at 360/768/1200', async () => {
+  it('L1-B09-ING-007-UI01 renders connector settings safely at 360/768/1200', async () => {
     await verifyResponsivePage({
       baseUrl: app!.baseUrl,
       path: `/settings/connectors?spaceId=${spaceId}&provider=feishu&connectorId=${connectorId}`,
       cookie: await consoleCookie({ baseUrl: app!.baseUrl, authToken, workspaceId }),
-      screenshotPrefix: 'connectors',
+      screenshotPrefix: 'b09-connectors',
+      resultDir: 'b09/20261115-140502/ui',
     });
   });
 
-  it.skip('ACC-UI-06 initializes provider and completes connect/update/sync/delete without credential echo', async () => {
+  it('L1-B09-ING-007-P01/UI01 completes Feishu connect/update/sync/delete without credential echo', async () => {
     const browser = await chromium.launch({ headless: true });
     const connectorIdForUi = randomUUID();
     const connected = {
       id: connectorIdForUi,
       workspaceId,
       knowledgeSpaceId: spaceId,
-      provider: 'yuque',
-      name: 'Yuque UI',
+      provider: 'feishu',
+      name: 'Feishu UI',
       status: 'active',
       syncEnabled: true,
       syncIntervalMinutes: 60,
@@ -137,13 +138,13 @@ describe('TEST-ING-007-BLOCK and ACC-UI-06 connector', () => {
       lastError: null,
       cursorVersion: 1,
       version: 1,
-      config: { provider: 'yuque' },
+      config: { provider: 'feishu', folderToken: 'folder-token' },
       credentialMetadata: {
-        provider: 'yuque',
+        provider: 'feishu',
         schemaVersion: 1,
         keyVersion: 1,
         configured: true,
-        redactedFields: ['token'],
+        redactedFields: ['appSecret'],
       },
     };
     try {
@@ -155,7 +156,7 @@ describe('TEST-ING-007-BLOCK and ACC-UI-06 connector', () => {
       let connectBody: unknown;
       let updateBody: unknown;
       let syncSubmitted = false;
-      await page.route('**/v1/knowledge/spaces/*/connectors/yuque/connect', async (route) => {
+      await page.route('**/v1/knowledge/spaces/*/connectors/feishu/connect', async (route) => {
         connectBody = route.request().postDataJSON();
         await route.fulfill({
           status: 201,
@@ -171,7 +172,7 @@ describe('TEST-ING-007-BLOCK and ACC-UI-06 connector', () => {
             contentType: 'application/json',
             body: JSON.stringify({
               success: true,
-              data: { ...connected, name: 'Yuque UI updated', version: 2 },
+              data: { ...connected, name: 'Feishu UI updated', version: 2 },
             }),
           });
           return;
@@ -212,24 +213,25 @@ describe('TEST-ING-007-BLOCK and ACC-UI-06 connector', () => {
         });
       });
 
-      await page.goto(`${app!.baseUrl}/settings/connectors?spaceId=${spaceId}&provider=yuque`, {
+      await page.goto(`${app!.baseUrl}/settings/connectors?spaceId=${spaceId}&provider=feishu`, {
         waitUntil: 'networkidle',
       });
-      await expectUi(page.locator('select').first()).toHaveValue('yuque');
-      await page.locator('input').nth(0).fill('Yuque UI');
-      await page.locator('input').nth(2).fill('user-1');
-      await page.locator('input').nth(3).fill('secret-token');
+      await expectUi(page.locator('select').first()).toHaveValue('feishu');
+      await page.getByLabel(/名称|Name/).fill('Feishu UI');
+      await page.getByLabel(/App ID/).fill('app-id');
+      await page.getByLabel(/App Secret/).fill('secret-token');
+      await page.getByLabel(/文件夹 Token|Folder token/).fill('folder-token');
       await page.getByRole('button', { name: /创建连接器|Create connector/ }).click();
-      await expectUi(page.getByText('Yuque UI').first()).toBeVisible();
+      await expectUi(page.getByText('Feishu UI').first()).toBeVisible();
       expect(connectBody).toMatchObject({
-        provider: 'yuque',
-        config: { provider: 'yuque' },
-        credentials: { provider: 'yuque', userId: 'user-1', token: 'secret-token' },
+        provider: 'feishu',
+        config: { provider: 'feishu', folderToken: 'folder-token' },
+        credentials: { provider: 'feishu', appId: 'app-id', appSecret: 'secret-token' },
       });
-      await expectUi(page.locator('input').nth(3)).toHaveValue('');
+      await expectUi(page.getByLabel(/App Secret/)).toHaveValue('');
       await expectUi(page.locator('body')).not.toContainText('secret-token');
 
-      await page.locator('input').nth(0).fill('Yuque UI updated');
+      await page.getByLabel(/名称|Name/).fill('Feishu UI updated');
       const updateResponse = page.waitForResponse(
         (response) =>
           response.request().method() === 'PATCH' &&
@@ -237,8 +239,8 @@ describe('TEST-ING-007-BLOCK and ACC-UI-06 connector', () => {
       );
       await page.getByRole('button', { name: /更新连接器|Update connector/ }).click();
       expect((await updateResponse).status()).toBe(200);
-      await expectUi(page.getByText('Yuque UI updated').first()).toBeVisible();
-      expect(updateBody).toMatchObject({ version: 1, name: 'Yuque UI updated' });
+      await expectUi(page.getByText('Feishu UI updated').first()).toBeVisible();
+      expect(updateBody).toMatchObject({ version: 1, name: 'Feishu UI updated' });
       expect(updateBody).not.toHaveProperty('credentials');
 
       await page.getByRole('button', { name: /提交同步|Submit sync/ }).click();

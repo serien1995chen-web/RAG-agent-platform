@@ -85,6 +85,9 @@ export type OperationId =
   | 'API-SPACE-EXPORT'
   | 'API-IMPORT-API-LIBRARY'
   | 'API-IMPORT-API-CATALOG'
+  | 'API-IMPORT-API-CONTENT'
+  | 'API-IMPORT-API-DETAIL'
+  | 'API-IMPORT-API-PREVIEW'
   | 'API-IMPORT-BACKUP'
   | 'API-IMPORT-FILES'
   | 'API-IMPORT-TEMPLATE'
@@ -207,6 +210,9 @@ export type RuntimeOperationId =
   | 'API-SPACE-EXPORT'
   | 'API-IMPORT-API-LIBRARY'
   | 'API-IMPORT-API-CATALOG'
+  | 'API-IMPORT-API-CONTENT'
+  | 'API-IMPORT-API-DETAIL'
+  | 'API-IMPORT-API-PREVIEW'
   | 'API-IMPORT-BACKUP'
   | 'API-IMPORT-FILES'
   | 'API-IMPORT-TEMPLATE'
@@ -257,6 +263,7 @@ export type SchemaName =
   | 'APIKeyUpdate'
   | 'ApiLibraryCatalog'
   | 'ApiLibraryCatalogRequest'
+  | 'ApiLibraryFilesRequest'
   | 'ArchiveCreate'
   | 'AuditEvent'
   | 'AuditEventList'
@@ -398,6 +405,7 @@ export interface SchemaPropertyMap {
   "APIKeyUpdate": "name" | "scopes" | "spaceIds" | "status" | "version";
   "ApiLibraryCatalog": "items" | "nextCursor" | "provider";
   "ApiLibraryCatalogRequest": "config" | "credentials" | "cursor" | "offset" | "parentId";
+  "ApiLibraryFilesRequest": "config" | "credentials" | "fileIds";
   "ArchiveCreate": "sourceIds";
   "AuditEvent": "action" | "actorMemberId" | "apiKeyId" | "apiKeyPrefix" | "eventId" | "expiresAt" | "ipHash" | "knowledgeSpaceId" | "occurredAt" | "outcome" | "requestId" | "resourceId" | "resourceType" | "safeDiff" | "traceId" | "userAgentHash" | "workspaceId";
   "AuditEventList": "items" | "pageInfo";
@@ -540,6 +548,7 @@ export interface RequiredSchemaPropertyMap {
   "APIKeyUpdate": "version";
   "ApiLibraryCatalog": "items" | "provider";
   "ApiLibraryCatalogRequest": "config" | "credentials";
+  "ApiLibraryFilesRequest": "config" | "credentials" | "fileIds";
   "ArchiveCreate": "sourceIds";
   "AuditEvent": "action" | "actorMemberId" | "eventId" | "expiresAt" | "ipHash" | "occurredAt" | "outcome" | "requestId" | "resourceId" | "resourceType" | "safeDiff" | "traceId" | "userAgentHash" | "workspaceId";
   "AuditEventList": "items" | "pageInfo";
@@ -554,7 +563,7 @@ export interface RequiredSchemaPropertyMap {
   "CollaboratorUpdate": "role" | "version";
   "Connector": "config" | "credentialMetadata" | "cursorVersion" | "id" | "knowledgeSpaceId" | "name" | "provider" | "status" | "syncEnabled" | "syncIntervalMinutes" | "version" | "workspaceId";
   "ConnectorCatalog": "items" | "provider";
-  "ConnectorCatalogRequest": "rootId";
+  "ConnectorCatalogRequest": never;
   "ConnectorConfig": never;
   "ConnectorConnect": "config" | "credentials" | "name" | "provider" | "syncEnabled" | "syncIntervalMinutes";
   "ConnectorCredentials": never;
@@ -757,6 +766,9 @@ export interface RuntimeRouteMethodPathMap {
   'API-SPACE-EXPORT': 'POST /v1/knowledge/spaces/{spaceId}/exports';
   'API-IMPORT-API-LIBRARY': 'POST /v1/knowledge/spaces/{spaceId}/imports/api-library';
   'API-IMPORT-API-CATALOG': 'POST /v1/knowledge/spaces/{spaceId}/imports/api-library/catalog';
+  'API-IMPORT-API-CONTENT': 'POST /v1/knowledge/spaces/{spaceId}/imports/api-library/content';
+  'API-IMPORT-API-DETAIL': 'POST /v1/knowledge/spaces/{spaceId}/imports/api-library/detail';
+  'API-IMPORT-API-PREVIEW': 'POST /v1/knowledge/spaces/{spaceId}/imports/api-library/preview';
   'API-IMPORT-BACKUP': 'POST /v1/knowledge/spaces/{spaceId}/imports/backup';
   'API-IMPORT-FILES': 'POST /v1/knowledge/spaces/{spaceId}/imports/files';
   'API-IMPORT-TEMPLATE': 'POST /v1/knowledge/spaces/{spaceId}/imports/template';

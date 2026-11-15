@@ -77,12 +77,13 @@ describe('TEST-X-FRONTEND-IMPORT, TEST-DOWN-004-BLOCK and ACC-UI', () => {
     ).toBe(1);
   });
 
-  it.skip('ACC-UI-01/TEST-X-FRONTEND-A11Y renders the import workbench at three viewports', async () => {
+  it('L1-B09-ING-006/ING-007-UI01 renders external-source controls at three viewports with axe', async () => {
     await verifyResponsivePage({
       baseUrl: app!.baseUrl,
-      path: `/spaces/${spaceId}/import?kind=text`,
+      path: `/dataset/detail?datasetId=${spaceId}&currentTab=import&source=apiDataset`,
       cookie: await consoleCookie({ baseUrl: app!.baseUrl, authToken, workspaceId }),
-      screenshotPrefix: 'import',
+      screenshotPrefix: 'b09-api-library',
+      resultDir: 'b09/20261115-140502/ui',
     });
   });
 
@@ -179,9 +180,37 @@ describe('TEST-X-FRONTEND-IMPORT, TEST-DOWN-004-BLOCK and ACC-UI', () => {
     }
   });
 
-  it.skip('ACC-UI-05 selects an API catalog document and submits without manual ID entry', async () => {
+  it('L1-B09-ING-006-P01/S01/UI01 browses the API tree and preserves only explicit selections', async () => {
     const browser = await chromium.launch({ headless: true });
     try {
+      await connection!.models.KnowledgeSource.create({
+        workspaceId,
+        knowledgeSpaceId: spaceId,
+        version: 1,
+        deletedAt: null,
+        createdByMemberId: memberId,
+        updatedByMemberId: memberId,
+        directoryId: null,
+        kind: 'api_library',
+        name: 'Existing runbook',
+        externalId: 'file:existing',
+        connectorId: null,
+        blobRefId: null,
+        originalUrl: null,
+        mimeType: 'text/markdown',
+        sizeBytes: 0,
+        contentHash: 'existing-runbook',
+        parseProvider: 'liteparse',
+        processingStatus: 'ready',
+        sourceVersion: 1,
+        searchEnabled: true,
+        permissionState: 'inherited',
+        permissionRevision: 0,
+        aclSnapshotVersion: 1,
+        ownershipMemberId: memberId,
+        metadata: {},
+        tagValues: [],
+      });
       const pageContext = await browser.newContext({ viewport: { width: 1200, height: 900 } });
       await pageContext.addCookies([
         await consoleCookie({ baseUrl: app!.baseUrl, authToken, workspaceId }),
@@ -209,25 +238,43 @@ describe('TEST-X-FRONTEND-IMPORT, TEST-DOWN-004-BLOCK and ACC-UI', () => {
             success: true,
             data: {
               provider: 'custom',
-              items: [{ id: 'file:ui', name: 'UI fixture', type: 'document' }],
+              items: [
+                { id: 'folder:eng', name: 'Engineering', type: 'directory' },
+                { id: 'file:existing', name: 'Existing runbook', type: 'document' },
+                { id: 'file:keep', name: 'Keep runbook', type: 'document' },
+              ],
+              nextCursor: null,
             },
           }),
         });
       });
-      await page.goto(`${app!.baseUrl}/spaces/${spaceId}/import?kind=api_library`, {
-        waitUntil: 'networkidle',
-      });
-      await page.getByRole('textbox', { name: 'API Base URL' }).fill('https://api.example.test');
-      await page.getByRole('textbox', { name: 'Parent ID' }).fill('folder:eng');
+      await page.goto(
+        `${app!.baseUrl}/dataset/detail?datasetId=${spaceId}&currentTab=import&source=apiDataset`,
+        {
+          waitUntil: 'networkidle',
+        },
+      );
+      await page.getByRole('button', { name: /下一步|Next/ }).click();
+      await page
+        .locator('.kb2-import-connect input[type=url]')
+        .first()
+        .fill('https://api.example.test');
+      await expectUi(page.getByText('父目录 ID', { exact: true })).toHaveCount(0);
       const catalogResponse = page.waitForResponse(
         (response) =>
           response.request().method() === 'POST' &&
           response.url().endsWith('/imports/api-library/catalog'),
       );
-      await page.getByRole('button', { name: /浏览目录|Browse catalog/ }).click();
+      await page.getByRole('button', { name: /读取 API 目录|Browse catalog/ }).click();
       expect((await catalogResponse).status()).toBe(200);
-      await expectUi(page.getByText(/UI fixture/)).toBeVisible();
-      await page.getByText(/UI fixture.*document/).click();
+      await expectUi(page.getByText('Engineering')).toBeVisible();
+      await expectUi(page.getByRole('checkbox', { name: /全选|select all/i })).toBeVisible();
+      await expectUi(page.getByRole('checkbox', { name: /Existing runbook/ })).toBeDisabled();
+      await page.getByRole('button', { name: /Engineering/ }).click();
+      await expectUi(page.getByRole('navigation', { name: /breadcrumb|路径/i })).toContainText(
+        /Engineering/,
+      );
+      await page.getByRole('checkbox', { name: /Keep runbook/ }).check();
       const importResponse = page.waitForResponse(
         (response) =>
           response.request().method() === 'POST' && response.url().endsWith('/imports/api-library'),
@@ -245,7 +292,7 @@ describe('TEST-X-FRONTEND-IMPORT, TEST-DOWN-004-BLOCK and ACC-UI', () => {
       });
       expect(requestBody).not.toHaveProperty('config.basePath');
       expect(importBody).toMatchObject({
-        fileIds: ['file:ui'],
+        fileIds: ['file:keep'],
         config: {
           provider: 'custom_api',
           catalogPath: '/v1/file/list',
@@ -258,7 +305,7 @@ describe('TEST-X-FRONTEND-IMPORT, TEST-DOWN-004-BLOCK and ACC-UI', () => {
     }
   });
 
-  it.skip('ACC-UI-06 selects a connector document and submits connector import', async () => {
+  it('L1-B09-ING-007-P01/UI01 selects Feishu documents from the configured tree', async () => {
     const browser = await chromium.launch({ headless: true });
     try {
       const pageContext = await browser.newContext({ viewport: { width: 1200, height: 900 } });
@@ -278,7 +325,23 @@ describe('TEST-X-FRONTEND-IMPORT, TEST-DOWN-004-BLOCK and ACC-UI', () => {
             data: {
               provider: 'feishu',
               verificationStatus: 'EXTERNAL_UNVERIFIED',
-              items: [{ id: 'doc:ui', name: 'Feishu UI fixture', type: 'document' }],
+              items: [
+                {
+                  externalId: 'feishu:folder:nested',
+                  title: 'Nested folder',
+                  type: 'directory',
+                },
+                {
+                  externalId: 'feishu:docx:keep',
+                  title: 'Feishu keep',
+                  type: 'document',
+                },
+                {
+                  externalId: 'feishu:docx:mutate',
+                  title: 'Feishu mutate',
+                  type: 'document',
+                },
+              ],
             },
           }),
         });
@@ -294,18 +357,29 @@ describe('TEST-X-FRONTEND-IMPORT, TEST-DOWN-004-BLOCK and ACC-UI', () => {
           }),
         });
       });
-      await page.goto(`${app!.baseUrl}/spaces/${spaceId}/import?kind=feishu`, {
-        waitUntil: 'networkidle',
-      });
-      await page.getByRole('textbox', { name: '根目录 ID' }).fill('folder:feishu');
+      await page.goto(
+        `${app!.baseUrl}/dataset/detail?datasetId=${spaceId}&currentTab=import&source=feishu`,
+        {
+          waitUntil: 'networkidle',
+        },
+      );
+      await page.getByRole('button', { name: /下一步|Next/ }).click();
+      await expectUi(page.getByText('根目录 ID', { exact: true })).toHaveCount(0);
       const catalogResponse = page.waitForResponse(
         (response) =>
           response.request().method() === 'POST' &&
           response.url().endsWith('/connectors/feishu/catalog'),
       );
-      await page.getByRole('button', { name: /浏览目录|Browse catalog/ }).click();
+      await page.getByRole('button', { name: /读取连接器目录|Browse catalog/ }).click();
       expect((await catalogResponse).status()).toBe(200);
-      await page.getByText(/Feishu UI fixture.*document/).click();
+      await expectUi(page.getByRole('button', { name: /Nested folder/ })).toBeVisible();
+      await page.getByRole('button', { name: /Nested folder/ }).click();
+      await expectUi(page.getByRole('navigation', { name: /breadcrumb|路径/i })).toContainText(
+        /Nested folder/,
+      );
+      await expectUi(page.getByRole('textbox', { name: /外部 ID|External IDs/i })).toHaveCount(0);
+      await page.getByRole('checkbox', { name: /Feishu keep/ }).check();
+      await page.getByRole('checkbox', { name: /Feishu mutate/ }).check();
       const importResponse = page.waitForResponse(
         (response) =>
           response.request().method() === 'POST' &&
@@ -314,8 +388,10 @@ describe('TEST-X-FRONTEND-IMPORT, TEST-DOWN-004-BLOCK and ACC-UI', () => {
       await page.getByRole('button', { name: /提交导入|Submit import/ }).click();
       expect((await importResponse).status()).toBe(202);
       await expectUi(page.getByRole('status')).toContainText('connector-ui-job');
-      expect(catalogBody).toEqual({ rootId: 'folder:feishu' });
-      expect(importBody).toMatchObject({ externalIds: ['doc:ui'] });
+      expect(catalogBody).toMatchObject({ rootId: expect.any(String) });
+      expect(importBody).toMatchObject({
+        externalIds: ['feishu:docx:keep', 'feishu:docx:mutate'],
+      });
     } finally {
       await browser.close();
     }

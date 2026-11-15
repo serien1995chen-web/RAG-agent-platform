@@ -221,6 +221,14 @@ export const ImportApiLibrarySchema = z
   })
   .strict();
 
+export const ApiLibraryFilesRequestSchema = z
+  .object({
+    config: CustomApiConnectorConfigSchema,
+    credentials: CustomApiCredentialsSchema,
+    fileIds: z.array(z.string().min(1)).min(1).max(1000),
+  })
+  .strict();
+
 export const ConnectorConnectSchema = z
   .object({
     provider: z.enum(CONNECTOR_PROVIDERS),
@@ -263,7 +271,7 @@ export const ConnectorSyncSchema = z
 
 export const ConnectorCatalogRequestSchema = z
   .object({
-    rootId: z.string().min(1),
+    rootId: z.string().default(''),
   })
   .strict();
 

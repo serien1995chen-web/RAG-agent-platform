@@ -206,7 +206,7 @@ afterAll(async () => {
 });
 
 describe('S6 connector sync discovery', () => {
-  it('commits provider pages, preserves cursor CAS, fans out once and completes connector state', async () => {
+  it('commits a complete recursive traversal, preserves cursor CAS and completes connector state', async () => {
     const connected = await connectors.connect(
       String(spaceId),
       {
@@ -251,25 +251,29 @@ describe('S6 connector sync discovery', () => {
       workspaceId,
       connectorId: connected.id,
       deletedAt: null,
-    }).lean();
-    expect(firstSources).toHaveLength(1);
-    expect(firstSources[0]).toMatchObject({
-      externalId: 'doc_a',
-      sourceVersion: 1,
-      processingStatus: 'parsing',
-    });
+    })
+      .sort({ externalId: 1 })
+      .lean();
+    expect(firstSources).toHaveLength(2);
+    expect(firstSources.map((source) => source.externalId)).toEqual(['doc_a', 'doc_b']);
+    expect(firstSources.every((source) => source.processingStatus === 'parsing')).toBe(true);
     const firstChildren = await models.KnowledgeJob.find({
       workspaceId,
       kind: 'parse',
       'inputSnapshot.rootJobId': first.job.jobId,
     }).lean();
-    expect(firstChildren).toHaveLength(1);
+    expect(firstChildren).toHaveLength(2);
     expect(await models.KnowledgeObjectRef.countDocuments({ workspaceId, state: 'active' })).toBe(
-      1,
+      2,
     );
     const firstCursor = await connectors.getSyncCursor(connected.id, 'safe-token', context);
     expect(firstCursor).toMatchObject({
-      cursor: { page: 'page:2' },
+      cursor: {
+        mode: 'full',
+        rootId: 'safe-token',
+        observedDocuments: 2,
+        visitedDirectories: 2,
+      },
       cursorVersion: 2,
       syncRunId: first.job.jobId,
     });
@@ -289,9 +293,9 @@ describe('S6 connector sync discovery', () => {
         connectorId: connected.id,
         deletedAt: null,
       }),
-    ).toBe(1);
+    ).toBe(2);
     expect(await models.KnowledgeObjectRef.countDocuments({ workspaceId, state: 'active' })).toBe(
-      1,
+      2,
     );
     expect(
       await models.KnowledgeJob.countDocuments({
@@ -299,10 +303,14 @@ describe('S6 connector sync discovery', () => {
         kind: 'parse',
         'inputSnapshot.rootJobId': first.job.jobId,
       }),
-    ).toBe(1);
+    ).toBe(2);
 
-    await models.KnowledgeJob.updateOne(
-      { _id: firstChildren[0]!._id, workspaceId },
+    await models.KnowledgeJob.updateMany(
+      {
+        workspaceId,
+        kind: 'parse',
+        'inputSnapshot.rootJobId': first.job.jobId,
+      },
       {
         $set: {
           status: 'succeeded',
@@ -317,62 +325,6 @@ describe('S6 connector sync discovery', () => {
       context,
     );
     expect((await jobs.getRaw(first.job.jobId, context)).status).toBe('succeeded');
-    expect((await connectors.get(connected.id, context)).status).toBe('active');
-
-    const second = await connectors.markSyncing(
-      connected.id,
-      {
-        full: false,
-        requestHash: `sync-page-2-${suffix}`,
-        idempotencyKey: `sync-page-2-${suffix}`,
-      },
-      context,
-    );
-    expect(
-      await processing.handleQueue(
-        'knowledge-sync',
-        second.job.jobId,
-        `sync-worker-page-2-${suffix}`,
-        context,
-      ),
-    ).toBe('succeeded');
-    const secondSources = await models.KnowledgeSource.find({
-      workspaceId,
-      connectorId: connected.id,
-      deletedAt: null,
-    }).lean();
-    expect(secondSources.map((source) => source.externalId).sort()).toEqual(['doc_a', 'doc_b']);
-    expect(await models.KnowledgeObjectRef.countDocuments({ workspaceId, state: 'active' })).toBe(
-      2,
-    );
-    expect(await connectors.getSyncCursor(connected.id, 'safe-token', context)).toMatchObject({
-      cursor: { page: null },
-      cursorVersion: 3,
-      syncRunId: second.job.jobId,
-    });
-    expect((await connectors.get(connected.id, context)).cursorVersion).toBe(3);
-
-    const secondChildren = await models.KnowledgeJob.find({
-      workspaceId,
-      kind: 'parse',
-      'inputSnapshot.rootJobId': second.job.jobId,
-    }).lean();
-    expect(secondChildren).toHaveLength(1);
-    await models.KnowledgeJob.updateOne(
-      { _id: secondChildren[0]!._id, workspaceId },
-      {
-        $set: {
-          status: 'succeeded',
-          progress: { stage: 'succeeded', completed: 1, total: 1, percent: 100 },
-        },
-      },
-    );
-    await processing.handleQueue(
-      'knowledge-sync',
-      second.job.jobId,
-      `sync-complete-page-2-${suffix}`,
-      context,
-    );
     expect((await connectors.get(connected.id, context)).status).toBe('active');
 
     docAChanged = true;
@@ -400,9 +352,40 @@ describe('S6 connector sync discovery', () => {
       deletedAt: null,
     }).lean();
     expect(changedSource?.sourceVersion).toBe(2);
+    const changedChildren = await models.KnowledgeJob.find({
+      workspaceId,
+      kind: 'parse',
+      'inputSnapshot.rootJobId': changed.job.jobId,
+    }).lean();
+    expect(changedChildren).toHaveLength(2);
+    await models.KnowledgeJob.updateMany(
+      {
+        workspaceId,
+        kind: 'parse',
+        'inputSnapshot.rootJobId': changed.job.jobId,
+      },
+      {
+        $set: {
+          status: 'succeeded',
+          progress: { stage: 'succeeded', completed: 1, total: 1, percent: 100 },
+        },
+      },
+    );
+    await processing.handleQueue(
+      'knowledge-sync',
+      changed.job.jobId,
+      `sync-complete-changed-${suffix}`,
+      context,
+    );
+    expect((await connectors.get(connected.id, context)).status).toBe('active');
     expect(await connectors.getSyncCursor(connected.id, 'safe-token', context)).toMatchObject({
-      cursor: { page: 'page:2' },
-      cursorVersion: 4,
+      cursor: {
+        mode: 'full',
+        rootId: 'safe-token',
+        observedDocuments: 2,
+        visitedDirectories: 2,
+      },
+      cursorVersion: 3,
       syncRunId: changed.job.jobId,
     });
   }, 60_000);
@@ -461,14 +444,18 @@ describe('S6 connector sync discovery', () => {
         context,
       ),
     ).toBe('succeeded');
-    const parse = await models.KnowledgeJob.findOne({
+    const parses = await models.KnowledgeJob.find({
       workspaceId,
       kind: 'parse',
       'inputSnapshot.rootJobId': sync.job.jobId,
     }).lean();
-    expect(parse).toBeTruthy();
-    await models.KnowledgeJob.updateOne(
-      { _id: parse!._id, workspaceId },
+    expect(parses).toHaveLength(2);
+    await models.KnowledgeJob.updateMany(
+      {
+        workspaceId,
+        kind: 'parse',
+        'inputSnapshot.rootJobId': sync.job.jobId,
+      },
       {
         $set: {
           status: 'failed',
@@ -505,14 +492,14 @@ describe('S6 connector sync discovery', () => {
       kind: 'parse',
       'inputSnapshot.rootJobId': sync.job.jobId,
     }).lean();
-    expect(retriedParse).toHaveLength(1);
+    expect(retriedParse).toHaveLength(2);
     expect(
       await models.KnowledgeSource.countDocuments({
         workspaceId,
         connectorId: connected.id,
         deletedAt: null,
       }),
-    ).toBe(1);
+    ).toBe(2);
     expect(
       await models.KnowledgeObjectRef.countDocuments({
         workspaceId,
@@ -525,9 +512,13 @@ describe('S6 connector sync discovery', () => {
         },
         state: 'active',
       }),
-    ).toBe(1);
-    await models.KnowledgeJob.updateOne(
-      { _id: retriedParse[0]!._id, workspaceId },
+    ).toBe(2);
+    await models.KnowledgeJob.updateMany(
+      {
+        workspaceId,
+        kind: 'parse',
+        'inputSnapshot.rootJobId': sync.job.jobId,
+      },
       {
         $set: {
           status: 'succeeded',
@@ -544,7 +535,12 @@ describe('S6 connector sync discovery', () => {
     expect((await jobs.getRaw(sync.job.jobId, context)).status).toBe('succeeded');
     expect((await connectors.get(connected.id, context)).status).toBe('active');
     expect(await connectors.getSyncCursor(connected.id, 'retry-token', context)).toMatchObject({
-      cursor: { page: 'page:2' },
+      cursor: {
+        mode: 'full',
+        rootId: 'retry-token',
+        observedDocuments: 2,
+        visitedDirectories: 2,
+      },
       cursorVersion: 2,
       syncRunId: sync.job.jobId,
     });

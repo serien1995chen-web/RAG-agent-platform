@@ -185,5 +185,5 @@ if (problems.length > 0) {
 
 console.log(
   `knowledge:check-runtime 通过：runtime ${runtimeIds.length}，deferred ${deferredIds.length}，` +
-    '交集 0，并集 120，旧 page route 0',
+    `交集 0，并集 ${fullIds.size}，旧 page route 0`,
 );

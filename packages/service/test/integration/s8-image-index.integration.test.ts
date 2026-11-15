@@ -159,6 +159,9 @@ beforeAll(async () => {
     process.env.KB_TEST_MONGO_URI ??
       `mongodb://127.0.0.1:27017/kb_s8_index_${suffix}?directConnection=true`,
   );
+  if (mongoUri.hostname === '127.0.0.1' || mongoUri.hostname === 'localhost') {
+    mongoUri.searchParams.set('directConnection', 'true');
+  }
   connection = mongoose.createConnection(mongoUri.toString(), { serverSelectionTimeoutMS: 5_000 });
   await connection.asPromise();
   await ensureKnowledgeCollections(connection);

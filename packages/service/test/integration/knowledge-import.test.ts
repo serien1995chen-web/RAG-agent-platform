@@ -3,6 +3,8 @@ import mongoose from 'mongoose';
 import { parseImportTemplate } from '../../../parse/src/import-template';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { KnowledgeImportRepository } from '../../src/modules/knowledge/repository/import.repository';
+import { KnowledgeConnectorRepository } from '../../src/modules/knowledge/repository/connector.repository';
+import { KnowledgeCredentialCipher } from '../../src/modules/knowledge/adapter/credential-cipher';
 import {
   ensureKnowledgeCollections,
   registerKnowledgeModels,
@@ -272,6 +274,15 @@ function ingestionApplication(
           items: [{ id: 'file:1', name: 'API Doc', type: 'document' as const }],
         };
       },
+      async detail(input) {
+        return input.fileIds.map((fileId) => ({
+          fileId,
+          name: `API ${fileId}`,
+          mimeType: 'text/plain',
+          sizeBytes: 11,
+          updatedAt: '2026-11-14T00:00:00.000Z',
+        }));
+      },
       async content(input) {
         counters.customApiContent += 1;
         return input.fileIds.map((externalId) => ({
@@ -279,6 +290,13 @@ function ingestionApplication(
           title: 'API Doc',
           mimeType: 'text/plain',
           bytes: Buffer.from('API content'),
+        }));
+      },
+      async preview(input) {
+        return input.fileIds.map((fileId) => ({
+          fileId,
+          mimeType: 'text/plain',
+          previewText: `API preview ${fileId}`,
         }));
       },
     },
@@ -354,6 +372,9 @@ beforeAll(async () => {
     process.env.KB_TEST_MONGO_URI ??
       `mongodb://127.0.0.1:27017/kb_s4_import_${suffix}?replicaSet=rs0&directConnection=true`,
   );
+  if (uri.hostname === '127.0.0.1' || uri.hostname === 'localhost') {
+    uri.searchParams.set('directConnection', 'true');
+  }
   connection = mongoose.createConnection(uri.toString(), {
     serverSelectionTimeoutMS: 5_000,
   });
@@ -760,7 +781,7 @@ describe('S4 import entry workflows', () => {
     expect(await connection.models.KnowledgeOutboxEvent.countDocuments({ workspaceId })).toBe(0);
   });
 
-  it('TEST-DOWN-004-U01 blocks API catalog without write scope before provider access', async () => {
+  it('TEST-DOWN-004-U01 blocks API catalog without read scope before provider access', async () => {
     const counters = newCounters();
     const ingestion = ingestionApplication('template', { counters });
     await expect(
@@ -782,7 +803,7 @@ describe('S4 import entry workflows', () => {
           credentials: { provider: 'custom_api', authMode: 'none' },
           parentId: '',
         },
-        context: { ...context, scopes: ['knowledge:read'] },
+        context: { ...context, scopes: ['knowledge:write'] },
       }),
     ).rejects.toMatchObject({
       problem: { error: { code: 'KNOWLEDGE_FORBIDDEN' } },
@@ -972,6 +993,283 @@ describe('S4 import entry workflows', () => {
     expect(await connection.models.KnowledgeJob.countDocuments({ workspaceId })).toBe(0);
     expect(await connection.models.KnowledgeSource.countDocuments({ workspaceId })).toBe(0);
     expect(await connection.models.KnowledgeOutboxEvent.countDocuments({ workspaceId })).toBe(0);
+  });
+
+  it('L1-B09-ING-006-P02 expands an explicitly selected API directory into its subtree only', async () => {
+    const counters = newCounters();
+    const ingestion = ingestionApplication('template', {
+      counters,
+      dependencies: {
+        customApi: {
+          async catalog(input) {
+            counters.customApiCatalog += 1;
+            if (input.parentId === 'folder:eng') {
+              return {
+                provider: 'custom',
+                items: [
+                  { id: 'file:a', name: 'A', type: 'document' },
+                  { id: 'file:b', name: 'B', type: 'document' },
+                ],
+              };
+            }
+            return {
+              provider: 'custom',
+              items: [{ id: 'folder:eng', name: 'Engineering', type: 'directory' }],
+            };
+          },
+          async detail(input) {
+            return input.fileIds.map((fileId) => ({
+              fileId,
+              name: fileId === 'folder:eng' ? 'Engineering' : fileId,
+              mimeType: 'text/plain',
+            }));
+          },
+          async content(input) {
+            counters.customApiContent += 1;
+            return input.fileIds.map((externalId) => ({
+              externalId,
+              title: externalId,
+              mimeType: 'text/plain',
+              bytes: Buffer.from(`content:${externalId}`),
+            }));
+          },
+          async preview(input) {
+            return input.fileIds.map((fileId) => ({
+              fileId,
+              mimeType: 'text/plain',
+              previewText: `preview:${fileId}`,
+            }));
+          },
+        },
+      },
+    });
+    const apiConfig = {
+      provider: 'custom_api',
+      baseUrl: 'https://api.example.com',
+      catalogPath: '/v1/file/list',
+      detailPath: '/v1/file/detail',
+      contentPath: '/v1/file/content',
+      previewPath: '/v1/file/read',
+      pageMode: 'none',
+    };
+
+    const result = await ingestion.dispatch({
+      operationId: 'API-IMPORT-API-LIBRARY',
+      params: { spaceId },
+      query: {},
+      headers: { 'idempotency-key': `api-directory-${suffix}-01` },
+      body: {
+        config: apiConfig,
+        credentials: { provider: 'custom_api', authMode: 'none' },
+        fileIds: ['folder:eng'],
+        directoryId: null,
+      },
+      context,
+    });
+
+    expect(result.status).toBe(202);
+    const sources = await connection.models.KnowledgeSource.find({
+      workspaceId,
+      deletedAt: null,
+    })
+      .sort({ externalId: 1 })
+      .lean();
+    expect(sources.map((source) => source.externalId)).toEqual(['file:a', 'file:b']);
+    expect(sources.map((source) => source.externalId)).not.toContain('file:outside');
+    expect(sources.map((source) => source.externalId)).not.toContain('folder:eng');
+  });
+
+  it('L1-B09-API-002-A01/S01 exposes read-only catalog/detail/content/preview without business writes', async () => {
+    const counters = newCounters();
+    const ingestion = ingestionApplication('template', { counters });
+    const readContext = { ...context, scopes: ['knowledge:read'] };
+    const apiConfig = {
+      provider: 'custom_api',
+      baseUrl: 'https://api.example.com',
+      catalogPath: '/v1/file/list',
+      detailPath: '/v1/file/detail',
+      contentPath: '/v1/file/content',
+      previewPath: '/v1/file/read',
+      pageMode: 'none',
+    };
+    const common = {
+      params: { spaceId },
+      query: {},
+      headers: {},
+      context: readContext,
+    };
+
+    const catalog = await ingestion.dispatch({
+      ...common,
+      operationId: 'API-IMPORT-API-CATALOG',
+      body: {
+        config: apiConfig,
+        credentials: { provider: 'custom_api', authMode: 'none' },
+        parentId: 'folder:eng',
+      },
+    });
+    expect(catalog.status).toBe(200);
+
+    for (const operationId of [
+      'API-IMPORT-API-DETAIL',
+      'API-IMPORT-API-CONTENT',
+      'API-IMPORT-API-PREVIEW',
+    ]) {
+      const result = await ingestion.dispatch({
+        ...common,
+        operationId: operationId as never,
+        body: {
+          config: apiConfig,
+          credentials: { provider: 'custom_api', authMode: 'none' },
+          fileIds: ['file:1'],
+        },
+      });
+      expect(result.status, operationId).toBe(200);
+    }
+
+    expect(counters.customApiCatalog).toBe(1);
+    expect(await connection.models.KnowledgeSource.countDocuments({ workspaceId })).toBe(0);
+    expect(await connection.models.KnowledgeJob.countDocuments({ workspaceId })).toBe(0);
+    expect(await connection.models.KnowledgeOutboxEvent.countDocuments({ workspaceId })).toBe(0);
+    expect(await connection.models.KnowledgeAuditEvent.countDocuments({ workspaceId })).toBe(0);
+    expect(counters.puts).toHaveLength(0);
+  });
+
+  it('L1-B09-ING-007-S01/C01 propagates a confirmed remote deletion through one idempotent delete job', async () => {
+    const connectorRepository = new KnowledgeConnectorRepository(
+      connection,
+      new KnowledgeCredentialCipher('b'.repeat(32)),
+    );
+    const connected = await connectorRepository.connect(
+      spaceId,
+      {
+        provider: 'feishu',
+        name: 'B09 delete propagation',
+        credentials: {
+          provider: 'feishu',
+          appId: 'safe-app-id',
+          appSecret: 'safe-app-secret',
+        },
+        config: { provider: 'feishu', folderToken: 'safe-folder' },
+        syncEnabled: true,
+        syncIntervalMinutes: 60,
+      },
+      context,
+    );
+    const sync = await connectorRepository.markSyncing(
+      connected.id,
+      {
+        full: true,
+        requestHash: `b09-delete-${suffix}`,
+        idempotencyKey: `sync-b09-delete-${suffix}`,
+      },
+      context,
+    );
+    const keepSourceId = new mongoose.Types.ObjectId();
+    const deletedSourceId = new mongoose.Types.ObjectId();
+    const sourceBase = {
+      workspaceId,
+      knowledgeSpaceId: new mongoose.Types.ObjectId(spaceId),
+      version: 1,
+      deletedAt: null,
+      createdByMemberId: context.memberId,
+      updatedByMemberId: context.memberId,
+      directoryId: null,
+      kind: 'feishu',
+      connectorId: new mongoose.Types.ObjectId(connected.id),
+      blobRefId: null,
+      originalUrl: null,
+      mimeType: 'text/markdown',
+      sizeBytes: 4,
+      contentHash: 'hash',
+      parseProvider: 'liteparse',
+      processingStatus: 'ready',
+      sourceVersion: 1,
+      searchEnabled: true,
+      permissionState: 'inherited',
+      permissionRevision: 0,
+      ownershipMemberId: context.memberId,
+      metadata: {},
+      tagValues: [],
+    };
+    await connection.models.KnowledgeSource.create([
+      {
+        ...sourceBase,
+        _id: keepSourceId,
+        name: 'Keep',
+        externalId: 'feishu:docx:keep',
+      },
+      {
+        ...sourceBase,
+        _id: deletedSourceId,
+        name: 'Delete',
+        externalId: 'feishu:docx:delete',
+      },
+    ]);
+
+    const applyInput = {
+      connectorId: connected.id,
+      knowledgeSpaceId: spaceId,
+      externalRootId: 'safe-folder',
+      provider: 'feishu' as const,
+      syncRunId: sync.job.jobId,
+      expectedCursorVersion: sync.connector.cursorVersion,
+      changeSetHash: `b09-change-${suffix}`,
+      cursor: { page: null },
+      fullTraversalCompleted: true,
+      sources: [
+        {
+          createdObjectKey: null,
+          source: {
+            id: String(keepSourceId),
+            kind: 'feishu' as const,
+            name: 'Keep renamed',
+            directoryId: null,
+            blobRefId: null,
+            externalId: 'feishu:docx:keep',
+            connectorId: connected.id,
+            mimeType: 'text/markdown',
+            sizeBytes: 11,
+            contentHash: 'keep-new-hash',
+            parseProvider: 'liteparse' as const,
+            metadata: {},
+            replaceSourceId: String(keepSourceId),
+            replaceSourceVersion: 1,
+          },
+        },
+      ],
+    };
+    await repository.applyConnectorChangeSet(applyInput, context);
+
+    const renamed = await connection.models.KnowledgeSource.findById(keepSourceId).lean();
+    expect(renamed).toMatchObject({
+      externalId: 'feishu:docx:keep',
+      name: 'Keep renamed',
+      sourceVersion: 2,
+    });
+    const deleteJobs = await connection.models.KnowledgeJob.find({
+      workspaceId,
+      kind: 'delete',
+      'inputSnapshot.sourceIds': String(deletedSourceId),
+    }).lean();
+    expect(deleteJobs).toHaveLength(1);
+    expect(deleteJobs[0]?.status).toBe('queued');
+    expect(
+      await connection.models.KnowledgeSource.countDocuments({
+        workspaceId,
+        _id: deletedSourceId,
+        deletedAt: null,
+      }),
+    ).toBe(1);
+
+    await repository.applyConnectorChangeSet(applyInput, context);
+    expect(
+      await connection.models.KnowledgeJob.countDocuments({
+        workspaceId,
+        kind: 'delete',
+        'inputSnapshot.sourceIds': String(deletedSourceId),
+      }),
+    ).toBe(1);
   });
 
   it('TEST-ING-007-BLOCK imports selected connector documents through Mongo C1', async () => {

@@ -30,18 +30,18 @@ const S10_OPERATIONS = [
 ];
 
 describe('S10 operations contract', () => {
-  it('TEST-X-OPENAPI keeps 92/120/139/8 and promotes only the ten S10 operations', () => {
+  it('TEST-X-OPENAPI keeps 95/123/140/8 and promotes only the ten S10 operations', () => {
     expect(artifacts.actualCounts).toEqual({
-      paths: 92,
-      operations: 120,
-      schemas: 139,
+      paths: 95,
+      operations: 123,
+      schemas: 140,
       parameters: 8,
     });
-    expect(artifacts.runtimeRegistry.count).toBe(120);
+    expect(artifacts.runtimeRegistry.count).toBe(123);
     expect(artifacts.deferredManifest.count).toBe(0);
     const ids = new Set(artifacts.runtimeRegistry.operations.map((entry) => entry.operationId));
     for (const operationId of S10_OPERATIONS) expect(ids.has(operationId)).toBe(true);
-    expect([...RUNTIME_OPERATION_IDS]).toHaveLength(120);
+    expect([...RUNTIME_OPERATION_IDS]).toHaveLength(123);
   });
 
   it('TEST-S10-NO-DEFERRED-FAKE generated artifacts contain no placeholder fallback', () => {

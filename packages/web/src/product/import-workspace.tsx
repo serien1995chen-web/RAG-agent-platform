@@ -45,9 +45,8 @@ import {
   ProductTextarea,
   ProductTypeIcon,
   StatusTag,
-  useProductToast,
 } from './ui';
-import type { CatalogItem, Directory, Job } from './types';
+import type { CatalogItem, Directory, Job, ProviderCatalogItem } from './types';
 import { knowledgeMultipartUpload, type KnowledgeFileUploadState } from '../client/file-upload';
 
 type ImportKind =
@@ -125,11 +124,11 @@ export function ImportWorkspace(props: {
   initialSource?: string;
   collectionId?: string;
   initialJobId?: string;
+  existingExternalIds?: string[];
   onExit: () => void;
   onImported: () => void;
   onJobStarted?: (jobId: string) => void;
 }) {
-  const toast = useProductToast();
   const queryClient = useQueryClient();
   const initialKind = normalizeImportKind(props.initialSource);
   const [kind, setKind] = useState<ImportKind>(initialKind);
@@ -154,12 +153,12 @@ export function ImportWorkspace(props: {
   const [conflictStrategy, setConflictStrategy] = useState<'fail' | 'skip' | 'overwrite'>('fail');
   const [apiBaseUrl, setApiBaseUrl] = useState('');
   const [apiAuthorization, setApiAuthorization] = useState('');
-  const [apiParentId, setApiParentId] = useState('');
   const [apiCatalog, setApiCatalog] = useState<CatalogItem[]>([]);
   const [apiSelected, setApiSelected] = useState<string[]>([]);
-  const [connectorRootId, setConnectorRootId] = useState('');
+  const [apiPath, setApiPath] = useState<Array<{ id: string; name: string }>>([]);
   const [connectorItems, setConnectorItems] = useState<CatalogItem[]>([]);
   const [connectorSelected, setConnectorSelected] = useState<string[]>([]);
+  const [connectorPath, setConnectorPath] = useState<Array<{ id: string; name: string }>>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
   const [jobId, setJobId] = useState(props.initialJobId ?? '');
@@ -254,10 +253,10 @@ export function ImportWorkspace(props: {
     setUploaded([]);
     setApiCatalog([]);
     setApiSelected([]);
-    setApiParentId('');
-    setConnectorRootId('');
+    setApiPath([]);
     setConnectorItems([]);
     setConnectorSelected([]);
+    setConnectorPath([]);
     setTrainingType(next === 'image' ? 'imageParse' : 'chunk');
   };
 
@@ -372,16 +371,27 @@ export function ImportWorkspace(props: {
     for (const controller of uploadControllers.current.values()) controller.abort();
   };
 
-  const browseApi = async () => {
+  const browseApi = async (
+    parentId = apiPath.at(-1)?.id ?? '',
+    nextPath: Array<{ id: string; name: string }> = apiPath,
+  ) => {
     setBusy(true);
     setError(null);
     try {
-      const result = await apiLibraryCatalog(props.spaceId, {
-        config: customApiConfig(apiBaseUrl),
-        credentials: customApiCredentials(apiAuthorization),
-        parentId: apiParentId,
-      });
-      setApiCatalog(result.items);
+      const items: CatalogItem[] = [];
+      let cursor: string | undefined;
+      do {
+        const result = await apiLibraryCatalog(props.spaceId, {
+          config: customApiConfig(apiBaseUrl),
+          credentials: customApiCredentials(apiAuthorization),
+          parentId,
+          ...(cursor ? { cursor } : {}),
+        });
+        items.push(...result.items);
+        cursor = result.nextCursor ?? undefined;
+      } while (cursor);
+      setApiCatalog(items);
+      setApiPath(nextPath);
     } catch (caught) {
       setError(caught);
     } finally {
@@ -389,15 +399,32 @@ export function ImportWorkspace(props: {
     }
   };
 
-  const browseConnector = async () => {
+  const browseConnector = async (
+    parentId = connectorPath.at(-1)?.id ?? '',
+    nextPath: Array<{ id: string; name: string }> = connectorPath,
+  ) => {
     if (!isConnectorKind(kind)) return;
     setBusy(true);
     setError(null);
     try {
-      const result = await connectorCatalog(props.spaceId, kind, {
-        rootId: connectorRootId,
-      });
-      setConnectorItems(result.items);
+      const items: CatalogItem[] = [];
+      let cursor: string | undefined;
+      do {
+        const result = await connectorCatalog(props.spaceId, kind, {
+          rootId: parentId,
+          ...(cursor ? { cursor } : {}),
+        });
+        items.push(
+          ...result.items.map((item: ProviderCatalogItem) => ({
+            id: String(item.id ?? item.externalId ?? ''),
+            name: String(item.name ?? item.title ?? '未命名项目'),
+            type: item.type,
+          })),
+        );
+        cursor = result.nextCursor ?? undefined;
+      } while (cursor);
+      setConnectorItems(items.filter((item) => Boolean(item.id)));
+      setConnectorPath(nextPath);
     } catch (caught) {
       setError(caught);
     } finally {
@@ -465,7 +492,6 @@ export function ImportWorkspace(props: {
         queryClient.invalidateQueries({ queryKey: ['kb-product', 'jobs', props.spaceId] }),
       ]);
       props.onImported();
-      toast.success('导入任务已提交');
     } catch (caught) {
       setSubmitError(caught);
     } finally {
@@ -800,12 +826,6 @@ export function ImportWorkspace(props: {
                         onChange={(event) => setApiAuthorization(event.target.value)}
                       />
                     </ProductField>
-                    <ProductField label="父目录 ID">
-                      <ProductInput
-                        value={apiParentId}
-                        onChange={(event) => setApiParentId(event.target.value)}
-                      />
-                    </ProductField>
                   </div>
                   <ProductButton busy={busy} onClick={() => void browseApi()}>
                     读取 API 目录
@@ -814,22 +834,15 @@ export function ImportWorkspace(props: {
                     items={apiCatalog}
                     selected={apiSelected}
                     onSelect={setApiSelected}
-                    onEnterDirectory={(id) => {
-                      setApiParentId(id);
-                      void browseApi();
-                    }}
+                    path={apiPath}
+                    existingIds={props.existingExternalIds ?? []}
+                    onNavigate={(nextPath) => void browseApi(nextPath.at(-1)?.id ?? '', nextPath)}
                   />
                 </div>
               ) : null}
 
               {isConnectorKind(kind) ? (
                 <div className="kb2-import-connect">
-                  <ProductField label="根目录 ID">
-                    <ProductInput
-                      value={connectorRootId}
-                      onChange={(event) => setConnectorRootId(event.target.value)}
-                    />
-                  </ProductField>
                   <ProductButton busy={busy} onClick={() => void browseConnector()}>
                     读取连接器目录
                   </ProductButton>
@@ -837,7 +850,11 @@ export function ImportWorkspace(props: {
                     items={connectorItems}
                     selected={connectorSelected}
                     onSelect={setConnectorSelected}
-                    onEnterDirectory={() => undefined}
+                    path={connectorPath}
+                    existingIds={props.existingExternalIds ?? []}
+                    onNavigate={(nextPath) =>
+                      void browseConnector(nextPath.at(-1)?.id ?? '', nextPath)
+                    }
                   />
                 </div>
               ) : null}
@@ -1074,6 +1091,11 @@ export function ImportWorkspace(props: {
 
           {step === 3 ? (
             <div className="kb2-import-result">
+              {jobId ? (
+                <div className="kb2-note" role="status">
+                  导入任务已提交：{jobId}
+                </div>
+              ) : null}
               {!jobId ? (
                 <>
                   <ProductEmpty
@@ -1116,6 +1138,16 @@ export function ImportWorkspace(props: {
             >
               上一步
             </ProductButton>
+            {step === 1 && (kind === 'api' || isConnectorKind(kind)) ? (
+              <ProductButton
+                tone="primary"
+                busy={busy}
+                disabled={!uploadsReady}
+                onClick={() => void submit()}
+              >
+                提交导入
+              </ProductButton>
+            ) : null}
             {step < 3 ? (
               <ProductButton
                 tone="primary"
@@ -1141,43 +1173,119 @@ function CatalogSelector(props: {
   items: CatalogItem[];
   selected: string[];
   onSelect: (ids: string[]) => void;
-  onEnterDirectory: (id: string) => void;
+  path: Array<{ id: string; name: string }>;
+  existingIds: string[];
+  onNavigate: (path: Array<{ id: string; name: string }>) => void;
 }) {
+  const [search, setSearch] = useState('');
+  const existingIds = new Set(props.existingIds);
+  const visibleItems = props.items.filter((item) =>
+    item.name.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase()),
+  );
+  const selectableItems = visibleItems.filter(
+    (item) => item.type === 'directory' || !existingIds.has(item.id),
+  );
+  const allSelected =
+    selectableItems.length > 0 && selectableItems.every((item) => props.selected.includes(item.id));
+  const toggle = (id: string, checked: boolean) => {
+    props.onSelect(
+      checked
+        ? [...new Set([...props.selected, id])]
+        : props.selected.filter((selectedId) => selectedId !== id),
+    );
+  };
   return (
     <div className="kb2-catalog-list">
+      <nav className="kb2-catalog-breadcrumb" aria-label="目录路径">
+        <button
+          type="button"
+          onClick={() => props.onNavigate([])}
+          aria-current={props.path.length === 0 ? 'page' : undefined}
+        >
+          根目录
+        </button>
+        {props.path.map((entry, index) => (
+          <span key={entry.id}>
+            <span aria-hidden>/</span>
+            <button
+              type="button"
+              onClick={() => props.onNavigate(props.path.slice(0, index + 1))}
+              aria-current={index === props.path.length - 1 ? 'page' : undefined}
+            >
+              {entry.name}
+            </button>
+          </span>
+        ))}
+      </nav>
+      <ProductInput
+        type="search"
+        value={search}
+        onChange={(event) => setSearch(event.target.value)}
+        placeholder="搜索当前目录"
+        aria-label="搜索当前目录"
+      />
       {props.items.length === 0 ? (
         <div className="kb2-center-state">尚未读取目录</div>
       ) : (
-        props.items.map((item) => (
-          <div className="kb2-catalog-row" key={`${item.type}-${item.id}`}>
-            {item.type === 'directory' ? (
-              <>
-                <ProductTypeIcon kind="folder" />
-                <span>{item.name}</span>
-                <ProductButton size="sm" onClick={() => props.onEnterDirectory(item.id)}>
-                  进入目录
-                </ProductButton>
-              </>
-            ) : (
-              <>
-                <input
-                  type="checkbox"
-                  checked={props.selected.includes(item.id)}
-                  onChange={(event) =>
-                    props.onSelect(
-                      event.target.checked
-                        ? [...new Set([...props.selected, item.id])]
-                        : props.selected.filter((id) => id !== item.id),
-                    )
-                  }
-                  aria-label={`选择 ${item.name}`}
-                />
-                <span>{item.name}</span>
-                <small>文件</small>
-              </>
-            )}
-          </div>
-        ))
+        <>
+          <label className="kb2-catalog-row kb2-catalog-row--select-all">
+            <input
+              type="checkbox"
+              checked={allSelected}
+              disabled={selectableItems.length === 0}
+              onChange={(event) => {
+                const ids = new Set(props.selected);
+                for (const item of selectableItems) {
+                  if (event.target.checked) ids.add(item.id);
+                  else ids.delete(item.id);
+                }
+                props.onSelect([...ids]);
+              }}
+              aria-label="全选当前目录"
+            />
+            <strong>全选当前目录</strong>
+          </label>
+          {visibleItems.map((item) => (
+            <div className="kb2-catalog-row" key={`${item.type}-${item.id}`}>
+              {item.type === 'directory' ? (
+                <>
+                  <input
+                    type="checkbox"
+                    checked={props.selected.includes(item.id)}
+                    onChange={(event) => toggle(item.id, event.target.checked)}
+                    aria-label={`选择目录 ${item.name}`}
+                  />
+                  <ProductTypeIcon kind="folder" />
+                  <span>{item.name}</span>
+                  <ProductButton
+                    size="sm"
+                    aria-label={`进入目录 ${item.name}`}
+                    onClick={() =>
+                      props.onNavigate([...props.path, { id: item.id, name: item.name }])
+                    }
+                  >
+                    进入目录
+                  </ProductButton>
+                </>
+              ) : (
+                <>
+                  <input
+                    type="checkbox"
+                    checked={props.selected.includes(item.id)}
+                    disabled={existingIds.has(item.id)}
+                    onChange={(event) => toggle(item.id, event.target.checked)}
+                    aria-label={`选择 ${item.name}`}
+                  />
+                  <span>{item.name}</span>
+                  <small>{existingIds.has(item.id) ? '已导入' : '文件'}</small>
+                </>
+              )}
+            </div>
+          ))}
+          {visibleItems.length === 0 ? (
+            <div className="kb2-center-state">当前目录没有匹配项</div>
+          ) : null}
+        </>
       )}
     </div>
   );

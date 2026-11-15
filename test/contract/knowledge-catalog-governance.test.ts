@@ -42,7 +42,7 @@ const S3_OPERATIONS = [
 
 describe('S3 catalog governance contract', () => {
   it('keeps the seven S3 operations in the W2 runtime', () => {
-    expect(runtime.count).toBe(120);
+    expect(runtime.count).toBe(123);
     expect(deferred.count).toBe(0);
     const runtimeIds = new Set(runtime.operations.map((operation) => operation.operationId));
     const deferredIds = new Set(deferred.operations.map((operation) => operation.operationId));
@@ -58,8 +58,8 @@ describe('S3 catalog governance contract', () => {
   });
 
   it('keeps contract counts frozen and exposes path/batch/export fields', () => {
-    expect(Object.keys(openapi.paths)).toHaveLength(92);
-    expect(Object.keys(openapi.components.schemas)).toHaveLength(139);
+    expect(Object.keys(openapi.paths)).toHaveLength(95);
+    expect(Object.keys(openapi.components.schemas)).toHaveLength(140);
     for (const schema of ['KnowledgeSpace', 'Directory', 'Source']) {
       expect(
         (openapi.components.schemas[schema]?.properties as Record<string, unknown>)?.parentPath,

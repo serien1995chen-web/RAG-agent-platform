@@ -6,7 +6,7 @@ import {
 } from '../../src/components/connector-form';
 
 describe('S4 connector form contract', () => {
-  it('supports all persistent providers and write-only credential fields', () => {
+  it('L1-B09-ING-007-UI01 supports Feishu write-only credentials without storage fields', () => {
     expect(CONNECTOR_PROVIDERS).toEqual(['feishu', 'yuque', 'dingtalk', 'custom_api']);
     expect(CONNECTOR_CREDENTIAL_FIELDS.feishu).toContain('appSecret');
     expect(CONNECTOR_CREDENTIAL_FIELDS.yuque).toContain('token');
@@ -20,7 +20,7 @@ describe('S4 connector form contract', () => {
     expect(fields).not.toContain('objectKey');
   });
 
-  it('ACC-UI-06 initializes the connector provider from the URL query value', () => {
+  it('L1-B09-ING-007-UI01 initializes the connector provider from the URL query value', () => {
     expect(normalizeConnectorProvider('yuque')).toBe('yuque');
     expect(normalizeConnectorProvider('dingtalk')).toBe('dingtalk');
     expect(normalizeConnectorProvider('unknown')).toBe('feishu');

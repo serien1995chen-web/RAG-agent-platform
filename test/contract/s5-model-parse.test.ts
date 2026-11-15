@@ -51,6 +51,9 @@ const S4_OPERATIONS = [
   'API-IMPORT-TEMPLATE',
   'API-IMPORT-BACKUP',
   'API-IMPORT-API-CATALOG',
+  'API-IMPORT-API-DETAIL',
+  'API-IMPORT-API-CONTENT',
+  'API-IMPORT-API-PREVIEW',
   'API-IMPORT-API-LIBRARY',
   'API-CONNECTOR-CONNECT',
   'API-CONNECTOR-CATALOG',
@@ -239,7 +242,7 @@ describe('S5 model and parse frozen contract', () => {
   });
 
   it('keeps S5 operation wiring separate from the S6 worker registry', () => {
-    expect(runtime.operations).toHaveLength(120);
+    expect(runtime.operations).toHaveLength(123);
     expect(deferred.operations).toHaveLength(0);
     const worker = readFileSync(
       join(root, 'projects', 'app', 'src', 'runtime', 'knowledge-worker.ts'),
@@ -249,7 +252,7 @@ describe('S5 model and parse frozen contract', () => {
     expect(worker).not.toMatch(/liteparse|S5ModelGateway|S5OcrApplication/);
   });
 
-  it('keeps S4 14 and S5 4 operations in the W1 runtime union', () => {
+  it('keeps S4 17 and S5 4 operations in the W1 runtime union', () => {
     const runtimeIds = new Set(runtime.operations.map((operation) => operation.operationId));
     for (const operationId of [...S4_OPERATIONS, ...S5_OPERATIONS]) {
       expect(runtimeIds.has(operationId), operationId).toBe(true);

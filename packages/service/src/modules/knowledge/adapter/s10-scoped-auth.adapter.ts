@@ -37,6 +37,11 @@ export class KnowledgeScopedAuthAdapter implements ScopedAuthPort {
         details: { reason: 'api_key_space_scope' },
       });
     }
-    await this.access.assertPermission('space', input.knowledgeSpaceId, 'write', context);
+    await this.access.assertPermission(
+      'space',
+      input.knowledgeSpaceId,
+      input.requiredScope === 'knowledge:read' ? 'read' : 'write',
+      context,
+    );
   }
 }

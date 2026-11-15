@@ -48,12 +48,12 @@ describe('S6 Job and index contract', () => {
       expect(runtimeIds.has(operationId), operationId).toBe(true);
       expect(deferredIds.has(operationId), operationId).toBe(false);
     }
-    expect(RUNTIME_ROUTE_REGISTRY).toHaveLength(120);
+    expect(RUNTIME_ROUTE_REGISTRY).toHaveLength(123);
     expect(DEFERRED_OPERATION_MANIFEST).toHaveLength(0);
     expect(TARGET_CONTRACT_COUNTS).toEqual({
-      paths: 92,
-      operations: 120,
-      schemas: 139,
+      paths: 95,
+      operations: 123,
+      schemas: 140,
       parameters: 8,
     });
   });

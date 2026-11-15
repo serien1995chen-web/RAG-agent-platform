@@ -1,5 +1,9 @@
 import { z } from 'zod';
-import { ConnectorConfigSchema, ConnectorCredentialsSchema } from '@kb/contracts';
+import {
+  ConnectorConfigSchema,
+  ConnectorCredentialsSchema,
+  createKnowledgeError,
+} from '@kb/contracts';
 import type { TenantContext } from '../../../../shared/persistence/knowledge/tenant';
 import type {
   CloudProviderClientPort,
@@ -117,10 +121,25 @@ function feishuFolderToken(config: Record<string, unknown>, context: TenantConte
   return parsed.data.folderToken;
 }
 
-function documentToken(externalId: string): string {
+function documentToken(externalId: string, context: TenantContext): string {
   if (externalId.startsWith('feishu:docx:')) return externalId.slice('feishu:docx:'.length);
   if (externalId.startsWith('feishu:doc:')) return externalId.slice('feishu:doc:'.length);
-  return externalId;
+  throw createKnowledgeError({
+    code: 'KNOWLEDGE_UNSUPPORTED_CONTENT',
+    requestId: context.requestId,
+    traceId: context.traceId,
+    details: { provider: 'feishu', reason: 'document_external_id_unsupported' },
+  });
+}
+
+function folderToken(
+  rootId: string,
+  config: Record<string, unknown>,
+  context: TenantContext,
+): string {
+  if (rootId.startsWith('feishu:folder:')) return rootId.slice('feishu:folder:'.length);
+  if (rootId.trim()) return rootId.trim();
+  return feishuFolderToken(config, context);
 }
 
 function isFeishuDocument(type: string): boolean {
@@ -298,7 +317,7 @@ export class FeishuHttpDelegate implements CloudProviderClientPort {
     credentials: Record<string, unknown>;
     context: TenantContext;
   }): Promise<{ content: string; title: string }> {
-    const token = documentToken(input.documentId);
+    const token = documentToken(input.documentId, input.context);
     const rawUrl = `${this.input.baseUrl ?? 'https://open.feishu.cn'}/open-apis/docx/v1/documents/${encodeURIComponent(token)}/raw_content`;
     const raw = await parseConnectorResponse(
       () =>
@@ -352,14 +371,17 @@ export class FeishuHttpDelegate implements CloudProviderClientPort {
     if (input.provider !== 'feishu') {
       return providerConfigError('feishu', input.context, 'provider_mismatch');
     }
-    const folderToken = feishuFolderToken(input.config, input.context);
+    const selectedFolderToken = folderToken(input.rootId, input.config, input.context);
     const page = await this.listFiles({
-      folderToken,
+      folderToken: selectedFolderToken,
       ...(input.cursor ? { cursor: input.cursor } : {}),
       credentials: input.credentials,
       context: input.context,
     });
-    const documents = page.files.filter((file) => isFeishuDocument(file.type));
+    const supportedFiles = page.files.filter(
+      (file) => isFeishuDocument(file.type) || file.type === 'folder',
+    );
+    const documents = supportedFiles.filter((file) => isFeishuDocument(file.type));
     let metas = new Map<string, z.infer<typeof MetaSchema>>();
     if (documents.length > 0) {
       try {
@@ -375,7 +397,7 @@ export class FeishuHttpDelegate implements CloudProviderClientPort {
     }
     return {
       provider: 'feishu',
-      items: page.files.map((file) => ({
+      items: supportedFiles.map((file) => ({
         id: isFeishuDocument(file.type)
           ? `feishu:${file.type}:${file.token}`
           : `feishu:folder:${file.token}`,

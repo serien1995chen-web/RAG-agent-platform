@@ -4,7 +4,7 @@
   "info": {
     "title": "RAG-agent-platform Knowledge API",
     "version": "1.0.0",
-    "description": "Knowledge architecture baseline contract: 92 paths, 120 operations and 139 schemas.",
+    "description": "Knowledge architecture baseline contract: 95 paths, 123 operations and 140 schemas.",
     "license": {
       "name": "Proprietary",
       "identifier": "LicenseRef-Proprietary"
@@ -9439,7 +9439,7 @@
             "example": "8c45a1f2-0ee1-4e21-937b-1a2e4c2f0921"
           }
         ],
-        "x-required-scope": "knowledge:write",
+        "x-required-scope": "knowledge:read",
         "x-rate-limit": "30 QPS/workspace",
         "x-timeout-ms": 30000,
         "x-audit": true,
@@ -9534,7 +9534,7 @@
           },
           {
             "APIKeyAuth": [
-              "knowledge:write"
+              "knowledge:read"
             ]
           }
         ],
@@ -9561,6 +9561,378 @@
                   "authorization": "redacted"
                 },
                 "parentId": ""
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/knowledge/spaces/{spaceId}/imports/api-library/detail": {
+      "post": {
+        "operationId": "API-IMPORT-API-DETAIL",
+        "summary": "读取外部 API 文件详情",
+        "tags": [
+          "导入"
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/SpaceIdPath"
+          },
+          {
+            "$ref": "#/components/parameters/WorkspaceHeader"
+          },
+          {
+            "$ref": "#/components/parameters/RequestIdHeader"
+          },
+          {
+            "$ref": "#/components/parameters/TraceParentHeader"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyHeader"
+          }
+        ],
+        "x-required-scope": "knowledge:read",
+        "x-rate-limit": "30 QPS/workspace",
+        "x-timeout-ms": 30000,
+        "x-audit": true,
+        "x-downstream-allowed": false,
+        "responses": {
+          "200": {
+            "description": "文件详情",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "success",
+                    "data",
+                    "traceId",
+                    "requestId"
+                  ],
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "const": true
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/ApiLibraryCatalog/$defs/ApiLibraryFileDetail"
+                      }
+                    },
+                    "traceId": {
+                      "type": "string"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem404"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem409"
+          },
+          "413": {
+            "$ref": "#/components/responses/Problem413"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem422"
+          },
+          "429": {
+            "$ref": "#/components/responses/Problem429"
+          },
+          "500": {
+            "$ref": "#/components/responses/Problem500"
+          },
+          "502": {
+            "$ref": "#/components/responses/Problem502"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem503"
+          },
+          "504": {
+            "$ref": "#/components/responses/Problem504"
+          }
+        },
+        "security": [
+          {
+            "JWTAuth": []
+          },
+          {
+            "APIKeyAuth": [
+              "knowledge:read"
+            ]
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApiLibraryFilesRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/knowledge/spaces/{spaceId}/imports/api-library/content": {
+      "post": {
+        "operationId": "API-IMPORT-API-CONTENT",
+        "summary": "读取外部 API 文件正文",
+        "tags": [
+          "导入"
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/SpaceIdPath"
+          },
+          {
+            "$ref": "#/components/parameters/WorkspaceHeader"
+          },
+          {
+            "$ref": "#/components/parameters/RequestIdHeader"
+          },
+          {
+            "$ref": "#/components/parameters/TraceParentHeader"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyHeader"
+          }
+        ],
+        "x-required-scope": "knowledge:read",
+        "x-rate-limit": "30 QPS/workspace",
+        "x-timeout-ms": 30000,
+        "x-audit": true,
+        "x-downstream-allowed": false,
+        "responses": {
+          "200": {
+            "description": "文件正文",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "success",
+                    "data",
+                    "traceId",
+                    "requestId"
+                  ],
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "const": true
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/ApiLibraryCatalog/$defs/ApiLibraryFileContent"
+                      }
+                    },
+                    "traceId": {
+                      "type": "string"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem404"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem409"
+          },
+          "413": {
+            "$ref": "#/components/responses/Problem413"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem422"
+          },
+          "429": {
+            "$ref": "#/components/responses/Problem429"
+          },
+          "500": {
+            "$ref": "#/components/responses/Problem500"
+          },
+          "502": {
+            "$ref": "#/components/responses/Problem502"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem503"
+          },
+          "504": {
+            "$ref": "#/components/responses/Problem504"
+          }
+        },
+        "security": [
+          {
+            "JWTAuth": []
+          },
+          {
+            "APIKeyAuth": [
+              "knowledge:read"
+            ]
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApiLibraryFilesRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/knowledge/spaces/{spaceId}/imports/api-library/preview": {
+      "post": {
+        "operationId": "API-IMPORT-API-PREVIEW",
+        "summary": "读取外部 API 文件预览",
+        "tags": [
+          "导入"
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/SpaceIdPath"
+          },
+          {
+            "$ref": "#/components/parameters/WorkspaceHeader"
+          },
+          {
+            "$ref": "#/components/parameters/RequestIdHeader"
+          },
+          {
+            "$ref": "#/components/parameters/TraceParentHeader"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyHeader"
+          }
+        ],
+        "x-required-scope": "knowledge:read",
+        "x-rate-limit": "30 QPS/workspace",
+        "x-timeout-ms": 30000,
+        "x-audit": true,
+        "x-downstream-allowed": false,
+        "responses": {
+          "200": {
+            "description": "文件预览",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "success",
+                    "data",
+                    "traceId",
+                    "requestId"
+                  ],
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "const": true
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/ApiLibraryCatalog/$defs/ApiLibraryFilePreview"
+                      }
+                    },
+                    "traceId": {
+                      "type": "string"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem404"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem409"
+          },
+          "413": {
+            "$ref": "#/components/responses/Problem413"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem422"
+          },
+          "429": {
+            "$ref": "#/components/responses/Problem429"
+          },
+          "500": {
+            "$ref": "#/components/responses/Problem500"
+          },
+          "502": {
+            "$ref": "#/components/responses/Problem502"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem503"
+          },
+          "504": {
+            "$ref": "#/components/responses/Problem504"
+          }
+        },
+        "security": [
+          {
+            "JWTAuth": []
+          },
+          {
+            "APIKeyAuth": [
+              "knowledge:read"
+            ]
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApiLibraryFilesRequest"
               }
             }
           }
@@ -10030,7 +10402,7 @@
             "example": "8c45a1f2-0ee1-4e21-937b-1a2e4c2f0921"
           }
         ],
-        "x-required-scope": "knowledge:write",
+        "x-required-scope": "knowledge:read",
         "x-rate-limit": "30 QPS/workspace",
         "x-timeout-ms": 30000,
         "x-audit": true,
@@ -10125,7 +10497,7 @@
           },
           {
             "APIKeyAuth": [
-              "knowledge:write"
+              "knowledge:read"
             ]
           }
         ],
@@ -23715,6 +24087,7 @@
       },
       "ApiLibraryCatalog": {
         "type": "object",
+        "additionalProperties": false,
         "required": [
           "provider",
           "items"
@@ -25537,6 +25910,32 @@
           }
         }
       },
+      "ApiLibraryFilesRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "config",
+          "credentials",
+          "fileIds"
+        ],
+        "properties": {
+          "config": {
+            "$ref": "#/components/schemas/CustomApiConnectorConfig"
+          },
+          "credentials": {
+            "$ref": "#/components/schemas/CustomApiCredentials"
+          },
+          "fileIds": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 1000,
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      },
       "ConnectorCredentials": {
         "oneOf": [
           {
@@ -25896,12 +26295,11 @@
       },
       "ConnectorCatalogRequest": {
         "type": "object",
-        "required": [
-          "rootId"
-        ],
+        "additionalProperties": false,
         "properties": {
           "rootId": {
-            "type": "string"
+            "type": "string",
+            "default": ""
           }
         }
       },
@@ -26804,11 +27202,11 @@
   "x-kb-contract": {
     "version": "1.0.0",
     "source": "KnowledgeBase-System-Design.md 1.0.0 section 9.3",
-    "paths": 92,
-    "operations": 120,
-    "schemas": 139,
+    "paths": 95,
+    "operations": 123,
+    "schemas": 140,
     "parameters": 8,
-    "runtimeOperations": 120,
+    "runtimeOperations": 123,
     "deferredOperations": 0,
     "canonicalCollections": 23,
     "vectorProfiles": 4,

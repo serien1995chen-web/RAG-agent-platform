@@ -183,6 +183,9 @@ export class KnowledgeIngestionContentAdapter {
       metadata: {
         providerStatus: 'EXTERNAL_UNVERIFIED',
         externalId: input.content.externalId,
+        ...(input.content.providerParentId !== undefined
+          ? { providerParentId: input.content.providerParentId }
+          : {}),
       },
       context: input.context,
       knowledgeSpaceId: input.knowledgeSpaceId,
