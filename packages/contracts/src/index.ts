@@ -66,6 +66,7 @@ export type {
 } from './errors/knowledge-errors';
 
 export {
+  ApiLibraryFilesRequestSchema,
   CLOUD_CONNECTOR_PROVIDERS,
   CONNECTOR_PROVIDERS,
   ChunkingSettingsSchema,

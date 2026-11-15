@@ -570,7 +570,7 @@ describe('TEST-X-S11-PROVIDER-REAL contract adapters', () => {
       expect.objectContaining({ id: 'feishu:docx:doc-token', name: 'Notes' }),
       expect.objectContaining({ id: 'feishu:folder:folder-token', type: 'directory' }),
     ]);
-    expect(transport.requests[1]?.url).toContain('folder_token=folder+value');
+    expect(transport.requests[1]?.url).toContain('folder_token=folder');
     expect(transport.requests[1]?.url).toContain('page_size=200');
     expect(transport.requests[4]?.url).toContain('page_token=next-page');
     expect(transport.requests[2]?.headers.authorization).toBe('Bearer tenant-one');

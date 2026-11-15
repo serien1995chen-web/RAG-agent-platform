@@ -1,4 +1,5 @@
 import {
+  ApiLibraryFilesRequestSchema,
   ConnectorCatalogRequestSchema,
   ConnectorConnectSchema,
   ConnectorImportSchema,
@@ -71,7 +72,7 @@ export class FixtureScopedAuthPort implements ScopedAuthPort {
     };
     workspaceId: string;
     knowledgeSpaceId: string;
-    requiredScope: 'knowledge:write';
+    requiredScope: 'knowledge:read' | 'knowledge:write';
     context: TenantContext;
   }): Promise<void> {
     if (
@@ -238,6 +239,26 @@ async function assertWriteAccess(
   });
 }
 
+async function assertReadAccess(
+  dependencies: S04IngestionDependencies,
+  knowledgeSpaceId: string,
+  context: TenantContext,
+): Promise<void> {
+  await dependencies.access.assertPermission('space', knowledgeSpaceId, 'read', context);
+  await dependencies.scopedAuth.authorize({
+    subject: {
+      authType: 'jwt',
+      memberId: context.memberId,
+      workspaceIds: [context.workspaceId],
+      scopes: context.scopes,
+    },
+    workspaceId: context.workspaceId,
+    knowledgeSpaceId,
+    requiredScope: 'knowledge:read',
+    context,
+  });
+}
+
 async function assertSpaceAccess(
   dependencies: S04IngestionDependencies,
   knowledgeSpaceId: string,
@@ -245,6 +266,88 @@ async function assertSpaceAccess(
   context: TenantContext,
 ): Promise<void> {
   await dependencies.access.assertPermission('space', knowledgeSpaceId, level, context);
+}
+
+function configuredConnectorRoot(
+  provider: CloudConnectorProvider,
+  config: Record<string, unknown>,
+  context: TenantContext,
+): string {
+  const candidate =
+    provider === 'feishu'
+      ? config.folderToken
+      : provider === 'yuque'
+        ? (config.repoId ?? config.rootId ?? config.groupId)
+        : (config.rootId ?? config.wikiRootId ?? config.spaceId);
+  if (typeof candidate === 'string' && candidate.trim()) return candidate.trim();
+  throw createKnowledgeError({
+    code: 'KNOWLEDGE_PROVIDER_CONFIG_INVALID',
+    requestId: context.requestId,
+    traceId: context.traceId,
+    details: { provider, field: 'catalogRootId' },
+  });
+}
+
+async function expandCustomApiFileIds(
+  dependencies: S04IngestionDependencies,
+  input: {
+    config: Record<string, unknown>;
+    credentials: Record<string, unknown>;
+    fileIds: readonly string[];
+    context: TenantContext;
+  },
+): Promise<string[]> {
+  const pending = [...input.fileIds];
+  const visitedDirectories = new Set<string>();
+  const documents = new Set<string>();
+  let visitedNodes = 0;
+  while (pending.length > 0) {
+    const fileId = pending.shift()!;
+    if (visitedDirectories.has(fileId)) continue;
+    visitedNodes += 1;
+    if (visitedNodes > 10_000) {
+      throw createKnowledgeError({
+        code: 'KNOWLEDGE_PAYLOAD_TOO_LARGE',
+        requestId: input.context.requestId,
+        traceId: input.context.traceId,
+        details: { reason: 'api_directory_selection_too_large', maxNodes: 10_000 },
+      });
+    }
+    const explicitlyDirectory = /^(?:folder|directory):/i.test(fileId);
+    if (!explicitlyDirectory) {
+      documents.add(fileId);
+      continue;
+    }
+    visitedDirectories.add(fileId);
+    let cursor: string | undefined;
+    for (let pageNumber = 0; pageNumber < 1_000; pageNumber += 1) {
+      const page = await dependencies.customApi.catalog({
+        config: input.config,
+        credentials: input.credentials,
+        parentId: fileId,
+        ...(cursor ? { cursor } : {}),
+        context: input.context,
+      });
+      for (const item of page.items) {
+        if (item.type === 'directory') {
+          if (!visitedDirectories.has(item.id)) pending.push(item.id);
+        } else {
+          documents.add(item.id);
+        }
+      }
+      if (!page.nextCursor) break;
+      cursor = page.nextCursor;
+    }
+  }
+  if (documents.size === 0) {
+    throw createKnowledgeError({
+      code: 'KNOWLEDGE_VALIDATION_FAILED',
+      requestId: input.context.requestId,
+      traceId: input.context.traceId,
+      details: { field: 'fileIds', reason: 'selection_contains_no_documents' },
+    });
+  }
+  return [...documents];
 }
 
 async function compensate(
@@ -887,7 +990,7 @@ export class S04IngestionApplication {
       }
       case 'API-IMPORT-API-CATALOG': {
         const targetSpaceId = spaceId(input);
-        await assertWriteAccess(this.dependencies, targetSpaceId, input.context);
+        await assertReadAccess(this.dependencies, targetSpaceId, input.context);
         const body = parseBody(
           z.object({
             config: z.record(z.string(), z.unknown()),
@@ -910,6 +1013,56 @@ export class S04IngestionApplication {
           }),
         };
       }
+      case 'API-IMPORT-API-DETAIL': {
+        const targetSpaceId = spaceId(input);
+        await assertReadAccess(this.dependencies, targetSpaceId, input.context);
+        const body = parseBody(ApiLibraryFilesRequestSchema, input);
+        const fileIds = assertUniqueIds(body.fileIds, 'fileIds', input.context);
+        return {
+          status: 200,
+          data: await this.dependencies.customApi.detail({
+            config: body.config,
+            credentials: body.credentials,
+            fileIds,
+            context: input.context,
+          }),
+        };
+      }
+      case 'API-IMPORT-API-CONTENT': {
+        const targetSpaceId = spaceId(input);
+        await assertReadAccess(this.dependencies, targetSpaceId, input.context);
+        const body = parseBody(ApiLibraryFilesRequestSchema, input);
+        const fileIds = assertUniqueIds(body.fileIds, 'fileIds', input.context);
+        const contents = await this.dependencies.customApi.content({
+          config: body.config,
+          credentials: body.credentials,
+          fileIds,
+          context: input.context,
+        });
+        return {
+          status: 200,
+          data: contents.map((content) => ({
+            fileId: content.externalId,
+            content: Buffer.from(content.bytes).toString('utf8'),
+            mimeType: content.mimeType,
+          })),
+        };
+      }
+      case 'API-IMPORT-API-PREVIEW': {
+        const targetSpaceId = spaceId(input);
+        await assertReadAccess(this.dependencies, targetSpaceId, input.context);
+        const body = parseBody(ApiLibraryFilesRequestSchema, input);
+        const fileIds = assertUniqueIds(body.fileIds, 'fileIds', input.context);
+        return {
+          status: 200,
+          data: await this.dependencies.customApi.preview({
+            config: body.config,
+            credentials: body.credentials,
+            fileIds,
+            context: input.context,
+          }),
+        };
+      }
       case 'API-IMPORT-API-LIBRARY': {
         const body = parseBody(ImportApiLibrarySchema, input);
         const targetSpaceId = spaceId(input);
@@ -925,7 +1078,12 @@ export class S04IngestionApplication {
           requestHash,
         });
         if (replay) return { status: 202, data: replay.job };
-        const fileIds = assertUniqueIds(body.fileIds, 'fileIds', input.context);
+        const fileIds = await expandCustomApiFileIds(this.dependencies, {
+          config: body.config,
+          credentials: body.credentials,
+          fileIds: assertUniqueIds(body.fileIds, 'fileIds', input.context),
+          context: input.context,
+        });
         await assertQuota(this.dependencies, {
           operation: 'import',
           knowledgeSpaceId: targetSpaceId,
@@ -1009,12 +1167,7 @@ export class S04IngestionApplication {
           provider,
           input.context,
         );
-        await assertSpaceAccess(
-          this.dependencies,
-          connector.knowledgeSpaceId,
-          'write',
-          input.context,
-        );
+        await assertReadAccess(this.dependencies, connector.knowledgeSpaceId, input.context);
         const credentials = await this.dependencies.connectors.decryptCredentials(
           connector.id,
           input.context,
@@ -1023,7 +1176,9 @@ export class S04IngestionApplication {
           provider,
           config: connector.config,
           credentials,
-          rootId: body.rootId,
+          rootId:
+            body.rootId.trim() ||
+            configuredConnectorRoot(provider, connector.config, input.context),
           context: input.context,
         });
         return {
@@ -1278,6 +1433,9 @@ export function isS04Operation(operationId: string): boolean {
     'API-IMPORT-TEMPLATE',
     'API-IMPORT-BACKUP',
     'API-IMPORT-API-CATALOG',
+    'API-IMPORT-API-DETAIL',
+    'API-IMPORT-API-CONTENT',
+    'API-IMPORT-API-PREVIEW',
     'API-IMPORT-API-LIBRARY',
     'API-CONNECTOR-CONNECT',
     'API-CONNECTOR-CATALOG',

@@ -217,10 +217,10 @@ describe('TEST-ING-007-BLOCK and ACC-UI-06 connector', () => {
         waitUntil: 'networkidle',
       });
       await expectUi(page.locator('select').first()).toHaveValue('feishu');
-      await page.locator('input').nth(0).fill('Feishu UI');
-      await page.locator('input').nth(2).fill('app-id');
-      await page.locator('input').nth(3).fill('secret-token');
-      await page.locator('input').nth(4).fill('folder-token');
+      await page.getByLabel(/名称|Name/).fill('Feishu UI');
+      await page.getByLabel(/App ID/).fill('app-id');
+      await page.getByLabel(/App Secret/).fill('secret-token');
+      await page.getByLabel(/文件夹 Token|Folder token/).fill('folder-token');
       await page.getByRole('button', { name: /创建连接器|Create connector/ }).click();
       await expectUi(page.getByText('Feishu UI').first()).toBeVisible();
       expect(connectBody).toMatchObject({
@@ -228,10 +228,10 @@ describe('TEST-ING-007-BLOCK and ACC-UI-06 connector', () => {
         config: { provider: 'feishu', folderToken: 'folder-token' },
         credentials: { provider: 'feishu', appId: 'app-id', appSecret: 'secret-token' },
       });
-      await expectUi(page.locator('input').nth(3)).toHaveValue('');
+      await expectUi(page.getByLabel(/App Secret/)).toHaveValue('');
       await expectUi(page.locator('body')).not.toContainText('secret-token');
 
-      await page.locator('input').nth(0).fill('Feishu UI updated');
+      await page.getByLabel(/名称|Name/).fill('Feishu UI updated');
       const updateResponse = page.waitForResponse(
         (response) =>
           response.request().method() === 'PATCH' &&

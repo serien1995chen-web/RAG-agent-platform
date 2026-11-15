@@ -69,9 +69,10 @@ export function safeEndpointPath(endpoint: string): string {
     const providerPath = apiStart >= 0 ? pathname.slice(apiStart) : pathname;
     return providerPath
       .replace(
-        /^\/open-apis\/docx\/v1\/documents\/[^/]+/,
-        '/open-apis/docx/v1/documents/:documentId',
+        /^(\/open-apis\/docx\/v1\/documents\/)[^/]+(\/blocks\/)[^/]+/,
+        '$1:documentId$2:blockId',
       )
+      .replace(/^(\/open-apis\/docx\/v1\/documents\/)[^/]+/, '$1:documentId')
       .replace(/^\/api\/v2\/groups\/[^/]+/, '/api/v2/groups/:groupId')
       .replace(/^\/api\/v2\/repos\/[^/]+/, '/api/v2/repos/:repoId')
       .replace(/(\/api\/v2\/repos\/:repoId\/docs)\/[^/]+/, '$1/:docSlug')
@@ -133,6 +134,8 @@ export class FetchS11ConnectorHttpTransport implements S11ConnectorHttpTransport
 
 export class S11ConnectorTokenCache {
   private readonly values = new Map<string, { token: string; expiresAt: number }>();
+  private readonly pending = new Map<string, Promise<string>>();
+  private readonly generations = new Map<string, number>();
 
   async getOrLoad(
     key: string,
@@ -140,16 +143,30 @@ export class S11ConnectorTokenCache {
   ): Promise<string> {
     const cached = this.values.get(key);
     if (cached && cached.expiresAt > Date.now() + 30_000) return cached.token;
-    const loaded = await loader();
-    this.values.set(key, {
-      token: loaded.token,
-      expiresAt: Date.now() + Math.max(60, loaded.expiresInSeconds) * 1_000,
-    });
-    return loaded.token;
+    const existing = this.pending.get(key);
+    if (existing) return existing;
+    const generation = this.generations.get(key) ?? 0;
+    const loading = loader()
+      .then((loaded) => {
+        if ((this.generations.get(key) ?? 0) === generation) {
+          this.values.set(key, {
+            token: loaded.token,
+            expiresAt: Date.now() + Math.max(60, loaded.expiresInSeconds) * 1_000,
+          });
+        }
+        return loaded.token;
+      })
+      .finally(() => {
+        if (this.pending.get(key) === loading) this.pending.delete(key);
+      });
+    this.pending.set(key, loading);
+    return loading;
   }
 
   invalidate(key: string): void {
     this.values.delete(key);
+    this.pending.delete(key);
+    this.generations.set(key, (this.generations.get(key) ?? 0) + 1);
   }
 }
 

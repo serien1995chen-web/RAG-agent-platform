@@ -26,12 +26,15 @@ const IMPORT_OPERATIONS = [
   'API-IMPORT-TEMPLATE',
   'API-IMPORT-BACKUP',
   'API-IMPORT-API-CATALOG',
+  'API-IMPORT-API-DETAIL',
+  'API-IMPORT-API-CONTENT',
+  'API-IMPORT-API-PREVIEW',
   'API-IMPORT-API-LIBRARY',
 ];
 
 describe('S4 import contract', () => {
-  it('keeps exactly the seven import operations in the W2 runtime', () => {
-    expect(runtime.count).toBe(120);
+  it('keeps exactly the ten import operations in the W2 runtime', () => {
+    expect(runtime.count).toBe(123);
     expect(deferred.count).toBe(0);
     const runtimeIds = new Set(runtime.operations.map((entry) => entry.operationId));
     const deferredIds = new Set(deferred.operations.map((entry) => entry.operationId));
@@ -49,6 +52,9 @@ describe('S4 import contract', () => {
       ['API-IMPORT-TEMPLATE', ['ING-004']],
       ['API-IMPORT-BACKUP', ['ING-005']],
       ['API-IMPORT-API-CATALOG', ['ING-006', 'API-002']],
+      ['API-IMPORT-API-DETAIL', ['ING-006', 'API-002']],
+      ['API-IMPORT-API-CONTENT', ['ING-006', 'API-002']],
+      ['API-IMPORT-API-PREVIEW', ['ING-006', 'API-002']],
       ['API-IMPORT-API-LIBRARY', ['ING-006', 'API-002']],
       ['API-CONNECTOR-CONNECT', ['ING-007', 'ING-008', 'ING-009']],
       ['API-CONNECTOR-CATALOG', ['ING-007', 'ING-008', 'ING-009', 'OPS-005']],

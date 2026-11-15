@@ -11,6 +11,7 @@ import type {
   Acl,
   BatchResult,
   CatalogItem,
+  ProviderCatalogItem,
   Collaborator,
   Connector,
   Directory,
@@ -744,7 +745,7 @@ export function connectorCatalog(
   provider: 'custom_api' | 'feishu' | 'yuque' | 'dingtalk',
   input: Record<string, unknown>,
 ) {
-  return knowledgeRequest<{ items: CatalogItem[] }>(
+  return knowledgeRequest<{ items: ProviderCatalogItem[]; nextCursor?: string | null }>(
     `/v1/knowledge/spaces/${encodeURIComponent(spaceId)}/connectors/${provider}/catalog`,
     {
       method: 'POST',
@@ -1016,9 +1017,11 @@ export function apiLibraryCatalog(
     config: Record<string, unknown>;
     credentials: Record<string, unknown>;
     parentId?: string;
+    cursor?: string;
+    offset?: number;
   },
 ) {
-  return knowledgeRequest<{ items: CatalogItem[] }>(
+  return knowledgeRequest<{ items: CatalogItem[]; nextCursor?: string | null }>(
     `/v1/knowledge/spaces/${encodeURIComponent(spaceId)}/imports/api-library/catalog`,
     {
       method: 'POST',

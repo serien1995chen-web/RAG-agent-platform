@@ -747,6 +747,9 @@ export function DatasetDetailPage(props: {
           initialSource={props.query.source}
           collectionId={props.query.collectionId}
           initialJobId={props.query.importJobId}
+          existingExternalIds={sources.flatMap((source) =>
+            source.externalId ? [source.externalId] : [],
+          )}
           onExit={() =>
             navigate(
               {
@@ -2041,6 +2044,23 @@ function DatasetInfoPanel(props: {
         </div>
         <div className="kb2-info-group">
           <h3>数据源同步</h3>
+          {props.space ? (
+            <ProductButton
+              size="sm"
+              className="kb2-full-button"
+              onClick={() => {
+                const provider = connectorQuery.data?.provider ?? 'feishu';
+                const query = new URLSearchParams({
+                  spaceId: props.space!.id,
+                  provider,
+                  ...(connectorId ? { connectorId } : {}),
+                });
+                window.location.assign(`/settings/connectors?${query.toString()}`);
+              }}
+            >
+              管理连接器
+            </ProductButton>
+          ) : null}
           {connectorId ? (
             <>
               <InfoLine label="连接器" value={connectorQuery.data?.provider ?? connectorId} />
@@ -2053,7 +2073,7 @@ function DatasetInfoPanel(props: {
                 size="sm"
                 className="kb2-full-button"
                 busy={connectorBusy}
-                disabled={!connectorQuery.data}
+                disabled={!connectorQuery.data || connectorQuery.data.status === 'syncing'}
                 onClick={() => void syncDataSource()}
               >
                 <RepeatIcon boxSize={3.5} />

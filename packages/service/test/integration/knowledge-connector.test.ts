@@ -55,6 +55,9 @@ beforeAll(async () => {
     process.env.KB_TEST_MONGO_URI ??
       `mongodb://127.0.0.1:27017/kb_s4_connector_${suffix}?replicaSet=rs0&directConnection=true`,
   );
+  if (uri.hostname === '127.0.0.1' || uri.hostname === 'localhost') {
+    uri.searchParams.set('directConnection', 'true');
+  }
   connection = mongoose.createConnection(uri.toString(), {
     serverSelectionTimeoutMS: 5_000,
   });

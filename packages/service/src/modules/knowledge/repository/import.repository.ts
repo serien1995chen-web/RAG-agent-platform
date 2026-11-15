@@ -535,6 +535,8 @@ export class KnowledgeImportRepository implements ImportSubmissionPort {
       const sourceVersions: Record<string, number> = {};
       const obsoleteObjectKeys: string[] = [];
       const drafts: ImportSourceDraft[] = [];
+      const observedExternalIds = new Set<string>();
+      const now = new Date();
       for (const material of input.sources) {
         const draft: ImportSourceDraft = {
           ...material.source,
@@ -549,6 +551,7 @@ export class KnowledgeImportRepository implements ImportSubmissionPort {
             details: { field: 'externalId', reason: 'required_for_connector_sync' },
           });
         }
+        observedExternalIds.add(draft.externalId);
         const existing = await this.sources
           .findOne({
             workspaceId,
@@ -562,7 +565,8 @@ export class KnowledgeImportRepository implements ImportSubmissionPort {
         if (
           existing &&
           existing.contentHash === draft.contentHash &&
-          existing.name === draft.name
+          existing.name === draft.name &&
+          existing.metadata?.providerParentId === draft.metadata.providerParentId
         ) {
           if (material.createdObjectKey) obsoleteObjectKeys.push(material.createdObjectKey);
           sourceIds.push(String(existing._id));
@@ -587,9 +591,116 @@ export class KnowledgeImportRepository implements ImportSubmissionPort {
         sourceIds.push(draft.id);
         sourceVersions[draft.id] = sourceVersion;
       }
+      if (input.fullTraversalCompleted) {
+        const remoteSources = await this.sources
+          .find({
+            workspaceId,
+            knowledgeSpaceId: spaceObjectId,
+            connectorId: connectorObjectId,
+            deletedAt: null,
+            externalId: { $ne: null },
+          })
+          .select({ _id: 1, externalId: 1, sourceVersion: 1 })
+          .session(session)
+          .lean<
+            Array<{
+              _id: Types.ObjectId;
+              externalId: string | null;
+              sourceVersion: number;
+            }>
+          >();
+        for (const source of remoteSources) {
+          if (!source.externalId || observedExternalIds.has(source.externalId)) continue;
+          const sourceId = String(source._id);
+          const idempotencyKey = `connector-sync-delete:${input.connectorId}:${sourceId}:${source.sourceVersion}`;
+          const existingDelete = await this.jobs
+            .findOne({
+              workspaceId,
+              idempotencyKey,
+              deletedAt: null,
+            })
+            .session(session)
+            .lean();
+          if (existingDelete) continue;
+          await this.sources.updateOne(
+            {
+              _id: source._id,
+              workspaceId,
+              deletedAt: null,
+            },
+            {
+              $set: {
+                processingStatus: 'deleting',
+                updatedByMemberId: context.memberId,
+              },
+              $inc: { version: 1 },
+            },
+            { session },
+          );
+          const [deleteJob] = await this.jobs.create(
+            [
+              {
+                workspaceId,
+                knowledgeSpaceId: spaceObjectId,
+                version: 1,
+                deletedAt: null,
+                createdByMemberId: context.memberId,
+                updatedByMemberId: context.memberId,
+                kind: 'delete',
+                resourceType: 'source',
+                resourceId: sourceId,
+                status: 'queued',
+                priority: 5,
+                idempotencyKey,
+                inputSnapshot: {
+                  connectorId: input.connectorId,
+                  sourceIds: [sourceId],
+                  sourceId,
+                  sourceVersion: source.sourceVersion,
+                  reason: 'remote_source_deleted',
+                  syncRunId: input.syncRunId,
+                },
+                progress: { stage: 'queued', completed: 0, total: 1, percent: 0 },
+                attempts: 0,
+                maxAttempts: 5,
+                attemptEpoch: 0,
+                fencingToken: 'unassigned',
+                leaseOwner: null,
+                leaseExpiresAt: null,
+                heartbeatAt: null,
+                availableAt: now,
+                cancelRequestedAt: null,
+                pausedAt: null,
+                error: null,
+                result: null,
+                expiresAt: new Date(now.getTime() + 180 * 86_400_000),
+              },
+            ],
+            { session, ordered: true },
+          );
+          if (!deleteJob) continue;
+          await createKnowledgeOutboxEvent(
+            this.connection,
+            {
+              workspaceId,
+              knowledgeSpaceId: input.knowledgeSpaceId,
+              eventType: 'source.delete',
+              aggregateType: 'job',
+              aggregateId: String(deleteJob._id),
+              queue: 'knowledge-delete',
+              payload: {
+                jobId: String(deleteJob._id),
+                connectorId: input.connectorId,
+                sourceId,
+              },
+            },
+            context,
+            session,
+          );
+        }
+      }
       command.sourceDrafts = drafts;
       const cursorVersion = input.expectedCursorVersion + 1;
-      const now = new Date();
       await this.cursors.findOneAndUpdate(
         {
           workspaceId,

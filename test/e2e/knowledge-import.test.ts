@@ -183,6 +183,34 @@ describe('TEST-X-FRONTEND-IMPORT, TEST-DOWN-004-BLOCK and ACC-UI', () => {
   it('L1-B09-ING-006-P01/S01/UI01 browses the API tree and preserves only explicit selections', async () => {
     const browser = await chromium.launch({ headless: true });
     try {
+      await connection!.models.KnowledgeSource.create({
+        workspaceId,
+        knowledgeSpaceId: spaceId,
+        version: 1,
+        deletedAt: null,
+        createdByMemberId: memberId,
+        updatedByMemberId: memberId,
+        directoryId: null,
+        kind: 'api_library',
+        name: 'Existing runbook',
+        externalId: 'file:existing',
+        connectorId: null,
+        blobRefId: null,
+        originalUrl: null,
+        mimeType: 'text/markdown',
+        sizeBytes: 0,
+        contentHash: 'existing-runbook',
+        parseProvider: 'liteparse',
+        processingStatus: 'ready',
+        sourceVersion: 1,
+        searchEnabled: true,
+        permissionState: 'inherited',
+        permissionRevision: 0,
+        aclSnapshotVersion: 1,
+        ownershipMemberId: memberId,
+        metadata: {},
+        tagValues: [],
+      });
       const pageContext = await browser.newContext({ viewport: { width: 1200, height: 900 } });
       await pageContext.addCookies([
         await consoleCookie({ baseUrl: app!.baseUrl, authToken, workspaceId }),

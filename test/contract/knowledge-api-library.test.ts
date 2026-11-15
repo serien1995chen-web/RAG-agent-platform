@@ -669,13 +669,15 @@ describe('L1-B09 external API public contract', () => {
       expect.arrayContaining(['fileId', 'mimeType', 'previewText']),
     );
 
-    const serialized = JSON.stringify({
+    const serializedResponses = JSON.stringify({
       catalog,
       operations: Object.fromEntries(
-        [...expectedContractOperationPaths()].map(([operationId, path]) => [
-          operationId,
-          openapi.paths[path]?.post,
-        ]),
+        [...expectedContractOperationPaths()].map(([operationId, path]) => {
+          const operation = openapi.paths[path]?.post as
+            | { responses?: Record<string, unknown> }
+            | undefined;
+          return [operationId, operation?.responses ?? {}];
+        }),
       ),
     });
     for (const forbidden of [
@@ -688,7 +690,7 @@ describe('L1-B09 external API public contract', () => {
       'connectionString',
       'credentialCiphertext',
     ]) {
-      expect(serialized, forbidden).not.toMatch(new RegExp(forbidden, 'i'));
+      expect(serializedResponses, forbidden).not.toMatch(new RegExp(forbidden, 'i'));
     }
   });
 

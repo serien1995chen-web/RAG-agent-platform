@@ -372,6 +372,9 @@ beforeAll(async () => {
     process.env.KB_TEST_MONGO_URI ??
       `mongodb://127.0.0.1:27017/kb_s4_import_${suffix}?replicaSet=rs0&directConnection=true`,
   );
+  if (uri.hostname === '127.0.0.1' || uri.hostname === 'localhost') {
+    uri.searchParams.set('directConnection', 'true');
+  }
   connection = mongoose.createConnection(uri.toString(), {
     serverSelectionTimeoutMS: 5_000,
   });
@@ -778,7 +781,7 @@ describe('S4 import entry workflows', () => {
     expect(await connection.models.KnowledgeOutboxEvent.countDocuments({ workspaceId })).toBe(0);
   });
 
-  it('TEST-DOWN-004-U01 blocks API catalog without write scope before provider access', async () => {
+  it('TEST-DOWN-004-U01 blocks API catalog without read scope before provider access', async () => {
     const counters = newCounters();
     const ingestion = ingestionApplication('template', { counters });
     await expect(
@@ -800,7 +803,7 @@ describe('S4 import entry workflows', () => {
           credentials: { provider: 'custom_api', authMode: 'none' },
           parentId: '',
         },
-        context: { ...context, scopes: ['knowledge:read'] },
+        context: { ...context, scopes: ['knowledge:write'] },
       }),
     ).rejects.toMatchObject({
       problem: { error: { code: 'KNOWLEDGE_FORBIDDEN' } },
@@ -998,14 +1001,20 @@ describe('S4 import entry workflows', () => {
       counters,
       dependencies: {
         customApi: {
-          async catalog() {
+          async catalog(input) {
             counters.customApiCatalog += 1;
+            if (input.parentId === 'folder:eng') {
+              return {
+                provider: 'custom',
+                items: [
+                  { id: 'file:a', name: 'A', type: 'document' },
+                  { id: 'file:b', name: 'B', type: 'document' },
+                ],
+              };
+            }
             return {
               provider: 'custom',
-              items: [
-                { id: 'folder:eng', name: 'Engineering', type: 'directory' },
-                { id: 'file:outside', name: 'Outside', type: 'document' },
-              ],
+              items: [{ id: 'folder:eng', name: 'Engineering', type: 'directory' }],
             };
           },
           async detail(input) {
@@ -1207,6 +1216,7 @@ describe('S4 import entry workflows', () => {
       expectedCursorVersion: sync.connector.cursorVersion,
       changeSetHash: `b09-change-${suffix}`,
       cursor: { page: null },
+      fullTraversalCompleted: true,
       sources: [
         {
           createdObjectKey: null,

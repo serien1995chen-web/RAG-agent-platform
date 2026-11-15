@@ -75,6 +75,7 @@ export interface ConnectorChangeSetApplyInput {
   expectedCursorVersion: number;
   changeSetHash: string;
   cursor: Record<string, unknown>;
+  fullTraversalCompleted: boolean;
   sources: IngestionContentResult[];
 }
 
@@ -127,15 +128,9 @@ function rootIdOf(
   });
 }
 
-function pageCursorOf(cursor: ConnectorCursorView | null): string | undefined {
-  const page = cursor?.cursor.page;
-  return typeof page === 'string' && page.trim() ? page : undefined;
-}
-
 function changeSetHashOf(input: {
   provider: CloudProvider;
   externalRootId: string;
-  cursor?: string;
   documents: ProviderContent[];
 }): string {
   return createHash('sha256')
@@ -143,12 +138,12 @@ function changeSetHashOf(input: {
       JSON.stringify({
         provider: input.provider,
         externalRootId: input.externalRootId,
-        cursor: input.cursor ?? null,
         documents: input.documents
           .map((document) => ({
             externalId: document.externalId,
             title: document.title,
             mimeType: document.mimeType,
+            providerParentId: document.providerParentId ?? null,
             bytesHash: createHash('sha256').update(document.bytes).digest('hex'),
           }))
           .sort((left, right) => left.externalId.localeCompare(right.externalId)),
@@ -167,6 +162,86 @@ export class KnowledgeConnectorSyncApplication implements S6ConnectorSyncPort {
     },
   ) {}
 
+  private async traverseCatalog(input: {
+    provider: CloudProvider;
+    config: Record<string, unknown>;
+    credentials: Record<string, unknown>;
+    rootId: string;
+    context: TenantContext;
+  }): Promise<{
+    documents: Array<{ externalId: string; providerParentId: string | null }>;
+    cursor: Record<string, unknown>;
+  }> {
+    const pending = [input.rootId];
+    const visitedDirectories = new Set<string>();
+    const documentParents = new Map<string, string | null>();
+    let visitedPages = 0;
+    while (pending.length > 0) {
+      const directoryId = pending.shift()!;
+      if (visitedDirectories.has(directoryId)) continue;
+      visitedDirectories.add(directoryId);
+      let pageCursor: string | undefined;
+      const pageCursors = new Set<string>();
+      while (true) {
+        visitedPages += 1;
+        if (visitedPages > 1_000) {
+          throw createKnowledgeError({
+            code: 'KNOWLEDGE_PAYLOAD_TOO_LARGE',
+            requestId: input.context.requestId,
+            traceId: input.context.traceId,
+            details: { provider: input.provider, reason: 'sync_page_limit', maxPages: 1_000 },
+          });
+        }
+        const page = await this.input.gateway.catalog({
+          provider: input.provider,
+          config: input.config,
+          credentials: input.credentials,
+          rootId: directoryId,
+          ...(pageCursor ? { cursor: pageCursor } : {}),
+          context: input.context,
+        });
+        if (page.items.length > 200) {
+          throw createKnowledgeError({
+            code: 'KNOWLEDGE_PAYLOAD_TOO_LARGE',
+            requestId: input.context.requestId,
+            traceId: input.context.traceId,
+            details: { provider: input.provider, pageSize: page.items.length, max: 200 },
+          });
+        }
+        for (const item of page.items) {
+          if (item.type === 'directory') {
+            if (!visitedDirectories.has(item.id)) pending.push(item.id);
+          } else {
+            documentParents.set(item.id, directoryId === input.rootId ? null : directoryId);
+          }
+        }
+        if (!page.nextCursor) break;
+        if (pageCursors.has(page.nextCursor)) {
+          throw createKnowledgeError({
+            code: 'KNOWLEDGE_CURSOR_INVALID',
+            requestId: input.context.requestId,
+            traceId: input.context.traceId,
+            details: { provider: input.provider, reason: 'catalog_cursor_cycle' },
+          });
+        }
+        pageCursors.add(page.nextCursor);
+        pageCursor = page.nextCursor;
+      }
+    }
+    const documents = [...documentParents.entries()]
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([externalId, providerParentId]) => ({ externalId, providerParentId }));
+    return {
+      documents,
+      cursor: {
+        mode: 'full',
+        rootId: input.rootId,
+        observedDocuments: documents.length,
+        visitedDirectories: visitedDirectories.size,
+      },
+    };
+  }
+
   async discover(
     input: { jobId: string; connectorId: string; full: boolean },
     context: TenantContext,
@@ -174,11 +249,6 @@ export class KnowledgeConnectorSyncApplication implements S6ConnectorSyncPort {
     const connector = await this.input.connectors.get(input.connectorId, context);
     const provider = providerOf(connector.provider, context);
     const externalRootId = rootIdOf(provider, connector.config, context);
-    const cursor = await this.input.connectors.getSyncCursor(
-      input.connectorId,
-      externalRootId,
-      context,
-    );
     const replay = await this.input.imports.replayConnectorSync(
       {
         connectorId: input.connectorId,
@@ -190,33 +260,16 @@ export class KnowledgeConnectorSyncApplication implements S6ConnectorSyncPort {
     if (replay) return replay;
 
     const credentials = await this.input.connectors.decryptCredentials(input.connectorId, context);
-    const pageCursor = input.full ? undefined : pageCursorOf(cursor);
-    const page = await this.input.gateway.catalog({
+    const traversal = await this.traverseCatalog({
       provider,
       config: connector.config,
       credentials,
       rootId: externalRootId,
-      ...(pageCursor ? { cursor: pageCursor } : {}),
       context,
     });
-    if (page.items.length > 200) {
-      throw createKnowledgeError({
-        code: 'KNOWLEDGE_PAYLOAD_TOO_LARGE',
-        requestId: context.requestId,
-        traceId: context.traceId,
-        details: { provider, pageSize: page.items.length, max: 200 },
-      });
-    }
-    const externalIds = [
-      ...new Set(
-        page.items
-          .filter((item) => item.type === 'document')
-          .map((item) => item.id)
-          .filter(Boolean),
-      ),
-    ];
-    const documents =
-      externalIds.length === 0
+    const externalIds = traversal.documents.map((entry) => entry.externalId);
+    const rawDocuments =
+      traversal.documents.length === 0
         ? []
         : await this.input.gateway.content({
             provider,
@@ -225,25 +278,34 @@ export class KnowledgeConnectorSyncApplication implements S6ConnectorSyncPort {
             externalIds,
             context,
           });
+    const parentById = new Map(
+      traversal.documents.map((entry) => [entry.externalId, entry.providerParentId]),
+    );
+    const documents = rawDocuments.map((document) => ({
+      ...document,
+      providerParentId: parentById.get(document.externalId) ?? null,
+    }));
     const changeSetHash = changeSetHashOf({
       provider,
       externalRootId,
-      ...(pageCursor ? { cursor: pageCursor } : {}),
       documents,
     });
     const materialized: IngestionContentResult[] = [];
     try {
       for (const document of documents) {
-        materialized.push(
-          await this.input.content.materializeProviderContent({
-            kind: provider,
-            knowledgeSpaceId: connector.knowledgeSpaceId,
-            directoryId: null,
-            connectorId: input.connectorId,
-            content: document,
-            context,
-          }),
-        );
+        const material = await this.input.content.materializeProviderContent({
+          kind: provider,
+          knowledgeSpaceId: connector.knowledgeSpaceId,
+          directoryId: null,
+          connectorId: input.connectorId,
+          content: document,
+          context,
+        });
+        material.source.metadata = {
+          ...material.source.metadata,
+          providerParentId: document.providerParentId ?? null,
+        };
+        materialized.push(material);
       }
       const applied = await this.input.imports.applyConnectorChangeSet(
         {
@@ -254,7 +316,8 @@ export class KnowledgeConnectorSyncApplication implements S6ConnectorSyncPort {
           syncRunId: input.jobId,
           expectedCursorVersion: connector.cursorVersion,
           changeSetHash,
-          cursor: { page: page.nextCursor ?? null },
+          cursor: traversal.cursor,
+          fullTraversalCompleted: true,
           sources: materialized,
         },
         context,

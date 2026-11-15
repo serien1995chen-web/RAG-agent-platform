@@ -270,7 +270,15 @@ export interface Connector {
 export interface CatalogItem {
   id: string;
   name: string;
-  type: 'file' | 'directory';
+  type: 'document' | 'directory';
+}
+
+export interface ProviderCatalogItem {
+  id?: string;
+  externalId?: string;
+  name?: string;
+  title?: string;
+  type: 'document' | 'directory';
 }
 
 export interface Citation {

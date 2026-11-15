@@ -127,7 +127,7 @@ export interface ScopedAuthPort {
     };
     workspaceId: string;
     knowledgeSpaceId: string;
-    requiredScope: 'knowledge:write';
+    requiredScope: 'knowledge:read' | 'knowledge:write';
     context: TenantContext;
   }): Promise<void>;
 }
@@ -324,6 +324,7 @@ export interface ProviderContent {
   title: string;
   mimeType: string;
   bytes: Uint8Array;
+  providerParentId?: string | null;
 }
 
 export interface CustomApiFileDetail {
