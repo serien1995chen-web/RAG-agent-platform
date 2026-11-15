@@ -54,7 +54,7 @@ describe('S9 synonym contract', () => {
     expect(TARGET_CONTRACT_COUNTS).toEqual({
       paths: 95,
       operations: 123,
-      schemas: 140,
+      schemas: 141,
       parameters: 8,
     });
     expect(FULL_ROUTE_REGISTRY).toHaveLength(123);

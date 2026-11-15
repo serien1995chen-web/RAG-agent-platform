@@ -194,12 +194,14 @@ describe('L1-B10-ING-003 UI single-page URL import', () => {
       const blockedUrl = 'http://169.254.169.254/latest/meta-data';
       await page.getByLabel('网页地址').fill(blockedUrl);
       await page.getByRole('button', { name: '下一步' }).click();
-      await page.getByRole('button', { name: '下一步' }).click();
       const response = page.waitForResponse(
         (candidate) =>
           candidate.request().method() === 'POST' && candidate.url().endsWith('/imports/url'),
       );
-      await page.getByRole('button', { name: '确认导入' }).click();
+      await page
+        .getByTestId('b10-url-preview-row')
+        .getByRole('button', { name: '预览', exact: true })
+        .click();
       const fetched = await response;
       const responseBody = await fetched.text();
       await mkdir(evidenceRoot, { recursive: true });
@@ -217,8 +219,11 @@ describe('L1-B10-ING-003 UI single-page URL import', () => {
       );
       expect(fetched.status()).toBe(422);
       await capturePage(page, 'rejected-url-retention', diagnostics);
+      await playwrightExpect(
+        page.getByTestId('b10-url-preview-row').getByRole('alert'),
+      ).toContainText(/不支持|unsupported/i);
+      await page.getByRole('button', { name: '上一步' }).click();
       await playwrightExpect(page.getByLabel('网页地址')).toHaveValue(blockedUrl);
-      await playwrightExpect(page.getByRole('alert')).toContainText(/不支持|unsupported/i);
     } finally {
       await context.close();
     }
@@ -236,6 +241,97 @@ describe('L1-B10-ING-003 UI single-page URL import', () => {
       await capturePage(page, 'back-retention', diagnostics);
       await playwrightExpect(page.getByLabel('网页地址')).toHaveValue(url);
       await playwrightExpect(page.getByLabel('内容选择器')).toHaveValue('main');
+    } finally {
+      await context.close();
+    }
+  });
+
+  it('L1-B10-ING-003-P05/UI04 keeps successful URLs and retries only the failed item', async () => {
+    const { context, page, diagnostics } = await urlPage();
+    const attempts = new Map<string, number>();
+    try {
+      await page.route('**/v1/knowledge/spaces/**/imports/url', async (route) => {
+        const body = route.request().postDataJSON() as {
+          url: string;
+          selector: string;
+          dryRun?: boolean;
+        };
+        if (body.dryRun) {
+          await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({
+              success: true,
+              data: {
+                title: `Preview ${body.url}`,
+                safeUrl: body.url,
+                selector: body.selector,
+                contentHash: 'a'.repeat(64),
+                totalChunks: 1,
+                chunks: [{ q: `Preview body ${body.url}`, a: '' }],
+                truncated: false,
+              },
+              traceId: 'b10-partial-preview',
+              requestId: 'b10-partial-preview',
+            }),
+          });
+          return;
+        }
+        const count = (attempts.get(body.url) ?? 0) + 1;
+        attempts.set(body.url, count);
+        if (body.url.endsWith('/one') && count === 1) {
+          await route.fulfill({
+            status: 422,
+            contentType: 'application/json',
+            body: JSON.stringify({
+              success: false,
+              error: {
+                code: 'KNOWLEDGE_UNSUPPORTED_CONTENT',
+                message: 'Fixture rejected the first URL.',
+                retryable: false,
+                details: { reason: 'partial_fixture' },
+              },
+              traceId: 'b10-partial-failure',
+              requestId: 'b10-partial-failure',
+            }),
+          });
+          return;
+        }
+        await route.fulfill({
+          status: 202,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            success: true,
+            data: { jobId: `job-${body.url.split('/').at(-1)}-${count}` },
+            traceId: 'b10-partial-success',
+            requestId: 'b10-partial-success',
+          }),
+        });
+      });
+
+      await enterUrlForm(page);
+      await page
+        .getByLabel('网页地址')
+        .fill('https://public.example.test/one\nhttps://public.example.test/two');
+      await page.getByRole('button', { name: '下一步' }).click();
+      for (const row of await page.getByTestId('b10-url-preview-row').all()) {
+        await row.getByRole('button', { name: '预览', exact: true }).click();
+        await playwrightExpect(row.getByText(/Preview body/)).toBeVisible();
+      }
+      await playwrightExpect(page.getByRole('button', { name: '下一步' })).toBeEnabled();
+      await page.getByRole('button', { name: '下一步' }).click();
+      await page.getByRole('button', { name: '开始上传' }).click();
+
+      const submitRows = page.getByTestId('b10-url-submit-row');
+      await playwrightExpect(submitRows.nth(0)).toContainText('错误');
+      await playwrightExpect(submitRows.nth(1)).toContainText('完成');
+      await playwrightExpect(page.getByRole('button', { name: '继续上传' })).toBeVisible();
+      await capturePage(page, 'partial-upload-before-retry', diagnostics);
+      await page.getByRole('button', { name: '继续上传' }).click();
+      await playwrightExpect(page.getByText('网页导入完成')).toBeVisible();
+      expect(attempts.get('https://public.example.test/one')).toBe(2);
+      expect(attempts.get('https://public.example.test/two')).toBe(1);
+      await capturePage(page, 'partial-upload-complete', diagnostics);
     } finally {
       await context.close();
     }
@@ -273,11 +369,14 @@ describe.skipIf(!B10_PUBLIC_FIXTURE_BASE_URL)(
           );
         await page.getByLabel('内容选择器').fill('main');
         await page.getByRole('button', { name: '下一步' }).click();
-        await page.getByRole('button', { name: '下一步' }).click();
-        const previewButtons = page.getByRole('button', { name: /预览|抓取/ });
-        await previewButtons.first().click();
-        await playwrightExpect(page.getByText(/共 \d+ 个分块/)).toBeVisible();
-        await playwrightExpect(page.getByText(/SELECTED_FIXTURE_TEXT/)).toBeVisible();
+        const rows = page.getByTestId('b10-url-preview-row');
+        await playwrightExpect(rows).toHaveCount(2);
+        for (const row of await rows.all()) {
+          await row.getByRole('button', { name: '预览', exact: true }).click();
+          await playwrightExpect(row.getByText(/分块数量/)).toBeVisible();
+        }
+        await playwrightExpect(page.getByText(/SELECTED_FIXTURE_TEXT/)).toHaveCount(2);
+        await playwrightExpect(page.getByText(/OUTSIDE_TEXT|NAVIGATION_NOISE/)).toHaveCount(0);
         await capturePage(page, 'public-fixture-preview', diagnostics);
         await playwrightExpect(page.getByRole('button', { name: '下一步' })).toBeEnabled();
       } finally {

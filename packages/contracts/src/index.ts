@@ -85,10 +85,13 @@ export {
   ImportFilesSchema,
   ImportTemplateSchema,
   ImportTextSchema,
+  ImportUrlPreviewChunkSchema,
+  ImportUrlPreviewSchema,
   ImportUrlSchema,
   PARSE_PROVIDERS,
   credentialMetadataOf,
 } from './knowledge/ingestion-contract';
+export type { ImportUrlPreview } from './knowledge/ingestion-contract';
 
 export {
   DEFERRED_OPERATION_MANIFEST,

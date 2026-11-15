@@ -190,9 +190,39 @@ export const ImportUrlSchema = z
   .object({
     directoryId: ObjectIdSchema.nullable().optional(),
     url: z.string().url(),
-    selector: z.string().max(500).default('body'),
+    selector: z
+      .string()
+      .max(500)
+      .default('body')
+      .transform((value) => value.trim() || 'body'),
+    chunking: ChunkingSettingsSchema.default({
+      trainingType: 'chunk',
+      chunkSettingMode: 'auto',
+    }),
+    dryRun: z.boolean().default(false),
   })
   .strict();
+
+export const ImportUrlPreviewChunkSchema = z
+  .object({
+    q: z.string(),
+    a: z.string(),
+  })
+  .strict();
+
+export const ImportUrlPreviewSchema = z
+  .object({
+    title: z.string().min(1).max(240),
+    safeUrl: z.string().url(),
+    selector: z.string().min(1).max(500),
+    contentHash: z.string().min(64).max(128),
+    totalChunks: z.number().int().nonnegative(),
+    chunks: z.array(ImportUrlPreviewChunkSchema).max(10),
+    truncated: z.boolean(),
+  })
+  .strict();
+
+export type ImportUrlPreview = z.infer<typeof ImportUrlPreviewSchema>;
 
 export const ImportTemplateSchema = z
   .object({

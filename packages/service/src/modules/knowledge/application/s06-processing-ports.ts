@@ -30,6 +30,7 @@ export interface S6SourceRecord {
   name: string;
   mimeType: string;
   parseProvider: string;
+  metadata: Record<string, unknown>;
   searchEnabled: boolean;
   processingStatus: string;
   version: number;
@@ -358,6 +359,7 @@ export interface S6ExternalProcessingPort {
       fileName: string;
       mimeType: string;
       parseProvider: string;
+      metadata: Record<string, unknown>;
     },
     context: TenantContext,
   ): Promise<S5ParseResult>;

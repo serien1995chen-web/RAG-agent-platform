@@ -4,7 +4,7 @@ import { join } from 'node:path';
 export const TARGET_CONTRACT_COUNTS = Object.freeze({
   paths: 95,
   operations: 123,
-  schemas: 140,
+  schemas: 141,
   parameters: 8,
 });
 

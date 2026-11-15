@@ -30,6 +30,7 @@ function sourceRecord(
     name: document.name,
     mimeType: document.mimeType,
     parseProvider: document.parseProvider,
+    metadata: document.metadata,
     searchEnabled: document.searchEnabled,
     processingStatus: document.processingStatus,
     version: document.version,

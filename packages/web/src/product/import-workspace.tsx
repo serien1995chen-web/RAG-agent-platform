@@ -31,6 +31,7 @@ import {
   previewImportText,
   productApi,
   productErrorView,
+  type ImportUrlPreview,
 } from './api';
 import {
   ProductButton,
@@ -69,6 +70,35 @@ interface ImportedUpload {
   progress: number;
   phase: KnowledgeFileUploadState['phase'];
   error: unknown;
+}
+
+type UrlEntryPhase = 'waiting' | 'previewing' | 'ready' | 'creating' | 'finished' | 'error';
+
+interface UrlEntry {
+  id: string;
+  idempotencyKey: string;
+  url: string;
+  phase: UrlEntryPhase;
+  preview?: ImportUrlPreview;
+  previewSignature?: string;
+  jobId?: string;
+  error?: unknown;
+}
+
+function urlLines(text: string): string[] {
+  return text
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+}
+
+function createUrlEntry(url: string): UrlEntry {
+  return {
+    id: globalThis.crypto.randomUUID(),
+    idempotencyKey: globalThis.crypto.randomUUID(),
+    url,
+    phase: 'waiting',
+  };
 }
 
 const IMPORT_OPTIONS: Array<{
@@ -147,7 +177,8 @@ export function ImportWorkspace(props: {
   const uploadFilesByRow = useRef(new Map<string, File>());
   const [textName, setTextName] = useState('');
   const [textBody, setTextBody] = useState('');
-  const [url, setUrl] = useState('');
+  const [urlText, setUrlText] = useState('');
+  const [urlEntries, setUrlEntries] = useState<UrlEntry[]>([]);
   const [selector, setSelector] = useState('body');
   const [dryRun, setDryRun] = useState(false);
   const [conflictStrategy, setConflictStrategy] = useState<'fail' | 'skip' | 'overwrite'>('fail');
@@ -187,6 +218,76 @@ export function ImportWorkspace(props: {
     }),
     [chunkSettingMode, chunkSize, chunkSplitMode, trainingType],
   );
+  const normalizedSelector = selector.trim() || 'body';
+  const urlPreviewSignature = JSON.stringify({ selector: normalizedSelector, chunking });
+  const invalidateUrlPreviews = () => {
+    setUrlEntries((current) =>
+      current.map((entry) => ({
+        ...entry,
+        phase: entry.phase === 'finished' ? entry.phase : 'waiting',
+        preview: entry.phase === 'finished' ? entry.preview : undefined,
+        previewSignature: entry.phase === 'finished' ? entry.previewSignature : undefined,
+      })),
+    );
+  };
+  const updateUrlText = (nextText: string) => {
+    setUrlText(nextText);
+    const lines = urlLines(nextText);
+    setUrlEntries((current) => {
+      const used = new Set<number>();
+      return lines.map((line) => {
+        const matched = current.findIndex((entry, index) => !used.has(index) && entry.url === line);
+        if (matched >= 0) {
+          used.add(matched);
+          return current[matched]!;
+        }
+        return createUrlEntry(line);
+      });
+    });
+  };
+  const removeUrlEntry = (target: UrlEntry) => {
+    const remaining = urlEntries.filter((entry) => entry.id !== target.id);
+    setUrlEntries(remaining);
+    setUrlText(remaining.map((entry) => entry.url).join('\n'));
+  };
+  const previewUrl = async (target: UrlEntry) => {
+    setUrlEntries((current) =>
+      current.map((entry) =>
+        entry.id === target.id
+          ? { ...entry, phase: 'previewing', preview: undefined, error: undefined }
+          : entry,
+      ),
+    );
+    try {
+      const preview = await importUrl(props.spaceId, {
+        url: target.url,
+        selector: normalizedSelector,
+        directoryId: directoryId || null,
+        chunking,
+        idempotencyKey: target.idempotencyKey,
+        dryRun: true,
+      });
+      setUrlEntries((current) =>
+        current.map((entry) =>
+          entry.id === target.id
+            ? {
+                ...entry,
+                phase: 'ready',
+                preview,
+                previewSignature: urlPreviewSignature,
+                error: undefined,
+              }
+            : entry,
+        ),
+      );
+    } catch (caught) {
+      setUrlEntries((current) =>
+        current.map((entry) =>
+          entry.id === target.id ? { ...entry, phase: 'error', error: caught } : entry,
+        ),
+      );
+    }
+  };
   const previewQuery = useQuery({
     queryKey: [
       'kb-product',
@@ -239,7 +340,7 @@ export function ImportWorkspace(props: {
     (['local', 'image'].includes(kind) && completedUploads.length > 0) ||
     (['template', 'backup'].includes(kind) && completedUploads.length === 1) ||
     (kind === 'text' && Boolean(textName.trim()) && Boolean(textBody.trim())) ||
-    (kind === 'url' && Boolean(url.trim())) ||
+    (kind === 'url' && urlEntries.length > 0) ||
     (kind === 'api' && apiSelected.length > 0) ||
     (['feishu', 'yuque', 'dingtalk'].includes(kind) && connectorSelected.length > 0) ||
     kind === 'retraining';
@@ -432,10 +533,61 @@ export function ImportWorkspace(props: {
     }
   };
 
+  const submitUrls = async () => {
+    const alreadyFinished = urlEntries.filter((entry) => entry.phase === 'finished').length;
+    const pending = urlEntries.filter(
+      (entry) => entry.phase !== 'finished' && entry.phase !== 'creating',
+    );
+    let newlyFinished = 0;
+    for (const initial of pending) {
+      setUrlEntries((current) =>
+        current.map((entry) =>
+          entry.id === initial.id ? { ...entry, phase: 'creating', error: undefined } : entry,
+        ),
+      );
+      try {
+        const job = await importUrl(props.spaceId, {
+          url: initial.url,
+          selector: normalizedSelector,
+          directoryId: directoryId || null,
+          chunking,
+          idempotencyKey: initial.idempotencyKey,
+          dryRun: false,
+        });
+        setUrlEntries((current) =>
+          current.map((entry) =>
+            entry.id === initial.id
+              ? { ...entry, phase: 'finished', jobId: job.jobId, error: undefined }
+              : entry,
+          ),
+        );
+        newlyFinished += 1;
+        props.onJobStarted?.(job.jobId);
+      } catch (caught) {
+        setUrlEntries((current) =>
+          current.map((entry) =>
+            entry.id === initial.id ? { ...entry, phase: 'error', error: caught } : entry,
+          ),
+        );
+      }
+    }
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ['kb-product', 'sources', props.spaceId] }),
+      queryClient.invalidateQueries({ queryKey: ['kb-product', 'jobs', props.spaceId] }),
+    ]);
+    if (alreadyFinished + newlyFinished === urlEntries.length && urlEntries.length > 0) {
+      props.onImported();
+    }
+  };
+
   const submit = async () => {
     setBusy(true);
     setSubmitError(null);
     try {
+      if (kind === 'url') {
+        await submitUrls();
+        return;
+      }
       let job: Job;
       if (kind === 'local' || kind === 'image') {
         job = await importFiles(props.spaceId, {
@@ -450,12 +602,6 @@ export function ImportWorkspace(props: {
           text: textBody,
           directoryId: directoryId || null,
           chunking,
-        });
-      } else if (kind === 'url') {
-        job = await importUrl(props.spaceId, {
-          url,
-          selector,
-          directoryId: directoryId || null,
         });
       } else if (kind === 'template') {
         job = await importTemplate(props.spaceId, {
@@ -570,7 +716,7 @@ export function ImportWorkspace(props: {
     uploaded: completedUploads,
     textName,
     textBody,
-    url,
+    urlCount: urlEntries.length,
     apiSelected,
     connectorSelected,
     collectionId: props.collectionId,
@@ -585,7 +731,15 @@ export function ImportWorkspace(props: {
         ? !structuredPreviewQuery.isLoading &&
           !structuredPreviewQuery.error &&
           Boolean(structuredPreviewQuery.data)
-        : true);
+        : kind === 'url'
+          ? urlEntries.length > 0 &&
+            urlEntries.every(
+              (entry) =>
+                entry.phase === 'ready' &&
+                Boolean(entry.preview) &&
+                entry.previewSignature === urlPreviewSignature,
+            )
+          : true);
 
   return (
     <ProductPage className="kb2-import-page">
@@ -791,20 +945,40 @@ export function ImportWorkspace(props: {
 
               {kind === 'url' ? (
                 <div className="kb2-form-grid">
-                  <ProductField label="网页地址">
-                    <ProductInput
-                      type="url"
-                      value={url}
-                      onChange={(event) => setUrl(event.target.value)}
-                      placeholder="https://example.com/page"
+                  <ProductField
+                    label="网页地址"
+                    hint="每行一个 URL；空白行会忽略，每个条目只抓取当前页面"
+                  >
+                    <ProductTextarea
+                      value={urlText}
+                      onChange={(event) => updateUrlText(event.target.value)}
+                      rows={7}
+                      placeholder={'https://example.com/page\nhttps://example.com/another-page'}
                     />
                   </ProductField>
                   <ProductField label="内容选择器" hint="默认抓取 body">
                     <ProductInput
                       value={selector}
-                      onChange={(event) => setSelector(event.target.value)}
+                      onChange={(event) => {
+                        setSelector(event.target.value);
+                        invalidateUrlPreviews();
+                      }}
                     />
                   </ProductField>
+                  <div className="kb2-url-tags" role="group" aria-label="待导入网页">
+                    {urlEntries.map((entry) => (
+                      <span className="kb2-url-tag" data-testid="b10-url-tag" key={entry.id}>
+                        <span>{entry.url}</span>
+                        <button
+                          type="button"
+                          aria-label={`删除 ${entry.url}`}
+                          onClick={() => removeUrlEntry(entry)}
+                        >
+                          <CloseIcon boxSize={3} />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
                 </div>
               ) : null}
 
@@ -884,28 +1058,31 @@ export function ImportWorkspace(props: {
                 </div>
               ) : null}
 
-              {kind === 'local' || kind === 'image' ? (
+              {kind === 'local' || kind === 'image' || kind === 'url' ? (
                 <div className="kb2-import-settings">
                   <h3>训练参数</h3>
                   <div className="kb2-form-grid">
-                    <ProductField label="解析器">
-                      <ProductSelect
-                        value={parseProvider}
-                        onChange={(event) => setParseProvider(event.target.value)}
-                      >
-                        <option value="liteparse">LiteParse</option>
-                        <option value="sangfor">Sangfor</option>
-                        <option value="somark">Somark</option>
-                        <option value="textin">TextIn</option>
-                        <option value="doc2x">doc2x</option>
-                      </ProductSelect>
-                    </ProductField>
+                    {kind !== 'url' ? (
+                      <ProductField label="解析器">
+                        <ProductSelect
+                          value={parseProvider}
+                          onChange={(event) => setParseProvider(event.target.value)}
+                        >
+                          <option value="liteparse">LiteParse</option>
+                          <option value="sangfor">Sangfor</option>
+                          <option value="somark">Somark</option>
+                          <option value="textin">TextIn</option>
+                          <option value="doc2x">doc2x</option>
+                        </ProductSelect>
+                      </ProductField>
+                    ) : null}
                     <ProductField label="训练类型">
                       <ProductSelect
                         value={trainingType}
-                        onChange={(event) =>
-                          setTrainingType(event.target.value as typeof trainingType)
-                        }
+                        onChange={(event) => {
+                          setTrainingType(event.target.value as typeof trainingType);
+                          invalidateUrlPreviews();
+                        }}
                       >
                         <option value="chunk">分段</option>
                         <option value="qa">问答对</option>
@@ -915,9 +1092,10 @@ export function ImportWorkspace(props: {
                     <ProductField label="切分方式">
                       <ProductSelect
                         value={chunkSettingMode}
-                        onChange={(event) =>
-                          setChunkSettingMode(event.target.value as typeof chunkSettingMode)
-                        }
+                        onChange={(event) => {
+                          setChunkSettingMode(event.target.value as typeof chunkSettingMode);
+                          invalidateUrlPreviews();
+                        }}
                       >
                         <option value="auto">自动</option>
                         <option value="custom">自定义</option>
@@ -931,15 +1109,19 @@ export function ImportWorkspace(props: {
                             min={64}
                             max={8000}
                             value={chunkSize}
-                            onChange={(event) => setChunkSize(event.target.value)}
+                            onChange={(event) => {
+                              setChunkSize(event.target.value);
+                              invalidateUrlPreviews();
+                            }}
                           />
                         </ProductField>
                         <ProductField label="切分模式">
                           <ProductSelect
                             value={chunkSplitMode}
-                            onChange={(event) =>
-                              setChunkSplitMode(event.target.value as typeof chunkSplitMode)
-                            }
+                            onChange={(event) => {
+                              setChunkSplitMode(event.target.value as typeof chunkSplitMode);
+                              invalidateUrlPreviews();
+                            }}
                           >
                             <option value="paragraph">按段落</option>
                             <option value="size">按长度</option>
@@ -1020,6 +1202,96 @@ export function ImportWorkspace(props: {
                     />
                   )}
                 </section>
+              ) : kind === 'url' ? (
+                <section aria-label="URL 分块预览">
+                  {!urlEntries.some(
+                    (entry) =>
+                      entry.phase === 'ready' &&
+                      entry.preview &&
+                      entry.previewSignature === urlPreviewSignature,
+                  ) ? (
+                    <div className="kb2-note">请先预览：逐个抓取网页后继续。</div>
+                  ) : null}
+                  <div className="kb2-url-preview-list">
+                    {urlEntries.map((entry) => {
+                      const preview = entry.preview;
+                      const errorView = entry.error ? productErrorView(entry.error) : null;
+                      return (
+                        <article
+                          className="kb2-url-preview"
+                          data-testid="b10-url-preview-row"
+                          key={entry.id}
+                        >
+                          <header>
+                            <div>
+                              <strong>{preview?.title ?? entry.url}</strong>
+                              <small>{entry.url}</small>
+                            </div>
+                            <StatusTag
+                              value={
+                                entry.phase === 'ready'
+                                  ? '已预览'
+                                  : entry.phase === 'previewing'
+                                    ? '抓取中'
+                                    : entry.phase === 'error'
+                                      ? '失败'
+                                      : '等待预览'
+                              }
+                              tone={
+                                entry.phase === 'ready'
+                                  ? 'success'
+                                  : entry.phase === 'error'
+                                    ? 'danger'
+                                    : entry.phase === 'previewing'
+                                      ? 'info'
+                                      : 'neutral'
+                              }
+                            />
+                            <ProductButton
+                              size="sm"
+                              busy={entry.phase === 'previewing'}
+                              onClick={() => void previewUrl(entry)}
+                            >
+                              {preview ? '重新预览' : '预览'}
+                            </ProductButton>
+                          </header>
+                          <ProductError error={entry.error} />
+                          {preview ? (
+                            <>
+                              <div className="kb2-info-group">
+                                <InfoRow label="安全 URL" value={preview.safeUrl} />
+                                <InfoRow label="正文选择器" value={preview.selector} />
+                                <InfoRow label="分块数量" value={String(preview.totalChunks)} />
+                                <InfoRow label="正文哈希" value={preview.contentHash} />
+                              </div>
+                              <div className="kb2-chunk-preview-list">
+                                {preview.chunks.map((chunk, index) => (
+                                  <article
+                                    className="kb2-chunk-preview"
+                                    key={`${entry.id}:${index}`}
+                                  >
+                                    <span>#{index + 1}</span>
+                                    <S7MarkdownRenderer>{chunk.q}</S7MarkdownRenderer>
+                                  </article>
+                                ))}
+                              </div>
+                              {preview.truncated ? (
+                                <p className="kb2-table-muted">
+                                  仅展示前 {preview.chunks.length} 个分块。
+                                </p>
+                              ) : null}
+                            </>
+                          ) : errorView ? (
+                            <p className="kb2-table-muted">
+                              {errorView.code}
+                              {errorView.traceId ? ` · Trace ${errorView.traceId}` : ''}
+                            </p>
+                          ) : null}
+                        </article>
+                      );
+                    })}
+                  </div>
+                </section>
               ) : kind === 'template' || kind === 'backup' ? (
                 <section aria-label="结构化导入预览">
                   <ProductError
@@ -1096,20 +1368,101 @@ export function ImportWorkspace(props: {
                   导入任务已提交：{jobId}
                 </div>
               ) : null}
+              {kind === 'url' ? (
+                <section aria-label="网页导入状态" className="kb2-url-submit-list">
+                  {urlEntries.map((entry) => (
+                    <article
+                      className="kb2-url-submit-row"
+                      data-testid="b10-url-submit-row"
+                      key={entry.id}
+                    >
+                      <div>
+                        <strong>{entry.preview?.title ?? entry.url}</strong>
+                        <small>{entry.url}</small>
+                      </div>
+                      <StatusTag
+                        value={
+                          entry.phase === 'finished'
+                            ? '完成'
+                            : entry.phase === 'creating'
+                              ? '创建中'
+                              : entry.phase === 'error'
+                                ? '错误'
+                                : '等待中'
+                        }
+                        tone={
+                          entry.phase === 'finished'
+                            ? 'success'
+                            : entry.phase === 'creating'
+                              ? 'info'
+                              : entry.phase === 'error'
+                                ? 'danger'
+                                : 'neutral'
+                        }
+                      />
+                      {entry.jobId ? <code>{entry.jobId}</code> : null}
+                      <ProductError error={entry.error} />
+                    </article>
+                  ))}
+                </section>
+              ) : null}
               {!jobId ? (
                 <>
                   <ProductEmpty
-                    title="准备提交导入"
-                    description="提交后以服务端返回的 Job ID、状态和进度为准。"
+                    title={
+                      kind === 'url'
+                        ? urlEntries.every((entry) => entry.phase === 'finished')
+                          ? '网页导入完成'
+                          : urlEntries.some((entry) => entry.phase === 'finished')
+                            ? '网页导入部分完成'
+                            : '准备提交网页导入'
+                        : '准备提交导入'
+                    }
+                    description={
+                      kind === 'url'
+                        ? `完成 ${urlEntries.filter((entry) => entry.phase === 'finished').length} / ${urlEntries.length}；只重试失败或等待项。`
+                        : '提交后以服务端返回的 Job ID、状态和进度为准。'
+                    }
                     action={
-                      <ProductButton
-                        tone="primary"
-                        busy={busy}
-                        disabled={kind === 'retraining'}
-                        onClick={() => void submit()}
-                      >
-                        确认导入
-                      </ProductButton>
+                      <div className="kb2-inline-actions">
+                        {kind === 'url' &&
+                        urlEntries.some((entry) => entry.phase === 'error') &&
+                        !urlEntries.some((entry) => entry.phase === 'finished') ? (
+                          <ProductButton
+                            disabled={busy}
+                            onClick={() => {
+                              setStep(1);
+                              setSubmitError(null);
+                            }}
+                          >
+                            重新编辑
+                          </ProductButton>
+                        ) : null}
+                        <ProductButton
+                          tone="primary"
+                          busy={busy}
+                          disabled={kind === 'retraining'}
+                          onClick={() => {
+                            if (
+                              kind === 'url' &&
+                              urlEntries.every((entry) => entry.phase === 'finished')
+                            ) {
+                              props.onExit();
+                              return;
+                            }
+                            void submit();
+                          }}
+                        >
+                          {kind === 'url' && urlEntries.every((entry) => entry.phase === 'finished')
+                            ? '返回 Collection'
+                            : kind === 'url' &&
+                                urlEntries.some((entry) => entry.phase === 'finished')
+                              ? '继续上传'
+                              : kind === 'url'
+                                ? '开始上传'
+                                : '确认导入'}
+                        </ProductButton>
+                      </div>
                     }
                   />
                   <ProductError error={submitError} />
@@ -1499,7 +1852,7 @@ function previewSummary(input: {
   uploaded: ImportedUpload[];
   textName: string;
   textBody: string;
-  url: string;
+  urlCount: number;
   apiSelected: string[];
   connectorSelected: string[];
   collectionId?: string;
@@ -1521,8 +1874,8 @@ function previewSummary(input: {
   if (input.kind === 'url') {
     return {
       title: '网页导入',
-      description: input.url,
-      rows: [{ label: 'URL', value: input.url }],
+      description: `${input.urlCount} 个待导入网页`,
+      rows: [{ label: 'URL 数量', value: String(input.urlCount) }],
     };
   }
   if (input.kind === 'api') {

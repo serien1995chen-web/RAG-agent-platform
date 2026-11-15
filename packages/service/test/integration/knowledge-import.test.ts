@@ -1958,6 +1958,9 @@ describe('L1-B10 ING-003 single-page URL import lifecycle', () => {
               title: 'B10 fixture title',
               contentType: 'text/html; charset=utf-8',
               bytes: Buffer.from(pageHtml),
+              selector: 'main#article',
+              markdown: '# B10 selected heading\n\nB10 selected body',
+              contentHash: sha256Of('# B10 selected heading\n\nB10 selected body'),
             };
           },
         },

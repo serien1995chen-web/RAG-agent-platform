@@ -274,6 +274,9 @@ export interface UrlSnapshot {
   title: string;
   contentType: string;
   bytes: Uint8Array;
+  selector?: string;
+  markdown?: string;
+  contentHash?: string;
 }
 
 export interface UrlImportAdapterPort {

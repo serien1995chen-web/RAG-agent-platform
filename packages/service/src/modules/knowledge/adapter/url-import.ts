@@ -26,6 +26,17 @@ interface PageResponse {
 export interface UrlImportAdapterOptions {
   resolve?: typeof validateUrlTarget;
   requestPage?: (target: VettedUrlTarget, context: TenantContext) => Promise<PageResponse>;
+  extractHtml?: (input: {
+    html: string;
+    selector: string;
+    baseUrl: string;
+    requestId: string;
+    traceId: string;
+  }) => Promise<{
+    title: string;
+    markdown: string;
+    usedSelector: string;
+  }>;
 }
 
 function timeoutError(context: TenantContext): never {
@@ -68,8 +79,13 @@ async function defaultRequestPage(
           accept: 'text/html,application/xhtml+xml,text/plain;q=0.9,*/*;q=0.1',
           'user-agent': 'RAG-agent-platform-url-import/1.0',
         },
-        lookup: (_hostname, _options, callback) => {
-          callback(null, target.address, target.family);
+        lookup: (_hostname, options, callback) => {
+          const lookupCallback = callback as unknown as (...args: unknown[]) => void;
+          if ((options as { all?: boolean }).all) {
+            lookupCallback(null, [{ address: target.address, family: target.family }]);
+            return;
+          }
+          lookupCallback(null, target.address, target.family);
         },
         servername: target.url.hostname,
         timeout: CONNECT_TIMEOUT_MS,
@@ -158,16 +174,54 @@ function titleOf(body: string): string {
   return match?.[1]?.replace(/\s+/g, ' ').trim().slice(0, 240) || 'Imported page';
 }
 
+async function fallbackExtractHtml(input: {
+  html: string;
+  selector: string;
+  baseUrl: string;
+  requestId: string;
+  traceId: string;
+}) {
+  const usedSelector = input.selector.trim() || 'body';
+  const title = (
+    /<title[^>]*>([\s\S]*?)<\/title>/i.exec(input.html)?.[1]?.replace(/\s+/g, ' ').trim() ||
+    /<h1[^>]*>([\s\S]*?)<\/h1>/i
+      .exec(input.html)?.[1]
+      ?.replace(/<[^>]+>/g, '')
+      .trim() ||
+    input.baseUrl
+  ).slice(0, 240);
+  const cleaned = input.html
+    .replace(/<i\b[^>]*>[\s\S]*?<\/i>/gi, '')
+    .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '')
+    .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, '')
+    .replace(/<a\b[^>]*>\s*<\/a>/gi, '');
+  const text = cleaned
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (!text) {
+    throw createKnowledgeError({
+      code: 'KNOWLEDGE_UNSUPPORTED_CONTENT',
+      requestId: input.requestId,
+      traceId: input.traceId,
+      details: { source: 'url_html', reason: 'content_empty' },
+    });
+  }
+  return { title: title || input.baseUrl, markdown: text, usedSelector };
+}
+
 export class KnowledgeUrlImportAdapter implements UrlImportAdapterPort {
   private readonly resolve: typeof validateUrlTarget;
   private readonly requestPage: (
     target: VettedUrlTarget,
     context: TenantContext,
   ) => Promise<PageResponse>;
+  private readonly extractHtml: NonNullable<UrlImportAdapterOptions['extractHtml']>;
 
   constructor(options: UrlImportAdapterOptions = {}) {
     this.resolve = options.resolve ?? validateUrlTarget;
     this.requestPage = options.requestPage ?? defaultRequestPage;
+    this.extractHtml = options.extractHtml ?? fallbackExtractHtml;
   }
 
   async fetch(input: {
@@ -196,7 +250,26 @@ export class KnowledgeUrlImportAdapter implements UrlImportAdapterPort {
             details: { provider: 'url', reason: 'redirect_location_missing' },
           });
         }
-        raw = new URL(response.location, target.url).toString();
+        let next: URL;
+        try {
+          next = new URL(response.location, target.url);
+        } catch {
+          throw createKnowledgeError({
+            code: 'KNOWLEDGE_PROVIDER_CONTRACT_INVALID',
+            requestId: input.context.requestId,
+            traceId: input.context.traceId,
+            details: { provider: 'url', reason: 'redirect_location_invalid' },
+          });
+        }
+        if (target.url.protocol === 'https:' && next.protocol === 'http:') {
+          throw createKnowledgeError({
+            code: 'KNOWLEDGE_UNSUPPORTED_CONTENT',
+            requestId: input.context.requestId,
+            traceId: input.context.traceId,
+            details: { provider: 'url', reason: 'protocol_downgrade', field: 'url' },
+          });
+        }
+        raw = next.toString();
         continue;
       }
       if (response.status === 401 || response.status === 403) {
@@ -217,13 +290,47 @@ export class KnowledgeUrlImportAdapter implements UrlImportAdapterPort {
       }
       const safeUrl = safeUrlForStorage(raw);
       const body = new TextDecoder().decode(response.bytes);
+      const mimeType = response.contentType.split(';')[0]?.trim().toLowerCase() || 'text/html';
+      if (!['text/html', 'application/xhtml+xml', 'text/plain'].includes(mimeType)) {
+        throw createKnowledgeError({
+          code: 'KNOWLEDGE_UNSUPPORTED_CONTENT',
+          requestId: input.context.requestId,
+          traceId: input.context.traceId,
+          details: { provider: 'url', reason: 'unsupported_mime', mimeType },
+        });
+      }
+      const extracted =
+        mimeType === 'text/plain'
+          ? {
+              title: safeUrl,
+              markdown: body.trim(),
+              usedSelector: 'body',
+            }
+          : await this.extractHtml({
+              html: body,
+              selector: input.selector,
+              baseUrl: safeUrl,
+              requestId: input.context.requestId,
+              traceId: input.context.traceId,
+            });
+      if (!extracted.markdown.trim()) {
+        throw createKnowledgeError({
+          code: 'KNOWLEDGE_UNSUPPORTED_CONTENT',
+          requestId: input.context.requestId,
+          traceId: input.context.traceId,
+          details: { provider: 'url', reason: 'content_empty' },
+        });
+      }
       return {
         finalUrl: raw,
         safeUrl,
         urlHash: createHash('sha256').update(safeUrl).digest('hex'),
-        title: titleOf(body),
-        contentType: response.contentType || 'text/html',
+        title: extracted.title || titleOf(body),
+        contentType: mimeType,
         bytes: response.bytes,
+        selector: extracted.usedSelector,
+        markdown: extracted.markdown,
+        contentHash: `sha256:${createHash('sha256').update(extracted.markdown).digest('hex')}`,
       };
     }
     return timeoutError(input.context);

@@ -8884,6 +8884,56 @@
         "x-audit": true,
         "x-downstream-allowed": false,
         "responses": {
+          "200": {
+            "description": "URL 正文与分块预览，不创建业务对象",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "success",
+                    "data",
+                    "traceId",
+                    "requestId"
+                  ],
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "const": true
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/ImportUrlPreview"
+                    },
+                    "traceId": {
+                      "type": "string"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "example": {
+                  "success": true,
+                  "data": {
+                    "title": "Product documentation",
+                    "safeUrl": "https://example.com/docs",
+                    "selector": "main",
+                    "contentHash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                    "totalChunks": 2,
+                    "chunks": [
+                      {
+                        "q": "Selected page body",
+                        "a": ""
+                      }
+                    ],
+                    "truncated": false
+                  },
+                  "traceId": "trace-url-preview",
+                  "requestId": "request-url-preview"
+                }
+              }
+            }
+          },
           "202": {
             "description": "异步任务",
             "content": {
@@ -25745,7 +25795,8 @@
         "type": "object",
         "required": [
           "url",
-          "selector"
+          "selector",
+          "chunking"
         ],
         "properties": {
           "url": {
@@ -25756,6 +25807,13 @@
             "type": "string",
             "maxLength": 500,
             "default": "body"
+          },
+          "chunking": {
+            "$ref": "#/components/schemas/ChunkingSettings"
+          },
+          "dryRun": {
+            "type": "boolean",
+            "default": false
           },
           "directoryId": {
             "oneOf": [
@@ -25772,6 +25830,67 @@
             ]
           }
         }
+      },
+      "ImportUrlPreview": {
+        "type": "object",
+        "required": [
+          "title",
+          "safeUrl",
+          "selector",
+          "contentHash",
+          "totalChunks",
+          "chunks",
+          "truncated"
+        ],
+        "properties": {
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 240
+          },
+          "safeUrl": {
+            "type": "string",
+            "format": "uri"
+          },
+          "selector": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          },
+          "contentHash": {
+            "type": "string",
+            "minLength": 64,
+            "maxLength": 128
+          },
+          "totalChunks": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "chunks": {
+            "type": "array",
+            "maxItems": 10,
+            "items": {
+              "type": "object",
+              "required": [
+                "q",
+                "a"
+              ],
+              "properties": {
+                "q": {
+                  "type": "string"
+                },
+                "a": {
+                  "type": "string"
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "truncated": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false
       },
       "ImportTemplate": {
         "type": "object",

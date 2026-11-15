@@ -312,6 +312,7 @@ export type SchemaName =
   | 'ImportTemplate'
   | 'ImportText'
   | 'ImportUrl'
+  | 'ImportUrlPreview'
   | 'Job'
   | 'JobCreate'
   | 'JobList'
@@ -453,7 +454,8 @@ export interface SchemaPropertyMap {
   "ImportFiles": "chunking" | "directoryId" | "parseConfig" | "parseProvider" | "uploadIds";
   "ImportTemplate": "directoryId" | "previewOnly" | "uploadId";
   "ImportText": "chunking" | "directoryId" | "dryRun" | "knowledgeSpaceId" | "name" | "text";
-  "ImportUrl": "directoryId" | "selector" | "url";
+  "ImportUrl": "chunking" | "directoryId" | "dryRun" | "selector" | "url";
+  "ImportUrlPreview": "chunks" | "contentHash" | "safeUrl" | "selector" | "title" | "totalChunks" | "truncated";
   "Job": "attemptEpoch" | "attempts" | "availableAt" | "cancelRequestedAt" | "createdAt" | "error" | "heartbeatAt" | "inputSnapshot" | "jobId" | "kind" | "knowledgeSpaceId" | "leaseExpiresAt" | "leaseOwner" | "maxAttempts" | "pausedAt" | "priority" | "progress" | "resourceId" | "resourceType" | "result" | "status" | "steps" | "updatedAt" | "version" | "workspaceId";
   "JobCreate": "inputSnapshot" | "kind" | "priority" | "resourceId" | "resourceType";
   "JobList": "items" | "pageInfo";
@@ -596,7 +598,8 @@ export interface RequiredSchemaPropertyMap {
   "ImportFiles": "chunking" | "parseProvider" | "uploadIds";
   "ImportTemplate": "uploadId";
   "ImportText": "chunking" | "knowledgeSpaceId" | "name" | "text";
-  "ImportUrl": "selector" | "url";
+  "ImportUrl": "chunking" | "selector" | "url";
+  "ImportUrlPreview": "chunks" | "contentHash" | "safeUrl" | "selector" | "title" | "totalChunks" | "truncated";
   "Job": "attempts" | "createdAt" | "jobId" | "kind" | "knowledgeSpaceId" | "maxAttempts" | "priority" | "progress" | "resourceId" | "resourceType" | "status" | "updatedAt" | "version" | "workspaceId";
   "JobCreate": "inputSnapshot" | "kind" | "resourceId" | "resourceType";
   "JobList": "items" | "pageInfo";

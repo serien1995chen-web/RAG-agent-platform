@@ -1,4 +1,6 @@
+import { createServer } from 'node:http';
 import { describe, expect, it } from 'vitest';
+import { extractHtmlDocument } from '../../packages/parse/src/parsers/html';
 import { KnowledgeUrlImportAdapter } from '../../packages/service/src/modules/knowledge/adapter/url-import';
 import {
   isForbiddenAddress,
@@ -313,5 +315,86 @@ describe('L1-B10-ING-003-Q URL import security', () => {
     expect(requests).toEqual([
       { address: '93.184.216.34', url: 'https://public.example.test/start' },
     ]);
+  });
+
+  it('L1-B10-ING-003-Q04 supports Node dual-form pinned lookup on a real socket', async () => {
+    const server = createServer((_request, response) => {
+      response.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
+      response.end(
+        '<html><head><title>Pinned</title></head><body><main>Pinned body</main></body></html>',
+      );
+    });
+    await new Promise<void>((resolve, reject) => {
+      server.once('error', reject);
+      server.listen(0, '127.0.0.1', () => resolve());
+    });
+    try {
+      const address = server.address();
+      if (!address || typeof address === 'string') throw new Error('missing local port');
+      const adapter = new KnowledgeUrlImportAdapter({
+        async resolve(raw) {
+          return {
+            url: new URL(raw),
+            address: '127.0.0.1',
+            family: 4,
+            addresses: ['127.0.0.1'],
+          };
+        },
+        extractHtml: extractHtmlDocument,
+      });
+      const snapshot = await adapter.fetch({
+        url: `http://pinned.example.test:${address.port}/`,
+        selector: 'main',
+        context,
+      });
+      expect(snapshot).toMatchObject({
+        title: 'Pinned',
+        selector: 'main',
+        markdown: 'Pinned body',
+      });
+    } finally {
+      await new Promise<void>((resolve, reject) => {
+        server.close((error) => (error ? reject(error) : resolve()));
+      });
+    }
+  });
+
+  it('L1-B10-ING-003-Q06 rejects a real streamed response above 50 MiB', async () => {
+    const server = createServer((_request, response) => {
+      response.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
+      response.end(Buffer.alloc(50 * 1024 * 1024 + 1, 'x'));
+    });
+    await new Promise<void>((resolve, reject) => {
+      server.once('error', reject);
+      server.listen(0, '127.0.0.1', () => resolve());
+    });
+    try {
+      const address = server.address();
+      if (!address || typeof address === 'string') throw new Error('missing local port');
+      const adapter = new KnowledgeUrlImportAdapter({
+        async resolve(raw) {
+          return {
+            url: new URL(raw),
+            address: '127.0.0.1',
+            family: 4,
+            addresses: ['127.0.0.1'],
+          };
+        },
+        extractHtml: extractHtmlDocument,
+      });
+      await expect(
+        adapter.fetch({
+          url: `http://oversized.example.test:${address.port}/large`,
+          selector: 'body',
+          context,
+        }),
+      ).rejects.toMatchObject({
+        problem: { error: { code: 'KNOWLEDGE_PAYLOAD_TOO_LARGE' } },
+      });
+    } finally {
+      await new Promise<void>((resolve, reject) => {
+        server.close((error) => (error ? reject(error) : resolve()));
+      });
+    }
   });
 });

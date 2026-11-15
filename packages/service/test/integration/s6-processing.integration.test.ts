@@ -53,6 +53,7 @@ let processing: S06ProcessingApplication;
 let redis: Redis;
 let queueAdapter: BullMqQueueAdapter;
 let segmentIndexes: KnowledgeSegmentIndexRepository;
+let capturedParseMetadata: Record<string, unknown> | undefined;
 const redisPrefix = `kb-s6-chain-${suffix}`;
 const modelCatalog = {
   async listModels() {
@@ -107,13 +108,13 @@ beforeAll(async () => {
     createdByMemberId: context.memberId,
     updatedByMemberId: context.memberId,
     directoryId: null,
-    kind: 'text',
-    name: 's6-chain.txt',
+    kind: 'url',
+    name: 's6-chain-page',
     externalId: null,
     connectorId: null,
     blobRefId: new mongoose.Types.ObjectId(),
-    originalUrl: null,
-    mimeType: 'text/plain',
+    originalUrl: 'https://public.example.test/docs',
+    mimeType: 'text/html',
     sizeBytes: 32,
     contentHash: 'initial',
     parseProvider: 'liteparse',
@@ -123,7 +124,11 @@ beforeAll(async () => {
     permissionState: 'disabled',
     permissionRevision: 0,
     ownershipMemberId: context.memberId,
-    metadata: {},
+    metadata: {
+      originalUrl: 'https://public.example.test/docs',
+      selector: 'main',
+      urlHash: 's6-chain-url-hash',
+    },
     tagValues: [],
   });
   await models.KnowledgeJob.create({
@@ -243,7 +248,8 @@ beforeAll(async () => {
       },
     },
     port: {
-      async parse() {
+      async parse(input) {
+        capturedParseMetadata = input.metadata;
         return {
           format: 'text',
           rawText: 'Refund requests are processed in five business days.',
@@ -328,6 +334,11 @@ describe('S6 C1/C2/C3 processing chain', () => {
       context,
     );
     expect(parseOutcome).toBe('succeeded');
+    expect(capturedParseMetadata).toMatchObject({
+      originalUrl: 'https://public.example.test/docs',
+      selector: 'main',
+      urlHash: 's6-chain-url-hash',
+    });
     const indexJob = await models.KnowledgeJob.findOne({
       workspaceId,
       kind: 'index',

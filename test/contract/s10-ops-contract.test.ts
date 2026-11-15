@@ -34,7 +34,7 @@ describe('S10 operations contract', () => {
     expect(artifacts.actualCounts).toEqual({
       paths: 95,
       operations: 123,
-      schemas: 140,
+      schemas: 141,
       parameters: 8,
     });
     expect(artifacts.runtimeRegistry.count).toBe(123);

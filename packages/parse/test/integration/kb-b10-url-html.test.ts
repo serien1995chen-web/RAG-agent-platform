@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { createDefaultDocumentParser } from '../../src/index';
 import { parseHtml } from '../../src/parsers/html';
 import type { ParseHandlerContext, ParseRequest } from '../../src/format-registry';
 
@@ -85,6 +86,18 @@ describe('L1-B10-ING-003-P02/P03 URL HTML extraction', () => {
     }
   });
 
+  it('L1-B10-ING-003-N03 rejects structurally damaged URL HTML', async () => {
+    await expect(
+      parseHtml(
+        urlContext('<html><body><main><p>BROKEN_FIXTURE_TEXT', {
+          selector: 'main',
+        }),
+      ),
+    ).rejects.toMatchObject({
+      problem: { error: { code: 'KNOWLEDGE_UNSUPPORTED_CONTENT' } },
+    });
+  });
+
   it('L1-B10-ING-003-P03 keeps h1 content and Markdown deterministic', async () => {
     const first = await parseHtml(
       urlContext('<html><body><h1>Only heading</h1><p>Body</p></body></html>', {
@@ -98,5 +111,19 @@ describe('L1-B10-ING-003-P02/P03 URL HTML extraction', () => {
     );
     expect(first.rawText).toContain('# Only heading');
     expect(first.contentHash).toBe(second.contentHash);
+  });
+
+  it('L1-B10-ING-003-S03 passes URL selector context through the formal parser port', async () => {
+    const result = await createDefaultDocumentParser().parse({
+      ...request,
+      selector: 'main',
+      baseUrl: 'https://public.example.test/docs/start',
+      bytes: Buffer.from(
+        '<html><body><main><h1>Formal</h1><a href="next">Next</a></main><aside>Outside</aside></body></html>',
+      ),
+    });
+    expect(result.rawText).toContain('Formal');
+    expect(result.rawText).toContain('https://public.example.test/docs/next');
+    expect(result.rawText).not.toContain('Outside');
   });
 });
