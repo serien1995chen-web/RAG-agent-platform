@@ -139,6 +139,87 @@ describe('TEST-X-S4-IDEMPOTENCY', () => {
     expect(outcomes.filter((outcome) => outcome.status === 'fulfilled')).toHaveLength(1);
     expect(outcomes.filter((outcome) => outcome.status === 'rejected')).toHaveLength(1);
   });
+
+  it('L1-B10-ING-003-C01/C04 keeps concurrent URL submissions isolated and idempotent', async () => {
+    const urlCommand = (key: string, url: string, selector: string): ImportSubmissionCommand => ({
+      workspaceId,
+      knowledgeSpaceId: spaceId,
+      directoryId: null,
+      importKind: 'url',
+      idempotencyKey: key,
+      requestHash: requestHashOf({ url, selector }),
+      configurationHash: requestHashOf({ chunking: 'auto' }),
+      sourceDrafts: [
+        {
+          id: new connection.base.Types.ObjectId().toString(),
+          kind: 'url',
+          name: url,
+          directoryId: null,
+          blobRefId: null,
+          externalId: null,
+          connectorId: null,
+          mimeType: 'text/html',
+          sizeBytes: 20,
+          contentHash: requestHashOf(url),
+          parseProvider: 'liteparse',
+          metadata: { originalUrl: url, selector, urlHash: requestHashOf(url) },
+        },
+      ],
+      parseConfigSnapshot: {},
+      chunkingConfigSnapshot: { mode: 'auto' },
+      qaConfigSnapshot: {},
+    });
+
+    const same = urlCommand(
+      `b10-concurrent-${suffix}-0001`,
+      'https://public.example.test/one',
+      'main',
+    );
+    const repeats = await Promise.all(
+      Array.from({ length: 10 }, () => repository.submit(same, context)),
+    );
+    expect(new Set(repeats.map((entry) => entry.parentJobId)).size).toBe(1);
+    expect(new Set(repeats.map((entry) => entry.sourceIds[0])).size).toBe(1);
+
+    const [left, right] = await Promise.all([
+      repository.submit(
+        urlCommand(`b10-concurrent-${suffix}-0002`, 'https://public.example.test/left', 'main'),
+        context,
+      ),
+      repository.submit(
+        urlCommand(`b10-concurrent-${suffix}-0003`, 'https://public.example.test/right', '#doc'),
+        context,
+      ),
+    ]);
+    expect(left.sourceIds[0]).not.toBe(right.sourceIds[0]);
+    const sources = await connection.models.KnowledgeSource.find({ workspaceId }).lean();
+    expect(sources).toHaveLength(3);
+    expect(
+      sources.map((source) => ({
+        name: source.name,
+        url: source.metadata?.originalUrl,
+        selector: source.metadata?.selector,
+      })),
+    ).toEqual(
+      expect.arrayContaining([
+        {
+          name: 'https://public.example.test/one',
+          url: 'https://public.example.test/one',
+          selector: 'main',
+        },
+        {
+          name: 'https://public.example.test/left',
+          url: 'https://public.example.test/left',
+          selector: 'main',
+        },
+        {
+          name: 'https://public.example.test/right',
+          url: 'https://public.example.test/right',
+          selector: '#doc',
+        },
+      ]),
+    );
+  });
 });
 
 describe('TEST-X-S4-BACKUP-DRYRUN', () => {

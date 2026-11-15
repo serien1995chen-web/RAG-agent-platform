@@ -1924,3 +1924,244 @@ describe('S4 import entry workflows', () => {
     expect(await connection.models.KnowledgeOutboxEvent.countDocuments({ workspaceId })).toBe(0);
   });
 });
+
+describe('L1-B10 ING-003 single-page URL import lifecycle', () => {
+  const chunking = {
+    trainingType: 'chunk' as const,
+    chunkSettingMode: 'custom' as const,
+    chunkSplitMode: 'paragraph' as const,
+    chunkSize: 512,
+  };
+  const pageHtml = [
+    '<!doctype html>',
+    '<html>',
+    '  <head><title>B10 fixture title</title></head>',
+    '  <body>',
+    '    <main id="article"><h1>B10 selected heading</h1><p>B10 selected body</p></main>',
+    '    <aside>B10 outside content</aside>',
+    '  </body>',
+    '</html>',
+  ].join('');
+
+  it('L1-B10-ING-003-P01/S01 returns real URL text/chunk preview without business writes', async () => {
+    const counters = newCounters();
+    const ingestion = ingestionApplication('template', {
+      counters,
+      dependencies: {
+        urlImport: {
+          async fetch(input) {
+            counters.urlFetches += 1;
+            return {
+              finalUrl: input.url,
+              safeUrl: input.url,
+              urlHash: requestHashOf(input.url),
+              title: 'B10 fixture title',
+              contentType: 'text/html; charset=utf-8',
+              bytes: Buffer.from(pageHtml),
+            };
+          },
+        },
+      },
+    });
+
+    const result = await ingestion.dispatch({
+      operationId: 'API-IMPORT-URL',
+      params: { spaceId },
+      query: {},
+      headers: { 'idempotency-key': `b10-url-preview-${suffix}-01` },
+      body: {
+        url: 'https://public.example.test/docs',
+        selector: 'main#article',
+        directoryId: null,
+        dryRun: true,
+        chunking,
+      },
+      context,
+    });
+
+    expect(result).toMatchObject({
+      status: 200,
+      data: {
+        title: 'B10 fixture title',
+        safeUrl: 'https://public.example.test/docs',
+        selector: 'main#article',
+        contentHash: expect.stringMatching(/^(sha256:)?[a-f0-9]{64}$/),
+        totalChunks: expect.any(Number),
+        chunks: expect.any(Array),
+        truncated: expect.any(Boolean),
+      },
+    });
+    expect(counters.urlFetches).toBe(1);
+    expect(counters.puts).toHaveLength(0);
+    expect(await connection.models.KnowledgeSource.countDocuments({ workspaceId })).toBe(0);
+    expect(await connection.models.KnowledgeJob.countDocuments({ workspaceId })).toBe(0);
+    expect(await connection.models.KnowledgeAuditEvent.countDocuments({ workspaceId })).toBe(0);
+    expect(await connection.models.KnowledgeOutboxEvent.countDocuments({ workspaceId })).toBe(0);
+  });
+
+  it('L1-B10-ING-003-P02/S02 persists one URL Source, selector and one import Job', async () => {
+    const counters = newCounters();
+    const ingestion = ingestionApplication('template', {
+      counters,
+      dependencies: {
+        urlImport: {
+          async fetch(input) {
+            counters.urlFetches += 1;
+            return {
+              finalUrl: `${input.url}?private=query#fragment`,
+              safeUrl: input.url,
+              urlHash: requestHashOf(input.url),
+              title: 'B10 fixture title',
+              contentType: 'text/html; charset=utf-8',
+              bytes: Buffer.from(pageHtml),
+            };
+          },
+        },
+      },
+    });
+
+    const result = await ingestion.dispatch({
+      operationId: 'API-IMPORT-URL',
+      params: { spaceId },
+      query: {},
+      headers: { 'idempotency-key': `b10-url-confirm-${suffix}-01` },
+      body: {
+        url: 'https://public.example.test/docs',
+        selector: 'main#article',
+        directoryId: null,
+      },
+      context,
+    });
+
+    expect(result.status).toBe(202);
+    expect(counters.urlFetches).toBe(1);
+    expect(counters.puts).toHaveLength(1);
+    expect(await connection.models.KnowledgeSource.countDocuments({ workspaceId })).toBe(1);
+    expect(await connection.models.KnowledgeJob.countDocuments({ workspaceId })).toBe(1);
+    expect(await connection.models.KnowledgeAuditEvent.countDocuments({ workspaceId })).toBe(1);
+    expect(await connection.models.KnowledgeOutboxEvent.countDocuments({ workspaceId })).toBe(1);
+    expect(await connection.models.KnowledgeSegment.countDocuments({ workspaceId })).toBe(0);
+
+    const source = await connection.models.KnowledgeSource.findOne({ workspaceId }).lean();
+    expect(source).toMatchObject({
+      kind: 'url',
+      metadata: {
+        originalUrl: 'https://public.example.test/docs',
+        selector: 'main#article',
+        urlHash: requestHashOf('https://public.example.test/docs'),
+      },
+    });
+    expect(JSON.stringify(source)).not.toContain('private=query');
+  });
+
+  it('L1-B10-ING-003-C02/C03 treats selector changes as a conflict and different keys as independent Sources', async () => {
+    const counters = newCounters();
+    const ingestion = ingestionApplication('template', { counters });
+    const key = `b10-url-idem-${suffix}-01`;
+    const base = {
+      operationId: 'API-IMPORT-URL' as const,
+      params: { spaceId },
+      query: {},
+      context,
+    };
+
+    const first = await ingestion.dispatch({
+      ...base,
+      headers: { 'idempotency-key': key },
+      body: {
+        url: 'https://public.example.test/docs',
+        selector: 'main',
+        directoryId: null,
+      },
+    });
+    const replay = await ingestion.dispatch({
+      ...base,
+      headers: { 'idempotency-key': key },
+      body: {
+        url: 'https://public.example.test/docs',
+        selector: 'main',
+        directoryId: null,
+      },
+    });
+    expect((replay.data as { jobId: string }).jobId).toBe((first.data as { jobId: string }).jobId);
+    expect(counters.urlFetches).toBe(1);
+
+    await expect(
+      ingestion.dispatch({
+        ...base,
+        headers: { 'idempotency-key': key },
+        body: {
+          url: 'https://public.example.test/docs',
+          selector: 'article',
+          directoryId: null,
+        },
+      }),
+    ).rejects.toMatchObject({
+      problem: { error: { code: 'KNOWLEDGE_CONFLICT' } },
+    });
+
+    await ingestion.dispatch({
+      ...base,
+      headers: { 'idempotency-key': `b10-url-independent-${suffix}-02` },
+      body: {
+        url: 'https://public.example.test/docs',
+        selector: 'main',
+        directoryId: null,
+      },
+    });
+    expect(await connection.models.KnowledgeSource.countDocuments({ workspaceId })).toBe(2);
+    expect(await connection.models.KnowledgeJob.countDocuments({ workspaceId })).toBe(2);
+  });
+
+  it('L1-B10-ING-003-A01 denies write scope before fetching or materializing', async () => {
+    const counters = newCounters();
+    const ingestion = ingestionApplication('template', {
+      counters,
+      dependencies: {
+        access: {
+          async assertPermission() {
+            throw Object.assign(new Error('forbidden'), {
+              problem: { error: { code: 'KNOWLEDGE_FORBIDDEN' } },
+            });
+          },
+        } as never,
+      },
+    });
+
+    await expect(
+      ingestion.dispatch({
+        operationId: 'API-IMPORT-URL',
+        params: { spaceId },
+        query: {},
+        headers: { 'idempotency-key': `b10-url-forbidden-${suffix}-01` },
+        body: {
+          url: 'https://public.example.test/docs',
+          selector: 'body',
+          directoryId: null,
+        },
+        context: { ...context, scopes: ['knowledge:read'] },
+      }),
+    ).rejects.toMatchObject({
+      problem: { error: { code: 'KNOWLEDGE_FORBIDDEN' } },
+    });
+    await expect(
+      ingestion.dispatch({
+        operationId: 'API-IMPORT-URL',
+        params: { spaceId },
+        query: {},
+        headers: { 'idempotency-key': `b10-url-body-space-${suffix}-01` },
+        body: {
+          knowledgeSpaceId: id(),
+          url: 'https://public.example.test/docs',
+          selector: 'body',
+          directoryId: null,
+        },
+        context,
+      }),
+    ).rejects.toMatchObject({
+      problem: { error: { code: 'KNOWLEDGE_VALIDATION_FAILED' } },
+    });
+    expect(counters.urlFetches).toBe(0);
+    expect(counters.puts).toHaveLength(0);
+  });
+});
