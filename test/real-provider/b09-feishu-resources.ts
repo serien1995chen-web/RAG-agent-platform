@@ -60,11 +60,15 @@ export async function writeB09ProviderEvidence(
   return path;
 }
 
-function safeEndpointPath(url: string): string {
+export function safeEndpointPath(url: string): string {
   const pathname = new URL(url).pathname;
   return pathname
-    .replace(/^\/open-apis\/docx\/v1\/documents\/[^/]+/, '/open-apis/docx/v1/documents/:documentId')
-    .replace(/^\/open-apis\/drive\/v1\/files\/[^/]+/, '/open-apis/drive/v1/files/:fileToken');
+    .replace(
+      /^(\/open-apis\/docx\/v1\/documents\/)[^/]+(\/blocks\/)[^/]+/,
+      '$1:documentId$2:blockId',
+    )
+    .replace(/^(\/open-apis\/docx\/v1\/documents\/)[^/]+/, '$1:documentId')
+    .replace(/^(\/open-apis\/drive\/v1\/files\/)[^/]+/, '$1:fileToken');
 }
 
 function requiredEnv(name: (typeof B09_FEISHU_ENV_KEYS)[number]): string {
@@ -241,11 +245,15 @@ export class B09FeishuResourceManager {
 
   private async renameDocument(token: string, name: string): Promise<string> {
     await this.request(
-      `${this.baseUrl}/open-apis/drive/v1/files/${encodeURIComponent(token)}?type=docx`,
+      `${this.baseUrl}/open-apis/docx/v1/documents/${encodeURIComponent(token)}/blocks/${encodeURIComponent(token)}?document_revision_id=-1`,
       {
         method: 'PATCH',
         operation: 'rename_document',
-        body: { name, type: 'docx' },
+        body: {
+          update_text_elements: {
+            elements: [{ text_run: { content: name } }],
+          },
+        },
       },
     );
     return token;

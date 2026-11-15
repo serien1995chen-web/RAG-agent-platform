@@ -8,6 +8,7 @@ import { apiHeaders, createSpace, requiredEnv, startS4App } from '../e2e/s4-app-
 import {
   B09FeishuResourceManager,
   missingFeishuEnvironment,
+  safeEndpointPath,
   safeSha256,
   writeB09ProviderEvidence,
 } from './b09-feishu-resources';
@@ -25,6 +26,16 @@ const evidenceDir =
   join(process.cwd(), 'test-results', 'b09', '20261115-140502', 'provider');
 
 describe('L1-B09 ING-007 real Feishu lifecycle', () => {
+  it('L1-B09-ING-007-Q01 redacts nested docx resource identifiers from evidence paths', () => {
+    const safe = safeEndpointPath(
+      'https://open.feishu.cn/open-apis/docx/v1/documents/doc_private/blocks/block_private/children?document_revision_id=-1',
+    );
+
+    expect(safe).toBe('/open-apis/docx/v1/documents/:documentId/blocks/:blockId/children');
+    expect(safe).not.toContain('doc_private');
+    expect(safe).not.toContain('block_private');
+  });
+
   it('L1-B09-ING-007-Q01 records provider input readiness without making unsafe calls', async () => {
     const status = missing.length === 0 ? 'REAL_INPUT_READY' : 'BLOCKED_PROVIDER';
     await writeB09ProviderEvidence(evidenceDir, 'preflight.json', {
@@ -83,10 +94,6 @@ describe('L1-B09 ING-007 real Feishu lifecycle', () => {
         expect(firstContent.map((item) => item.externalId).sort()).toEqual([...externalIds].sort());
         const firstHashes = firstContent.map((item) => safeSha256(item.bytes)).sort();
         expect(new Set(firstHashes).size).toBe(2);
-        const firstHashesByExternalId = new Map(
-          firstContent.map((item) => [item.externalId, safeSha256(item.bytes)]),
-        );
-
         const suffix = randomSuffix(provisioned.runId);
         const workspaceId = `ws_b09_real_${suffix}`;
         productWorkspaceId = workspaceId;
@@ -186,7 +193,17 @@ describe('L1-B09 ING-007 real Feishu lifecycle', () => {
           data: { kind: 'sync', status: 'queued' },
         });
 
-        await resources.renameMutateDocument(`${provisioned.runId}-mutate-renamed`);
+        const renamedTitle = `${provisioned.runId}-mutate-renamed`;
+        await resources.renameMutateDocument(renamedTitle);
+        const renamedContent = await delegate.content({
+          provider: 'feishu',
+          config,
+          credentials,
+          externalIds: [`feishu:docx:${provisioned.mutateDocumentToken}`],
+          context,
+        });
+        expect(renamedContent[0]?.title).toBe(renamedTitle);
+        const renamedHash = safeSha256(renamedContent[0]!.bytes);
         await resources.moveMutateDocument();
         const nested = await delegate.catalog({
           provider: 'feishu',
@@ -208,9 +225,7 @@ describe('L1-B09 ING-007 real Feishu lifecycle', () => {
           externalIds: [`feishu:docx:${provisioned.mutateDocumentToken}`],
           context,
         });
-        expect(safeSha256(secondContent[0]!.bytes)).toBe(
-          firstHashesByExternalId.get(`feishu:docx:${provisioned.mutateDocumentToken}`),
-        );
+        expect(safeSha256(secondContent[0]!.bytes)).toBe(renamedHash);
 
         await resources.deleteMutateDocument();
         const nestedAfterDelete = await delegate.catalog({
