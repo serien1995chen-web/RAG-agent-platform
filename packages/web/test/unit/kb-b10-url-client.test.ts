@@ -73,48 +73,56 @@ describe('L1-B10-ING-003-C04 UI URL client requests', () => {
     expect(writes[1]?.headers.get('Idempotency-Key')).toBe('b10-item-stable-key-0001');
   });
 
-  it('L1-B10-ING-003-UI03 sends dry-run preview with selector and chunking', async () => {
-    let requestBody: Record<string, unknown> | undefined;
+  it('L1-B10-ING-003-UI03 isolates preview and submit idempotency for the same URL entry', async () => {
+    const requests: Array<{ body: Record<string, unknown>; headers: Headers }> = [];
     vi.stubGlobal(
       'fetch',
       vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
         if (String(input) === '/api/console/session') return sessionResponse();
-        requestBody = JSON.parse(String(init?.body ?? '{}')) as Record<string, unknown>;
-        return new Response(
-          JSON.stringify({
-            success: true,
-            data: {
-              title: 'Preview',
-              safeUrl: 'https://public.example.test/docs',
-              selector: 'main',
-              contentHash: 'a'.repeat(64),
-              totalChunks: 1,
-              chunks: [{ q: 'Selected body', a: '' }],
-              truncated: false,
-            },
-            traceId: 'trace_b10_web',
-            requestId: 'req_b10_web',
-          }),
-          { status: 200, headers: { 'content-type': 'application/json' } },
-        );
+        const body = JSON.parse(String(init?.body ?? '{}')) as Record<string, unknown>;
+        requests.push({ body, headers: new Headers(init?.headers) });
+        if (body.dryRun) {
+          return new Response(
+            JSON.stringify({
+              success: true,
+              data: {
+                title: 'Preview',
+                safeUrl: 'https://public.example.test/docs',
+                selector: 'main',
+                contentHash: 'a'.repeat(64),
+                totalChunks: 1,
+                chunks: [{ q: 'Selected body', a: '' }],
+                truncated: false,
+              },
+              traceId: 'trace_b10_web',
+              requestId: 'req_b10_web',
+            }),
+            { status: 200, headers: { 'content-type': 'application/json' } },
+          );
+        }
+        return jobResponse('job-b10-submit');
       }),
     );
     const { importUrl } = await import('../../src/product/api');
 
-    await importUrl('space_b10_web', {
+    const input = {
       idempotencyKey: 'b10-preview-stable-key-0001',
       url: 'https://public.example.test/docs',
       selector: 'main',
-      dryRun: true,
       chunking: {
         trainingType: 'chunk',
         chunkSettingMode: 'custom',
         chunkSplitMode: 'paragraph',
         chunkSize: 512,
       },
-    } as never);
+    } as const;
 
-    expect(requestBody).toMatchObject({
+    await importUrl('space_b10_web', { ...input, dryRun: true });
+    await importUrl('space_b10_web', { ...input, dryRun: false });
+    await importUrl('space_b10_web', { ...input, dryRun: false });
+
+    expect(requests).toHaveLength(3);
+    expect(requests[0]?.body).toMatchObject({
       url: 'https://public.example.test/docs',
       selector: 'main',
       dryRun: true,
@@ -125,5 +133,9 @@ describe('L1-B10-ING-003-C04 UI URL client requests', () => {
         chunkSize: 512,
       },
     });
+    expect(requests[0]?.headers.get('Idempotency-Key')).toBe('b10-preview-stable-key-0001:preview');
+    expect(requests[1]?.headers.get('Idempotency-Key')).toBe('b10-preview-stable-key-0001');
+    expect(requests[2]?.headers.get('Idempotency-Key')).toBe('b10-preview-stable-key-0001');
+    expect(requests.slice(1).map((request) => request.body.dryRun)).toEqual([false, false]);
   });
 });

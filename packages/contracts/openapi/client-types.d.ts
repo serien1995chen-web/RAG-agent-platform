@@ -506,7 +506,7 @@ export interface SchemaPropertyMap {
   "SegmentList": "items" | "pageInfo";
   "SegmentUpdate": "answer" | "metadata" | "question" | "searchEnabled" | "version";
   "SomarkParseConfig": "credentialProfileId" | "fallbackProvider" | "imageHandling" | "provider" | "timeoutMs";
-  "Source": "blobRefId" | "connectorId" | "contentHash" | "directoryId" | "externalId" | "id" | "kind" | "knowledgeSpaceId" | "mimeType" | "name" | "parentPath" | "permissionRevision" | "permissionState" | "processingStatus" | "searchEnabled" | "sizeBytes" | "sourceVersion" | "version" | "workspaceId";
+  "Source": "blobRefId" | "connectorId" | "contentHash" | "directoryId" | "externalId" | "id" | "kind" | "knowledgeSpaceId" | "metadata" | "mimeType" | "name" | "parentPath" | "permissionRevision" | "permissionState" | "processingStatus" | "searchEnabled" | "sizeBytes" | "sourceVersion" | "version" | "workspaceId";
   "SourceBatchAction": "action" | "ids" | "targetDirectoryId" | "versions";
   "SourceCreate": "directoryId" | "kind" | "metadata" | "name" | "searchEnabled";
   "SourceList": "items" | "pageInfo";

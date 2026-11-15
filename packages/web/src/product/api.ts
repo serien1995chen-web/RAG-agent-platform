@@ -935,11 +935,13 @@ export function importUrl(
     dryRun?: boolean;
   },
 ): Promise<Job | ImportUrlPreview> {
+  const baseIdempotencyKey = input.idempotencyKey ?? key();
+  const idempotencyKey = input.dryRun ? `${baseIdempotencyKey}:preview` : baseIdempotencyKey;
   return knowledgeRequest<Job | ImportUrlPreview>(
     `/v1/knowledge/spaces/${encodeURIComponent(spaceId)}/imports/url`,
     {
       method: 'POST',
-      idempotencyKey: input.idempotencyKey ?? key(),
+      idempotencyKey,
       body: {
         url: input.url,
         selector: input.selector,

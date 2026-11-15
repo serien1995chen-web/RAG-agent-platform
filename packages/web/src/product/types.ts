@@ -90,6 +90,7 @@ export interface Source {
   ownershipMemberId?: string;
   effectivePermission?: PermissionLevel;
   segmentCount?: number;
+  metadata?: Record<string, unknown>;
   tagValues?: SourceTagValue[];
   version: number;
 }

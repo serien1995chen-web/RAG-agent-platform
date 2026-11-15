@@ -144,6 +144,16 @@ export function DataWorkspace(props: {
   });
 
   const source = sourceQuery.data;
+  const sourceMetadata = source?.metadata ?? {};
+  const originalUrl =
+    typeof sourceMetadata.originalUrl === 'string' ? sourceMetadata.originalUrl : null;
+  const pageSelector = typeof sourceMetadata.selector === 'string' ? sourceMetadata.selector : null;
+  const extractedContentHash =
+    typeof sourceMetadata.extractedContentHash === 'string'
+      ? sourceMetadata.extractedContentHash
+      : typeof source?.contentHash === 'string'
+        ? source.contentHash
+        : null;
   const segments = segmentsQuery.data ?? [];
   const models = modelsQuery.data ?? [];
   const bindings = bindingsQuery.data?.items ?? [];
@@ -636,6 +646,14 @@ export function DataWorkspace(props: {
           <InfoRow label="更新时间" value="后端未提供" />
           <InfoRow label="权限模式" value={source?.permissionState ?? '—'} />
           <InfoRow label="权限版本" value={String(source?.permissionRevision ?? '—')} />
+          {source?.kind === 'url' ? (
+            <div className="kb2-info-group">
+              <h3>网页来源</h3>
+              <InfoRow label="原始网页 URL" value={originalUrl ?? '—'} wrap />
+              <InfoRow label="网页选择器" value={pageSelector ?? '—'} wrap />
+              <InfoRow label="抽取正文 hash" value={extractedContentHash ?? '—'} wrap />
+            </div>
+          ) : null}
           <div className="kb2-info-group">
             <h3>标签</h3>
             {source?.tagValues?.length ? (
@@ -1170,9 +1188,9 @@ function SegmentImage(props: { blobId: string; alt: string }) {
   return <img className="kb2-data-image" src={ticket.data.url} alt={props.alt} />;
 }
 
-function InfoRow(props: { label: string; value: string }) {
+function InfoRow(props: { label: string; value: string; wrap?: boolean }) {
   return (
-    <div className="kb2-info-line">
+    <div className={`kb2-info-line${props.wrap ? ' kb2-info-line--wrap' : ''}`}>
       <span>{props.label}</span>
       <strong title={props.value}>{props.value}</strong>
     </div>

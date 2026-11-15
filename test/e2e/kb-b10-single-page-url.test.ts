@@ -97,6 +97,7 @@ beforeAll(async () => {
   app = await startS4App({ suffix, workspaceId, memberId, authToken });
   spaceId = await createSpace({ baseUrl: app.baseUrl, authToken, workspaceId, suffix });
   connection = await createKnowledgeMongoConnection(requiredEnv('KB_TEST_MONGO_URI'));
+  registerKnowledgeModels(connection);
   browser = await chromium.launch({ headless: true });
   cookie = await consoleCookie({ baseUrl: app.baseUrl, authToken, workspaceId });
 }, 120_000);
@@ -249,6 +250,7 @@ describe('L1-B10-ING-003 UI single-page URL import', () => {
   it('L1-B10-ING-003-P05/UI04 keeps successful URLs and retries only the failed item', async () => {
     const { context, page, diagnostics } = await urlPage();
     const attempts = new Map<string, number>();
+    const requestKeys: Array<{ url: string; dryRun: boolean; key: string }> = [];
     try {
       await page.route('**/v1/knowledge/spaces/**/imports/url', async (route) => {
         const body = route.request().postDataJSON() as {
@@ -256,6 +258,11 @@ describe('L1-B10-ING-003 UI single-page URL import', () => {
           selector: string;
           dryRun?: boolean;
         };
+        requestKeys.push({
+          url: body.url,
+          dryRun: body.dryRun === true,
+          key: route.request().headers()['idempotency-key'] ?? '',
+        });
         if (body.dryRun) {
           await route.fulfill({
             status: 200,
@@ -331,6 +338,13 @@ describe('L1-B10-ING-003 UI single-page URL import', () => {
       await playwrightExpect(page.getByText('网页导入完成')).toBeVisible();
       expect(attempts.get('https://public.example.test/one')).toBe(2);
       expect(attempts.get('https://public.example.test/two')).toBe(1);
+      for (const url of ['https://public.example.test/one', 'https://public.example.test/two']) {
+        const preview = requestKeys.filter((request) => request.url === url && request.dryRun);
+        const submissions = requestKeys.filter((request) => request.url === url && !request.dryRun);
+        expect(preview).toHaveLength(1);
+        expect(new Set(submissions.map((request) => request.key)).size).toBe(1);
+        expect(preview[0]?.key).toBe(`${submissions[0]?.key}:preview`);
+      }
       await capturePage(page, 'partial-upload-complete', diagnostics);
     } finally {
       await context.close();
@@ -348,6 +362,70 @@ describe('L1-B10-ING-003 UI single-page URL import', () => {
       await capturePage(page, 'refresh-restored-entry', diagnostics);
     } finally {
       await context.close();
+    }
+  });
+
+  it('L1-B10-ING-003-011 renders persisted webpage URL, selector and content hash metadata', async () => {
+    const sourceId = new connection.base.Types.ObjectId();
+    const metadata = {
+      originalUrl: 'https://public.example.test/metadata',
+      selector: 'main',
+      extractedContentHash: `sha256:${'b'.repeat(64)}`,
+    };
+    await connection.models.KnowledgeSource.create({
+      _id: sourceId,
+      workspaceId,
+      knowledgeSpaceId: spaceId,
+      version: 1,
+      deletedAt: null,
+      createdByMemberId: memberId,
+      updatedByMemberId: memberId,
+      directoryId: null,
+      kind: 'url',
+      name: 'Metadata fixture',
+      externalId: null,
+      connectorId: null,
+      blobRefId: null,
+      originalUrl: metadata.originalUrl,
+      mimeType: 'text/html',
+      sizeBytes: 64,
+      contentHash: metadata.extractedContentHash.replace('sha256:', ''),
+      parseProvider: 'liteparse',
+      processingStatus: 'ready',
+      sourceVersion: 1,
+      searchEnabled: true,
+      permissionState: 'disabled',
+      permissionRevision: 0,
+      ownershipMemberId: memberId,
+      metadata,
+      tagValues: [],
+    });
+    for (const viewport of [
+      { width: 360, height: 900 },
+      { width: 1200, height: 900 },
+    ]) {
+      const { context, page, diagnostics } = await urlPage(viewport);
+      try {
+        await page.goto(
+          `${app.baseUrl}/dataset/detail?datasetId=${spaceId}&currentTab=dataCard&collectionId=${sourceId}`,
+          { waitUntil: 'networkidle' },
+        );
+        await playwrightExpect(page.getByText('原始网页 URL', { exact: true })).toBeVisible();
+        await playwrightExpect(page.getByText(metadata.originalUrl, { exact: true })).toBeVisible();
+        await playwrightExpect(page.getByText('网页选择器', { exact: true })).toBeVisible();
+        await playwrightExpect(page.getByText('main', { exact: true })).toBeVisible();
+        await playwrightExpect(
+          page.getByText(metadata.extractedContentHash, { exact: true }),
+        ).toBeVisible();
+        const dimensions = await page.evaluate(() => ({
+          scrollWidth: document.documentElement.scrollWidth,
+          clientWidth: document.documentElement.clientWidth,
+        }));
+        expect(dimensions.scrollWidth).toBeLessThanOrEqual(dimensions.clientWidth);
+        await capturePage(page, `webpage-metadata-${viewport.width}`, diagnostics);
+      } finally {
+        await context.close();
+      }
     }
   });
 });

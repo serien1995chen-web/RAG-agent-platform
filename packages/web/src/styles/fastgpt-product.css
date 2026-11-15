@@ -1675,6 +1675,13 @@ a:hover {
   white-space: nowrap;
 }
 
+.kb2-info-line--wrap > strong {
+  overflow: visible;
+  overflow-wrap: anywhere;
+  text-overflow: clip;
+  white-space: normal;
+}
+
 .kb2-collection-header {
   min-height: 76px;
   display: flex;
@@ -2605,6 +2612,7 @@ a:hover {
 
 .kb2-data-panel,
 .kb2-meta-panel {
+  min-width: 0;
   background: #fff;
   border: 1px solid var(--kb2-line);
   border-radius: 8px;
@@ -2651,6 +2659,7 @@ a:hover {
 
 .kb2-data-card {
   position: relative;
+  min-width: 0;
   padding: 12px;
   border: 1px solid var(--kb2-line-soft);
   border-radius: 8px;
@@ -2700,12 +2709,28 @@ a:hover {
 }
 
 .kb2-data-content {
+  min-width: 0;
+  overflow-wrap: anywhere;
   color: var(--kb2-text);
   font-size: 13px;
   line-height: 21px;
 }
 
+.kb2-data-content a,
+.kb2-data-content code {
+  overflow-wrap: anywhere;
+}
+
+.kb2-data-content table,
+.kb2-data-answer table {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+}
+
 .kb2-data-answer {
+  min-width: 0;
+  overflow-wrap: anywhere;
   margin-top: 10px;
   padding-top: 10px;
   border-top: 1px solid var(--kb2-line-soft);
@@ -3303,7 +3328,7 @@ a:hover {
 
   .kb2-data-layout,
   .kb2-data-editor {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .kb2-search-page {
