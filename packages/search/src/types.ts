@@ -119,6 +119,7 @@ export interface SearchQueryExpansionResult {
     | 'cache_mismatch'
     | 'safety'
     | 'code_point_limit'
+    | 'query_optimization_failed'
     | null;
 }
 

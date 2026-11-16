@@ -591,6 +591,7 @@ export class S8ImageSearchApplication {
               similarity: request.similarity,
               embeddingWeight: request.embeddingWeight,
               usingRerank: request.usingRerank,
+              queryOptimizationEnabled: false,
               rerankWeight: request.rerankWeight,
               ...(request.filters ? { filters: request.filters } : {}),
             },

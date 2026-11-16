@@ -1,5 +1,9 @@
 import { z } from 'zod';
-import type { S5ModelType, S5VectorDimension } from '../application/s5-model-gateway.port';
+import type {
+  S5ModelType,
+  S5UsageUnit,
+  S5VectorDimension,
+} from '../application/s5-model-gateway.port';
 
 const UsageSchema = z
   .object({
@@ -39,17 +43,38 @@ const EmbeddingResponseSchema = z
   })
   .passthrough();
 
+const RerankResultSchema = z
+  .object({
+    index: z.number().int().min(0),
+    relevance_score: z.number().finite().optional(),
+    score: z.number().finite().optional(),
+  })
+  .passthrough()
+  .superRefine((value, context) => {
+    if (value.relevance_score === undefined && value.score === undefined) {
+      context.addIssue({
+        code: 'custom',
+        path: ['relevance_score'],
+        message: 'at least one score is required',
+      });
+    }
+  });
+
 const RerankResponseSchema = z
   .object({
-    results: z.array(
-      z
-        .object({
-          index: z.number().int().min(0),
-          relevance_score: z.number().finite().optional(),
-          score: z.number().finite().optional(),
-        })
-        .passthrough(),
-    ),
+    results: z.array(RerankResultSchema).superRefine((results, context) => {
+      const seen = new Set<number>();
+      results.forEach((result, position) => {
+        if (seen.has(result.index)) {
+          context.addIssue({
+            code: 'custom',
+            path: [position, 'index'],
+            message: 'duplicate candidate index',
+          });
+        }
+        seen.add(result.index);
+      });
+    }),
     usage: UsageSchema,
   })
   .passthrough();
@@ -59,13 +84,26 @@ const SttResponseSchema = z
     text: z.string(),
     duration: z.number().finite().min(0).optional(),
     duration_seconds: z.number().finite().min(0).optional(),
+    usage: UsageSchema,
   })
   .passthrough();
+
+const NativeTtsResponseSchema = z
+  .object({
+    audioUrl: z.string().url().optional(),
+    audio: z.instanceof(Uint8Array).optional(),
+    mimeType: z.string().min(1),
+    usageCharacters: z.number().int().min(0).optional(),
+  })
+  .refine((value) => value.audioUrl !== undefined || value.audio !== undefined, {
+    message: 'audio payload is required',
+  });
 
 export interface ParsedModelResponse {
   data: unknown;
   usage: { inputTokens: number; outputTokens: number };
   quantity: number;
+  quantityUnit?: S5UsageUnit;
 }
 
 export class S5ModelResponseContractError extends Error {
@@ -134,25 +172,34 @@ export function parseModelResponse(input: {
     case 'stt': {
       const parsed = SttResponseSchema.safeParse(input.data);
       if (!parsed.success) throw parseFailure();
+      const usage = tokenUsage(parsed.data.usage);
       return {
         data: parsed.data,
-        usage: { inputTokens: 0, outputTokens: 0 },
+        usage,
         quantity: parsed.data.duration_seconds ?? parsed.data.duration ?? 0,
       };
     }
     case 'tts': {
-      if (!(input.data instanceof Uint8Array) && !(input.data instanceof ArrayBuffer)) {
-        throw parseFailure();
+      if (input.data instanceof Uint8Array || input.data instanceof ArrayBuffer) {
+        return {
+          data: input.data,
+          usage: { inputTokens: 0, outputTokens: 0 },
+          quantity:
+            typeof input.durationSeconds === 'number' &&
+            Number.isFinite(input.durationSeconds) &&
+            input.durationSeconds >= 0
+              ? input.durationSeconds
+              : 0,
+          quantityUnit: 'second',
+        };
       }
+      const parsed = NativeTtsResponseSchema.safeParse(input.data);
+      if (!parsed.success) throw parseFailure();
       return {
-        data: input.data,
+        data: parsed.data,
         usage: { inputTokens: 0, outputTokens: 0 },
-        quantity:
-          typeof input.durationSeconds === 'number' &&
-          Number.isFinite(input.durationSeconds) &&
-          input.durationSeconds >= 0
-            ? input.durationSeconds
-            : 0,
+        quantity: parsed.data.usageCharacters ?? 0,
+        quantityUnit: 'character',
       };
     }
   }

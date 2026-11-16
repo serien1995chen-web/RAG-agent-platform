@@ -170,6 +170,29 @@ export function buildImportChunkingSettings(
   return {
     trainingType: config.trainingType,
     chunkSettingMode: config.chunkSettingMode,
+    ...(config.chunkTriggerType === undefined ? {} : { chunkTriggerType: config.chunkTriggerType }),
+    ...(config.chunkTriggerMinSize === undefined
+      ? {}
+      : { chunkTriggerMinSize: config.chunkTriggerMinSize }),
+    ...(config.chunkSplitMode === undefined ? {} : { chunkSplitMode: config.chunkSplitMode }),
+    ...(config.paragraphChunkAIMode === undefined
+      ? {}
+      : { paragraphChunkAIMode: config.paragraphChunkAIMode }),
+    ...(config.paragraphChunkDeep === undefined
+      ? {}
+      : { paragraphChunkDeep: config.paragraphChunkDeep }),
+    ...(config.paragraphChunkMinSize === undefined
+      ? {}
+      : { paragraphChunkMinSize: config.paragraphChunkMinSize }),
     ...(config.chunkSize === undefined ? {} : { chunkSize: config.chunkSize }),
+    ...(config.chunkSplitter === undefined ? {} : { chunkSplitter: config.chunkSplitter }),
+    ...(config.indexSize === undefined ? {} : { indexSize: config.indexSize }),
+    ...(config.dataEnhanceCollectionName === undefined
+      ? {}
+      : { dataEnhanceCollectionName: config.dataEnhanceCollectionName }),
+    ...(config.qaPrompt === undefined ? {} : { qaPrompt: config.qaPrompt }),
+    ...(config.autoIndexes === undefined ? {} : { autoIndexes: config.autoIndexes }),
+    ...(config.imageIndex === undefined ? {} : { imageIndex: config.imageIndex }),
+    ...(config.indexPrefixTitle === undefined ? {} : { indexPrefixTitle: config.indexPrefixTitle }),
   };
 }

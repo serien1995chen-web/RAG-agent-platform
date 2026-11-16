@@ -22,6 +22,9 @@ describe('S5-CFG-01 AIProxy configuration', () => {
       modelMode: 'mock',
       providerOnly: null,
       rerankProtocol: 'openai',
+      ttsProtocol: 'openai',
+      sttProtocol: 'openai',
+      ttsVoice: null,
     });
 
     const real = loadS5AiproxyConfig({
@@ -109,6 +112,7 @@ describe('S5-CFG-01 AIProxy configuration', () => {
     });
     expect(config.providerOnly).toEqual(['alibaba']);
     expect(config.rerankProtocol).toBe('alibaba-native');
+    expect(config.sttProtocol).toBe('dashscope-multimodal-native');
   });
 
   it('requires a non-empty token for openai real mode', () => {

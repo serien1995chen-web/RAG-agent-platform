@@ -107,6 +107,7 @@ import {
   S10OperationApplication,
   S10StatusApplication,
   S10StatusProbesAdapter,
+  S10ModelHealthProbeAdapter,
   registerKnowledgeModels,
   SourceFileApplication,
   RedisKnowledgeRateLimiter,
@@ -353,6 +354,9 @@ async function bootstrapRuntime(): Promise<TelemetryKnowledgeApiRuntime> {
       transport: s5ModelTransport,
       ...(s5AiproxyConfig.providerOnly ? { providerOnly: s5AiproxyConfig.providerOnly } : {}),
       rerankProtocol: s5AiproxyConfig.rerankProtocol,
+      ttsProtocol: s5AiproxyConfig.ttsProtocol,
+      sttProtocol: s5AiproxyConfig.sttProtocol,
+      ...(s5AiproxyConfig.ttsVoice ? { defaultTtsVoice: s5AiproxyConfig.ttsVoice } : {}),
     }),
     usage: s5Usage,
     quotaGate,
@@ -796,6 +800,7 @@ async function bootstrapRuntime(): Promise<TelemetryKnowledgeApiRuntime> {
     citations: s7Citations,
     audits: s7Citations,
     synonymExpansion: s09Expansion,
+    modelGateway: s5Gateway,
   });
   const s7Citation = new S7CitationApplication({
     access: s7Authorization,
@@ -1411,6 +1416,7 @@ async function bootstrapRuntime(): Promise<TelemetryKnowledgeApiRuntime> {
       queues,
       readiness,
       models: s5Catalog,
+      modelHealth: new S10ModelHealthProbeAdapter({ gateway: s5Gateway }),
     }),
   );
 

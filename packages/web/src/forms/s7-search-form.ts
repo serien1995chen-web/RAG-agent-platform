@@ -46,6 +46,10 @@ export const S7SearchFormSchema = z
     embeddingWeight: z.number().min(0).max(1).default(0.5),
     rerankWeight: z.number().min(0).max(1).default(0.5),
     usingRerank: z.boolean().default(false),
+    rerankModelId: z.string().min(1).max(256).optional(),
+    queryOptimizationEnabled: z.boolean().default(false),
+    queryOptimizationModelId: z.string().min(1).max(256).optional(),
+    queryOptimizationPrompt: z.string().max(20_000).optional(),
     filters: SearchFilterApiSchema.default({
       logic: 'AND',
       conditions: [],
@@ -78,6 +82,7 @@ export function defaultS7SearchForm(knowledgeSpaceId: string): S7SearchFormValue
     embeddingWeight: 0.5,
     rerankWeight: 0.5,
     usingRerank: false,
+    queryOptimizationEnabled: false,
     filters: { logic: 'AND', conditions: [] },
   };
 }
@@ -167,6 +172,14 @@ export function buildS7SearchRequest(
     embeddingWeight: values.embeddingWeight,
     usingRerank: values.usingRerank,
     rerankWeight: values.rerankWeight,
+    ...(values.rerankModelId ? { rerankModelId: values.rerankModelId } : {}),
+    queryOptimizationEnabled: values.queryOptimizationEnabled,
+    ...(values.queryOptimizationModelId
+      ? { queryOptimizationModelId: values.queryOptimizationModelId }
+      : {}),
+    ...(values.queryOptimizationPrompt
+      ? { queryOptimizationPrompt: values.queryOptimizationPrompt }
+      : {}),
     filters: values.filters,
   };
   if (values.mode === 'multi_space') {

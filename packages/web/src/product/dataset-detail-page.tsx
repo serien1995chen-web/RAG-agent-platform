@@ -876,6 +876,12 @@ export function DatasetDetailPage(props: {
               bindings={bindings}
               models={models}
               sources={sources}
+              rebuilding={jobs.some(
+                (job) =>
+                  job.knowledgeSpaceId === datasetId &&
+                  job.kind === 'rebuild' &&
+                  !['succeeded', 'failed', 'cancelled', 'dead_letter'].includes(job.status),
+              )}
               onEdit={openEditDataset}
               onPermission={() =>
                 space &&
@@ -1369,6 +1375,12 @@ export function DatasetDetailPage(props: {
                 bindings={bindings}
                 models={models}
                 sources={sources}
+                rebuilding={jobs.some(
+                  (job) =>
+                    job.knowledgeSpaceId === datasetId &&
+                    job.kind === 'rebuild' &&
+                    !['succeeded', 'failed', 'cancelled', 'dead_letter'].includes(job.status),
+                )}
                 onEdit={openEditDataset}
                 onPermission={() =>
                   space &&
@@ -1920,6 +1932,7 @@ function DatasetInfoPanel(props: {
   bindings: ModelBinding[];
   models: Model[];
   sources: Source[];
+  rebuilding: boolean;
   onEdit: () => void;
   onPermission: () => void;
   onSourcePermissionChange: (enabled: boolean) => void;
@@ -1949,7 +1962,10 @@ function DatasetInfoPanel(props: {
     setModelDraft({
       llm: binding('llm')?.modelId ?? '',
       embedding: binding('embedding')?.modelId ?? '',
+      rerank: binding('rerank')?.modelId ?? '',
       vlm: binding('vlm')?.modelId ?? '',
+      stt: binding('stt')?.modelId ?? '',
+      tts: binding('tts')?.modelId ?? '',
     });
     setModelsError(null);
     setModelsOpen(true);
@@ -1960,19 +1976,21 @@ function DatasetInfoPanel(props: {
     setModelsBusy(true);
     setModelsError(null);
     try {
-      const next = (['llm', 'embedding', 'vlm'] as const).flatMap((modelType) => {
-        const model = props.models.find((item) => item.modelId === modelDraft[modelType]);
-        if (!model) return [];
-        return [
-          {
-            modelType,
-            modelId: model.modelId,
-            displayName: model.displayName,
-            requiredCapabilities: model.capabilities,
-            status: 'active' as const,
-          },
-        ];
-      });
+      const next = (['llm', 'embedding', 'rerank', 'vlm', 'stt', 'tts'] as const).flatMap(
+        (modelType) => {
+          const model = props.models.find((item) => item.modelId === modelDraft[modelType]);
+          if (!model) return [];
+          return [
+            {
+              modelType,
+              modelId: model.modelId,
+              displayName: model.displayName,
+              requiredCapabilities: model.capabilities,
+              status: 'active' as const,
+            },
+          ];
+        },
+      );
       await updateModelBindings(props.space.id, next, props.space.version);
       props.onChanged();
       setModelsOpen(false);
@@ -2031,15 +2049,25 @@ function DatasetInfoPanel(props: {
         <div className="kb2-info-group">
           <div className="kb2-info-group__title">
             <h3>模型配置</h3>
-            <ProductIconButton label="编辑模型配置" onClick={openModels}>
+            <ProductIconButton
+              label="编辑模型配置"
+              onClick={openModels}
+              disabled={props.rebuilding}
+            >
               <EditIcon boxSize={3.5} />
             </ProductIconButton>
           </div>
           <InfoLine label="索引模型" value={binding('embedding')?.displayName ?? '后端未提供'} />
           <InfoLine label="文本理解模型" value={binding('llm')?.displayName ?? '后端未提供'} />
+          <InfoLine label="重排模型" value={binding('rerank')?.displayName ?? '未设置'} />
           <InfoLine label="图片理解模型" value={binding('vlm')?.displayName ?? '未设置'} />
+          <InfoLine label="语音识别模型" value={binding('stt')?.displayName ?? '未设置'} />
+          <InfoLine label="语音合成模型" value={binding('tts')?.displayName ?? '未设置'} />
           {props.models.length === 0 ? (
             <div className="kb2-table-muted">模型目录暂不可用</div>
+          ) : null}
+          {props.rebuilding ? (
+            <div className="kb2-table-muted">索引重建进行中，完成前不能再次修改模型。</div>
           ) : null}
         </div>
         <div className="kb2-info-group">
@@ -2158,6 +2186,21 @@ function DatasetInfoPanel(props: {
               ))}
             </ProductSelect>
           </ProductField>
+          <ProductField label="重排模型">
+            <ProductSelect
+              value={modelDraft.rerank ?? ''}
+              onChange={(event) =>
+                setModelDraft((current) => ({ ...current, rerank: event.target.value }))
+              }
+            >
+              <option value="">未设置</option>
+              {authorizedModels('rerank').map((model) => (
+                <option key={model.modelId} value={model.modelId}>
+                  {model.displayName}
+                </option>
+              ))}
+            </ProductSelect>
+          </ProductField>
           <ProductField label="图片理解模型">
             <ProductSelect
               value={modelDraft.vlm ?? ''}
@@ -2167,6 +2210,36 @@ function DatasetInfoPanel(props: {
             >
               <option value="">未设置</option>
               {authorizedModels('vlm').map((model) => (
+                <option key={model.modelId} value={model.modelId}>
+                  {model.displayName}
+                </option>
+              ))}
+            </ProductSelect>
+          </ProductField>
+          <ProductField label="语音识别模型">
+            <ProductSelect
+              value={modelDraft.stt ?? ''}
+              onChange={(event) =>
+                setModelDraft((current) => ({ ...current, stt: event.target.value }))
+              }
+            >
+              <option value="">未设置</option>
+              {authorizedModels('stt').map((model) => (
+                <option key={model.modelId} value={model.modelId}>
+                  {model.displayName}
+                </option>
+              ))}
+            </ProductSelect>
+          </ProductField>
+          <ProductField label="语音合成模型">
+            <ProductSelect
+              value={modelDraft.tts ?? ''}
+              onChange={(event) =>
+                setModelDraft((current) => ({ ...current, tts: event.target.value }))
+              }
+            >
+              <option value="">未设置</option>
+              {authorizedModels('tts').map((model) => (
                 <option key={model.modelId} value={model.modelId}>
                   {model.displayName}
                 </option>

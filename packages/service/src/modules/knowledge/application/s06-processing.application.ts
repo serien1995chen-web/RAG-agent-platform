@@ -997,12 +997,10 @@ export class S06ProcessingApplication {
         ? [...new Set(job.inputSnapshot.sourceIds.map(String))]
         : [];
       if (sourceIds.length === 0) {
-        throw createKnowledgeError({
-          code: 'KNOWLEDGE_VALIDATION_FAILED',
-          requestId: context.requestId,
-          traceId: context.traceId,
-          details: { field: 'inputSnapshot.sourceIds', min: 1 },
-        });
+        return {
+          result: { childJobIds: [], sourceIds: [], reason: 'no_active_sources' },
+          value: [],
+        };
       }
       const childJobIds: string[] = [];
       for (const sourceId of sourceIds) {

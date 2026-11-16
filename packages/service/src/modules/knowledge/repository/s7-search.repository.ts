@@ -39,9 +39,10 @@ export class S7SearchRepository {
     spaceId: string,
     usingRerank: boolean,
     context: TenantContext,
+    rerankModelId?: string,
   ): Promise<S7ResolvedModels> {
     try {
-      return await this.resolveModelsUnsafe(spaceId, usingRerank, context);
+      return await this.resolveModelsUnsafe(spaceId, usingRerank, context, rerankModelId);
     } catch (error) {
       if (typeof error === 'object' && error !== null && 'problem' in error) throw error;
       throw createKnowledgeError({
@@ -57,6 +58,7 @@ export class S7SearchRepository {
     spaceId: string,
     usingRerank: boolean,
     context: TenantContext,
+    rerankModelId?: string,
   ): Promise<S7ResolvedModels> {
     const workspaceId = requireWorkspaceId(context);
     const models = registerKnowledgeModels(this.connection);
@@ -88,17 +90,37 @@ export class S7SearchRepository {
         reason: 'active_binding_required',
       });
     }
+    const llmBinding = bindings.find((binding) => binding.modelType === 'llm');
+    const llm = llmBinding ? modelOfType(catalog, llmBinding.modelId, 'llm') : undefined;
     const rerankBinding = usingRerank
       ? bindings.find((binding) => binding.modelType === 'rerank')
       : undefined;
-    const rerank = rerankBinding
-      ? modelOfType(catalog, rerankBinding.modelId, 'rerank')
+    const rerank = usingRerank
+      ? rerankModelId
+        ? modelOfType(catalog, rerankModelId, 'rerank')
+        : rerankBinding
+          ? modelOfType(catalog, rerankBinding.modelId, 'rerank')
+          : undefined
       : undefined;
+    if (usingRerank && rerankModelId && !rerank) {
+      throw tenantError(context, 'KNOWLEDGE_VALIDATION_FAILED', {
+        field: 'rerankModelId',
+        reason: 'not_authorized_for_type',
+      });
+    }
     return {
       embedding: {
         modelId: activeModelId ?? embedding.modelId,
         dimension: activeDimension,
       },
+      ...(llm
+        ? {
+            llm: {
+              modelId: llm.modelId,
+              dimension: llm.dimension ?? 768,
+            },
+          }
+        : {}),
       ...(rerank
         ? {
             rerank: {

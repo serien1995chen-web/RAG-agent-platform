@@ -5,7 +5,7 @@ import type { TenantContext } from '../../../shared/persistence/knowledge/tenant
 import { requireWorkspaceId } from '../../../shared/persistence/knowledge/tenant';
 import { registerKnowledgeModels } from '../../../shared/persistence/schemas/knowledge-index';
 import type { S10StatusProbePort, S10StatusView } from '../application/s10-status.application';
-import type { ModelCatalogPort } from '../application/s5-model-ports';
+import type { ModelCatalogItem, ModelCatalogPort } from '../application/s5-model-ports';
 
 function state(
   status: S10StatusView['dependencies']['mongo']['status'],
@@ -32,6 +32,12 @@ export class S10StatusProbesAdapter implements S10StatusProbePort {
         body: { checks: Array<{ name: string; status: string; latencyMs: number }> };
       }>;
       models: ModelCatalogPort;
+      modelHealth?: {
+        probe(
+          context: TenantContext,
+          models: readonly ModelCatalogItem[],
+        ): Promise<{ verifiedTypes: string[] }>;
+      };
       connectors?: {
         list(context: TenantContext): Promise<S10StatusView['connectorProbes']>;
       };
@@ -83,6 +89,23 @@ export class S10StatusProbesAdapter implements S10StatusProbePort {
         requestId: context.requestId,
         traceId: context.traceId,
       });
+      if (!fixture) {
+        if (!this.input.modelHealth) {
+          return {
+            status: 'external_unverified',
+            verificationStatus: 'EXTERNAL_UNVERIFIED' as const,
+            latencyMs: Date.now() - startedAt,
+            modelCount: models.length,
+          };
+        }
+        await Promise.race([
+          this.input.modelHealth.probe(context, models),
+          new Promise<never>((_, reject) => {
+            const timer = setTimeout(() => reject(new Error('model_probe_timeout')), 60_000);
+            timer.unref?.();
+          }),
+        ]);
+      }
       return {
         status: fixture ? 'fixture_verified' : 'ok',
         verificationStatus: fixture ? ('FIXTURE_VERIFIED' as const) : ('REAL_VERIFIED' as const),

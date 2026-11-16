@@ -14,6 +14,9 @@ import { registerKnowledgeModels } from '../../../shared/persistence/schemas/kno
 import type { KnowledgeModelBindingDoc } from '../../../shared/persistence/schemas/knowledge-governance.schemas';
 import type { KnowledgeSpaceDoc } from '../../../shared/persistence/schemas/knowledge-catalog.schemas';
 import type { KnowledgeAuditEventDoc } from '../../../shared/persistence/schemas/knowledge-operations.schemas';
+import type { KnowledgeSourceDoc } from '../../../shared/persistence/schemas/knowledge-catalog.schemas';
+import type { KnowledgeJobDoc } from '../../../shared/persistence/schemas/knowledge-job.schemas';
+import { KnowledgeJobExecutionRepository } from './job-execution.repository';
 
 const TYPE_ORDER: readonly S5ModelType[] = ['llm', 'embedding', 'rerank', 'vlm', 'stt', 'tts'];
 
@@ -76,6 +79,9 @@ export class S5ModelBindingRepository implements ModelBindingRepositoryPort {
   private readonly spaces: Model<KnowledgeSpaceDoc>;
   private readonly bindings: Model<KnowledgeModelBindingDoc>;
   private readonly audits: Model<KnowledgeAuditEventDoc>;
+  private readonly sources: Model<KnowledgeSourceDoc>;
+  private readonly jobDocuments: Model<KnowledgeJobDoc>;
+  private readonly jobExecution: KnowledgeJobExecutionRepository;
 
   constructor(
     private readonly connection: Connection,
@@ -85,6 +91,9 @@ export class S5ModelBindingRepository implements ModelBindingRepositoryPort {
     this.spaces = models.KnowledgeSpace;
     this.bindings = models.KnowledgeModelBinding;
     this.audits = models.KnowledgeAuditEvent;
+    this.sources = models.KnowledgeSource;
+    this.jobDocuments = models.KnowledgeJob;
+    this.jobExecution = new KnowledgeJobExecutionRepository(connection);
   }
 
   async list(spaceId: string, context: TenantContext): Promise<ModelBindingView[]> {
@@ -118,6 +127,38 @@ export class S5ModelBindingRepository implements ModelBindingRepositoryPort {
         })
         .session(session)
         .lean<BindingDocument>();
+      const nextEmbedding = bindings.find(
+        (binding) => binding.modelType === 'embedding' && binding.status === 'active',
+      );
+      const nextDimension = nextEmbedding
+        ? dimensionOfCapabilities(nextEmbedding.requiredCapabilities)
+        : null;
+      const embeddingChanged =
+        nextEmbedding !== undefined &&
+        nextDimension !== null &&
+        (existingEmbedding?.modelId !== nextEmbedding.modelId ||
+          existingEmbedding?.activeQueryDimension !== nextDimension);
+      if (embeddingChanged) {
+        const activeRebuild = await this.jobDocuments
+          .findOne({
+            workspaceId,
+            knowledgeSpaceId: spaceObjectId,
+            kind: 'rebuild',
+            resourceType: 'space',
+            status: { $in: ['queued', 'leased', 'running', 'retry_wait', 'paused', 'cancelling'] },
+            deletedAt: null,
+          })
+          .session(session)
+          .lean();
+        if (activeRebuild) {
+          throw createKnowledgeError({
+            code: 'KNOWLEDGE_CONFLICT',
+            requestId: context.requestId,
+            traceId: context.traceId,
+            details: { resourceId: spaceId, reason: 'model_rebuild_in_progress' },
+          });
+        }
+      }
       const space = await this.spaces
         .findOneAndUpdate(
           {
@@ -176,7 +217,9 @@ export class S5ModelBindingRepository implements ModelBindingRepositoryPort {
             status: binding.status,
             activeQueryModelId:
               binding.modelType === 'embedding'
-                ? (existingEmbedding?.activeQueryModelId ?? binding.modelId)
+                ? (existingEmbedding?.activeQueryModelId ??
+                  existingEmbedding?.modelId ??
+                  binding.modelId)
                 : null,
             activeQueryDimension:
               binding.modelType === 'embedding'
@@ -190,18 +233,12 @@ export class S5ModelBindingRepository implements ModelBindingRepositoryPort {
           { session, ordered: true },
         );
       }
-      const nextEmbedding = bindings.find(
-        (binding) => binding.modelType === 'embedding' && binding.status === 'active',
-      );
-      const nextDimension = nextEmbedding
-        ? dimensionOfCapabilities(nextEmbedding.requiredCapabilities)
-        : null;
       if (
+        embeddingChanged &&
         nextEmbedding &&
         nextDimension &&
         this.synonymRebuild &&
-        (existingEmbedding?.modelId !== nextEmbedding.modelId ||
-          existingEmbedding?.activeQueryDimension !== nextDimension)
+        existingEmbedding
       ) {
         await this.synonymRebuild.requestModelChangeRebuildInSession(
           {
@@ -212,6 +249,72 @@ export class S5ModelBindingRepository implements ModelBindingRepositoryPort {
           context,
           session,
         );
+      }
+      if (embeddingChanged && nextEmbedding && nextDimension) {
+        const sourceIds = (
+          await this.sources
+            .find({
+              workspaceId,
+              knowledgeSpaceId: spaceObjectId,
+              searchEnabled: true,
+              processingStatus: { $in: ['ready', 'partial'] },
+              deletedAt: null,
+            })
+            .sort({ _id: 1 })
+            .select({ _id: 1 })
+            .session(session)
+            .lean<Array<{ _id: Types.ObjectId }>>()
+            .exec()
+        ).map((source) => String(source._id));
+        const rebuild = await this.jobExecution.createInSession(
+          {
+            kind: 'rebuild',
+            resourceType: 'space',
+            resourceId: spaceId,
+            knowledgeSpaceId: spaceId,
+            inputSnapshot: {
+              reason: 'model_change',
+              sourceIds,
+              targetModelId: nextEmbedding.modelId,
+              targetDimension: nextDimension,
+              previousModelId: existingEmbedding?.modelId ?? null,
+              previousDimension: existingEmbedding?.activeQueryDimension ?? null,
+            },
+            idempotencyKey: `model_rebuild:${spaceId}:${nextEmbedding.modelId}:${nextDimension}:${sourceIds.join(',')}`,
+          },
+          context,
+          session,
+        );
+        if (sourceIds.length === 0) {
+          await this.jobDocuments.updateOne(
+            {
+              _id: rebuild.jobId,
+              workspaceId,
+              knowledgeSpaceId: spaceObjectId,
+              status: 'queued',
+              deletedAt: null,
+            },
+            {
+              $set: {
+                status: 'succeeded',
+                progress: {
+                  stage: 'succeeded',
+                  completed: 0,
+                  total: 0,
+                  percent: 100,
+                },
+                result: {
+                  childJobIds: [],
+                  sourceIds: [],
+                  reason: 'no_active_sources',
+                },
+                updatedByMemberId: context.memberId,
+              },
+              $inc: { version: 1 },
+            },
+            { session },
+          );
+        }
       }
       await this.audits.create(
         [

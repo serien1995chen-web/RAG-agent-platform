@@ -171,6 +171,13 @@ function withDeadline<T>(
   });
 }
 
+function chatContent(data: unknown): string {
+  if (typeof data !== 'object' || data === null) return '';
+  const choices = (data as { choices?: Array<{ message?: { content?: unknown } }> }).choices;
+  const content = choices?.[0]?.message?.content;
+  return typeof content === 'string' ? content.trim() : '';
+}
+
 export class S7SearchApplication {
   constructor(private readonly input: S7SearchApplicationDependencies) {}
 
@@ -216,7 +223,6 @@ export class S7SearchApplication {
     mode: SearchApiMode,
     context: TenantContext,
     finalization: 'complete' | 'defer',
-    queryExpansion?: SearchEngineDeps['queryExpansion'],
   ): Promise<SpaceExecution> {
     const filterFacts = await this.input.filters.listFilterFacts(
       space.spaceId,
@@ -245,6 +251,13 @@ export class S7SearchApplication {
       space.spaceId,
       request.usingRerank,
       context,
+      request.rerankModelId,
+    );
+    const queryExpansion = this.queryExpansionFor(
+      [space.spaceId],
+      context,
+      request,
+      models.llm?.modelId,
     );
     const pipeline = this.input.pipeline.create({
       space,
@@ -275,7 +288,14 @@ export class S7SearchApplication {
     );
     return {
       candidates: result.authorizedCandidates,
-      degradedCodes: result.stats.degraded.map((entry) => entry.reason),
+      degradedCodes: [
+        ...result.stats.degraded.map((entry) => entry.reason),
+        ...(result.queryExpansions.some(
+          (entry) => entry.fallbackReason === 'query_optimization_failed',
+        )
+          ? ['query_optimization_failed']
+          : []),
+      ],
       failedChannels: result.failedChannels,
       partial: result.stats.partial ?? false,
       rerankApplied: result.stats.rerankApplied ?? false,
@@ -288,16 +308,98 @@ export class S7SearchApplication {
   private queryExpansionFor(
     spaceIds: readonly string[],
     context: TenantContext,
+    request: SearchApiRequest | MultiSpaceSearchApiRequest,
+    boundLlmModelId?: string,
   ): SearchEngineDeps['queryExpansion'] | undefined {
-    if (!this.input.synonymExpansion) return undefined;
+    if (!this.input.synonymExpansion && !request.queryOptimizationEnabled) return undefined;
     const cache = new Map<string, Promise<SearchQueryExpansionResult>>();
     return {
       expand: (query) => {
         const cached = cache.get(query);
         if (cached) return cached;
-        const pending = this.input
-          .synonymExpansion!.expand({ query, spaceIds }, context)
-          .then((result) => result.result);
+        const pending = (async () => {
+          let optimizedQuery = query;
+          let optimizationFailed = false;
+          if (request.queryOptimizationEnabled) {
+            const modelId = request.queryOptimizationModelId ?? boundLlmModelId;
+            if (!modelId || !this.input.modelGateway) {
+              optimizationFailed = true;
+            } else {
+              try {
+                const result = await this.input.modelGateway.invoke<{
+                  choices: Array<{ message: { content: string } }>;
+                }>({
+                  kind: 'llm',
+                  modelId,
+                  messages: [
+                    {
+                      role: 'system',
+                      content:
+                        'Rewrite the user question into a concise standalone search query. Return only the rewritten query, without explanation or quotation marks.',
+                    },
+                    {
+                      role: 'user',
+                      content: [
+                        request.queryOptimizationPrompt
+                          ? `Background:\n${request.queryOptimizationPrompt}`
+                          : '',
+                        `Question:\n${query}`,
+                      ]
+                        .filter(Boolean)
+                        .join('\n\n'),
+                    },
+                  ],
+                  maxOutputTokens: 512,
+                  workspaceId: context.workspaceId,
+                  knowledgeSpaceId: spaceIds[0] ?? null,
+                  requestId: context.requestId,
+                  traceId: context.traceId,
+                  context,
+                  operation: 'search:query_optimization',
+                  resourceType: 'space',
+                  ...(spaceIds[0] ? { resourceId: spaceIds[0] } : {}),
+                  audit: { promptVersion: 'query-optimization@1' },
+                });
+                const generated = chatContent(result.data)
+                  .replace(/^```(?:text)?\s*/i, '')
+                  .replace(/\s*```$/i, '')
+                  .trim();
+                if (!generated || generated.length > 20_000) {
+                  optimizationFailed = true;
+                } else {
+                  optimizedQuery = generated;
+                }
+              } catch {
+                optimizationFailed = true;
+              }
+            }
+          }
+          if (this.input.synonymExpansion) {
+            try {
+              const expanded = await this.input.synonymExpansion.expand(
+                { query: optimizedQuery, spaceIds },
+                context,
+              );
+              return {
+                ...expanded.result,
+                originalQuery: query,
+                ...(optimizationFailed
+                  ? { fallbackReason: 'query_optimization_failed' as const }
+                  : {}),
+              };
+            } catch {
+              optimizationFailed = true;
+            }
+          }
+          return {
+            originalQuery: query,
+            expandedQuery: optimizedQuery,
+            hits: [],
+            normalizedStandardTerms: [],
+            appliedMappingIds: [],
+            fallbackReason: optimizationFailed ? ('query_optimization_failed' as const) : null,
+          };
+        })();
         cache.set(query, pending);
         return pending;
       },
@@ -535,9 +637,8 @@ export class S7SearchApplication {
       );
       const executionBudgetMs = timeoutMs - (Date.now() - startedAt);
       if (executionBudgetMs < 1) throw searchTimeout(context, timeoutMs);
-      const queryExpansion = this.queryExpansionFor([space.spaceId], context);
       const execution = await withDeadline(
-        this.executeSpace(request, space, mode, context, 'complete', queryExpansion),
+        this.executeSpace(request, space, mode, context, 'complete'),
         executionBudgetMs,
         context,
       );
@@ -611,7 +712,6 @@ export class S7SearchApplication {
       );
       const searchBudgetMs = timeoutMs - (Date.now() - startedAt);
       if (searchBudgetMs < 1) throw searchTimeout(context, timeoutMs);
-      const queryExpansion = this.queryExpansionFor(knowledgeSpaceIds, context);
       const outcomes = await withDeadline(
         Promise.all(
           spaces.map(
@@ -625,14 +725,7 @@ export class S7SearchApplication {
               try {
                 return {
                   space,
-                  execution: await this.executeSpace(
-                    request,
-                    space,
-                    mode,
-                    context,
-                    'defer',
-                    queryExpansion,
-                  ),
+                  execution: await this.executeSpace(request, space, mode, context, 'defer'),
                 };
               } catch (error) {
                 if (statusOf(error) === 400) throw error;
@@ -766,7 +859,6 @@ export class S7SearchApplication {
         this.input.access.getAuthorizedSpace(spaceId, input.context),
       ),
     );
-    const queryExpansion = this.queryExpansionFor(knowledgeSpaceIds, input.context);
     const outcomes = await Promise.all(
       spaces.map(async (space) => {
         try {
@@ -778,7 +870,6 @@ export class S7SearchApplication {
               input.mode,
               input.context,
               'defer',
-              queryExpansion,
             ),
           };
         } catch (error) {

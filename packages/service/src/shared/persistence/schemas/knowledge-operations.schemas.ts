@@ -17,7 +17,7 @@ export interface KnowledgeUsageEventDoc extends WorkspaceFields {
     | 'storage'
     | 'sync';
   quantity: number;
-  unit: 'page' | 'image' | 'token' | 'vector' | 'byte' | 'request' | 'second';
+  unit: 'page' | 'image' | 'token' | 'vector' | 'byte' | 'request' | 'second' | 'character';
   inputTokens: number;
   outputTokens: number;
   pointsMicros: number;
@@ -48,7 +48,7 @@ export const KnowledgeUsageEventSchema = new Schema(
     quantity: { type: Number, required: true, min: 0 },
     unit: {
       type: String,
-      enum: ['page', 'image', 'token', 'vector', 'byte', 'request', 'second'],
+      enum: ['page', 'image', 'token', 'vector', 'byte', 'request', 'second', 'character'],
       required: true,
     },
     inputTokens: {

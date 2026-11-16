@@ -32,7 +32,7 @@ export function computeUsagePointsMicros(input: {
   status: number | null;
   intent: boolean;
   quantity: number;
-  unit: 'page' | 'image' | 'token' | 'vector' | 'byte' | 'request' | 'second';
+  unit: 'page' | 'image' | 'token' | 'vector' | 'byte' | 'request' | 'second' | 'character';
   inputTokens?: number;
   outputTokens?: number;
   pricing: S10PricingProfile;

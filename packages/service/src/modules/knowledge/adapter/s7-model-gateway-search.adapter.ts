@@ -140,6 +140,13 @@ export class S7ModelGatewaySearchAdapter {
     if (!Array.isArray(result.data?.results)) {
       throw outputInvalid(context, 'invalid_rerank_output');
     }
+    const providerIndices = new Set<number>();
+    for (const entry of result.data.results) {
+      if (providerIndices.has(entry.index)) {
+        throw outputInvalid(context, 'duplicate_rerank_candidate_index');
+      }
+      providerIndices.add(entry.index);
+    }
     const ranked = result.data.results
       .map((entry) => {
         const source = input.items[entry.index];

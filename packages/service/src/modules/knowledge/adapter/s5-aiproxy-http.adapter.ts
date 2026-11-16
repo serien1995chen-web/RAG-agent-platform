@@ -92,6 +92,9 @@ const TIMEOUT_BY_KIND: Record<S5ModelType, number> = {
 };
 
 function formDataOf(input: Extract<S5ModelInvocation, { kind: 'stt' }>): FormData {
+  if (!input.audio) {
+    throw new S5ModelTransportError('validation', null, null, 'stt_file_payload_required');
+  }
   const form = new FormData();
   form.append('model', input.modelId);
   form.append(
@@ -100,6 +103,32 @@ function formDataOf(input: Extract<S5ModelInvocation, { kind: 'stt' }>): FormDat
     `audio.${input.mimeType.split('/')[1] ?? 'bin'}`,
   );
   return form;
+}
+
+function sttAudioData(input: Extract<S5ModelInvocation, { kind: 'stt' }>): string {
+  if (input.audioUrl) return input.audioUrl;
+  if (!input.audio) {
+    throw new S5ModelTransportError('validation', null, null, 'stt_audio_payload_required');
+  }
+  return `data:${input.mimeType ?? 'audio/mpeg'};base64,${Buffer.from(input.audio).toString('base64')}`;
+}
+
+function audioFormat(mimeType: string): string {
+  return (
+    {
+      'audio/mpeg': 'mp3',
+      'audio/mp3': 'mp3',
+      'audio/wav': 'wav',
+      'audio/x-wav': 'wav',
+      'audio/webm': 'webm',
+      'audio/ogg': 'ogg',
+      'audio/flac': 'flac',
+      'audio/mp4': 'mp4',
+      'audio/m4a': 'm4a',
+    }[mimeType.toLowerCase()] ??
+    mimeType.split('/')[1] ??
+    'bin'
+  );
 }
 
 function vlmMessages(input: Extract<S5ModelInvocation, { kind: 'vlm' }>): unknown[] {
@@ -132,6 +161,9 @@ function bodyOf(
   routing: {
     providerOnly?: readonly string[];
     rerankProtocol: 'openai' | 'alibaba-native';
+    ttsProtocol: 'openai' | 'minimax-native';
+    sttProtocol: 'openai' | 'chat-audio-native' | 'dashscope-multimodal-native';
+    defaultTtsVoice?: string;
   },
 ): unknown {
   const provider =
@@ -185,10 +217,125 @@ function bodyOf(
         ...(provider ? { provider } : {}),
       };
     case 'stt':
+      if (routing.sttProtocol === 'dashscope-multimodal-native') {
+        return {
+          model: input.modelId,
+          input: {
+            messages: [
+              {
+                role: 'user',
+                content: [
+                  {
+                    type: 'input_audio',
+                    input_audio: {
+                      data: sttAudioData(input),
+                    },
+                  },
+                ],
+              },
+            ],
+          },
+          parameters: { format: audioFormat(input.mimeType ?? 'audio/mpeg') },
+        };
+      }
+      if (routing.sttProtocol === 'chat-audio-native') {
+        return {
+          model: input.modelId,
+          messages: [
+            {
+              role: 'user',
+              content: [
+                {
+                  type: 'input_audio',
+                  input_audio: {
+                    data: sttAudioData(input),
+                  },
+                },
+              ],
+            },
+          ],
+        };
+      }
       return formDataOf(input);
     case 'tts':
+      if (routing.ttsProtocol === 'minimax-native') {
+        return {
+          model: input.modelId,
+          text: input.text,
+          output_format: 'url',
+          voice_setting: {
+            voice_id: input.voice ?? routing.defaultTtsVoice,
+            speed: 1,
+            vol: 1,
+            pitch: 0,
+          },
+          audio_setting: {
+            sample_rate: 32_000,
+            bitrate: 128_000,
+            format: 'mp3',
+            channel: 1,
+          },
+        };
+      }
       return { model: input.modelId, input: input.text, voice: input.voice };
   }
+}
+
+function nativeTtsPayload(payload: unknown): unknown {
+  if (typeof payload !== 'object' || payload === null) return payload;
+  const record = payload as {
+    data?: { audio?: unknown };
+    extra_info?: { usage_characters?: unknown };
+  };
+  const encoded = record.data?.audio;
+  if (typeof encoded !== 'string' || encoded.length === 0) return payload;
+  const audioUrl = /^https?:\/\//i.test(encoded) ? encoded : undefined;
+  const audio = audioUrl
+    ? undefined
+    : Uint8Array.from(Buffer.from(encoded.replace(/^data:audio\/[^;]+;base64,/, ''), 'hex'));
+  const usageCharacters = Number(record.extra_info?.usage_characters);
+  return {
+    ...(audioUrl ? { audioUrl } : {}),
+    ...(audio ? { audio } : {}),
+    mimeType: 'audio/mpeg',
+    ...(Number.isInteger(usageCharacters) && usageCharacters >= 0 ? { usageCharacters } : {}),
+  };
+}
+
+function nativeSttPayload(payload: unknown): unknown {
+  if (typeof payload !== 'object' || payload === null) return payload;
+  const record = payload as {
+    choices?: Array<{ message?: { content?: unknown } }>;
+    usage?: unknown;
+  };
+  const content = record.choices?.[0]?.message?.content;
+  return typeof content === 'string' ? { text: content, usage: record.usage } : payload;
+}
+
+function dashscopeSttPayload(payload: unknown): unknown {
+  if (typeof payload !== 'object' || payload === null) return payload;
+  const record = payload as {
+    output?: { text?: unknown };
+    usage?: {
+      duration?: unknown;
+      input_tokens?: unknown;
+      output_tokens?: unknown;
+    };
+  };
+  if (typeof record.output?.text !== 'string') return payload;
+  const inputTokens = Number(record.usage?.input_tokens);
+  const outputTokens = Number(record.usage?.output_tokens);
+  const duration = Number(record.usage?.duration);
+  return {
+    text: record.output.text,
+    ...(Number.isFinite(duration) && duration >= 0 ? { duration_seconds: duration } : {}),
+    usage: {
+      ...(Number.isInteger(inputTokens) && inputTokens >= 0 ? { prompt_tokens: inputTokens } : {}),
+      ...(Number.isInteger(outputTokens) && outputTokens >= 0
+        ? { completion_tokens: outputTokens }
+        : {}),
+    },
+  };
 }
 
 function retryAfterMs(response: S5HttpResponse): number | null {
@@ -218,6 +365,9 @@ export class S5AiproxyHttpAdapter implements S5ModelInvocationAdapterPort {
       transport: S5HttpTransportPort;
       providerOnly?: readonly string[];
       rerankProtocol?: 'openai' | 'alibaba-native';
+      ttsProtocol?: 'openai' | 'minimax-native';
+      sttProtocol?: 'openai' | 'chat-audio-native' | 'dashscope-multimodal-native';
+      defaultTtsVoice?: string;
     },
   ) {}
 
@@ -230,17 +380,32 @@ export class S5AiproxyHttpAdapter implements S5ModelInvocationAdapterPort {
     } = { workspaceId: 'runtime', requestId: 'runtime', traceId: 'runtime' },
   ): Promise<S5ModelAdapterResponse<T>> {
     const rerankProtocol = this.input.rerankProtocol ?? 'openai';
+    const ttsProtocol = this.input.ttsProtocol ?? 'openai';
+    const sttProtocol = this.input.sttProtocol ?? 'openai';
     const endpoint =
       invocation.kind === 'rerank' && rerankProtocol === 'alibaba-native'
         ? new URL('/gateway/alibaba/text-rerank/v1', this.input.baseUrl).toString()
-        : joinAiproxyUrl(this.input.baseUrl, ENDPOINT_BY_KIND[invocation.kind]);
+        : invocation.kind === 'tts' && ttsProtocol === 'minimax-native'
+          ? new URL('/gateway/minimax/v1/t2a_v2', this.input.baseUrl).toString()
+          : invocation.kind === 'stt' && sttProtocol === 'chat-audio-native'
+            ? new URL('/gateway/v1/chat/completions', this.input.baseUrl).toString()
+            : invocation.kind === 'stt' && sttProtocol === 'dashscope-multimodal-native'
+              ? new URL(
+                  '/gateway/alibaba/api/v1/services/aigc/multimodal-generation/generation',
+                  this.input.baseUrl,
+                ).toString()
+              : joinAiproxyUrl(this.input.baseUrl, ENDPOINT_BY_KIND[invocation.kind]);
     const response = await this.input.transport.request<T>({
       method: 'POST',
       url: endpoint,
       headers: {
         Authorization: `Bearer ${this.input.token}`,
-        'Content-Type': invocation.kind === 'stt' ? 'multipart/form-data' : 'application/json',
-        Accept: invocation.kind === 'tts' ? 'audio/mpeg' : 'application/json',
+        'Content-Type':
+          invocation.kind === 'stt' && sttProtocol === 'openai'
+            ? 'multipart/form-data'
+            : 'application/json',
+        Accept:
+          invocation.kind === 'tts' && ttsProtocol === 'openai' ? 'audio/mpeg' : 'application/json',
         'X-Workspace-Id': context.workspaceId,
         'X-Request-Id': context.requestId,
         'X-Trace-Id': context.traceId,
@@ -248,9 +413,12 @@ export class S5AiproxyHttpAdapter implements S5ModelInvocationAdapterPort {
       body: bodyOf(invocation, {
         ...(this.input.providerOnly ? { providerOnly: this.input.providerOnly } : {}),
         rerankProtocol,
+        ttsProtocol,
+        sttProtocol,
+        ...(this.input.defaultTtsVoice ? { defaultTtsVoice: this.input.defaultTtsVoice } : {}),
       }),
       timeoutMs: TIMEOUT_BY_KIND[invocation.kind],
-      responseType: invocation.kind === 'tts' ? 'arraybuffer' : 'json',
+      responseType: invocation.kind === 'tts' && ttsProtocol === 'openai' ? 'arraybuffer' : 'json',
     });
     if (response.status === 401 || response.status === 403) {
       throw new S5ModelTransportError('auth', response.status, null, 'aiproxy_auth_rejected');
@@ -285,7 +453,13 @@ export class S5AiproxyHttpAdapter implements S5ModelInvocationAdapterPort {
               ).output?.results,
               usage: (response.data as { usage?: unknown }).usage,
             }
-          : response.data;
+          : invocation.kind === 'tts' && ttsProtocol === 'minimax-native'
+            ? nativeTtsPayload(response.data)
+            : invocation.kind === 'stt' && sttProtocol === 'chat-audio-native'
+              ? nativeSttPayload(response.data)
+              : invocation.kind === 'stt' && sttProtocol === 'dashscope-multimodal-native'
+                ? dashscopeSttPayload(response.data)
+                : response.data;
       const parsed = parseModelResponse({
         kind: invocation.kind,
         data: responseData,
@@ -301,6 +475,7 @@ export class S5AiproxyHttpAdapter implements S5ModelInvocationAdapterPort {
         data: parsed.data as T,
         status: response.status,
         quantity: parsed.quantity,
+        ...(parsed.quantityUnit ? { quantityUnit: parsed.quantityUnit } : {}),
         usage: parsed.usage,
       };
     } catch (error) {
