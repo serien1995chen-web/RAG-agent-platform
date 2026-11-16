@@ -4,7 +4,13 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { chromium, expect as playwrightExpect, type Browser } from '@playwright/test';
 import { afterAll, beforeAll, describe, it } from 'vitest';
-import { consoleCookie, createSpace, startS4App, type S4AppHarness } from './s4-app-harness';
+import {
+  apiHeaders,
+  consoleCookie,
+  createSpace,
+  startS4App,
+  type S4AppHarness,
+} from './s4-app-harness';
 
 const suffix = randomUUID().replaceAll('-', '').slice(0, 12);
 const workspaceId = `ws_b15_ui_${suffix}`;
@@ -26,6 +32,37 @@ beforeAll(async () => {
 }, 180_000);
 
 afterAll(async () => {
+  if (app && spaceId) {
+    const headers = apiHeaders({ authToken, workspaceId });
+    const current = await fetch(`${app.baseUrl}/v1/knowledge/spaces/${spaceId}`, { headers });
+    const payload = (await current.json()) as {
+      success?: boolean;
+      data?: { version: number; referenceRevision: number };
+    };
+    if (current.ok && payload.success && payload.data) {
+      const deletion = await fetch(`${app.baseUrl}/v1/knowledge/spaces/${spaceId}`, {
+        method: 'DELETE',
+        headers: {
+          ...headers,
+          'content-type': 'application/json',
+          'idempotency-key': `b15-page-cleanup-${suffix}`,
+        },
+        body: JSON.stringify({
+          version: payload.data.version,
+          expectedReferenceRevision: payload.data.referenceRevision,
+          referenceStrategy: 'block',
+        }),
+      });
+      if (!deletion.ok) {
+        const safe = (await deletion.json().catch(() => ({}))) as {
+          error?: { code?: string };
+        };
+        console.error(
+          `B15_E2E_CLEANUP_FAILED status=${deletion.status} code=${safe.error?.code ?? 'unknown'}`,
+        );
+      }
+    }
+  }
   await browser?.close();
   await app?.close();
 }, 30_000);
