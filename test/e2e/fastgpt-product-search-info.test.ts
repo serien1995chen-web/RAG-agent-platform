@@ -399,10 +399,6 @@ describe('FastGPT product module 4 Search and Info', () => {
     });
     await context.addCookies([cookie]);
     const page = await context.newPage();
-    const rebuildRequests: string[] = [];
-    page.on('request', (request) => {
-      if (request.url().includes('/rebuild')) rebuildRequests.push(request.url());
-    });
     await page.goto(
       `${app.baseUrl}/dataset/detail?datasetId=${datasetId}&currentTab=collectionCard`,
       { waitUntil: 'networkidle' },
@@ -412,14 +408,32 @@ describe('FastGPT product module 4 Search and Info', () => {
       knowledgeSpaceId: datasetId,
       deletedAt: null,
     })
-      .select({ _id: 1, kind: 1, status: 1 })
-      .lean<Array<{ _id: unknown; kind: string; status: string }>>();
+      .select({ _id: 1, kind: 1, status: 1, inputSnapshot: 1 })
+      .lean<
+        Array<{
+          _id: unknown;
+          kind: string;
+          status: string;
+          inputSnapshot: Record<string, unknown>;
+        }>
+      >();
     const jobIdsBefore = new Set(jobsBefore.map((job) => String(job._id)));
     await page.getByRole('button', { name: '编辑模型配置' }).click();
     const modelModal = page.locator('.kb2-modal');
     const embedding = modelModal.getByLabel('索引模型');
     expect(await embedding.locator('option').count()).toBeGreaterThan(1);
-    await embedding.selectOption({ index: 1 });
+    const currentEmbeddingModel = await embedding.inputValue();
+    const alternateEmbeddingModel = await embedding
+      .locator('option')
+      .evaluateAll(
+        (options, current) =>
+          options
+            .map((option) => (option as HTMLOptionElement).value)
+            .find((value) => value.length > 0 && value !== current),
+        currentEmbeddingModel,
+      );
+    expect(alternateEmbeddingModel).toBeTruthy();
+    await embedding.selectOption(alternateEmbeddingModel!);
     const saved = page.waitForResponse(
       (response) =>
         response.request().method() === 'PUT' &&
@@ -429,16 +443,31 @@ describe('FastGPT product module 4 Search and Info', () => {
     expect((await saved).status()).toBe(200);
 
     const after = await api<{
-      items: Array<{ modelType: string }>;
+      items: Array<{ modelType: string; modelId: string }>;
     }>(`/v1/knowledge/spaces/${datasetId}/model-bindings`, 'GET');
     const jobsAfter = await models.KnowledgeJob.find({
       workspaceId,
       knowledgeSpaceId: datasetId,
       deletedAt: null,
     })
-      .select({ _id: 1, kind: 1, status: 1 })
-      .lean<Array<{ _id: unknown; kind: string; status: string }>>();
+      .select({ _id: 1, kind: 1, status: 1, inputSnapshot: 1 })
+      .lean<
+        Array<{
+          _id: unknown;
+          kind: string;
+          status: string;
+          inputSnapshot: Record<string, unknown>;
+        }>
+      >();
     const newJobs = jobsAfter.filter((job) => !jobIdsBefore.has(String(job._id)));
+    const activeEmbeddingBinding = await models.KnowledgeModelBinding.findOne({
+      workspaceId,
+      knowledgeSpaceId: datasetId,
+      modelType: 'embedding',
+      deletedAt: null,
+    })
+      .select({ activeQueryModelId: 1, activeQueryDimension: 1 })
+      .lean<{ activeQueryModelId: string | null; activeQueryDimension: number | null }>();
     await writeFile(
       join(resultDir, 'b15-model-binding-result.json'),
       `${JSON.stringify(
@@ -446,8 +475,13 @@ describe('FastGPT product module 4 Search and Info', () => {
           testId: 'L1-B15-A-MODEL-001-UI01',
           expectedModelTypes: selectedModels.map((item) => item.modelType).sort(),
           actualModelTypes: after.items.map((item) => item.modelType).sort(),
-          rebuildRequestCount: rebuildRequests.length,
-          newJobs: newJobs.map((job) => ({ kind: job.kind, status: job.status })),
+          activeQueryModelId: activeEmbeddingBinding?.activeQueryModelId ?? null,
+          activeQueryDimension: activeEmbeddingBinding?.activeQueryDimension ?? null,
+          newJobs: newJobs.map((job) => ({
+            kind: job.kind,
+            status: job.status,
+            inputSnapshot: job.inputSnapshot,
+          })),
         },
         null,
         2,
@@ -460,10 +494,14 @@ describe('FastGPT product module 4 Search and Info', () => {
     expect
       .soft(after.items.map((item) => item.modelType).sort())
       .toEqual(selectedModels.map((item) => item.modelType).sort());
-    expect.soft(rebuildRequests.length).toBeGreaterThan(0);
+    const rebuildJob = newJobs.find(
+      (job) => job.kind === 'rebuild' || job.kind === 'synonym_rebuild',
+    );
+    expect.soft(rebuildJob).toBeDefined();
     expect
-      .soft(newJobs.some((job) => job.kind === 'rebuild' || job.kind === 'synonym_rebuild'))
-      .toBe(true);
+      .soft(rebuildJob?.inputSnapshot?.targetModelId)
+      .toBe(after.items.find((item) => item.modelType === 'embedding')?.modelId);
+    expect.soft(activeEmbeddingBinding?.activeQueryModelId).toBe(currentEmbeddingModel);
     await context.close();
   });
 });

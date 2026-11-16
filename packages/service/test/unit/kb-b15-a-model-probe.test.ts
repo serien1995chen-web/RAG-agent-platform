@@ -100,4 +100,54 @@ describe('L1 B15 A model health probe', () => {
     expect(catalogCalls).toBe(1);
     expect(view.modelProbe.verificationStatus).not.toBe('REAL_VERIFIED');
   });
+
+  it('L1-B15-A-MODEL-001-Q01 marks models real-verified only after the six-role probe succeeds', async () => {
+    let probeCalls = 0;
+    const adapter = new S10StatusProbesAdapter({
+      config: {
+        externalModes: { model: 'real' },
+        s3: { provider: 'minio' },
+        s10: {
+          apiKeyHmacConfigured: true,
+          quota: { requestsPerMinute: 30 },
+        },
+      } as never,
+      connection: {} as never,
+      queues: new Map(),
+      readiness: async () => ({
+        status: 200,
+        body: {
+          checks: ['mongo', 'redis', 'postgres', 's3'].map((name) => ({
+            name,
+            status: 'ok',
+            latencyMs: 1,
+          })),
+        },
+      }),
+      models: {
+        async listModels() {
+          return [];
+        },
+      },
+      modelHealth: {
+        async probe() {
+          probeCalls += 1;
+          return { verifiedTypes: ['llm', 'embedding', 'rerank', 'vlm', 'stt', 'tts'] };
+        },
+      },
+      connectors: {
+        async list() {
+          return [];
+        },
+      },
+    });
+
+    const view = await adapter.probe(context);
+    expect(probeCalls).toBe(1);
+    expect(view.modelProbe).toMatchObject({
+      status: 'ok',
+      verificationStatus: 'REAL_VERIFIED',
+      modelCount: 0,
+    });
+  });
 });

@@ -22,6 +22,9 @@ describe('S5-CFG-01 AIProxy configuration', () => {
       modelMode: 'mock',
       providerOnly: null,
       rerankProtocol: 'openai',
+      ttsProtocol: 'openai',
+      sttProtocol: 'openai',
+      ttsVoice: null,
     });
 
     const real = loadS5AiproxyConfig({

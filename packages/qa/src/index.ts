@@ -115,29 +115,46 @@ export async function generateQa(
   }
 
   const prompt = buildQaPrompt(resolvePrompt(template, request), request.chunkText);
-  let output;
-  try {
-    output = await options.model.generate({
-      model: request.models.llmModel,
-      prompt,
-      chunkText: request.chunkText,
-      timeoutMs: options.timeoutMs ?? DEFAULT_QA_TIMEOUT_MS,
-    });
-  } catch (error) {
-    throw modelFailure(error, request, requestId);
-  }
-
   const sourceChunkHash =
     request.sourceChunkHash ??
     `sha256:${createHash('sha256').update(request.chunkText, 'utf8').digest('hex')}`;
-  const parsed = parseQaOutputValidated(output.content, sourceChunkHash);
+  const generate = async (inputPrompt: string) => {
+    try {
+      return await options.model.generate({
+        model: request.models.llmModel,
+        prompt: inputPrompt,
+        chunkText: request.chunkText,
+        timeoutMs: options.timeoutMs ?? DEFAULT_QA_TIMEOUT_MS,
+      });
+    } catch (error) {
+      throw modelFailure(error, request, requestId);
+    }
+  };
+  const addUsage = (
+    left: { inputTokens: number; outputTokens: number },
+    right: { inputTokens: number; outputTokens: number },
+  ) => ({
+    inputTokens: left.inputTokens + right.inputTokens,
+    outputTokens: left.outputTokens + right.outputTokens,
+  });
+
+  const output = await generate(prompt);
+  let parsed = parseQaOutputValidated(output.content, sourceChunkHash);
+  let usage = output.usage;
+  if (parsed.items.length === 0) {
+    const repairedOutput = await generate(
+      `${prompt}\n\nReturn only a valid JSON array of question-answer objects with non-empty q and a fields. Do not include prose.`,
+    );
+    usage = addUsage(usage, repairedOutput.usage);
+    parsed = parseQaOutputValidated(repairedOutput.content, sourceChunkHash);
+  }
   if (parsed.items.length === 0) {
     const fallbackItems = options.fallbackToChunkSplit
       ? (await options.fallbackToChunkSplit(request)).items
       : [];
     return {
       items: fallbackItems,
-      usage: output.usage,
+      usage,
       fallback: 'chunk_split',
       diagnostics: [{ code: 'qa_output_invalid', problems: parsed.problems }],
     };
@@ -146,7 +163,7 @@ export async function generateQa(
   const deduped = dedupeQaItems(parsed.items, request.limits.maxQaPerChunk);
   return {
     items: deduped.items,
-    usage: output.usage,
+    usage,
     fallback: 'none',
     diagnostics: [
       ...(deduped.duplicates > 0

@@ -9,6 +9,7 @@ import type {
   SearchQueryExpansionResult,
 } from '@kb/search';
 import type { TenantContext } from '../../../shared/persistence/knowledge/tenant';
+import type { S5ModelGatewayPort } from './s5-model-gateway.port';
 import type { S09QueryExpansionPort } from './s09-synonym.ports';
 
 export type S7SearchPersistenceMode = SearchApiMode | 'multi_space' | 'image' | 'deep';
@@ -26,6 +27,7 @@ export interface S7BoundModel {
 
 export interface S7ResolvedModels {
   embedding: S7BoundModel;
+  llm?: S7BoundModel;
   rerank?: S7BoundModel;
 }
 
@@ -39,6 +41,7 @@ export interface S7ModelResolverPort {
     spaceId: string,
     usingRerank: boolean,
     context: TenantContext,
+    rerankModelId?: string,
   ): Promise<S7ResolvedModels>;
 }
 
@@ -170,6 +173,7 @@ export interface S7SearchApplicationDependencies {
   citations: S7CitationPersistencePort;
   audits: S7SearchAuditPort;
   synonymExpansion?: S09QueryExpansionPort;
+  modelGateway?: S5ModelGatewayPort;
   now?: () => Date;
   searchIdFactory?: () => string;
   totalTimeoutMs?: {

@@ -336,6 +336,7 @@ export class S5ModelGateway implements S5ModelGatewayPort {
               parsed.status,
               fallbackUsed,
               false,
+              parsed.quantityUnit,
             );
             inputTokens += parsed.usage.inputTokens;
             outputTokens += parsed.usage.outputTokens;
@@ -431,6 +432,7 @@ export class S5ModelGateway implements S5ModelGatewayPort {
     status: number | null,
     fallbackUsed: boolean,
     intent: boolean,
+    unitOverride?: S5UsageUnit,
   ): Promise<void> {
     const eventSequence = attempt * 2 - (intent ? 1 : 0);
     const fact: S5GatewayUsageFact = {
@@ -444,7 +446,7 @@ export class S5ModelGateway implements S5ModelGatewayPort {
       attempt,
       eventSequence,
       quantity: Math.max(0, quantity),
-      unit: usageUnit(request.kind),
+      unit: unitOverride ?? usageUnit(request.kind),
       inputTokens: Math.max(0, inputTokens),
       outputTokens: Math.max(0, outputTokens),
       status,

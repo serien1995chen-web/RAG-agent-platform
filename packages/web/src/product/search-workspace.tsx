@@ -36,6 +36,10 @@ interface SearchSettings {
   embeddingWeight: number;
   usingRerank: boolean;
   rerankWeight: number;
+  rerankModelId: string;
+  queryOptimizationEnabled: boolean;
+  queryOptimizationModelId: string;
+  queryOptimizationPrompt: string;
   tagId: string;
   tagValue: string;
 }
@@ -56,6 +60,10 @@ const DEFAULT_SETTINGS: SearchSettings = {
   embeddingWeight: 0.5,
   usingRerank: false,
   rerankWeight: 0.5,
+  rerankModelId: '',
+  queryOptimizationEnabled: false,
+  queryOptimizationModelId: '',
+  queryOptimizationPrompt: '',
   tagId: '',
   tagValue: '',
 };
@@ -86,6 +94,13 @@ export function SearchWorkspace(props: {
     queryFn: () => productApi.listTags(props.datasetId),
   });
   const tags = tagsQuery.data ?? [];
+  const modelsQuery = useQuery({
+    queryKey: ['kb-product', 'models'],
+    queryFn: () => productApi.listModels(),
+  });
+  const models = modelsQuery.data ?? [];
+  const rerankModels = models.filter((model) => model.type === 'rerank' && model.authorized);
+  const llmModels = models.filter((model) => model.type === 'llm' && model.authorized);
   const selectedTag = tags.find((tag) => tag.id === settings.tagId);
 
   useEffect(() => {
@@ -151,6 +166,14 @@ export function SearchWorkspace(props: {
         embeddingWeight: settings.embeddingWeight,
         usingRerank: settings.usingRerank,
         rerankWeight: settings.rerankWeight,
+        ...(settings.rerankModelId ? { rerankModelId: settings.rerankModelId } : {}),
+        queryOptimizationEnabled: settings.queryOptimizationEnabled,
+        ...(settings.queryOptimizationModelId
+          ? { queryOptimizationModelId: settings.queryOptimizationModelId }
+          : {}),
+        ...(settings.queryOptimizationPrompt
+          ? { queryOptimizationPrompt: settings.queryOptimizationPrompt }
+          : {}),
         ...(filters ? { filters } : {}),
       };
       const response = imageUpload?.uploadId
@@ -475,6 +498,77 @@ export function SearchWorkspace(props: {
               />
             </ProductField>
           ) : null}
+          <ProductField label="ReRank 模型">
+            <ProductSelect
+              value={settingsDraft.rerankModelId}
+              disabled={!settingsDraft.usingRerank || rerankModels.length === 0}
+              onChange={(event) =>
+                setSettingsDraft((current) => ({
+                  ...current,
+                  rerankModelId: event.target.value,
+                }))
+              }
+            >
+              <option value="">
+                {rerankModels.length === 0 ? '没有可用的 ReRank 模型' : '使用知识库默认模型'}
+              </option>
+              {rerankModels.map((model) => (
+                <option key={model.modelId} value={model.modelId}>
+                  {model.displayName}
+                </option>
+              ))}
+            </ProductSelect>
+          </ProductField>
+          <div className="kb2-form-grid__full">
+            <label className="kb2-checkbox-row">
+              <input
+                type="checkbox"
+                checked={settingsDraft.queryOptimizationEnabled}
+                onChange={(event) =>
+                  setSettingsDraft((current) => ({
+                    ...current,
+                    queryOptimizationEnabled: event.target.checked,
+                  }))
+                }
+              />
+              <span>启用问题优化</span>
+            </label>
+          </div>
+          <ProductField label="问题优化模型">
+            <ProductSelect
+              value={settingsDraft.queryOptimizationModelId}
+              disabled={!settingsDraft.queryOptimizationEnabled || llmModels.length === 0}
+              onChange={(event) =>
+                setSettingsDraft((current) => ({
+                  ...current,
+                  queryOptimizationModelId: event.target.value,
+                }))
+              }
+            >
+              <option value="">
+                {llmModels.length === 0 ? '没有可用的文本模型' : '使用知识库默认模型'}
+              </option>
+              {llmModels.map((model) => (
+                <option key={model.modelId} value={model.modelId}>
+                  {model.displayName}
+                </option>
+              ))}
+            </ProductSelect>
+          </ProductField>
+          <ProductField label="问题优化背景 Prompt">
+            <ProductTextarea
+              value={settingsDraft.queryOptimizationPrompt}
+              disabled={!settingsDraft.queryOptimizationEnabled}
+              rows={4}
+              placeholder="补充业务背景、术语和查询改写约束"
+              onChange={(event) =>
+                setSettingsDraft((current) => ({
+                  ...current,
+                  queryOptimizationPrompt: event.target.value,
+                }))
+              }
+            />
+          </ProductField>
           <ProductField label="标签过滤">
             <ProductSelect
               value={settingsDraft.tagId}
@@ -503,7 +597,7 @@ export function SearchWorkspace(props: {
           />
         ) : null}
         <div className="kb2-note">
-          当前合同未提供查询扩展 Prompt 和重排模型选择字段；对应配置未伪造。
+          问题优化会先调用所选文本模型改写查询；失败时保留原查询并显示降级状态。
         </div>
       </ProductModal>
     </section>

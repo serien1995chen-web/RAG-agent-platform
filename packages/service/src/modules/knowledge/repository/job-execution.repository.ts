@@ -9,6 +9,7 @@ import type {
 } from '../../../shared/persistence/schemas/knowledge-job.schemas';
 import type { KnowledgeSourceDoc } from '../../../shared/persistence/schemas/knowledge-catalog.schemas';
 import type { KnowledgeConnectorDoc } from '../../../shared/persistence/schemas/knowledge-connector.schemas';
+import type { KnowledgeModelBindingDoc } from '../../../shared/persistence/schemas/knowledge-governance.schemas';
 import { createKnowledgeOutboxEvent } from '../../../shared/persistence/knowledge/outbox';
 import { withMongoTransaction } from '../../../shared/persistence/with-mongo-transaction';
 import {
@@ -128,6 +129,7 @@ export class KnowledgeJobExecutionRepository {
   private readonly outbox: Model<KnowledgeOutboxEventDoc>;
   private readonly sources: Model<KnowledgeSourceDoc>;
   private readonly connectors: Model<KnowledgeConnectorDoc>;
+  private readonly bindings: Model<KnowledgeModelBindingDoc>;
 
   constructor(private readonly connection: Connection) {
     const models = registerKnowledgeModels(connection);
@@ -136,6 +138,7 @@ export class KnowledgeJobExecutionRepository {
     this.outbox = models.KnowledgeOutboxEvent;
     this.sources = models.KnowledgeSource;
     this.connectors = models.KnowledgeConnector;
+    this.bindings = models.KnowledgeModelBinding;
   }
 
   private async createWithSession(
@@ -772,6 +775,33 @@ export class KnowledgeJobExecutionRepository {
     const status = await finalize(byId.get(rootJobId)!);
     if (!status) return null;
     const latestRoot = byId.get(rootJobId)!;
+    if (
+      latestRoot.status === 'succeeded' &&
+      latestRoot.kind === 'rebuild' &&
+      latestRoot.resourceType === 'space' &&
+      latestRoot.inputSnapshot.reason === 'model_change' &&
+      typeof latestRoot.inputSnapshot.targetModelId === 'string'
+    ) {
+      const targetDimension = Number(latestRoot.inputSnapshot.targetDimension);
+      await this.bindings.updateOne(
+        {
+          workspaceId: requireWorkspaceId(context),
+          knowledgeSpaceId: latestRoot.knowledgeSpaceId,
+          modelType: 'embedding',
+          deletedAt: null,
+        },
+        {
+          $set: {
+            activeQueryModelId: latestRoot.inputSnapshot.targetModelId,
+            ...([768, 1024, 1536, 3072].includes(targetDimension)
+              ? { activeQueryDimension: targetDimension }
+              : {}),
+            updatedByMemberId: context.memberId,
+          },
+          $inc: { version: 1 },
+        },
+      );
+    }
     return jobDto(latestRoot);
   }
 

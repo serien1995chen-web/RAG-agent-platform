@@ -213,6 +213,10 @@ const SearchRequestObject = z.object({
   embeddingWeight: z.number().min(0).max(1).default(0.5),
   usingRerank: z.boolean().default(false),
   rerankWeight: z.number().min(0).max(1).default(0.5),
+  rerankModelId: z.string().min(1).max(256).optional(),
+  queryOptimizationEnabled: z.boolean().default(false),
+  queryOptimizationModelId: z.string().min(1).max(256).optional(),
+  queryOptimizationPrompt: z.string().max(20_000).optional(),
   filters: SearchFilterApiSchema.optional(),
 });
 

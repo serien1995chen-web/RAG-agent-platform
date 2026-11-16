@@ -172,6 +172,9 @@ describe('ACC-UI-01..07 S5 independent UI state', () => {
       trainingType: 'qa',
       chunkSettingMode: 'custom',
       chunkSize: 512,
+      chunkSplitMode: 'char',
+      chunkSplitter: '---',
+      qaPrompt: 'Use concise answers.',
     });
   });
 

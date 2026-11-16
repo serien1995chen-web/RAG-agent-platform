@@ -86,6 +86,7 @@ export {
   S10OpsWorkerApplication,
   S10StatusApplication,
   S10StatusProbesAdapter,
+  S10ModelHealthProbeAdapter,
   KnowledgeCatalogRepository,
   KnowledgeConnectorRepository,
   KnowledgeCredentialCipher,

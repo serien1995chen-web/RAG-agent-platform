@@ -67,7 +67,7 @@ export type S5ModelGatewayRequest = S5ModelInvocation & {
   };
 };
 
-export type S5UsageUnit = 'token' | 'request' | 'second' | 'page' | 'image';
+export type S5UsageUnit = 'token' | 'request' | 'second' | 'page' | 'image' | 'character';
 
 export interface S5GatewayUsageFact {
   workspaceId: string;
@@ -157,6 +157,7 @@ export interface S5ModelAdapterResponse<T> {
   data: T;
   status: number;
   quantity: number;
+  quantityUnit?: S5UsageUnit;
   usage: { inputTokens: number; outputTokens: number };
 }
 

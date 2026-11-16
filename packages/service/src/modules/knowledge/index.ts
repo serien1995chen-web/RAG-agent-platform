@@ -96,6 +96,7 @@ export type {
   S10VerificationStatus,
 } from './application/s10-status.application';
 export { S10StatusProbesAdapter } from './adapter/s10-status-probes.adapter';
+export { S10ModelHealthProbeAdapter } from './adapter/s10-model-health.adapter';
 export { KnowledgeCatalogRepository } from './repository/catalog.repository';
 export type {
   CreateDirectoryInput,
