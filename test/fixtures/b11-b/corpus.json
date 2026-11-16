@@ -1,0 +1,8 @@
+{
+  "mixedMarkdown": "# 退款政策 Refund Policy\n\n退款申请会在五个工作日内处理。Refund requests are processed within five business days.\n\n| 项目 | 时限 |\n| --- | --- |\n| 审核 | 1 business day |\n| 退款 | 5 business days |\n\n## 例外 Exceptions\n\n超过三十天的订单需要人工审核。Orders older than thirty days require manual review.\n\n短段。\n\nSELECTED\n\n第二段包含足够多的中英文内容，用于验证自定义分隔符、顺序稳定性和内容哈希不会因重复执行发生变化。The second paragraph contains enough mixed-language text to exercise deterministic chunking and hashing.",
+  "longParagraph": "这是用于验证超长段落和重叠边界的句子。This sentence is repeated to produce a long paragraph without relying on an undocumented separator. Refund requests are reviewed carefully and processed within five business days. 退款申请会被仔细审核，并在五个工作日内完成处理。",
+  "oversizedTable": "| 编号 | 说明 |\n| --- | --- |\n| 1 | 这一行非常长，用于验证表格在超过分块预算时仍必须遵守最终 Segment 最大长度。This row is intentionally long so the table exceeds the configured budget. |\n| 2 | 第二行同样包含额外的中英文内容，以阻止实现把整张表无界地写成一个超大 Segment。 |\n| 3 | 第三行继续补充用于容量边界验证的内容，确保结果可以被稳定、安全地解析和索引。 |",
+  "validQa": "Q1: 退款需要多久？\nA1: 五个工作日。\nQ2: 超过三十天如何处理？\nA2: 需要人工审核。",
+  "partiallyInvalidQa": "Q1: 退款需要多久？\nA1: 五个工作日。\nQ2: 未完成的尾部问题",
+  "invalidQa": "这不是可解析的问答结构。"
+}
