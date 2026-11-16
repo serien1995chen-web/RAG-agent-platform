@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { joinAiproxyUrl } from '../../packages/service/src/modules/knowledge/adapter/s5-aiproxy-http.adapter';
 
 const requiredNames = ['AIPROXY_BASE_URL', 'AIPROXY_API_TOKEN', 'B11_B_REAL_LLM_MODEL_ID'] as const;
 
@@ -20,7 +21,7 @@ describe('L1-B11-B-PARSE-004 real AIProxy QA', () => {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 120_000);
     try {
-      const response = await fetch(`${baseUrl}/v1/chat/completions`, {
+      const response = await fetch(joinAiproxyUrl(baseUrl, '/v1/chat/completions'), {
         method: 'POST',
         headers: {
           authorization: `Bearer ${token}`,
