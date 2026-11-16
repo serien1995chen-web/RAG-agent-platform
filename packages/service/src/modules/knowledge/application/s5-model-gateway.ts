@@ -99,7 +99,7 @@ export function estimateInvocationPointsMicros(
       return computeUsagePointsMicros({
         ...base,
         kind: 'stt',
-        quantity: Math.ceil(invocation.audio.byteLength / 16_000),
+        quantity: invocation.audioUrl ? 0 : Math.ceil((invocation.audio?.byteLength ?? 0) / 16_000),
         unit: 'second',
       });
     case 'tts':
@@ -195,7 +195,16 @@ function validateBudget(invocation: S5ModelInvocation, requestId: string, traceI
       }
       break;
     case 'stt':
-      if (invocation.audio.byteLength > MAX_STT_BYTES) {
+      if (
+        invocation.audioUrl &&
+        (!/^https?:\/\//i.test(invocation.audioUrl) || invocation.audioUrl.length > 8_192)
+      ) {
+        fail({ field: 'audioUrl', reason: 'invalid_audio_url' });
+      }
+      if (!invocation.audioUrl && !invocation.audio) {
+        fail({ field: 'audio', reason: 'required' });
+      }
+      if (invocation.audio && invocation.audio.byteLength > MAX_STT_BYTES) {
         fail({ field: 'audio', maxBytes: MAX_STT_BYTES });
       }
       break;

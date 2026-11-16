@@ -86,33 +86,39 @@ beforeAll(async () => {
     usageCharacters: ttsPayload.extra_info?.usage_characters ?? null,
   };
 
-  const sttResponse = await fetch(new URL('/gateway/v1/chat/completions', base), {
-    method: 'POST',
-    headers: { ...auth, 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      model: requiredProviderEnv('S11_AIPROXY_STT_MODEL'),
-      messages: [
-        {
-          role: 'user',
-          content: [
+  const sttResponse = await fetch(
+    new URL('/gateway/alibaba/api/v1/services/aigc/multimodal-generation/generation', base),
+    {
+      method: 'POST',
+      headers: { ...auth, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: requiredProviderEnv('S11_AIPROXY_STT_MODEL'),
+        input: {
+          messages: [
             {
-              type: 'input_audio',
-              input_audio: { data: audioUrl ?? '' },
+              role: 'user',
+              content: [
+                {
+                  type: 'input_audio',
+                  input_audio: { data: audioUrl ?? '' },
+                },
+              ],
             },
           ],
         },
-      ],
-    }),
-  });
+        parameters: { format: 'mp3' },
+      }),
+    },
+  );
   const sttPayload = (await sttResponse.json()) as {
-    choices?: Array<{ message?: { content?: string } }>;
+    output?: { text?: string };
     usage?: unknown;
     error?: { code?: string };
   };
   nativeStt = {
     status: sttResponse.status,
     requestId: sttResponse.headers.get('x-request-id'),
-    text: sttPayload.choices?.[0]?.message?.content ?? '',
+    text: sttPayload.output?.text ?? '',
     safeErrorCode: sttPayload.error?.code ?? null,
     usage: sttPayload.usage ?? null,
   };
@@ -122,7 +128,7 @@ beforeAll(async () => {
     token: token(),
     transport: new AxiosS5HttpTransport(),
     ttsProtocol: 'minimax-native',
-    sttProtocol: 'chat-audio-native',
+    sttProtocol: 'dashscope-multimodal-native',
     defaultTtsVoice: requiredProviderEnv('S11_AIPROXY_TTS_VOICE'),
   });
   const tts = await adapter.invoke<{
@@ -145,20 +151,15 @@ beforeAll(async () => {
     audioUrlPresent: typeof tts.data.audioUrl === 'string',
     mimeType: tts.data.mimeType,
   };
-  const audioResponse = tts.data.audioUrl
-    ? await fetch(tts.data.audioUrl, { signal: AbortSignal.timeout(60_000) })
-    : null;
-  const audioBytes = audioResponse
-    ? new Uint8Array(await audioResponse.arrayBuffer())
-    : (tts.data.audio ?? new Uint8Array());
-  if (!audioResponse || audioResponse.ok) {
+  if (tts.data.audioUrl || tts.data.audio) {
     try {
       const stt = await adapter.invoke<{ text: string }>(
         {
           kind: 'stt',
           modelId: requiredProviderEnv('S11_AIPROXY_STT_MODEL'),
-          audio: audioBytes,
-          mimeType: tts.data.mimeType,
+          ...(tts.data.audioUrl
+            ? { audioUrl: tts.data.audioUrl, mimeType: tts.data.mimeType }
+            : { audio: tts.data.audio!, mimeType: tts.data.mimeType }),
         },
         providerContext,
       );

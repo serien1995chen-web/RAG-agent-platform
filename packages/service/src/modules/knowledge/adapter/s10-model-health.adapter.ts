@@ -36,7 +36,6 @@ export class S10ModelHealthProbeAdapter {
   constructor(
     private readonly input: {
       gateway: S5ModelGatewayPort;
-      fetch?: typeof fetch;
     },
   ) {}
 
@@ -129,23 +128,16 @@ export class S10ModelHealthProbeAdapter {
       text: '健康检查',
     });
     const audio = ttsAudio(ttsResult.data);
-    let audioBytes = audio.audio;
-    if (!audioBytes && audio.audioUrl) {
-      const response = await (this.input.fetch ?? fetch)(audio.audioUrl, {
-        signal: AbortSignal.timeout(60_000),
-      });
-      if (!response.ok) throw probeFailure(context, 'tts_audio_fetch_failed');
-      audioBytes = new Uint8Array(await response.arrayBuffer());
-    }
-    if (!audioBytes || audioBytes.byteLength === 0) {
+    if (!audio.audio && !audio.audioUrl) {
       throw probeFailure(context, 'tts_probe_empty');
     }
 
     const sttResult = await invoke<{ text: string }>({
       kind: 'stt',
       modelId: stt.modelId,
-      audio: audioBytes,
-      mimeType: 'audio/mpeg',
+      ...(audio.audioUrl
+        ? { audioUrl: audio.audioUrl, mimeType: 'audio/mpeg' }
+        : { audio: audio.audio!, mimeType: 'audio/mpeg' }),
     });
     if (!sttResult.data.text.trim()) throw probeFailure(context, 'stt_probe_empty');
 

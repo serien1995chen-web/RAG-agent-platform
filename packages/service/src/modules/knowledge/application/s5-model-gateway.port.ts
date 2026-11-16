@@ -41,6 +41,14 @@ export type S5ModelInvocation =
       modelId: string;
       audio: Uint8Array;
       mimeType: string;
+      audioUrl?: never;
+    }
+  | {
+      kind: 'stt';
+      modelId: string;
+      audioUrl: string;
+      audio?: never;
+      mimeType?: string;
     }
   | {
       kind: 'tts';

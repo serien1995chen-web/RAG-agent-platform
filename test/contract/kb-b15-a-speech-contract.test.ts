@@ -119,4 +119,56 @@ describe('L1-B15-A TokenDance speech adapter contract', () => {
       usage: { inputTokens: 7, outputTokens: 2 },
     });
   });
+
+  it('L1-B15-A-MODEL-005-P02 uses TokenDance DashScope multimodal generation for HTTP ASR', async () => {
+    const transport = new RecordingTransport([
+      {
+        output: { text: '你好' },
+        usage: { duration: 1.25, input_tokens: 12, output_tokens: 3 },
+      },
+    ]);
+    const adapter = new S5AiproxyHttpAdapter({
+      baseUrl: 'https://tokendance.example.invalid',
+      token: 'fake-provider-token',
+      transport,
+      sttProtocol: 'dashscope-multimodal-native',
+    });
+
+    const result = await adapter.invoke(
+      {
+        kind: 'stt',
+        modelId: 'qwen-audio-3.1-asr-flash',
+        audioUrl: 'https://audio.example.invalid/input.mp3',
+        mimeType: 'audio/mpeg',
+      },
+      context,
+    );
+
+    expect(transport.requests[0]).toMatchObject({
+      url: 'https://tokendance.example.invalid/gateway/alibaba/api/v1/services/aigc/multimodal-generation/generation',
+      headers: { 'Content-Type': 'application/json' },
+      body: {
+        model: 'qwen-audio-3.1-asr-flash',
+        input: {
+          messages: [
+            {
+              role: 'user',
+              content: [
+                {
+                  type: 'input_audio',
+                  input_audio: { data: 'https://audio.example.invalid/input.mp3' },
+                },
+              ],
+            },
+          ],
+        },
+        parameters: { format: 'mp3' },
+      },
+    });
+    expect(result).toMatchObject({
+      data: { text: '你好', duration_seconds: 1.25 },
+      quantity: 1.25,
+      usage: { inputTokens: 12, outputTokens: 3 },
+    });
+  });
 });

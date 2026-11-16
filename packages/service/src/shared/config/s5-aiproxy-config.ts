@@ -34,7 +34,7 @@ export const S5AiproxyConfigSchema = z
     providerOnly: z.array(z.string().min(1)).nullable(),
     rerankProtocol: z.enum(['openai', 'alibaba-native']),
     ttsProtocol: z.enum(['openai', 'minimax-native']),
-    sttProtocol: z.enum(['openai', 'chat-audio-native']),
+    sttProtocol: z.enum(['openai', 'chat-audio-native', 'dashscope-multimodal-native']),
     ttsVoice: z.string().min(1).nullable(),
   })
   .strict();
@@ -87,7 +87,7 @@ export function loadS5AiproxyConfig(env: EnvSource = process.env): S5AiproxyConf
     (mode === 'openai' && tokenDanceGateway ? 'minimax-native' : 'openai');
   const sttProtocol =
     read(env, 'AIPROXY_STT_PROTOCOL') ??
-    (mode === 'openai' && tokenDanceGateway ? 'chat-audio-native' : 'openai');
+    (mode === 'openai' && tokenDanceGateway ? 'dashscope-multimodal-native' : 'openai');
   const ttsVoice = read(env, 'S11_AIPROXY_TTS_VOICE') ?? read(env, 'AIPROXY_TTS_VOICE') ?? null;
 
   const parsed = S5AiproxyConfigSchema.safeParse({
