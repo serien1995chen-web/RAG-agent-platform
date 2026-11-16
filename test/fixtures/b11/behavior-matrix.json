@@ -1,0 +1,68 @@
+{
+  "schemaVersion": 1,
+  "capturedAt": "2026-11-16",
+  "fastGptVersion": "4.17.3",
+  "references": [
+    {
+      "capability": "PARSE-001",
+      "testPrefix": "L1-B11-A-PARSE-001",
+      "fastGpt": [
+        "packages/service/worker/readFile/index.ts:87",
+        "packages/service/worker/readFile/index.ts:97",
+        "packages/service/worker/readFile/index.ts:112",
+        "packages/service/worker/readFile/parseOffice.ts:352"
+      ],
+      "frontend": ["KB-IMPORT-020", "KB-IMPORT-100", "KB-IMPORT-120", "KB-IMPORT-125"],
+      "behavior": "Registered file extensions are dispatched to their format parser; empty preview is an explicit error and import remains recoverable.",
+      "verdict": "MATCH"
+    },
+    {
+      "capability": "PARSE-001",
+      "testPrefix": "L1-B11-A-PARSE-001-F01",
+      "fastGpt": [
+        "packages/service/worker/readFile/index.ts:97",
+        "packages/service/worker/readFile/utils/LiteParse/index.ts"
+      ],
+      "frontend": ["KB-IMPORT-118", "KB-IMPORT-123", "KB-IMPORT-125"],
+      "behavior": "Parser selection is format-aware; a loading fallback must remain distinct from successful OCR or parse completion.",
+      "verdict": "MATCH"
+    },
+    {
+      "capability": "PARSE-002",
+      "testPrefix": "L1-B11-A-PARSE-002-P01",
+      "fastGpt": [
+        "packages/service/thirdProvider/somark/index.ts:35",
+        "packages/service/thirdProvider/textin/index.ts:58",
+        "packages/service/thirdProvider/doc2x/index.ts:111",
+        "packages/service/thirdProvider/sangfor/index.ts:68"
+      ],
+      "frontend": ["KB-IMPORT-100", "KB-IMPORT-120", "KB-IMPORT-125"],
+      "behavior": "The selected external PDF parser is used, returns markdown and a page count, and transfers configured images.",
+      "verdict": "MATCH"
+    },
+    {
+      "capability": "PARSE-002",
+      "testPrefix": "L1-B11-A-PARSE-002-N01",
+      "fastGpt": [
+        "packages/service/thirdProvider/somark/index.ts:56",
+        "packages/service/thirdProvider/textin/index.ts:82",
+        "packages/service/thirdProvider/doc2x/index.ts:184"
+      ],
+      "frontend": ["KB-IMPORT-123", "KB-IMPORT-125"],
+      "behavior": "Provider authentication, quota, rate-limit, transport, timeout and invalid-output failures are explicit and never become empty success.",
+      "verdict": "MATCH"
+    },
+    {
+      "capability": "PARSE-002",
+      "testPrefix": "L1-B11-A-PARSE-002-UI01",
+      "fastGpt": [
+        "projects/app/src/pageComponents/dataset/detail/Form/CollectionChunkForm.tsx:118",
+        "projects/app/src/pageComponents/dataset/detail/Import/commonProgress/PreviewData.tsx:20"
+      ],
+      "frontend": ["KB-IMPORT-100", "KB-IMPORT-104", "KB-IMPORT-110", "KB-IMPORT-123"],
+      "behavior": "Provider availability, fallback, image handling, preview loading and recovery are visible and preserve the user's settings.",
+      "verdict": "MATCH",
+      "allowedDifference": "Control layout and labels may differ while preserving the same business effect."
+    }
+  ]
+}
