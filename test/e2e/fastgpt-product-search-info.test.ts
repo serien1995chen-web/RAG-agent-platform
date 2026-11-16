@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { mkdir } from 'node:fs/promises';
+import { mkdir, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import AxeBuilder from '@axe-core/playwright';
 import { chromium, expect as playwrightExpect, type Browser } from '@playwright/test';
@@ -355,6 +355,115 @@ describe('FastGPT product module 4 Search and Info', () => {
     await permissionModal.getByRole('button', { name: '关闭弹窗' }).click();
     await playwrightExpect(page.locator('.kb2-modal')).toHaveCount(0);
 
+    await context.close();
+  });
+
+  it('L1-B15-A-MODEL-001-UI01 preserves all model roles and starts rebuild after index model change', async () => {
+    const catalog = await api<{
+      items: Array<{
+        modelId: string;
+        displayName: string;
+        type: 'llm' | 'embedding' | 'rerank' | 'vlm' | 'stt' | 'tts';
+        capabilities: string[];
+        authorized: boolean;
+      }>;
+    }>('/v1/knowledge/models?limit=200', 'GET');
+    const selectedModels = (['llm', 'embedding', 'rerank', 'vlm', 'stt', 'tts'] as const).flatMap(
+      (type) => {
+        const model = catalog.items.find(
+          (candidate) => candidate.authorized && candidate.type === type,
+        );
+        return model
+          ? [
+              {
+                modelType: type,
+                modelId: model.modelId,
+                displayName: model.displayName,
+                requiredCapabilities: model.capabilities,
+                status: 'active' as const,
+              },
+            ]
+          : [];
+      },
+    );
+    expect(selectedModels).toHaveLength(6);
+    const space = await api<{ version: number }>(`/v1/knowledge/spaces/${datasetId}`, 'GET');
+    await api(`/v1/knowledge/spaces/${datasetId}/model-bindings`, 'PUT', {
+      bindings: selectedModels,
+      version: space.version,
+    });
+
+    const context = await browser.newContext({
+      viewport: { width: 1200, height: 900 },
+      locale: 'zh-CN',
+    });
+    await context.addCookies([cookie]);
+    const page = await context.newPage();
+    const rebuildRequests: string[] = [];
+    page.on('request', (request) => {
+      if (request.url().includes('/rebuild')) rebuildRequests.push(request.url());
+    });
+    await page.goto(
+      `${app.baseUrl}/dataset/detail?datasetId=${datasetId}&currentTab=collectionCard`,
+      { waitUntil: 'networkidle' },
+    );
+    const jobsBefore = await models.KnowledgeJob.find({
+      workspaceId,
+      knowledgeSpaceId: datasetId,
+      deletedAt: null,
+    })
+      .select({ _id: 1, kind: 1, status: 1 })
+      .lean<Array<{ _id: unknown; kind: string; status: string }>>();
+    const jobIdsBefore = new Set(jobsBefore.map((job) => String(job._id)));
+    await page.getByRole('button', { name: '编辑模型配置' }).click();
+    const modelModal = page.locator('.kb2-modal');
+    const embedding = modelModal.getByLabel('索引模型');
+    expect(await embedding.locator('option').count()).toBeGreaterThan(1);
+    await embedding.selectOption({ index: 1 });
+    const saved = page.waitForResponse(
+      (response) =>
+        response.request().method() === 'PUT' &&
+        response.url().endsWith(`/spaces/${datasetId}/model-bindings`),
+    );
+    await modelModal.getByRole('button', { name: '保存' }).click();
+    expect((await saved).status()).toBe(200);
+
+    const after = await api<{
+      items: Array<{ modelType: string }>;
+    }>(`/v1/knowledge/spaces/${datasetId}/model-bindings`, 'GET');
+    const jobsAfter = await models.KnowledgeJob.find({
+      workspaceId,
+      knowledgeSpaceId: datasetId,
+      deletedAt: null,
+    })
+      .select({ _id: 1, kind: 1, status: 1 })
+      .lean<Array<{ _id: unknown; kind: string; status: string }>>();
+    const newJobs = jobsAfter.filter((job) => !jobIdsBefore.has(String(job._id)));
+    await writeFile(
+      join(resultDir, 'b15-model-binding-result.json'),
+      `${JSON.stringify(
+        {
+          testId: 'L1-B15-A-MODEL-001-UI01',
+          expectedModelTypes: selectedModels.map((item) => item.modelType).sort(),
+          actualModelTypes: after.items.map((item) => item.modelType).sort(),
+          rebuildRequestCount: rebuildRequests.length,
+          newJobs: newJobs.map((job) => ({ kind: job.kind, status: job.status })),
+        },
+        null,
+        2,
+      )}\n`,
+    );
+    await page.screenshot({
+      path: join(resultDir, 'b15-model-binding-after-save.png'),
+      fullPage: true,
+    });
+    expect
+      .soft(after.items.map((item) => item.modelType).sort())
+      .toEqual(selectedModels.map((item) => item.modelType).sort());
+    expect.soft(rebuildRequests.length).toBeGreaterThan(0);
+    expect
+      .soft(newJobs.some((job) => job.kind === 'rebuild' || job.kind === 'synonym_rebuild'))
+      .toBe(true);
     await context.close();
   });
 });
