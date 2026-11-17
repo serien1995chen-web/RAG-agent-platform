@@ -3,7 +3,7 @@ import { parseQaText } from './parser';
 import type { QaResultItem } from './parser';
 
 export type QaValidationResult =
-  | { valid: true; items: QaResultItem[] }
+  | { valid: true; items: QaResultItem[]; problems: string[] }
   | { valid: false; problems: string[] };
 
 export function validateQaItems(
@@ -21,6 +21,7 @@ export function validateQaItems(
     const item = raw as Record<string, unknown>;
     const q = typeof item.q === 'string' ? item.q.trim() : '';
     const a = typeof item.a === 'string' ? item.a.trim() : '';
+    const itemProblemStart = problems.length;
     if (q.length === 0) problems.push(`items.${index}.q:empty`);
     if (a.length === 0) problems.push(`items.${index}.a:empty`);
     if ([...q].length > 20_000) problems.push(`items.${index}.q:too_long`);
@@ -28,11 +29,13 @@ export function validateQaItems(
     if (typeof item.sourceChunkHash === 'string' && item.sourceChunkHash !== sourceChunkHash) {
       problems.push(`items.${index}.sourceChunkHash:mismatch`);
     }
-    if (q.length > 0 && a.length > 0) {
+    if (q.length > 0 && a.length > 0 && problems.length === itemProblemStart) {
       normalized.push({ q, a, sourceChunkHash });
     }
   });
-  return problems.length > 0 ? { valid: false, problems } : { valid: true, items: normalized };
+  return normalized.length > 0
+    ? { valid: true, items: normalized, problems }
+    : { valid: false, problems: problems.length > 0 ? problems : ['items_empty'] };
 }
 
 export interface QaParsedValidation {
@@ -67,7 +70,7 @@ export function parseQaOutputValidated(
     }
     const validated = validateQaItems(parsed, sourceChunkHash);
     return validated.valid
-      ? { items: validated.items, problems: [], repairCount }
+      ? { items: validated.items, problems: validated.problems, repairCount }
       : { items: [], problems: validated.problems, repairCount };
   }
   const parsedText = parseQaText(content);
@@ -79,8 +82,8 @@ export function parseQaOutputValidated(
           ...(validated.valid ? [] : validated.problems),
           ...(parsedText.unparsed.length > 0 ? ['text_unparsed'] : []),
         ];
-  return validated.valid && validated.items.length > 0 && problems.length === 0
-    ? { items: validated.items, problems: [], repairCount: 1 }
+  return validated.valid && validated.items.length > 0
+    ? { items: validated.items, problems, repairCount: 1 }
     : {
         items: [],
         problems: problems.length > 0 ? problems : ['items_empty'],

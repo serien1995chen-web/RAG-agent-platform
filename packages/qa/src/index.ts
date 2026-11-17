@@ -50,6 +50,8 @@ export interface GenerateQaOptions {
     request: QaRequest,
   ) => Promise<Pick<QaResult, 'items'>> | Pick<QaResult, 'items'>;
   timeoutMs?: number;
+  /** Legacy model-service callers may request one schema repair call. B11 imports disable it. */
+  retryOnInvalidSchema?: boolean;
 }
 
 function qaError(
@@ -114,7 +116,12 @@ export async function generateQa(
     throw qaError('KNOWLEDGE_NOT_FOUND', { templateId: request.qaTemplateId }, requestId);
   }
 
-  const prompt = buildQaPrompt(resolvePrompt(template, request), request.chunkText);
+  const basePrompt = resolvePrompt(template, request);
+  const prompt = buildQaPrompt(basePrompt, request.chunkText);
+  const promptVersion =
+    template.allowPromptOverride && request.qaPrompt?.trim()
+      ? `sha256:${createHash('sha256').update(basePrompt, 'utf8').digest('hex')}`
+      : `${template.templateId}@${template.version}`;
   const sourceChunkHash =
     request.sourceChunkHash ??
     `sha256:${createHash('sha256').update(request.chunkText, 'utf8').digest('hex')}`;
@@ -130,22 +137,17 @@ export async function generateQa(
       throw modelFailure(error, request, requestId);
     }
   };
-  const addUsage = (
-    left: { inputTokens: number; outputTokens: number },
-    right: { inputTokens: number; outputTokens: number },
-  ) => ({
-    inputTokens: left.inputTokens + right.inputTokens,
-    outputTokens: left.outputTokens + right.outputTokens,
-  });
-
   const output = await generate(prompt);
   let parsed = parseQaOutputValidated(output.content, sourceChunkHash);
   let usage = output.usage;
-  if (parsed.items.length === 0) {
+  if (parsed.items.length === 0 && options.retryOnInvalidSchema === true) {
     const repairedOutput = await generate(
       `${prompt}\n\nReturn only a valid JSON array of question-answer objects with non-empty q and a fields. Do not include prose.`,
     );
-    usage = addUsage(usage, repairedOutput.usage);
+    usage = {
+      inputTokens: usage.inputTokens + repairedOutput.usage.inputTokens,
+      outputTokens: usage.outputTokens + repairedOutput.usage.outputTokens,
+    };
     parsed = parseQaOutputValidated(repairedOutput.content, sourceChunkHash);
   }
   if (parsed.items.length === 0) {
@@ -156,6 +158,7 @@ export async function generateQa(
       items: fallbackItems,
       usage,
       fallback: 'chunk_split',
+      promptVersion,
       diagnostics: [{ code: 'qa_output_invalid', problems: parsed.problems }],
     };
   }
@@ -165,7 +168,11 @@ export async function generateQa(
     items: deduped.items,
     usage,
     fallback: 'none',
+    promptVersion,
     diagnostics: [
+      ...(parsed.problems.length > 0
+        ? [{ code: 'qa_output_partial', problems: parsed.problems }]
+        : []),
       ...(deduped.duplicates > 0
         ? [{ code: 'qa_duplicate_removed', count: deduped.duplicates }]
         : []),

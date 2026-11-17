@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import {
   BullMqQueueAdapter,
   KNOWLEDGE_QUEUE_NAMES,
@@ -43,6 +44,8 @@ import {
   S5OcrApplication,
   S5OcrCredentialProfileAdapter,
   S5OcrHttpAdapter,
+  S5MockOcrProvider,
+  parseS5OcrProviderConfig,
   S5ProcessingApplication,
   S5QaPipelineAdapter,
   S5RemoteAssetAdapter,
@@ -370,6 +373,7 @@ async function bootstrapRuntime(): Promise<TelemetryKnowledgeApiRuntime> {
   const s5Artifacts = new S5ArtifactRepository(mongo, s5ArtifactStore);
   const s5Qa = new S5QaPipelineAdapter({
     gateway: s5Gateway,
+    qaSchemaRetries: 0,
     resolveModels: async ({ knowledgeSpaceId, context }) => {
       const bindings = await s5BindingRepository.list(knowledgeSpaceId, context);
       const llm = bindings.find(
@@ -391,12 +395,40 @@ async function bootstrapRuntime(): Promise<TelemetryKnowledgeApiRuntime> {
         ...(embedding ? { embeddingModelId: embedding.modelId } : {}),
       };
     },
+    assertRequestScope: async (input) => {
+      const source = await catalog.getSource(input.sourceId, input.context);
+      if (
+        String(source.knowledgeSpaceId) !== input.knowledgeSpaceId ||
+        String(source.workspaceId) !== input.workspaceId
+      ) {
+        throw createKnowledgeError({
+          code: 'KNOWLEDGE_NOT_FOUND',
+          requestId: input.context.requestId,
+          traceId: input.context.traceId,
+          details: { sourceId: input.sourceId },
+        });
+      }
+      if (
+        input.sourceVersion !== undefined &&
+        Number((source as { sourceVersion?: unknown }).sourceVersion) !== input.sourceVersion
+      ) {
+        throw createKnowledgeError({
+          code: 'KNOWLEDGE_CONFLICT',
+          requestId: input.context.requestId,
+          traceId: input.context.traceId,
+          details: { sourceId: input.sourceId, expectedVersion: input.sourceVersion },
+        });
+      }
+    },
   });
   const s5Ocr = new S5OcrApplication({
-    provider: new S5OcrHttpAdapter({
-      profiles: new S5OcrCredentialProfileAdapter(s5RuntimeEnv),
-      transport: new AxiosS5OcrHttpTransport(),
-    }),
+    provider:
+      config.externalModes.ocr === 'mock'
+        ? new S5MockOcrProvider()
+        : new S5OcrHttpAdapter({
+            profiles: new S5OcrCredentialProfileAdapter(s5RuntimeEnv),
+            transport: new AxiosS5OcrHttpTransport(),
+          }),
     usage: s5Usage,
     remoteAssets: new S5RemoteAssetAdapter(),
     assetSink: s5Artifacts,
@@ -631,6 +663,54 @@ async function bootstrapRuntime(): Promise<TelemetryKnowledgeApiRuntime> {
         const chunks: Uint8Array[] = [];
         for await (const chunk of object.body) chunks.push(chunk);
         const bytes = Buffer.concat(chunks.map((chunk) => Buffer.from(chunk)));
+        const parseProvider = input.parseProvider as
+          | 'liteparse'
+          | 'sangfor'
+          | 'somark'
+          | 'textin'
+          | 'doc2x';
+        if (parseProvider !== 'liteparse') {
+          const config = parseS5OcrProviderConfig(
+            input.metadata?.parseConfigSnapshot,
+            parseProvider,
+            context,
+          );
+          const result = await s5Ocr.parse({
+            workspaceId: context.workspaceId,
+            knowledgeSpaceId: input.knowledgeSpaceId,
+            sourceId: input.sourceId,
+            sourceVersion: Number(input.sourceVersion),
+            bytes,
+            fileName: input.fileName,
+            mimeType: input.mimeType,
+            config,
+            timeoutMs: config.timeoutMs,
+            requestId: context.requestId,
+            traceId: context.traceId,
+            context,
+          });
+          return {
+            format: result.actualProvider,
+            rawText: result.markdown,
+            pages: result.pages,
+            assets: result.assets,
+            diagnostics: result.diagnostics,
+            scanRequired: false,
+            imageRefs: result.assets
+              .map((asset) => asset.objectRefId)
+              .filter((value): value is string => typeof value === 'string'),
+            contentHash: `sha256:${createHash('sha256').update(result.markdown).digest('hex')}`,
+            parserVersion: `${result.actualProvider}@1`,
+            configHash: `sha256:${createHash('sha256')
+              .update(JSON.stringify(config))
+              .digest('hex')}`,
+            requestEvidence: result.requestEvidence,
+            attempts: result.attempts,
+            fallbackUsed: result.fallbackUsed,
+            actualProvider: result.actualProvider,
+            providerUsage: result.usage,
+          };
+        }
         const urlSelector =
           typeof input.metadata?.selector === 'string' ? input.metadata.selector : undefined;
         const urlBase =

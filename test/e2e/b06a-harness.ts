@@ -5,7 +5,6 @@ import { join, resolve } from 'node:path';
 
 const root = resolve(import.meta.dirname, '../..');
 const appRoot = join(root, 'projects', 'app');
-const WORKER_MARKER = '/tmp/knowledge-worker-ready';
 
 export interface B06aAppHarness {
   baseUrl: string;
@@ -38,6 +37,7 @@ function baseRuntimeEnv(input: {
   suffix: string;
   workspaceId: string;
   memberId: string;
+  workspaceMemberIds?: string[];
   authToken: string;
   scopes?: string;
   isWorkspaceOwner?: boolean;
@@ -75,6 +75,11 @@ function baseRuntimeEnv(input: {
     API_KEY_HMAC_SECRET_FILE: `${root}/test/fixtures/s10/api-key-hmac.secret`,
     KB_MOCK_WORKSPACE_ID: input.workspaceId,
     KB_MOCK_MEMBER_ID: input.memberId,
+    ...(input.workspaceMemberIds && input.workspaceMemberIds.length > 0
+      ? {
+          KB_MOCK_MEMBER_IDS: [...new Set([input.memberId, ...input.workspaceMemberIds])].join(','),
+        }
+      : {}),
     KB_MOCK_SCOPES:
       input.scopes ?? 'knowledge:read,knowledge:write,knowledge:manage,knowledge:admin',
     KB_MOCK_WORKSPACE_OWNER: String(input.isWorkspaceOwner ?? true),
@@ -102,13 +107,13 @@ async function waitForHealth(handle: ChildProcess, baseUrl: string, output: () =
   throw new Error(`B06A e2e app did not become healthy\n${output()}`);
 }
 
-async function waitForWorker(worker: ChildProcess, output: () => string) {
+async function waitForWorker(worker: ChildProcess, marker: string, output: () => string) {
   const deadline = Date.now() + 90_000;
   while (Date.now() < deadline) {
     if (worker.exitCode !== null) {
       throw new Error(`B06A worker exited early\n${output()}`);
     }
-    if (existsSync(WORKER_MARKER)) return;
+    if (existsSync(marker)) return;
     await new Promise((resolveWait) => setTimeout(resolveWait, 250));
   }
   throw new Error(`B06A worker did not become ready\n${output()}`);
@@ -127,6 +132,7 @@ export async function startB06aApp(input: {
 }): Promise<B06aAppHarness> {
   const port = await freePort();
   const baseUrl = `http://127.0.0.1:${port}`;
+  const workerMarker = `/tmp/knowledge-worker-ready-${input.suffix}-${process.pid}`;
   const nextBinary = join(appRoot, 'node_modules', 'next', 'dist', 'bin', 'next');
   if (!existsSync(nextBinary)) throw new Error(`Next binary not found: ${nextBinary}`);
   let output = '';
@@ -148,19 +154,20 @@ export async function startB06aApp(input: {
     if (!existsSync(workerEntry)) {
       throw new Error(`worker build missing: ${workerEntry} (run pnpm build:workers)`);
     }
-    rmSync(WORKER_MARKER, { force: true });
+    rmSync(workerMarker, { force: true });
     worker = spawn(process.execPath, [workerEntry], {
       cwd: appRoot,
       env: {
         ...baseRuntimeEnv({ ...input, port }),
         KB_APP_WORKER_MODE: 'worker',
         KB_INSTANCE_ID: `b06a-e2e-worker-${input.suffix}`,
+        KB_WORKER_READY_FILE: workerMarker,
       },
       stdio: ['ignore', 'pipe', 'pipe'],
     });
     worker.stdout?.on('data', collect);
     worker.stderr?.on('data', collect);
-    await waitForWorker(worker, () => output);
+    await waitForWorker(worker, workerMarker, () => output);
   }
 
   return {
@@ -172,7 +179,7 @@ export async function startB06aApp(input: {
         await new Promise((resolveWait) => setTimeout(resolveWait, 800));
         if (worker.exitCode === null) worker.kill('SIGKILL');
       }
-      rmSync(WORKER_MARKER, { force: true });
+      rmSync(workerMarker, { force: true });
       if (handle.exitCode === null) {
         handle.kill('SIGTERM');
         await new Promise((resolveWait) => setTimeout(resolveWait, 500));

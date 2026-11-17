@@ -327,6 +327,8 @@ export interface KnowledgeSegmentDoc extends WorkspaceFields {
   question: string;
   answer: string;
   content: string;
+  contentHash: string | null;
+  chunkSettingsHash: string | null;
   fullTextTokens: string;
   fullTextVersion: number;
   metadata: Record<string, unknown>;
@@ -366,6 +368,8 @@ export const KnowledgeSegmentSchema = new Schema(
     question: { type: String, default: '', maxlength: 100000 },
     answer: { type: String, default: '', maxlength: 100000 },
     content: { type: String, required: true },
+    contentHash: { type: String, default: null },
+    chunkSettingsHash: { type: String, default: null },
     fullTextTokens: { type: String, default: '' },
     fullTextVersion: { type: Number, required: true, min: 0, default: 0 },
     metadata: { type: Schema.Types.Mixed, required: true, default: {} },

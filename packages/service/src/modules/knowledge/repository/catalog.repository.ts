@@ -139,6 +139,8 @@ function segmentDto(document: Plain<KnowledgeSegmentDoc>) {
     question: document.question,
     answer: document.answer,
     content: document.content,
+    contentHash: document.contentHash ?? null,
+    chunkSettingsHash: document.chunkSettingsHash ?? null,
     fullTextTokens: document.fullTextTokens,
     fullTextVersion: document.fullTextVersion,
     metadata: document.metadata,
@@ -1430,6 +1432,10 @@ export class KnowledgeCatalogRepository {
       question: input.question,
       answer: input.answer,
       content: `${input.question}\n${input.answer}`.trim(),
+      contentHash: createHash('sha256')
+        .update(`${input.question}\n${input.answer}`.trim(), 'utf8')
+        .digest('hex'),
+      chunkSettingsHash: null,
       fullTextTokens: '',
       fullTextVersion: 0,
       metadata: input.metadata ?? {},
@@ -1479,6 +1485,9 @@ export class KnowledgeCatalogRepository {
       const question = String(input.question ?? current.question);
       const answer = String(input.answer ?? current.answer);
       update.content = `${question}\n${answer}`.trim();
+      update.contentHash = createHash('sha256')
+        .update(String(update.content), 'utf8')
+        .digest('hex');
       const history = [
         ...current.history,
         {

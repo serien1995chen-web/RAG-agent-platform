@@ -1,0 +1,21 @@
+{
+  "fixtureSet": "b11-b",
+  "schemaVersion": 1,
+  "sourceOfTruth": "RAG-agent-platform synthetic clean-room fixtures",
+  "files": [
+    {
+      "path": "test/fixtures/b11-b/corpus.json",
+      "sha256": "6c24d6784dbf3c624b14469cc132ada56b58cdf2d65514434012872a8d5b2658",
+      "contains": [
+        "mixed Chinese and English Markdown",
+        "Markdown table",
+        "short paragraph",
+        "long paragraph",
+        "oversized table",
+        "valid QA",
+        "partially invalid QA",
+        "invalid QA"
+      ]
+    }
+  ]
+}

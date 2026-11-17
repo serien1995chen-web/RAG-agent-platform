@@ -221,6 +221,7 @@ export class KnowledgeOutboxDispatcher {
           {
             $or: [
               { status: 'pending', availableAt: { $lte: now } },
+              { status: 'failed', availableAt: { $lte: now } },
               { status: 'publishing', updatedAt: { $lte: stalePublishingBefore } },
             ],
           },

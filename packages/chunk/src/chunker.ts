@@ -34,6 +34,14 @@ function validatePolicy(policy: ChunkPolicy): void {
   if (!(policy.minSize <= policy.chunkSize && policy.chunkSize <= policy.maxSize))
     fail(policy.chunkSize);
   if (policy.overlapRatio < 0 || policy.overlapRatio > 0.9) fail(policy.overlapRatio);
+  if (
+    policy.overlapSize !== undefined &&
+    (!Number.isInteger(policy.overlapSize) ||
+      policy.overlapSize < 0 ||
+      policy.overlapSize >= policy.chunkSize)
+  ) {
+    fail(policy.overlapSize);
+  }
   if (policy.paragraphDeep < 1 || policy.paragraphDeep > 5) fail(policy.paragraphDeep);
   if (policy.customRegs.length > 5 || policy.customRegs.some((reg) => reg.length > 200)) {
     fail(policy.customRegs.length);
@@ -83,10 +91,11 @@ function expandOversized(segments: Segment[], policy: ChunkPolicy, counter: Coun
 interface MergeState {
   policy: ChunkPolicy;
   counter: Counter;
-  chunks: string[];
+  chunks: Array<{ text: string; group: number }>;
   current: Segment[];
   currentLength: number;
   lastKind: Segment['kind'] | null;
+  group: number;
 }
 
 function flush(state: MergeState): void {
@@ -98,7 +107,7 @@ function flush(state: MergeState): void {
   state.lastKind = state.current[state.current.length - 1]?.kind ?? null;
   state.current = [];
   state.currentLength = 0;
-  if (text.length > 0) state.chunks.push(text);
+  if (text.length > 0) state.chunks.push({ text, group: state.group });
 }
 
 function buildSingleSegment(segment: Segment, counter: Counter, limit: number): string[] {
@@ -106,7 +115,11 @@ function buildSingleSegment(segment: Segment, counter: Counter, limit: number): 
   return counter.split(segment.text, limit);
 }
 
-function mergeSegments(segments: Segment[], policy: ChunkPolicy, counter: Counter): string[] {
+function mergeSegments(
+  segments: Segment[],
+  policy: ChunkPolicy,
+  counter: Counter,
+): Array<{ text: string; group: number }> {
   const state: MergeState = {
     policy,
     counter,
@@ -114,19 +127,22 @@ function mergeSegments(segments: Segment[], policy: ChunkPolicy, counter: Counte
     current: [],
     currentLength: 0,
     lastKind: null,
+    group: 0,
   };
   const overlapUnit =
-    policy.overlapRatio > 0 ? Math.floor(policy.chunkSize * policy.overlapRatio) : 0;
+    policy.overlapSize ??
+    (policy.overlapRatio > 0 ? Math.floor(policy.chunkSize * policy.overlapRatio) : 0);
 
   const startChunk = (segment: Segment): void => {
     const previous = state.chunks[state.chunks.length - 1];
     if (
       overlapUnit > 0 &&
       previous !== undefined &&
+      previous.group === state.group &&
       state.lastKind === 'text' &&
       segment.kind === 'text'
     ) {
-      const tail = counter.tail(previous, overlapUnit);
+      const tail = counter.tail(previous.text, overlapUnit);
       const tailLength = tail.length > 0 ? counter.length(tail) : 0;
       if (
         tailLength > 0 &&
@@ -142,11 +158,17 @@ function mergeSegments(segments: Segment[], policy: ChunkPolicy, counter: Counte
   };
 
   for (const segment of segments) {
+    if (segment.kind === 'custom') {
+      flush(state);
+      state.lastKind = null;
+      state.group += 1;
+      continue;
+    }
     const length = counter.length(segment.text);
     if (isAtomic(segment)) {
       flush(state);
       for (const piece of buildSingleSegment(segment, counter, policy.chunkSize)) {
-        state.chunks.push(piece);
+        state.chunks.push({ text: piece, group: state.group });
         state.lastKind = segment.kind;
       }
       continue;
@@ -179,35 +201,44 @@ function mergeSegments(segments: Segment[], policy: ChunkPolicy, counter: Counte
 }
 
 /** 小于 minSize 的块优先与后块合并，其次与前块合并，避免产生孤立碎片。 */
-function coalesceSmall(chunks: string[], policy: ChunkPolicy, counter: Counter): string[] {
-  if (chunks.length <= 1) return chunks;
-  const result: string[] = [];
+function coalesceSmall(
+  chunks: Array<{ text: string; group: number }>,
+  policy: ChunkPolicy,
+  counter: Counter,
+): string[] {
+  if (chunks.length <= 1) return chunks.map((chunk) => chunk.text);
+  const result: Array<{ text: string; group: number }> = [];
   for (let index = 0; index < chunks.length; index += 1) {
-    const chunk = chunks[index] ?? '';
-    if (counter.length(chunk) >= policy.minSize) {
+    const chunk = chunks[index]!;
+    if (counter.length(chunk.text) >= policy.minSize) {
       result.push(chunk);
       continue;
     }
     const next = chunks[index + 1];
     if (
       next !== undefined &&
-      counter.length(chunk) + 1 + counter.length(next) <= policy.chunkSize
+      next.group === chunk.group &&
+      counter.length(chunk.text) + 1 + counter.length(next.text) <= policy.chunkSize
     ) {
-      result.push(`${chunk}\n${next}`);
+      result.push({ ...chunk, text: `${chunk.text}\n${next.text}` });
       index += 1;
       continue;
     }
     const previous = result[result.length - 1];
     if (
       previous !== undefined &&
-      counter.length(previous) + 1 + counter.length(chunk) <= policy.chunkSize
+      previous.group === chunk.group &&
+      counter.length(previous.text) + 1 + counter.length(chunk.text) <= policy.chunkSize
     ) {
-      result[result.length - 1] = `${previous}\n${chunk}`;
+      result[result.length - 1] = {
+        ...previous,
+        text: `${previous.text}\n${chunk.text}`,
+      };
       continue;
     }
     result.push(chunk);
   }
-  return result;
+  return result.map((chunk) => chunk.text);
 }
 
 export function chunkText(input: { text: string; policy: ChunkPolicy }): ChunkOutput {

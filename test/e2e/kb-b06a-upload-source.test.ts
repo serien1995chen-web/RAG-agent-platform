@@ -178,11 +178,20 @@ beforeAll(async () => {
   process.env.KB_TEST_S3_ACCESS_KEY ??= 'minioadmin';
   process.env.KB_TEST_S3_SECRET_KEY ??= 'minioadmin';
 
-  app = await startB06aApp({ suffix, workspaceId, memberId, authToken, withWorker: true });
+  const readMemberId = memberId + 'read';
+  app = await startB06aApp({
+    suffix,
+    workspaceId,
+    memberId,
+    workspaceMemberIds: [readMemberId],
+    authToken,
+    withWorker: true,
+  });
   readApp = await startB06aApp({
     suffix: suffix + 'read',
     workspaceId,
-    memberId: memberId + 'read',
+    memberId: readMemberId,
+    workspaceMemberIds: [memberId],
     authToken: readToken,
     scopes: 'knowledge:read',
     isWorkspaceOwner: false,

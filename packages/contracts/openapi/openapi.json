@@ -21315,6 +21315,18 @@
               "Refunds are processed within five business days."
             ]
           },
+          "contentHash": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "chunkSettingsHash": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "metadata": {
             "type": "object",
             "additionalProperties": true,
@@ -25405,6 +25417,11 @@
           "chunkSplitter": {
             "type": "string",
             "maxLength": 1000
+          },
+          "overlap": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 8000
           },
           "indexSize": {
             "type": "integer",

@@ -1,0 +1,61 @@
+{
+  "schemaVersion": 1,
+  "capturedAt": "2026-11-16",
+  "assets": [
+    {
+      "path": "packages/parse/test/integration/s5-format-matrix.test.ts",
+      "status": "REUSE",
+      "notes": "Rerun; B11-A adds per-format content and metadata assertions in its own file."
+    },
+    {
+      "path": "packages/parse/test/integration/parser-formats.test.ts",
+      "status": "REUSE",
+      "notes": "Existing parser behavior remains useful but lacks B11 capability IDs."
+    },
+    {
+      "path": "packages/parse/test/unit/s5-liteparse-fallback.test.ts",
+      "status": "REUSE",
+      "notes": "Confirms only WASM loading triggers PDF.js fallback."
+    },
+    {
+      "path": "packages/service/test/integration/s5-artifact.test.ts",
+      "status": "EXTEND",
+      "notes": "B11-A adds partial-failure compensation and same-version concurrency checks."
+    },
+    {
+      "path": "packages/service/test/integration/s5-ocr-assets.test.ts",
+      "status": "REUSE",
+      "notes": "Real Mongo usage and image materialization remains valid."
+    },
+    {
+      "path": "packages/service/test/unit/s5-ocr-provider.test.ts",
+      "status": "EXTEND",
+      "notes": "B11-A adds TextIn option propagation and page-count bounds."
+    },
+    {
+      "path": "test/fault/s5-model-parse-fault.test.ts",
+      "status": "EXTEND",
+      "notes": "B11-A adds dedicated retry, fallback and schema exhaustion IDs."
+    },
+    {
+      "path": "test/real-provider/s11-ocr-real.test.ts",
+      "status": "EXTEND",
+      "notes": "Existing direct Provider calls remain; B11-A adds per-provider evidence records."
+    },
+    {
+      "path": "test/e2e/s5-model-parse.test.ts",
+      "status": "BLOCKED",
+      "notes": "Contains pre-existing it.skip coverage; B11-A adds a separate E2E test file."
+    },
+    {
+      "path": "packages/web/test/unit/s5-model-parse-ui.test.ts",
+      "status": "EXTEND",
+      "notes": "B11-A adds the product import settings surface and submit payload checks."
+    },
+    {
+      "path": "test/contract/s5-model-parse.test.ts",
+      "status": "REUSE",
+      "notes": "Frozen contracts remain valid; B11-A adds runtime provider-selection wiring checks."
+    }
+  ]
+}

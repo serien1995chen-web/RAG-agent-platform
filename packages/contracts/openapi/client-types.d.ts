@@ -412,7 +412,7 @@ export interface SchemaPropertyMap {
   "AuditEventList": "items" | "pageInfo";
   "BatchResult": "code" | "failed" | "items" | "requested" | "succeeded";
   "BinaryStream": never;
-  "ChunkingSettings": "autoIndexes" | "chunkSettingMode" | "chunkSize" | "chunkSplitMode" | "chunkSplitter" | "chunkTriggerMinSize" | "chunkTriggerType" | "dataEnhanceCollectionName" | "imageIndex" | "indexPrefixTitle" | "indexSize" | "paragraphChunkAIMode" | "paragraphChunkDeep" | "paragraphChunkMinSize" | "qaPrompt" | "trainingType";
+  "ChunkingSettings": "autoIndexes" | "chunkSettingMode" | "chunkSize" | "chunkSplitMode" | "chunkSplitter" | "chunkTriggerMinSize" | "chunkTriggerType" | "dataEnhanceCollectionName" | "imageIndex" | "indexPrefixTitle" | "indexSize" | "overlap" | "paragraphChunkAIMode" | "paragraphChunkDeep" | "paragraphChunkMinSize" | "qaPrompt" | "trainingType";
   "Citation": "citationId" | "score" | "segmentId" | "segmentRange" | "sourceId" | "sourceUrl" | "title" | "version";
   "CleanupCreate": "scope";
   "Collaborator": "grantedAt" | "memberId" | "role" | "status";
@@ -496,7 +496,7 @@ export interface SchemaPropertyMap {
   "SearchFilter": "conditions" | "createdAt" | "directoryIds" | "logic" | "sourceIds";
   "SearchRequest": "embeddingWeight" | "filters" | "knowledgeSpaceId" | "query" | "rerankWeight" | "searchMode" | "similarity" | "tokenBudget" | "usingRerank";
   "SearchResponse": "degraded" | "durationMs" | "items" | "mode" | "partial" | "rerankApplied" | "searchId";
-  "Segment": "answer" | "content" | "fullTextTokens" | "fullTextVersion" | "id" | "imageBlobRefId" | "indexErrorCode" | "indexStatus" | "indexes" | "knowledgeSpaceId" | "metadata" | "order" | "question" | "searchEnabled" | "sourceId" | "sourceVersion" | "version" | "workspaceId";
+  "Segment": "answer" | "chunkSettingsHash" | "content" | "contentHash" | "fullTextTokens" | "fullTextVersion" | "id" | "imageBlobRefId" | "indexErrorCode" | "indexStatus" | "indexes" | "knowledgeSpaceId" | "metadata" | "order" | "question" | "searchEnabled" | "sourceId" | "sourceVersion" | "version" | "workspaceId";
   "SegmentBatchAction": "action" | "items";
   "SegmentCreate": "answer" | "indexes" | "metadata" | "question" | "searchEnabled" | "segmentType";
   "SegmentHistory": "answer" | "changedAt" | "changedByMemberId" | "indexId" | "indexes" | "nextIndexes" | "operation" | "question" | "version";

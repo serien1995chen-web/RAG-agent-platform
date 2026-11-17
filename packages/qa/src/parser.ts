@@ -33,6 +33,7 @@ export interface QaResult {
   items: QaResultItem[];
   usage: { inputTokens: number; outputTokens: number };
   fallback: 'none' | 'chunk_split';
+  promptVersion: string;
   diagnostics: Array<{
     code: string;
     count?: number;

@@ -50,6 +50,16 @@ export interface S5ParseResult {
   contentHash: string;
   parserVersion: string;
   configHash: string;
+  requestEvidence?: Record<string, unknown>;
+  attempts?: number;
+  fallbackUsed?: boolean;
+  actualProvider?: string;
+  providerUsage?: Array<{
+    provider: string;
+    unit: 'page' | 'image' | 'request';
+    quantity: number;
+    status: number | null;
+  }>;
 }
 
 export interface S5ProcessingResult {
@@ -70,6 +80,8 @@ export interface S5ProcessingResult {
     ocrFallbackProvider: string | null;
     chunkingConfigHash: string;
     qaPromptVersion: string | null;
+    qaUsage?: { inputTokens: number; outputTokens: number };
+    qaAttempts?: number;
     fallbackUsed: boolean;
     paragraphEnhancementApplied?: boolean;
     paragraphPromptVersion?: string | null;
@@ -120,7 +132,13 @@ export interface S5ArtifactMaterializeResult {
   evidence: Pick<
     S5ProcessingResult['evidence'],
     'parserName' | 'parserVersion' | 'providerConfigHash' | 'rawTextHash'
-  >;
+  > & {
+    requestEvidence?: Record<string, unknown>;
+    attempts?: number;
+    fallbackUsed?: boolean;
+    actualProvider?: string;
+    providerUsage?: S5ParseResult['providerUsage'];
+  };
 }
 
 export function parseIdempotencyKeyOf(input: {

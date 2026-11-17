@@ -30,7 +30,7 @@ describe('TEST-PARSE-003-BLOCK deterministic chunk settings', () => {
       mode: 'custom',
       lengthUnit: 'char',
       chunkSize: 512,
-      overlapRatio: 0.15,
+      overlapRatio: 0,
       forceSplit: true,
       maxChunks: 50_000,
     });

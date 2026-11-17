@@ -32,6 +32,7 @@ export interface S5QaPipelineInput {
   workspaceId: string;
   knowledgeSpaceId: string;
   sourceId: string;
+  sourceVersion?: number;
 }
 
 export class S5QaPipelineAdapter implements S5QaPipelinePort {
@@ -42,15 +43,40 @@ export class S5QaPipelineAdapter implements S5QaPipelinePort {
       gateway: S5ModelGatewayPort;
       llmModelId?: string;
       embeddingModelId?: string;
+      qaSchemaRetries?: number;
       resolveModels?: (input: {
         workspaceId: string;
         knowledgeSpaceId: string;
         context: TenantContext;
       }) => Promise<{ llmModelId: string; embeddingModelId?: string }>;
+      assertRequestScope?: (input: {
+        workspaceId: string;
+        knowledgeSpaceId: string;
+        sourceId: string;
+        sourceVersion?: number;
+        context: TenantContext;
+      }) => Promise<void>;
     },
   ) {}
 
   async generate(request: S5QaPipelineInput): Promise<S5QaChunkResult> {
+    if (request.workspaceId !== request.context.workspaceId) {
+      throw createKnowledgeError({
+        code: 'KNOWLEDGE_FORBIDDEN',
+        requestId: request.context.requestId,
+        traceId: request.context.traceId,
+        details: { field: 'workspaceId' },
+      });
+    }
+    if (this.input.assertRequestScope) {
+      await this.input.assertRequestScope({
+        workspaceId: request.workspaceId,
+        knowledgeSpaceId: request.knowledgeSpaceId,
+        sourceId: request.sourceId,
+        ...(request.sourceVersion !== undefined ? { sourceVersion: request.sourceVersion } : {}),
+        context: request.context,
+      });
+    }
     const selected = this.input.resolveModels
       ? await this.input.resolveModels({
           workspaceId: request.workspaceId,
@@ -69,6 +95,7 @@ export class S5QaPipelineAdapter implements S5QaPipelinePort {
         details: { field: 'modelBindings.llm', reason: 'required_for_qa' },
       });
     }
+    let actualAttempts = 0;
     const model: QaModelPort = {
       generate: async (modelInput) => {
         const invocation: S5ModelInvocation = {
@@ -88,6 +115,7 @@ export class S5QaPipelineAdapter implements S5QaPipelinePort {
           resourceId: request.knowledgeSpaceId,
           operation: `qa:${request.chunk.contentHash}`,
         });
+        actualAttempts += result.attempts;
         return {
           content: contentOf(result.data),
           usage: {
@@ -116,14 +144,24 @@ export class S5QaPipelineAdapter implements S5QaPipelinePort {
       {
         templateRegistry: this.templates,
         model,
-        fallbackToChunkSplit: () => ({ items: [] }),
+        fallbackToChunkSplit: () => ({
+          items: [
+            {
+              q: request.chunk.text,
+              a: '',
+              sourceChunkHash: request.chunk.contentHash,
+            },
+          ],
+        }),
+        retryOnInvalidSchema: (this.input.qaSchemaRetries ?? 1) > 0,
       },
     );
     return {
       items: result.items,
       fallback: result.fallback,
-      promptVersion: 'qa.default@1',
+      promptVersion: result.promptVersion,
       usage: result.usage,
+      attempts: actualAttempts,
       diagnostics: result.diagnostics.map((diagnostic) => ({
         severity: diagnostic.code === 'qa_output_invalid' ? 'warning' : 'info',
         code: diagnostic.code,

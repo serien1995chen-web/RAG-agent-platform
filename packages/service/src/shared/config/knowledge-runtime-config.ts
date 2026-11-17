@@ -15,6 +15,7 @@ const EnvironmentSchema = z.object({
   KB_APP_WORKER_MODE: z.enum(['all', 'http', 'worker']).default('all'),
   KB_PORT: z.coerce.number().int().min(1).max(65535).default(3010),
   KB_INSTANCE_ID: z.string().min(1).max(128).default('knowledge-1'),
+  KB_WORKER_READY_FILE: z.string().trim().min(1).default('/tmp/knowledge-worker-ready'),
   KB_MONGO_URI: z.string().min(1),
   KB_REDIS_URL: z.string().min(1),
   KB_PG_URL: z.string().min(1),
@@ -67,6 +68,7 @@ export interface KnowledgeRuntimeConfig {
   workerMode: 'all' | 'http' | 'worker';
   port: number;
   instanceId: string;
+  workerReadyFile: string;
   mongoUri: string;
   redisUrl: string;
   pgUrl: string;
@@ -203,6 +205,7 @@ export function loadKnowledgeRuntimeConfig(
     workerMode: data.KB_APP_WORKER_MODE,
     port: data.KB_PORT,
     instanceId: data.KB_INSTANCE_ID,
+    workerReadyFile: data.KB_WORKER_READY_FILE,
     mongoUri: data.KB_MONGO_URI,
     redisUrl: data.KB_REDIS_URL,
     pgUrl: data.KB_PG_URL,

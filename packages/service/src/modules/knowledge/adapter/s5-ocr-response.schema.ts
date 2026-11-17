@@ -2,6 +2,8 @@ import { z } from 'zod';
 import type { S5OcrProviderName, S5OcrProviderResult } from '../application/s5-ocr-ports';
 import type { S5ParseAsset, S5ParsePage } from '../application/s5-processing-ports';
 
+export const MAX_OCR_PROVIDER_PAGES = 100_000;
+
 const ImageSchema = z
   .object({
     url: z.string().url().optional(),
@@ -111,6 +113,14 @@ export function parseOcrResponse(
   if (!parsed.success) throw new S5OcrResponseContractError('ocr_response_schema_invalid');
   if (!('markdown' in parsed.data) || parsed.data.markdown === undefined) {
     throw new S5OcrResponseContractError('ocr_markdown_missing');
+  }
+  if (
+    input.pageCountHint !== undefined &&
+    (!Number.isInteger(input.pageCountHint) ||
+      input.pageCountHint < 1 ||
+      input.pageCountHint > MAX_OCR_PROVIDER_PAGES)
+  ) {
+    throw new S5OcrResponseContractError('ocr_page_count_invalid');
   }
   const markdown = parsed.data.markdown;
   if (markdown.trim().length === 0) {
