@@ -230,6 +230,34 @@ describe('L1-B11-A PARSE-002 provider request contract', () => {
     expect(doc2x?.headers.Authorization).toBe('Bearer key-doc2x');
   });
 
+  it('L1-B11-A-PARSE-002-P01 preserves SomArk total page count without page payloads', async () => {
+    const adapter = new S5OcrHttpAdapter({
+      profiles,
+      transport: {
+        async request<T>() {
+          return {
+            status: 200,
+            headers: {},
+            data: {
+              code: 0,
+              data: {
+                result: { outputs: { markdown: 'SomArk combined markdown' } },
+                metadata: { page_num: 2 },
+              },
+            },
+          } as S5OcrHttpResponse<T>;
+        },
+      },
+    });
+    const result = await adapter.parse(request('somark'), context);
+    expect(result.pages.map((page) => page.pageNumber)).toEqual([1, 2]);
+    expect(result.pages[0]?.text).toBe('SomArk combined markdown');
+    expect(result.pages[1]?.text).toBe('');
+    expect(result.usage).toContainEqual(
+      expect.objectContaining({ provider: 'somark', unit: 'page', quantity: 2 }),
+    );
+  });
+
   it('L1-B11-A-PARSE-002-N01 classifies 401, 403, 402, 429 and 503 without converting them to success', async () => {
     const cases = [
       [401, 'auth', false],

@@ -447,15 +447,19 @@ export class S5OcrHttpAdapter implements OcrProviderPort {
       if (config.provider === 'somark') {
         const native = SomarkNativeResponseSchema.safeParse(response.data);
         if (native.success) {
+          const pageCount = native.data.data.metadata.page_num;
+          if (!pageCountWithinLimit(pageCount)) {
+            throw new ProviderError('contract', response.status, usage, false, true);
+          }
           normalized = {
             code: native.data.code,
             markdown: native.data.data.result.outputs.markdown,
-            pages: [],
+            pages: Array.from({ length: pageCount }, (_, index) => ({
+              pageNumber: index + 1,
+              markdown: index === 0 ? native.data.data.result.outputs.markdown : '',
+            })),
           };
-          pageCountHint = native.data.data.metadata.page_num;
-          if (!pageCountWithinLimit(pageCountHint)) {
-            throw new ProviderError('contract', response.status, usage, false, true);
-          }
+          pageCountHint = pageCount;
         }
       } else if (config.provider === 'textin') {
         const native = TextinNativeResponseSchema.safeParse(response.data);
