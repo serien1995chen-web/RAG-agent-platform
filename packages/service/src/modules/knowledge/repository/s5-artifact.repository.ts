@@ -1,9 +1,10 @@
 import { createHash } from 'node:crypto';
-import { Types, type Connection, type Model } from 'mongoose';
+import { Types, type ClientSession, type Connection, type Model } from 'mongoose';
 import { createKnowledgeError } from '@kb/contracts';
 import type { TenantContext } from '../../../shared/persistence/knowledge/tenant';
 import { requireWorkspaceId, tenantError } from '../../../shared/persistence/knowledge/tenant';
 import { registerKnowledgeModels } from '../../../shared/persistence/schemas/knowledge-index';
+import { withMongoTransaction } from '../../../shared/persistence/with-mongo-transaction';
 import type { KnowledgeObjectRefDoc } from '../../../shared/persistence/schemas/knowledge-operations.schemas';
 import type { KnowledgeSourceDoc } from '../../../shared/persistence/schemas/knowledge-catalog.schemas';
 import type {
@@ -17,6 +18,19 @@ import type { S5OcrAssetSinkPort } from '../application/s5-ocr-ports';
 
 interface PlainObjectRef extends KnowledgeObjectRefDoc {
   _id: Types.ObjectId;
+}
+
+interface StagedArtifact {
+  blobId: Types.ObjectId;
+  objectKey: string;
+  purpose: 'source' | 'image';
+  sha256: string;
+  sizeBytes: number;
+  mimeType: string;
+  etag: string;
+  sourceId: string;
+  knowledgeSpaceId: string;
+  assetId?: string;
 }
 
 function stableObjectId(value: string): Types.ObjectId {
@@ -71,9 +85,8 @@ export class S5ArtifactRepository implements S5OcrAssetSinkPort {
     this.sources = models.KnowledgeSource;
   }
 
-  private async materializeOne(input: {
+  private async stageOne(input: {
     sourceId: string;
-    sourceVersion: number;
     knowledgeSpaceId: string;
     purpose: 'source' | 'image';
     bytes: Uint8Array;
@@ -81,10 +94,12 @@ export class S5ArtifactRepository implements S5OcrAssetSinkPort {
     sha256: string;
     context: TenantContext;
     assetId?: string;
-  }): Promise<S5ObjectArtifactRef> {
+  }): Promise<
+    | { existing: S5ObjectArtifactRef; staged?: undefined }
+    | { existing?: undefined; staged: StagedArtifact }
+  > {
     const workspaceId = requireWorkspaceId(input.context);
     const sourceObjectId = new Types.ObjectId(input.sourceId);
-    const knowledgeSpaceObjectId = new Types.ObjectId(input.knowledgeSpaceId);
     const blobId = stableObjectId(
       [
         workspaceId,
@@ -106,7 +121,9 @@ export class S5ArtifactRepository implements S5OcrAssetSinkPort {
       })
       .lean<PlainObjectRef>()
       .exec();
-    if (existing?.state === 'active') return objectRefView(existing);
+    if (existing?.state === 'active') {
+      return { existing: objectRefView(existing) };
+    }
     const objectKey = objectKeyOf({
       workspaceId,
       knowledgeSpaceId: input.knowledgeSpaceId,
@@ -115,193 +132,107 @@ export class S5ArtifactRepository implements S5OcrAssetSinkPort {
       sha256: input.sha256,
       ...(input.assetId ? { assetId: input.assetId } : {}),
     });
-    let pending: PlainObjectRef;
-    if (existing) {
-      const updated = await this.objects
-        .findOneAndUpdate(
-          {
-            _id: blobId,
-            workspaceId,
-            version: existing.version,
-            deletedAt: null,
-          },
-          {
-            $set: {
-              state: 'pending',
-              objectKey,
-              mimeType: input.mimeType,
-              sizeBytes: input.bytes.byteLength,
-              etag: '',
-              sha256: input.sha256,
-              expiresAt: null,
-              'upload.mode': null,
-              'upload.status': null,
-              'upload.providerUploadId': null,
-              'upload.pendingObjectKey': null,
-              'upload.finalObjectKey': objectKey,
-              'upload.finalizedAt': null,
-              'upload.pendingUrlExpiresAt': null,
-              'upload.partSizeBytes': 8_388_608,
-              'upload.partCount': 0,
-              'upload.parts': [],
-              'upload.originalName':
-                input.purpose === 'source'
-                  ? `${input.sourceId}.md`
-                  : `${input.assetId ?? 'image'}.bin`,
-              'upload.completedAt': null,
-              'upload.abortedAt': null,
-              updatedByMemberId: input.context.memberId,
-            },
-            $inc: { version: 1 },
-          },
-          { new: true },
-        )
-        .lean<PlainObjectRef>()
-        .exec();
-      if (!updated) {
-        throw tenantError(input.context, 'KNOWLEDGE_CONFLICT', {
-          reason: 'artifact_reset_conflict',
-          blobId: String(blobId),
-        });
-      }
-      pending = updated;
-    } else {
-      const created = await this.objects.create({
-        _id: blobId,
+    const stored = await this.store.putObject(
+      {
+        key: objectKey,
+        body: input.bytes,
+        contentType: input.mimeType,
         workspaceId,
-        knowledgeSpaceId: knowledgeSpaceObjectId,
-        version: 1,
-        deletedAt: null,
-        createdByMemberId: input.context.memberId,
-        updatedByMemberId: input.context.memberId,
-        provider: this.store.provider,
-        bucket: this.store.bucket,
+        knowledgeSpaceId: input.knowledgeSpaceId,
+        purpose: input.purpose,
+        sha256: input.sha256,
+      },
+      input.context,
+    );
+    return {
+      staged: {
+        blobId,
         objectKey,
         purpose: input.purpose,
-        sourceId: sourceObjectId,
+        sha256: stored.sha256 || input.sha256,
+        sizeBytes: stored.size,
         mimeType: input.mimeType,
-        sizeBytes: input.bytes.byteLength,
-        etag: '',
-        sha256: input.sha256,
-        state: 'pending',
-        expiresAt: null,
-        upload: {
-          mode: null,
-          status: null,
-          providerUploadId: null,
-          pendingObjectKey: null,
-          finalObjectKey: objectKey,
-          finalizedAt: null,
-          pendingUrlExpiresAt: null,
-          partSizeBytes: 8_388_608,
-          partCount: 0,
-          parts: [],
-          originalName:
-            input.purpose === 'source' ? `${input.sourceId}.md` : `${input.assetId ?? 'image'}.bin`,
-          completedAt: null,
-          abortedAt: null,
-        },
-      });
-      pending = created.toObject<PlainObjectRef>();
-    }
-    try {
-      const stored = await this.store.putObject(
-        {
-          key: objectKey,
-          body: input.bytes,
-          contentType: input.mimeType,
-          workspaceId,
-          knowledgeSpaceId: input.knowledgeSpaceId,
-          purpose: input.purpose,
-          sha256: input.sha256,
-        },
-        input.context,
-      );
-      const active = await this.objects
-        .findOneAndUpdate(
-          {
-            _id: blobId,
-            workspaceId,
-            version: pending.version,
-            state: 'pending',
-            deletedAt: null,
-          },
-          {
-            $set: {
-              state: 'active',
-              objectKey: stored.key,
-              sizeBytes: stored.size,
-              etag: stored.etag,
-              sha256: stored.sha256 || input.sha256,
-              'upload.finalObjectKey': stored.key,
-              'upload.finalizedAt': new Date(),
-              updatedByMemberId: input.context.memberId,
-            },
-            $inc: { version: 1 },
-          },
-          { new: true },
-        )
-        .lean<PlainObjectRef>()
-        .exec();
-      if (!active) {
-        throw tenantError(input.context, 'KNOWLEDGE_CONFLICT', {
-          reason: 'artifact_activation_conflict',
-          blobId: String(blobId),
-        });
-      }
-      return objectRefView(active);
-    } catch (error) {
-      await this.objects
-        .updateOne(
-          {
-            _id: blobId,
-            workspaceId,
-            version: pending.version,
-          },
-          {
-            $set: {
-              state: 'deleting',
-              expiresAt: new Date(Date.now() + 3 * 60 * 60 * 1000),
-              updatedByMemberId: input.context.memberId,
-            },
-            $inc: { version: 1 },
-          },
-        )
-        .exec();
-      throw error;
-    }
+        etag: stored.etag || '',
+        sourceId: input.sourceId,
+        knowledgeSpaceId: input.knowledgeSpaceId,
+        ...(input.assetId ? { assetId: input.assetId } : {}),
+      },
+    };
   }
 
-  private async materializeAsset(
-    asset: S5ParseAsset,
-    input: S5ArtifactMaterializeInput,
+  private async activateOne(
+    staged: StagedArtifact,
     context: TenantContext,
-  ): Promise<S5ParseAsset> {
-    if (asset.objectRefId) return asset;
-    if (!asset.bytes || asset.bytes.byteLength === 0) {
-      return {
-        ...asset,
-        bytes: undefined,
-      };
+    session: ClientSession,
+  ): Promise<S5ObjectArtifactRef> {
+    const workspaceId = requireWorkspaceId(context);
+    const filter = { _id: staged.blobId, workspaceId, deletedAt: null };
+    const update = {
+      $set: {
+        knowledgeSpaceId: new Types.ObjectId(staged.knowledgeSpaceId),
+        sourceId: new Types.ObjectId(staged.sourceId),
+        provider: this.store.provider,
+        bucket: this.store.bucket,
+        objectKey: staged.objectKey,
+        purpose: staged.purpose,
+        mimeType: staged.mimeType,
+        sizeBytes: staged.sizeBytes,
+        etag: staged.etag,
+        sha256: staged.sha256,
+        state: 'active',
+        expiresAt: null,
+        deletedAt: null,
+        updatedByMemberId: context.memberId,
+        'upload.mode': null,
+        'upload.status': null,
+        'upload.providerUploadId': null,
+        'upload.pendingObjectKey': null,
+        'upload.finalObjectKey': staged.objectKey,
+        'upload.finalizedAt': new Date(),
+        'upload.pendingUrlExpiresAt': null,
+        'upload.partSizeBytes': 8_388_608,
+        'upload.partCount': 0,
+        'upload.parts': [],
+        'upload.originalName':
+          staged.purpose === 'source'
+            ? `${staged.sourceId}.md`
+            : `${staged.assetId ?? 'image'}.bin`,
+        'upload.completedAt': null,
+        'upload.abortedAt': null,
+      },
+      $setOnInsert: { createdByMemberId: context.memberId },
+      $inc: { version: 1 },
+    } as const;
+    const updateActive = async (upsert: boolean) =>
+      this.objects
+        .findOneAndUpdate(filter, update, {
+          upsert,
+          new: true,
+          setDefaultsOnInsert: true,
+          session,
+        })
+        .lean<PlainObjectRef>()
+        .exec();
+    let active: PlainObjectRef | null;
+    try {
+      active = await updateActive(true);
+    } catch (error) {
+      if (
+        typeof error !== 'object' ||
+        error === null ||
+        (error as { code?: unknown }).code !== 11000
+      ) {
+        throw error;
+      }
+      active = await updateActive(false);
     }
-    const ref = await this.materializeOne({
-      sourceId: input.sourceId,
-      sourceVersion: input.sourceVersion,
-      knowledgeSpaceId: input.knowledgeSpaceId,
-      purpose: 'image',
-      bytes: asset.bytes,
-      mimeType: asset.mimeType,
-      sha256: asset.sha256,
-      context,
-      assetId: asset.assetId,
-    });
-    return {
-      assetId: asset.assetId,
-      mimeType: asset.mimeType,
-      sha256: asset.sha256,
-      sizeBytes: asset.sizeBytes,
-      objectRefId: ref.blobId,
-    };
+    if (!active) {
+      throw tenantError(context, 'KNOWLEDGE_CONFLICT', {
+        reason: 'artifact_activation_conflict',
+        blobId: String(staged.blobId),
+      });
+    }
+    return objectRefView(active);
   }
 
   async putImage(
@@ -316,9 +247,8 @@ export class S5ArtifactRepository implements S5OcrAssetSinkPort {
     },
     context: TenantContext,
   ): Promise<{ objectRefId: string; markdownUrl: string }> {
-    const ref = await this.materializeOne({
+    const prepared = await this.stageOne({
       sourceId: input.sourceId,
-      sourceVersion: input.sourceVersion,
       knowledgeSpaceId: input.knowledgeSpaceId,
       purpose: 'image',
       bytes: input.bytes,
@@ -327,6 +257,11 @@ export class S5ArtifactRepository implements S5OcrAssetSinkPort {
       context,
       assetId: input.sha256,
     });
+    const ref =
+      prepared.existing ??
+      (await withMongoTransaction(this.connection, (session) =>
+        this.activateOne(prepared.staged, context, session),
+      ));
     return {
       objectRefId: ref.blobId,
       markdownUrl: `object://${ref.blobId}`,
@@ -379,9 +314,8 @@ export class S5ArtifactRepository implements S5OcrAssetSinkPort {
       });
     }
     const rawTextHash = createHash('sha256').update(input.parse.rawText, 'utf8').digest('hex');
-    const rawTextObjectRef = await this.materializeOne({
+    const rawPrepared = await this.stageOne({
       sourceId: input.sourceId,
-      sourceVersion: input.sourceVersion,
       knowledgeSpaceId: input.knowledgeSpaceId,
       purpose: 'source',
       bytes: new TextEncoder().encode(input.parse.rawText),
@@ -389,51 +323,117 @@ export class S5ArtifactRepository implements S5OcrAssetSinkPort {
       sha256: rawTextHash,
       context,
     });
+    const staged: StagedArtifact[] = rawPrepared.staged ? [rawPrepared.staged] : [];
     const assets: S5ParseAsset[] = [];
     for (const asset of input.parse.assets) {
-      const materialized = await this.materializeAsset(asset, input, context);
-      assets.push(materialized);
-    }
-    const updatedSource = await this.sources
-      .updateOne(
-        {
-          _id: new Types.ObjectId(input.sourceId),
-          workspaceId,
-          sourceVersion: input.sourceVersion,
-          deletedAt: null,
-        },
-        {
-          $set: {
-            contentHash: rawTextHash,
-            updatedByMemberId: context.memberId,
-          },
-        },
-      )
-      .exec();
-    if (updatedSource.modifiedCount !== 1) {
-      throw tenantError(context, 'KNOWLEDGE_CONFLICT', {
-        reason: 'source_content_hash_cas_failed',
+      if (asset.objectRefId) {
+        assets.push(asset);
+        continue;
+      }
+      if (!asset.bytes || asset.bytes.byteLength === 0) {
+        assets.push({ ...asset, bytes: undefined });
+        continue;
+      }
+      const prepared = await this.stageOne({
         sourceId: input.sourceId,
-        sourceVersion: input.sourceVersion,
+        knowledgeSpaceId: input.knowledgeSpaceId,
+        purpose: 'image',
+        bytes: asset.bytes,
+        mimeType: asset.mimeType,
+        sha256: asset.sha256,
+        context,
+        assetId: asset.assetId,
+      });
+      if (prepared.staged) staged.push(prepared.staged);
+      assets.push({
+        assetId: asset.assetId,
+        mimeType: asset.mimeType,
+        sha256: asset.sha256,
+        sizeBytes: asset.sizeBytes,
+        ...(prepared.existing
+          ? { objectRefId: prepared.existing.blobId }
+          : prepared.staged
+            ? { objectRefId: String(prepared.staged.blobId) }
+            : {}),
       });
     }
+    const activated = await withMongoTransaction(this.connection, async (session) => {
+      const refs = new Map<string, S5ObjectArtifactRef>();
+      for (const artifact of staged) {
+        const ref = await this.activateOne(artifact, context, session);
+        refs.set(ref.blobId, ref);
+      }
+      const updatedSource = await this.sources
+        .updateOne(
+          {
+            _id: new Types.ObjectId(input.sourceId),
+            workspaceId,
+            sourceVersion: input.sourceVersion,
+            deletedAt: null,
+          },
+          {
+            $set: {
+              contentHash: rawTextHash,
+              updatedByMemberId: context.memberId,
+            },
+          },
+          { session },
+        )
+        .exec();
+      if (updatedSource.matchedCount !== 1) {
+        throw tenantError(context, 'KNOWLEDGE_CONFLICT', {
+          reason: 'source_content_hash_cas_failed',
+          sourceId: input.sourceId,
+          sourceVersion: input.sourceVersion,
+        });
+      }
+      return refs;
+    });
+    const rawTextObjectRef =
+      rawPrepared.existing ??
+      (rawPrepared.staged ? activated.get(String(rawPrepared.staged.blobId)) : undefined);
+    if (!rawTextObjectRef) {
+      throw createKnowledgeError({
+        code: 'KNOWLEDGE_INTERNAL_ERROR',
+        requestId: context.requestId,
+        traceId: context.traceId,
+        details: {
+          reason: 'raw_text_artifact_not_activated',
+          sourceId: input.sourceId,
+          sourceVersion: input.sourceVersion,
+        },
+      });
+    }
+    const activatedAssets = assets.map((asset) =>
+      asset.objectRefId && activated.has(asset.objectRefId)
+        ? { ...asset, objectRefId: activated.get(asset.objectRefId)!.blobId }
+        : asset,
+    );
     const pages = input.parse.pages.map((page) => ({
       ...page,
       assets: page.assets.map(
-        (asset) => assets.find((candidate) => candidate.assetId === asset.assetId) ?? asset,
+        (asset) =>
+          activatedAssets.find((candidate) => candidate.assetId === asset.assetId) ?? asset,
       ),
     }));
     return {
       sourceVersion: input.sourceVersion,
       rawTextObjectRef,
       pages,
-      assets,
+      assets: activatedAssets,
       diagnostics: input.parse.diagnostics,
       evidence: {
         parserName: input.parse.format,
         parserVersion: input.parse.parserVersion,
         providerConfigHash: input.parse.configHash,
         rawTextHash: `sha256:${rawTextHash}`,
+        ...(input.parse.requestEvidence ? { requestEvidence: input.parse.requestEvidence } : {}),
+        ...(input.parse.attempts !== undefined ? { attempts: input.parse.attempts } : {}),
+        ...(input.parse.fallbackUsed !== undefined
+          ? { fallbackUsed: input.parse.fallbackUsed }
+          : {}),
+        ...(input.parse.actualProvider ? { actualProvider: input.parse.actualProvider } : {}),
+        ...(input.parse.providerUsage ? { providerUsage: input.parse.providerUsage } : {}),
       },
     };
   }

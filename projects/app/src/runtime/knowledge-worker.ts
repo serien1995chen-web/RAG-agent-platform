@@ -163,12 +163,20 @@ async function start(): Promise<void> {
               scopes: ['knowledge:admin'],
               isWorkspaceOwner: false,
             };
-            await processing.recoverExpiredLeases(context);
-            await processing.requeueDueRetries(context);
             for (let index = 0; index < BATCH_SIZE; index += 1) {
               const result = await dispatcher.dispatchOnce(context);
               if (!result.dispatched) break;
             }
+            await processing.recoverExpiredLeases(context).catch(() => {
+              telemetry.log('knowledge.worker.maintenance.failed', {
+                operation: 'job.recover_expired_leases',
+              });
+            });
+            await processing.requeueDueRetries(context).catch(() => {
+              telemetry.log('knowledge.worker.maintenance.failed', {
+                operation: 'job.requeue_due_retries',
+              });
+            });
           }
         },
       );
@@ -191,7 +199,7 @@ async function start(): Promise<void> {
     stopping = true;
     if (timer) clearTimeout(timer);
     try {
-      unlinkSync('/tmp/knowledge-worker-ready');
+      unlinkSync(config.workerReadyFile);
     } catch {
       // The readiness marker may already be absent after an abnormal start.
     }
@@ -207,13 +215,15 @@ async function start(): Promise<void> {
   telemetry.log('knowledge.worker.started', {
     operation: `bootstrap:${KNOWLEDGE_QUEUE_NAMES.length}`,
   });
-  writeFileSync('/tmp/knowledge-worker-ready', 'ready\n');
+  writeFileSync(config.workerReadyFile, 'ready\n');
   await tick();
 }
 
 start().catch((error) => {
   process.stderr.write(
-    `knowledge.worker.bootstrap.failed ${error instanceof Error ? error.name : typeof error}\n`,
+    `knowledge.worker.bootstrap.failed ${
+      error instanceof Error ? `${error.name}: ${error.message}` : typeof error
+    }\n`,
   );
   process.exit(1);
 });

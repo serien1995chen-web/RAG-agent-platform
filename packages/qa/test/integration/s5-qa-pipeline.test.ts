@@ -19,6 +19,7 @@ describe('TEST-PARSE-004-BLOCK QA validation, one repair and dedup', () => {
       ),
     ).toEqual({
       valid: true,
+      problems: [],
       items: [
         { q: 'question', a: 'answer', sourceChunkHash: 'sha256:chunk' },
         { q: 'second', a: 'answer', sourceChunkHash: 'sha256:chunk' },
@@ -29,7 +30,7 @@ describe('TEST-PARSE-004-BLOCK QA validation, one repair and dedup', () => {
     ).toMatchObject({ valid: false });
   });
 
-  it('repairs malformed JSON once and rejects irreparable output without fabrication', () => {
+  it('repairs malformed JSON once and preserves valid siblings', () => {
     const repaired = repairQaOutputOnce('[{"q":"问题","a":"答案",},]', 'sha256:chunk');
     expect(repaired.repairCount).toBe(1);
     expect(repaired.items).toEqual([{ q: '问题', a: '答案', sourceChunkHash: 'sha256:chunk' }]);
@@ -42,16 +43,16 @@ describe('TEST-PARSE-004-BLOCK QA validation, one repair and dedup', () => {
     expect(
       parseQaOutputValidated('[{"q":"合法","a":"答案"},{"q":"","a":"非法"}]', 'sha256:chunk'),
     ).toMatchObject({
-      items: [],
+      items: [{ q: '合法', a: '答案', sourceChunkHash: 'sha256:chunk' }],
       problems: ['items.1.q:empty'],
     });
   });
 
-  it('rejects a truncated trailing Q/A block instead of silently keeping earlier pairs', () => {
+  it('keeps complete pairs while diagnosing a truncated trailing block', () => {
     expect(
       parseQaOutputValidated('Q1: complete\nA1: answer\nQ2: missing answer', 'sha256:chunk'),
     ).toMatchObject({
-      items: [],
+      items: [{ q: 'complete', a: 'answer', sourceChunkHash: 'sha256:chunk' }],
       problems: ['text_unparsed'],
       repairCount: 1,
     });

@@ -333,8 +333,15 @@ function validateSnapshot(
   if (kind === 'parse') {
     assertKeys(
       snapshot,
-      ['sourceVersion', 'parseProvider', 'configHash', 'chunking'],
-      ['blobRefId'],
+      ['sourceVersion', 'parseProvider', 'configHash'],
+      [
+        'sourceId',
+        'blobRefId',
+        'chunking',
+        'chunkingConfigSnapshot',
+        'parseConfigSnapshot',
+        'qaConfigSnapshot',
+      ],
       context,
     );
     return;

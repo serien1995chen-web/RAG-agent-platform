@@ -95,6 +95,8 @@ function segmentDto(document: Plain<KnowledgeSegmentDoc>) {
     question: document.question,
     answer: document.answer,
     content: document.content,
+    contentHash: document.contentHash ?? null,
+    chunkSettingsHash: document.chunkSettingsHash ?? null,
     fullTextTokens: document.fullTextTokens,
     fullTextVersion: document.fullTextVersion,
     metadata: document.metadata,

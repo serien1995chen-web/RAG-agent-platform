@@ -104,6 +104,35 @@ const Doc2xNativeResponseSchema = z
   })
   .passthrough();
 
+export const MAX_OCR_PROVIDER_PAGES = 100_000;
+
+export class S5MockOcrProvider implements OcrProviderPort {
+  async parse(request: S5OcrRequest): Promise<S5OcrProviderResult> {
+    const markdown = `# Mock ${request.config.provider} OCR\n\n${request.fileName}`;
+    return {
+      markdown,
+      pages: [{ pageNumber: 1, text: markdown, assets: [] }],
+      assets: [],
+      usage: [
+        {
+          provider: request.config.provider,
+          unit: 'page',
+          quantity: 1,
+          status: 200,
+        },
+      ],
+      diagnostics: [{ severity: 'info', code: 'ocr_mock_transport' }],
+      requestEvidence: {
+        provider: request.config.provider,
+        mode: 'mock',
+        requestId: request.requestId,
+        traceId: request.traceId,
+        pageCount: 1,
+      },
+    };
+  }
+}
+
 function providerPath(provider: S5OcrRequest['config']['provider']): string {
   if (provider === 'somark') return '/parse/sync';
   if (provider === 'textin') return '/pdf_to_markdown';
@@ -117,18 +146,28 @@ function appendPath(endpoint: string, path: string): string {
   return url.toString();
 }
 
-function textinUrl(endpoint: string): string {
+function textinUrl(
+  endpoint: string,
+  config: {
+    parseMode: 'auto' | 'scan';
+    removeWatermark: boolean;
+  },
+): string {
   const url = new URL(appendPath(endpoint, '/pdf_to_markdown'));
   url.searchParams.set('get_image', 'objects');
   url.searchParams.set('image_output_type', 'default');
-  url.searchParams.set('parse_mode', 'auto');
+  url.searchParams.set('parse_mode', config.parseMode);
   url.searchParams.set('dpi', '144');
   url.searchParams.set('markdown_details', '1');
   url.searchParams.set('table_flavor', 'md');
   url.searchParams.set('paratext_mode', 'none');
   url.searchParams.set('page_details', '0');
-  url.searchParams.set('remove_watermark', '1');
+  url.searchParams.set('remove_watermark', config.removeWatermark ? '1' : '0');
   return url.toString();
+}
+
+function pageCountWithinLimit(value: number): boolean {
+  return Number.isInteger(value) && value >= 1 && value <= MAX_OCR_PROVIDER_PAGES;
 }
 
 function requestUsage(provider: string, status: number | null): S5ProviderUsage {
@@ -390,7 +429,13 @@ export class S5OcrHttpAdapter implements OcrProviderPort {
     try {
       const response = await call({
         method: 'POST',
-        url: config.provider === 'textin' ? textinUrl(profile.endpoint) : url,
+        url:
+          config.provider === 'textin'
+            ? textinUrl(profile.endpoint, {
+                parseMode: config.parseMode,
+                removeWatermark: config.removeWatermark,
+              })
+            : url,
         headers: {
           ...headers,
           ...(config.provider === 'textin' ? {} : { 'Content-Type': 'multipart/form-data' }),
@@ -408,12 +453,18 @@ export class S5OcrHttpAdapter implements OcrProviderPort {
             pages: [],
           };
           pageCountHint = native.data.data.metadata.page_num;
+          if (!pageCountWithinLimit(pageCountHint)) {
+            throw new ProviderError('contract', response.status, usage, false, true);
+          }
         }
       } else if (config.provider === 'textin') {
         const native = TextinNativeResponseSchema.safeParse(response.data);
         if (native.success) {
           const pages = [...(native.data.result.pages ?? [])];
           const totalPages = native.data.result.total_page_number ?? 0;
+          if (totalPages > MAX_OCR_PROVIDER_PAGES) {
+            throw new ProviderError('contract', response.status, usage, false, true);
+          }
           if (pages.length === 0 && totalPages > 0) {
             pages.push({ pageNumber: 1, markdown: native.data.result.markdown });
           }

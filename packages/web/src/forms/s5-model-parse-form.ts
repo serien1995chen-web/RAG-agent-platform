@@ -27,6 +27,7 @@ export const s5ChunkingSettingsFormSchema = z
     paragraphChunkMinSize: z.number().int().min(1).max(8_000).optional(),
     chunkSize: z.number().int().min(64).max(8_000).optional(),
     chunkSplitter: z.string().max(1_000).optional(),
+    overlap: z.number().int().min(0).max(8_000).optional(),
     indexSize: z.number().int().min(1).max(8_000).optional(),
     dataEnhanceCollectionName: z.boolean().optional(),
     imageIndex: z.boolean().optional(),
@@ -41,6 +42,17 @@ export const s5ChunkingSettingsFormSchema = z
         code: 'custom',
         path: ['chunkSize'],
         message: 'validation.required',
+      });
+    }
+    if (
+      value.overlap !== undefined &&
+      value.chunkSize !== undefined &&
+      value.overlap >= value.chunkSize
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['overlap'],
+        message: 'validation.maxLength',
       });
     }
     if (
@@ -64,6 +76,36 @@ export const s5ChunkingSettingsFormSchema = z
         });
       }
     }
+    if (
+      value.chunkSplitMode !== 'paragraph' &&
+      (value.paragraphChunkAIMode !== undefined ||
+        value.paragraphChunkDeep !== undefined ||
+        value.paragraphChunkMinSize !== undefined)
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['chunkSplitMode'],
+        message: 'validation.paragraphModeRequired',
+      });
+    }
+    if (
+      value.paragraphChunkAIMode !== undefined &&
+      value.paragraphChunkAIMode !== 'forbid' &&
+      value.trainingType !== 'chunk'
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['paragraphChunkAIMode'],
+        message: 'validation.chunkModeRequired',
+      });
+    }
+    if (value.qaPrompt !== undefined && value.trainingType !== 'qa') {
+      context.addIssue({
+        code: 'custom',
+        path: ['qaPrompt'],
+        message: 'validation.qaModeRequired',
+      });
+    }
   });
 
 export const s5LiteParseConfigFormSchema = z
@@ -77,15 +119,41 @@ export const s5LiteParseConfigFormSchema = z
   })
   .strict();
 
-export const s5ExternalOcrConfigFormSchema = z
-  .object({
-    provider: z.enum(['sangfor', 'somark', 'textin', 'doc2x']),
-    credentialProfileId: z.string().min(1).max(128),
-    fallbackProvider: z.enum(['liteparse', 'none']),
-    imageHandling: z.enum(['upload_to_storage', 'keep_url', 'drop']),
-    timeoutMs: z.number().int().min(1_000).max(600_000),
-  })
-  .strict();
+const externalOcrCommon = {
+  credentialProfileId: z.string().min(1).max(128),
+  fallbackProvider: z.enum(['liteparse', 'none']),
+  imageHandling: z.enum(['upload_to_storage', 'keep_url', 'drop']),
+  timeoutMs: z.number().int().min(1_000).max(600_000),
+} as const;
+
+export const s5ExternalOcrConfigFormSchema = z.discriminatedUnion('provider', [
+  z
+    .object({
+      provider: z.literal('sangfor'),
+      ...externalOcrCommon,
+      keepHeaderFooter: z.boolean().optional(),
+      keepAppendix: z.boolean().optional(),
+      imageAnalysis: z.boolean().optional(),
+      chartAnalysis: z.boolean().optional(),
+    })
+    .strict(),
+  z.object({ provider: z.literal('somark'), ...externalOcrCommon }).strict(),
+  z
+    .object({
+      provider: z.literal('textin'),
+      ...externalOcrCommon,
+      parseMode: z.enum(['auto', 'scan']),
+      removeWatermark: z.boolean(),
+    })
+    .strict(),
+  z
+    .object({
+      provider: z.literal('doc2x'),
+      ...externalOcrCommon,
+      pollIntervalMs: z.number().int().min(100).max(60_000),
+    })
+    .strict(),
+]);
 
 export type S5ChunkingSettingsView = z.infer<typeof s5ChunkingSettingsFormSchema>;
 export type S5LiteParseConfigView = z.infer<typeof s5LiteParseConfigFormSchema>;
@@ -148,18 +216,12 @@ export function buildImportParseConfig(config: S5ParseProviderConfigView): Recor
   if (config.provider === 'liteparse') return config;
   if (config.provider === 'sangfor') {
     return {
+      keepHeaderFooter: config.keepHeaderFooter ?? false,
+      keepAppendix: config.keepAppendix ?? true,
+      imageAnalysis: config.imageAnalysis ?? false,
+      chartAnalysis: config.chartAnalysis ?? false,
       ...config,
-      keepHeaderFooter: false,
-      keepAppendix: true,
-      imageAnalysis: false,
-      chartAnalysis: false,
     };
-  }
-  if (config.provider === 'textin') {
-    return { ...config, removeWatermark: true, parseMode: 'auto' };
-  }
-  if (config.provider === 'doc2x') {
-    return { ...config, pollIntervalMs: 5_000 };
   }
   return config;
 }
@@ -186,6 +248,7 @@ export function buildImportChunkingSettings(
       : { paragraphChunkMinSize: config.paragraphChunkMinSize }),
     ...(config.chunkSize === undefined ? {} : { chunkSize: config.chunkSize }),
     ...(config.chunkSplitter === undefined ? {} : { chunkSplitter: config.chunkSplitter }),
+    ...(config.overlap === undefined ? {} : { overlap: config.overlap }),
     ...(config.indexSize === undefined ? {} : { indexSize: config.indexSize }),
     ...(config.dataEnhanceCollectionName === undefined
       ? {}

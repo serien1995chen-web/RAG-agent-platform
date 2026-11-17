@@ -3,7 +3,7 @@ import type { ChunkingSettings } from '@kb/chunk';
 import { z } from 'zod';
 import type { TenantContext } from '../../../shared/persistence/knowledge/tenant';
 import type { S5ParseAsset, S5ParseDiagnostic } from './s5-processing-ports';
-import type { S5ModelGatewayPort } from './s5-model-gateway.port';
+import type { S5GatewayResult, S5ModelGatewayPort } from './s5-model-gateway.port';
 import type { S8CaptionExecutorPort, S8ImageModelResolverPort } from './s8-image-deep.ports';
 import { isS8ImageMimeType } from './s8-image-policy';
 
@@ -85,45 +85,63 @@ export class S8ContentEnhancementApplication {
       };
     }
     const model = await this.input.models.resolveLlm(input.knowledgeSpaceId, input.context);
-    const result = await this.input.gateway.invoke<ChatCompletionEnvelope>({
-      kind: 'llm',
-      modelId: model.modelId,
-      messages: [
-        {
-          role: 'system',
-          content:
-            'Structure the supplied knowledge text as Markdown. Preserve facts. Return only JSON: {"markdown":"..."}',
-        },
-        { role: 'user', content: [...input.rawText].slice(0, 48_000).join('') },
-      ],
-      maxOutputTokens: 4_096,
-      workspaceId: input.workspaceId,
-      knowledgeSpaceId: input.knowledgeSpaceId,
-      resourceType: 'source',
-      resourceId: input.sourceId,
-      operation: `s8.paragraph-enhance:${input.sourceVersion}`,
-      audit: {
-        promptVersion: S8_PARAGRAPH_PROMPT_VERSION,
-        mediaItemCount: 0,
-        totalBytes: Buffer.byteLength(input.rawText, 'utf8'),
-        sourceVersion: input.sourceVersion,
-      },
-      requestId: input.context.requestId,
-      traceId: input.context.traceId,
-      context: input.context,
+    const fallback = (
+      usage = { inputTokens: 0, outputTokens: 0 },
+    ): S8ParagraphEnhancementResult => ({
+      markdown: input.rawText,
+      applied: false,
+      promptVersion: S8_PARAGRAPH_PROMPT_VERSION,
+      usage,
+      diagnostics: [{ severity: 'warning', code: 'paragraph_ai_fallback' }],
     });
+    let result: S5GatewayResult<ChatCompletionEnvelope>;
+    try {
+      result = await this.input.gateway.invoke<ChatCompletionEnvelope>({
+        kind: 'llm',
+        modelId: model.modelId,
+        messages: [
+          {
+            role: 'system',
+            content:
+              'Structure the supplied knowledge text as Markdown. Preserve facts. Return only JSON: {"markdown":"..."}',
+          },
+          { role: 'user', content: [...input.rawText].slice(0, 48_000).join('') },
+        ],
+        maxOutputTokens: 4_096,
+        workspaceId: input.workspaceId,
+        knowledgeSpaceId: input.knowledgeSpaceId,
+        resourceType: 'source',
+        resourceId: input.sourceId,
+        operation: `s8.paragraph-enhance:${input.sourceVersion}`,
+        audit: {
+          promptVersion: S8_PARAGRAPH_PROMPT_VERSION,
+          mediaItemCount: 0,
+          totalBytes: Buffer.byteLength(input.rawText, 'utf8'),
+          sourceVersion: input.sourceVersion,
+        },
+        requestId: input.context.requestId,
+        traceId: input.context.traceId,
+        context: input.context,
+      });
+    } catch (error) {
+      if (mode === 'auto') return fallback();
+      throw error;
+    }
     const content = result.data?.choices?.[0]?.message?.content;
     if (typeof content !== 'string') {
+      if (mode === 'auto') return fallback(result.usage);
       throw invalidOutput(input.context, 'paragraph_content_missing');
     }
     let parsed: unknown;
     try {
       parsed = JSON.parse(content);
     } catch {
+      if (mode === 'auto') return fallback(result.usage);
       throw invalidOutput(input.context, 'paragraph_json_invalid');
     }
     const validated = EnhancementOutputSchema.safeParse(parsed);
     if (!validated.success) {
+      if (mode === 'auto') return fallback(result.usage);
       throw invalidOutput(input.context, 'paragraph_schema_invalid');
     }
     return {

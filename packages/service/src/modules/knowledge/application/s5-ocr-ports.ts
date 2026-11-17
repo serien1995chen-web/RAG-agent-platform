@@ -1,3 +1,5 @@
+import { createKnowledgeError } from '@kb/contracts';
+import { z } from 'zod';
 import type { TenantContext } from '../../../shared/persistence/knowledge/tenant';
 import type { S5ParseAsset, S5ParseDiagnostic, S5ParsePage } from './s5-processing-ports';
 
@@ -30,6 +32,69 @@ export type S5OcrProviderConfig =
       provider: 'doc2x';
       pollIntervalMs: number;
     });
+
+const commonOcrConfig = {
+  credentialProfileId: z.string().min(1).max(128),
+  timeoutMs: z.number().int().min(1_000).max(600_000),
+  fallbackProvider: z.enum(['liteparse', 'none']),
+  imageHandling: z.enum(['upload_to_storage', 'keep_url', 'drop']),
+} as const;
+
+const S5OcrProviderConfigSchema = z.discriminatedUnion('provider', [
+  z
+    .object({
+      provider: z.literal('sangfor'),
+      ...commonOcrConfig,
+      allowedExtensions: z.array(z.string().min(1).max(16)).max(20).optional(),
+      keepHeaderFooter: z.boolean(),
+      keepAppendix: z.boolean(),
+      imageAnalysis: z.boolean(),
+      chartAnalysis: z.boolean(),
+    })
+    .strict(),
+  z.object({ provider: z.literal('somark'), ...commonOcrConfig }).strict(),
+  z
+    .object({
+      provider: z.literal('textin'),
+      ...commonOcrConfig,
+      removeWatermark: z.boolean(),
+      parseMode: z.enum(['auto', 'scan']),
+    })
+    .strict(),
+  z
+    .object({
+      provider: z.literal('doc2x'),
+      ...commonOcrConfig,
+      pollIntervalMs: z.number().int().min(100).max(60_000),
+    })
+    .strict(),
+]);
+
+export function parseS5OcrProviderConfig(
+  value: unknown,
+  expectedProvider: S5OcrProviderName,
+  context: TenantContext,
+): S5OcrProviderConfig {
+  const parsed = S5OcrProviderConfigSchema.safeParse(value);
+  if (!parsed.success || parsed.data.provider !== expectedProvider) {
+    throw createKnowledgeError({
+      code: 'KNOWLEDGE_VALIDATION_FAILED',
+      requestId: context.requestId,
+      traceId: context.traceId,
+      details: {
+        field: 'parseConfig',
+        provider: expectedProvider,
+        issues: parsed.success
+          ? [{ path: 'provider', message: 'must match parseProvider' }]
+          : parsed.error.issues.map((entry) => ({
+              path: entry.path.join('.'),
+              message: entry.message,
+            })),
+      },
+    });
+  }
+  return parsed.data;
+}
 
 export interface S5OcrRequest {
   workspaceId: string;

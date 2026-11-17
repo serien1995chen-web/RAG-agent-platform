@@ -12,6 +12,7 @@ export interface ChunkingSettings {
   paragraphChunkMinSize?: number;
   chunkSize?: number;
   chunkSplitter?: string;
+  overlap?: number;
   indexSize?: number;
   dataEnhanceCollectionName?: boolean;
   imageIndex?: boolean;
@@ -36,6 +37,7 @@ const ALLOWED_KEYS = new Set<keyof ChunkingSettings>([
   'paragraphChunkMinSize',
   'chunkSize',
   'chunkSplitter',
+  'overlap',
   'indexSize',
   'dataEnhanceCollectionName',
   'imageIndex',
@@ -56,6 +58,36 @@ function integerInRange(
     return false;
   }
   return true;
+}
+
+function parseSeparatorRules(value: string): string[] {
+  return value
+    .split(/\r?\n/)
+    .map((entry) => entry.trim())
+    .filter((entry) => entry.length > 0);
+}
+
+function separatorIssue(value: string): string | null {
+  const rules = parseSeparatorRules(value);
+  if (rules.length === 0) return 'at least one separator rule is required';
+  if (rules.length > 5) return 'max 5 separator rules';
+  if (rules.some((entry) => entry.length > 200)) {
+    return 'each separator rule must be at most 200 characters';
+  }
+  const normalized = rules.map((entry) => entry.replace(/\s+/g, ' '));
+  if (new Set(normalized).size !== normalized.length) {
+    return 'separator rules must be unique';
+  }
+  for (const rule of rules) {
+    try {
+      if (new RegExp(rule).test('')) {
+        return 'separator rules must not match an empty string';
+      }
+    } catch {
+      return 'separator rule is not a valid regular expression';
+    }
+  }
+  return null;
 }
 
 export function validateChunkingSettings(
@@ -107,11 +139,21 @@ export function validateChunkingSettings(
   if (input.chunkSize !== undefined) {
     integerInRange(input.chunkSize, 'chunkSize', 64, 8_000, issues);
   }
+  if (input.overlap !== undefined) {
+    integerInRange(input.overlap, 'overlap', 0, 8_000, issues);
+  }
   if (input.indexSize !== undefined) {
     integerInRange(input.indexSize, 'indexSize', 1, 8_000, issues);
   }
   if (input.chunkSettingMode === 'custom' && input.chunkSize === undefined) {
     issues.push({ path: 'chunkSize', message: 'required in custom mode' });
+  }
+  if (
+    typeof input.overlap === 'number' &&
+    typeof input.chunkSize === 'number' &&
+    input.overlap >= input.chunkSize
+  ) {
+    issues.push({ path: 'overlap', message: 'must be less than chunkSize' });
   }
   if (
     typeof input.chunkSize === 'number' &&
@@ -129,9 +171,9 @@ export function validateChunkingSettings(
         message: 'must be a string of at most 1000 characters',
       });
     } else {
-      const rules = input.chunkSplitter.split(/\r?\n/).filter((entry) => entry.trim().length > 0);
-      if (rules.length > 5 || rules.some((entry) => entry.length > 200)) {
-        issues.push({ path: 'chunkSplitter', message: 'max 5 rules of 200 characters each' });
+      const issue = separatorIssue(input.chunkSplitter);
+      if (issue) {
+        issues.push({ path: 'chunkSplitter', message: issue });
       }
     }
   }
@@ -208,11 +250,7 @@ export function toChunkPolicy(settings: ChunkingSettings): ChunkPolicy {
     });
   }
   const value = parsed.data;
-  const customRegs =
-    value.chunkSplitter
-      ?.split(/\r?\n/)
-      .map((entry) => entry.trim())
-      .filter(Boolean) ?? [];
+  const customRegs = value.chunkSplitter ? parseSeparatorRules(value.chunkSplitter) : [];
   const lengthUnit = value.chunkSplitMode === 'char' ? 'char' : 'token';
   const mode =
     value.chunkSettingMode !== 'custom'
@@ -222,12 +260,19 @@ export function toChunkPolicy(settings: ChunkingSettings): ChunkPolicy {
         : 'custom';
   const chunkSize = value.chunkSize ?? DEFAULT_CHUNK_POLICY.chunkSize;
   const explicitMin = value.chunkTriggerMinSize ?? value.paragraphChunkMinSize;
+  const overlapRatio =
+    value.overlap !== undefined
+      ? value.overlap / chunkSize
+      : value.trainingType === 'chunk'
+        ? 0.2
+        : 0;
   return {
     mode,
     chunkSize,
     minSize: explicitMin ?? Math.min(DEFAULT_CHUNK_POLICY.minSize, chunkSize),
     maxSize: Math.max(chunkSize, value.indexSize ?? DEFAULT_CHUNK_POLICY.maxSize),
-    overlapRatio: 0.15,
+    overlapRatio,
+    ...(value.overlap !== undefined ? { overlapSize: value.overlap } : {}),
     paragraphDeep: Math.max(1, value.paragraphChunkDeep ?? DEFAULT_CHUNK_POLICY.paragraphDeep),
     customRegs,
     lengthUnit,

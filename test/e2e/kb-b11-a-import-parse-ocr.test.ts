@@ -227,9 +227,9 @@ describe('L1-B11-A real import, parse, preview and segment chain', () => {
     expect(createHash('sha256').update(rawText).digest('hex')).toBe(source!.contentHash);
     const segments = await api<{
       items: Array<{ content: string; sourceVersion: number }>;
-      total: number;
+      pageInfo: { nextCursor: string | null; hasMore: boolean };
     }>(`/v1/knowledge/sources/${source!.id}/segments?limit=100`);
-    expect(segments.total).toBeGreaterThan(0);
+    expect(segments.items.length).toBeGreaterThan(0);
     expect(segments.items.every((segment) => segment.sourceVersion === source!.sourceVersion));
     expect(segments.items.map((segment) => segment.content).join('')).toContain(
       'B11 text layer document',

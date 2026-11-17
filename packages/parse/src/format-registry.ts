@@ -266,7 +266,10 @@ export class ParseFormatRegistry {
   }
 
   resolve(extension: string, mimeType?: string): ParseFormat | null {
-    return this.resolveByExtension(extension) ?? this.resolveByMime(mimeType);
+    const byExtension = this.resolveByExtension(extension);
+    const byMime = this.resolveByMime(mimeType);
+    if (byExtension && byMime && byExtension !== byMime) return null;
+    return byExtension ?? byMime;
   }
 
   get(format: ParseFormat): ParseFormatRegistration | null {

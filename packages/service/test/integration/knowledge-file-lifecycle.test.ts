@@ -219,6 +219,48 @@ describe('TEST-FILE-005-BLOCK object lifecycle', () => {
     expect((await repository.findObjectRef(uploadId, context))?.state).toBe('pending');
   });
 
+  it('L1-B11-A-PARSE-001-S01 preserves parse artifacts bound to an active Source', async () => {
+    const sourceBlobId = await createPending(false);
+    const rawTextBlobId = await createPending(false);
+    const source = await connection.models.KnowledgeSource.create({
+      workspaceId,
+      knowledgeSpaceId: new mongoose.Types.ObjectId(knowledgeSpaceId),
+      version: 1,
+      deletedAt: null,
+      createdByMemberId: context.memberId,
+      updatedByMemberId: context.memberId,
+      kind: 'file',
+      name: 'artifact-bound.txt',
+      blobRefId: new mongoose.Types.ObjectId(sourceBlobId),
+      mimeType: 'text/plain',
+      sizeBytes: 5,
+      ownershipMemberId: context.memberId,
+    });
+    await connection.models.KnowledgeObjectRef.updateMany(
+      {
+        workspaceId,
+        _id: {
+          $in: [sourceBlobId, rawTextBlobId].map((value) => new mongoose.Types.ObjectId(value)),
+        },
+      },
+      {
+        $set: {
+          state: 'active',
+          sourceId: source._id,
+          expiresAt: null,
+          'upload.status': 'completed',
+          'upload.pendingObjectKey': null,
+          'upload.pendingUrlExpiresAt': null,
+        },
+      },
+    );
+
+    await lifecycle.cleanup(context, new Date(), 'orphan_objects');
+
+    expect((await repository.findObjectRef(sourceBlobId, context))?.state).toBe('active');
+    expect((await repository.findObjectRef(rawTextBlobId, context))?.state).toBe('active');
+  });
+
   it('TEST-FILE-005-T03 treats provider 404 as a successful deletion', async () => {
     const uploadId = await createPending(true);
     await lifecycle.cleanup(context);

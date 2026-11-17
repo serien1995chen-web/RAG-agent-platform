@@ -44,6 +44,7 @@ function request(content = 'Q1: 问题\nA1: 答案') {
   const calls: S5ModelGatewayRequest[] = [];
   const adapter = new S5QaPipelineAdapter({
     gateway: gateway(content, calls),
+    qaSchemaRetries: 0,
     resolveModels: async () => ({
       llmModelId: 'mock-llm-general',
       embeddingModelId: 'mock-embedding-768',
@@ -88,35 +89,34 @@ describe('TEST-PARSE-004-BLOCK QA model pipeline', () => {
   it('returns chunk_split fallback for invalid model output without fake QA', async () => {
     const { result } = request('not a QA payload');
     await expect(result).resolves.toMatchObject({
-      items: [],
+      items: [{ q: '知识库问答原文', a: '', sourceChunkHash: 'sha256:chunk' }],
       fallback: 'chunk_split',
     });
   });
 
-  it('rejects mixed valid/invalid QA fields instead of silently keeping valid items', async () => {
+  it('keeps mixed valid/invalid QA fields and diagnoses invalid siblings', async () => {
     const { result } = request('[{"q":"合法","a":"答案"},{"q":"","a":"非法"}]');
     await expect(result).resolves.toMatchObject({
-      items: [],
-      fallback: 'chunk_split',
-      diagnostics: [{ code: 'qa_output_invalid' }],
+      items: [{ q: '合法', a: '答案', sourceChunkHash: 'sha256:chunk' }],
+      fallback: 'none',
+      diagnostics: [{ code: 'qa_output_partial' }],
     });
   });
 
-  it('rejects mixed valid and empty text Q/A pairs', async () => {
+  it('keeps complete text Q/A pairs before an empty pair', async () => {
     const { result } = request('Q1: good\nA1: yes\nQ2: broken\nA2:');
     await expect(result).resolves.toMatchObject({
-      items: [],
-      fallback: 'chunk_split',
-      diagnostics: [{ code: 'qa_output_invalid' }],
+      items: [{ q: 'good', a: 'yes', sourceChunkHash: 'sha256:chunk' }],
+      fallback: 'none',
     });
   });
 
-  it('rejects valid text Q/A pairs followed by an incomplete pair', async () => {
+  it('keeps complete text Q/A pairs followed by an incomplete pair', async () => {
     const { result } = request('Q1: good\nA1: yes\nQ2: broken');
     await expect(result).resolves.toMatchObject({
-      items: [],
-      fallback: 'chunk_split',
-      diagnostics: [{ code: 'qa_output_invalid' }],
+      items: [{ q: 'good', a: 'yes', sourceChunkHash: 'sha256:chunk' }],
+      fallback: 'none',
+      diagnostics: [{ code: 'qa_output_partial' }],
     });
   });
 

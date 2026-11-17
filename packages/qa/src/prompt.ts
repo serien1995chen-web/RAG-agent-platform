@@ -49,7 +49,7 @@ export function createDefaultTemplateRegistry(): QaTemplateRegistryPort {
     locale: DEFAULT_TEMPLATE_LOCALE,
     contentHash: DEFAULT_QA_PROMPT_HASH,
     status: 'active',
-    allowPromptOverride: false,
+    allowPromptOverride: true,
   };
   return {
     find: (templateId, version) =>

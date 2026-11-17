@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import type { ClientSession, Connection, Model, Types } from 'mongoose';
 import { registerKnowledgeModels } from '../../../shared/persistence/schemas/knowledge-index';
 import type {
@@ -51,6 +52,8 @@ function segmentRecord(
     question: document.question,
     answer: document.answer,
     content: document.content,
+    contentHash: document.contentHash ?? null,
+    chunkSettingsHash: document.chunkSettingsHash ?? null,
     fullTextTokens: document.fullTextTokens,
     fullTextVersion: document.fullTextVersion,
     metadata: document.metadata,
@@ -163,6 +166,8 @@ export class S6ProcessingRepository implements S6ProcessingStorePort {
         question: string;
         answer: string;
         content: string;
+        contentHash?: string;
+        chunkSettingsHash?: string | null;
         metadata?: Record<string, unknown>;
       }>;
     },
@@ -187,7 +192,10 @@ export class S6ProcessingRepository implements S6ProcessingStorePort {
             question: row.question,
             answer: row.answer,
             content: row.content,
-            metadata: input.rows.find((row) => row.order === segmentIds.length)?.metadata ?? {},
+            contentHash:
+              row.contentHash ?? createHash('sha256').update(row.content, 'utf8').digest('hex'),
+            chunkSettingsHash: row.chunkSettingsHash ?? null,
+            metadata: row.metadata ?? {},
             indexStatus: 'pending',
             indexErrorCode: null,
             updatedByMemberId: context.memberId,

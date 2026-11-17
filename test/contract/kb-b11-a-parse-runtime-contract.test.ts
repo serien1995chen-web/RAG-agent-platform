@@ -25,8 +25,9 @@ describe('L1-B11-A PARSE runtime selection contract', () => {
     );
     expect(processing).toMatch(/parseConfig/);
     expect(runtime).toMatch(/input\.parseProvider[\s\S]{0,800}s5Ocr\.parse/);
-    expect(runtime).not.toMatch(
-      /input\.mimeType === 'application\/pdf'[\s\S]{0,160}return parseWithLiteParse/,
-    );
+    const externalBranch = runtime.indexOf("if (parseProvider !== 'liteparse')");
+    const localPdfBranch = runtime.indexOf("if (input.mimeType === 'application/pdf'");
+    expect(externalBranch).toBeGreaterThanOrEqual(0);
+    expect(localPdfBranch).toBeGreaterThan(externalBranch);
   });
 });

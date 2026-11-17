@@ -135,6 +135,8 @@ describe('ACC-UI-01..07 S5 independent UI state', () => {
         fallbackProvider: 'liteparse',
         imageHandling: 'upload_to_storage',
         timeoutMs: 10_000,
+        parseMode: 'auto',
+        removeWatermark: true,
       }).success,
     ).toBe(true);
     expect(

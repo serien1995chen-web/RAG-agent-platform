@@ -12,6 +12,8 @@ export interface ChunkPolicy {
   minSize: number;
   maxSize: number;
   overlapRatio: number;
+  /** Absolute overlap in the active length unit. Takes precedence over overlapRatio. */
+  overlapSize?: number;
   paragraphDeep: number;
   customRegs: string[];
   lengthUnit: 'char' | 'token';
@@ -25,7 +27,7 @@ export const DEFAULT_CHUNK_POLICY: ChunkPolicy = {
   chunkSize: 1000,
   minSize: 100,
   maxSize: 8000,
-  overlapRatio: 0.15,
+  overlapRatio: 0.2,
   paragraphDeep: 5,
   customRegs: [],
   lengthUnit: 'token',

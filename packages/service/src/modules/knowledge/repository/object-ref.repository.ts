@@ -433,16 +433,23 @@ export class KnowledgeObjectRefRepository implements ObjectRefRepositoryPort {
       {
         $lookup: {
           from: 'knowledge_sources',
-          let: { blobId: '$_id' },
+          let: { blobId: '$_id', sourceId: '$sourceId' },
           pipeline: [
             {
               $match: {
                 $expr: {
                   $and: [
+                    {
+                      $or: [
+                        { $eq: ['$blobRefId', '$$blobId'] },
+                        {
+                          $and: [{ $ne: ['$$sourceId', null] }, { $eq: ['$_id', '$$sourceId'] }],
+                        },
+                      ],
+                    },
                     { $eq: ['$workspaceId', workspaceId] },
-                    { $eq: ['$blobRefId', '$$blobId'] },
                     { $eq: ['$deletedAt', null] },
-                    { $not: [{ $in: ['$status', ['deleted', 'archived']] }] },
+                    { $not: { $in: ['$status', ['deleted', 'archived']] } },
                   ],
                 },
               },

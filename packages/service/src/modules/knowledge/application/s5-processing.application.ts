@@ -15,6 +15,7 @@ export interface S5QaChunkResult {
   fallback: 'none' | 'chunk_split';
   promptVersion: string | null;
   usage: { inputTokens: number; outputTokens: number };
+  attempts?: number;
   diagnostics: S5ParseDiagnostic[];
 }
 
@@ -26,6 +27,7 @@ export interface S5QaPipelinePort {
     workspaceId: string;
     knowledgeSpaceId: string;
     sourceId: string;
+    sourceVersion?: number;
   }): Promise<S5QaChunkResult>;
   dedupe(items: readonly S5QaResultItem[]): S5QaResultItem[];
 }
@@ -110,16 +112,31 @@ export class S5ProcessingApplication {
   async generateQaForChunks(
     input: Pick<
       S5ProcessingInput,
-      'workspaceId' | 'knowledgeSpaceId' | 'sourceId' | 'settings' | 'qaFallbackPolicy' | 'context'
+      | 'workspaceId'
+      | 'knowledgeSpaceId'
+      | 'sourceId'
+      | 'sourceVersion'
+      | 'settings'
+      | 'qaFallbackPolicy'
+      | 'context'
     > & { chunks: readonly ChunkItem[] },
   ): Promise<{
     items: S5QaResultItem[];
     fallbackUsed: boolean;
     promptVersion: string | null;
+    usage: { inputTokens: number; outputTokens: number };
+    attempts: number;
     diagnostics: S5ParseDiagnostic[];
   }> {
     if (input.settings.trainingType !== 'qa') {
-      return { items: [], fallbackUsed: false, promptVersion: null, diagnostics: [] };
+      return {
+        items: [],
+        fallbackUsed: false,
+        promptVersion: null,
+        usage: { inputTokens: 0, outputTokens: 0 },
+        attempts: 0,
+        diagnostics: [],
+      };
     }
     if (!this.qa) {
       throw createKnowledgeError({
@@ -133,6 +150,8 @@ export class S5ProcessingApplication {
     const diagnostics: S5ParseDiagnostic[] = [];
     const promptVersions = new Set<string>();
     let fallbackUsed = false;
+    let usage = { inputTokens: 0, outputTokens: 0 };
+    let attempts = 0;
     for (const chunk of input.chunks) {
       const result = await this.qa.generate({
         chunk,
@@ -141,6 +160,7 @@ export class S5ProcessingApplication {
         workspaceId: input.workspaceId,
         knowledgeSpaceId: input.knowledgeSpaceId,
         sourceId: input.sourceId,
+        sourceVersion: input.sourceVersion,
       });
       if (result.fallback === 'chunk_split') {
         fallbackUsed = true;
@@ -159,6 +179,11 @@ export class S5ProcessingApplication {
         });
       }
       if (result.promptVersion) promptVersions.add(result.promptVersion);
+      usage = {
+        inputTokens: usage.inputTokens + result.usage.inputTokens,
+        outputTokens: usage.outputTokens + result.usage.outputTokens,
+      };
+      attempts += result.attempts ?? 1;
       diagnostics.push(...result.diagnostics);
       items.push(...result.items);
     }
@@ -171,6 +196,8 @@ export class S5ProcessingApplication {
           : promptVersions.size === 1
             ? [...promptVersions][0]!
             : `mixed:${configHashOf([...promptVersions].sort())}`,
+      usage,
+      attempts,
       diagnostics,
     };
   }
@@ -210,6 +237,8 @@ export class S5ProcessingApplication {
             items: [],
             fallbackUsed: false,
             promptVersion: null,
+            usage: { inputTokens: 0, outputTokens: 0 },
+            attempts: 0,
             diagnostics: [],
           };
     const autoItems = input.settings.indexPrefixTitle
@@ -258,6 +287,8 @@ export class S5ProcessingApplication {
           : null,
         chunkingConfigHash: chunks.policyHash,
         qaPromptVersion: qa.promptVersion,
+        qaUsage: qa.usage,
+        qaAttempts: qa.attempts,
         fallbackUsed:
           qa.fallbackUsed || autoIndexes.fallbackUsed || (input.ocrEvidence?.fallbackUsed ?? false),
         paragraphEnhancementApplied: enhanced.applied,

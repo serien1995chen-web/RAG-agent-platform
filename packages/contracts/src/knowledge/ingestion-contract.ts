@@ -31,6 +31,7 @@ export const ChunkingSettingsSchema = z
     paragraphChunkMinSize: z.number().int().min(1).max(8_000).optional(),
     chunkSize: z.number().int().min(64).max(8000).optional(),
     chunkSplitter: z.string().max(1_000).optional(),
+    overlap: z.number().int().min(0).max(8_000).optional(),
     indexSize: z.number().int().min(1).max(8_000).optional(),
     dataEnhanceCollectionName: z.boolean().optional(),
     imageIndex: z.boolean().optional(),
@@ -44,6 +45,13 @@ export const ChunkingSettingsSchema = z
       context.addIssue({ code: 'custom', path: [path], message });
     if (value.chunkSettingMode === 'custom' && value.chunkSize === undefined) {
       issue('chunkSize', 'required in custom mode');
+    }
+    if (
+      value.overlap !== undefined &&
+      value.chunkSize !== undefined &&
+      value.overlap >= value.chunkSize
+    ) {
+      issue('overlap', 'must be less than chunkSize');
     }
     if (
       value.chunkSize !== undefined &&
@@ -81,6 +89,33 @@ export const ChunkingSettingsSchema = z
     }
     if (value.qaPrompt !== undefined && value.trainingType !== 'qa') {
       issue('qaPrompt', 'requires trainingType=qa');
+    }
+    if (value.chunkSplitter !== undefined) {
+      const rules = value.chunkSplitter
+        .split(/\r?\n/)
+        .map((entry) => entry.trim())
+        .filter(Boolean);
+      const normalized = rules.map((entry) => entry.replace(/\s+/g, ' '));
+      if (
+        rules.length === 0 ||
+        rules.length > 5 ||
+        new Set(normalized).size !== normalized.length ||
+        rules.some((entry) => entry.length > 200)
+      ) {
+        issue('chunkSplitter', 'must contain 1-5 unique rules of at most 200 characters');
+      } else {
+        for (const rule of rules) {
+          try {
+            if (new RegExp(rule).test('')) {
+              issue('chunkSplitter', 'separator rules must not match an empty string');
+              break;
+            }
+          } catch {
+            issue('chunkSplitter', 'invalid regular expression');
+            break;
+          }
+        }
+      }
     }
   });
 

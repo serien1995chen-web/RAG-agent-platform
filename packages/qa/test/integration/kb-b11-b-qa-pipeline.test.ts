@@ -45,6 +45,7 @@ describe('L1-B11-B-PARSE-004 generation and fallback', () => {
     const result = await generateQa(request(), {
       templateRegistry: createDefaultTemplateRegistry(),
       model,
+      retryOnInvalidSchema: false,
     });
     expect(result).toMatchObject({
       fallback: 'none',
@@ -59,6 +60,7 @@ describe('L1-B11-B-PARSE-004 generation and fallback', () => {
     const result = await generateQa(request(), {
       templateRegistry: createDefaultTemplateRegistry(),
       model,
+      retryOnInvalidSchema: false,
       fallbackToChunkSplit: () => ({
         items: [
           {
@@ -82,6 +84,7 @@ describe('L1-B11-B-PARSE-004 generation and fallback', () => {
     await generateQa(request({ qaPrompt: 'B11-B custom grounded QA instruction' }), {
       templateRegistry: createDefaultTemplateRegistry(),
       model,
+      retryOnInvalidSchema: false,
     });
     expect(model.inputs[0]?.prompt).toContain('B11-B custom grounded QA instruction');
   });
@@ -94,6 +97,7 @@ describe('L1-B11-B-PARSE-004 generation and fallback', () => {
     const result = await generateQa(request(), {
       templateRegistry: createDefaultTemplateRegistry(),
       model,
+      retryOnInvalidSchema: false,
     });
     expect(model.inputs).toHaveLength(1);
     expect(result.items).toEqual([

@@ -54,6 +54,7 @@ describe('L1-B11-B-PARSE-004 service orchestration', () => {
     const requests: S5ModelGatewayRequest[] = [];
     const adapter = new S5QaPipelineAdapter({
       gateway: gatewayFor('Q1: 退款需要多久？\nA1: 五个工作日。', requests),
+      qaSchemaRetries: 0,
       resolveModels: async () => ({
         llmModelId: 'fake-llm',
         embeddingModelId: 'fake-embedding',
@@ -83,6 +84,7 @@ describe('L1-B11-B-PARSE-004 service orchestration', () => {
     const requests: S5ModelGatewayRequest[] = [];
     const adapter = new S5QaPipelineAdapter({
       gateway: gatewayFor('not a QA payload', requests),
+      qaSchemaRetries: 0,
       resolveModels: async () => ({ llmModelId: 'fake-llm' }),
     });
     const result = await adapter.generate(input());
@@ -104,6 +106,7 @@ describe('L1-B11-B-PARSE-004 service orchestration', () => {
     const requests: S5ModelGatewayRequest[] = [];
     const adapter = new S5QaPipelineAdapter({
       gateway: gatewayFor('Q1: q\nA1: a', requests),
+      qaSchemaRetries: 0,
       resolveModels: async () => ({ llmModelId: 'fake-llm' }),
     });
     const result = await adapter.generate(
@@ -122,6 +125,7 @@ describe('L1-B11-B-PARSE-004 service orchestration', () => {
     const requests: S5ModelGatewayRequest[] = [];
     const adapter = new S5QaPipelineAdapter({
       gateway: gatewayFor('Q1: q\nA1: a', requests),
+      qaSchemaRetries: 0,
       resolveModels: async () => ({ llmModelId: 'fake-llm' }),
     });
     await expect(
@@ -138,6 +142,7 @@ describe('L1-B11-B-PARSE-004 service orchestration', () => {
   it('L1-B11-B-PARSE-004-N01 rejects QA without an LLM binding', async () => {
     const adapter = new S5QaPipelineAdapter({
       gateway: gatewayFor('Q1: q\nA1: a'),
+      qaSchemaRetries: 0,
       resolveModels: async () => ({ llmModelId: '' }),
     });
     await expect(adapter.generate(input())).rejects.toMatchObject({

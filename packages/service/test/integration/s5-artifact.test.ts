@@ -167,7 +167,7 @@ describe('TEST-PARSE-001-BLOCK rawText and image ObjectRef materialization', () 
     expect(store.puts).toHaveLength(2);
   });
 
-  it('leaves a failed upload deleting and never exposes an active object', async () => {
+  it('writes no object metadata when an upload fails', async () => {
     const { space, source } = await sourceFixture(`Artifact failure ${suffix}`);
     const repository = new S5ArtifactRepository(connection, new FailingStore());
     const parse = parseResult('OFD page that fails upload');
@@ -188,8 +188,7 @@ describe('TEST-PARSE-001-BLOCK rawText and image ObjectRef materialization', () 
         sha256: digest(parse.rawText),
       })
       .lean();
-    expect(refs).toHaveLength(1);
-    expect(refs[0]?.state).toBe('deleting');
+    expect(refs).toEqual([]);
     const storedSource = await registerKnowledgeModels(connection)
       .KnowledgeSource.findById(source.id)
       .lean();

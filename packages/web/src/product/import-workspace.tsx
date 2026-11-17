@@ -50,6 +50,9 @@ import {
 import type { CatalogItem, Directory, Job, ProviderCatalogItem } from './types';
 import { knowledgeMultipartUpload, type KnowledgeFileUploadState } from '../client/file-upload';
 
+// This product form mirrors the shared S5ParseSettingsPanel contract while preserving
+// the product workspace layout and its three-viewport import flow.
+
 type ImportKind =
   | 'local'
   | 'text'
@@ -165,12 +168,36 @@ export function ImportWorkspace(props: {
   const [step, setStep] = useState(props.initialJobId ? 3 : initialKind === 'retraining' ? 1 : 0);
   const [directoryId, setDirectoryId] = useState(props.initialDirectoryId ?? '');
   const [parseProvider, setParseProvider] = useState('liteparse');
+  const [credentialProfileId, setCredentialProfileId] = useState('');
+  const [fallbackProvider, setFallbackProvider] = useState<'liteparse' | 'none'>('liteparse');
+  const [imageHandling, setImageHandling] = useState<'upload_to_storage' | 'keep_url' | 'drop'>(
+    'upload_to_storage',
+  );
+  const [parseTimeoutMs, setParseTimeoutMs] = useState('120000');
+  const [textinParseMode, setTextinParseMode] = useState<'auto' | 'scan'>('auto');
+  const [textinRemoveWatermark, setTextinRemoveWatermark] = useState(true);
+  const [doc2xPollIntervalMs, setDoc2xPollIntervalMs] = useState('5000');
   const [trainingType, setTrainingType] = useState<'chunk' | 'qa' | 'imageParse'>(
     initialKind === 'image' ? 'imageParse' : 'chunk',
   );
-  const [chunkSettingMode, setChunkSettingMode] = useState<'auto' | 'custom'>('auto');
+  const [chunkSettingMode, setChunkSettingMode] = useState<'auto' | 'custom' | 'intelligent'>(
+    'auto',
+  );
+  const [chunkTriggerType, setChunkTriggerType] = useState<'minSize' | 'forceChunk' | 'maxSize'>(
+    'minSize',
+  );
+  const [chunkTriggerMinSize, setChunkTriggerMinSize] = useState('1');
   const [chunkSize, setChunkSize] = useState('1000');
   const [chunkSplitMode, setChunkSplitMode] = useState<'paragraph' | 'size' | 'char'>('paragraph');
+  const [paragraphChunkAIMode, setParagraphChunkAIMode] = useState<'auto' | 'force' | 'forbid'>(
+    'auto',
+  );
+  const [paragraphChunkDeep, setParagraphChunkDeep] = useState('5');
+  const [paragraphChunkMinSize, setParagraphChunkMinSize] = useState('100');
+  const [chunkSplitter, setChunkSplitter] = useState('');
+  const [overlap, setOverlap] = useState('100');
+  const [indexSize, setIndexSize] = useState('1000');
+  const [qaPrompt, setQaPrompt] = useState('');
   const [uploaded, setUploaded] = useState<ImportedUpload[]>([]);
   const [uploading, setUploading] = useState(false);
   const uploadControllers = useRef(new Map<string, AbortController>());
@@ -214,10 +241,85 @@ export function ImportWorkspace(props: {
       trainingType,
       chunkSettingMode,
       chunkSplitMode,
-      ...(chunkSettingMode === 'custom' ? { chunkSize: Number(chunkSize) || 1 } : {}),
+      ...(chunkSettingMode === 'custom'
+        ? {
+            chunkTriggerType,
+            chunkTriggerMinSize: Number(chunkTriggerMinSize) || 1,
+            chunkSize: Number(chunkSize) || 1000,
+            overlap: Number(overlap) || 0,
+            indexSize: Number(indexSize) || 1000,
+          }
+        : {}),
+      ...(chunkSplitMode === 'paragraph' && trainingType === 'chunk'
+        ? {
+            paragraphChunkAIMode,
+            paragraphChunkDeep: Number(paragraphChunkDeep) || 5,
+            paragraphChunkMinSize: Number(paragraphChunkMinSize) || 100,
+          }
+        : {}),
+      ...(chunkSplitMode === 'char' && chunkSplitter.trim()
+        ? { chunkSplitter: chunkSplitter.trim() }
+        : {}),
+      ...(trainingType === 'qa' && qaPrompt.trim() ? { qaPrompt: qaPrompt.trim() } : {}),
     }),
-    [chunkSettingMode, chunkSize, chunkSplitMode, trainingType],
+    [
+      chunkSettingMode,
+      chunkSize,
+      chunkSplitMode,
+      chunkSplitter,
+      chunkTriggerMinSize,
+      chunkTriggerType,
+      indexSize,
+      overlap,
+      paragraphChunkAIMode,
+      paragraphChunkDeep,
+      paragraphChunkMinSize,
+      qaPrompt,
+      trainingType,
+    ],
   );
+  const parseConfig = useMemo<Record<string, unknown>>(() => {
+    if (parseProvider === 'liteparse') return {};
+    const common = {
+      provider: parseProvider,
+      credentialProfileId: credentialProfileId.trim(),
+      fallbackProvider,
+      imageHandling,
+      timeoutMs: Number(parseTimeoutMs) || 120_000,
+    };
+    if (parseProvider === 'textin') {
+      return {
+        ...common,
+        parseMode: textinParseMode,
+        removeWatermark: textinRemoveWatermark,
+      };
+    }
+    if (parseProvider === 'doc2x') {
+      return {
+        ...common,
+        pollIntervalMs: Number(doc2xPollIntervalMs) || 5_000,
+      };
+    }
+    if (parseProvider === 'sangfor') {
+      return {
+        ...common,
+        keepHeaderFooter: false,
+        keepAppendix: true,
+        imageAnalysis: false,
+        chartAnalysis: false,
+      };
+    }
+    return common;
+  }, [
+    credentialProfileId,
+    doc2xPollIntervalMs,
+    fallbackProvider,
+    imageHandling,
+    parseProvider,
+    parseTimeoutMs,
+    textinParseMode,
+    textinRemoveWatermark,
+  ]);
   const normalizedSelector = selector.trim() || 'body';
   const urlPreviewSignature = JSON.stringify({ selector: normalizedSelector, chunking });
   const invalidateUrlPreviews = () => {
@@ -594,6 +696,7 @@ export function ImportWorkspace(props: {
           uploadIds: completedUploads.map((item) => item.id),
           directoryId: directoryId || null,
           parseProvider,
+          parseConfig: parseConfig,
           chunking,
         });
       } else if (kind === 'text') {
@@ -1058,11 +1161,11 @@ export function ImportWorkspace(props: {
                 </div>
               ) : null}
 
-              {kind === 'local' || kind === 'image' || kind === 'url' ? (
+              {kind === 'local' || kind === 'image' || kind === 'text' || kind === 'url' ? (
                 <div className="kb2-import-settings">
                   <h3>训练参数</h3>
                   <div className="kb2-form-grid">
-                    {kind !== 'url' ? (
+                    {kind === 'local' || kind === 'image' ? (
                       <ProductField label="解析器">
                         <ProductSelect
                           value={parseProvider}
@@ -1075,6 +1178,89 @@ export function ImportWorkspace(props: {
                           <option value="doc2x">doc2x</option>
                         </ProductSelect>
                       </ProductField>
+                    ) : null}
+                    {kind === 'local' || kind === 'image' ? (
+                      parseProvider !== 'liteparse' ? (
+                        <>
+                          <ProductField label="凭据配置">
+                            <ProductInput
+                              value={credentialProfileId}
+                              autoComplete="off"
+                              placeholder="env:S11_OCR_PROFILE"
+                              onChange={(event) => setCredentialProfileId(event.target.value)}
+                            />
+                          </ProductField>
+                          <ProductField label="回退">
+                            <ProductSelect
+                              value={fallbackProvider}
+                              onChange={(event) =>
+                                setFallbackProvider(event.target.value as typeof fallbackProvider)
+                              }
+                            >
+                              <option value="liteparse">LiteParse</option>
+                              <option value="none">不回退</option>
+                            </ProductSelect>
+                          </ProductField>
+                          <ProductField label="图片处理">
+                            <ProductSelect
+                              value={imageHandling}
+                              onChange={(event) =>
+                                setImageHandling(event.target.value as typeof imageHandling)
+                              }
+                            >
+                              <option value="upload_to_storage">转存到对象存储</option>
+                              <option value="keep_url">保留远程 URL</option>
+                              <option value="drop">丢弃图片</option>
+                            </ProductSelect>
+                          </ProductField>
+                          <ProductField label="超时">
+                            <ProductInput
+                              aria-label="超时"
+                              type="number"
+                              min={1000}
+                              max={600000}
+                              value={parseTimeoutMs}
+                              onChange={(event) => setParseTimeoutMs(event.target.value)}
+                            />
+                          </ProductField>
+                          {parseProvider === 'textin' ? (
+                            <>
+                              <ProductField label="TextIn 解析模式">
+                                <ProductSelect
+                                  value={textinParseMode}
+                                  onChange={(event) =>
+                                    setTextinParseMode(event.target.value as typeof textinParseMode)
+                                  }
+                                >
+                                  <option value="auto">自动</option>
+                                  <option value="scan">扫描</option>
+                                </ProductSelect>
+                              </ProductField>
+                              <label className="kb2-checkbox-row">
+                                <input
+                                  type="checkbox"
+                                  checked={textinRemoveWatermark}
+                                  onChange={(event) =>
+                                    setTextinRemoveWatermark(event.target.checked)
+                                  }
+                                />
+                                <span>移除水印</span>
+                              </label>
+                            </>
+                          ) : null}
+                          {parseProvider === 'doc2x' ? (
+                            <ProductField label="Doc2X 轮询间隔">
+                              <ProductInput
+                                type="number"
+                                min={100}
+                                max={60000}
+                                value={doc2xPollIntervalMs}
+                                onChange={(event) => setDoc2xPollIntervalMs(event.target.value)}
+                              />
+                            </ProductField>
+                          ) : null}
+                        </>
+                      ) : null
                     ) : null}
                     <ProductField label="训练类型">
                       <ProductSelect
@@ -1098,37 +1284,149 @@ export function ImportWorkspace(props: {
                         }}
                       >
                         <option value="auto">自动</option>
+                        <option value="intelligent">智能</option>
                         <option value="custom">自定义</option>
                       </ProductSelect>
                     </ProductField>
-                    {chunkSettingMode === 'custom' ? (
-                      <>
-                        <ProductField label="分块大小">
-                          <ProductInput
-                            type="number"
-                            min={64}
-                            max={8000}
-                            value={chunkSize}
-                            onChange={(event) => {
-                              setChunkSize(event.target.value);
-                              invalidateUrlPreviews();
-                            }}
-                          />
-                        </ProductField>
-                        <ProductField label="切分模式">
-                          <ProductSelect
-                            value={chunkSplitMode}
-                            onChange={(event) => {
-                              setChunkSplitMode(event.target.value as typeof chunkSplitMode);
-                              invalidateUrlPreviews();
-                            }}
-                          >
-                            <option value="paragraph">按段落</option>
-                            <option value="size">按长度</option>
-                            <option value="char">按字符</option>
-                          </ProductSelect>
-                        </ProductField>
-                      </>
+                    <ProductField label="分块条件">
+                      <ProductSelect
+                        value={chunkTriggerType}
+                        onChange={(event) => {
+                          setChunkTriggerType(event.target.value as typeof chunkTriggerType);
+                          invalidateUrlPreviews();
+                        }}
+                      >
+                        <option value="minSize">原文长度大于</option>
+                        <option value="maxSize">原文长度小于</option>
+                        <option value="forceChunk">强制分块</option>
+                      </ProductSelect>
+                    </ProductField>
+                    <ProductField label="切分模式">
+                      <ProductSelect
+                        value={chunkSplitMode}
+                        onChange={(event) => {
+                          setChunkSplitMode(event.target.value as typeof chunkSplitMode);
+                          invalidateUrlPreviews();
+                        }}
+                      >
+                        <option value="paragraph">按段落</option>
+                        <option value="size">按长度</option>
+                        <option value="char">按字符</option>
+                      </ProductSelect>
+                    </ProductField>
+                    <ProductField label="分块大小">
+                      <ProductInput
+                        type="number"
+                        min={64}
+                        max={8000}
+                        value={chunkSize}
+                        onChange={(event) => {
+                          setChunkSize(event.target.value);
+                          invalidateUrlPreviews();
+                        }}
+                      />
+                    </ProductField>
+                    <ProductField label="分块条件值">
+                      <ProductInput
+                        type="number"
+                        min={1}
+                        max={8000}
+                        value={chunkTriggerMinSize}
+                        onChange={(event) => {
+                          setChunkTriggerMinSize(event.target.value);
+                          invalidateUrlPreviews();
+                        }}
+                      />
+                    </ProductField>
+                    <ProductField label="段落 AI 模式">
+                      <ProductSelect
+                        value={paragraphChunkAIMode}
+                        onChange={(event) => {
+                          setParagraphChunkAIMode(
+                            event.target.value as typeof paragraphChunkAIMode,
+                          );
+                          invalidateUrlPreviews();
+                        }}
+                      >
+                        <option value="auto">自动</option>
+                        <option value="force">强制</option>
+                        <option value="forbid">禁用</option>
+                      </ProductSelect>
+                    </ProductField>
+                    <ProductField label="最大段落深度">
+                      <ProductInput
+                        type="number"
+                        min={1}
+                        max={5}
+                        value={paragraphChunkDeep}
+                        onChange={(event) => {
+                          setParagraphChunkDeep(event.target.value);
+                          invalidateUrlPreviews();
+                        }}
+                      />
+                    </ProductField>
+                    <ProductField label="最小分块长度">
+                      <ProductInput
+                        type="number"
+                        min={1}
+                        max={8000}
+                        value={paragraphChunkMinSize}
+                        onChange={(event) => {
+                          setParagraphChunkMinSize(event.target.value);
+                          invalidateUrlPreviews();
+                        }}
+                      />
+                    </ProductField>
+                    <ProductField label="分隔符">
+                      <ProductTextarea
+                        value={chunkSplitter}
+                        placeholder="每行一个正则分隔符"
+                        maxLength={1000}
+                        onChange={(event) => {
+                          setChunkSplitter(event.target.value);
+                          invalidateUrlPreviews();
+                        }}
+                      />
+                    </ProductField>
+                    <ProductField label="重叠长度">
+                      <ProductInput
+                        type="number"
+                        min={0}
+                        max={7999}
+                        value={overlap}
+                        onChange={(event) => {
+                          setOverlap(event.target.value);
+                          invalidateUrlPreviews();
+                        }}
+                      />
+                    </ProductField>
+                    <ProductField label="索引大小">
+                      <ProductInput
+                        type="number"
+                        min={1}
+                        max={8000}
+                        value={indexSize}
+                        onChange={(event) => {
+                          setIndexSize(event.target.value);
+                          invalidateUrlPreviews();
+                        }}
+                      />
+                    </ProductField>
+                    {trainingType === 'qa' ? (
+                      <ProductField label="QA Prompt">
+                        <ProductTextarea
+                          value={qaPrompt}
+                          maxLength={20000}
+                          placeholder="留空时使用系统 QA Prompt"
+                          onChange={(event) => setQaPrompt(event.target.value)}
+                        />
+                      </ProductField>
+                    ) : null}
+                    {trainingType === 'qa' ? (
+                      <div className="kb2-note" role="status" aria-label="QA 状态说明">
+                        {'QA 成功'}会写入问答 Segment；无效输出使用{'原文回退'}
+                        ；模型或权限失败保持{'QA 失败'}，不会伪装成成功。
+                      </div>
                     ) : null}
                   </div>
                 </div>

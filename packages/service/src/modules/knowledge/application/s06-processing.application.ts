@@ -16,6 +16,7 @@ import type {
 } from './s06-processing-ports';
 import { tenantError } from '../../../shared/persistence/knowledge/tenant';
 import type { S5ProcessingApplication } from './s5-processing.application';
+import type { S5ArtifactMaterializeResult } from './s5-processing-ports';
 import type { ModelBindingRepositoryPort, ModelCatalogPort } from './s5-model-ports';
 import type { S8CaptionExecutorPort } from './s8-image-deep.ports';
 import type { S09RebuildApplication } from './s09-rebuild.application';
@@ -380,10 +381,12 @@ export class S06ProcessingApplication {
               imageBlobRefId: image ? source.blobRefId : null,
               parseProvider: source.parseProvider,
               configHash: String(job.inputSnapshot.configurationHash ?? ''),
-              chunking: job.inputSnapshot.chunking ?? {
+              parseConfigSnapshot: job.inputSnapshot.parseConfigSnapshot ?? {},
+              chunkingConfigSnapshot: job.inputSnapshot.chunkingConfigSnapshot ?? {
                 trainingType: 'chunk',
                 chunkSettingMode: 'auto',
               },
+              qaConfigSnapshot: job.inputSnapshot.qaConfigSnapshot ?? {},
               rootJobId: parentJobId,
               parentJobId,
             },
@@ -473,15 +476,51 @@ export class S06ProcessingApplication {
       },
       context,
     );
-    const artifact = await this.input.artifacts.materialize(
-      {
-        sourceId,
-        sourceVersion: Number(job.inputSnapshot.sourceVersion ?? source.sourceVersion),
-        knowledgeSpaceId: source.knowledgeSpaceId,
-        parse: parsed,
-      },
-      context,
-    );
+    let artifact: S5ArtifactMaterializeResult;
+    try {
+      artifact = await this.input.artifacts.materialize(
+        {
+          sourceId,
+          sourceVersion: Number(job.inputSnapshot.sourceVersion ?? source.sourceVersion),
+          knowledgeSpaceId: source.knowledgeSpaceId,
+          parse: parsed,
+        },
+        context,
+      );
+      await this.input.jobs.setStep(
+        {
+          jobId: String(job._id),
+          stepKey: 'parse',
+          status: 'succeeded',
+          idempotencyKey: `parse:${sourceId}:${source.sourceVersion}:${parsed.configHash}`,
+          evidence: {
+            parserVersion: parsed.parserVersion,
+            providerConfigHash: parsed.configHash,
+            rawTextHash: artifact.evidence.rawTextHash,
+            actualProvider: artifact.evidence.actualProvider ?? parsed.format,
+            attempts: artifact.evidence.attempts ?? 1,
+            fallbackUsed: artifact.evidence.fallbackUsed ?? false,
+            requestEvidence: artifact.evidence.requestEvidence ?? null,
+            providerUsage: artifact.evidence.providerUsage ?? [],
+          },
+        },
+        context,
+      );
+    } catch (error) {
+      await this.input.jobs
+        .setStep(
+          {
+            jobId: String(job._id),
+            stepKey: 'parse',
+            status: 'failed',
+            idempotencyKey: `parse:${sourceId}:${source.sourceVersion}:${parsed.configHash}`,
+            error: { code: errorCode(error) },
+          },
+          context,
+        )
+        .catch(() => undefined);
+      throw error;
+    }
     const structured =
       (source.kind === 'template' || source.kind === 'backup') && this.input.structuredImport
         ? await this.input.structuredImport.parse({
@@ -496,11 +535,19 @@ export class S06ProcessingApplication {
       question: string;
       answer: string;
       content: string;
+      contentHash?: string;
+      chunkSettingsHash?: string | null;
       metadata?: Record<string, unknown>;
     }> = [];
     let diagnostics: Array<{ severity: 'info' | 'warning' | 'error'; code: string }> = [];
     let qaCount = 0;
     let fallbackUsed = false;
+    let qaPromptVersion: string | null = null;
+    let qaUsage: { inputTokens: number; outputTokens: number } | undefined;
+    let qaAttempts: number | undefined;
+    let chunkSettingsHash: string | null = null;
+    const contentHashOf = (content: string) =>
+      `sha256:${createHash('sha256').update(content, 'utf8').digest('hex')}`;
     if (structured) {
       for (const [order, row] of structured.rows.entries()) {
         rows.push({
@@ -520,11 +567,17 @@ export class S06ProcessingApplication {
         sourceVersion: artifact.sourceVersion,
         rawText: parsed.rawText,
         artifact,
-        settings: job.inputSnapshot.chunking as ChunkingSettings,
+        settings: (job.inputSnapshot.chunkingConfigSnapshot ??
+          job.inputSnapshot.chunking) as ChunkingSettings,
         context,
       });
-      const qaByHash = new Map(processed.qaItems.map((item) => [item.sourceChunkHash, item]));
-      const chunking = job.inputSnapshot.chunking as ChunkingSettings | undefined;
+      chunkSettingsHash = processed.evidence.chunkingConfigHash;
+      qaPromptVersion = processed.evidence.qaPromptVersion ?? null;
+      qaUsage = processed.evidence.qaUsage;
+      qaAttempts = processed.evidence.qaAttempts;
+      const chunking = (job.inputSnapshot.chunkingConfigSnapshot ?? job.inputSnapshot.chunking) as
+        | ChunkingSettings
+        | undefined;
       const enhancementMetadata =
         processed.evidence.partial === true ? { enhancementPartial: true } : undefined;
       for (const chunk of processed.chunks) {
@@ -537,7 +590,16 @@ export class S06ProcessingApplication {
             question: chunk.text,
             answer: chunk.text,
             content: chunk.text,
-            ...(enhancementMetadata ? { metadata: enhancementMetadata } : {}),
+            contentHash: chunk.contentHash,
+            chunkSettingsHash,
+            ...(enhancementMetadata || qaPromptVersion
+              ? {
+                  metadata: {
+                    ...(enhancementMetadata ?? {}),
+                    ...(qaPromptVersion ? { qaPromptVersion } : {}),
+                  },
+                }
+              : {}),
           });
         }
         if (qaItems.length > 0) {
@@ -547,13 +609,23 @@ export class S06ProcessingApplication {
               question: item.q,
               answer: item.a,
               content: `${item.q}\n${item.a}`.trim(),
-              ...(enhancementMetadata ? { metadata: enhancementMetadata } : {}),
+              contentHash: contentHashOf(`${item.q}\n${item.a}`.trim()),
+              chunkSettingsHash,
+              ...(enhancementMetadata || qaPromptVersion
+                ? {
+                    metadata: {
+                      ...(enhancementMetadata ?? {}),
+                      sourceChunkHash: item.sourceChunkHash,
+                      ...(qaPromptVersion ? { qaPromptVersion } : {}),
+                    },
+                  }
+                : {}),
             });
           }
         }
       }
       diagnostics = processed.diagnostics;
-      qaCount = qaByHash.size;
+      qaCount = processed.qaItems.length;
       fallbackUsed = processed.evidence.fallbackUsed;
     }
     if (rows.length === 0 && !structured) {
@@ -610,10 +682,16 @@ export class S06ProcessingApplication {
           segmentIds,
           parserVersion: parsed.parserVersion,
           rawTextHash: artifact.evidence.rawTextHash,
-          chunkingConfigHash: String(job.inputSnapshot.configHash ?? ''),
-          qaPromptVersion: null,
+          chunkingConfigHash: chunkSettingsHash,
+          qaPromptVersion,
           qaCount,
           fallbackUsed,
+          qaAttempts: qaAttempts ?? 0,
+          qaUsage: qaUsage ?? { inputTokens: 0, outputTokens: 0 },
+          parserAttempts: artifact.evidence.attempts ?? 1,
+          providerUsage: artifact.evidence.providerUsage ?? [],
+          requestEvidence: artifact.evidence.requestEvidence ?? null,
+          ocrFallbackUsed: artifact.evidence.fallbackUsed ?? false,
           structuredImport: Boolean(structured),
         },
       },
@@ -622,6 +700,14 @@ export class S06ProcessingApplication {
     if (indexJobIds.length > 0) {
       await this.input.jobs.releaseWaitingForChildren(String(job._id), indexJobIds, context, {
         segmentIds,
+        rawTextBlobId: artifact.rawTextObjectRef.blobId,
+        parserVersion: parsed.parserVersion,
+        contentHash: parsed.contentHash,
+        diagnostics,
+        attempts: artifact.evidence.attempts ?? 1,
+        fallbackUsed: artifact.evidence.fallbackUsed ?? false,
+        actualProvider: artifact.evidence.actualProvider ?? parsed.format,
+        providerUsage: artifact.evidence.providerUsage ?? [],
       });
     }
     return {
@@ -1104,6 +1190,7 @@ export class S06ProcessingApplication {
       workspaceId: context.workspaceId,
       knowledgeSpaceId: segment.knowledgeSpaceId,
       sourceId: segment.sourceId,
+      sourceVersion: segment.sourceVersion,
       settings,
       chunks: [
         {
@@ -1221,7 +1308,12 @@ export class S06ProcessingApplication {
             sourceVersion: source.sourceVersion,
             parseProvider: source.parseProvider,
             configHash: String(job.inputSnapshot.configurationHash ?? ''),
-            chunking: { trainingType: 'chunk', chunkSettingMode: 'auto' },
+            parseConfigSnapshot: job.inputSnapshot.parseConfigSnapshot ?? {},
+            chunkingConfigSnapshot: job.inputSnapshot.chunkingConfigSnapshot ?? {
+              trainingType: 'chunk',
+              chunkSettingMode: 'auto',
+            },
+            qaConfigSnapshot: job.inputSnapshot.qaConfigSnapshot ?? {},
             rootJobId: String(job.inputSnapshot.rootJobId ?? job._id),
             parentJobId: String(job._id),
           },

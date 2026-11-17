@@ -106,6 +106,7 @@ function pipeline(input: { token?: string; modelId: string; transport?: Counting
     usage,
     qa: new S5QaPipelineAdapter({
       gateway,
+      qaSchemaRetries: 0,
       resolveModels: async () => ({ llmModelId: input.modelId }),
     }),
   };
@@ -201,6 +202,7 @@ describe('L1-B11-A2 PARSE-004 real AIProxy QA integration', () => {
         {
           templateRegistry: createDefaultTemplateRegistry(),
           model,
+          retryOnInvalidSchema: false,
           fallbackToChunkSplit: () => ({
             items: [
               {

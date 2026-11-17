@@ -47,6 +47,8 @@ export interface S6SegmentRecord {
   question: string;
   answer: string;
   content: string;
+  contentHash?: string | null;
+  chunkSettingsHash?: string | null;
   fullTextTokens: string;
   fullTextVersion: number;
   metadata: Record<string, unknown>;
@@ -287,6 +289,8 @@ export interface S6ProcessingStorePort {
         question: string;
         answer: string;
         content: string;
+        contentHash?: string | null;
+        chunkSettingsHash?: string | null;
         metadata?: Record<string, unknown>;
       }>;
     },

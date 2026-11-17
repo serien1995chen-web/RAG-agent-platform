@@ -34,12 +34,21 @@ export interface S5ParseSettingsPanelProps {
     providerProfile: string;
     fallback: string;
     imageHandling: string;
+    timeout: string;
+    textinMode: string;
+    removeWatermark: string;
+    pollInterval: string;
     training: string;
     mode: string;
     split: string;
+    trigger: string;
+    paragraphAi: string;
+    paragraphDepth: string;
     chunkSize: string;
     minSize: string;
     splitter: string;
+    overlap: string;
+    indexSize: string;
     qaPrompt: string;
     preview: string;
     noJob: string;
@@ -82,13 +91,43 @@ function providerConfigFor(
       timeoutMs: 600_000,
     };
   }
-  return {
+  const common = {
     provider,
     credentialProfileId: previous.provider === 'liteparse' ? '' : previous.credentialProfileId,
     fallbackProvider: previous.provider === 'liteparse' ? 'liteparse' : previous.fallbackProvider,
     imageHandling: previous.provider === 'liteparse' ? 'upload_to_storage' : previous.imageHandling,
     timeoutMs: previous.timeoutMs,
-  };
+  } as const;
+  if (provider === 'textin') {
+    return {
+      ...common,
+      provider,
+      parseMode: previous.provider === 'textin' ? previous.parseMode : 'auto',
+      removeWatermark: previous.provider === 'textin' ? previous.removeWatermark : true,
+    };
+  }
+  if (provider === 'doc2x') {
+    return {
+      ...common,
+      provider,
+      pollIntervalMs: previous.provider === 'doc2x' ? previous.pollIntervalMs : 5_000,
+    };
+  }
+  if (provider === 'sangfor') {
+    return {
+      ...common,
+      provider,
+      ...(previous.provider === 'sangfor'
+        ? {
+            keepHeaderFooter: previous.keepHeaderFooter,
+            keepAppendix: previous.keepAppendix,
+            imageAnalysis: previous.imageAnalysis,
+            chartAnalysis: previous.chartAnalysis,
+          }
+        : {}),
+    };
+  }
+  return { ...common, provider };
 }
 
 export function S5ParseSettingsPanel(props: S5ParseSettingsPanelProps) {
@@ -103,12 +142,21 @@ export function S5ParseSettingsPanel(props: S5ParseSettingsPanelProps) {
     providerProfile: 'Credential profile',
     fallback: 'Fallback',
     imageHandling: 'Images',
+    timeout: 'Timeout (ms)',
+    textinMode: 'TextIn parse mode',
+    removeWatermark: 'Remove watermark',
+    pollInterval: 'Doc2X poll interval (ms)',
     training: 'Training type',
     mode: 'Chunk mode',
     split: 'Split mode',
+    trigger: 'Chunk trigger',
+    paragraphAi: 'Paragraph AI mode',
+    paragraphDepth: 'Maximum paragraph depth',
     chunkSize: 'Chunk size',
     minSize: 'Minimum size',
     splitter: 'Custom separators',
+    overlap: 'Overlap',
+    indexSize: 'Index size',
     qaPrompt: 'QA instructions',
     preview: 'Preview configuration',
     noJob: 'Configuration preview only',
@@ -230,6 +278,79 @@ export function S5ParseSettingsPanel(props: S5ParseSettingsPanelProps) {
             </FormControl>
             <FormControl>
               <FormLabel fontSize="xs" fontWeight="700">
+                {labels.timeout}
+              </FormLabel>
+              <NumberInput
+                min={1_000}
+                max={600_000}
+                value={providerConfig.timeoutMs}
+                onChange={(_value, valueNumber) =>
+                  commitProvider({
+                    ...providerConfig,
+                    timeoutMs: Number.isFinite(valueNumber) ? valueNumber : 120_000,
+                  })
+                }
+              >
+                <NumberInputField aria-label={labels.timeout} />
+              </NumberInput>
+            </FormControl>
+            {providerConfig.provider === 'textin' ? (
+              <>
+                <FormControl>
+                  <FormLabel fontSize="xs" fontWeight="700">
+                    {labels.textinMode}
+                  </FormLabel>
+                  <Select
+                    size="sm"
+                    value={providerConfig.parseMode}
+                    onChange={(event) =>
+                      commitProvider({
+                        ...providerConfig,
+                        parseMode: event.target.value as 'auto' | 'scan',
+                      })
+                    }
+                  >
+                    <option value="auto">Auto</option>
+                    <option value="scan">Scan</option>
+                  </Select>
+                </FormControl>
+                <Checkbox
+                  size="sm"
+                  isChecked={providerConfig.removeWatermark}
+                  mt={7}
+                  onChange={(event) =>
+                    commitProvider({
+                      ...providerConfig,
+                      removeWatermark: event.target.checked,
+                    })
+                  }
+                >
+                  {labels.removeWatermark}
+                </Checkbox>
+              </>
+            ) : null}
+            {providerConfig.provider === 'doc2x' ? (
+              <FormControl>
+                <FormLabel fontSize="xs" fontWeight="700">
+                  {labels.pollInterval}
+                </FormLabel>
+                <NumberInput
+                  min={100}
+                  max={60_000}
+                  value={providerConfig.pollIntervalMs}
+                  onChange={(_value, valueNumber) =>
+                    commitProvider({
+                      ...providerConfig,
+                      pollIntervalMs: Number.isFinite(valueNumber) ? valueNumber : 5_000,
+                    })
+                  }
+                >
+                  <NumberInputField aria-label={labels.pollInterval} />
+                </NumberInput>
+              </FormControl>
+            ) : null}
+            <FormControl>
+              <FormLabel fontSize="xs" fontWeight="700">
                 {labels.imageHandling}
               </FormLabel>
               <Select
@@ -323,6 +444,62 @@ export function S5ParseSettingsPanel(props: S5ParseSettingsPanelProps) {
           </Select>
         </FormControl>
 
+        <FormControl>
+          <FormLabel fontSize="xs" fontWeight="700">
+            {labels.trigger}
+          </FormLabel>
+          <Select
+            size="sm"
+            value={settings.chunkTriggerType ?? 'minSize'}
+            onChange={(event) =>
+              setField(
+                'chunkTriggerType',
+                event.target.value as S5ChunkingSettingsView['chunkTriggerType'],
+              )
+            }
+          >
+            <option value="minSize">Minimum size</option>
+            <option value="maxSize">Maximum size</option>
+            <option value="forceChunk">Force chunk</option>
+          </Select>
+        </FormControl>
+
+        <FormControl>
+          <FormLabel fontSize="xs" fontWeight="700">
+            {labels.paragraphAi}
+          </FormLabel>
+          <Select
+            size="sm"
+            value={settings.paragraphChunkAIMode ?? 'auto'}
+            onChange={(event) =>
+              setField(
+                'paragraphChunkAIMode',
+                event.target.value as S5ChunkingSettingsView['paragraphChunkAIMode'],
+              )
+            }
+          >
+            <option value="auto">Auto</option>
+            <option value="force">Force</option>
+            <option value="forbid">Forbid</option>
+          </Select>
+        </FormControl>
+
+        <FormControl>
+          <FormLabel fontSize="xs" fontWeight="700">
+            {labels.paragraphDepth}
+          </FormLabel>
+          <NumberInput
+            min={1}
+            max={5}
+            value={settings.paragraphChunkDeep ?? 5}
+            onChange={(_value, valueNumber) =>
+              setField('paragraphChunkDeep', Number.isFinite(valueNumber) ? valueNumber : 5)
+            }
+          >
+            <NumberInputField aria-label={labels.paragraphDepth} />
+          </NumberInput>
+        </FormControl>
+
         <FormControl isInvalid={Boolean(errors.chunkSize)}>
           <FormLabel fontSize="xs" fontWeight="700">
             {labels.chunkSize}
@@ -342,6 +519,38 @@ export function S5ParseSettingsPanel(props: S5ParseSettingsPanelProps) {
               {errors.chunkSize}
             </Text>
           ) : null}
+        </FormControl>
+
+        <FormControl isInvalid={Boolean(errors.overlap)}>
+          <FormLabel fontSize="xs" fontWeight="700">
+            {labels.overlap}
+          </FormLabel>
+          <NumberInput
+            min={0}
+            max={7_999}
+            value={settings.overlap ?? 0}
+            onChange={(_value, valueNumber) =>
+              setField('overlap', Number.isFinite(valueNumber) ? valueNumber : 0)
+            }
+          >
+            <NumberInputField aria-label={labels.overlap} />
+          </NumberInput>
+        </FormControl>
+
+        <FormControl>
+          <FormLabel fontSize="xs" fontWeight="700">
+            {labels.indexSize}
+          </FormLabel>
+          <NumberInput
+            min={1}
+            max={8_000}
+            value={settings.indexSize ?? 1_000}
+            onChange={(_value, valueNumber) =>
+              setField('indexSize', Number.isFinite(valueNumber) ? valueNumber : 1_000)
+            }
+          >
+            <NumberInputField aria-label={labels.indexSize} />
+          </NumberInput>
         </FormControl>
 
         <FormControl isInvalid={Boolean(errors.paragraphChunkMinSize)}>

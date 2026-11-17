@@ -147,7 +147,11 @@ export {
   S5MockAiproxyTransport,
 } from './adapter/s5-aiproxy-http.adapter';
 export { S5KeyedSemaphore } from './adapter/s5-keyed-semaphore';
-export { S5OcrHttpAdapter, AxiosS5OcrHttpTransport } from './adapter/s5-ocr-http.adapter';
+export {
+  S5OcrHttpAdapter,
+  S5MockOcrProvider,
+  AxiosS5OcrHttpTransport,
+} from './adapter/s5-ocr-http.adapter';
 export { S5OcrCredentialProfileAdapter } from './adapter/s5-ocr-profile.adapter';
 export { S5RemoteAssetAdapter } from './adapter/s5-remote-asset.adapter';
 export { S5ModelApplication } from './application/s5-model.application';
@@ -285,9 +289,11 @@ export type {
 export type { S5ModelGatewayPort, S5UsageRecorderPort } from './application/s5-model-gateway.port';
 export type {
   S5OcrAssetSinkPort,
+  S5OcrProviderConfig,
   S5OcrHttpTransportPort,
   S5ProviderUsageRecorderPort,
 } from './application/s5-ocr-ports';
+export { parseS5OcrProviderConfig } from './application/s5-ocr-ports';
 export type {
   S5ArtifactMaterializeResult,
   S5ArtifactStorePort,
