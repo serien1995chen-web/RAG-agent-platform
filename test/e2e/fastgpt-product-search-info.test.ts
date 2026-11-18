@@ -504,4 +504,79 @@ describe('FastGPT product module 4 Search and Info', () => {
     expect.soft(activeEmbeddingBinding?.activeQueryModelId).toBe(currentEmbeddingModel);
     await context.close();
   });
+
+  it('L1-B14-TRAIN-006-UI01 requires an explicit rebuild confirmation before changing the index model', async () => {
+    const confirmationSpace = await api<{ id: string }>('/v1/knowledge/spaces', 'POST', {
+      kind: 'space',
+      parentSpaceId: null,
+      name: `B14 模型切换确认 ${suffix}`,
+      description: '',
+      iconKey: 'book-open',
+      accessMode: 'workspace',
+      sourceAclMode: 'inherited',
+      sourcePermissionEnabled: true,
+    });
+    const catalog = await api<{
+      items: Array<{
+        modelId: string;
+        displayName: string;
+        type: string;
+        capabilities: string[];
+        authorized: boolean;
+      }>;
+    }>('/v1/knowledge/models?limit=200', 'GET');
+    const embeddingModels = catalog.items.filter(
+      (model) => model.type === 'embedding' && model.authorized,
+    );
+    expect(embeddingModels.length).toBeGreaterThanOrEqual(2);
+    const initialModel = embeddingModels[0]!;
+    const alternateModel = embeddingModels[1]!;
+    const initialSpace = await api<{ version: number }>(
+      `/v1/knowledge/spaces/${confirmationSpace.id}`,
+      'GET',
+    );
+    await api(`/v1/knowledge/spaces/${confirmationSpace.id}/model-bindings`, 'PUT', {
+      bindings: [
+        {
+          modelType: 'embedding',
+          modelId: initialModel.modelId,
+          displayName: initialModel.displayName,
+          requiredCapabilities: initialModel.capabilities,
+          status: 'active',
+        },
+      ],
+      version: initialSpace.version,
+    });
+
+    const context = await browser.newContext({
+      viewport: { width: 1440, height: 900 },
+      locale: 'zh-CN',
+    });
+    await context.addCookies([cookie]);
+    const page = await context.newPage();
+    let immediateBindingUpdate = false;
+    page.on('request', (request) => {
+      if (
+        request.method() === 'PUT' &&
+        request.url().endsWith(`/spaces/${confirmationSpace.id}/model-bindings`)
+      ) {
+        immediateBindingUpdate = true;
+      }
+    });
+    await page.goto(
+      `${app.baseUrl}/dataset/detail?datasetId=${confirmationSpace.id}&currentTab=collectionCard`,
+      { waitUntil: 'networkidle' },
+    );
+    await page.getByRole('button', { name: '编辑模型配置' }).click();
+    const modal = page.locator('.kb2-modal');
+    await modal.getByLabel('索引模型').selectOption(alternateModel.modelId);
+    await modal.getByRole('button', { name: '保存' }).click();
+    await page.waitForTimeout(500);
+
+    expect(immediateBindingUpdate).toBe(false);
+    await playwrightExpect(page.locator('.kb2-modal')).toHaveCount(1);
+    await playwrightExpect(page.getByText(/重建索引/)).toBeVisible();
+    await playwrightExpect(page.getByRole('button', { name: /确认/ })).toBeVisible();
+    await context.close();
+  });
 });
