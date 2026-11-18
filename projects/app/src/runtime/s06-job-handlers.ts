@@ -71,6 +71,18 @@ export class S06JobHandlers {
         details: { reason: 'queue_workspace_mismatch' },
       });
     }
+    if (event.payload.queue !== queue) {
+      throw createKnowledgeError({
+        code: 'KNOWLEDGE_VALIDATION_FAILED',
+        requestId: context.requestId,
+        traceId: context.traceId,
+        details: {
+          field: 'outbox.payload.queue',
+          expected: queue,
+          actual: event.payload.queue,
+        },
+      });
+    }
     const jobId = String(event.payload.jobId ?? '');
     if (!/^[a-f0-9]{24}$/.test(jobId)) {
       throw createKnowledgeError({

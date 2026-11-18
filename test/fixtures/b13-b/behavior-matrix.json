@@ -1,0 +1,259 @@
+{
+  "schemaVersion": 1,
+  "runScope": "B13B",
+  "fastgptVersion": "4.17.3",
+  "references": [
+    {
+      "path": "packages/global/core/dataset/training/constant.ts",
+      "behavior": "Training leases expire after five minutes and heartbeat every minute."
+    },
+    {
+      "path": "packages/service/core/dataset/training/entity.ts",
+      "behavior": "Claims are atomic and require an expired lease before takeover."
+    },
+    {
+      "path": "packages/service/core/dataset/training/query.ts",
+      "behavior": "Active, temporary error, final error and blocked training states are computed from retryCount, lockTime and errorMsg."
+    },
+    {
+      "path": "packages/service/core/dataset/training/schema.ts",
+      "behavior": "Training records keep retryCount, lockTime, errorMsg, data linkage and expiration."
+    },
+    {
+      "path": "packages/service/core/dataset/training/service.ts",
+      "behavior": "Lease ownership is checked before result, transition and error commits; final errors remain retryable."
+    },
+    {
+      "path": "packages/service/core/dataset/training/controller.ts",
+      "behavior": "Insufficient points block active records instead of deleting them."
+    },
+    {
+      "path": "projects/app/src/pages/api/core/dataset/training/getTrainingError.ts",
+      "behavior": "Collection-scoped final errors are paginated."
+    },
+    {
+      "path": "projects/app/src/pages/api/core/dataset/training/getDatasetTrainingError.ts",
+      "behavior": "Dataset-scoped final errors are grouped by Source and paginated with bounded item pages."
+    },
+    {
+      "path": "projects/app/src/pages/api/core/dataset/training/updateTrainingData.ts",
+      "behavior": "Single and bulk retry restore final errors; editable content remains available where applicable."
+    },
+    {
+      "path": "projects/app/src/pages/api/core/dataset/training/deleteTrainingData.ts",
+      "behavior": "Error deletion requires manage permission and keeps transactions scoped to the authorized Source."
+    },
+    {
+      "path": "projects/app/src/pageComponents/dataset/detail/CollectionCard/TrainingStates.tsx",
+      "behavior": "Training details show stage counts and final errors."
+    },
+    {
+      "path": "projects/app/src/pageComponents/dataset/detail/CollectionCard/TrainingErrorList.tsx",
+      "behavior": "Users can retry, edit applicable data, delete and retry all final errors with per-action loading."
+    }
+  ],
+  "cases": [
+    {
+      "capability": "TRAIN-005",
+      "subtestId": "L1-B13-B-TRAIN-005-P01",
+      "responsibility": "List and detail expose counts, attempts, progress, steps and errors.",
+      "fastgptConclusion": "MATCH",
+      "projectContract": "FAIL",
+      "frontendBehaviorIds": ["KB-COLLECTION-100", "KB-COLLECTION-103"],
+      "expectedHttp": "200",
+      "expectedError": null,
+      "stateTransition": "read-only",
+      "sideEffects": "none",
+      "permission": "workspace-scoped read"
+    },
+    {
+      "capability": "TRAIN-005",
+      "subtestId": "L1-B13-B-TRAIN-005-P02",
+      "responsibility": "Failed and dead-letter Jobs can be retried or replayed.",
+      "fastgptConclusion": "MATCH",
+      "projectContract": "FAIL",
+      "frontendBehaviorIds": ["KB-COLLECTION-111", "KB-COLLECTION-114"],
+      "expectedHttp": "200",
+      "expectedError": null,
+      "stateTransition": "failed|dead_letter -> queued",
+      "sideEffects": "one requeue Outbox event",
+      "permission": "write; replay requires owner or admin"
+    },
+    {
+      "capability": "TRAIN-005",
+      "subtestId": "L1-B13-B-TRAIN-005-N01",
+      "responsibility": "Unknown Jobs are 404; stale versions and illegal states are stable 409 responses.",
+      "fastgptConclusion": "INTENTIONAL_DIFFERENCE",
+      "projectContract": "FAIL",
+      "frontendBehaviorIds": [],
+      "expectedHttp": "404 or 409",
+      "expectedError": "KNOWLEDGE_NOT_FOUND or KNOWLEDGE_CONFLICT",
+      "stateTransition": "unchanged",
+      "sideEffects": "none",
+      "permission": "workspace-scoped"
+    },
+    {
+      "capability": "TRAIN-005",
+      "subtestId": "L1-B13-B-TRAIN-005-A01",
+      "responsibility": "Foreign Jobs remain hidden and protected actions require resource permission.",
+      "fastgptConclusion": "MATCH",
+      "projectContract": "FAIL",
+      "frontendBehaviorIds": [],
+      "expectedHttp": "404 or 403",
+      "expectedError": "KNOWLEDGE_NOT_FOUND or KNOWLEDGE_FORBIDDEN",
+      "stateTransition": "unchanged",
+      "sideEffects": "none",
+      "permission": "tenant plus Source/Space ACL"
+    },
+    {
+      "capability": "TRAIN-005",
+      "subtestId": "L1-B13-B-TRAIN-005-S01",
+      "responsibility": "Retry resets retryable truth and emits exactly one requeue event.",
+      "fastgptConclusion": "MATCH",
+      "projectContract": "FAIL",
+      "frontendBehaviorIds": ["KB-COLLECTION-111"],
+      "expectedHttp": "200",
+      "expectedError": null,
+      "stateTransition": "failed -> queued",
+      "sideEffects": "Job, Step, epoch and Outbox updated atomically",
+      "permission": "write"
+    },
+    {
+      "capability": "TRAIN-005",
+      "subtestId": "L1-B13-B-TRAIN-005-C01",
+      "responsibility": "Cancel and complete races converge to one legal terminal result.",
+      "fastgptConclusion": "UNRESOLVED",
+      "projectContract": "PASS",
+      "frontendBehaviorIds": [],
+      "expectedHttp": "one 200 and one stable conflict",
+      "expectedError": "KNOWLEDGE_CONFLICT",
+      "stateTransition": "one terminal state",
+      "sideEffects": "no stale Worker commit",
+      "permission": "write"
+    },
+    {
+      "capability": "TRAIN-005",
+      "subtestId": "L1-B13-B-TRAIN-005-F01",
+      "responsibility": "Requeue failure recovers without duplicating the Job.",
+      "fastgptConclusion": "MATCH",
+      "projectContract": "PASS",
+      "frontendBehaviorIds": [],
+      "expectedHttp": "internal recovery",
+      "expectedError": null,
+      "stateTransition": "retry_wait -> queued",
+      "sideEffects": "one logical Job and replay-safe Outbox delivery",
+      "permission": "system"
+    },
+    {
+      "capability": "TRAIN-005",
+      "subtestId": "L1-B13-B-TRAIN-005-UI01",
+      "responsibility": "Training errors can be listed, retried, edited or deleted, and terminal actions disable correctly.",
+      "fastgptConclusion": "MATCH",
+      "projectContract": "FAIL",
+      "frontendBehaviorIds": [
+        "KB-COLLECTION-103",
+        "KB-COLLECTION-104",
+        "KB-COLLECTION-110",
+        "KB-COLLECTION-111",
+        "KB-COLLECTION-112",
+        "KB-COLLECTION-113",
+        "KB-COLLECTION-114"
+      ],
+      "expectedHttp": "200",
+      "expectedError": null,
+      "stateTransition": "terminal/error actions disabled",
+      "sideEffects": "visible state survives refresh",
+      "permission": "write/edit and manage/delete"
+    },
+    {
+      "capability": "TRAIN-007",
+      "subtestId": "L1-B13-B-TRAIN-007-P01",
+      "responsibility": "Project pause/resume persists and resumes from a safe point.",
+      "fastgptConclusion": "BLOCKED_REFERENCE",
+      "projectContract": "FAIL",
+      "frontendBehaviorIds": ["KB-COLLECTION-100", "KB-DATA-093"],
+      "expectedHttp": "200",
+      "expectedError": null,
+      "stateTransition": "queued|running -> paused -> queued",
+      "sideEffects": "safe continuation and no duplicate Segment/vector/billing",
+      "permission": "write and resource ACL"
+    },
+    {
+      "capability": "TRAIN-007",
+      "subtestId": "L1-B13-B-TRAIN-007-N01",
+      "responsibility": "Illegal pause/resume and blocked work never appear ready.",
+      "fastgptConclusion": "MATCH",
+      "projectContract": "FAIL",
+      "frontendBehaviorIds": ["KB-COLLECTION-105"],
+      "expectedHttp": "409",
+      "expectedError": "KNOWLEDGE_CONFLICT",
+      "stateTransition": "unchanged",
+      "sideEffects": "no partial Step",
+      "permission": "write"
+    },
+    {
+      "capability": "TRAIN-007",
+      "subtestId": "L1-B13-B-TRAIN-007-S01",
+      "responsibility": "Pause retains evidence and resume creates a new execution epoch.",
+      "fastgptConclusion": "BLOCKED_REFERENCE",
+      "projectContract": "FAIL",
+      "frontendBehaviorIds": [],
+      "expectedHttp": "200",
+      "expectedError": null,
+      "stateTransition": "paused -> queued",
+      "sideEffects": "attemptEpoch increases and old fence fails",
+      "permission": "write"
+    },
+    {
+      "capability": "TRAIN-007",
+      "subtestId": "L1-B13-B-TRAIN-007-C01",
+      "responsibility": "Pause versus complete and resume versus lease expiry allow only one winner.",
+      "fastgptConclusion": "UNRESOLVED",
+      "projectContract": "PASS",
+      "frontendBehaviorIds": [],
+      "expectedHttp": "one 200 and one stable conflict",
+      "expectedError": "KNOWLEDGE_CONFLICT",
+      "stateTransition": "one legal terminal or paused state",
+      "sideEffects": "stale lease cannot commit",
+      "permission": "write"
+    },
+    {
+      "capability": "TRAIN-007",
+      "subtestId": "L1-B13-B-TRAIN-007-F01",
+      "responsibility": "Redis/Worker restart preserves pause/cancel and eventually resumes or blocks explicitly.",
+      "fastgptConclusion": "MATCH",
+      "projectContract": "PASS",
+      "frontendBehaviorIds": ["KB-XROUTE-007"],
+      "expectedHttp": "polling does not create work",
+      "expectedError": null,
+      "stateTransition": "paused/cancelled remain durable",
+      "sideEffects": "no duplicate Segment/vector/index",
+      "permission": "system"
+    },
+    {
+      "capability": "TRAIN-007",
+      "subtestId": "L1-B13-B-TRAIN-007-UI01",
+      "responsibility": "Pause/resume controls appear only in legal states; blocking and network failure remain recoverable.",
+      "fastgptConclusion": "BLOCKED_REFERENCE",
+      "projectContract": "FAIL",
+      "frontendBehaviorIds": ["KB-COLLECTION-100", "KB-COLLECTION-105", "KB-XROUTE-007"],
+      "expectedHttp": "200",
+      "expectedError": null,
+      "stateTransition": "visible state survives refresh",
+      "sideEffects": "loading prevents duplicate submission",
+      "permission": "write"
+    }
+  ],
+  "blockedReferences": [
+    {
+      "capability": "TRAIN-007",
+      "reason": "FastGPT 4.17.3 exposes system blocking and automatic retry but no public explicit user pause/resume API or state machine.",
+      "requiredCloudEvidence": "Record exact user role, page, operation, request, response, DOM and refresh behavior for an explicit pause/resume control, if it exists."
+    },
+    {
+      "capability": "TRAIN-005",
+      "reason": "The project public reference binding accepts only Space resources. No public API can register a Segment-level reference.",
+      "requiredCloudEvidence": "Record whether FastGPT can delete a referenced chunk, the exact referrer type, block/delete prompt and persisted result."
+    }
+  ]
+}

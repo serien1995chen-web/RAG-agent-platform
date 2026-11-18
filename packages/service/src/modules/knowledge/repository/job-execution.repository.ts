@@ -7,7 +7,10 @@ import type {
   KnowledgeJobStepDoc,
   KnowledgeOutboxEventDoc,
 } from '../../../shared/persistence/schemas/knowledge-job.schemas';
-import type { KnowledgeSourceDoc } from '../../../shared/persistence/schemas/knowledge-catalog.schemas';
+import type {
+  KnowledgeSegmentDoc,
+  KnowledgeSourceDoc,
+} from '../../../shared/persistence/schemas/knowledge-catalog.schemas';
 import type { KnowledgeConnectorDoc } from '../../../shared/persistence/schemas/knowledge-connector.schemas';
 import type { KnowledgeModelBindingDoc } from '../../../shared/persistence/schemas/knowledge-governance.schemas';
 import { createKnowledgeOutboxEvent } from '../../../shared/persistence/knowledge/outbox';
@@ -128,6 +131,7 @@ export class KnowledgeJobExecutionRepository {
   private readonly steps: Model<KnowledgeJobStepDoc>;
   private readonly outbox: Model<KnowledgeOutboxEventDoc>;
   private readonly sources: Model<KnowledgeSourceDoc>;
+  private readonly segments: Model<KnowledgeSegmentDoc>;
   private readonly connectors: Model<KnowledgeConnectorDoc>;
   private readonly bindings: Model<KnowledgeModelBindingDoc>;
 
@@ -137,8 +141,66 @@ export class KnowledgeJobExecutionRepository {
     this.steps = models.KnowledgeJobStep;
     this.outbox = models.KnowledgeOutboxEvent;
     this.sources = models.KnowledgeSource;
+    this.segments = models.KnowledgeSegment;
     this.connectors = models.KnowledgeConnector;
     this.bindings = models.KnowledgeModelBinding;
+  }
+
+  private async sourcePermissionSnapshot(
+    input: CreateJobInput | CreateChildJobInput,
+    context: TenantContext,
+    session?: ClientSession,
+  ): Promise<Record<string, unknown>> {
+    const workspaceId = requireWorkspaceId(context);
+    if (input.resourceType === 'source') {
+      const source = await this.sources
+        .findOne({
+          _id: objectIdOf(input.resourceId, context, 'sourceId'),
+          workspaceId,
+          deletedAt: null,
+        })
+        .session(session ?? null)
+        .lean<Pick<KnowledgeSourceDoc, 'permissionRevision'> | null>();
+      return source ? { sourcePermissionRevision: source.permissionRevision } : {};
+    }
+    if (input.resourceType === 'segment') {
+      const segment = await this.segments
+        .findOne({
+          _id: objectIdOf(input.resourceId, context, 'segmentId'),
+          workspaceId,
+          deletedAt: null,
+        })
+        .session(session ?? null)
+        .lean<Pick<KnowledgeSegmentDoc, 'sourceId'> | null>();
+      if (!segment) return {};
+      const source = await this.sources
+        .findOne({
+          _id: segment.sourceId,
+          workspaceId,
+          deletedAt: null,
+        })
+        .session(session ?? null)
+        .lean<Pick<KnowledgeSourceDoc, 'permissionRevision'> | null>();
+      return source ? { sourcePermissionRevision: source.permissionRevision } : {};
+    }
+    const sourceIds = Array.isArray(input.inputSnapshot.sourceIds)
+      ? [...new Set(input.inputSnapshot.sourceIds.map(String))]
+      : [];
+    if (sourceIds.length === 0) return {};
+    const sources = await this.sources
+      .find({
+        _id: { $in: sourceIds.map((sourceId) => objectIdOf(sourceId, context, 'sourceIds')) },
+        workspaceId,
+        deletedAt: null,
+      })
+      .select({ _id: 1, permissionRevision: 1 })
+      .session(session ?? null)
+      .lean<Array<{ _id: Types.ObjectId; permissionRevision: number }>>();
+    return {
+      sourcePermissionRevisions: Object.fromEntries(
+        sources.map((source) => [String(source._id), source.permissionRevision]),
+      ),
+    };
   }
 
   private async createWithSession(
@@ -153,6 +215,38 @@ export class KnowledgeJobExecutionRepository {
       resourceId: input.resourceId,
       inputSnapshot: input.inputSnapshot,
     });
+    let permissionSnapshot = await this.sourcePermissionSnapshot(input, context, session);
+    const parentJobId = (input as CreateChildJobInput).parentJobId;
+    if (parentJobId) {
+      const parent = await this.jobs
+        .findOne({
+          _id: objectIdOf(parentJobId, context, 'parentJobId'),
+          workspaceId,
+          deletedAt: null,
+        })
+        .session(session ?? null)
+        .lean<Pick<KnowledgeJobDoc, 'inputSnapshot'> | null>();
+      const revisions = parent?.inputSnapshot.sourcePermissionRevisions;
+      const sourceId =
+        input.resourceType === 'source' && typeof input.resourceId === 'string'
+          ? input.resourceId
+          : null;
+      if (
+        sourceId &&
+        typeof revisions === 'object' &&
+        revisions !== null &&
+        !Array.isArray(revisions) &&
+        Number.isFinite(Number((revisions as Record<string, unknown>)[sourceId]))
+      ) {
+        permissionSnapshot = {
+          sourcePermissionRevision: Number((revisions as Record<string, unknown>)[sourceId]),
+        };
+      } else if (Number.isFinite(Number(parent?.inputSnapshot.sourcePermissionRevision))) {
+        permissionSnapshot = {
+          sourcePermissionRevision: Number(parent?.inputSnapshot.sourcePermissionRevision),
+        };
+      }
+    }
     const existing = await this.jobs
       .findOne({ workspaceId, idempotencyKey: input.idempotencyKey, deletedAt: null })
       .session(session ?? null)
@@ -184,6 +278,7 @@ export class KnowledgeJobExecutionRepository {
           idempotencyKey: input.idempotencyKey,
           inputSnapshot: {
             ...input.inputSnapshot,
+            ...permissionSnapshot,
             requestHash,
             ...((input as CreateChildJobInput).rootJobId
               ? { rootJobId: (input as CreateChildJobInput).rootJobId }
@@ -217,6 +312,20 @@ export class KnowledgeJobExecutionRepository {
         traceId: context.traceId,
         details: { reason: 'job_create_failed' },
       });
+    }
+    if (input.kind === 'parse' && input.resourceType === 'source') {
+      await this.sources.updateOne(
+        {
+          _id: objectIdOf(input.resourceId, context, 'sourceId'),
+          workspaceId,
+          deletedAt: null,
+        },
+        {
+          $set: { processingStatus: 'queued', updatedByMemberId: context.memberId },
+          $inc: { version: 1 },
+        },
+        { session },
+      );
     }
     await createKnowledgeOutboxEvent(
       this.connection,
@@ -389,6 +498,7 @@ export class KnowledgeJobExecutionRepository {
         leaseOwner: workerId,
         attemptEpoch,
         fencingToken,
+        leaseExpiresAt: { $gt: now },
         deletedAt: null,
       },
       {
@@ -471,6 +581,7 @@ export class KnowledgeJobExecutionRepository {
     errorCode: string,
     context: TenantContext,
     details?: Record<string, unknown> | null,
+    terminal = false,
   ) {
     const current = await this.jobs.findOne({
       _id: objectIdOf(jobId, context, 'jobId'),
@@ -505,7 +616,7 @@ export class KnowledgeJobExecutionRepository {
       { new: true },
     );
     if (!updated) throw conflict(context, { reason: 'job_fail_cas', jobId });
-    if (!exhausted) {
+    if (!terminal && !exhausted) {
       return jobDto(updated.toObject() as unknown as Plain<KnowledgeJobDoc>);
     }
     const dead = await this.jobs.findOneAndUpdate(
@@ -865,11 +976,13 @@ export class KnowledgeJobExecutionRepository {
         .findOne({
           _id: objectIdOf(jobId, context, 'jobId'),
           workspaceId: requireWorkspaceId(context),
-          version: expectedVersion,
           deletedAt: null,
         })
         .session(session);
-      if (!root) throw conflict(context, { reason: 'version_conflict', jobId });
+      if (!root) throw tenantError(context, 'KNOWLEDGE_NOT_FOUND', { jobId });
+      if (root.version !== expectedVersion) {
+        throw conflict(context, { reason: 'version_conflict', jobId });
+      }
       const rootId = String(root.inputSnapshot.rootJobId ?? root._id);
       const tree = await this.jobs
         .find({
@@ -979,10 +1092,10 @@ export class KnowledgeJobExecutionRepository {
           ...(next === 'cancelled' ? { cancelRequestedAt: now } : {}),
         };
         const inc: Record<string, number> = { version: 1 };
-        if (action === 'retry' || action === 'replay') {
+        if (action === 'retry' || action === 'replay' || action === 'resume') {
           update.attemptEpoch = node.attemptEpoch + 1;
-          update.attempts = 0;
           update.fencingToken = 'unassigned';
+          if (action === 'retry' || action === 'replay') update.attempts = 0;
           update.result = {
             ...(node.result ?? {}),
             replayHistory: [
@@ -998,6 +1111,25 @@ export class KnowledgeJobExecutionRepository {
         );
         if (!updated) throw conflict(context, { reason: 'control_cas', jobId: String(node._id) });
         if (next === 'queued') {
+          if (action === 'retry' || action === 'replay' || action === 'resume') {
+            await this.steps.updateMany(
+              {
+                workspaceId: node.workspaceId,
+                jobId: node._id,
+                status: { $in: ['failed', 'retry_wait'] },
+                deletedAt: null,
+              },
+              {
+                $set: {
+                  status: 'pending',
+                  error: null,
+                  updatedByMemberId: context.memberId,
+                },
+                $inc: { version: 1 },
+              },
+              { session },
+            );
+          }
           await createKnowledgeOutboxEvent(
             this.connection,
             {
@@ -1007,7 +1139,10 @@ export class KnowledgeJobExecutionRepository {
               aggregateType: 'job',
               aggregateId: String(node._id),
               queue: queueOf(node.kind),
-              payload: { jobId: String(node._id) },
+              payload: {
+                jobId: String(node._id),
+                attemptEpoch: Number(updated.attemptEpoch),
+              },
             },
             context,
             session,
@@ -1118,6 +1253,23 @@ export class KnowledgeJobExecutionRepository {
           { new: true, session },
         );
         if (!document) return false;
+        await this.steps.updateMany(
+          {
+            workspaceId,
+            jobId: document._id,
+            status: { $in: ['failed', 'retry_wait'] },
+            deletedAt: null,
+          },
+          {
+            $set: {
+              status: 'pending',
+              error: null,
+              updatedByMemberId: context.memberId,
+            },
+            $inc: { version: 1 },
+          },
+          { session },
+        );
         await createKnowledgeOutboxEvent(
           this.connection,
           {
@@ -1127,7 +1279,10 @@ export class KnowledgeJobExecutionRepository {
             aggregateType: 'job',
             aggregateId: String(job._id),
             queue: queueOf(job.kind),
-            payload: { jobId: String(job._id) },
+            payload: {
+              jobId: String(job._id),
+              attemptEpoch: Number(document.attemptEpoch),
+            },
           },
           context,
           session,

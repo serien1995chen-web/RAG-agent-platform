@@ -329,6 +329,7 @@ export { CapabilityUnavailableError, productApi, productErrorView } from './prod
 export { DatasetListPage } from './product/dataset-list-page';
 export { DatasetDetailPage } from './product/dataset-detail-page';
 export type { DatasetDetailQuery } from './product/dataset-detail-page';
+export { JobsPage } from './product/jobs-page';
 export { ProductAppShell } from './product/shell';
 export { FastGptProductProvider } from './product/theme';
 export { productTokens } from './product/tokens';

@@ -62,6 +62,7 @@ function jobDto(document: Plain<KnowledgeJobDoc>, steps: Plain<KnowledgeJobStepD
       attempts: step.attempts,
       externalEvidence: step.externalEvidence,
       compensationState: step.compensationState,
+      error: step.error,
     })),
     error: document.error,
     result: document.result,

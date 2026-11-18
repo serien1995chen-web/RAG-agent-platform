@@ -597,4 +597,88 @@ describe('S6 C1/C2/C3 processing chain', () => {
     const job = await models.KnowledgeJob.findById(jobId).lean();
     expect(job?.status).toBe('succeeded');
   }, 30_000);
+
+  it('TEST-X-PERMISSION-SWITCH L1-B13-A-TRAIN-002-A02 refuses to commit an index after write access changes to read', async () => {
+    const models = registerKnowledgeModels(connection);
+    const aclSourceId = new mongoose.Types.ObjectId();
+    const aclSpaceId = new mongoose.Types.ObjectId();
+    await models.KnowledgeSource.create({
+      _id: aclSourceId,
+      workspaceId,
+      knowledgeSpaceId: aclSpaceId,
+      version: 1,
+      deletedAt: null,
+      createdByMemberId: context.memberId,
+      updatedByMemberId: context.memberId,
+      directoryId: null,
+      kind: 'text',
+      name: 'b13-permission-switch',
+      externalId: null,
+      connectorId: null,
+      blobRefId: null,
+      originalUrl: null,
+      mimeType: 'text/plain',
+      sizeBytes: 0,
+      contentHash: 'b13-permission-switch',
+      parseProvider: 'liteparse',
+      processingStatus: 'ready',
+      sourceVersion: 1,
+      searchEnabled: true,
+      permissionState: 'independent',
+      permissionRevision: 1,
+      aclSnapshotVersion: 1,
+      ownershipMemberId: context.memberId,
+      metadata: {},
+      tagValues: [],
+    });
+    const acl = await models.KnowledgeResourcePermission.create({
+      workspaceId,
+      knowledgeSpaceId: aclSpaceId,
+      version: 1,
+      deletedAt: null,
+      createdByMemberId: context.memberId,
+      updatedByMemberId: context.memberId,
+      resourceType: 'source',
+      resourceId: aclSourceId,
+      principalType: 'member',
+      principalId: context.memberId,
+      permission: 'write',
+      inheritMode: 'override',
+      snapshotVersion: 1,
+    });
+    const draft = await segmentIndexes.createSegment(
+      String(aclSourceId),
+      {
+        question: 'Permission switch must not commit',
+        answer: '',
+        segmentType: 'chunk',
+        searchEnabled: true,
+        metadata: {},
+      },
+      context,
+    );
+    await models.KnowledgeResourcePermission.updateOne(
+      { _id: acl._id, workspaceId },
+      { $set: { permission: 'read' }, $inc: { version: 1, snapshotVersion: 1 } },
+    );
+    await models.KnowledgeSource.updateOne(
+      { _id: aclSourceId, workspaceId },
+      { $inc: { version: 1, permissionRevision: 1 } },
+    );
+
+    const outcome = await processing.handleQueue(
+      'knowledge-index',
+      draft.jobId,
+      `permission-switch-${suffix}`,
+      context,
+    );
+    const segment = await models.KnowledgeSegment.findById(draft.id).lean();
+    const vector = await pool.query(
+      'SELECT id FROM knowledge_segment_vectors_768 WHERE workspace_id = $1 AND segment_id = $2',
+      [workspaceId, draft.id],
+    );
+    expect.soft(outcome).toBe('dead_letter');
+    expect.soft(segment?.indexStatus).toBe('error');
+    expect.soft(vector.rows).toHaveLength(0);
+  }, 30_000);
 });

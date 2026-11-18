@@ -160,7 +160,9 @@ export class KnowledgeOutboxDispatcher {
     const jobId = buildKnowledgeJobId({
       kind: 'outbox',
       resourceId: event.eventKey,
-      version: event.version,
+      // The delivery identity must survive publishing-state recovery. The event
+      // version changes when an interrupted publisher is reclaimed.
+      version: 1,
       inputHash,
     });
     try {

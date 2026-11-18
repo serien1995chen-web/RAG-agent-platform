@@ -24,6 +24,7 @@ import {
   batchSources,
   createDirectory,
   createTag,
+  controlJob,
   deleteDirectory,
   deleteSource,
   deleteTag,
@@ -40,7 +41,6 @@ import {
   previewSource,
   productApi,
   removeCollaborator,
-  retryJob,
   transitionSourcePermission,
   updateAcl,
   updateDirectory,
@@ -76,6 +76,7 @@ import type {
   Source,
   Tag,
 } from './types';
+import { jobActionsFor, type S6JobAction } from '../components/s6-jobs-panel';
 import {
   ProductButton,
   ProductCheckbox,
@@ -848,6 +849,12 @@ export function DatasetDetailPage(props: {
             </button>
           </div>
           <div className="kb2-detail-nav__status">
+            <a
+              className="kb2-detail-nav__jobs-link"
+              href={`/spaces/${encodeURIComponent(datasetId)}/jobs`}
+            >
+              任务中心
+            </a>
             {activeJobs.length > 0 ? (
               <StatusTag value={`${activeJobs.length} 个任务处理中`} tone="info" dot />
             ) : (
@@ -1804,6 +1811,8 @@ export function DatasetDetailPage(props: {
       <TrainingDialog
         source={trainingSource}
         job={trainingSource ? latestJobs.get(trainingSource.id) : undefined}
+        jobs={jobs}
+        isAdmin={space?.effectivePermission === 'owner' || space?.effectivePermission === 'manage'}
         onClose={() => setTrainingSource(null)}
         onRetried={() => void invalidateCollection()}
       />
@@ -2924,18 +2933,62 @@ function ResourcePermissionDialog(props: {
 function TrainingDialog(props: {
   source: Source | null;
   job?: Job;
+  jobs: Job[];
+  isAdmin: boolean;
   onClose: () => void;
   onRetried: () => void;
 }) {
   const toast = useProductToast();
   const [busy, setBusy] = useState(false);
+  const [busyAction, setBusyAction] = useState<string | null>(null);
   const [error, setError] = useState<unknown>(null);
-  const retry = async () => {
-    if (!props.job) return;
+  const [editing, setEditing] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [sourceName, setSourceName] = useState('');
+  const sourceJobs = props.source
+    ? props.jobs.filter(
+        (job) =>
+          job.knowledgeSpaceId === props.source?.knowledgeSpaceId &&
+          job.resourceType === 'source' &&
+          job.resourceId === props.source?.id,
+      )
+    : [];
+  const failedJobs = sourceJobs.filter((job) => ['failed', 'dead_letter'].includes(job.status));
+  const actions = props.job ? jobActionsFor(props.job.status, props.isAdmin) : [];
+  const actionLabel: Record<S6JobAction, string> = {
+    retry: '重试任务',
+    cancel: '取消任务',
+    pause: '暂停',
+    resume: '恢复',
+    replay: '重新投递',
+  };
+
+  useEffect(() => {
+    if (!editing) setSourceName(props.source?.name ?? '');
+  }, [editing, props.source?.name]);
+
+  const runControl = async (action: S6JobAction, job: Job) => {
+    const key = `${action}:${job.jobId}`;
+    setBusyAction(key);
+    setError(null);
+    try {
+      await controlJob(action, job);
+      props.onRetried();
+      toast.success(action === 'retry' ? '已提交重试' : `已提交${actionLabel[action]}`);
+    } catch (caught) {
+      setError(caught);
+    } finally {
+      setBusyAction(null);
+    }
+  };
+
+  const retryAll = async () => {
     setBusy(true);
     setError(null);
     try {
-      await retryJob(props.job);
+      for (const job of failedJobs) {
+        await controlJob('retry', job);
+      }
       props.onRetried();
       toast.success('已提交重试');
     } catch (caught) {
@@ -2944,63 +2997,212 @@ function TrainingDialog(props: {
       setBusy(false);
     }
   };
+
+  const saveSource = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!props.source || !sourceName.trim()) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await updateSource(props.source, { name: sourceName.trim() });
+      props.onRetried();
+      setEditing(false);
+      toast.success('文件信息已更新');
+    } catch (caught) {
+      setError(caught);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const removeSource = async () => {
+    if (!props.source) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await deleteSource(props.source);
+      props.onRetried();
+      setDeleting(false);
+      props.onClose();
+      toast.success('文件已删除');
+    } catch (caught) {
+      setError(caught);
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
-    <ProductModal
-      open={Boolean(props.source)}
-      title="训练与索引状态"
-      description={props.source?.name}
-      onClose={() => !busy && props.onClose()}
-      footer={
-        props.job && ['failed', 'dead_letter'].includes(props.job.status) ? (
-          <ProductButton tone="primary" busy={busy} onClick={() => void retry()}>
-            重试任务
-          </ProductButton>
-        ) : undefined
-      }
-    >
-      <ProductError error={error} />
-      {props.source ? (
-        <div className="kb2-training-view">
-          <div className="kb2-training-summary">
-            <StatusTag
-              value={sourceStatusView(props.source.processingStatus).label}
-              tone={sourceStatusView(props.source.processingStatus).tone}
-              dot
-            />
-            <span>Source 版本 {props.source.sourceVersion}</span>
-          </div>
-          {props.job ? (
+    <>
+      <ProductModal
+        open={Boolean(props.source)}
+        title="训练与索引状态"
+        description={props.source?.name}
+        onClose={() => !busy && props.onClose()}
+        footer={
+          props.job ? (
             <>
-              <InfoLine label="任务类型" value={props.job.kind} />
-              <InfoLine label="任务状态" value={props.job.status} />
-              <InfoLine label="当前阶段" value={props.job.progress.stage} />
-              <InfoLine
-                label="进度"
-                value={`${props.job.progress.completed}/${props.job.progress.total} · ${props.job.progress.percent}%`}
+              {actions.map((action) => (
+                <ProductButton
+                  key={action}
+                  tone={action === 'retry' || action === 'resume' ? 'primary' : 'secondary'}
+                  busy={busyAction === `${action}:${props.job?.jobId}`}
+                  onClick={() => void runControl(action, props.job!)}
+                >
+                  {actionLabel[action]}
+                </ProductButton>
+              ))}
+            </>
+          ) : undefined
+        }
+      >
+        <ProductError error={error} />
+        {props.source ? (
+          <div className="kb2-training-view">
+            <div className="kb2-training-summary">
+              <StatusTag
+                value={sourceStatusView(props.source.processingStatus).label}
+                tone={sourceStatusView(props.source.processingStatus).tone}
+                dot
               />
-              <div className="kb2-progress-track">
-                <span
-                  style={{ width: `${Math.max(0, Math.min(100, props.job.progress.percent))}%` }}
+              <span>Source 版本 {props.source.sourceVersion}</span>
+            </div>
+            {props.job ? (
+              <>
+                <InfoLine label="任务类型" value={props.job.kind} />
+                <InfoLine label="任务状态" value={props.job.status} />
+                <InfoLine label="当前阶段" value={props.job.progress.stage} />
+                <InfoLine
+                  label="进度"
+                  value={`${props.job.progress.completed}/${props.job.progress.total} · ${props.job.progress.percent}%`}
                 />
+                <div className="kb2-progress-track">
+                  <span
+                    style={{ width: `${Math.max(0, Math.min(100, props.job.progress.percent))}%` }}
+                  />
+                </div>
+                {props.job.error ? (
+                  <div className="kb2-error-panel">
+                    <WarningIcon boxSize={4} />
+                    <div>
+                      <strong>{props.job.error.code ?? '任务失败'}</strong>
+                      <span>错误详情由后端任务记录提供，请根据任务 ID 排查。</span>
+                    </div>
+                  </div>
+                ) : null}
+                <div className="kb2-note">任务 ID：{props.job.jobId}</div>
+              </>
+            ) : (
+              <div className="kb2-note">
+                后端没有返回该 Source 的任务记录，当前只展示 Source 状态。
               </div>
-              {props.job.error ? (
-                <div className="kb2-error-panel">
-                  <WarningIcon boxSize={4} />
+            )}
+            <section className="kb2-training-errors" aria-label="分组训练异常">
+              <div className="kb2-training-errors__header">
+                <div>
+                  <h3>{props.source.name}</h3>
+                  <p>
+                    {failedJobs.length > 0 ? `${failedJobs.length} 条待处理异常` : '暂无任务异常'}
+                  </p>
+                </div>
+                {failedJobs.length > 0 ? (
+                  <ProductButton busy={busy} onClick={() => void retryAll()}>
+                    重试全部
+                  </ProductButton>
+                ) : null}
+              </div>
+              {failedJobs.map((job) => (
+                <div className="kb2-training-error-row" key={job.jobId}>
                   <div>
-                    <strong>{props.job.error.code ?? '任务失败'}</strong>
-                    <span>错误详情由后端任务记录提供，请根据任务 ID 排查。</span>
+                    <strong>{job.error?.code ?? '任务失败'}</strong>
+                    <span>
+                      {job.kind} · {job.jobId}
+                    </span>
+                  </div>
+                  <div className="kb2-training-error-row__actions">
+                    <ProductButton
+                      busy={busyAction === `retry:${job.jobId}`}
+                      onClick={() => void runControl('retry', job)}
+                    >
+                      重试 {job.kind}
+                    </ProductButton>
+                    <ProductButton
+                      onClick={() => {
+                        setSourceName(props.source?.name ?? '');
+                        setEditing(true);
+                      }}
+                    >
+                      编辑 {props.source?.name ?? ''}
+                    </ProductButton>
+                    <ProductButton tone="danger" onClick={() => setDeleting(true)}>
+                      删除 {props.source?.name ?? ''}
+                    </ProductButton>
                   </div>
                 </div>
-              ) : null}
-              <div className="kb2-note">任务 ID：{props.job.jobId}</div>
-            </>
-          ) : (
-            <div className="kb2-note">
-              后端没有返回该 Source 的任务记录，当前只展示 Source 状态。
-            </div>
-          )}
-        </div>
-      ) : null}
-    </ProductModal>
+              ))}
+            </section>
+          </div>
+        ) : null}
+      </ProductModal>
+
+      <ProductModal
+        open={editing}
+        title="编辑文件信息"
+        description={props.source?.name}
+        onClose={() => !busy && setEditing(false)}
+        footer={
+          <>
+            <ProductButton onClick={() => setEditing(false)} disabled={busy}>
+              取消
+            </ProductButton>
+            <ProductButton
+              tone="primary"
+              busy={busy}
+              onClick={() =>
+                (
+                  document.getElementById('kb2-training-source-edit') as HTMLFormElement | null
+                )?.requestSubmit()
+              }
+            >
+              保存
+            </ProductButton>
+          </>
+        }
+      >
+        <form id="kb2-training-source-edit" onSubmit={saveSource}>
+          <ProductField label="名称">
+            <ProductInput
+              value={sourceName}
+              onChange={(event) => setSourceName(event.target.value)}
+              maxLength={240}
+              autoFocus
+            />
+          </ProductField>
+          <ProductError error={error} />
+        </form>
+      </ProductModal>
+
+      <ProductModal
+        open={deleting}
+        title="删除文件与训练异常"
+        description="删除后关联数据块和训练任务可能同时删除。"
+        onClose={() => !busy && setDeleting(false)}
+        footer={
+          <>
+            <ProductButton onClick={() => setDeleting(false)} disabled={busy}>
+              取消
+            </ProductButton>
+            <ProductButton tone="danger" busy={busy} onClick={() => void removeSource()}>
+              确认删除
+            </ProductButton>
+          </>
+        }
+      >
+        <p className="kb2-confirm-copy">
+          确认删除 <strong>{props.source?.name}</strong>？
+        </p>
+        <ProductError error={error} />
+      </ProductModal>
+    </>
   );
 }

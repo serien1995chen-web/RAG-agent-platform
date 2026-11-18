@@ -136,4 +136,27 @@ describe('S6 Job and index tenant isolation', () => {
       problem: { error: { code: 'KNOWLEDGE_NOT_FOUND' } },
     });
   });
+
+  it('L1-B13-B-TRAIN-005-A01 foreign Job controls are 404 and missing context fails closed', async () => {
+    const job = await jobs.create(
+      {
+        kind: 'index',
+        resourceType: 'segment',
+        resourceId: String(new connection.base.Types.ObjectId()),
+        knowledgeSpaceId: String(new connection.base.Types.ObjectId()),
+        inputSnapshot: { segmentVersion: 1, runId: suffix },
+        priority: 5,
+        idempotencyKey: `tenant-control-${suffix}`,
+      },
+      contextA,
+    );
+    for (const action of ['retry', 'cancel', 'pause', 'resume', 'replay'] as const) {
+      await expect(jobs.control(action, job.jobId, job.version, contextB)).rejects.toMatchObject({
+        problem: { error: { code: 'KNOWLEDGE_NOT_FOUND' } },
+      });
+    }
+    await expect(
+      jobs.getRaw(job.jobId, { ...contextA, workspaceId: '', memberId: '' }),
+    ).rejects.toBeInstanceOf(Error);
+  });
 });

@@ -93,6 +93,50 @@ describe('S6 Job and index contract', () => {
     );
   });
 
+  it('L1-B13-A-TRAIN-001-Q02 exposes lease, epoch, attempts and terminal statuses in the Job contract', () => {
+    const openapi = JSON.parse(
+      readFileSync(
+        join(root, 'packages', 'contracts', 'openapi', 'knowledge-target.openapi.json'),
+        'utf8',
+      ),
+    );
+    const job = openapi.components.schemas.Job;
+    expect(job.required).toEqual(
+      expect.arrayContaining([
+        'jobId',
+        'kind',
+        'status',
+        'attempts',
+        'maxAttempts',
+        'progress',
+        'version',
+      ]),
+    );
+    expect(job.properties).toEqual(
+      expect.objectContaining({
+        attemptEpoch: expect.objectContaining({ type: 'integer' }),
+        leaseOwner: expect.anything(),
+        leaseExpiresAt: expect.anything(),
+        heartbeatAt: expect.anything(),
+        steps: expect.objectContaining({ type: 'array' }),
+      }),
+    );
+    expect(openapi.components.schemas.JobStatus.enum).toEqual(
+      expect.arrayContaining([
+        'queued',
+        'leased',
+        'running',
+        'retry_wait',
+        'paused',
+        'cancelling',
+        'cancelled',
+        'failed',
+        'dead_letter',
+        'succeeded',
+      ]),
+    );
+  });
+
   it('declares four vector profiles and the canonical 13 queue registry', () => {
     const ddl = readFileSync(
       join(root, 'packages', 'service', 'src', 'shared', 'persistence', 'pgvector', 'ddl.ts'),
@@ -142,5 +186,76 @@ describe('S6 Job and index contract', () => {
     expect(dockerfile).toContain(
       'ENV NODE_PATH=/app/node_modules/.pnpm/node_modules:/app/node_modules',
     );
+  });
+
+  it('L1-B13-B-TRAIN-005-N01 pins Job control states, scopes and versioned contracts', () => {
+    const controls = new Map(
+      RUNTIME_ROUTE_REGISTRY.filter((entry) =>
+        [
+          'API-JOB-RETRY',
+          'API-JOB-CANCEL',
+          'API-JOB-PAUSE',
+          'API-JOB-RESUME',
+          'API-JOB-REPLAY',
+        ].includes(entry.operationId),
+      ).map((entry) => [entry.operationId, entry]),
+    );
+    for (const operationId of [
+      'API-JOB-RETRY',
+      'API-JOB-CANCEL',
+      'API-JOB-PAUSE',
+      'API-JOB-RESUME',
+    ]) {
+      expect(controls.get(operationId)).toMatchObject({
+        method: 'POST',
+        requestSchema: 'VersionedMutation',
+        responseSchema: 'Job',
+        scopes: ['knowledge:write'],
+        idempotent: true,
+      });
+    }
+    expect(controls.get('API-JOB-REPLAY')).toMatchObject({
+      method: 'POST',
+      requestSchema: 'VersionedMutation',
+      responseSchema: 'Job',
+      scopes: ['knowledge:admin'],
+      idempotent: true,
+    });
+
+    const openapi = JSON.parse(
+      readFileSync(
+        join(root, 'packages', 'contracts', 'openapi', 'knowledge-target.openapi.json'),
+        'utf8',
+      ),
+    );
+    expect(openapi.components.schemas.JobStatus.enum).toEqual(
+      expect.arrayContaining([
+        'queued',
+        'leased',
+        'running',
+        'retry_wait',
+        'paused',
+        'cancelling',
+        'cancelled',
+        'failed',
+        'dead_letter',
+        'succeeded',
+      ]),
+    );
+    expect(openapi.components.schemas.Job.required).toEqual(
+      expect.arrayContaining([
+        'attempts',
+        'maxAttempts',
+        'progress',
+        'status',
+        'version',
+        'resourceType',
+        'resourceId',
+      ]),
+    );
+    expect(openapi.components.schemas.VersionedMutation).toMatchObject({
+      required: ['version'],
+      additionalProperties: false,
+    });
   });
 });

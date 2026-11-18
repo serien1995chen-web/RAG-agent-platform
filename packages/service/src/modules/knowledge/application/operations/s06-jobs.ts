@@ -65,6 +65,14 @@ interface S6CreateJobInput {
 }
 
 interface S6JobPort {
+  getRaw(
+    jobId: string,
+    context: TenantContext,
+  ): Promise<{
+    resourceType: string;
+    resourceId: string;
+    inputSnapshot: Record<string, unknown>;
+  }>;
   create(input: S6CreateJobInput, context: TenantContext): Promise<Record<string, unknown>>;
   createSourceRebuild(
     input: S6CreateJobInput & { resourceType: 'source'; sourceVersion: number },
@@ -505,7 +513,25 @@ export class S06JobApplication {
       });
     }
     const version = versionOf(bodyObject(input.body, input.context), input.context);
-    const job = await this.jobs.control(action, input.params.jobId ?? '', version, input.context);
+    const jobId = input.params.jobId ?? '';
+    const current = await this.jobs.getRaw(jobId, input.context);
+    if (current.resourceType === 'source') {
+      await this.catalog.getSource(current.resourceId, input.context);
+      await this.access.assertPermission('source', current.resourceId, 'write', input.context);
+    } else if (current.resourceType === 'segment') {
+      const segment = await this.catalog.getSegment(current.resourceId, input.context);
+      await this.access.assertPermission('source', segment.sourceId, 'write', input.context);
+    } else if (current.resourceType === 'space') {
+      await this.catalog.getSpace(current.resourceId, input.context);
+      await this.access.assertPermission('space', current.resourceId, 'write', input.context);
+      const sourceIds = Array.isArray(current.inputSnapshot.sourceIds)
+        ? [...new Set(current.inputSnapshot.sourceIds.map(String))]
+        : [];
+      for (const sourceId of sourceIds) {
+        await this.access.assertPermission('source', sourceId, 'write', input.context);
+      }
+    }
+    const job = await this.jobs.control(action, jobId, version, input.context);
     return { status: 200, data: job };
   }
 

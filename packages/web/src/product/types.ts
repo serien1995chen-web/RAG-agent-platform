@@ -169,6 +169,10 @@ export interface Job {
   priority: number;
   attempts: number;
   maxAttempts: number;
+  attemptEpoch?: number;
+  leaseOwner?: string | null;
+  leaseExpiresAt?: string | null;
+  heartbeatAt?: string | null;
   progress: JobProgress;
   steps?: Array<Record<string, unknown>>;
   error?: { code?: string; message?: string; retryable?: boolean; details?: unknown } | null;
