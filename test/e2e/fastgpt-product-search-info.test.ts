@@ -322,8 +322,18 @@ describe('FastGPT product module 4 Search and Info', () => {
     const modelModal = page.locator('.kb2-modal');
     await playwrightExpect(modelModal.getByText('模型配置', { exact: true })).toBeVisible();
     const llmSelect = modelModal.getByLabel('文本理解模型');
-    if ((await llmSelect.locator('option').count()) > 1) {
-      await llmSelect.selectOption({ index: 1 });
+    const selectedLlm = await llmSelect.inputValue();
+    const alternateLlm = await llmSelect
+      .locator('option')
+      .evaluateAll(
+        (options, current) =>
+          options
+            .map((option) => (option as HTMLOptionElement).value)
+            .find((value) => value !== current),
+        selectedLlm,
+      );
+    if (alternateLlm !== undefined) {
+      await llmSelect.selectOption(alternateLlm);
       const saveResponse = page.waitForResponse(
         (response) =>
           response.request().method() === 'PUT' &&
@@ -434,12 +444,18 @@ describe('FastGPT product module 4 Search and Info', () => {
       );
     expect(alternateEmbeddingModel).toBeTruthy();
     await embedding.selectOption(alternateEmbeddingModel!);
+    await modelModal.getByRole('button', { name: '保存' }).click();
+    const confirmModal = page.locator('.kb2-modal');
+    await playwrightExpect(confirmModal.getByText('确认重建索引')).toBeVisible();
+    const confirmRebuild = confirmModal.getByRole('button', { name: /确认重建/ });
+    await playwrightExpect(confirmRebuild).toBeDisabled();
+    await playwrightExpect(confirmRebuild).toBeEnabled({ timeout: 5_000 });
     const saved = page.waitForResponse(
       (response) =>
         response.request().method() === 'PUT' &&
         response.url().endsWith(`/spaces/${datasetId}/model-bindings`),
     );
-    await modelModal.getByRole('button', { name: '保存' }).click();
+    await confirmRebuild.click();
     expect((await saved).status()).toBe(200);
 
     const after = await api<{
@@ -502,6 +518,101 @@ describe('FastGPT product module 4 Search and Info', () => {
       .soft(rebuildJob?.inputSnapshot?.targetModelId)
       .toBe(after.items.find((item) => item.modelType === 'embedding')?.modelId);
     expect.soft(activeEmbeddingBinding?.activeQueryModelId).toBe(currentEmbeddingModel);
+    await context.close();
+  });
+
+  it('L1-B14-TRAIN-006-UI01 requires an explicit rebuild confirmation before changing the index model', async () => {
+    const confirmationSpace = await api<{ id: string }>('/v1/knowledge/spaces', 'POST', {
+      kind: 'space',
+      parentSpaceId: null,
+      name: `B14 模型切换确认 ${suffix}`,
+      description: '',
+      iconKey: 'book-open',
+      accessMode: 'workspace',
+      sourceAclMode: 'inherited',
+      sourcePermissionEnabled: true,
+    });
+    const catalog = await api<{
+      items: Array<{
+        modelId: string;
+        displayName: string;
+        type: string;
+        capabilities: string[];
+        authorized: boolean;
+      }>;
+    }>('/v1/knowledge/models?limit=200', 'GET');
+    const embeddingModels = catalog.items.filter(
+      (model) => model.type === 'embedding' && model.authorized,
+    );
+    expect(embeddingModels.length).toBeGreaterThanOrEqual(2);
+    const initialModel = embeddingModels[0]!;
+    const alternateModel = embeddingModels[1]!;
+    const initialSpace = await api<{ version: number }>(
+      `/v1/knowledge/spaces/${confirmationSpace.id}`,
+      'GET',
+    );
+    await api(`/v1/knowledge/spaces/${confirmationSpace.id}/model-bindings`, 'PUT', {
+      bindings: [
+        {
+          modelType: 'embedding',
+          modelId: initialModel.modelId,
+          displayName: initialModel.displayName,
+          requiredCapabilities: initialModel.capabilities,
+          status: 'active',
+        },
+      ],
+      version: initialSpace.version,
+    });
+
+    const context = await browser.newContext({
+      viewport: { width: 1440, height: 900 },
+      locale: 'zh-CN',
+    });
+    await context.addCookies([cookie]);
+    const page = await context.newPage();
+    let immediateBindingUpdate = false;
+    page.on('request', (request) => {
+      if (
+        request.method() === 'PUT' &&
+        request.url().endsWith(`/spaces/${confirmationSpace.id}/model-bindings`)
+      ) {
+        immediateBindingUpdate = true;
+      }
+    });
+    await page.goto(
+      `${app.baseUrl}/dataset/detail?datasetId=${confirmationSpace.id}&currentTab=collectionCard`,
+      { waitUntil: 'networkidle' },
+    );
+    await page.getByRole('button', { name: '编辑模型配置' }).click();
+    const modal = page.locator('.kb2-modal');
+    await modal.getByLabel('索引模型').selectOption(alternateModel.modelId);
+    await modal.getByRole('button', { name: '保存' }).click();
+    await page.waitForTimeout(500);
+
+    expect(immediateBindingUpdate).toBe(false);
+    await playwrightExpect(page.locator('.kb2-modal')).toHaveCount(1);
+    await playwrightExpect(page.getByText(/重建索引/)).toBeVisible();
+    const confirmButton = page.getByRole('button', { name: /确认重建/ });
+    await playwrightExpect(confirmButton).toBeVisible();
+    await playwrightExpect(confirmButton).toBeDisabled();
+
+    await page.getByRole('button', { name: '取消' }).click();
+    await playwrightExpect(page.locator('.kb2-modal')).toHaveCount(0);
+    expect(immediateBindingUpdate).toBe(false);
+
+    await page.getByRole('button', { name: '编辑模型配置' }).click();
+    await page.locator('.kb2-modal').getByLabel('索引模型').selectOption(alternateModel.modelId);
+    await page.locator('.kb2-modal').getByRole('button', { name: '保存' }).click();
+    const rebuilt = page.waitForResponse(
+      (response) =>
+        response.request().method() === 'PUT' &&
+        response.url().endsWith(`/spaces/${confirmationSpace.id}/model-bindings`),
+    );
+    const enabledConfirm = page.getByRole('button', { name: /确认重建/ });
+    await playwrightExpect(enabledConfirm).toBeEnabled({ timeout: 5_000 });
+    await enabledConfirm.click();
+    expect((await rebuilt).status()).toBe(200);
+    expect(immediateBindingUpdate).toBe(true);
     await context.close();
   });
 });

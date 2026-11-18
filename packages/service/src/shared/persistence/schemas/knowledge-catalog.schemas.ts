@@ -410,19 +410,11 @@ defineKnowledgeIndex(KnowledgeSegmentSchema, {
     workspaceId: 1,
     knowledgeSpaceId: 1,
     fullTextTokens: 'text',
-    question: 'text',
-    answer: 'text',
-    content: 'text',
-    'metadata.title': 'text',
   },
   options: {
     default_language: 'none',
     weights: {
       fullTextTokens: 1,
-      question: 4,
-      answer: 2,
-      content: 2,
-      'metadata.title': 1,
     },
   },
 });
