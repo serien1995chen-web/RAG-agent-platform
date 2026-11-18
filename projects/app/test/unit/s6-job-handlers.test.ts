@@ -30,6 +30,56 @@ describe('S6 worker handlers', () => {
     expect(processing.handleImport).not.toHaveBeenCalled();
   });
 
+  it('L1-B13-A-TRAIN-002-N02 rejects a hydrated Outbox event without a canonical jobId', async () => {
+    const processing = {
+      hydrateOutbox: vi.fn(async () => ({
+        eventType: 'index.job.queued',
+        eventKey: 'event',
+        aggregateId: outboxEventId,
+        payload: { queue: 'knowledge-index' },
+        workspaceId,
+      })),
+      handleImport: vi.fn(),
+      handleQueue: vi.fn(),
+    } as unknown as S06ProcessingApplication;
+    const handlers = new S06JobHandlers(processing);
+    await expect(
+      handlers.queue(
+        'knowledge-index',
+        { workspaceId, eventKey: 'event', outboxEventId },
+        'worker-1',
+      ),
+    ).rejects.toMatchObject({
+      problem: { error: { code: 'KNOWLEDGE_VALIDATION_FAILED' } },
+    });
+    expect(processing.handleQueue).not.toHaveBeenCalled();
+  });
+
+  it('L1-B13-A-TRAIN-002-N06 rejects an Outbox event delivered to a different canonical queue', async () => {
+    const processing = {
+      hydrateOutbox: vi.fn(async () => ({
+        eventType: 'index.job.queued',
+        eventKey: 'event',
+        aggregateId: outboxEventId,
+        payload: { jobId: outboxEventId, queue: 'knowledge-index' },
+        workspaceId,
+      })),
+      handleImport: vi.fn(),
+      handleQueue: vi.fn(),
+    } as unknown as S06ProcessingApplication;
+    const handlers = new S06JobHandlers(processing);
+    await expect(
+      handlers.queue(
+        'knowledge-parse',
+        { workspaceId, eventKey: 'event', outboxEventId },
+        'worker-1',
+      ),
+    ).rejects.toMatchObject({
+      problem: { error: { code: 'KNOWLEDGE_VALIDATION_FAILED' } },
+    });
+    expect(processing.handleQueue).not.toHaveBeenCalled();
+  });
+
   it('rejects a hydrated Outbox event from another workspace', async () => {
     const processing = {
       hydrateOutbox: vi.fn(async () => ({

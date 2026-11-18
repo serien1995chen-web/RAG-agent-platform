@@ -18,14 +18,24 @@ function definition(queue: (typeof KNOWLEDGE_QUEUE_NAMES)[number]): QueueConsume
 }
 
 describe('S6 worker registry', () => {
-  it('requires all 13 canonical queues', () => {
+  it('L1-B13-A-TRAIN-002-N01 registers exactly the 13 canonical queues', () => {
     expect(() => createWorkerRegistry([])).toThrow();
     const registry = createWorkerRegistry(KNOWLEDGE_QUEUE_NAMES.map(definition));
     expect(registry.size).toBe(13);
     expect([...registry.keys()]).toEqual([...KNOWLEDGE_QUEUE_NAMES]);
   });
 
-  it('rejects duplicate and unknown registrations', () => {
+  it('L1-B13-A-TRAIN-002-N04 rejects a missing handler before a worker can start', () => {
+    const definitions = KNOWLEDGE_QUEUE_NAMES.map(definition);
+    const broken = definitions.map((entry) =>
+      entry.queue === 'knowledge-parse'
+        ? ({ ...entry, handler: undefined } as unknown as QueueConsumerDefinition)
+        : entry,
+    );
+    expect(() => createWorkerRegistry(broken)).toThrow();
+  });
+
+  it('L1-B13-A-TRAIN-002-N03 rejects duplicate and unknown queue registrations', () => {
     const duplicate = [definition('knowledge-import'), definition('knowledge-import')];
     expect(() => createWorkerRegistry(duplicate)).toThrow();
     const unknown = definition('knowledge-import');

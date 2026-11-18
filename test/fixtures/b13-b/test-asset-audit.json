@@ -1,0 +1,79 @@
+{
+  "schemaVersion": 1,
+  "generatedFor": "B13B",
+  "assets": [
+    {
+      "path": "packages/service/test/unit/s6-job-state.test.ts",
+      "decision": "EXTEND",
+      "reason": "State helper coverage exists but the legal and illegal transition matrix is incomplete."
+    },
+    {
+      "path": "packages/service/test/integration/s6-job-execution.integration.test.ts",
+      "decision": "REUSE",
+      "reason": "Existing coverage proves creation, fencing, aggregation, retry and replay and must be rerun."
+    },
+    {
+      "path": "packages/service/test/integration/s6-processing.integration.test.ts",
+      "decision": "REUSE",
+      "reason": "Existing coverage exercises real BullMQ delivery and processing projections."
+    },
+    {
+      "path": "packages/service/test/integration/s6-processing-failure.integration.test.ts",
+      "decision": "REUSE",
+      "reason": "Existing coverage proves descendant failure propagation."
+    },
+    {
+      "path": "packages/service/test/integration/s6-connector-sync.integration.test.ts",
+      "decision": "REUSE",
+      "reason": "Existing coverage proves failed sync recovery without duplicate provider artifacts."
+    },
+    {
+      "path": "packages/service/test/integration/s6-rebuild-sync-cleanup.integration.test.ts",
+      "decision": "REUSE",
+      "reason": "Existing coverage proves rebuild projection, sync and cleanup behavior."
+    },
+    {
+      "path": "projects/app/test/unit/s6-job-handlers.test.ts",
+      "decision": "REUSE",
+      "reason": "Existing coverage validates queue payload identity and tenant rejection."
+    },
+    {
+      "path": "projects/app/test/unit/s6-worker-registry.test.ts",
+      "decision": "REUSE",
+      "reason": "Existing coverage validates the canonical worker registry."
+    },
+    {
+      "path": "test/contract/s6-job-index-contract.test.ts",
+      "decision": "EXTEND",
+      "reason": "Existing coverage pins Operations and schemas but not the complete control scope and state contract."
+    },
+    {
+      "path": "test/tenant/s6-job-index-tenant.test.ts",
+      "decision": "EXTEND",
+      "reason": "Existing coverage hides foreign reads but does not exercise foreign and malformed control requests."
+    },
+    {
+      "path": "test/concurrency/s6-job-fencing.test.ts",
+      "decision": "REUSE",
+      "reason": "Existing coverage proves one of two concurrent claims wins."
+    },
+    {
+      "path": "test/fault/s6-worker-restart.test.ts",
+      "decision": "REUSE",
+      "reason": "Existing coverage proves expired lease recovery and stale commit rejection."
+    },
+    {
+      "path": "test/e2e/s6-jobs-segments.test.ts",
+      "decision": "STALE",
+      "reason": "The API section is reusable, but both product UI assertions are skipped and legacy Jobs routes redirect."
+    }
+  ],
+  "newAssets": [
+    "packages/service/test/integration/kb-b13-b-job-control.integration.test.ts",
+    "packages/service/test/unit/kb-b13-b-job-control-authorization.test.ts",
+    "test/concurrency/kb-b13-b-job-control-concurrency.test.ts",
+    "test/fault/kb-b13-b-retry-pause-recovery.test.ts",
+    "packages/web/test/unit/kb-b13-b-job-control-ui.test.ts",
+    "test/e2e/kb-b13-b-job-control-ui.test.ts"
+  ]
+}
