@@ -92,10 +92,61 @@ describe('B14 TRAIN-004 1M Segment full-text performance', () => {
       const fullTextIndex = indexes.find((index) => index.name === 'ix_segment_fulltext');
       expect(fullTextIndex).toMatchObject({
         key: { _fts: 'text', _ftsx: 1 },
-        weights: { fullTextTokens: 1, question: 4, answer: 2, content: 2 },
+        weights: { fullTextTokens: 1 },
         default_language: 'none',
       });
 
+      const measureVariant = async (query: () => Promise<unknown>) => {
+        const durations: number[] = [];
+        for (let attempt = 0; attempt < 8; attempt += 1) {
+          const startedAt = performance.now();
+          const rows = await query();
+          durations.push(performance.now() - startedAt);
+          expect(Array.isArray(rows) ? rows.length : 0).toBeGreaterThan(0);
+        }
+        return {
+          p50Ms: Number(percentile(durations.slice(2), 0.5).toFixed(3)),
+          p95Ms: Number(percentile(durations.slice(2), 0.95).toFixed(3)),
+        };
+      };
+      const match = {
+        workspaceId,
+        knowledgeSpaceId,
+        deletedAt: null,
+        searchEnabled: true,
+        indexStatus: 'indexed',
+        $text: { $search: 'release evidence' },
+      };
+      const variants = {
+        findScoreSort: await measureVariant(() =>
+          models.KnowledgeSegment.collection
+            .find(match, { projection: { score: { $meta: 'textScore' } } })
+            .sort({ score: { $meta: 'textScore' }, _id: 1 })
+            .limit(100)
+            .toArray(),
+        ),
+        findNaturalLimit: await measureVariant(() =>
+          models.KnowledgeSegment.collection
+            .find(match, { projection: { score: { $meta: 'textScore' } } })
+            .limit(100)
+            .toArray(),
+        ),
+        aggregateNaturalLimit: await measureVariant(() =>
+          models.KnowledgeSegment.collection
+            .aggregate([
+              { $match: match },
+              {
+                $project: {
+                  sourceId: 1,
+                  fullTextVersion: 1,
+                  score: { $meta: 'textScore' },
+                },
+              },
+              { $limit: 100 },
+            ])
+            .toArray(),
+        ),
+      };
       const latencyMs: number[] = [];
       for (let attempt = 0; attempt < 53; attempt += 1) {
         const startedAt = performance.now();
@@ -132,6 +183,7 @@ describe('B14 TRAIN-004 1M Segment full-text performance', () => {
           mongo: '5.0.32',
         },
         index: fullTextIndex,
+        queryVariants: variants,
       };
       await mkdir(resultDir, { recursive: true });
       await writeFile(

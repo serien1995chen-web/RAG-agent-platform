@@ -572,10 +572,6 @@ describe('B14 vector, full-text and rebuild acceptance', () => {
       key: { _fts: 'text', _ftsx: 1 },
       weights: {
         fullTextTokens: 1,
-        question: 4,
-        answer: 2,
-        content: 2,
-        'metadata.title': 1,
       },
       default_language: 'none',
     });

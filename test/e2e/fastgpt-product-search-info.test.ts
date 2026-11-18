@@ -322,8 +322,18 @@ describe('FastGPT product module 4 Search and Info', () => {
     const modelModal = page.locator('.kb2-modal');
     await playwrightExpect(modelModal.getByText('模型配置', { exact: true })).toBeVisible();
     const llmSelect = modelModal.getByLabel('文本理解模型');
-    if ((await llmSelect.locator('option').count()) > 1) {
-      await llmSelect.selectOption({ index: 1 });
+    const selectedLlm = await llmSelect.inputValue();
+    const alternateLlm = await llmSelect
+      .locator('option')
+      .evaluateAll(
+        (options, current) =>
+          options
+            .map((option) => (option as HTMLOptionElement).value)
+            .find((value) => value !== current),
+        selectedLlm,
+      );
+    if (alternateLlm !== undefined) {
+      await llmSelect.selectOption(alternateLlm);
       const saveResponse = page.waitForResponse(
         (response) =>
           response.request().method() === 'PUT' &&
@@ -434,12 +444,18 @@ describe('FastGPT product module 4 Search and Info', () => {
       );
     expect(alternateEmbeddingModel).toBeTruthy();
     await embedding.selectOption(alternateEmbeddingModel!);
+    await modelModal.getByRole('button', { name: '保存' }).click();
+    const confirmModal = page.locator('.kb2-modal');
+    await playwrightExpect(confirmModal.getByText('确认重建索引')).toBeVisible();
+    const confirmRebuild = confirmModal.getByRole('button', { name: /确认重建/ });
+    await playwrightExpect(confirmRebuild).toBeDisabled();
+    await playwrightExpect(confirmRebuild).toBeEnabled({ timeout: 5_000 });
     const saved = page.waitForResponse(
       (response) =>
         response.request().method() === 'PUT' &&
         response.url().endsWith(`/spaces/${datasetId}/model-bindings`),
     );
-    await modelModal.getByRole('button', { name: '保存' }).click();
+    await confirmRebuild.click();
     expect((await saved).status()).toBe(200);
 
     const after = await api<{
@@ -576,7 +592,27 @@ describe('FastGPT product module 4 Search and Info', () => {
     expect(immediateBindingUpdate).toBe(false);
     await playwrightExpect(page.locator('.kb2-modal')).toHaveCount(1);
     await playwrightExpect(page.getByText(/重建索引/)).toBeVisible();
-    await playwrightExpect(page.getByRole('button', { name: /确认/ })).toBeVisible();
+    const confirmButton = page.getByRole('button', { name: /确认重建/ });
+    await playwrightExpect(confirmButton).toBeVisible();
+    await playwrightExpect(confirmButton).toBeDisabled();
+
+    await page.getByRole('button', { name: '取消' }).click();
+    await playwrightExpect(page.locator('.kb2-modal')).toHaveCount(0);
+    expect(immediateBindingUpdate).toBe(false);
+
+    await page.getByRole('button', { name: '编辑模型配置' }).click();
+    await page.locator('.kb2-modal').getByLabel('索引模型').selectOption(alternateModel.modelId);
+    await page.locator('.kb2-modal').getByRole('button', { name: '保存' }).click();
+    const rebuilt = page.waitForResponse(
+      (response) =>
+        response.request().method() === 'PUT' &&
+        response.url().endsWith(`/spaces/${confirmationSpace.id}/model-bindings`),
+    );
+    const enabledConfirm = page.getByRole('button', { name: /确认重建/ });
+    await playwrightExpect(enabledConfirm).toBeEnabled({ timeout: 5_000 });
+    await enabledConfirm.click();
+    expect((await rebuilt).status()).toBe(200);
+    expect(immediateBindingUpdate).toBe(true);
     await context.close();
   });
 });

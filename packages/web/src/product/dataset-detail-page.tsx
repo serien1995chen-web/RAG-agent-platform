@@ -115,6 +115,7 @@ export interface DatasetDetailQuery {
 type DetailQueryChange = (query: DatasetDetailQuery, options?: { replace?: boolean }) => void;
 
 const ACTIVE_JOB_STATUSES = new Set(['queued', 'running', 'retry_wait', 'paused']);
+const MODEL_REBUILD_CONFIRM_SECONDS = 3;
 
 type SourcePreviewView =
   | { kind: 'image'; url: string; expiresAt: string }
@@ -1952,6 +1953,8 @@ function DatasetInfoPanel(props: {
   const [modelDraft, setModelDraft] = useState<Record<string, string>>({});
   const [modelsBusy, setModelsBusy] = useState(false);
   const [modelsError, setModelsError] = useState<unknown>(null);
+  const [pendingModelBindings, setPendingModelBindings] = useState<ModelBinding[] | null>(null);
+  const [modelConfirmCountdown, setModelConfirmCountdown] = useState(0);
   const [connectorBusy, setConnectorBusy] = useState(false);
   const [connectorError, setConnectorError] = useState<unknown>(null);
   const type = productTypeOf(props.space?.iconKey);
@@ -1967,6 +1970,15 @@ function DatasetInfoPanel(props: {
   const authorizedModels = (type: Model['type']) =>
     props.models.filter((model) => model.type === type && model.authorized);
 
+  useEffect(() => {
+    if (!pendingModelBindings || modelConfirmCountdown <= 0) return;
+    const timer = window.setTimeout(
+      () => setModelConfirmCountdown((current) => Math.max(0, current - 1)),
+      1_000,
+    );
+    return () => window.clearTimeout(timer);
+  }, [modelConfirmCountdown, pendingModelBindings]);
+
   const openModels = () => {
     setModelDraft({
       llm: binding('llm')?.modelId ?? '',
@@ -1980,35 +1992,58 @@ function DatasetInfoPanel(props: {
     setModelsOpen(true);
   };
 
-  const saveModels = async () => {
-    if (!props.space) return;
+  const persistModels = async (next: ModelBinding[]) => {
+    if (!props.space) return false;
     setModelsBusy(true);
     setModelsError(null);
     try {
-      const next = (['llm', 'embedding', 'rerank', 'vlm', 'stt', 'tts'] as const).flatMap(
-        (modelType) => {
-          const model = props.models.find((item) => item.modelId === modelDraft[modelType]);
-          if (!model) return [];
-          return [
-            {
-              modelType,
-              modelId: model.modelId,
-              displayName: model.displayName,
-              requiredCapabilities: model.capabilities,
-              status: 'active' as const,
-            },
-          ];
-        },
-      );
       await updateModelBindings(props.space.id, next, props.space.version);
       props.onChanged();
       setModelsOpen(false);
+      setPendingModelBindings(null);
       toast.success('模型配置已更新');
+      return true;
     } catch (caught) {
       setModelsError(caught);
+      return false;
     } finally {
       setModelsBusy(false);
     }
+  };
+
+  const saveModels = async () => {
+    if (!props.space) return;
+    const next = (['llm', 'embedding', 'rerank', 'vlm', 'stt', 'tts'] as const).flatMap(
+      (modelType) => {
+        const model = props.models.find((item) => item.modelId === modelDraft[modelType]);
+        if (!model) return [];
+        return [
+          {
+            modelType,
+            modelId: model.modelId,
+            displayName: model.displayName,
+            requiredCapabilities: model.capabilities,
+            status: 'active' as const,
+          },
+        ];
+      },
+    );
+    const currentEmbeddingModelId = binding('embedding')?.modelId ?? '';
+    if (currentEmbeddingModelId && currentEmbeddingModelId !== modelDraft.embedding) {
+      setModelsError(null);
+      setModelsOpen(false);
+      setModelConfirmCountdown(MODEL_REBUILD_CONFIRM_SECONDS);
+      setPendingModelBindings(next);
+      return;
+    }
+    await persistModels(next);
+  };
+
+  const cancelModelRebuild = () => {
+    if (modelsBusy) return;
+    setPendingModelBindings(null);
+    setModelConfirmCountdown(0);
+    setModelsError(null);
   };
 
   const syncDataSource = async () => {
@@ -2256,6 +2291,41 @@ function DatasetInfoPanel(props: {
             </ProductSelect>
           </ProductField>
         </div>
+        <ProductError error={modelsError} />
+      </ProductModal>
+
+      <ProductModal
+        open={Boolean(pendingModelBindings)}
+        title="确认重建索引"
+        description="切换索引模型需要重建全部向量索引和全文索引。"
+        onClose={cancelModelRebuild}
+        footer={
+          <>
+            <ProductButton onClick={cancelModelRebuild} disabled={modelsBusy}>
+              取消
+            </ProductButton>
+            <ProductButton
+              tone="danger"
+              busy={modelsBusy}
+              disabled={modelConfirmCountdown > 0}
+              onClick={() => {
+                if (pendingModelBindings && modelConfirmCountdown === 0) {
+                  void persistModels(pendingModelBindings);
+                }
+              }}
+            >
+              确认重建（{modelConfirmCountdown}）
+            </ProductButton>
+          </>
+        }
+      >
+        <p className="kb2-confirm-copy">
+          将索引模型切换到“{modelDraft.embedding || '未设置'}
+          ”。重建期间继续使用旧索引，完成后原子切换到新索引。
+        </p>
+        <p className="kb2-table-muted" aria-live="polite">
+          为避免误操作，确认按钮将在 {modelConfirmCountdown} 秒后启用。
+        </p>
         <ProductError error={modelsError} />
       </ProductModal>
     </>

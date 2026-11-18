@@ -14,6 +14,17 @@ import {
   requireWorkspaceId,
   tenantError,
 } from '../../../shared/persistence/knowledge/tenant';
+import { projectFullText } from '../adapter/s06-jieba.tokenizer';
+
+const FULL_TEXT_CACHE_TTL_MS = 10_000;
+const FULL_TEXT_CACHE_MAX_ENTRIES = 256;
+
+interface FullTextRecallRow {
+  segmentId: string;
+  sourceId: string;
+  fullTextVersion?: string | number;
+  score: number;
+}
 
 function modelOfType(
   catalog: readonly ModelCatalogItem[],
@@ -30,6 +41,17 @@ function modelOfType(
 }
 
 export class S7SearchRepository {
+  // Mongo text scans matching a large share of a 1M-Segment Space are expensive.
+  // Cache only candidate IDs/scores briefly; ACL and content authorization still
+  // run for every request after recall.
+  private readonly fullTextCache = new Map<
+    string,
+    {
+      expiresAt: number;
+      rows: FullTextRecallRow[];
+    }
+  >();
+
   constructor(
     private readonly connection: Connection,
     private readonly catalog: ModelCatalogPort,
@@ -144,6 +166,29 @@ export class S7SearchRepository {
   ) {
     const workspaceId = requireWorkspaceId(context);
     const knowledgeSpaceId = objectIdOf(input.knowledgeSpaceId, context, 'knowledgeSpaceId');
+    const searchText =
+      projectFullText({
+        segmentId: 'full-text-query',
+        sourceVersion: 0,
+        indexVersion: 0,
+        question: input.text,
+        answer: '',
+        content: '',
+        searchEnabled: true,
+      }).fullTextTokens || input.text;
+    const sourceIds = input.sourceIds === undefined ? null : [...input.sourceIds].sort();
+    const cacheKey = JSON.stringify([
+      workspaceId,
+      String(knowledgeSpaceId),
+      sourceIds,
+      searchText,
+      input.limit,
+    ]);
+    const cached = this.fullTextCache.get(cacheKey);
+    if (cached && cached.expiresAt > Date.now()) {
+      return cached.rows.map((row) => ({ ...row }));
+    }
+    if (cached) this.fullTextCache.delete(cacheKey);
     const models = registerKnowledgeModels(this.connection);
     const match: Record<string, unknown> = {
       workspaceId,
@@ -151,7 +196,7 @@ export class S7SearchRepository {
       deletedAt: null,
       searchEnabled: true,
       indexStatus: 'indexed',
-      $text: { $search: input.text },
+      $text: { $search: searchText },
     };
     if (input.sourceIds !== undefined) {
       match.sourceId = {
@@ -179,12 +224,21 @@ export class S7SearchRepository {
       ])
         .option({ maxTimeMS: input.options.timeoutMs })
         .exec();
-      return rows.map((row) => ({
+      const result = rows.map((row) => ({
         segmentId: String(row._id),
         sourceId: String(row.sourceId),
         ...(row.fullTextVersion !== undefined ? { fullTextVersion: row.fullTextVersion } : {}),
         score: Number(row.score),
       }));
+      if (this.fullTextCache.size >= FULL_TEXT_CACHE_MAX_ENTRIES) {
+        const oldestKey = this.fullTextCache.keys().next().value;
+        if (oldestKey !== undefined) this.fullTextCache.delete(oldestKey);
+      }
+      this.fullTextCache.set(cacheKey, {
+        expiresAt: Date.now() + FULL_TEXT_CACHE_TTL_MS,
+        rows: result,
+      });
+      return result.map((row) => ({ ...row }));
     } catch (error) {
       if ((error as { code?: number }).code === 50) {
         throw createKnowledgeError({

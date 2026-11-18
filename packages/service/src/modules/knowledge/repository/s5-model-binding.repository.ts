@@ -54,6 +54,19 @@ function sortedBindings(items: readonly ModelBindingView[]): ModelBindingView[] 
   );
 }
 
+function sameBinding(left: ModelBindingView, right: ModelBindingView): boolean {
+  return (
+    left.modelType === right.modelType &&
+    left.modelId === right.modelId &&
+    left.displayName === right.displayName &&
+    left.status === right.status &&
+    left.requiredCapabilities.length === right.requiredCapabilities.length &&
+    [...left.requiredCapabilities]
+      .sort()
+      .every((capability, index) => capability === [...right.requiredCapabilities].sort()[index])
+  );
+}
+
 function mirrorOf(bindings: readonly ModelBindingInput[]): Record<string, unknown> {
   return Object.fromEntries(
     bindings.map((binding) => [
@@ -118,15 +131,17 @@ export class S5ModelBindingRepository implements ModelBindingRepositoryPort {
     const workspaceId = requireWorkspaceId(context);
     const spaceObjectId = objectIdOf(spaceId, context, 'spaceId');
     return withMongoTransaction(this.connection, async (session) => {
-      const existingEmbedding = await this.bindings
-        .findOne({
+      const existingBindings = await this.bindings
+        .find({
           workspaceId,
           knowledgeSpaceId: spaceObjectId,
-          modelType: 'embedding',
           deletedAt: null,
         })
         .session(session)
-        .lean<BindingDocument>();
+        .lean<BindingDocument[]>();
+      const existingEmbedding = existingBindings.find(
+        (binding) => binding.modelType === 'embedding',
+      );
       const nextEmbedding = bindings.find(
         (binding) => binding.modelType === 'embedding' && binding.status === 'active',
       );
@@ -138,6 +153,31 @@ export class S5ModelBindingRepository implements ModelBindingRepositoryPort {
         nextDimension !== null &&
         (existingEmbedding?.modelId !== nextEmbedding.modelId ||
           existingEmbedding?.activeQueryDimension !== nextDimension);
+      const currentBindingSet = sortedBindings(existingBindings.map(bindingView));
+      const nextBindingSet = sortedBindings(bindings.map((binding) => ({ ...binding })));
+      const sameBindingSet =
+        currentBindingSet.length === nextBindingSet.length &&
+        currentBindingSet.every((binding, index) => sameBinding(binding, nextBindingSet[index]!));
+      const sameActiveEmbedding =
+        existingEmbedding !== undefined &&
+        nextEmbedding !== undefined &&
+        existingEmbedding.modelId === nextEmbedding.modelId &&
+        (existingEmbedding.activeQueryModelId ?? existingEmbedding.modelId) ===
+          nextEmbedding.modelId &&
+        nextDimension !== null &&
+        (existingEmbedding.activeQueryDimension ??
+          dimensionOfCapabilities(existingEmbedding.requiredCapabilities)) === nextDimension;
+      if (sameActiveEmbedding && sameBindingSet) {
+        throw createKnowledgeError({
+          code: 'KNOWLEDGE_VALIDATION_FAILED',
+          requestId: context.requestId,
+          traceId: context.traceId,
+          details: {
+            field: 'modelBindings.embedding',
+            reason: 'embedding_model_unchanged',
+          },
+        });
+      }
       if (embeddingChanged) {
         const activeRebuild = await this.jobDocuments
           .findOne({
