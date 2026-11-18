@@ -20,7 +20,7 @@ const TRANSITIONS: Readonly<Record<JobState, readonly JobState[]>> = {
   queued: ['leased', 'paused', 'cancelling', 'cancelled'],
   leased: ['running', 'retry_wait', 'cancelling'],
   running: ['succeeded', 'retry_wait', 'failed', 'paused', 'cancelling'],
-  retry_wait: ['queued', 'paused', 'cancelling', 'failed'],
+  retry_wait: ['queued', 'cancelling', 'failed'],
   paused: ['queued', 'cancelling'],
   cancelling: ['cancelled', 'failed'],
   cancelled: [],

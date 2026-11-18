@@ -31,6 +31,11 @@ describe('B13B Job control authorization', () => {
       assertPermission: vi.fn(),
     };
     const jobs = {
+      getRaw: vi.fn(async () => ({
+        resourceType: 'source',
+        resourceId: sourceId,
+        inputSnapshot: {},
+      })),
       create: vi.fn(),
       createSourceRebuild: vi.fn(),
       control: vi.fn(async () => ({
@@ -66,6 +71,7 @@ describe('B13B Job control authorization', () => {
 
   it('L1-B13-B-TRAIN-005-A02 dead-letter replay rejects a non-owner without admin', async () => {
     const jobs = {
+      getRaw: vi.fn(),
       create: vi.fn(),
       createSourceRebuild: vi.fn(),
       control: vi.fn(),

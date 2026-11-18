@@ -21,7 +21,7 @@ export const productTokens = {
     success: '#039855',
     warningBg: '#FFFAEB',
     warningBorder: '#FEDF89',
-    warning: '#DC6803',
+    warning: '#B54708',
     dangerBg: '#FEF3F2',
     dangerBorder: '#FECDCA',
     danger: '#D92D20',

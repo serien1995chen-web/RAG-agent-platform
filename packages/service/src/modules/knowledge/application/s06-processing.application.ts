@@ -198,6 +198,42 @@ export class S06ProcessingApplication {
     return status;
   }
 
+  private async assertPermissionSnapshot(job: S6JobRecord, context: TenantContext) {
+    const expectedBySource = new Map<string, number>();
+    const expectedSingle = Number(job.inputSnapshot.sourcePermissionRevision);
+    if (Number.isFinite(expectedSingle)) {
+      let sourceId =
+        job.resourceType === 'source'
+          ? job.resourceId
+          : typeof job.inputSnapshot.sourceId === 'string'
+            ? job.inputSnapshot.sourceId
+            : null;
+      if (!sourceId && job.resourceType === 'segment') {
+        const segment = await this.input.store.getSegment(job.resourceId, context);
+        sourceId = segment?.sourceId ?? null;
+      }
+      if (sourceId) expectedBySource.set(sourceId, expectedSingle);
+    }
+    const revisions = job.inputSnapshot.sourcePermissionRevisions;
+    if (typeof revisions === 'object' && revisions !== null && !Array.isArray(revisions)) {
+      for (const [sourceId, revision] of Object.entries(revisions)) {
+        const expected = Number(revision);
+        if (Number.isFinite(expected)) expectedBySource.set(sourceId, expected);
+      }
+    }
+    for (const [sourceId, expectedRevision] of expectedBySource) {
+      const source = await this.input.store.getSource(sourceId, context);
+      if (!source || source.permissionRevision !== expectedRevision) {
+        throw createKnowledgeError({
+          code: 'KNOWLEDGE_FORBIDDEN',
+          requestId: context.requestId,
+          traceId: context.traceId,
+          details: { reason: 'source_permission_changed', sourceId },
+        });
+      }
+    }
+  }
+
   private async withJob<T>(
     queue: QueueName,
     jobId: string,
@@ -245,8 +281,10 @@ export class S06ProcessingApplication {
     }, 60_000);
     try {
       const job = await this.input.jobs.getRaw(jobId, context);
+      await this.assertPermissionSnapshot(job, context);
       const completed = await work(job);
       if (!completed.waitingForChildren) {
+        await this.assertPermissionSnapshot(job, context);
         await this.input.jobs.commit(
           jobId,
           Number(current.version),
@@ -272,13 +310,14 @@ export class S06ProcessingApplication {
         errorCode(error),
         context,
         errorDetails(error),
+        errorCode(error) === 'KNOWLEDGE_FORBIDDEN',
       );
       if (queue === 'knowledge-caption' && failed.status !== 'retry_wait' && this.input.caption) {
         await this.input.caption.markFinalFailure(raw, context).catch(() => undefined);
       }
       if (queue === 'knowledge-index' && failed.status !== 'retry_wait') {
         try {
-          const segment = await this.input.store.getSegment(jobId, context);
+          const segment = await this.input.store.getSegment(String(raw.resourceId), context);
           if (segment) {
             await this.input.store.markIndexFailure(segment.id, errorCode(error), context);
             await this.refreshSourceIndexStatus(segment.sourceId, context);
@@ -795,6 +834,7 @@ export class S06ProcessingApplication {
     const text = supplied?.text ?? existing?.text ?? segment.content;
     const contentHash = createHash('sha256').update(text, 'utf8').digest('hex');
     const indexVersion = segment.version + 2;
+    await this.assertPermissionSnapshot(job, context);
     const vectors = await this.input.port.embed(
       {
         modelId: model.modelId,
@@ -814,6 +854,7 @@ export class S06ProcessingApplication {
         retryable: true,
         details: { reason: 'embedding_empty' },
       });
+    await this.assertPermissionSnapshot(job, context);
     const written = await this.input.vectors.insert(
       [
         {
@@ -832,6 +873,24 @@ export class S06ProcessingApplication {
       ],
       context,
     );
+    try {
+      await this.assertPermissionSnapshot(job, context);
+    } catch (error) {
+      await this.input.vectors
+        .deleteBySegment(
+          {
+            workspaceId: context.workspaceId,
+            knowledgeSpaceId: segment.knowledgeSpaceId,
+            segmentId,
+            dimension: model.dimension,
+            embeddingModelId: model.modelId,
+            indexId,
+          },
+          context,
+        )
+        .catch(() => undefined);
+      throw error;
+    }
     await this.input.jobs.setStep(
       {
         jobId: String(job._id),
@@ -977,6 +1036,7 @@ export class S06ProcessingApplication {
     }
     const indexVersion = segment.version + 2;
     const contentHash = createHash('sha256').update(text, 'utf8').digest('hex');
+    await this.assertPermissionSnapshot(job, context);
     const vectors = await this.input.port.embed(
       {
         modelId: model.modelId,
@@ -997,6 +1057,7 @@ export class S06ProcessingApplication {
         details: { reason: 'embedding_empty' },
       });
     }
+    await this.assertPermissionSnapshot(job, context);
     const written = await this.input.vectors.insert(
       [
         {
@@ -1015,6 +1076,24 @@ export class S06ProcessingApplication {
       ],
       context,
     );
+    try {
+      await this.assertPermissionSnapshot(job, context);
+    } catch (error) {
+      await this.input.vectors
+        .deleteBySegment(
+          {
+            workspaceId: context.workspaceId,
+            knowledgeSpaceId: segment.knowledgeSpaceId,
+            segmentId: segment.id,
+            dimension: model.dimension,
+            embeddingModelId: model.modelId,
+            indexId,
+          },
+          context,
+        )
+        .catch(() => undefined);
+      throw error;
+    }
     const projected = await this.input.fulltext.project(
       {
         segmentId: segment.id,

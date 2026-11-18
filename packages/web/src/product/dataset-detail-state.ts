@@ -79,6 +79,9 @@ export function sourceStatusView(status: string) {
   if (status === 'parsing') return { label: '内容解析中', tone: 'info' as const };
   if (status === 'indexing') return { label: '索引中', tone: 'purple' as const };
   if (status === 'rebuilding') return { label: '重建中', tone: 'purple' as const };
+  if (status === 'retry_wait') return { label: '等待重试', tone: 'warning' as const };
+  if (status === 'blocked') return { label: '系统阻塞', tone: 'warning' as const };
+  if (status === 'paused') return { label: '已暂停', tone: 'warning' as const };
   if (status === 'queued') return { label: '排队中', tone: 'warning' as const };
   if (status === 'deleting') return { label: '删除中', tone: 'warning' as const };
   if (status === 'deleted') return { label: '已删除', tone: 'neutral' as const };

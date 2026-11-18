@@ -640,6 +640,16 @@ export function retryJob(job: Job) {
   });
 }
 
+export type JobControlAction = 'retry' | 'cancel' | 'pause' | 'resume' | 'replay';
+
+export function controlJob(action: JobControlAction, job: Job) {
+  return knowledgeRequest<Job>(`/v1/knowledge/jobs/${encodeURIComponent(job.jobId)}/${action}`, {
+    method: 'POST',
+    idempotencyKey: key(),
+    body: { version: job.version },
+  });
+}
+
 export function listModels() {
   return allPages<Model>('/v1/knowledge/models', {}, 'modelType');
 }
@@ -1142,6 +1152,7 @@ export const productApi = {
   listJobs,
   getJob,
   retryJob,
+  controlJob,
   listModels,
   getModelBindings,
   updateModelBindings,

@@ -33,6 +33,7 @@ export interface S6SourceRecord {
   metadata: Record<string, unknown>;
   searchEnabled: boolean;
   processingStatus: string;
+  permissionRevision: number;
   version: number;
 }
 
@@ -113,6 +114,7 @@ export interface S6JobPort {
     errorCode: string,
     context: TenantContext,
     details?: Record<string, unknown> | null,
+    terminal?: boolean,
   ): Promise<{ status: string }>;
   setStep(
     input: {

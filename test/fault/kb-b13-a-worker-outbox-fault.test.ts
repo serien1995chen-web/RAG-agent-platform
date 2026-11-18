@@ -174,9 +174,10 @@ describe('B13-A Outbox and worker fault recovery', () => {
     const created = await createJob('enqueue-before-publish-crash');
     const models = registerKnowledgeModels(connection);
     const queuePort = {
-      enqueue: (queue, jobId, payload, options) => {
-        deliveredJobIds.push(jobId);
-        return queueAdapter.enqueue(queue, jobId, payload, options);
+      enqueue: async (queue, jobId, payload, options) => {
+        const result = await queueAdapter.enqueue(queue, jobId, payload, options);
+        if (result.enqueued) deliveredJobIds.push(jobId);
+        return result;
       },
       remove: queueAdapter.remove.bind(queueAdapter),
       close: queueAdapter.close.bind(queueAdapter),

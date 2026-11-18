@@ -169,6 +169,7 @@ describe('B13B product Job control UI', () => {
       await playwrightExpect(errorEntry).toBeVisible();
       await errorEntry.click();
       await playwrightExpect(page.getByRole('dialog', { name: '训练与索引状态' })).toBeVisible();
+      await page.waitForTimeout(350);
       const accessibility = await new AxeBuilder({ page }).analyze();
       expect
         .soft(

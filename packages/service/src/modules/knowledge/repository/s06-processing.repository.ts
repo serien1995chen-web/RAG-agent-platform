@@ -34,6 +34,7 @@ function sourceRecord(
     metadata: document.metadata,
     searchEnabled: document.searchEnabled,
     processingStatus: document.processingStatus,
+    permissionRevision: document.permissionRevision,
     version: document.version,
   };
 }

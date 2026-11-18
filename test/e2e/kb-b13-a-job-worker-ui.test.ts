@@ -430,14 +430,31 @@ describe('B13-A Job API and UI', () => {
     }
   });
 
-  it('L1-B13-A-TRAIN-001-UI01 records that the Jobs route is a redirect, not a task-center surface', async () => {
-    const cookie = await consoleCookie({ baseUrl: app.baseUrl, authToken, workspaceId });
-    const cookieHeader = `${cookie.name}=${cookie.value}`;
-    const response = await fetch(`${app.baseUrl}/spaces/${spaceId}/jobs`, {
-      redirect: 'manual',
-      headers: { cookie: cookieHeader },
+  it('L1-B13-A-TRAIN-001-UI01 exposes the Jobs task center with status and progress', async () => {
+    const context = await browser.newContext({
+      viewport: { width: 1440, height: 900 },
+      locale: 'zh-CN',
     });
-    expect([302, 307, 308]).toContain(response.status);
-    expect(response.headers.get('location') ?? '').toContain('/dataset/detail');
+    await context.addCookies([
+      await consoleCookie({ baseUrl: app.baseUrl, authToken, workspaceId }),
+    ]);
+    const page = await context.newPage();
+    try {
+      const response = await page.goto(`${app.baseUrl}/spaces/${spaceId}/jobs`, {
+        waitUntil: 'networkidle',
+      });
+      expect(response?.status()).toBe(200);
+      await playwrightExpect(page.getByRole('heading', { name: '任务中心' })).toBeVisible();
+      await playwrightExpect(page.getByLabel('任务概览')).toBeVisible();
+      await playwrightExpect(page.getByLabel('任务列表')).toBeVisible();
+      const accessibility = await new AxeBuilder({ page }).analyze();
+      expect(
+        accessibility.violations.filter(
+          (violation) => violation.impact === 'serious' || violation.impact === 'critical',
+        ),
+      ).toEqual([]);
+    } finally {
+      await context.close();
+    }
   });
 });
