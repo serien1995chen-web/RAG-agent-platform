@@ -29,7 +29,7 @@ function request(): SearchRequest {
   };
 }
 
-describe('TEST-X-SEARCH-REAUTH tenant isolation', () => {
+describe('TEST-X-SEARCH-REAUTH / L1-B12-SEARCH-006-A01 tenant isolation', () => {
   it('drops a recalled hit after ACL revocation and never leaks source existence', async () => {
     const result = await createSearchEngine({
       vectors: {
@@ -124,7 +124,7 @@ describe('TEST-X-SEARCH-REAUTH tenant isolation', () => {
     });
   });
 
-  it('TEST-AUTH-003-BLOCK maps cross-tenant Image search to 404 before tickets or citations', async () => {
+  it('L1-B12-MULTI-001-A01 maps cross-tenant Image search to 404 before tickets or citations', async () => {
     const error = createKnowledgeError({
       code: 'KNOWLEDGE_NOT_FOUND',
       requestId: context.requestId,

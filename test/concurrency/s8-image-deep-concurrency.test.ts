@@ -36,8 +36,8 @@ afterAll(async () => {
   await connection.close();
 });
 
-describe('TEST-TRAIN-003-BLOCK / TEST-SEARCH-008-BLOCK concurrency contracts', () => {
-  it('allows only one image index pointer switch for the same Segment version', async () => {
+describe('TEST-TRAIN-003-BLOCK / L1-B12-PARSE-005-C01 concurrency contracts', () => {
+  it('L1-B12-PARSE-005-C01 allows only one image index pointer switch for the same Segment version', async () => {
     const models = registerKnowledgeModels(connection);
     const space = await models.KnowledgeSpace.create({
       workspaceId,

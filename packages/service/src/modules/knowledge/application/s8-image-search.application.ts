@@ -381,7 +381,9 @@ export class S8ImageSearchApplication {
     allowedSourceIds: readonly string[],
     context: TenantContext,
   ): Promise<{ candidates: AuthorizedCandidate[]; failed: boolean; error?: unknown }> {
-    if (allowedSourceIds.length === 0) return { candidates: [], failed: false };
+    if (allowedSourceIds.length === 0 || request.query.trim().length === 0) {
+      return { candidates: [], failed: false };
+    }
     try {
       const hits = await this.input.fullText.search(
         {
@@ -431,7 +433,9 @@ export class S8ImageSearchApplication {
     allowedSourceIds: readonly string[],
     context: TenantContext,
   ): Promise<{ candidates: AuthorizedCandidate[]; failed: boolean; error?: unknown }> {
-    if (allowedSourceIds.length === 0) return { candidates: [], failed: false };
+    if (allowedSourceIds.length === 0 || request.imageUploadIds.length === 0) {
+      return { candidates: [], failed: false };
+    }
     try {
       const query = await this.queryVectors(request, context);
       const raw: Candidate[] = [];
@@ -574,42 +578,43 @@ export class S8ImageSearchApplication {
         failureChannel = channel;
         throw error;
       });
-    const textRecall: Promise<TextRecallResult> = compiled.emptyMatch
-      ? Promise.resolve({
-          candidates: [],
-          partial: false,
-          degradedCodes: [],
-          rerankApplied: false,
-          usage: { inputTokens: 0, outputTokens: 0 },
-        })
-      : this.input.search
-          .collectCandidates({
-            request: {
-              knowledgeSpaceId: request.knowledgeSpaceId,
-              query: request.query,
-              tokenBudget: request.tokenBudget,
-              similarity: request.similarity,
-              embeddingWeight: request.embeddingWeight,
-              usingRerank: request.usingRerank,
-              queryOptimizationEnabled: false,
-              rerankWeight: request.rerankWeight,
-              ...(request.filters ? { filters: request.filters } : {}),
-            },
-            knowledgeSpaceIds: [request.knowledgeSpaceId],
-            mode: 'hybrid',
-            context,
-            limit: 20,
+    const textRecall: Promise<TextRecallResult> =
+      compiled.emptyMatch || request.query.trim().length === 0
+        ? Promise.resolve({
+            candidates: [],
+            partial: false,
+            degradedCodes: [],
+            rerankApplied: false,
+            usage: { inputTokens: 0, outputTokens: 0 },
           })
-          .catch(
-            (error: unknown): TextRecallResult => ({
-              candidates: [],
-              partial: true,
-              degradedCodes: ['text_recall_failed'],
-              rerankApplied: false,
-              usage: { inputTokens: 0, outputTokens: 0 },
-              error,
-            }),
-          );
+        : this.input.search
+            .collectCandidates({
+              request: {
+                knowledgeSpaceId: request.knowledgeSpaceId,
+                query: request.query,
+                tokenBudget: request.tokenBudget,
+                similarity: request.similarity,
+                embeddingWeight: request.embeddingWeight,
+                usingRerank: request.usingRerank,
+                queryOptimizationEnabled: false,
+                rerankWeight: request.rerankWeight,
+                ...(request.filters ? { filters: request.filters } : {}),
+              },
+              knowledgeSpaceIds: [request.knowledgeSpaceId],
+              mode: 'hybrid',
+              context,
+              limit: 20,
+            })
+            .catch(
+              (error: unknown): TextRecallResult => ({
+                candidates: [],
+                partial: true,
+                degradedCodes: ['text_recall_failed'],
+                rerankApplied: false,
+                usage: { inputTokens: 0, outputTokens: 0 },
+                error,
+              }),
+            );
     try {
       const [caption, imageVectors, text] = await Promise.all([
         observe('caption', this.captionCandidates(request, compiled.allowedSourceIds, context)),

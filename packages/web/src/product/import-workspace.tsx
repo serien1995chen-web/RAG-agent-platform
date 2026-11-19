@@ -14,7 +14,7 @@ import {
 } from '@chakra-ui/icons';
 import { Spinner } from '@chakra-ui/react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { S7MarkdownRenderer } from '../components/s7-markdown-renderer';
 import {
   apiLibraryCatalog,
@@ -197,6 +197,9 @@ export function ImportWorkspace(props: {
   const [chunkSplitter, setChunkSplitter] = useState('');
   const [overlap, setOverlap] = useState('100');
   const [indexSize, setIndexSize] = useState('1000');
+  const [autoIndexes, setAutoIndexes] = useState(false);
+  const [imageIndex, setImageIndex] = useState(false);
+  const [indexPrefixTitle, setIndexPrefixTitle] = useState(false);
   const [qaPrompt, setQaPrompt] = useState('');
   const [uploaded, setUploaded] = useState<ImportedUpload[]>([]);
   const [uploading, setUploading] = useState(false);
@@ -226,6 +229,10 @@ export function ImportWorkspace(props: {
     queryKey: ['kb-product', 'import-directories', props.spaceId],
     queryFn: () => productApi.listDirectories(props.spaceId),
   });
+  const modelsQuery = useQuery({
+    queryKey: ['kb-product', 'models'],
+    queryFn: () => productApi.listModels(),
+  });
   const jobQuery = useQuery<Job>({
     queryKey: ['kb-product', 'import-job', jobId],
     queryFn: () => productApi.getJob(jobId),
@@ -241,6 +248,9 @@ export function ImportWorkspace(props: {
       trainingType,
       chunkSettingMode,
       chunkSplitMode,
+      autoIndexes,
+      imageIndex,
+      indexPrefixTitle,
       ...(chunkSettingMode === 'custom'
         ? {
             chunkTriggerType,
@@ -275,9 +285,40 @@ export function ImportWorkspace(props: {
       paragraphChunkDeep,
       paragraphChunkMinSize,
       qaPrompt,
+      autoIndexes,
+      imageIndex,
+      indexPrefixTitle,
       trainingType,
     ],
   );
+  const indexCapabilities = useMemo(() => {
+    const models = modelsQuery.data ?? [];
+    const hasAutoIndexModel = models.some((model) => model.authorized && model.type === 'llm');
+    const hasVlmModel = models.some((model) => model.authorized && model.type === 'vlm');
+    const hasImageEmbeddingModel = models.some(
+      (model) =>
+        model.authorized &&
+        model.type === 'embedding' &&
+        (model.capabilities.includes('vision') || model.capabilities.includes('caption-embedding')),
+    );
+    return {
+      autoIndexes: trainingType === 'chunk' && hasAutoIndexModel,
+      indexPrefixTitle: trainingType === 'chunk' && hasAutoIndexModel && autoIndexes,
+      imageIndex: trainingType === 'chunk' && hasVlmModel && hasImageEmbeddingModel,
+    };
+  }, [autoIndexes, modelsQuery.data, trainingType]);
+
+  useEffect(() => {
+    if (modelsQuery.isLoading) return;
+    if (!indexCapabilities.autoIndexes) setAutoIndexes(false);
+    if (!indexCapabilities.indexPrefixTitle) setIndexPrefixTitle(false);
+    if (!indexCapabilities.imageIndex) setImageIndex(false);
+  }, [
+    indexCapabilities.autoIndexes,
+    indexCapabilities.imageIndex,
+    indexCapabilities.indexPrefixTitle,
+    modelsQuery.isLoading,
+  ]);
   const parseConfig = useMemo<Record<string, unknown>>(() => {
     if (parseProvider === 'liteparse') return {};
     const common = {
@@ -1412,6 +1453,90 @@ export function ImportWorkspace(props: {
                         }}
                       />
                     </ProductField>
+                    <div className="kb2-index-enhancements">
+                      <div className="kb2-index-enhancement">
+                        <label className="kb2-checkbox-row">
+                          <input
+                            type="checkbox"
+                            aria-label="自动生成补充索引"
+                            aria-describedby={
+                              indexCapabilities.autoIndexes ? undefined : 'index-auto-unavailable'
+                            }
+                            checked={autoIndexes}
+                            disabled={!indexCapabilities.autoIndexes}
+                            onChange={(event) => {
+                              setAutoIndexes(event.target.checked);
+                              if (!event.target.checked) setIndexPrefixTitle(false);
+                              invalidateUrlPreviews();
+                            }}
+                          />
+                          <span>自动生成补充索引</span>
+                        </label>
+                        {!indexCapabilities.autoIndexes ? (
+                          <small id="index-auto-unavailable">
+                            {trainingType !== 'chunk'
+                              ? '分段训练时可用。'
+                              : modelsQuery.isLoading
+                                ? '正在检查模型能力。'
+                                : '没有已授权的文本模型，暂时无法启用。'}
+                          </small>
+                        ) : null}
+                      </div>
+                      <div className="kb2-index-enhancement">
+                        <label className="kb2-checkbox-row">
+                          <input
+                            type="checkbox"
+                            aria-label="标题加入索引"
+                            aria-describedby={
+                              indexCapabilities.indexPrefixTitle
+                                ? undefined
+                                : 'index-title-unavailable'
+                            }
+                            checked={indexPrefixTitle}
+                            disabled={!indexCapabilities.indexPrefixTitle}
+                            onChange={(event) => {
+                              setIndexPrefixTitle(event.target.checked);
+                              invalidateUrlPreviews();
+                            }}
+                          />
+                          <span>标题加入索引</span>
+                        </label>
+                        {!indexCapabilities.indexPrefixTitle ? (
+                          <small id="index-title-unavailable">
+                            {autoIndexes && indexCapabilities.autoIndexes
+                              ? '补充索引当前不可用，标题增强已清除。'
+                              : '启用自动生成补充索引后可用。'}
+                          </small>
+                        ) : null}
+                      </div>
+                      <div className="kb2-index-enhancement">
+                        <label className="kb2-checkbox-row">
+                          <input
+                            type="checkbox"
+                            aria-label="图片自动索引"
+                            aria-describedby={
+                              indexCapabilities.imageIndex ? undefined : 'index-image-unavailable'
+                            }
+                            checked={imageIndex}
+                            disabled={!indexCapabilities.imageIndex}
+                            onChange={(event) => {
+                              setImageIndex(event.target.checked);
+                              invalidateUrlPreviews();
+                            }}
+                          />
+                          <span>图片自动索引</span>
+                        </label>
+                        {!indexCapabilities.imageIndex ? (
+                          <small id="index-image-unavailable">
+                            {trainingType !== 'chunk'
+                              ? '分段训练时可用。'
+                              : modelsQuery.isLoading
+                                ? '正在检查视觉模型能力。'
+                                : '需要已授权的 VLM 和视觉或 Caption Embedding 模型。'}
+                          </small>
+                        ) : null}
+                      </div>
+                    </div>
                     {trainingType === 'qa' ? (
                       <ProductField label="QA Prompt">
                         <ProductTextarea

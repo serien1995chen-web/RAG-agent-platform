@@ -50,6 +50,7 @@ export interface UploadInitInput {
   name: string;
   mimeType: string;
   sizeBytes: number;
+  purpose?: 'source' | 'image';
 }
 
 export interface UploadPresignInput {
@@ -304,7 +305,11 @@ export class FileApplication {
   async init(input: UploadInitInput, context: TenantContext): Promise<UploadSessionView> {
     const name = safeName(input.name);
     const mimeType = normalizeMime(input.mimeType);
+    const purpose = input.purpose ?? 'source';
     validateNameAndMime(name, mimeType, context);
+    if (purpose !== 'source' && purpose !== 'image') {
+      throw validationError(context, 'purpose', 'must_be_source_or_image');
+    }
     if (!Number.isSafeInteger(input.sizeBytes) || input.sizeBytes <= 0) {
       throw payloadError(context, 'sizeBytes must be greater than zero');
     }
@@ -341,6 +346,7 @@ export class FileApplication {
         mimeType,
         sizeBytes: input.sizeBytes,
         originalName: name,
+        purpose,
         mode,
         partSizeBytes: UPLOAD_PART_SIZE_BYTES,
         partCount,

@@ -9,6 +9,7 @@ import type {
   S6VectorPort,
 } from './s06-processing-ports';
 import type { S8CaptionDependencies, S8CaptionExecutorPort } from './s8-image-deep.ports';
+import { S5ModelTransportError } from './s5-model-gateway.port';
 import type { S5EmbeddingInputItem } from './s5-model-gateway.port';
 
 export const S8_CAPTION_PROMPT_VERSION = 's8.image-caption.v1';
@@ -64,6 +65,13 @@ function captionOf(data: unknown, context: TenantContext): string {
 }
 
 function errorCode(error: unknown): string {
+  if (error instanceof S5ModelTransportError) {
+    if (error.kind === 'timeout') return 'KNOWLEDGE_DEPENDENCY_TIMEOUT';
+    if (error.kind === 'rate_limit') return 'KNOWLEDGE_RATE_LIMITED';
+    if (error.kind === 'contract') return 'KNOWLEDGE_PROVIDER_CONTRACT_INVALID';
+    if (error.kind === 'validation') return 'KNOWLEDGE_VALIDATION_FAILED';
+    return 'KNOWLEDGE_MODEL_FAILED';
+  }
   return typeof error === 'object' &&
     error !== null &&
     'problem' in error &&
@@ -76,6 +84,7 @@ function partialFailure(error: unknown): boolean {
   const code = errorCode(error);
   return (
     code === 'KNOWLEDGE_MODEL_FAILED' ||
+    code === 'KNOWLEDGE_MODEL_OUTPUT_INVALID' ||
     code === 'KNOWLEDGE_RATE_LIMITED' ||
     code === 'KNOWLEDGE_DEPENDENCY_TIMEOUT' ||
     code === 'KNOWLEDGE_DEPENDENCY_UNAVAILABLE'
@@ -504,6 +513,7 @@ export class S8CaptionApplication implements S8CaptionExecutorPort {
       partial: captionIndexed !== vectorIndexed,
       segmentId: segment.id,
       result: {
+        partial: captionIndexed !== vectorIndexed,
         captionStatus: captionIndexed ? 'indexed' : 'error',
         vectorStatus: vectorIndexed ? 'indexed' : 'error',
         captionPromptVersion: S8_CAPTION_PROMPT_VERSION,

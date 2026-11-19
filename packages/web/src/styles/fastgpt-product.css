@@ -2021,6 +2021,37 @@ a:hover {
   font-size: 12px;
 }
 
+.kb2-index-enhancements {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--kb2-line);
+  border-radius: 8px;
+  background: var(--kb2-surface-muted);
+}
+
+.kb2-index-enhancement {
+  min-width: 0;
+  display: grid;
+  align-content: start;
+  gap: 2px;
+}
+
+.kb2-index-enhancement small {
+  padding-left: 22px;
+  color: var(--kb2-muted);
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+@media (max-width: 760px) {
+  .kb2-index-enhancements {
+    grid-template-columns: 1fr;
+  }
+}
+
 .kb2-permission-actions {
   display: flex;
   flex-wrap: wrap;

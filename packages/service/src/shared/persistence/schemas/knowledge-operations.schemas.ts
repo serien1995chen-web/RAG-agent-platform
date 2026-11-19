@@ -103,6 +103,10 @@ defineKnowledgeIndex(KnowledgeUsageEventSchema, {
   key: { workspaceId: 1, knowledgeSpaceId: 1, occurredAt: -1, eventType: 1 },
 });
 defineKnowledgeIndex(KnowledgeUsageEventSchema, {
+  name: 'ix_usage_quota_snapshot',
+  key: { workspaceId: 1, deletedAt: 1, occurredAt: -1, eventType: 1 },
+});
+defineKnowledgeIndex(KnowledgeUsageEventSchema, {
   name: 'ix_usage_delivery',
   key: { deliveryStatus: 1, occurredAt: 1 },
 });

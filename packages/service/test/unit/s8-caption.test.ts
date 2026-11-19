@@ -46,6 +46,8 @@ function application(input?: {
   failVlmResolution?: boolean;
   failEmbeddingResolution?: boolean;
   embeddingMode?: 'vision-embedding' | 'caption-embedding';
+  vlmContent?: string;
+  vlmError?: S5ModelTransportError;
 }) {
   const commit = vi.fn(async (value: { indexes: unknown[] }) => ({
     id: '65f1e5b2a1c9d4b7e8f02222',
@@ -151,11 +153,15 @@ function application(input?: {
     gateway: {
       invoke: async (invocation) => {
         if (invocation.kind === 'vlm') {
+          if (input?.vlmError) throw input.vlmError;
           return {
             data: {
               choices: [
                 {
-                  message: { content: JSON.stringify({ caption: 'A refund flow diagram' }) },
+                  message: {
+                    content:
+                      input?.vlmContent ?? JSON.stringify({ caption: 'A refund flow diagram' }),
+                  },
                 },
               ],
             },
@@ -245,7 +251,7 @@ function application(input?: {
 }
 
 describe('TEST-X-IMAGE-CAPTION executor', () => {
-  it('writes ordered caption and image vectors with one source version and one CAS', async () => {
+  it('L1-B12-PARSE-005-P01 writes ordered caption and image vectors with one source version, usage, trace context and one CAS', async () => {
     const { instance, commit, updateStatus } = application();
     const result = await instance.execute(job, context);
     expect(result.result).toMatchObject({
@@ -259,6 +265,8 @@ describe('TEST-X-IMAGE-CAPTION executor', () => {
     expect(
       commit.mock.calls[0]?.[0].indexes.map((index: { indexId: string }) => index.indexId),
     ).toEqual(['image_caption', 'image']);
+    expect(result.result.usage).toEqual({ inputTokens: 5, outputTokens: 2 });
+    expect(commit.mock.calls[0]?.[1]).toBe(context);
     expect(updateStatus).toHaveBeenCalledWith(source.id, 'ready', context, 2);
   });
 
@@ -313,5 +321,57 @@ describe('TEST-X-IMAGE-CAPTION executor', () => {
       problem: { error: { code: 'KNOWLEDGE_VALIDATION_FAILED' } },
     });
     expect(commit).not.toHaveBeenCalled();
+  });
+
+  it('L1-B12-PARSE-005-N01 rejects corrupt VLM output without fabricating a caption index', async () => {
+    const { instance, commit, updateStatus } = application({
+      vlmContent: '{"caption":',
+    });
+    const result = await instance.execute(job, context);
+    expect(result.result).toMatchObject({
+      captionStatus: 'error',
+      vectorStatus: 'indexed',
+      captionFailureCode: 'KNOWLEDGE_MODEL_OUTPUT_INVALID',
+    });
+    expect(
+      commit.mock.calls[0]?.[0].indexes.map((index: { indexId: string }) => index.indexId),
+    ).toEqual(['image']);
+    expect(updateStatus).toHaveBeenCalledWith(source.id, 'partial', context, 2);
+  });
+
+  it('L1-B12-PARSE-005-N02 fails when corrupt VLM output leaves no usable image channel', async () => {
+    const { instance, commit } = application({
+      vlmContent: '{"caption":',
+      embeddingMode: 'caption-embedding',
+    });
+    await expect(instance.execute(job, context)).rejects.toMatchObject({
+      problem: {
+        error: {
+          code: 'KNOWLEDGE_MODEL_OUTPUT_INVALID',
+          details: { reason: 'caption_required_for_caption_embedding' },
+        },
+      },
+    });
+    expect(commit).not.toHaveBeenCalled();
+  });
+
+  it('L1-B12-PARSE-005-F01 preserves the vision-vector path on VLM timeout and emits a partial result', async () => {
+    const { instance, commit, updateStatus } = application({
+      vlmError: new S5ModelTransportError('timeout', 504),
+    });
+    const result = await instance.execute(job, context);
+    expect(result).toMatchObject({
+      result: {
+        partial: true,
+        captionStatus: 'error',
+        vectorStatus: 'indexed',
+        captionFailureCode: 'KNOWLEDGE_DEPENDENCY_TIMEOUT',
+        sourceVersion: 2,
+      },
+    });
+    expect(
+      commit.mock.calls[0]?.[0].indexes.map((index: { indexId: string }) => index.indexId),
+    ).toEqual(['image']);
+    expect(updateStatus).toHaveBeenCalledWith(source.id, 'partial', context, 2);
   });
 });

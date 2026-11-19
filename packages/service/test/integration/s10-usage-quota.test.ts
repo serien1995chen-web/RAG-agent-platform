@@ -258,4 +258,56 @@ describe('TEST-OPS-001-BLOCK / TEST-OPS-002-BLOCK usage and quota', () => {
     }).toEqual(before);
     expect(redis.values.size).toBe(0);
   });
+
+  it('coalesces concurrent fresh quota snapshots for the same workspace', async () => {
+    let summaryCalls = 0;
+    const quota = new KnowledgeQuotaGate({
+      usage: {
+        async summary() {
+          summaryCalls += 1;
+          await new Promise((resolve) => setTimeout(resolve, 20));
+          return {
+            period: {
+              from: new Date(Date.now() - 86_400_000).toISOString(),
+              to: new Date().toISOString(),
+            },
+            quota: {
+              aiPointsLimit: FREE_V1_QUOTA.aiPointsLimit,
+              aiPointsLimitMicros: FREE_V1_QUOTA.aiPointsLimit * 1_000_000,
+              storageBytesLimit: FREE_V1_QUOTA.storageBytesLimit,
+              maxSpaces: FREE_V1_QUOTA.maxSpaces,
+              maxIndexes: FREE_V1_QUOTA.maxIndexes,
+              requestsPerMinute: FREE_V1_QUOTA.requestsPerMinute,
+              maxModelConcurrency: FREE_V1_QUOTA.maxModelConcurrency,
+              profileVersion: FREE_V1_QUOTA.version,
+            },
+            usage: {
+              aiPoints: 0,
+              aiPointsMicros: 0,
+              storageBytes: 0,
+              indexCount: 0,
+              spaceCount: 1,
+              parsePages: 0,
+              inputTokens: 0,
+              outputTokens: 0,
+              embeddingTokens: 0,
+              rerankTokens: 0,
+              modelCalls: 0,
+            },
+            delivery: { pending: 0, delivered: 0, failed: 0 },
+            series: [],
+            profileVersion: FREE_V1_QUOTA.version,
+          };
+        },
+      },
+      redis: new FakeRedis() as never,
+      quota: FREE_V1_QUOTA,
+    });
+
+    await Promise.all(
+      Array.from({ length: 5 }, () => quota.withModelSlot(context, async () => undefined)),
+    );
+
+    expect(summaryCalls).toBe(1);
+  });
 });

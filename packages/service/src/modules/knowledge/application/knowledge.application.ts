@@ -1164,6 +1164,16 @@ export class KnowledgeApplication {
           data: await this.jobs.get(params.jobId ?? '', context),
         };
       case 'API-UPLOAD-INIT':
+        if (body.purpose !== undefined && body.purpose !== 'source' && body.purpose !== 'image') {
+          throw createKnowledgeError({
+            code: 'KNOWLEDGE_VALIDATION_FAILED',
+            requestId: context.requestId,
+            traceId: context.traceId,
+            details: {
+              issues: [{ path: 'purpose', code: 'custom', message: 'must be source or image' }],
+            },
+          });
+        }
         return {
           status: 201,
           data: await this.files!.init(
@@ -1172,6 +1182,7 @@ export class KnowledgeApplication {
               name: String(body.name ?? ''),
               mimeType: String(body.mimeType ?? ''),
               sizeBytes: Number(body.sizeBytes),
+              purpose: body.purpose === 'image' ? 'image' : 'source',
             },
             context,
           ),

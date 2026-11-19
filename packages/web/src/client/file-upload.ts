@@ -65,6 +65,7 @@ export interface KnowledgeFileUploadState {
 
 export interface UploadOptions {
   knowledgeSpaceId: string;
+  purpose?: 'source' | 'image';
   signal?: AbortSignal;
   onState?: (state: KnowledgeFileUploadState) => void;
 }
@@ -218,6 +219,7 @@ export async function knowledgeMultipartUpload(
           name: file.name,
           mimeType: file.type || 'application/octet-stream',
           sizeBytes: file.size,
+          purpose: options.purpose ?? 'source',
         },
       }),
     );
