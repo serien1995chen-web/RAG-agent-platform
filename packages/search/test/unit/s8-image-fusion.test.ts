@@ -61,4 +61,22 @@ describe('TEST-SEARCH-006-BLOCK image fusion', () => {
     expect(fused.find((entry) => entry.segmentId === text.segmentId)?.score).toBe(1);
     expect(fused.find((entry) => entry.segmentId === image.segmentId)?.score).toBe(0.7);
   });
+
+  it('L1-B12-SEARCH-006-C01 preserves different images with identical captions by image identity', () => {
+    const first = candidate({
+      segment: '65f1e5b2a1c9d4b7e8f20005',
+      image: '65f1e5b2a1c9d4b7e8f30005',
+      score: 0.9,
+      fullText: true,
+    });
+    const second = candidate({
+      segment: '65f1e5b2a1c9d4b7e8f20006',
+      image: '65f1e5b2a1c9d4b7e8f30006',
+      score: 0.9,
+      fullText: true,
+    });
+    first.text = 'Refund flow';
+    second.text = 'Refund flow';
+    expect(fuseImageChannels([first, second], [])).toHaveLength(2);
+  });
 });

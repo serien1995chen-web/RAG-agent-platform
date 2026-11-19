@@ -44,4 +44,37 @@ describe('TEST-X-DEEP-BUDGET / S8 UI forms', () => {
     expect(keys.keyFor({ query: 'one' })).toBe('key-1');
     expect(keys.keyFor({ query: 'two' })).toBe('key-2');
   });
+
+  it('L1-B12-SEARCH-006-P01 builds text-to-image requests without an uploaded image', () => {
+    const defaults = defaultS8SearchForm(spaceId);
+    expect(() =>
+      buildS8ImageRequest({
+        ...defaults,
+        query: 'refund flow diagram',
+        imageUploadIds: [],
+      }),
+    ).not.toThrow();
+  });
+
+  it('L1-B12-SEARCH-006-P02 builds pure-image requests with a blank text query', () => {
+    const defaults = defaultS8SearchForm(spaceId);
+    expect(() =>
+      buildS8ImageRequest({
+        ...defaults,
+        query: '',
+        imageUploadIds: [uploadId],
+      }),
+    ).not.toThrow();
+  });
+
+  it('L1-B12-SEARCH-006-P03 builds mixed text and image requests', () => {
+    const defaults = defaultS8SearchForm(spaceId);
+    expect(
+      buildS8ImageRequest({
+        ...defaults,
+        query: 'refund flow diagram',
+        imageUploadIds: [uploadId],
+      }).imageUploadIds,
+    ).toEqual([uploadId]);
+  });
 });

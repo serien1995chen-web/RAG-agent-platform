@@ -1,0 +1,54 @@
+{
+  "schemaVersion": 1,
+  "fixtures": [
+    {
+      "name": "valid-1x1.png",
+      "encodedFile": "valid-1x1.png.b64",
+      "mimeType": "image/png",
+      "expectedMagic": "image/png",
+      "variant": "valid"
+    },
+    {
+      "name": "transparent-1x1.png",
+      "encodedFile": "transparent-1x1.png.b64",
+      "mimeType": "image/png",
+      "expectedMagic": "image/png",
+      "variant": "transparent"
+    },
+    {
+      "name": "low-resolution-1x1.png",
+      "encodedFile": "low-resolution-1x1.png.b64",
+      "mimeType": "image/png",
+      "expectedMagic": "image/png",
+      "variant": "low-resolution"
+    },
+    {
+      "name": "valid-1x1.jpg",
+      "encodedFile": "valid-1x1.jpg.b64",
+      "mimeType": "image/jpeg",
+      "expectedMagic": "image/jpeg",
+      "variant": "valid"
+    },
+    {
+      "name": "valid-1x1.webp",
+      "encodedFile": "valid-1x1.webp.b64",
+      "mimeType": "image/webp",
+      "expectedMagic": "image/webp",
+      "variant": "valid"
+    },
+    {
+      "name": "valid-1x1.gif",
+      "encodedFile": "valid-1x1.gif.b64",
+      "mimeType": "image/gif",
+      "expectedMagic": "image/gif",
+      "variant": "valid"
+    },
+    {
+      "name": "corrupt.png",
+      "encodedFile": "corrupt.png.b64",
+      "mimeType": "image/png",
+      "expectedMagic": null,
+      "variant": "corrupt"
+    }
+  ]
+}

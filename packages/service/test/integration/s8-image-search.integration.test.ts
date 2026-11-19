@@ -112,6 +112,8 @@ function application(
     objectPurpose?: 'source' | 'image';
     filterMatch?: boolean;
     failImageVector?: boolean;
+    failCaptionChannel?: boolean;
+    failTextChannel?: boolean;
   } = {},
 ) {
   const issue = vi.fn(async (input: { candidates: readonly AuthorizedCandidate[] }) => {
@@ -188,23 +190,41 @@ function application(
         }),
       },
       search: {
-        collectCandidates: async () => ({
-          candidates: [],
-          partial: false,
-          degradedCodes: [],
-          rerankApplied: false,
-          usage: { inputTokens: 0, outputTokens: 0 },
-        }),
+        collectCandidates: async () => {
+          if (options.failTextChannel) {
+            throw createKnowledgeError({
+              code: 'KNOWLEDGE_DEPENDENCY_TIMEOUT',
+              requestId: context.requestId,
+              traceId: context.traceId,
+            });
+          }
+          return {
+            candidates: [],
+            partial: false,
+            degradedCodes: [],
+            rerankApplied: false,
+            usage: { inputTokens: 0, outputTokens: 0 },
+          };
+        },
       },
       fullText: {
-        search: async () => [
-          {
-            segmentId,
-            sourceId,
-            fullTextVersion: 1,
-            score: 1,
-          },
-        ],
+        search: async () => {
+          if (options.failCaptionChannel) {
+            throw createKnowledgeError({
+              code: 'KNOWLEDGE_RATE_LIMITED',
+              requestId: context.requestId,
+              traceId: context.traceId,
+            });
+          }
+          return [
+            {
+              segmentId,
+              sourceId,
+              fullTextVersion: 1,
+              score: 1,
+            },
+          ];
+        },
       },
       filters: {
         listFilterFacts: async () => ({
@@ -273,6 +293,36 @@ function application(
 }
 
 describe('TEST-SEARCH-006-BLOCK / TEST-MULTI-001-BLOCK image search', () => {
+  it('L1-B12-SEARCH-006-P01 executes text-to-image search without query image uploads', async () => {
+    const { instance } = application();
+    const result = await instance.search(
+      {
+        knowledgeSpaceId: spaceId,
+        query: 'refund diagram',
+        tokenBudget: 5_000,
+        imageUploadIds: [],
+      },
+      context,
+    );
+    expect(result.mode).toBe('image');
+    expect(result.items[0]?.segment.imageBlobRefId).toBe(imageId);
+  });
+
+  it('L1-B12-SEARCH-006-P02 executes pure-image search with a blank text query', async () => {
+    const { instance } = application();
+    const result = await instance.search(
+      {
+        knowledgeSpaceId: spaceId,
+        query: '',
+        tokenBudget: 5_000,
+        imageUploadIds: [imageId],
+      },
+      context,
+    );
+    expect(result.mode).toBe('image');
+    expect(result.items[0]?.segment.imageBlobRefId).toBe(imageId);
+  });
+
   it('fuses caption and image vector recall, reauthorizes and persists one citation set', async () => {
     const { instance, issue } = application();
     const result = await instance.search(
@@ -307,6 +357,38 @@ describe('TEST-SEARCH-006-BLOCK / TEST-MULTI-001-BLOCK image search', () => {
     expect(result.degraded).toContain('image_vector_recall_failed');
     expect(result.partial).toBe(true);
     expect(JSON.stringify(result)).not.toContain('provider');
+  });
+
+  it('L1-B12-SEARCH-006-F01 preserves image-vector evidence when the caption channel fails', async () => {
+    const { instance } = application({ failCaptionChannel: true });
+    const result = await instance.search(
+      {
+        knowledgeSpaceId: spaceId,
+        query: 'refund diagram',
+        tokenBudget: 5_000,
+        imageUploadIds: [imageId],
+      },
+      context,
+    );
+    expect(result.partial).toBe(true);
+    expect(result.degraded).toContain('image_caption_recall_failed');
+    expect(result.items[0]?.segment.imageBlobRefId).toBe(imageId);
+  });
+
+  it('L1-B12-SEARCH-006-F01 preserves image-vector evidence when the text channel fails', async () => {
+    const { instance } = application({ failTextChannel: true });
+    const result = await instance.search(
+      {
+        knowledgeSpaceId: spaceId,
+        query: 'refund diagram',
+        tokenBudget: 5_000,
+        imageUploadIds: [imageId],
+      },
+      context,
+    );
+    expect(result.partial).toBe(true);
+    expect(result.degraded).toContain('text_recall_failed');
+    expect(result.items[0]?.segment.imageBlobRefId).toBe(imageId);
   });
 
   it('applies non-source filters to both image recall channels', async () => {

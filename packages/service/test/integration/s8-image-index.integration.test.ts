@@ -186,6 +186,16 @@ afterAll(async () => {
     }
     await connection.close();
   }
+  if (pool) {
+    for (const table of [
+      'knowledge_segment_vectors_768',
+      'knowledge_segment_vectors_1024',
+      'knowledge_segment_vectors_1536',
+      'knowledge_segment_vectors_3072',
+    ]) {
+      await pool.query(`DELETE FROM ${table} WHERE workspace_id = $1`, [workspaceId]);
+    }
+  }
   await pool?.end();
 });
 
@@ -381,4 +391,134 @@ describe('TEST-X-IMAGE-CAPTION / TEST-TRAIN-003-BLOCK image index', () => {
       },
     });
   });
+
+  it('TEST-X-HALFVEC-3072 / L1-B12-PARSE-005-S01 stores 3072-dimensional image vectors in halfvec and commits matching pointers', async () => {
+    await connection.models.KnowledgeModelBinding.updateOne(
+      {
+        workspaceId,
+        knowledgeSpaceId: new mongoose.Types.ObjectId(spaceId),
+        modelType: 'embedding',
+      },
+      {
+        $set: {
+          modelId: 'mock-embedding-3072',
+          displayName: 'Mock vision embedding 3072',
+          requiredCapabilities: ['vision', 'dimension:3072'],
+        },
+      },
+    );
+    const application = new S8CaptionApplication({
+      store: new S6ProcessingRepository(connection),
+      objects: new KnowledgeObjectRefRepository(connection),
+      models: new S8ModelResolver(connection, new S5MockModelCatalog()),
+      gateway: {
+        async invoke<T>(request) {
+          if (request.kind === 'vlm') {
+            return {
+              data: {
+                choices: [
+                  {
+                    message: {
+                      content: JSON.stringify({ caption: 'A 3072-dimensional refund flow' }),
+                    },
+                  },
+                ],
+              } as T,
+              actualModelId: request.modelId,
+              attempts: 1,
+              fallbackUsed: false,
+              degraded: false,
+              usage: { inputTokens: 3, outputTokens: 2, quantity: 5 },
+            };
+          }
+          const count = request.input?.length ?? 0;
+          return {
+            data: {
+              data: Array.from({ length: count }, (_, itemIndex) => ({
+                index: itemIndex,
+                embedding: Array.from({ length: 3072 }, (_, vectorIndex) =>
+                  vectorIndex === itemIndex ? 1 : 0,
+                ),
+              })),
+            } as T,
+            actualModelId: request.modelId,
+            attempts: 1,
+            fallbackUsed: false,
+            degraded: false,
+            usage: { inputTokens: 2, outputTokens: 0, quantity: 2 },
+          };
+        },
+      },
+      tickets: new S8FileTicketAdapter(
+        new FileTicketService(
+          's8-integration-ticket-secret-at-least-32-bytes',
+          'http://127.0.0.1:3010',
+        ),
+      ),
+      vectors: new KnowledgeVectorRepository(pool),
+      fulltext: new KnowledgeFullTextRepository(connection),
+      indexes: new S8ImageIndexRepository(connection),
+    });
+    const result = await application.execute(
+      {
+        _id: new mongoose.Types.ObjectId(),
+        resourceId: sourceId,
+        inputSnapshot: {
+          sourceId,
+          sourceVersion: 1,
+          imageBlobRefId,
+        },
+      } as never,
+      context,
+    );
+    expect(result.result).toMatchObject({
+      captionStatus: 'indexed',
+      vectorStatus: 'indexed',
+      visionEmbeddingModelId: 'mock-embedding-3072',
+    });
+    const rows = await pool.query<{
+      index_id: string;
+      storage_type: string;
+      vector_profile: string;
+    }>(
+      `SELECT index_id, pg_typeof(embedding)::text AS storage_type,
+              'knowledge_segment_vectors_3072'::text AS vector_profile
+         FROM knowledge_segment_vectors_3072
+        WHERE workspace_id = $1 AND source_id = $2
+        ORDER BY index_id`,
+      [workspaceId, sourceId],
+    );
+    expect(rows.rows).toEqual([
+      {
+        index_id: 'image',
+        storage_type: 'halfvec',
+        vector_profile: 'knowledge_segment_vectors_3072',
+      },
+      {
+        index_id: 'image_caption',
+        storage_type: 'halfvec',
+        vector_profile: 'knowledge_segment_vectors_3072',
+      },
+    ]);
+    const segment = await connection.models.KnowledgeSegment.findOne({
+      workspaceId,
+      sourceId,
+    }).lean();
+    expect(segment?.indexes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          indexId: 'image',
+          dimension: 3072,
+          storageType: 'halfvec',
+          vectorProfile: 'knowledge_segment_vectors_3072',
+        }),
+        expect.objectContaining({
+          indexId: 'image_caption',
+          dimension: 3072,
+          storageType: 'halfvec',
+          vectorProfile: 'knowledge_segment_vectors_3072',
+        }),
+      ]),
+    );
+  }, 60_000);
 });

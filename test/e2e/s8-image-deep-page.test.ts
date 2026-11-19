@@ -58,8 +58,10 @@ async function assertSkipLinkDoesNotOverlap(page: Page): Promise<void> {
   });
   await page.waitForTimeout(50);
   const geometry = await page.evaluate(() => {
-    const skip = document.querySelector<HTMLElement>('.skip-link');
-    const nav = document.querySelector<HTMLElement>('aside[aria-label="Primary navigation"]');
+    const skip = document.querySelector<HTMLElement>('.skip-link, .kb2-skip-link');
+    const nav = document.querySelector<HTMLElement>(
+      'aside[aria-label="Primary navigation"], aside[aria-label="主导航"]',
+    );
     const heading = document.querySelector<HTMLElement>('h1');
     if (!skip)
       return { present: false, visible: false, overlapsNav: false, overlapsHeading: false };
@@ -96,23 +98,6 @@ async function assertSkipLinkDoesNotOverlap(page: Page): Promise<void> {
   expect(geometry.visible).toBe(false);
   expect(geometry.overlapsNav).toBe(false);
   expect(geometry.overlapsHeading).toBe(false);
-}
-
-async function assertSkipLinkKeyboardFocus(page: Page): Promise<void> {
-  await page.evaluate(() => {
-    if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
-  });
-  await page.keyboard.press('Tab');
-  const state = await page.evaluate(() => {
-    const skip = document.querySelector<HTMLElement>('.skip-link');
-    if (!skip) return { focused: false, visible: false };
-    const style = getComputedStyle(skip);
-    return {
-      focused: document.activeElement === skip,
-      visible: style.opacity !== '0' && style.pointerEvents !== 'none',
-    };
-  });
-  expect(state).toEqual({ focused: true, visible: true });
 }
 
 function requiredEnv(name: string): string {
@@ -490,6 +475,41 @@ beforeAll(async () => {
 }, 240_000);
 
 afterAll(async () => {
+  const cleanupContext: TenantContext = {
+    workspaceId,
+    memberId,
+    knowledgeSpaceId: spaceId,
+    requestId: `cleanup-s8-${suffix}`,
+    traceId: suffix.padEnd(32, '0').slice(0, 32),
+    scopes: ['knowledge:read', 'knowledge:write'],
+    isWorkspaceOwner: true,
+  };
+  if (process.env.KB_TEST_S3_ENDPOINT) {
+    const endpoint = new URL(requiredEnv('KB_TEST_S3_ENDPOINT'));
+    const objectStore = new MinioKnowledgeObjectStore({
+      provider: 'minio',
+      endPoint: endpoint.hostname,
+      port: Number(endpoint.port || (endpoint.protocol === 'https:' ? 443 : 80)),
+      useSSL: endpoint.protocol === 'https:',
+      accessKey: requiredEnv('KB_TEST_S3_ACCESS_KEY'),
+      secretKey: requiredEnv('KB_TEST_S3_SECRET_KEY'),
+      region: process.env.KB_TEST_S3_REGION ?? 'us-east-1',
+      bucket: requiredEnv('KB_TEST_S3_BUCKET'),
+    });
+    const refs = connection
+      ? await connection.models.KnowledgeObjectRef.find({ workspaceId }).lean()
+      : [];
+    const keys = new Set(
+      refs.flatMap((ref: { objectKey?: string; upload?: { finalObjectKey?: string | null } }) =>
+        [ref.objectKey, ref.upload?.finalObjectKey].filter(
+          (key): key is string => typeof key === 'string' && key.length > 0,
+        ),
+      ),
+    );
+    for (const key of keys) {
+      await objectStore.deleteObject(key, cleanupContext);
+    }
+  }
   if (connection) {
     for (const model of Object.values(registerKnowledgeModels(connection))) {
       await model.deleteMany({ workspaceId });
@@ -583,7 +603,45 @@ describe('S8 real app image and deep search routes', () => {
     });
   });
 
-  it.skip('renders real Images and Deep pages and rechecks ticket ACL on content', async () => {
+  it('L1-B12-MULTI-001-S01 rechecks current Source ACL before serving a previously issued preview URL', async () => {
+    const preview = await request(`/v1/knowledge/files/${imageBlobRefId}/preview`, {
+      method: 'POST',
+      idempotencyKey: `b12-preview-revoke-${suffix}`,
+      body: { ttlSeconds: 300 },
+    });
+    expect(preview.response.status, JSON.stringify(preview.payload)).toBe(200);
+    const previewUrl = String(preview.payload.data.url);
+    expect(previewUrl).not.toContain('objectKey');
+    const cookie = await consoleCookie({ baseUrl: app.baseUrl, authToken, workspaceId });
+    const browser = await chromium.launch({ headless: true });
+    const browserContext = await browser.newContext();
+    await browserContext.addCookies([cookie]);
+    const liveContent = await browserContext.request.get(previewUrl);
+    expect(liveContent.status()).toBe(200);
+    await connection.models.KnowledgeSource.updateOne(
+      { workspaceId, _id: imageSourceId },
+      { $set: { deletedAt: new Date() } },
+    );
+    try {
+      const revokedContent = await browserContext.request.get(previewUrl);
+      expect(revokedContent.status()).toBe(404);
+      const revokedRetry = await request(`/v1/knowledge/files/${imageBlobRefId}/preview`, {
+        method: 'POST',
+        idempotencyKey: `b12-preview-revoke-retry-${suffix}`,
+        body: { ttlSeconds: 300 },
+      });
+      expect(revokedRetry.response.status).toBe(404);
+    } finally {
+      await connection.models.KnowledgeSource.updateOne(
+        { workspaceId, _id: imageSourceId },
+        { $set: { deletedAt: null } },
+      );
+      await browserContext.close();
+      await browser.close();
+    }
+  }, 120_000);
+
+  it('L1-B12-MULTI-001-UI01 renders image import controls and the three index settings at three viewports', async () => {
     mkdirSync(screenshotDir, { recursive: true });
     const imageSources = await request(
       `/v1/knowledge/spaces/${spaceId}/sources?kind=image&limit=100`,
@@ -594,6 +652,8 @@ describe('S8 real app image and deep search routes', () => {
     );
     const cookie = await consoleCookie({ baseUrl: app.baseUrl, authToken, workspaceId });
     const browser = await chromium.launch({ headless: true });
+    const missingControls: string[] = [];
+    const skipLinkFailures: string[] = [];
     try {
       for (const viewport of [
         { name: '360', width: 360, height: 900 },
@@ -616,86 +676,54 @@ describe('S8 real app image and deep search routes', () => {
           if (request.url().includes('/v1/knowledge/')) failedRequests.push(request.url());
         });
 
-        await page.goto(`${app.baseUrl}/spaces/${spaceId}/images`, {
-          waitUntil: 'networkidle',
-        });
-        await playwrightExpect(
-          page.getByRole('heading', { level: 1, name: '图片知识' }),
-        ).toBeVisible();
-        await playwrightExpect(
-          page.getByText('refund-flow.png', { exact: false }).first(),
-        ).toBeVisible();
-        await assertSkipLinkKeyboardFocus(page);
-        await page.getByRole('button', { name: '预览' }).first().click();
-        await playwrightExpect(page.getByRole('dialog')).toBeVisible();
-        await page.keyboard.press('Escape');
-        await playwrightExpect(page.getByRole('dialog')).toHaveCount(0);
-        const imagesOverflow = await page.evaluate(
-          () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
-        );
-        expect(imagesOverflow).toBeLessThanOrEqual(0);
-        const imagesAccessibility = await new AxeBuilder({ page }).analyze();
-        expect(
-          imagesAccessibility.violations.filter(
-            (violation) => violation.impact === 'serious' || violation.impact === 'critical',
-          ),
-        ).toEqual([]);
-        await assertSkipLinkDoesNotOverlap(page);
-        const imagesShot = await page.screenshot({
-          fullPage: true,
-          path: join(screenshotDir, `s8-images-${viewport.name}.png`),
-        });
-        writeFileSync(
-          join(screenshotDir, `s8-images-${viewport.name}.sha256`),
-          `${createHash('sha256').update(imagesShot).digest('hex')}\n`,
-        );
-
         await page.goto(
-          `${app.baseUrl}/spaces/${spaceId}/search?mode=deep&query=refunds&budget=12000`,
+          `${app.baseUrl}/dataset/detail?datasetId=${spaceId}&currentTab=import&source=image`,
           { waitUntil: 'networkidle' },
         );
+        await playwrightExpect(page.getByText('新建 / 导入', { exact: true })).toBeVisible();
         await playwrightExpect(
-          page.getByRole('heading', { level: 2, name: '深度检索' }),
+          page.getByRole('button', { name: /图片集合/ }).first(),
         ).toBeVisible();
-        const deepResponsePromise = page.waitForResponse(
-          (response) =>
-            response.request().method() === 'POST' &&
-            new URL(response.url()).pathname === '/v1/knowledge/search/deep',
+        await page.getByRole('button', { name: /下一步/ }).click();
+        await playwrightExpect(page.getByText('选择或拖放文件', { exact: false })).toBeVisible();
+
+        const labels = ['标题加入索引', '自动生成补充索引', '图片自动索引'];
+        const visibility = await Promise.all(
+          labels.map((label) =>
+            page
+              .getByRole('checkbox', { name: label })
+              .isVisible()
+              .catch(() => false),
+          ),
         );
-        await page.getByRole('button', { name: '运行深度检索' }).click();
-        const deepResponse = await deepResponsePromise;
-        expect(deepResponse.status(), await deepResponse.text()).toBe(200);
-        await playwrightExpect(page.getByText('停止原因:', { exact: false })).toBeVisible({
-          timeout: 20_000,
+        visibility.forEach((visible, index) => {
+          if (!visible) missingControls.push(`${viewport.name}:${labels[index]}`);
         });
-        await page.mouse.move(0, 0);
-        await playwrightExpect(page.getByRole('button', { name: '运行深度检索' })).toHaveAttribute(
-          'aria-busy',
-          'false',
-        );
-        await page.waitForTimeout(250);
-        const runButtonOpacity = await page
-          .getByRole('button', { name: '运行深度检索' })
-          .evaluate((button) => getComputedStyle(button).opacity);
-        expect(runButtonOpacity).toBe('1');
-        const deepOverflow = await page.evaluate(
+
+        const importOverflow = await page.evaluate(
           () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
         );
-        expect(deepOverflow).toBeLessThanOrEqual(0);
-        const deepAccessibility = await new AxeBuilder({ page }).analyze();
+        expect(importOverflow).toBeLessThanOrEqual(0);
+        const importAccessibility = await new AxeBuilder({ page }).analyze();
         expect(
-          deepAccessibility.violations.filter(
+          importAccessibility.violations.filter(
             (violation) => violation.impact === 'serious' || violation.impact === 'critical',
           ),
         ).toEqual([]);
-        await assertSkipLinkDoesNotOverlap(page);
-        const deepShot = await page.screenshot({
+        try {
+          await assertSkipLinkDoesNotOverlap(page);
+        } catch (error) {
+          skipLinkFailures.push(
+            `${viewport.name}:${error instanceof Error ? error.message : String(error)}`,
+          );
+        }
+        const importShot = await page.screenshot({
           fullPage: true,
-          path: join(screenshotDir, `s8-deep-${viewport.name}.png`),
+          path: join(screenshotDir, `b12-image-import-${viewport.name}.png`),
         });
         writeFileSync(
-          join(screenshotDir, `s8-deep-${viewport.name}.sha256`),
-          `${createHash('sha256').update(deepShot).digest('hex')}\n`,
+          join(screenshotDir, `b12-image-import-${viewport.name}.sha256`),
+          `${createHash('sha256').update(importShot).digest('hex')}\n`,
         );
         expect(consoleErrors).toEqual([]);
         expect(pageErrors).toEqual([]);
@@ -705,32 +733,106 @@ describe('S8 real app image and deep search routes', () => {
     } finally {
       await browser.close();
     }
+    expect(
+      { missingControls, skipLinkFailures },
+      'required B12 index switches or the accessible skip link are absent from the product import UI',
+    ).toEqual({ missingControls: [], skipLinkFailures: [] });
+  }, 240_000);
 
-    const preview = await request(`/v1/knowledge/files/${imageBlobRefId}/preview`, {
-      method: 'POST',
-      idempotencyKey: `s8-preview-revoke-${suffix}`,
-      body: { ttlSeconds: 300 },
-    });
-    expect(preview.response.status).toBe(200);
-    const previewUrl = String(preview.payload.data.url);
-    await connection.models.KnowledgeSource.updateOne(
-      { workspaceId, _id: imageSourceId },
-      { $set: { deletedAt: new Date() } },
-    );
+  it('L1-B12-SEARCH-006-UI01 runs pure-image product search and renders controlled results', async () => {
+    mkdirSync(screenshotDir, { recursive: true });
+    const cookie = await consoleCookie({ baseUrl: app.baseUrl, authToken, workspaceId });
+    const browser = await chromium.launch({ headless: true });
+    const statuses: number[] = [];
+    const consoleErrors: string[] = [];
+    const pageErrors: string[] = [];
+    const failedRequests: string[] = [];
+    const skipLinkFailures: string[] = [];
     try {
-      const revokedContent = await fetch(previewUrl);
-      expect(revokedContent.status).toBe(404);
-      const revokedRetry = await request(`/v1/knowledge/files/${imageBlobRefId}/preview`, {
-        method: 'POST',
-        idempotencyKey: `s8-preview-revoke-retry-${suffix}`,
-        body: { ttlSeconds: 300 },
-      });
-      expect(revokedRetry.response.status).toBe(404);
+      for (const viewport of [
+        { name: '360', width: 360, height: 900 },
+        { name: '768', width: 768, height: 1_000 },
+        { name: '1200', width: 1_200, height: 1_000 },
+      ]) {
+        const browserContext = await browser.newContext({
+          viewport: { width: viewport.width, height: viewport.height },
+        });
+        await browserContext.addCookies([cookie]);
+        const page = await browserContext.newPage();
+        page.on('console', (message) => {
+          if (message.type() === 'error') {
+            consoleErrors.push(`${viewport.name}:${message.text()}`);
+          }
+        });
+        page.on('pageerror', (error) => pageErrors.push(`${viewport.name}:${error.message}`));
+        page.on('requestfailed', (request) => {
+          if (request.url().includes('/v1/knowledge/')) {
+            failedRequests.push(`${viewport.name}:${request.url()}`);
+          }
+        });
+
+        await page.goto(`${app.baseUrl}/dataset/detail?datasetId=${spaceId}&currentTab=test`, {
+          waitUntil: 'networkidle',
+        });
+        await playwrightExpect(
+          page.getByRole('heading', { level: 2, name: '搜索测试' }),
+        ).toBeVisible();
+        await page
+          .locator('input[type="file"]')
+          .setInputFiles(join(root, 'test/fixtures/s11/generated/s11-image-1x1.png'));
+        await playwrightExpect(page.getByRole('button', { name: '开始测试' })).toBeEnabled({
+          timeout: 30_000,
+        });
+        const responsePromise = page.waitForResponse(
+          (response) =>
+            response.request().method() === 'POST' &&
+            new URL(response.url()).pathname === '/v1/knowledge/search/image',
+        );
+        await page.getByRole('button', { name: '开始测试' }).click();
+        const response = await responsePromise;
+        statuses.push(response.status());
+        const searchShot = await page.screenshot({
+          fullPage: true,
+          path: join(screenshotDir, `b12-image-search-${viewport.name}.png`),
+        });
+        writeFileSync(
+          join(screenshotDir, `b12-image-search-${viewport.name}.sha256`),
+          `${createHash('sha256').update(searchShot).digest('hex')}\n`,
+        );
+        const searchOverflow = await page.evaluate(
+          () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+        );
+        expect(searchOverflow).toBeLessThanOrEqual(0);
+        const searchAccessibility = await new AxeBuilder({ page }).analyze();
+        expect(
+          searchAccessibility.violations.filter(
+            (violation) => violation.impact === 'serious' || violation.impact === 'critical',
+          ),
+        ).toEqual([]);
+        try {
+          await assertSkipLinkDoesNotOverlap(page);
+        } catch (error) {
+          skipLinkFailures.push(
+            `${viewport.name}:${error instanceof Error ? error.message : String(error)}`,
+          );
+        }
+        await browserContext.close();
+      }
     } finally {
-      await connection.models.KnowledgeSource.updateOne(
-        { workspaceId, _id: imageSourceId },
-        { $set: { deletedAt: null } },
-      );
+      await browser.close();
     }
+    expect({
+      statuses,
+      consoleErrors,
+      pageErrors,
+      failedRequests,
+      skipLinkFailures,
+    }).toEqual({
+      statuses: [200, 200, 200],
+      consoleErrors: [],
+      pageErrors: [],
+      failedRequests: [],
+      skipLinkFailures: [],
+    });
   }, 240_000);
 });

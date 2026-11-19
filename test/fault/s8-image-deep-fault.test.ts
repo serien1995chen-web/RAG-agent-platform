@@ -128,8 +128,8 @@ function application() {
   return { instance, citations };
 }
 
-describe('S8 dependency failures', () => {
-  it('preserves the highest-priority timeout when every image/text channel fails', async () => {
+describe('L1-B12-SEARCH-006-F01 S8 dependency failures', () => {
+  it('L1-B12-SEARCH-006-F01 preserves the highest-priority timeout when every image/text channel fails', async () => {
     const { instance, citations } = application();
     await expect(
       instance.search(
