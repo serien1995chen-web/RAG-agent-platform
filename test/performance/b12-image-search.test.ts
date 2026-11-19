@@ -168,9 +168,14 @@ describe('L1-B12-SEARCH-006 image search performance', () => {
     console.info(markdown);
     if (result.status !== 0) {
       console.error(String(result.stderr ?? ''));
+      console.error(
+        `::error title=B12 image-search performance metrics::${JSON.stringify(meta.scenario)}`,
+      );
     }
 
-    expect(result.status, String(result.stderr ?? '')).toBe(0);
+    expect(result.status, `${String(result.stderr ?? '')}\n${JSON.stringify(meta.scenario)}`).toBe(
+      0,
+    );
     expect(duration['p(95)']).toBeLessThanOrEqual(900);
     expect(errorRate).toBeLessThanOrEqual(0.01);
     expect(
