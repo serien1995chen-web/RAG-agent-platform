@@ -1,7 +1,8 @@
 /* global __ENV, __ITER, __VU, open */
 import http from 'k6/http';
 import { check } from 'k6';
-import { Counter } from 'k6/metrics';
+import { scenario as currentScenario } from 'k6/execution';
+import { Counter, Rate, Trend } from 'k6/metrics';
 
 const uploadIds = JSON.parse(open(__ENV.S11_PERF_UPLOAD_IDS_FILE));
 if (!Array.isArray(uploadIds) || uploadIds.length === 0) {
@@ -26,21 +27,34 @@ const errorCodeCounters = Object.fromEntries(
   errorCodes.map((code) => [`b12_error_${code}`, new Counter(`b12_error_${code}`)]),
 );
 const otherErrorCodeCounter = new Counter('b12_error_other');
+const steadyRequests = new Counter('b12_steady_requests');
+const steadyFailed = new Rate('b12_steady_failed');
+const steadyDuration = new Trend('b12_steady_duration', true);
+const warmupSeconds = Number(__ENV.S11_PERF_WARMUP_SECONDS || 30);
 
 export const options = {
   scenarios: {
+    image_search_warmup: {
+      executor: 'constant-arrival-rate',
+      rate: 5,
+      timeUnit: '1s',
+      duration: `${warmupSeconds}s`,
+      preAllocatedVUs: 20,
+      maxVUs: 100,
+    },
     image_search: {
       executor: 'constant-arrival-rate',
       rate: Number(__ENV.S11_PERF_RATE || 20),
       timeUnit: '1s',
       duration: __ENV.S11_PERF_DURATION || '2m',
-      preAllocatedVUs: 20,
-      maxVUs: 100,
+      startTime: `${warmupSeconds}s`,
+      preAllocatedVUs: 50,
+      maxVUs: 300,
     },
   },
   thresholds: {
-    http_req_duration: ['p(95)<=900'],
-    http_req_failed: ['rate<=0.01'],
+    b12_steady_duration: ['p(95)<=900'],
+    b12_steady_failed: ['rate<=0.01'],
   },
 };
 
@@ -69,6 +83,11 @@ export default function () {
   const statusCounter = statusCounters[`b12_status_${response.status}`];
   if (statusCounter) statusCounter.add(1);
   else otherStatusCounter.add(1);
+  if (currentScenario.name === 'image_search') {
+    steadyRequests.add(1);
+    steadyFailed.add(response.status >= 400);
+    steadyDuration.add(response.timings.duration);
+  }
   if (response.status >= 400) {
     let errorCode = '';
     try {

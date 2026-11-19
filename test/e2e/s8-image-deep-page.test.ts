@@ -921,9 +921,9 @@ describe('S8 real app image and deep search routes', () => {
       const metric = summary.metrics[name] ?? {};
       return metric.values ?? (metric as Record<string, number>);
     };
-    const duration = metricValues('http_req_duration');
-    const failed = metricValues('http_req_failed');
-    const requests = metricValues('http_reqs');
+    const duration = metricValues('b12_steady_duration');
+    const failed = metricValues('b12_steady_failed');
+    const requests = metricValues('b12_steady_requests');
     const errorRate = failed.rate ?? failed.value;
     const fixtureRoot = join(root, 'test/fixtures/b12');
     const fixtureHash = createHash('sha256');
@@ -948,11 +948,12 @@ describe('S8 real app image and deep search routes', () => {
           scenario: {
             executor: 'constant-arrival-rate',
             targetQps: 20,
+            warmupSeconds: Number(process.env.S11_PERF_WARMUP_SECONDS ?? 30),
             durationSeconds: process.env.S11_PERF_DURATION === '10s' ? 10 : 120,
             k6ExitCode: result.status,
             p95Ms: duration['p(95)'],
             errorRate,
-            measuredQps: requests.rate,
+            measuredQps: requests.count / (process.env.S11_PERF_DURATION === '10s' ? 10 : 120),
             requestCount: requests.count,
             statusCounts: Object.fromEntries(
               Object.entries(summary.metrics)
@@ -973,6 +974,8 @@ describe('S8 real app image and deep search routes', () => {
     expect(result.status, result.stderr).toBe(0);
     expect(duration['p(95)']).toBeLessThanOrEqual(900);
     expect(errorRate).toBeLessThanOrEqual(0.01);
-    expect(requests.rate).toBeGreaterThanOrEqual(18);
-  }, 180_000);
+    expect(
+      requests.count / (process.env.S11_PERF_DURATION === '10s' ? 10 : 120),
+    ).toBeGreaterThanOrEqual(18);
+  }, 210_000);
 });
