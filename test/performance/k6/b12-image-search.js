@@ -31,6 +31,7 @@ const steadyRequests = new Counter('b12_steady_requests');
 const steadyFailed = new Rate('b12_steady_failed');
 const steadyDuration = new Trend('b12_steady_duration', true);
 const warmupSeconds = Number(__ENV.S11_PERF_WARMUP_SECONDS || 30);
+const steadyMaxVus = Number(__ENV.S11_PERF_STEADY_MAX_VUS || 60);
 
 export const options = {
   scenarios: {
@@ -39,8 +40,8 @@ export const options = {
       rate: 5,
       timeUnit: '1s',
       duration: `${warmupSeconds}s`,
-      preAllocatedVUs: 20,
-      maxVUs: 100,
+      preAllocatedVUs: 10,
+      maxVUs: 20,
     },
     image_search: {
       executor: 'constant-arrival-rate',
@@ -48,13 +49,14 @@ export const options = {
       timeUnit: '1s',
       duration: __ENV.S11_PERF_DURATION || '2m',
       startTime: `${warmupSeconds}s`,
-      preAllocatedVUs: 50,
-      maxVUs: 300,
+      preAllocatedVUs: Math.min(40, steadyMaxVus),
+      maxVUs: steadyMaxVus,
     },
   },
   thresholds: {
     b12_steady_duration: ['p(95)<=900'],
     b12_steady_failed: ['rate<=0.01'],
+    dropped_iterations: ['count==0'],
   },
 };
 

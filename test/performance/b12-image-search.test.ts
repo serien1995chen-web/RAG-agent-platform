@@ -18,6 +18,7 @@ const root = resolve(import.meta.dirname, '../..');
 const steadySeconds = process.env.S11_PERF_DURATION === '10s' ? 10 : 120;
 const warmupSeconds = Number(process.env.S11_PERF_WARMUP_SECONDS ?? 30);
 const targetQps = Number(process.env.S11_PERF_RATE ?? 20);
+const steadyMaxVus = Number(process.env.S11_PERF_STEADY_MAX_VUS ?? 60);
 
 let fixture: B12ImageDeepHarness;
 
@@ -121,6 +122,7 @@ describe('L1-B12-SEARCH-006 image search performance', () => {
         targetQps,
         warmupSeconds,
         durationSeconds: steadySeconds,
+        configuredMaxVus: steadyMaxVus,
         k6ExitCode: result.status,
         p95Ms: duration['p(95)'],
         errorRate,
@@ -156,6 +158,7 @@ describe('L1-B12-SEARCH-006 image search performance', () => {
       `- completed iterations: ${String(meta.scenario.completedIterations)}`,
       `- dropped iterations: ${String(meta.scenario.droppedIterations)}`,
       `- max active VUs: ${String(meta.scenario.maxActiveVus)}`,
+      `- configured max VUs: ${String(meta.scenario.configuredMaxVus)}`,
       `- status counts: ${JSON.stringify(meta.scenario.statusCounts)}`,
       `- error code counts: ${JSON.stringify(meta.scenario.errorCodeCounts)}`,
     ].join('\n');
@@ -170,6 +173,10 @@ describe('L1-B12-SEARCH-006 image search performance', () => {
     expect(result.status, String(result.stderr ?? '')).toBe(0);
     expect(duration['p(95)']).toBeLessThanOrEqual(900);
     expect(errorRate).toBeLessThanOrEqual(0.01);
+    expect(
+      meta.scenario.droppedIterations,
+      'k6 dropped scheduled iterations; the configured VU bound could not sustain the target rate',
+    ).toBe(0);
     expect(measuredQps).toBeGreaterThanOrEqual(18);
   }, 210_000);
 });
