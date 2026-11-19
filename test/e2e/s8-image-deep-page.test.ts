@@ -1,5 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import AxeBuilder from '@axe-core/playwright';
 import { chromium, expect as playwrightExpect, type Page } from '@playwright/test';
@@ -835,4 +837,108 @@ describe('S8 real app image and deep search routes', () => {
       skipLinkFailures: [],
     });
   }, 240_000);
+
+  it('L1-B12-SEARCH-006-Q01 sustains 20 image-search QPS per workspace with p95 at or below 900 ms', async () => {
+    const evidenceDir =
+      process.env.B12_EVIDENCE_DIR ??
+      join(root, 'test-results/b12', `unscoped-${randomUUID().slice(0, 8)}`);
+    mkdirSync(evidenceDir, { recursive: true });
+    const tempDir = mkdtempSync(join(tmpdir(), 'b12-image-k6-'));
+    const uploadIdsFile = join(tempDir, 'upload-ids.json');
+    writeFileSync(uploadIdsFile, `${JSON.stringify([imageBlobRefId])}\n`);
+    const summaryPath = join(evidenceDir, 'b12-image-search-summary.json');
+    const stderrPath = join(evidenceDir, 'b12-image-search-k6-stderr.log');
+    const scriptPath = join(root, 'test/performance/k6/b12-image-search.js');
+    const k6Version = spawnSync('k6', ['version'], { encoding: 'utf8' });
+    expect(k6Version.status, k6Version.stderr).toBe(0);
+    const result = spawnSync(
+      'k6',
+      [
+        'run',
+        '--quiet',
+        '--summary-export',
+        summaryPath,
+        '-e',
+        `S11_PERF_BASE_URL=${app.baseUrl}`,
+        '-e',
+        `S11_PERF_WORKSPACE_ID=${workspaceId}`,
+        '-e',
+        `S11_PERF_SPACE_ID=${spaceId}`,
+        '-e',
+        `S11_PERF_API_KEY=${authToken}`,
+        '-e',
+        `S11_PERF_UPLOAD_IDS_FILE=${uploadIdsFile}`,
+        '-e',
+        'S11_PERF_QUERY=refund flow diagram',
+        scriptPath,
+      ],
+      {
+        encoding: 'utf8',
+        maxBuffer: 10 * 1024 * 1024,
+        env: { ...process.env },
+      },
+    );
+    writeFileSync(stderrPath, String(result.stderr ?? ''));
+    writeFileSync(join(evidenceDir, 'b12-image-search-app.log'), app.output());
+    const summary = JSON.parse(readFileSync(summaryPath, 'utf8')) as {
+      metrics: Record<string, { values?: Record<string, number>; count?: number }>;
+    };
+    const metricValues = (name: string) => {
+      const metric = summary.metrics[name] ?? {};
+      return metric.values ?? (metric as Record<string, number>);
+    };
+    const duration = metricValues('http_req_duration');
+    const failed = metricValues('http_req_failed');
+    const requests = metricValues('http_reqs');
+    const errorRate = failed.rate ?? failed.value;
+    const fixtureRoot = join(root, 'test/fixtures/b12');
+    const fixtureHash = createHash('sha256');
+    for (const name of readdirSync(fixtureRoot).sort()) {
+      fixtureHash.update(name);
+      fixtureHash.update(readFileSync(join(fixtureRoot, name)));
+    }
+    writeFileSync(
+      join(evidenceDir, 'b12-image-search-meta.json'),
+      `${JSON.stringify(
+        {
+          testId: 'L1-B12-SEARCH-006-Q01',
+          candidateSha: process.env.CANDIDATE_SHA ?? 'faeb269018d949da1abf41b74be7d55f0762e7a6',
+          k6: k6Version.stdout.trim().split('\n')[0],
+          mode: 'deterministic-mock-models-real-infrastructure',
+          quotaProfile: process.env.KB_QUOTA_PROFILE ?? 'free-v1',
+          queryMode: 'mixed_text_and_image',
+          workspaceId,
+          spaceId,
+          uploadIdCount: 1,
+          fixtureHash: fixtureHash.digest('hex'),
+          scenario: {
+            executor: 'constant-arrival-rate',
+            targetQps: 20,
+            durationSeconds: process.env.S11_PERF_DURATION === '10s' ? 10 : 120,
+            k6ExitCode: result.status,
+            p95Ms: duration['p(95)'],
+            errorRate,
+            measuredQps: requests.rate,
+            requestCount: requests.count,
+            statusCounts: Object.fromEntries(
+              Object.entries(summary.metrics)
+                .filter(([name]) => name.startsWith('b12_status_'))
+                .map(([name, metric]) => [name, metric.count ?? metric.values?.count ?? 0]),
+            ),
+            errorCodeCounts: Object.fromEntries(
+              Object.entries(summary.metrics)
+                .filter(([name]) => name.startsWith('b12_error_'))
+                .map(([name, metric]) => [name, metric.count ?? metric.values?.count ?? 0]),
+            ),
+          },
+        },
+        null,
+        2,
+      )}\n`,
+    );
+    expect(result.status, result.stderr).toBe(0);
+    expect(duration['p(95)']).toBeLessThanOrEqual(900);
+    expect(errorRate).toBeLessThanOrEqual(0.01);
+    expect(requests.rate).toBeGreaterThanOrEqual(18);
+  }, 180_000);
 });
