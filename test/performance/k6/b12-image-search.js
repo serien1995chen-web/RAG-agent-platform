@@ -30,6 +30,8 @@ const otherErrorCodeCounter = new Counter('b12_error_other');
 const steadyRequests = new Counter('b12_steady_requests');
 const steadyFailed = new Rate('b12_steady_failed');
 const steadyDuration = new Trend('b12_steady_duration', true);
+const steadyWaiting = new Trend('b12_steady_waiting', true);
+const steadyServerDuration = new Trend('b12_steady_server_duration', true);
 const warmupSeconds = Number(__ENV.S11_PERF_WARMUP_SECONDS || 30);
 const steadyMaxVus = Number(__ENV.S11_PERF_STEADY_MAX_VUS || 60);
 
@@ -89,6 +91,13 @@ export default function () {
     steadyRequests.add(1);
     steadyFailed.add(response.status >= 400);
     steadyDuration.add(response.timings.duration);
+    steadyWaiting.add(response.timings.waiting);
+    try {
+      const serverDuration = Number(JSON.parse(response.body)?.data?.durationMs);
+      if (Number.isFinite(serverDuration)) steadyServerDuration.add(serverDuration);
+    } catch {
+      // A malformed response is already represented by the status and failure metrics.
+    }
   }
   if (response.status >= 400) {
     let errorCode = '';

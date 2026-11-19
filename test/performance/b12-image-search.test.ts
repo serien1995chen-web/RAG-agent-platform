@@ -96,6 +96,8 @@ describe('L1-B12-SEARCH-006 image search performance', () => {
       return metric.values ?? (metric as Record<string, number>);
     };
     const duration = metricValues('b12_steady_duration');
+    const waiting = metricValues('b12_steady_waiting');
+    const serverDuration = metricValues('b12_steady_server_duration');
     const failed = metricValues('b12_steady_failed');
     const requests = metricValues('b12_steady_requests');
     const errorRate = failed.rate ?? failed.value;
@@ -125,6 +127,8 @@ describe('L1-B12-SEARCH-006 image search performance', () => {
         configuredMaxVus: steadyMaxVus,
         k6ExitCode: result.status,
         p95Ms: duration['p(95)'],
+        p95WaitingMs: waiting['p(95)'],
+        p95ServerDurationMs: serverDuration['p(95)'],
         errorRate,
         measuredQps,
         requestCount: requests.count,
@@ -152,6 +156,8 @@ describe('L1-B12-SEARCH-006 image search performance', () => {
       '',
       `- k6 exit: ${String(result.status)}`,
       `- steady p95: ${String(duration['p(95)'])} ms`,
+      `- steady waiting p95: ${String(waiting['p(95)'])} ms`,
+      `- server duration p95: ${String(serverDuration['p(95)'])} ms`,
       `- error rate: ${String(errorRate)}`,
       `- measured QPS: ${measuredQps.toFixed(2)}`,
       `- requests: ${String(requests.count)}`,
