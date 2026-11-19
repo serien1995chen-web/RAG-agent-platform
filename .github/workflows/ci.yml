@@ -218,6 +218,8 @@ jobs:
     name: e2e
     runs-on: ubuntu-24.04
     timeout-minutes: 45
+    env:
+      KB_QUOTA_PROFILE: s11-perf-v1
     services:
       redis:
         image: redis:7.2-alpine
@@ -244,6 +246,10 @@ jobs:
         with:
           node-version: '22.23.2'
           cache: pnpm
+      - name: Install k6
+        uses: grafana/setup-k6-action@v1
+        with:
+          k6-version: '2.3.0'
       - name: Restore Next cache
         uses: actions/cache@v4
         with:

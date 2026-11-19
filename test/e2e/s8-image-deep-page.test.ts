@@ -882,10 +882,11 @@ describe('S8 real app image and deep search routes', () => {
     const summaryPath = join(evidenceDir, 'b12-image-search-summary.json');
     const stderrPath = join(evidenceDir, 'b12-image-search-k6-stderr.log');
     const scriptPath = join(root, 'test/performance/k6/b12-image-search.js');
-    const k6Version = spawnSync('k6', ['version'], { encoding: 'utf8' });
+    const k6Binary = process.env.K6_BIN?.trim() || 'k6';
+    const k6Version = spawnSync(k6Binary, ['version'], { encoding: 'utf8' });
     expect(k6Version.status, k6Version.stderr).toBe(0);
     const result = spawnSync(
-      'k6',
+      k6Binary,
       [
         'run',
         '--quiet',
