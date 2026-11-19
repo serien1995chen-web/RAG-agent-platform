@@ -17,6 +17,8 @@ type QuotaKind =
 // Provider timeout is 120s with up to three attempts; keep crash-safe leases
 // beyond the complete retry window.
 export const S10_MODEL_LEASE_TTL_SECONDS = 900;
+const QUOTA_SNAPSHOT_TTL_MS = 5_000;
+const FRESH_QUOTA_SNAPSHOT_TTL_MS = 250;
 
 function quotaError(
   context: TenantContext,
@@ -33,7 +35,11 @@ function quotaError(
 }
 
 export class KnowledgeQuotaGate implements QuotaGatePort {
-  private readonly cache = new Map<string, { expiresAt: number; value: S10UsageSummary }>();
+  private readonly cache = new Map<
+    string,
+    { expiresAt: number; freshExpiresAt: number; value: S10UsageSummary }
+  >();
+  private readonly inFlight = new Map<string, Promise<S10UsageSummary>>();
 
   constructor(
     private readonly input: {
@@ -50,21 +56,41 @@ export class KnowledgeQuotaGate implements QuotaGatePort {
 
   private async snapshot(context: TenantContext, fresh = false): Promise<S10UsageSummary> {
     const now = this.now();
-    const key = `${context.workspaceId}:${this.input.quota.version}:local:${Math.floor(now.getTime() / 5_000)}`;
+    const key = `${context.workspaceId}:${this.input.quota.version}`;
     const cached = this.cache.get(key);
-    if (!fresh && cached && cached.expiresAt > now.getTime()) return cached.value;
-    const value = await this.input.usage.summary(
-      {
-        from: new Date(now.getTime() - this.input.quota.retentionDays * 86_400_000),
-        to: now,
-      },
-      context,
-    );
-    this.cache.set(key, { expiresAt: now.getTime() + 5_000, value });
-    for (const [entryKey, entry] of this.cache) {
-      if (entry.expiresAt <= now.getTime()) this.cache.delete(entryKey);
+    if (
+      cached &&
+      (fresh ? cached.freshExpiresAt > now.getTime() : cached.expiresAt > now.getTime())
+    ) {
+      return cached.value;
     }
-    return value;
+    const pending = this.inFlight.get(key);
+    if (pending) return pending;
+    const request = this.input.usage
+      .summary(
+        {
+          from: new Date(now.getTime() - this.input.quota.retentionDays * 86_400_000),
+          to: now,
+        },
+        context,
+      )
+      .then((value) => {
+        const completedAt = this.now().getTime();
+        this.cache.set(key, {
+          expiresAt: completedAt + QUOTA_SNAPSHOT_TTL_MS,
+          freshExpiresAt: completedAt + FRESH_QUOTA_SNAPSHOT_TTL_MS,
+          value,
+        });
+        for (const [entryKey, entry] of this.cache) {
+          if (entry.expiresAt <= completedAt) this.cache.delete(entryKey);
+        }
+        return value;
+      })
+      .finally(() => {
+        this.inFlight.delete(key);
+      });
+    this.inFlight.set(key, request);
+    return request;
   }
 
   private async consumeRpm(context: TenantContext): Promise<void> {
