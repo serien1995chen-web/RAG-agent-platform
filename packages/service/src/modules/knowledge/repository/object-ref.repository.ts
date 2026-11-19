@@ -156,7 +156,7 @@ export class KnowledgeObjectRefRepository implements ObjectRefRepositoryPort {
       provider: input.provider,
       bucket: input.bucket,
       objectKey: input.objectKey,
-      purpose: 'source',
+      purpose: input.purpose ?? 'source',
       sourceId: null,
       mimeType: input.mimeType,
       sizeBytes: input.sizeBytes,

@@ -202,11 +202,7 @@ export const SearchFilterApiSchema = z
 
 const SearchRequestObject = z.object({
   knowledgeSpaceId: SearchObjectIdSchema,
-  query: z
-    .string()
-    .min(1)
-    .max(20_000)
-    .refine((value) => value.trim().length > 0, 'query must not be blank'),
+  query: z.string().max(20_000),
   tokenBudget: z.number().int().min(1).max(20_000),
   similarity: z.number().min(0).max(1).default(0.2),
   searchMode: z.enum(SEARCH_MODES).optional(),
@@ -220,12 +216,27 @@ const SearchRequestObject = z.object({
   filters: SearchFilterApiSchema.optional(),
 });
 
-export const SearchApiRequestSchema = SearchRequestObject.strict();
+function requireQuery(
+  request: { query: string },
+  context: z.RefinementCtx,
+  path: Array<string | number> = ['query'],
+) {
+  if (request.query.trim().length === 0) {
+    context.addIssue({
+      code: 'custom',
+      path,
+      message: 'query must not be blank',
+    });
+  }
+}
+
+export const SearchApiRequestSchema = SearchRequestObject.strict().superRefine(requireQuery);
 export const MultiSpaceSearchApiRequestSchema = SearchRequestObject.extend({
   knowledgeSpaceIds: z.array(SearchObjectIdSchema).min(1).max(20),
 })
   .strict()
   .superRefine((request, context) => {
+    requireQuery(request, context);
     if (!request.knowledgeSpaceIds.includes(request.knowledgeSpaceId)) {
       context.addIssue({
         code: 'custom',
@@ -236,8 +247,18 @@ export const MultiSpaceSearchApiRequestSchema = SearchRequestObject.extend({
   });
 
 export const ImageSearchApiRequestSchema = SearchRequestObject.extend({
-  imageUploadIds: z.array(z.string().min(1).max(64)).min(1).max(10),
-}).strict();
+  imageUploadIds: z.array(z.string().min(1).max(64)).max(10).default([]),
+})
+  .strict()
+  .superRefine((request, context) => {
+    if (request.query.trim().length === 0 && request.imageUploadIds.length === 0) {
+      context.addIssue({
+        code: 'custom',
+        path: ['query'],
+        message: 'query must not be blank unless at least one image is provided',
+      });
+    }
+  });
 
 const DeepStopReasonSchema = z.enum([
   'sufficient',
@@ -255,6 +276,7 @@ export const DeepSearchApiRequestSchema = SearchRequestObject.extend({
 })
   .strict()
   .superRefine((request, context) => {
+    requireQuery(request, context);
     if (!request.knowledgeSpaceIds.includes(request.knowledgeSpaceId)) {
       context.addIssue({
         code: 'custom',

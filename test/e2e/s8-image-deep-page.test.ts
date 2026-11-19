@@ -749,6 +749,7 @@ describe('S8 real app image and deep search routes', () => {
     const consoleErrors: string[] = [];
     const pageErrors: string[] = [];
     const failedRequests: string[] = [];
+    const searchErrors: string[] = [];
     const skipLinkFailures: string[] = [];
     try {
       for (const viewport of [
@@ -779,12 +780,38 @@ describe('S8 real app image and deep search routes', () => {
         await playwrightExpect(
           page.getByRole('heading', { level: 2, name: '搜索测试' }),
         ).toBeVisible();
+        const uploadResponsePromise = page.waitForResponse(
+          (response) =>
+            response.request().method() === 'POST' &&
+            new URL(response.url()).pathname === '/v1/knowledge/uploads',
+        );
         await page
           .locator('input[type="file"]')
           .setInputFiles(join(root, 'test/fixtures/s11/generated/s11-image-1x1.png'));
+        const uploadResponse = await uploadResponsePromise;
+        expect(uploadResponse.status()).toBe(201);
+        const uploadedSession = (await uploadResponse.json()) as {
+          data: { uploadId: string };
+        };
         await playwrightExpect(page.getByRole('button', { name: '开始测试' })).toBeEnabled({
           timeout: 30_000,
         });
+        const uploadedObject = await connection.models.KnowledgeObjectRef.findOne({
+          workspaceId,
+          _id: new connection.base.Types.ObjectId(uploadedSession.data.uploadId),
+        }).lean<{
+          purpose: string;
+          state: string;
+          createdByMemberId: string;
+          knowledgeSpaceId: { toString(): string };
+          expiresAt: Date | null;
+        }>();
+        expect(uploadedObject).toMatchObject({
+          purpose: 'image',
+          state: 'active',
+          createdByMemberId: memberId,
+        });
+        expect(uploadedObject?.knowledgeSpaceId.toString()).toBe(spaceId);
         const responsePromise = page.waitForResponse(
           (response) =>
             response.request().method() === 'POST' &&
@@ -793,6 +820,10 @@ describe('S8 real app image and deep search routes', () => {
         await page.getByRole('button', { name: '开始测试' }).click();
         const response = await responsePromise;
         statuses.push(response.status());
+        if (!response.ok()) {
+          const payload = await response.json().catch(() => null);
+          searchErrors.push(`${viewport.name}:${JSON.stringify(payload)}`);
+        }
         const searchShot = await page.screenshot({
           fullPage: true,
           path: join(screenshotDir, `b12-image-search-${viewport.name}.png`),
@@ -828,12 +859,14 @@ describe('S8 real app image and deep search routes', () => {
       consoleErrors,
       pageErrors,
       failedRequests,
+      searchErrors,
       skipLinkFailures,
     }).toEqual({
       statuses: [200, 200, 200],
       consoleErrors: [],
       pageErrors: [],
       failedRequests: [],
+      searchErrors: [],
       skipLinkFailures: [],
     });
   }, 240_000);

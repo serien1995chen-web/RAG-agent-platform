@@ -331,12 +331,28 @@ describe('TEST-X-IMAGE-CAPTION executor', () => {
     expect(result.result).toMatchObject({
       captionStatus: 'error',
       vectorStatus: 'indexed',
-      captionFailureCode: 'KNOWLEDGE_MODEL_FAILED',
+      captionFailureCode: 'KNOWLEDGE_MODEL_OUTPUT_INVALID',
     });
     expect(
       commit.mock.calls[0]?.[0].indexes.map((index: { indexId: string }) => index.indexId),
     ).toEqual(['image']);
     expect(updateStatus).toHaveBeenCalledWith(source.id, 'partial', context, 2);
+  });
+
+  it('L1-B12-PARSE-005-N02 fails when corrupt VLM output leaves no usable image channel', async () => {
+    const { instance, commit } = application({
+      vlmContent: '{"caption":',
+      embeddingMode: 'caption-embedding',
+    });
+    await expect(instance.execute(job, context)).rejects.toMatchObject({
+      problem: {
+        error: {
+          code: 'KNOWLEDGE_MODEL_OUTPUT_INVALID',
+          details: { reason: 'caption_required_for_caption_embedding' },
+        },
+      },
+    });
+    expect(commit).not.toHaveBeenCalled();
   });
 
   it('L1-B12-PARSE-005-F01 preserves the vision-vector path on VLM timeout and emits a partial result', async () => {
@@ -345,8 +361,8 @@ describe('TEST-X-IMAGE-CAPTION executor', () => {
     });
     const result = await instance.execute(job, context);
     expect(result).toMatchObject({
-      partial: true,
       result: {
+        partial: true,
         captionStatus: 'error',
         vectorStatus: 'indexed',
         captionFailureCode: 'KNOWLEDGE_DEPENDENCY_TIMEOUT',

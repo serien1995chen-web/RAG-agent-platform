@@ -214,6 +214,7 @@ export function SearchWorkspace(props: {
     try {
       await knowledgeMultipartUpload(file, {
         knowledgeSpaceId: props.datasetId,
+        purpose: 'image',
         onState: setImageUpload,
       });
     } catch (caught) {

@@ -10,7 +10,7 @@ const spaceId2 = '65f1e5b2a1c9d4b7e8f01235';
 const uploadId = '65f1e5b2a1c9d4b7e8f09999';
 
 describe('TEST-SEARCH-006-BLOCK / TEST-SEARCH-008-BLOCK API contracts', () => {
-  it('keeps ImageSearchRequest fields and requires 1-10 images', () => {
+  it('keeps ImageSearchRequest fields and accepts text-only, image-only and mixed modes', () => {
     const base = {
       knowledgeSpaceId: spaceId,
       query: 'refund flow',
@@ -19,13 +19,23 @@ describe('TEST-SEARCH-006-BLOCK / TEST-SEARCH-008-BLOCK API contracts', () => {
     };
     expect(ImageSearchApiRequestSchema.safeParse(base).success).toBe(true);
     expect(ImageSearchApiRequestSchema.safeParse({ ...base, imageUploadIds: [] }).success).toBe(
-      false,
+      true,
     );
+    expect(
+      ImageSearchApiRequestSchema.safeParse({
+        ...base,
+        query: '',
+        imageUploadIds: [uploadId],
+      }).success,
+    ).toBe(true);
     expect(
       ImageSearchApiRequestSchema.safeParse({
         ...base,
         imageUploadIds: Array.from({ length: 11 }, () => uploadId),
       }).success,
+    ).toBe(false);
+    expect(
+      ImageSearchApiRequestSchema.safeParse({ ...base, query: '', imageUploadIds: [] }).success,
     ).toBe(false);
     expect(SearchApiRequestSchema.keyof().options).not.toContain('imageUploadIds');
   });

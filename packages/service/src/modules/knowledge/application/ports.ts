@@ -484,6 +484,7 @@ export interface CreateUploadSessionInput {
   uploadId: string;
   workspaceId: string;
   knowledgeSpaceId: string;
+  purpose?: 'source' | 'image';
   provider: KnowledgeObjectProvider;
   bucket: string;
   objectKey: string;

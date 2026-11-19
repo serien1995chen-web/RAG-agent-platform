@@ -26537,6 +26537,14 @@
             "type": "integer",
             "minimum": 1,
             "maximum": 1048576000
+          },
+          "purpose": {
+            "type": "string",
+            "enum": [
+              "source",
+              "image"
+            ],
+            "default": "source"
           }
         }
       },

@@ -529,7 +529,7 @@ export interface SchemaPropertyMap {
   "TagValuesUpdate": "options" | "version";
   "TextinParseConfig": "credentialProfileId" | "fallbackProvider" | "imageHandling" | "parseMode" | "provider" | "removeWatermark" | "timeoutMs";
   "UploadComplete": "parts";
-  "UploadInit": "knowledgeSpaceId" | "mimeType" | "name" | "sizeBytes";
+  "UploadInit": "knowledgeSpaceId" | "mimeType" | "name" | "purpose" | "sizeBytes";
   "UploadPart": never;
   "UploadPartResult": "etag" | "partNumber" | "uploadId";
   "UploadSession": "expiresAt" | "mode" | "partSizeBytes" | "status" | "uploadId";
