@@ -1,0 +1,92 @@
+{
+  "schemaVersion": 1,
+  "batch": "B16",
+  "owner": "codexA",
+  "assets": [
+    {
+      "path": "packages/search/test/unit/candidates.test.ts",
+      "classification": "REUSE",
+      "reason": "Already covers candidate limits 100/80+60 and RRF rerank merge."
+    },
+    {
+      "path": "packages/search/test/unit/s7-rrf.test.ts",
+      "classification": "REUSE",
+      "reason": "Already covers weighted RRF and one-channel partial behavior."
+    },
+    {
+      "path": "packages/search/test/unit/s7-rerank.test.ts",
+      "classification": "REUSE",
+      "reason": "Already covers rerank weight boundaries, fallback and invalid output."
+    },
+    {
+      "path": "packages/service/test/integration/s7-vector-recall.test.ts",
+      "classification": "EXTEND",
+      "reason": "Real pgvector recall exists but only covers 1536 and lacks 3072 halfvec profile assertions."
+    },
+    {
+      "path": "packages/service/test/integration/s7-citation.test.ts",
+      "classification": "REUSE",
+      "reason": "Covers real Mongo citation issuance, ACL revocation, TTL and snapshot binding."
+    },
+    {
+      "path": "test/fault/s7-search-fault.test.ts",
+      "classification": "EXTEND",
+      "reason": "Covers basic search dependency failure but not the complete B16 status-priority and usage dedup matrix."
+    },
+    {
+      "path": "test/e2e/s7-search-ui.test.ts",
+      "classification": "STALE",
+      "reason": "The test-only harness validates generic states and accessibility but not B16 duration/result count/history/refresh behavior."
+    },
+    {
+      "path": "test/performance/k6/search.js",
+      "classification": "STALE",
+      "reason": "Status-only search load cannot prove recall or result correctness."
+    },
+    {
+      "path": "packages/search/test/unit/kb-b16-a-core-fusion.test.ts",
+      "classification": "NEW",
+      "reason": "A-specific exact B16 fusion, limits, ties and weight assertions."
+    },
+    {
+      "path": "packages/service/test/integration/kb-b16-a-vector-profiles.integration.test.ts",
+      "classification": "NEW",
+      "reason": "A-specific real pgvector four-profile and halfvec validation."
+    },
+    {
+      "path": "test/real-provider/kb-b16-a-search-real.test.ts",
+      "classification": "NEW",
+      "reason": "A-specific real TokenDance embedding and rerank validation."
+    },
+    {
+      "path": "test/tenant/kb-b16-a-search-auth.test.ts",
+      "classification": "NEW",
+      "reason": "A-specific final ACL, API key scope and existence-hiding assertions."
+    },
+    {
+      "path": "test/concurrency/kb-b16-a-search-concurrency.test.ts",
+      "classification": "NEW",
+      "reason": "A-specific concurrent search candidate/request isolation."
+    },
+    {
+      "path": "test/fault/kb-b16-a-search-fault.test.ts",
+      "classification": "NEW",
+      "reason": "A-specific status priority, partial and recovery assertions."
+    },
+    {
+      "path": "test/security/kb-b16-a-search-security.test.ts",
+      "classification": "NEW",
+      "reason": "A-specific secret/raw-body redaction and unsafe dependency detail assertions."
+    },
+    {
+      "path": "packages/web/test/unit/kb-b16-a-search-ui-state.test.ts",
+      "classification": "NEW",
+      "reason": "A-specific visible mode, duration, count, partial, degraded and history state assertions."
+    },
+    {
+      "path": "test/performance/kb-b16-a-search.test.ts",
+      "classification": "BLOCKED",
+      "reason": "Requires an approved 1M Segment fixture, running app and real models; the runner must remain BLOCKED_ENV or BLOCKED_PROVIDER until all inputs exist."
+    }
+  ]
+}

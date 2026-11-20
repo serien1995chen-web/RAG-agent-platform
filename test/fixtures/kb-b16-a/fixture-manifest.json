@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "batch": "B16",
+  "owner": "codexA",
+  "timezone": "Asia/Shanghai",
+  "status": "PENDING_RUN",
+  "projectBaseline": "3b64f6bcd485f865a45b6d162c95a3dc70ede8d8",
+  "reference": {
+    "application": "FastGPT",
+    "version": "4.17.3",
+    "sourceRoot": "/mnt/d/Fastgpt/FastGPT"
+  },
+  "seed": "kb-b16-a-20261120",
+  "segmentCount": 100,
+  "corpusHash": "b890121b8e62fba779ff90f9983ade799994f404a0e1d2c84f9262f05a79c473",
+  "behaviorMatrixHash": "247645b3f64859e0b39ba373b19a74e125c61c731d28be79218bab076f16edcf",
+  "testAssetAuditHash": "14c6f2094f75736b167624b59f4032e7c85bd243614466addb409058b32ce5b6",
+  "inputHashes": {
+    "layer1Manual": "2f7099667d501b5e708d2f59501ab4c50a9357003bda8eaab58b63e0a49f4ed0",
+    "frontendBehaviorSpec": "26d3e570785b54cde57822ecf9f07eaa576f717c6d870aa1373a794d68c734ac",
+    "systemDesign": "8e5e7300c651c4fe0478b87fc3572add52f95c3e49c8f15700b45bb8c690a26d",
+    "pnpmLock": "b6478a453e4383e9d73839da809111eb6c4d584fea9a050bc5d3ba761a9f961c",
+    "releaseImages": "aa77525cdcc985cf6e9ab9ab6140b38c9bb65f720f065f2bbe21a31fd6f3c0aa"
+  },
+  "fastgptHashes": {
+    "appPackage": "125a9378b939b2cf0cd7412ea976448dc7fb619336888ff9ac0d41b3624b231a",
+    "searchTestApi": "836221ed8e439ce1bad27b4b431e9c2161f8eafedf15b633918118b2501ca3c8",
+    "defaultRecall": "1212a3ca8b2abaf0b4fd2a52844d57c975b708db7425e733cd72a24bcde17dd5"
+  },
+  "profiles": [768, 1024, 1536, 3072],
+  "realProviderProfile": 1024,
+  "providers": {
+    "embedding": "qwen3.7-text-embedding",
+    "rerank": "qwen3.7-text-rerank",
+    "llm": "qwen3.7-plus"
+  },
+  "candidateLimits": {
+    "embedding": 100,
+    "fullText": 100,
+    "hybridEmbedding": 80,
+    "hybridFullText": 60,
+    "rerank": 100
+  },
+  "performance": {
+    "qps": 50,
+    "segmentCount": 1000000,
+    "p95Milliseconds": 900,
+    "failureRatePercentMaximum": 1,
+    "recallAt10Percent": 100
+  }
+}
