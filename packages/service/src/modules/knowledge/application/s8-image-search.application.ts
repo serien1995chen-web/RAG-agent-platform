@@ -7,6 +7,7 @@ import {
   type CitationApi,
   type ImageSearchApiRequest,
   type SearchApiResponse,
+  type SearchImagePreviewApi,
 } from '@kb/contracts';
 import {
   compileSearchFilter,
@@ -22,6 +23,11 @@ import { ImageCaptionOutputSchema, S8_CAPTION_PROMPT_VERSION } from './s8-captio
 import type { KnowledgeOperationInput, KnowledgeOperationResult } from './operation-types';
 import type { S8CaptionStatus, S8ImageSearchDependencies } from './s8-image-deep.ports';
 import { assertS8ImageMedia } from './s8-image-policy';
+import {
+  buildPublicSearchItem,
+  issueSearchImagePreviews,
+  searchCandidateKey,
+} from './s7-search-public-response';
 
 interface EmbeddingEnvelope {
   data: Array<{ index?: number; embedding: number[] }>;
@@ -489,6 +495,7 @@ export class S8ImageSearchApplication {
     durationMs: number;
     degradedCodes: readonly string[];
     rerankApplied: boolean;
+    imagePreviews?: ReadonlyMap<string, SearchImagePreviewApi>;
   }): SearchApiResponse {
     return SearchApiResponseSchema.parse({
       searchId: input.searchId,
@@ -505,47 +512,12 @@ export class S8ImageSearchApplication {
             details: { reason: 'image_citation_missing' },
           });
         }
-        return {
-          segment: {
-            id: candidate.segment.id,
-            workspaceId: candidate.segment.workspaceId,
-            knowledgeSpaceId: candidate.knowledgeSpaceId,
-            sourceId: candidate.sourceId,
-            searchEnabled: candidate.segment.searchEnabled,
-            order: candidate.segment.order,
-            question: candidate.segment.question,
-            answer: candidate.segment.answer,
-            content: candidate.segment.content,
-            metadata: candidate.segment.metadata,
-            indexes: candidate.segment.indexes.map((index) => ({
-              indexId: index.indexId,
-              type: index.type as
-                | 'default'
-                | 'custom'
-                | 'question'
-                | 'summary'
-                | 'image'
-                | 'image_caption',
-              modelId: index.modelId,
-              dimension: index.dimension,
-              storageType: index.dimension === 3072 ? ('halfvec' as const) : ('vector' as const),
-              vectorProfile: index.vectorProfile as
-                | 'knowledge_segment_vectors_768'
-                | 'knowledge_segment_vectors_1024'
-                | 'knowledge_segment_vectors_1536'
-                | 'knowledge_segment_vectors_3072',
-              vectorId: index.vectorId,
-              text: index.text,
-              version: index.version,
-            })),
-            indexStatus: candidate.segment.indexStatus,
-            indexErrorCode: candidate.segment.indexErrorCode,
-            imageBlobRefId: candidate.segment.imageBlobRefId,
-            version: candidate.segment.version,
-          },
-          score: candidate.embeddingScore ?? candidate.fullTextScore ?? candidate.score,
+        const imagePreview = input.imagePreviews?.get(searchCandidateKey(candidate));
+        return buildPublicSearchItem({
+          candidate,
           citation,
-        };
+          ...(imagePreview ? { imagePreview } : {}),
+        });
       }),
       partial: input.partial,
       durationMs: input.durationMs,
@@ -677,6 +649,12 @@ export class S8ImageSearchApplication {
         if (current) candidates.push(current);
         else degraded.push('image_candidate_acl_rejected');
       }
+      const imagePreviews = await issueSearchImagePreviews({
+        candidates,
+        previews: this.input.tickets,
+        context,
+      });
+      degraded.push(...imagePreviews.degradedCodes);
       const durationMs = Date.now() - startedAt;
       const partial =
         caption.failed ||
@@ -708,6 +686,7 @@ export class S8ImageSearchApplication {
         durationMs,
         degradedCodes: degraded,
         rerankApplied: text.rerankApplied,
+        imagePreviews: imagePreviews.items,
       });
     } catch (error) {
       const fingerprint = failureFingerprint(error);

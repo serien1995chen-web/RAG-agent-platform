@@ -56,10 +56,10 @@ export function classifyS7SearchState(input: {
   }
   if (!input.result) return { kind: 'idle' };
   if (input.result.partial) return { kind: 'partial', result: input.result };
-  if (input.result.items.length === 0) return { kind: 'empty', result: input.result };
   if ((input.result.degraded?.length ?? 0) > 0) {
     return { kind: 'degraded', result: input.result };
   }
+  if (input.result.items.length === 0) return { kind: 'empty', result: input.result };
   return { kind: 'ready', result: input.result };
 }
 
@@ -72,7 +72,8 @@ export function safeDegradedCode(code: string): string | null {
     code === 'vector_recall_failed' ||
     code === 'fulltext_recall_failed' ||
     code === 'rerank_failed' ||
-    code === 'rerank_not_configured'
+    code === 'rerank_not_configured' ||
+    code === 'image_preview_unavailable'
   ) {
     return code;
   }

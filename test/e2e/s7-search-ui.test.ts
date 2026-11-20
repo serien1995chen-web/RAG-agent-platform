@@ -76,12 +76,12 @@ afterAll(async () => {
 });
 
 describe('TEST-X-FRONTEND-A11Y S7 test-only Search UI harness', () => {
-  it('passes 360/768/1200 overflow, axe and state interaction checks', async () => {
+  it('passes 360/768/1440 overflow, axe and state interaction checks', async () => {
     expect(baseUrl).not.toBe('');
     for (const viewport of [
       { name: 'mobile', width: 360, height: 900 },
       { name: 'tablet', width: 768, height: 1000 },
-      { name: 'desktop', width: 1200, height: 1000 },
+      { name: 'desktop', width: 1440, height: 900 },
     ]) {
       const browserContext = await browser.newContext({
         viewport: { width: viewport.width, height: viewport.height },
@@ -99,6 +99,8 @@ describe('TEST-X-FRONTEND-A11Y S7 test-only Search UI harness', () => {
         page.getByText('Some retrieval channels were unavailable.'),
       ).toBeVisible();
       await playwrightExpect(page.getByText('fulltext_recall_failed')).toBeVisible();
+      await page.getByLabel('Query').fill('');
+      await playwrightExpect(page.getByRole('button', { name: 'Run search' })).toBeDisabled();
 
       const overflow = await page.evaluate(
         () => document.documentElement.scrollWidth - document.documentElement.clientWidth,

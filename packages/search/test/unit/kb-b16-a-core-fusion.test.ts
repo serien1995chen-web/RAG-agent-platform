@@ -243,8 +243,41 @@ describe('B16 codexA core fusion', () => {
     });
   });
 
-  it('L1-B16-A-SEARCH-004-Q01 uses the FastGPT-aligned 30 second rerank timeout', () => {
+  it('L1-B16-A-SEARCH-004-Q01 uses the FastGPT-aligned 30 second rerank timeout', async () => {
     expect(SearchBudgetsSchema.parse({}).rerankTimeoutMs).toBe(30_000);
+    const timeouts: number[] = [];
+    const run = (rerankTimeoutMs?: number) =>
+      createSearchEngine(
+        deps({
+          rerank: {
+            rerank: async (input) => {
+              timeouts.push(input.options.timeoutMs);
+              return [];
+            },
+          },
+        }),
+      ).search(
+        request({
+          searchMode: 'embedding',
+          models: {
+            embeddingModel: 'qwen3.7-text-embedding',
+            rerankModel: 'qwen3.7-text-rerank',
+          },
+          ...(rerankTimeoutMs
+            ? {
+                budgets: {
+                  totalTimeoutMs: 30_000,
+                  recallTimeoutMs: 5_000,
+                  rerankTimeoutMs,
+                },
+              }
+            : {}),
+        }),
+        context,
+      );
+    await run();
+    await run(15_000);
+    expect(timeouts).toEqual([30_000, 15_000]);
   });
 
   it('L1-B16-A-SEARCH-004-F01 preserves baseline order and emits degraded on rerank failure', async () => {

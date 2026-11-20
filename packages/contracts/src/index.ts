@@ -124,6 +124,7 @@ export {
   SearchApiRequestSchema,
   SearchApiResponseSchema,
   SearchFilterApiSchema,
+  SearchImagePreviewApiSchema,
   SearchSegmentApiSchema,
   SegmentIndexApiSchema,
   TagArrayFilterConditionSchema,
@@ -150,6 +151,7 @@ export type {
   SearchApiRequest,
   SearchApiResponse,
   SearchFilterApi,
+  SearchImagePreviewApi,
   SearchSegmentApi,
   TagFilterCondition,
 } from './search/api-types';

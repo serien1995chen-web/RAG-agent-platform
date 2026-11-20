@@ -19,6 +19,7 @@ import {
   stableSortCandidates,
   truncateByLimit,
 } from './fusion';
+import { normalizedDedupeText } from './filter';
 import { rrfFuseWeighted } from './rrf';
 import { recallCandidates } from './recall';
 import type {
@@ -36,6 +37,14 @@ import type {
 } from './types';
 
 const ERROR_PRIORITY: readonly ChannelFailure['status'][] = [504, 429, 503, 502, 500];
+const RECOVERABLE_RERANK_CODES = new Set([
+  'KNOWLEDGE_RATE_LIMITED',
+  'KNOWLEDGE_QUOTA_EXCEEDED',
+  'KNOWLEDGE_MODEL_FAILED',
+  'KNOWLEDGE_PROVIDER_CONTRACT_INVALID',
+  'KNOWLEDGE_DEPENDENCY_TIMEOUT',
+  'KNOWLEDGE_DEPENDENCY_UNAVAILABLE',
+]);
 
 function error(
   request: SearchRequest,
@@ -70,6 +79,12 @@ function emptyResult(request: SearchRequest, degraded: DegradedInfo[] = []): Sea
     modelUsage: { inputTokens: 0, outputTokens: 0 },
     queryExpansions: [],
   };
+}
+
+function problemCodeOf(error: unknown): string | null {
+  if (typeof error !== 'object' || error === null || !('problem' in error)) return null;
+  const code = (error as KnowledgeApiError).problem?.error?.code;
+  return typeof code === 'string' ? code : null;
 }
 
 function validate(request: SearchRequest): void {
@@ -281,14 +296,18 @@ export function finalizeSearchCandidates(
 ): { items: AuthorizedCandidate[]; usingSimilarityFilter: boolean } {
   const usingSimilarityFilter =
     request.similarity > 0 && (rerankApplied || request.searchMode === 'embedding');
-  let items = dedupeCandidates(candidates, (candidate) => {
-    return [
-      candidate.segment?.question ?? '',
-      candidate.segment?.answer ?? '',
-      candidate.segment?.content ?? candidate.text,
-      candidate.imageIdentity ?? '',
-    ].join('\n');
-  });
+  let items = dedupeCandidates(
+    candidates,
+    (candidate) => {
+      const text = normalizedDedupeText(
+        `${candidate.segment?.question ?? ''}${candidate.segment?.answer ?? ''}`,
+      );
+      const identityText =
+        text || normalizedDedupeText(candidate.segment?.content ?? candidate.text);
+      return `${identityText}\0${candidate.imageIdentity ?? ''}`;
+    },
+    (key) => key,
+  );
   items = stableSortCandidates(items);
   if (usingSimilarityFilter) {
     items = filterBySimilarity(items, request.similarity, (candidate) =>
@@ -380,7 +399,7 @@ export function createSearchEngine(
               model: request.models.rerankModel,
               query: request.textQueries[0] ?? '',
               items: rerankItems,
-              options: { timeoutMs: request.budgets?.rerankTimeoutMs ?? 10_000 },
+              options: { timeoutMs: request.budgets?.rerankTimeoutMs ?? 30_000 },
             },
             context,
           );
@@ -393,21 +412,9 @@ export function createSearchEngine(
           candidates = mergedRerank.items as AuthorizedCandidate[];
           rerankApplied = mergedRerank.appliedIds.size > 0;
         } catch (caught) {
-          if (
-            typeof caught === 'object' &&
-            caught !== null &&
-            'problem' in caught &&
-            (caught as KnowledgeApiError).problem.error.code === 'KNOWLEDGE_MODEL_OUTPUT_INVALID'
-          ) {
-            throw caught;
-          }
-          if ((options.rerankFailureMode ?? 'fallback') === 'strict') {
-            throw error(request, 'KNOWLEDGE_MODEL_FAILED', {
-              model: request.models.rerankModel,
-              reason: 'rerank_failed',
-              requestId: request.requestId,
-            });
-          }
+          if ((options.rerankFailureMode ?? 'fallback') === 'strict') throw caught;
+          const code = problemCodeOf(caught);
+          if (!code || !RECOVERABLE_RERANK_CODES.has(code)) throw caught;
           candidates = stableSortCandidates(candidates);
           degraded.push({ stage: 'rerank', reason: 'rerank_failed' });
         }

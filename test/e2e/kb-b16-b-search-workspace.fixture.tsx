@@ -71,8 +71,24 @@ const imageResult: SearchResponse = {
         segmentId: '65f1e5b2a1c9d4b7e8f09604',
         title: 'Refund chart',
       },
+      imagePreview: {
+        url: 'data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2296%22 height=%2296%22%3E%3Crect width=%2296%22 height=%2296%22 fill=%22%233667ee%22/%3E%3C/svg%3E',
+        expiresAt: '2099-11-20T16:00:00.000Z',
+      },
     },
   ],
+};
+
+const expiredImageResult: SearchResponse = {
+  ...imageResult,
+  searchId: 'search_kb_b16_b_image_expired',
+  items: imageResult.items.map((item) => ({
+    ...item,
+    imagePreview: {
+      url: 'https://knowledge.example.invalid/v1/knowledge/files/blob/content?ticket=expired',
+      expiresAt: '2000-01-01T00:00:00.000Z',
+    },
+  })),
 };
 
 const emptyResult: SearchResponse = {
@@ -80,6 +96,11 @@ const emptyResult: SearchResponse = {
   searchId: 'search_kb_b16_b_empty',
   items: [],
   durationMs: 9,
+};
+
+const emptyDegradedResult: SearchResponse = {
+  ...emptyResult,
+  degraded: ['image_preview_unavailable'],
 };
 
 function page(data: unknown) {
@@ -129,7 +150,15 @@ globalThis.fetch = async (input, init) => {
   if (path.includes('/v1/knowledge/search/')) {
     const body = init?.body ? (JSON.parse(String(init.body)) as { query?: string }) : {};
     const data =
-      body.query === 'empty' ? emptyResult : body.query === 'image' ? imageResult : result;
+      body.query === 'empty'
+        ? emptyResult
+        : body.query === 'empty-degraded'
+          ? emptyDegradedResult
+          : body.query === 'image'
+            ? imageResult
+            : body.query === 'image-expired'
+              ? expiredImageResult
+              : result;
     return response({
       success: true,
       data,

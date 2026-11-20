@@ -9,6 +9,7 @@ import {
   type DeepSearchApiRequest,
   type DeepSearchApiResponse,
   type SearchApiRequest,
+  type SearchImagePreviewApi,
 } from '@kb/contracts';
 import {
   deepBudgetOf,
@@ -22,11 +23,17 @@ import type { KnowledgeOperationInput, KnowledgeOperationResult } from './operat
 import type {
   S7CandidateCollection,
   S7CitationPersistencePort,
+  S7ImagePreviewPort,
   S7SearchAccessPort,
   S7SearchAuditPort,
 } from './s7-search.ports';
 import type { S5ModelGatewayPort } from './s5-model-gateway.port';
 import type { S8DeepSearchRepositoryPort } from './s8-image-deep.ports';
+import {
+  buildPublicSearchItem,
+  issueSearchImagePreviews,
+  searchCandidateKey,
+} from './s7-search-public-response';
 
 interface ChatCompletionEnvelope {
   choices: Array<{ message: { content: string } }>;
@@ -127,6 +134,7 @@ export class S8DeepSearchApplication {
       };
       citations: S7CitationPersistencePort;
       audits: S7SearchAuditPort;
+      imagePreviews?: S7ImagePreviewPort;
       now?: () => Date;
       searchIdFactory?: () => string;
     },
@@ -237,6 +245,7 @@ export class S8DeepSearchApplication {
     degradedCodes: readonly string[];
     rerankApplied: boolean;
     usage: { inputTokens: number; outputTokens: number };
+    imagePreviews?: ReadonlyMap<string, SearchImagePreviewApi>;
   }): DeepSearchApiResponse {
     return DeepSearchApiResponseSchema.parse({
       searchId: input.searchId,
@@ -253,30 +262,12 @@ export class S8DeepSearchApplication {
             details: { reason: 'deep_citation_missing' },
           });
         }
-        return {
-          segment: {
-            id: candidate.segment.id,
-            workspaceId: candidate.segment.workspaceId,
-            knowledgeSpaceId: candidate.knowledgeSpaceId,
-            sourceId: candidate.sourceId,
-            searchEnabled: candidate.segment.searchEnabled,
-            order: candidate.segment.order,
-            question: candidate.segment.question,
-            answer: candidate.segment.answer,
-            content: candidate.segment.content,
-            metadata: candidate.segment.metadata,
-            indexes: candidate.segment.indexes.map((index) => ({
-              ...index,
-              storageType: index.dimension === 3072 ? ('halfvec' as const) : ('vector' as const),
-            })),
-            indexStatus: candidate.segment.indexStatus,
-            indexErrorCode: candidate.segment.indexErrorCode,
-            imageBlobRefId: candidate.segment.imageBlobRefId,
-            version: candidate.segment.version,
-          },
-          score: candidate.rerankScore ?? candidate.embeddingScore ?? candidate.score,
+        const imagePreview = input.imagePreviews?.get(searchCandidateKey(candidate));
+        return buildPublicSearchItem({
+          candidate,
           citation,
-        };
+          ...(imagePreview ? { imagePreview } : {}),
+        });
       }),
       partial: input.partial,
       durationMs: input.durationMs,
@@ -495,6 +486,12 @@ export class S8DeepSearchApplication {
         details: { reason: 'deep_final_acl_rejected' },
       });
     }
+    const imagePreviews = await issueSearchImagePreviews({
+      candidates: current,
+      previews: this.input.imagePreviews,
+      context,
+    });
+    degradedCodes.push(...imagePreviews.degradedCodes);
     const durationMs = Date.now() - startedAt;
     const partial = stopReason === 'dependency_failure' || degradedCodes.length > 0;
     const citations = await this.input.citations.issueWithAudit(
@@ -522,6 +519,7 @@ export class S8DeepSearchApplication {
       degradedCodes,
       rerankApplied,
       usage,
+      imagePreviews: imagePreviews.items,
     });
   }
 

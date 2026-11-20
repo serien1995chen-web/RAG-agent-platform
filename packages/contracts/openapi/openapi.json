@@ -22659,6 +22659,25 @@
                 },
                 "citation": {
                   "$ref": "#/components/schemas/Citation"
+                },
+                "imagePreview": {
+                  "type": "object",
+                  "required": [
+                    "url",
+                    "expiresAt"
+                  ],
+                  "additionalProperties": false,
+                  "properties": {
+                    "url": {
+                      "type": "string",
+                      "format": "uri",
+                      "pattern": "^https?://"
+                    },
+                    "expiresAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  }
                 }
               }
             }

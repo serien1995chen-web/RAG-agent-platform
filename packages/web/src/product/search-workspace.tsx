@@ -183,7 +183,10 @@ export function SearchWorkspace(props: {
           })
         : await productApi.search(settings.mode, base);
       if (response.items.length === 0) {
-        setWarning('搜索结果为空。右侧继续保留上一条测试结果。');
+        const degraded = response.degraded?.length
+          ? `降级原因：${response.degraded.join(', ')}。`
+          : '';
+        setWarning(`搜索结果为空。${degraded}右侧继续保留上一条测试结果。`);
         return;
       }
       setResult(response);
@@ -193,7 +196,7 @@ export function SearchWorkspace(props: {
         query: query.trim() || '(空查询)',
         imageLabel: imageFile?.name ?? null,
         createdAt: new Date().toISOString(),
-        result: response,
+        result: withoutEphemeralImagePreviews(response),
         settings,
       };
       setHistory((current) => [entry, ...current].slice(0, 50));
@@ -639,6 +642,9 @@ function SearchResultCard(props: {
 }) {
   const segment = props.item.segment;
   const content = segment.question || segment.content;
+  const [previewFailed, setPreviewFailed] = useState(false);
+  const preview = segment.imageBlobRefId ? props.item.imagePreview : undefined;
+  const previewExpired = preview ? Date.parse(preview.expiresAt) <= Date.now() : true;
   return (
     <article className="kb2-search-result-card">
       <div className="kb2-search-result-card__head">
@@ -646,6 +652,20 @@ function SearchResultCard(props: {
         <strong title={props.item.citation.title}>{props.item.citation.title}</strong>
         <StatusTag value={props.item.score.toFixed(3)} tone="info" />
       </div>
+      {segment.imageBlobRefId ? (
+        <figure className="kb2-search-result-image">
+          {preview && !previewExpired && !previewFailed ? (
+            <img
+              src={preview.url}
+              alt={props.item.citation.title}
+              loading="lazy"
+              onError={() => setPreviewFailed(true)}
+            />
+          ) : (
+            <figcaption role="status">图片预览已过期或不可用，请重新测试。</figcaption>
+          )}
+        </figure>
+      ) : null}
       <S7MarkdownRenderer>{content}</S7MarkdownRenderer>
       {segment.answer ? <div className="kb2-search-result-answer">{segment.answer}</div> : null}
       <div className="kb2-search-result-card__footer">
@@ -674,6 +694,13 @@ function SearchResultCard(props: {
 
 function historyKey(datasetId: string) {
   return `kb-product-search-history:${datasetId}`;
+}
+
+function withoutEphemeralImagePreviews(result: SearchResponse): SearchResponse {
+  return {
+    ...result,
+    items: result.items.map(({ imagePreview: _imagePreview, ...item }) => item),
+  };
 }
 
 function settingsKey(datasetId: string) {

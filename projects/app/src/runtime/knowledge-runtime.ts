@@ -881,6 +881,7 @@ async function bootstrapRuntime(): Promise<TelemetryKnowledgeApiRuntime> {
     audits: s7Citations,
     synonymExpansion: s09Expansion,
     modelGateway: s5Gateway,
+    imagePreviews: imageTickets,
   });
   const s7Citation = new S7CitationApplication({
     access: s7Authorization,
@@ -911,6 +912,7 @@ async function bootstrapRuntime(): Promise<TelemetryKnowledgeApiRuntime> {
     authorization: s7Authorization,
     citations: s7Citations,
     audits: s7Citations,
+    imagePreviews: imageTickets,
   });
   const s8Operations = new S8SearchOperationApplication(s8ImageSearch, s8DeepSearch);
   const ingestion = new S04IngestionApplication({

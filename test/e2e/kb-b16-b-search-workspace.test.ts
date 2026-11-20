@@ -107,6 +107,13 @@ describe('L1-B16-B-SEARCH-005-UI01 product Search Test history and result state'
     ).toBeVisible();
     await playwrightExpect(page.getByText('Where is the refund policy?')).toBeVisible();
 
+    await page.getByLabel('测试查询').fill('empty-degraded');
+    await page.getByRole('button', { name: '开始测试' }).click();
+    await playwrightExpect(
+      page.getByText('降级原因：image_preview_unavailable。', { exact: false }),
+    ).toBeVisible();
+    await playwrightExpect(page.getByText('Where is the refund policy?')).toBeVisible();
+
     await page.getByLabel('测试查询').fill('image');
     await page.getByRole('button', { name: '开始测试' }).click();
     await page.screenshot({
@@ -120,6 +127,15 @@ describe('L1-B16-B-SEARCH-005-UI01 product Search Test history and result state'
       ),
     ).toEqual([]);
     await playwrightExpect(page.getByRole('img', { name: 'Refund chart' })).toBeVisible();
+    const storedHistory = await page.evaluate(() =>
+      globalThis.localStorage.getItem('kb-product-search-history:65f1e5b2a1c9d4b7e8f09600'),
+    );
+    expect(storedHistory).not.toContain('ticket=redacted');
+    expect(storedHistory).not.toContain('data:image/svg');
+
+    await page.getByLabel('测试查询').fill('image-expired');
+    await page.getByRole('button', { name: '开始测试' }).click();
+    await playwrightExpect(page.getByText('图片预览已过期或不可用，请重新测试。')).toBeVisible();
     await context.close();
   }, 120_000);
 });

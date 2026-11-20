@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { SearchApiRequest } from '@kb/contracts';
 import { S7SearchApplication } from '../../src/modules/knowledge/application/s7-search.application';
 import type { TenantContext } from '../../src/shared/persistence/knowledge/tenant';
+import { preservesQueryOptimizationFacts } from '../../src/modules/knowledge/application/s7-query-facts';
 
 const context: TenantContext = {
   workspaceId: 'ws-kb-b16-b-query-optimization',
@@ -76,11 +77,61 @@ function expand(app: S7SearchApplication) {
 }
 
 describe('L1-B16-B-SEARCH-003 query optimization application', () => {
+  it('L1-B16-B-SEARCH-003-N05 preserves required facts and permits background facts', () => {
+    expect(
+      preservesQueryOptimizationFacts({
+        query: 'Acme-9 退款政策',
+        background: 'Acme Shop supports refunds.',
+        rewritten: 'Acme-9 客户退款政策',
+      }),
+    ).toBe(true);
+    expect(
+      preservesQueryOptimizationFacts({
+        query: 'Acme-9 退款政策',
+        rewritten: '退款政策',
+      }),
+    ).toBe(false);
+    expect(
+      preservesQueryOptimizationFacts({
+        query: '退款政策',
+        background: 'Acme-9 supports refunds.',
+        rewritten: 'Acme-9 退款政策',
+      }),
+    ).toBe(true);
+  });
+
   it('L1-B16-B-SEARCH-003-N03 rejects a model rewrite that introduces a new entity', async () => {
     const result = await expand(application('Zephyr-9 客户多久退款？'));
 
     expect(result.originalQuery).toBe(request.query);
     expect(result.expandedQuery).not.toContain('Zephyr-9');
+    expect(result.fallbackReason).toBe('query_optimization_failed');
+  });
+
+  it('L1-B16-B-SEARCH-003-N04 rejects new numbers and dates while preserving valid rewrites', async () => {
+    const rewrite = await expand(application('客户退款需要多长时间？'));
+    expect(rewrite).toMatchObject({
+      expandedQuery: '客户退款需要多长时间？',
+      fallbackReason: null,
+    });
+
+    const number = await expand(application('客户退款需要 7 天？'));
+    expect(number).toMatchObject({
+      expandedQuery: request.query,
+      fallbackReason: 'query_optimization_failed',
+    });
+
+    const date = await expand(application('客户 2027-01-01 退款需要多久？'));
+    expect(date).toMatchObject({
+      expandedQuery: request.query,
+      fallbackReason: 'query_optimization_failed',
+    });
+
+    const quoted = await expand(application('“极光集团”客户多久退款？'));
+    expect(quoted).toMatchObject({
+      expandedQuery: request.query,
+      fallbackReason: 'query_optimization_failed',
+    });
   });
 
   it('L1-B16-B-SEARCH-003-F01 falls back to the original query and marks degradation', async () => {
