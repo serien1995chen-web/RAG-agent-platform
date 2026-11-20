@@ -13,6 +13,7 @@ import {
   type SearchApiMode,
   type SearchApiRequest,
   type SearchApiResponse,
+  type SearchImagePreviewApi,
 } from '@kb/contracts';
 import {
   compileSearchFilter,
@@ -33,6 +34,12 @@ import type {
   S7SearchPersistenceMode,
   S7SearchApplicationDependencies,
 } from './s7-search.ports';
+import { preservesQueryOptimizationFacts } from './s7-query-facts';
+import {
+  buildPublicSearchItem,
+  issueSearchImagePreviews,
+  searchCandidateKey,
+} from './s7-search-public-response';
 
 interface SpaceExecution {
   candidates: AuthorizedCandidate[];
@@ -364,7 +371,17 @@ export class S7SearchApplication {
                   .replace(/^```(?:text)?\s*/i, '')
                   .replace(/\s*```$/i, '')
                   .trim();
-                if (!generated || generated.length > 20_000) {
+                if (
+                  !generated ||
+                  generated.length > 20_000 ||
+                  !preservesQueryOptimizationFacts({
+                    query,
+                    ...(request.queryOptimizationPrompt
+                      ? { background: request.queryOptimizationPrompt }
+                      : {}),
+                    rewritten: generated,
+                  })
+                ) {
                   optimizationFailed = true;
                 } else {
                   optimizedQuery = generated;
@@ -464,6 +481,7 @@ export class S7SearchApplication {
     durationMs: number;
     degradedCodes: readonly string[];
     rerankApplied: boolean;
+    imagePreviews?: ReadonlyMap<string, SearchImagePreviewApi>;
   }): SearchApiResponse {
     const items = input.candidates.map((candidate, index) => {
       const citation = input.citations.get(
@@ -477,41 +495,12 @@ export class S7SearchApplication {
           details: { reason: 'citation_missing', index },
         });
       }
-      return {
-        segment: {
-          id: candidate.segment.id,
-          workspaceId: candidate.segment.workspaceId,
-          knowledgeSpaceId: candidate.knowledgeSpaceId,
-          sourceId: candidate.sourceId,
-          searchEnabled: candidate.segment.searchEnabled,
-          order: candidate.segment.order,
-          question: candidate.segment.question,
-          answer: candidate.segment.answer,
-          content: candidate.segment.content,
-          metadata: candidate.segment.metadata,
-          indexes: candidate.segment.indexes.map((entry) => ({
-            indexId: entry.indexId,
-            type: entry.type,
-            modelId: entry.modelId,
-            dimension: entry.dimension,
-            storageType: entry.dimension === 3072 ? ('halfvec' as const) : ('vector' as const),
-            vectorProfile: entry.vectorProfile as
-              | 'knowledge_segment_vectors_768'
-              | 'knowledge_segment_vectors_1024'
-              | 'knowledge_segment_vectors_1536'
-              | 'knowledge_segment_vectors_3072',
-            vectorId: entry.vectorId,
-            text: entry.text,
-            version: entry.version,
-          })),
-          indexStatus: candidate.segment.indexStatus,
-          indexErrorCode: candidate.segment.indexErrorCode,
-          imageBlobRefId: candidate.segment.imageBlobRefId,
-          version: candidate.segment.version,
-        },
-        score: candidate.rerankScore ?? candidate.embeddingScore ?? candidate.score,
+      const imagePreview = input.imagePreviews?.get(searchCandidateKey(candidate));
+      return buildPublicSearchItem({
+        candidate,
         citation,
-      };
+        ...(imagePreview ? { imagePreview } : {}),
+      });
     });
     return SearchApiResponseSchema.parse({
       searchId: input.searchId,
@@ -642,7 +631,15 @@ export class S7SearchApplication {
         executionBudgetMs,
         context,
       );
-      const partial = execution.degradedCodes.some(
+      const imagePreviews = await issueSearchImagePreviews({
+        candidates: execution.candidates,
+        previews: this.input.imagePreviews,
+        context,
+      });
+      const degradedCodes = [
+        ...new Set([...execution.degradedCodes, ...imagePreviews.degradedCodes]),
+      ];
+      const partial = degradedCodes.some(
         (code) =>
           code === 'vector_recall_failed' ||
           code === 'fulltext_recall_failed' ||
@@ -659,7 +656,7 @@ export class S7SearchApplication {
           candidates: execution.candidates,
           partial,
           durationMs,
-          degradedCodes: execution.degradedCodes,
+          degradedCodes,
           queryExpansions: execution.queryExpansions,
           deadlineAt: startedAt + timeoutMs,
           ...(execution.filterSummary ? { filterSummary: execution.filterSummary } : {}),
@@ -673,8 +670,9 @@ export class S7SearchApplication {
         citations,
         partial,
         durationMs,
-        degradedCodes: execution.degradedCodes,
+        degradedCodes,
         rerankApplied: execution.rerankApplied,
+        imagePreviews: imagePreviews.items,
       });
     } catch (error) {
       await this.auditFailure(
@@ -785,9 +783,17 @@ export class S7SearchApplication {
       }
       const rerankApplied = succeeded.some((entry) => entry.execution.rerankApplied);
       const finalized = finalizeSearchCandidates(internalRequest, merged.candidates, rerankApplied);
+      const imagePreviews = await issueSearchImagePreviews({
+        candidates: finalized.items,
+        previews: this.input.imagePreviews,
+        context,
+      });
       const degradedCodes = [
-        ...succeeded.flatMap((entry) => entry.execution.degradedCodes),
-        ...merged.degraded.map((entry) => entry.reason),
+        ...new Set([
+          ...succeeded.flatMap((entry) => entry.execution.degradedCodes),
+          ...merged.degraded.map((entry) => entry.reason),
+          ...imagePreviews.degradedCodes,
+        ]),
       ];
       const partial = merged.partial;
       const queryExpansions = succeeded.flatMap((entry) => entry.execution.queryExpansions);
@@ -820,6 +826,7 @@ export class S7SearchApplication {
         durationMs,
         degradedCodes,
         rerankApplied,
+        imagePreviews: imagePreviews.items,
       });
     } catch (error) {
       await this.auditFailure(

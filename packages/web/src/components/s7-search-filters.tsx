@@ -23,7 +23,18 @@ import {
   tagConditionFromDraft,
   type S7SearchMode,
 } from '../forms/s7-search-form';
+import { knowledgeThemeTokens } from '../theme/tokens';
 import { similarityControlEnabled } from './s7-search-state';
+
+const SUBMIT_DISABLED_STYLE = {
+  backgroundColor: knowledgeThemeTokens.colors.surfaceMuted,
+  color: knowledgeThemeTokens.colors.ink,
+  opacity: 1,
+} as const;
+const SUBMIT_ENABLED_STYLE = {
+  backgroundColor: knowledgeThemeTokens.colors.primaryHover,
+  color: knowledgeThemeTokens.colors.surface,
+} as const;
 
 export interface S7TagChoice {
   id: string;
@@ -574,8 +585,16 @@ export function S7SearchFilters(props: {
           leftIcon={<SearchIcon />}
           isLoading={props.busy}
           loadingText={props.labels.running}
-          bg="kn.primary"
-          color="white"
+          bg={props.busy || !props.value.query.trim() ? 'kn.surfaceMuted' : 'kn.primary'}
+          color={props.busy || !props.value.query.trim() ? 'kn.ink' : 'white'}
+          _disabled={{
+            bg: 'kn.surfaceMuted',
+            color: 'kn.ink',
+            opacity: 1,
+          }}
+          style={
+            props.busy || !props.value.query.trim() ? SUBMIT_DISABLED_STYLE : SUBMIT_ENABLED_STYLE
+          }
           borderRadius="sm"
           isDisabled={!props.value.query.trim()}
         >

@@ -373,11 +373,22 @@ export const CitationApiSchema = z
   })
   .strict();
 
+export const SearchImagePreviewApiSchema = z
+  .object({
+    url: z
+      .string()
+      .url()
+      .refine((value) => /^https?:\/\//i.test(value), 'image preview URL must use http or https'),
+    expiresAt: z.string().datetime({ offset: true }),
+  })
+  .strict();
+
 export const SearchApiItemSchema = z
   .object({
     segment: SearchSegmentApiSchema,
     score: z.number().finite(),
     citation: CitationApiSchema,
+    imagePreview: SearchImagePreviewApiSchema.optional(),
   })
   .strict();
 
@@ -445,6 +456,7 @@ export type DeepPlannerOutput = z.infer<typeof DeepPlannerOutputSchema>;
 export type SearchApiResponse = z.infer<typeof SearchApiResponseSchema>;
 export type DeepSearchApiResponse = z.infer<typeof DeepSearchApiResponseSchema>;
 export type SearchApiItem = z.infer<typeof SearchApiItemSchema>;
+export type SearchImagePreviewApi = z.infer<typeof SearchImagePreviewApiSchema>;
 export type CitationApi = z.infer<typeof CitationApiSchema>;
 export type SearchSegmentApi = z.infer<typeof SearchSegmentApiSchema>;
 

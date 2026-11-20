@@ -304,6 +304,10 @@ export interface SearchResultItem {
   segment: Segment;
   score: number;
   citation: Citation;
+  imagePreview?: {
+    url: string;
+    expiresAt: string;
+  };
 }
 
 export interface SearchResponse {

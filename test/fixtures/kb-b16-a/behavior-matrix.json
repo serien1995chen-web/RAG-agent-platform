@@ -1,0 +1,87 @@
+{
+  "schemaVersion": 1,
+  "batch": "B16",
+  "owner": "codexA",
+  "capabilities": [
+    {
+      "capabilityId": "SEARCH-001",
+      "responsibility": "Embedding top-k recall with final ACL and citation",
+      "fastgptSources": [
+        "projects/app/src/pages/api/core/dataset/searchTest.ts:32",
+        "packages/service/core/dataset/search/defaultRecall/embeddingRecall.ts:135",
+        "packages/service/core/dataset/search/defaultRecall/utils.ts:13",
+        "packages/service/core/dataset/search/defaultRecall/result.ts:77"
+      ],
+      "frontendBehaviorIds": ["KB-TEST-010", "KB-TEST-011", "KB-TEST-013", "KB-TEST-050", "KB-TEST-051", "KB-TEST-052", "KB-TEST-053", "KB-TEST-062"],
+      "observableResult": "Semantic search returns finite scores, stable order, duration, count and citation bound to the current authorized Segment.",
+      "statusAndErrors": ["400 invalid query/input", "401/403 scope or ACL rejection", "429/502/503/504 dependency Problem", "207 only when an explicitly declared channel is partial"],
+      "limits": {"semanticCandidates": 100, "rerankCandidates": 100},
+      "persistence": ["search audit", "usage", "short-lived citation snapshot"],
+      "permissions": ["workspace isolation", "API key knowledge:search", "final Source ACL and searchEnabled recheck"],
+      "allowedDifference": "Page layout and internal field names may differ; user-visible mode, ordering, duration, empty/error/partial state and citation remain equivalent.",
+      "decision": "MATCH"
+    },
+    {
+      "capabilityId": "SEARCH-002",
+      "responsibility": "MongoDB full-text and weighted RRF fusion",
+      "fastgptSources": [
+        "packages/service/core/dataset/search/defaultRecall/fullTextRecall.ts:174",
+        "packages/service/core/dataset/search/defaultRecall/utils.ts:13",
+        "packages/service/core/dataset/search/defaultRecall/result.ts:52",
+        "packages/service/core/dataset/search/defaultRecall/index.ts:111"
+      ],
+      "frontendBehaviorIds": ["KB-TEST-040", "KB-TEST-041", "KB-TEST-050", "KB-TEST-053"],
+      "observableResult": "Semantic, full-text and hybrid use distinct channels; hybrid applies 0.5/0.5 defaults and RRF weight/(60+rank) with stable ties.",
+      "statusAndErrors": ["400 mode/weight/filter validation", "207 single-channel failure with degradation", "Problem when every attempted channel fails", "200 empty only for a successful zero-hit query"],
+      "limits": {"fullTextCandidates": 100, "hybridEmbeddingCandidates": 80, "hybridFullTextCandidates": 60, "resultItemsMaximum": 50},
+      "persistence": ["search audit with mode partial degraded count duration", "usage only for real calls"],
+      "permissions": ["tenant-scoped text index", "final ACL after candidate cache", "filters cannot widen ACL"],
+      "allowedDifference": "Internal tokenizer and index names may differ; query intent, candidate limits, fusion and partial semantics must match.",
+      "decision": "MATCH"
+    },
+    {
+      "capabilityId": "SEARCH-004",
+      "responsibility": "Rerank and weight fusion",
+      "fastgptSources": [
+        "packages/service/core/dataset/search/defaultRecall/rerank.ts:55",
+        "packages/service/core/ai/rerank/index.ts",
+        "projects/app/src/components/core/app/DatasetParamsModal.tsx:43"
+      ],
+      "frontendBehaviorIds": ["KB-TEST-042", "KB-TEST-050", "KB-TEST-051", "KB-TEST-052"],
+      "observableResult": "Real rerank changes only ranking and score evidence; content and citation provenance stay stable. rerankWeight 0/0.5/1 and fallback/degraded state are observable.",
+      "statusAndErrors": ["401/403 no retry or unauthorized fallback", "429/5xx/timeout explicit fallback/degraded according to contract", "invalid output stable 502 Problem"],
+      "limits": {"rerankCandidates": 100, "timeoutMilliseconds": 30000},
+      "persistence": ["real provider usage", "degraded reason", "rerankApplied"],
+      "permissions": ["authorized model only", "authorized candidates only", "tenant-isolated batches"],
+      "allowedDifference": "Provider protocol may be adapted independently; visible rerank state, failure classification and citation stability must match.",
+      "decision": "MATCH"
+    },
+    {
+      "capabilityId": "TEST-X-SEARCH-REAUTH",
+      "responsibility": "Final ACL reauthorization after recall",
+      "frontendBehaviorIds": ["KB-TEST-015", "KB-TEST-053"],
+      "observableResult": "ACL revocation before response removes text and citation; reading an old citation returns hidden/not-found without title or content.",
+      "decision": "MATCH"
+    },
+    {
+      "capabilityId": "TEST-X-ACL-INHERIT",
+      "responsibility": "Space, Directory, Source and Segment authorization consistency",
+      "observableResult": "Search-visible content is readable and revoke/override produces the same final denial at search and citation read.",
+      "decision": "MATCH"
+    },
+    {
+      "capabilityId": "TEST-X-HALFVEC-3072",
+      "responsibility": "Dimension/profile/storage compatibility",
+      "observableResult": "768/1024/1536 use vector; 3072 uses halfvec and halfvec_cosine_ops; mismatched model or dimension never returns unrelated candidates.",
+      "decision": "MATCH"
+    },
+    {
+      "capabilityId": "TEST-X-PERF-SEARCH",
+      "responsibility": "Search performance without hiding recall failure",
+      "observableResult": "50 QPS, 1M Segments, p95 <= 900ms, failure <= 1%, Recall@10 = 100%.",
+      "decision": "MATCH"
+    }
+  ],
+  "unresolved": [],
+  "blockedReference": []
+}

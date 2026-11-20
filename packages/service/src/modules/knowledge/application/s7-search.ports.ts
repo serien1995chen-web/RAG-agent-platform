@@ -174,6 +174,7 @@ export interface S7SearchApplicationDependencies {
   audits: S7SearchAuditPort;
   synonymExpansion?: S09QueryExpansionPort;
   modelGateway?: S5ModelGatewayPort;
+  imagePreviews?: S7ImagePreviewPort;
   now?: () => Date;
   searchIdFactory?: () => string;
   totalTimeoutMs?: {
@@ -195,4 +196,15 @@ export interface S7CandidateCollection {
 export interface S7CitationSignerPort {
   issue(workspaceId: string, uuid?: string): string;
   verify(citationId: string, workspaceId: string): boolean;
+}
+
+export interface S7ImagePreviewPort {
+  issueImage(input: {
+    workspaceId: string;
+    blobId: string;
+    sourceId: string | null;
+    knowledgeSpaceId: string;
+    ttlSeconds: number;
+    context: TenantContext;
+  }): Promise<{ url: string; expiresAt: string }>;
 }

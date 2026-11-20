@@ -180,13 +180,21 @@ export function S7SearchWorkbench(props: S7SearchWorkbenchProps) {
           </Alert>
         ) : null}
         {props.state.kind === 'degraded' ? (
-          <Alert status="warning" variant="left-accent" mb={4}>
-            <AlertIcon />
-            <Box>
-              <AlertTitle>{props.labels.degraded}</AlertTitle>
-              <DegradedCodes codes={props.state.result.degraded ?? []} labels={props.labels} />
-            </Box>
-          </Alert>
+          <>
+            {props.state.result.items.length === 0 ? (
+              <Alert status="info" variant="left-accent" mb={3}>
+                <AlertIcon />
+                <AlertDescription>{props.labels.empty}</AlertDescription>
+              </Alert>
+            ) : null}
+            <Alert status="warning" variant="left-accent" mb={4}>
+              <AlertIcon />
+              <Box>
+                <AlertTitle>{props.labels.degraded}</AlertTitle>
+                <DegradedCodes codes={props.state.result.degraded ?? []} labels={props.labels} />
+              </Box>
+            </Alert>
+          </>
         ) : null}
         {props.state.kind === 'permission' ||
         props.state.kind === 'timeout' ||

@@ -18,12 +18,15 @@ function candidate(input: Partial<Candidate> & { docId: string; score: number })
 }
 
 describe('TEST-SEARCH-005-BLOCK dedupe, similarity and token trim', () => {
-  it('deduplicates after NFKC and non-alphanumeric removal', () => {
+  it('preserves full-width and ASCII values while removing punctuation and whitespace', () => {
     const items = [
       candidate({ docId: 'a', score: 1, text: 'ＡＢＣ， refund!' }),
       candidate({ docId: 'b', score: 0.9, text: 'ABC refund' }),
     ];
-    expect(dedupeCandidates(items, (item) => item.text).map((item) => item.docId)).toEqual(['a']);
+    expect(dedupeCandidates(items, (item) => item.text).map((item) => item.docId)).toEqual([
+      'a',
+      'b',
+    ]);
   });
 
   it('filters by the supplied score domain rather than RRF', () => {

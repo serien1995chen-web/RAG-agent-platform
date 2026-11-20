@@ -7,6 +7,7 @@ import {
   SearchApiRequestSchema,
   SearchApiResponseSchema,
   SearchFilterApiSchema,
+  SearchImagePreviewApiSchema,
   SearchRequestSchema,
   toPipelineSearchRequest,
 } from '../../packages/contracts/src/index';
@@ -95,6 +96,21 @@ describe('TEST-SEARCH-001/002/004/005/007/009-BLOCK S7 contract gate', () => {
   });
 
   it('exposes only S7 response additions and no citation expiry/object key', () => {
+    expect(
+      SearchImagePreviewApiSchema.parse({
+        url: 'https://knowledge.example.invalid/files/blob/content?ticket=redacted',
+        expiresAt: '2026-11-20T16:00:00.000Z',
+      }),
+    ).toEqual({
+      url: 'https://knowledge.example.invalid/files/blob/content?ticket=redacted',
+      expiresAt: '2026-11-20T16:00:00.000Z',
+    });
+    expect(
+      SearchImagePreviewApiSchema.safeParse({
+        url: 'dataset/team-sensitive/refund-chart.png',
+        expiresAt: '2026-11-20T16:00:00.000Z',
+      }).success,
+    ).toBe(false);
     const parsed = SearchApiResponseSchema.parse({
       searchId: 'search_contract',
       mode: 'semantic',
@@ -124,6 +140,24 @@ describe('TEST-SEARCH-001/002/004/005/007/009-BLOCK S7 contract gate', () => {
     const citation = openapi.paths['/v1/knowledge/citations/{citationId}']?.get;
     expect(citation?.operationId).toBe('API-CITATION-GET');
     expect(citation?.['x-audit']).toBe(false);
+    const searchOpenapi = JSON.parse(
+      readFileSync(resolve(root, 'packages/contracts/openapi/openapi.json'), 'utf8'),
+    ) as {
+      components: {
+        schemas: {
+          SearchResponse: {
+            properties: {
+              items: {
+                items: { properties: Record<string, unknown> };
+              };
+            };
+          };
+        };
+      };
+    };
+    expect(
+      searchOpenapi.components.schemas.SearchResponse.properties.items.items.properties,
+    ).toHaveProperty('imagePreview');
   });
 
   it('binds every S7 503 response to Problem503 in target and generated OpenAPI', () => {

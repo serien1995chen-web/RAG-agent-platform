@@ -302,5 +302,5 @@ export function compileSearchFilter(
 }
 
 export function normalizedDedupeText(text: string): string {
-  return text.normalize('NFKC').replace(NON_ALNUM, '');
+  return text.replace(NON_ALNUM, '');
 }

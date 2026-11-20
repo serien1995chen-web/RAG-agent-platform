@@ -34,7 +34,7 @@ export type SearchWeights = z.infer<typeof SearchWeightsSchema>;
 export const SearchBudgetsSchema = z.object({
   totalTimeoutMs: z.number().int().min(1000).max(30000).default(30000),
   recallTimeoutMs: z.number().int().min(500).max(5000).default(5000),
-  rerankTimeoutMs: z.number().int().min(1000).max(10000).default(10000),
+  rerankTimeoutMs: z.number().int().min(1000).max(30000).default(30000),
 });
 export type SearchBudgets = z.infer<typeof SearchBudgetsSchema>;
 

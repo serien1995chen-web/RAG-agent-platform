@@ -146,11 +146,12 @@ export function mergeRerankRankedLists(
 export function dedupeCandidates<T extends Candidate>(
   items: readonly T[],
   hashText: (item: Candidate) => string,
+  normalizeKey: (text: string) => string = normalizedDedupeText,
 ): T[] {
   const seen = new Set<string>();
   const output: T[] = [];
   for (const item of items) {
-    const key = normalizedDedupeText(hashText(item));
+    const key = normalizeKey(hashText(item));
     const hash = createHash('sha256').update(key, 'utf8').digest('hex');
     if (seen.has(hash)) continue;
     seen.add(hash);
