@@ -73,6 +73,18 @@ export function joinAiproxyUrl(baseUrl: string, path: string): string {
   return url.toString();
 }
 
+export function normalizeAiproxyToken(token: string): string {
+  let value = token.trim();
+  if (
+    value.length >= 2 &&
+    ((value.startsWith('"') && value.endsWith('"')) ||
+      (value.startsWith("'") && value.endsWith("'")))
+  ) {
+    value = value.slice(1, -1).trim();
+  }
+  return value.replace(/^Bearer\s+/i, '').trim();
+}
+
 const ENDPOINT_BY_KIND: Record<S5ModelType, string> = {
   llm: '/v1/chat/completions',
   vlm: '/v1/chat/completions',
@@ -399,7 +411,7 @@ export class S5AiproxyHttpAdapter implements S5ModelInvocationAdapterPort {
       method: 'POST',
       url: endpoint,
       headers: {
-        Authorization: `Bearer ${this.input.token}`,
+        Authorization: `Bearer ${normalizeAiproxyToken(this.input.token)}`,
         'Content-Type':
           invocation.kind === 'stt' && sttProtocol === 'openai'
             ? 'multipart/form-data'

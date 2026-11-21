@@ -206,6 +206,35 @@ describe('TEST-X-S11-PROVIDER-REAL contract adapters', () => {
     );
   });
 
+  it('normalizes a pasted bearer-prefixed AIProxy token before sending Authorization', async () => {
+    const transport = new ScriptedTransport<S5HttpRequest, S5HttpResponse>([
+      response(200, {
+        choices: [{ message: { content: 'normalized' } }],
+      }),
+    ]);
+    const adapter = new S5AiproxyHttpAdapter({
+      baseUrl: 'https://tokendance.space/gateway/v1',
+      token: '  "Bearer aiproxy-secret-value"  ',
+      transport: transport as S5HttpTransportPort,
+    });
+
+    await adapter.invoke(
+      {
+        kind: 'llm',
+        modelId: 's11-llm',
+        messages: [{ role: 'user', content: 'hello' }],
+        maxOutputTokens: 12,
+      },
+      {
+        workspaceId: context.workspaceId,
+        requestId: context.requestId,
+        traceId: context.traceId,
+      },
+    );
+
+    expect(transport.requests[0]?.headers.Authorization).toBe('Bearer aiproxy-secret-value');
+  });
+
   it('uses TokenDance standard embedding input with explicit provider routing', async () => {
     const transport = new ScriptedTransport<S5HttpRequest, S5HttpResponse>([
       response(200, {

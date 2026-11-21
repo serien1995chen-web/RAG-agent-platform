@@ -9,7 +9,11 @@ import { resolveSecretRef } from '../../../shared/config/secret-ref';
 import type { S5AiproxyConfig } from '../../../shared/config/s5-aiproxy-config';
 import { S5ModelTransportError } from '../application/s5-model-gateway.port';
 import { S5AiproxyCatalogEnvelopeSchema, normalizeCatalog } from './s5-model-catalog.schema';
-import { joinAiproxyUrl, type S5HttpTransportPort } from './s5-aiproxy-http.adapter';
+import {
+  joinAiproxyUrl,
+  normalizeAiproxyToken,
+  type S5HttpTransportPort,
+} from './s5-aiproxy-http.adapter';
 
 const BareCatalogEnvelopeSchema = z
   .object({
@@ -120,7 +124,7 @@ export class S5AiproxyCatalogAdapter implements ModelCatalogPort {
         method: 'GET',
         url: joinAiproxyUrl(this.input.config.baseUrl, '/v1/models'),
         headers: {
-          Authorization: `Bearer ${this.token}`,
+          Authorization: `Bearer ${normalizeAiproxyToken(this.token)}`,
           Accept: 'application/json',
           'X-Workspace-Id': input.workspaceId,
           'X-Request-Id': input.requestId,
