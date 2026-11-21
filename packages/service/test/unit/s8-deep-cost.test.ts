@@ -47,4 +47,24 @@ describe('L1-B17-SEARCH-008 cost pricing', () => {
     expect(() => adapter.embeddingPointsMicros(Number.NaN)).toThrow(RangeError);
     expect(() => adapter.rerankPointsMicros(1.5)).toThrow(RangeError);
   });
+
+  it('fails with a stable internal error when quota availability support is absent', async () => {
+    const adapter = new S8DeepCostAdapter({
+      pricing: FIXTURE_V1_PRICING,
+      quota: {
+        async check() {},
+        async withModelSlot(_context, work) {
+          return work();
+        },
+      },
+    });
+    await expect(adapter.availablePointsMicros(context)).rejects.toMatchObject({
+      problem: {
+        error: {
+          code: 'KNOWLEDGE_INTERNAL_ERROR',
+          details: { reason: 'deep_cost_quota_unavailable' },
+        },
+      },
+    });
+  });
 });

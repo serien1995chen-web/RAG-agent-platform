@@ -1,3 +1,4 @@
+import { createKnowledgeError } from '@kb/contracts';
 import type { S10PricingProfile } from '../../../shared/config/s10-profiles';
 import type { TenantContext } from '../../../shared/persistence/knowledge/tenant';
 import { computeUsagePointsMicros } from '../domain/s10-usage';
@@ -16,9 +17,14 @@ export class S8DeepCostAdapter implements S8DeepCostPort {
     this.pricingVersion = input.pricing.version;
   }
 
-  availablePointsMicros(context: TenantContext): Promise<number> {
+  async availablePointsMicros(context: TenantContext): Promise<number> {
     if (!this.input.quota.availableAiPointsMicros) {
-      throw new Error('Deep AI Points budget requires quota availability support');
+      throw createKnowledgeError({
+        code: 'KNOWLEDGE_INTERNAL_ERROR',
+        requestId: context.requestId,
+        traceId: context.traceId,
+        details: { reason: 'deep_cost_quota_unavailable' },
+      });
     }
     return this.input.quota.availableAiPointsMicros(context);
   }
