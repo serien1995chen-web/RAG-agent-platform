@@ -205,6 +205,15 @@ export interface S8DeepSearchRepositoryPort {
       durationMs: number;
       inputTokens: number;
       outputTokens: number;
+      aiPointsMicros: number;
+      pricingVersion: string;
+      permissionRevision: number;
+      permissionRevisions: readonly {
+        knowledgeSpaceId: string;
+        sourceId: string;
+        revision: number;
+      }[];
+      reservedAiPointsMicros: number;
       stopEvidence: Record<string, unknown>;
     },
     context: TenantContext,
@@ -215,6 +224,7 @@ export type S8DeepStopReason =
   | 'sufficient'
   | 'round_limit'
   | 'token_budget'
+  | 'cost_budget'
   | 'no_new_evidence'
   | 'dependency_failure';
 
@@ -223,6 +233,10 @@ export interface S8DeepRound {
   queries: string[];
   candidateCount: number;
   sufficient: boolean;
+  inputTokens: number;
+  outputTokens: number;
+  aiPoints: number;
+  permissionRevision: number;
 }
 
 export interface S8DeepSearchResponse {
@@ -239,5 +253,20 @@ export interface S8DeepSearchResponse {
   rerankApplied?: boolean;
   rounds: S8DeepRound[];
   stopReason: S8DeepStopReason;
-  usage: { inputTokens: number; outputTokens: number };
+  usage: {
+    inputTokens: number;
+    outputTokens: number;
+    aiPoints: number;
+    aiPointsMicros: number;
+    costBudgetPoints: number;
+    remainingAiPoints: number;
+  };
+}
+
+export interface S8DeepCostPort {
+  pricingVersion: string;
+  availablePointsMicros(context: TenantContext): Promise<number>;
+  llmPointsMicros(inputTokens: number, outputTokens: number): number;
+  embeddingPointsMicros(inputTokens: number): number;
+  rerankPointsMicros(inputTokens: number): number;
 }

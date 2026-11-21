@@ -54,6 +54,26 @@ describe('S8 contract and runtime closure', () => {
       default: 3,
     });
     expect(
+      openapi.components.schemas.DeepSearchRequest.allOf[1].properties.costBudgetPoints,
+    ).toMatchObject({
+      type: 'number',
+      exclusiveMinimum: 0,
+      maximum: 1_000_000,
+    });
+    const deepResponse = openapi.components.schemas.DeepSearchResponse.allOf[1];
+    expect(deepResponse.properties.rounds.items.required).toEqual(
+      expect.arrayContaining(['inputTokens', 'outputTokens', 'aiPoints', 'permissionRevision']),
+    );
+    expect(deepResponse.properties.stopReason.enum).toContain('cost_budget');
+    expect(deepResponse.properties.usage.required).toEqual(
+      expect.arrayContaining([
+        'aiPoints',
+        'aiPointsMicros',
+        'costBudgetPoints',
+        'remainingAiPoints',
+      ]),
+    );
+    expect(
       openapi.components.schemas.ImageSearchRequest.allOf[1].properties.imageUploadIds,
     ).toMatchObject({
       minItems: 1,

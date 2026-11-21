@@ -319,3 +319,36 @@ export interface SearchResponse {
   degraded?: string[];
   rerankApplied?: boolean;
 }
+
+export type DeepStopReason =
+  | 'sufficient'
+  | 'round_limit'
+  | 'token_budget'
+  | 'cost_budget'
+  | 'no_new_evidence'
+  | 'dependency_failure';
+
+export interface DeepSearchRound {
+  round: number;
+  queries: string[];
+  candidateCount: number;
+  sufficient: boolean;
+  inputTokens: number;
+  outputTokens: number;
+  aiPoints: number;
+  permissionRevision: number;
+}
+
+export interface DeepSearchResponse extends Omit<SearchResponse, 'mode'> {
+  mode: 'multi_space';
+  rounds: DeepSearchRound[];
+  stopReason: DeepStopReason;
+  usage: {
+    inputTokens: number;
+    outputTokens: number;
+    aiPoints: number;
+    aiPointsMicros: number;
+    costBudgetPoints: number;
+    remainingAiPoints: number;
+  };
+}

@@ -190,7 +190,16 @@ export interface S7CandidateCollection {
   rerankApplied: boolean;
   filterSummary?: SearchFilterSummary;
   queryExpansions: SearchQueryExpansionResult[];
-  usage: { inputTokens: number; outputTokens: number };
+  usage: S7ModelUsage;
+}
+
+export interface S7ModelUsage {
+  inputTokens: number;
+  outputTokens: number;
+  embeddingInputTokens?: number;
+  rerankInputTokens?: number;
+  llmInputTokens?: number;
+  llmOutputTokens?: number;
 }
 
 export interface S7CitationSignerPort {

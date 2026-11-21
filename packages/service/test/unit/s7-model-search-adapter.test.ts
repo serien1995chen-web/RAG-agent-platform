@@ -156,6 +156,13 @@ describe('TEST-MODEL-003-BLOCK S7 model gateway consumption', () => {
       },
       context,
     );
-    expect(deps.modelUsage).toEqual({ inputTokens: 8, outputTokens: 0 });
+    expect(deps.modelUsage).toEqual({
+      inputTokens: 8,
+      outputTokens: 0,
+      embeddingInputTokens: 4,
+      rerankInputTokens: 4,
+      llmInputTokens: 0,
+      llmOutputTokens: 0,
+    });
   });
 });

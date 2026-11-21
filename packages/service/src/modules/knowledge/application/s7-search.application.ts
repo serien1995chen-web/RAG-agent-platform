@@ -31,6 +31,7 @@ import type { KnowledgeOperationInput, KnowledgeOperationResult } from './operat
 import type {
   S7AuthorizedSpace,
   S7CandidateCollection,
+  S7ModelUsage,
   S7SearchPersistenceMode,
   S7SearchApplicationDependencies,
 } from './s7-search.ports';
@@ -49,7 +50,7 @@ interface SpaceExecution {
   rerankApplied: boolean;
   filterSummary?: SearchFilterSummary;
   queryExpansions: SearchQueryExpansionResult[];
-  usage: { inputTokens: number; outputTokens: number };
+  usage: S7ModelUsage;
 }
 
 function citationKey(knowledgeSpaceId: string, segmentId: string): string {
@@ -939,12 +940,26 @@ export class S7SearchApplication {
       ],
       rerankApplied,
       queryExpansions: succeeded.flatMap((entry) => entry.execution.queryExpansions),
-      usage: succeeded.reduce(
+      usage: succeeded.reduce<S7ModelUsage>(
         (total, entry) => ({
           inputTokens: total.inputTokens + entry.execution.usage.inputTokens,
           outputTokens: total.outputTokens + entry.execution.usage.outputTokens,
+          embeddingInputTokens:
+            (total.embeddingInputTokens ?? 0) + (entry.execution.usage.embeddingInputTokens ?? 0),
+          rerankInputTokens:
+            (total.rerankInputTokens ?? 0) + (entry.execution.usage.rerankInputTokens ?? 0),
+          llmInputTokens: (total.llmInputTokens ?? 0) + (entry.execution.usage.llmInputTokens ?? 0),
+          llmOutputTokens:
+            (total.llmOutputTokens ?? 0) + (entry.execution.usage.llmOutputTokens ?? 0),
         }),
-        { inputTokens: 0, outputTokens: 0 },
+        {
+          inputTokens: 0,
+          outputTokens: 0,
+          embeddingInputTokens: 0,
+          rerankInputTokens: 0,
+          llmInputTokens: 0,
+          llmOutputTokens: 0,
+        },
       ),
       ...(succeeded.find((entry) => entry.execution.filterSummary)
         ? {

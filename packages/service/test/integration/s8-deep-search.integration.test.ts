@@ -271,7 +271,12 @@ describe('TEST-SEARCH-008-BLOCK / TEST-X-DEEP-BUDGET deep search', () => {
     );
     expect(collectBudgets).toEqual([1_800]);
     expect(result.stopReason).toBe('token_budget');
-    expect(result.usage).toEqual({ inputTokens: 5_977, outputTokens: 23 });
+    expect(result.usage).toMatchObject({
+      inputTokens: 5_977,
+      outputTokens: 23,
+      aiPoints: 0,
+      costBudgetPoints: 0,
+    });
   });
 
   it('authorizes every requested Space before invoking the planner', async () => {

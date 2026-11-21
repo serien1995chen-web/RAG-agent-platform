@@ -24,12 +24,15 @@ export interface S8DeepSearchPanelLabels {
   maxRounds: string;
   roundTokenBudget: string;
   tokenBudget: string;
+  costBudgetPoints: string;
   stopWhenNoNewEvidence: string;
   run: string;
   running: string;
   idle: string;
   partial: string;
   rounds: string;
+  duration: string;
+  aiPoints: string;
   round: string;
   candidateCount: string;
   sufficient: string;
@@ -95,10 +98,26 @@ export function S8DeepSearchPanel(props: S8DeepSearchPanelProps) {
           <Field label={props.labels.tokenBudget}>
             <Input
               type="number"
-              min={1}
+              min={500}
               max={20_000}
               value={props.value.tokenBudget}
               onChange={(event) => props.onChange({ tokenBudget: Number(event.target.value) })}
+            />
+          </Field>
+          <Field label={props.labels.costBudgetPoints}>
+            <Input
+              type="number"
+              min={0.000001}
+              max={1_000_000}
+              step={0.000001}
+              value={props.value.costBudgetPoints ?? ''}
+              placeholder="Use workspace remaining AI Points"
+              onChange={(event) =>
+                props.onChange({
+                  costBudgetPoints:
+                    event.target.value === '' ? undefined : Number(event.target.value),
+                })
+              }
             />
           </Field>
         </Grid>
@@ -151,6 +170,13 @@ export function S8DeepSearchPanel(props: S8DeepSearchPanelProps) {
             <Text m={0}>
               <Text as="strong">{props.labels.rounds}:</Text> {props.result.rounds.length}
             </Text>
+            <Text m={0}>
+              <Text as="strong">{props.labels.duration}:</Text> {props.result.durationMs} ms
+            </Text>
+            <Text m={0}>
+              <Text as="strong">{props.labels.aiPoints}:</Text> {props.result.usage.aiPoints} /{' '}
+              {props.result.usage.costBudgetPoints}
+            </Text>
           </Grid>
           <Box as="ol" mt={5} pl={5} minW={0}>
             {props.result.rounds.map((round) => (
@@ -161,7 +187,8 @@ export function S8DeepSearchPanel(props: S8DeepSearchPanelProps) {
                 <Text mt={1}>{round.queries.join(' · ')}</Text>
                 <Text mt={1} color="kn.inkMuted" fontSize="sm">
                   {props.labels.candidateCount} {round.candidateCount} · {props.labels.sufficient}{' '}
-                  {String(round.sufficient)}
+                  {String(round.sufficient)} · Token {round.inputTokens + round.outputTokens} · AI
+                  Points {round.aiPoints}
                 </Text>
               </Box>
             ))}

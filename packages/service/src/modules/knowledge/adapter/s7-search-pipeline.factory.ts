@@ -38,10 +38,26 @@ export class S7SearchPipelineFactory implements S7SearchPipelineFactoryPort {
     const fullTextAdapter = new S7FullTextSearchAdapter({
       search: (request) => this.input.fullText.search(request, input.context),
     });
-    const modelUsage = { inputTokens: 0, outputTokens: 0 };
-    const recordUsage = (usage: { inputTokens: number; outputTokens: number }) => {
+    const modelUsage = {
+      inputTokens: 0,
+      outputTokens: 0,
+      embeddingInputTokens: 0,
+      rerankInputTokens: 0,
+      llmInputTokens: 0,
+      llmOutputTokens: 0,
+    };
+    const recordUsage = (
+      kind: 'embedding' | 'rerank' | 'llm',
+      usage: { inputTokens: number; outputTokens: number },
+    ) => {
       modelUsage.inputTokens += usage.inputTokens;
       modelUsage.outputTokens += usage.outputTokens;
+      if (kind === 'embedding') modelUsage.embeddingInputTokens += usage.inputTokens;
+      if (kind === 'rerank') modelUsage.rerankInputTokens += usage.inputTokens;
+      if (kind === 'llm') {
+        modelUsage.llmInputTokens += usage.inputTokens;
+        modelUsage.llmOutputTokens += usage.outputTokens;
+      }
     };
     return {
       modelUsage,
@@ -49,7 +65,7 @@ export class S7SearchPipelineFactory implements S7SearchPipelineFactoryPort {
       embedding: {
         embed: async (request) => {
           const result = await modelAdapter.embedWithUsage(request, input.context);
-          recordUsage(result.usage);
+          recordUsage('embedding', result.usage);
           return result.vectors;
         },
       },
@@ -59,7 +75,7 @@ export class S7SearchPipelineFactory implements S7SearchPipelineFactoryPort {
             rerank: {
               rerank: async (request) => {
                 const result = await modelAdapter.rerankWithUsage(request, input.context);
-                recordUsage(result.usage);
+                recordUsage('rerank', result.usage);
                 return result.ranked;
               },
             },

@@ -103,6 +103,7 @@ interface DeepHarnessOptions {
   searchPartial?: boolean[];
   revoked?: Set<string>;
   onPlanner?: (round: number, messages: Array<{ role: string; content: string }>) => void;
+  onSearch?: (query: string, call: number) => void;
 }
 
 function key(candidateValue: AuthorizedCandidate): string {
@@ -221,6 +222,7 @@ function deepHarness(options: DeepHarnessOptions = {}) {
           tokenBudget: input.request.tokenBudget,
           knowledgeSpaceIds: input.knowledgeSpaceIds,
         });
+        options.onSearch?.(input.request.query, searchCalls.length);
         return {
           candidates: searchResponses.shift() ?? [candidateA],
           partial: searchPartial.shift() ?? false,
@@ -242,6 +244,21 @@ function deepHarness(options: DeepHarnessOptions = {}) {
     audits: {
       async appendSearch(input) {
         failedAudits.push(input as unknown as Record<string, unknown>);
+      },
+    },
+    cost: {
+      pricingVersion: 'b17-test-pricing-v1',
+      async availablePointsMicros() {
+        return 100_000_000;
+      },
+      llmPointsMicros(inputTokens, outputTokens) {
+        return (inputTokens + outputTokens) * 1_000;
+      },
+      embeddingPointsMicros(inputTokens) {
+        return inputTokens * 1_000;
+      },
+      rerankPointsMicros(inputTokens) {
+        return inputTokens * 1_000;
       },
     },
     searchIdFactory: () => 'search_b17_integration',
@@ -306,6 +323,8 @@ describe('L1-B17-SEARCH-008 Deep RAG application closure', () => {
     expect(result.items).toHaveLength(2);
     expect(new Set(result.items.map((item) => item.citation.citationId)).size).toBe(2);
     expect(result.stopReason).toBe('sufficient');
+    expect(result.usage.costBudgetPoints).toBe(100);
+    expect(result.usage.remainingAiPoints).toBeGreaterThan(0);
     expect(harness.issue).toHaveBeenCalledTimes(1);
   });
 
@@ -360,9 +379,15 @@ describe('L1-B17-SEARCH-008 Deep RAG application closure', () => {
       remainingAiPoints: expect.any(Number),
     });
     expect(harness.roundAudits[0]).toMatchObject({
+      aiPointsMicros: expect.any(Number),
+      pricingVersion: 'b17-test-pricing-v1',
+      permissionRevision: 3,
+      permissionRevisions: expect.arrayContaining([
+        expect.objectContaining({ sourceId: sourceA, revision: 3 }),
+      ]),
       stopEvidence: expect.objectContaining({
-        permissionRevision: expect.any(Number),
-        pricingVersion: expect.any(String),
+        reservedAiPoints: expect.any(Number),
+        actualAiPoints: expect.any(Number),
       }),
     });
   });
@@ -462,6 +487,31 @@ describe('L1-B17-SEARCH-008 Deep RAG application closure', () => {
     expect(harness.plannerMessages).toHaveLength(0);
   });
 
+  it('L1-B17-SEARCH-008-N06 returns confirmed citations as partial when cost budget stops the next round', async () => {
+    const harness = deepHarness({
+      planner: [
+        {
+          content: JSON.stringify({ queries: ['refund policy'], sufficient: false }),
+          inputTokens: 5_000,
+          outputTokens: 1_000,
+        },
+      ],
+    });
+    const result = await harness.instance.search(
+      request({
+        costBudgetPoints: 10,
+        maxRounds: 2,
+      }),
+      context,
+    );
+    expect(result.stopReason).toBe('cost_budget');
+    expect(result.partial).toBe(true);
+    expect(result.items).toHaveLength(1);
+    expect(result.usage.costBudgetPoints).toBe(10);
+    expect(result.usage.aiPoints).toBeLessThanOrEqual(result.usage.costBudgetPoints);
+    expect(harness.plannerMessages).toHaveLength(1);
+  });
+
   it('L1-B17-SEARCH-008-A02 reauthorizes confirmed evidence before it enters the next planner round', async () => {
     const revoked = new Set<string>();
     const harness = deepHarness({
@@ -475,19 +525,19 @@ describe('L1-B17-SEARCH-008 Deep RAG application closure', () => {
       ],
       search: [[candidateA], [candidateA]],
       revoked,
-      onPlanner(round) {
-        if (round === 2) revoked.add(key(candidateA));
+      onSearch(query, call) {
+        if (call === 1 && query === 'refund policy') revoked.add(key(candidateA));
       },
     });
-    await harness.instance.search(request({ maxRounds: 2 }), context).catch(() => undefined);
-
-    const plannerTwoSequence = harness.sequence.indexOf('planner:2');
-    const reauthBeforePlanner = harness.sequence
-      .slice(0, plannerTwoSequence)
-      .some((entry) => entry === `reauth:${segmentA}`);
-    expect(reauthBeforePlanner).toBe(true);
-    expect(harness.plannerMessages[1]?.at(-1)?.content).not.toContain('Refund policy');
-    expect(harness.plannerMessages[1]?.at(-1)?.content).not.toContain(
+    await expect(harness.instance.search(request({ maxRounds: 2 }), context)).rejects.toMatchObject(
+      {
+        problem: { error: { code: 'KNOWLEDGE_FORBIDDEN' } },
+      },
+    );
+    expect(harness.sequence).toContain(`reauth:${segmentA}`);
+    expect(harness.sequence).not.toContain('planner:2');
+    expect(harness.plannerMessages).toHaveLength(1);
+    expect(harness.plannerMessages[0]?.at(-1)?.content).not.toContain(
       'Refunds take five business days',
     );
   });

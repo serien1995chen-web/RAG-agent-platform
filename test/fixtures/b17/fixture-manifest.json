@@ -15,7 +15,8 @@
   "budgets": {
     "maxRounds": 3,
     "roundTokenBudget": 5000,
-    "tokenBudget": 12000
+    "tokenBudget": 12000,
+    "costBudgetPoints": 1
   },
   "stableKeys": [
     "knowledgeSpaceId",

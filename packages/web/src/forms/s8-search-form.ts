@@ -13,7 +13,7 @@ export const S8SearchFormSchema = z
     knowledgeSpaceId: ObjectId,
     knowledgeSpaceIds: z.array(ObjectId).min(1).max(20),
     query: z.string().trim().min(1).max(20_000),
-    tokenBudget: z.number().int().min(1).max(20_000).default(12_000),
+    tokenBudget: z.number().int().min(500).max(20_000).default(12_000),
     roundTokenBudget: z.number().int().min(500).max(20_000).default(5_000),
     maxRounds: z.number().int().min(1).max(3).default(3),
     stopWhenNoNewEvidence: z.boolean().default(true),
@@ -22,6 +22,16 @@ export const S8SearchFormSchema = z
     usingRerank: z.boolean().default(false),
     rerankWeight: z.number().min(0).max(1).default(0.5),
     imageUploadIds: z.array(z.string().min(1)).max(10).default([]),
+    costBudgetPoints: z
+      .number()
+      .finite()
+      .positive()
+      .max(1_000_000)
+      .refine((value) => {
+        const micros = Math.round(value * 1_000_000);
+        return micros >= 1 && Number.isSafeInteger(micros);
+      }, 'costBudgetPoints must convert to a positive safe integer number of micros')
+      .optional(),
   })
   .strict();
 
@@ -60,6 +70,7 @@ export function buildS8DeepRequest(value: S8SearchFormValues): DeepSearchApiRequ
     embeddingWeight: value.embeddingWeight,
     usingRerank: value.usingRerank,
     rerankWeight: value.rerankWeight,
+    ...(value.costBudgetPoints === undefined ? {} : { costBudgetPoints: value.costBudgetPoints }),
   });
 }
 

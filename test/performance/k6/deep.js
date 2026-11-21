@@ -30,6 +30,7 @@ export default function () {
       query: 'S11 Deep RAG performance fixture',
       tokenBudget: 7000,
       roundTokenBudget: 5000,
+      costBudgetPoints: Number(__ENV.S11_PERF_COST_BUDGET_POINTS || '100'),
       maxRounds: 3,
       stopWhenNoNewEvidence: true,
       similarity: 0,

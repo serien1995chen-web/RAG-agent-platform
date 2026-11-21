@@ -143,6 +143,7 @@ export {
   S8CaptionApplication,
   S8ContentEnhancementApplication,
   S8DeepSearchApplication,
+  S8DeepCostAdapter,
   S8DeepSearchRepository,
   S8FileTicketAdapter,
   S8ImageIndexRepository,

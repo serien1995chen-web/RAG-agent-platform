@@ -52,6 +52,15 @@ describe('TEST-X-DEEP-BUDGET / S8 UI forms', () => {
       stopWhenNoNewEvidence: true,
       costBudgetPoints: 0.25,
     });
+    for (const costBudgetPoints of [0, 0.0000001, -1, Number.NaN, Number.POSITIVE_INFINITY]) {
+      expect(
+        S8SearchFormSchema.safeParse({
+          ...withCostBudget,
+          costBudgetPoints,
+        }).success,
+        `costBudgetPoints=${String(costBudgetPoints)}`,
+      ).toBe(false);
+    }
   });
 
   it('reuses an idempotency key only while the request body is unchanged', () => {

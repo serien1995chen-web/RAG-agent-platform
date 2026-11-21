@@ -158,6 +158,10 @@ export interface SearchEngineDeps {
   modelUsage?: {
     inputTokens: number;
     outputTokens: number;
+    embeddingInputTokens?: number;
+    rerankInputTokens?: number;
+    llmInputTokens?: number;
+    llmOutputTokens?: number;
   };
   vectors: {
     embRecall(
@@ -238,6 +242,10 @@ export interface SearchPipelineResult extends SearchResult {
   modelUsage: {
     inputTokens: number;
     outputTokens: number;
+    embeddingInputTokens?: number;
+    rerankInputTokens?: number;
+    llmInputTokens?: number;
+    llmOutputTokens?: number;
   };
   queryExpansions: SearchQueryExpansionResult[];
 }

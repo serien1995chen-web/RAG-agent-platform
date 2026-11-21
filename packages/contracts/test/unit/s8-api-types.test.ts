@@ -92,7 +92,7 @@ describe('TEST-SEARCH-006-BLOCK / TEST-SEARCH-008-BLOCK API contracts', () => {
         `roundTokenBudget=${String(roundTokenBudget)}`,
       ).toBe(false);
     }
-    for (const tokenBudget of [0, 20_001, -1, Number.NaN, Number.POSITIVE_INFINITY, '12000']) {
+    for (const tokenBudget of [0, 499, 20_001, -1, Number.NaN, Number.POSITIVE_INFINITY, '12000']) {
       expect(
         DeepSearchApiRequestSchema.safeParse({ ...base, tokenBudget }).success,
         `tokenBudget=${String(tokenBudget)}`,
@@ -107,6 +107,16 @@ describe('TEST-SEARCH-006-BLOCK / TEST-SEARCH-008-BLOCK API contracts', () => {
         knowledgeSpaceIds: Array.from({ length: 21 }, (_, index) =>
           (index + 1).toString(16).padStart(24, '0'),
         ),
+      }).success,
+    ).toBe(false);
+    expect(
+      DeepSearchApiRequestSchema.safeParse({
+        knowledgeSpaceId: spaceId,
+        knowledgeSpaceIds: [spaceId],
+        query: 'compare policies',
+        tokenBudget: 12_000,
+        roundTokenBudget: 5_000,
+        costBudgetPoints: 0.0000001,
       }).success,
     ).toBe(false);
     expect(
@@ -155,6 +165,10 @@ describe('TEST-SEARCH-006-BLOCK / TEST-SEARCH-008-BLOCK API contracts', () => {
           queries: ['refund policy'],
           candidateCount: 0,
           sufficient: false,
+          inputTokens: 10,
+          outputTokens: 2,
+          aiPoints: 0.05,
+          permissionRevision: 3,
         },
       ],
       stopReason: 'cost_budget',

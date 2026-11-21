@@ -338,7 +338,7 @@ describe('S7 search application integration fixture', () => {
       mode: 'semantic',
       context,
     });
-    expect(result.usage).toEqual(modelUsage);
+    expect(result.usage).toMatchObject(modelUsage);
   });
 
   it('short-circuits an empty source allowlist before model or vector work', async () => {
