@@ -21,13 +21,21 @@ export const options = {
 
 export default function () {
   const baseUrl = __ENV.S11_PERF_BASE_URL.replace(/\/+$/, '');
+  const knowledgeSpaceId = __ENV.S11_PERF_SPACE_ID;
   const response = http.post(
     `${baseUrl}/v1/knowledge/search/deep`,
     JSON.stringify({
-      knowledgeSpaceId: __ENV.S11_PERF_SPACE_ID,
+      knowledgeSpaceId,
+      knowledgeSpaceIds: [knowledgeSpaceId],
       query: 'S11 Deep RAG performance fixture',
       tokenBudget: 7000,
+      roundTokenBudget: 5000,
       maxRounds: 3,
+      stopWhenNoNewEvidence: true,
+      similarity: 0,
+      embeddingWeight: 0.5,
+      usingRerank: true,
+      rerankWeight: 0.5,
     }),
     {
       headers: {
@@ -36,10 +44,23 @@ export default function () {
         'Idempotency-Key': `s11-deep-${__VU}-${__ITER}`.slice(0, 128),
         'Content-Type': 'application/json',
       },
-      tags: { scenario: 'deep' },
+      tags: { scenario: 'deep', test_id: 'L1-B17-SEARCH-008-Q01' },
     },
   );
   check(response, {
     'deep status is 200 or 207': (result) => result.status === 200 || result.status === 207,
+    'deep response has rounds and usage': (result) => {
+      try {
+        const payload = result.json();
+        return (
+          Array.isArray(payload.data.rounds) &&
+          payload.data.rounds.length > 0 &&
+          typeof payload.data.usage.inputTokens === 'number' &&
+          typeof payload.data.usage.outputTokens === 'number'
+        );
+      } catch {
+        return false;
+      }
+    },
   });
 }

@@ -37,6 +37,23 @@ describe('TEST-X-DEEP-BUDGET / S8 UI forms', () => {
     ).toBe(false);
   });
 
+  it('L1-B17-SEARCH-008-UI02 keeps Deep controls and AI Points budget in the product form contract', () => {
+    const defaults = defaultS8SearchForm(spaceId);
+    const withCostBudget = {
+      ...defaults,
+      query: 'compare refund escalation policies',
+      costBudgetPoints: 0.25,
+    };
+    expect(S8SearchFormSchema.safeParse(withCostBudget).success).toBe(true);
+    expect(buildS8DeepRequest(withCostBudget)).toMatchObject({
+      maxRounds: 3,
+      roundTokenBudget: 5_000,
+      tokenBudget: 12_000,
+      stopWhenNoNewEvidence: true,
+      costBudgetPoints: 0.25,
+    });
+  });
+
   it('reuses an idempotency key only while the request body is unchanged', () => {
     let index = 0;
     const keys = new IdempotencyKeyBuffer(() => `key-${++index}`);
