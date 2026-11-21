@@ -22728,7 +22728,11 @@
                     "round",
                     "queries",
                     "candidateCount",
-                    "sufficient"
+                    "sufficient",
+                    "inputTokens",
+                    "outputTokens",
+                    "aiPoints",
+                    "permissionRevision"
                   ],
                   "properties": {
                     "round": {
@@ -22754,6 +22758,22 @@
                       "examples": [
                         false
                       ]
+                    },
+                    "inputTokens": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "outputTokens": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "aiPoints": {
+                      "type": "number",
+                      "minimum": 0
+                    },
+                    "permissionRevision": {
+                      "type": "integer",
+                      "minimum": 0
                     }
                   }
                 }
@@ -22764,6 +22784,7 @@
                   "sufficient",
                   "round_limit",
                   "token_budget",
+                  "cost_budget",
                   "no_new_evidence",
                   "dependency_failure"
                 ],
@@ -22775,7 +22796,11 @@
                 "type": "object",
                 "required": [
                   "inputTokens",
-                  "outputTokens"
+                  "outputTokens",
+                  "aiPoints",
+                  "aiPointsMicros",
+                  "costBudgetPoints",
+                  "remainingAiPoints"
                 ],
                 "properties": {
                   "inputTokens": {
@@ -22789,6 +22814,22 @@
                     "examples": [
                       582
                     ]
+                  },
+                  "aiPoints": {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  "aiPointsMicros": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "costBudgetPoints": {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  "remainingAiPoints": {
+                    "type": "number",
+                    "minimum": 0
                   }
                 }
               }
@@ -26911,6 +26952,16 @@
               "stopWhenNoNewEvidence": {
                 "type": "boolean",
                 "default": true
+              },
+              "tokenBudget": {
+                "type": "integer",
+                "minimum": 500,
+                "maximum": 20000
+              },
+              "costBudgetPoints": {
+                "type": "number",
+                "exclusiveMinimum": 0,
+                "maximum": 1000000
               }
             }
           }

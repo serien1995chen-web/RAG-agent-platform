@@ -70,6 +70,7 @@ export const PROVIDER_SCENARIOS = Object.freeze({
   's11-aiproxy-real': Object.freeze(['aiproxy']),
   's11-aiproxy-catalog-preflight': Object.freeze(['aiproxy']),
   's11-provider-quota': Object.freeze(['aiproxy']),
+  's11-b17-deep-real': Object.freeze(['aiproxy']),
   's11-ocr-real': Object.freeze(['ocr-somark', 'ocr-textin', 'ocr-doc2x']),
   's11-connectors-real': Object.freeze(['feishu']),
 });

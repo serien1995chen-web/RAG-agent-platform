@@ -14,6 +14,7 @@ export function requestedScenario(argv) {
 
 const SCENARIO_EVIDENCE = Object.freeze({
   's11-aiproxy-real': 't02-aiproxy.json',
+  's11-b17-deep-real': 'b17-provider.json',
   's11-ocr-real': 't02-ocr.json',
   's11-connectors-real': 't02-connectors.json',
 });

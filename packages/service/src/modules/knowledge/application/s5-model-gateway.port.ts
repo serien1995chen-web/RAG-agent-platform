@@ -122,6 +122,7 @@ export interface S10ModelQuotaPort {
     work: () => Promise<T>,
     estimatedPointsMicros?: number,
   ): Promise<T>;
+  availableAiPointsMicros?(context: TenantContext): Promise<number>;
 }
 
 export interface S5GatewayResult<T> {

@@ -62,6 +62,8 @@ export async function startS4App(input: {
   scopes?: string;
   isWorkspaceOwner?: boolean;
   connectorMode?: 'mock' | 'real';
+  pricingProfile?: 'zero-v1' | 'fixture-v1';
+  quotaProfile?: 'free-v1' | 's11-perf-v1';
 }): Promise<S4AppHarness> {
   const port = await freePort();
   const baseUrl = `http://127.0.0.1:${port}`;
@@ -106,7 +108,9 @@ export async function startS4App(input: {
       KB_EXTERNAL_MODEL_MODE: 'mock',
       KB_EXTERNAL_OCR_MODE: 'mock',
       KB_EXTERNAL_CONNECTOR_MODE: input.connectorMode ?? 'mock',
-      KB_LOG_LEVEL: 'error',
+      KB_LOG_LEVEL: process.env.KB_LOG_LEVEL?.trim() || 'error',
+      ...(input.pricingProfile ? { KB_USAGE_PRICING_PROFILE: input.pricingProfile } : {}),
+      ...(input.quotaProfile ? { KB_QUOTA_PROFILE: input.quotaProfile } : {}),
     },
     stdio: ['ignore', 'pipe', 'pipe'],
   });

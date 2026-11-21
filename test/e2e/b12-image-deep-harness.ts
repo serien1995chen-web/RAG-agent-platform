@@ -75,13 +75,24 @@ function createObjectStore() {
 }
 
 export async function startB12ImageDeepHarness(
-  input: { suffix?: string } = {},
+  input: {
+    suffix?: string;
+    pricingProfile?: 'zero-v1' | 'fixture-v1';
+    quotaProfile?: 'free-v1' | 's11-perf-v1';
+  } = {},
 ): Promise<B12ImageDeepHarness> {
   const suffix = input.suffix ?? randomUUID().replaceAll('-', '').slice(0, 12);
   const workspaceId = `ws_s8_e2e_${suffix}`;
   const memberId = `mem_s8_e2e_${suffix}`;
   const authToken = `kb-s8-e2e-token-${suffix}`;
-  const app = await startS4App({ suffix, workspaceId, memberId, authToken });
+  const app = await startS4App({
+    suffix,
+    workspaceId,
+    memberId,
+    authToken,
+    ...(input.pricingProfile ? { pricingProfile: input.pricingProfile } : {}),
+    ...(input.quotaProfile ? { quotaProfile: input.quotaProfile } : {}),
+  });
   let connections: KnowledgeConnections | undefined;
   let pool: KnowledgeConnections['pg'] | undefined;
   let spaceId = '';
@@ -493,7 +504,10 @@ export async function startB12ImageDeepHarness(
       close,
     };
   } catch (error) {
+    const appOutput = app.output();
     await close();
-    throw error;
+    throw new Error(`${error instanceof Error ? error.message : String(error)}\n${appOutput}`, {
+      cause: error,
+    });
   }
 }

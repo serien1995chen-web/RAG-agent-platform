@@ -4,6 +4,7 @@ export type DeepStopReason =
   | 'sufficient'
   | 'round_limit'
   | 'token_budget'
+  | 'cost_budget'
   | 'no_new_evidence'
   | 'dependency_failure';
 
@@ -50,11 +51,19 @@ export function deepRoundSummary(input: {
   queries: readonly string[];
   candidateCount: number;
   sufficient: boolean;
+  inputTokens: number;
+  outputTokens: number;
+  aiPoints: number;
+  permissionRevision: number;
 }): DeepSearchRound {
   return {
     round: input.round,
     queries: [...input.queries],
     candidateCount: input.candidateCount,
     sufficient: input.sufficient,
+    inputTokens: input.inputTokens,
+    outputTokens: input.outputTokens,
+    aiPoints: input.aiPoints,
+    permissionRevision: input.permissionRevision,
   };
 }

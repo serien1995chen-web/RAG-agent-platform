@@ -11,6 +11,7 @@ import { registerKnowledgeModels } from '../../../shared/persistence/schemas/kno
 import type { TenantContext } from '../../../shared/persistence/knowledge/tenant';
 import { requireWorkspaceId } from '../../../shared/persistence/knowledge/tenant';
 import { KnowledgeAuditRepository } from '../../../shared/persistence/knowledge/audit';
+import { pointsFromMicros } from '../domain/s10-usage';
 
 function catalogModel(
   catalog: readonly ModelCatalogItem[],
@@ -104,6 +105,15 @@ export class S8DeepSearchRepository {
       durationMs: number;
       inputTokens: number;
       outputTokens: number;
+      aiPointsMicros: number;
+      pricingVersion: string;
+      permissionRevision: number;
+      permissionRevisions: readonly {
+        knowledgeSpaceId: string;
+        sourceId: string;
+        revision: number;
+      }[];
+      reservedAiPointsMicros: number;
       stopEvidence: Record<string, unknown>;
     },
     context: TenantContext,
@@ -127,9 +137,15 @@ export class S8DeepSearchRepository {
           sufficient: input.sufficient,
           modelIds: input.modelIds,
           durationMs: input.durationMs,
+          pricingVersion: input.pricingVersion,
+          permissionRevision: input.permissionRevision,
+          permissionRevisions: input.permissionRevisions,
+          reservedAiPointsMicros: input.reservedAiPointsMicros,
           usage: {
             inputTokens: input.inputTokens,
             outputTokens: input.outputTokens,
+            aiPointsMicros: input.aiPointsMicros,
+            aiPoints: pointsFromMicros(input.aiPointsMicros),
           },
           stopEvidence: input.stopEvidence,
         },

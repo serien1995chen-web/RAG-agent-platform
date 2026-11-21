@@ -214,6 +214,61 @@ jobs:
         if: always()
         run: docker rm --force kb-ci-mongo kb-ci-minio >/dev/null 2>&1 || true
 
+  b17-provider:
+    name: b17-provider
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.23.2'
+          cache: pnpm
+      - name: Install (frozen lockfile)
+        run: pnpm install --frozen-lockfile --prefer-offline
+      - name: Require TokenDance secrets
+        env:
+          AIPROXY_BASE_URL: ${{ secrets.AIPROXY_BASE_URL }}
+          AIPROXY_API_TOKEN: ${{ secrets.AIPROXY_API_TOKEN }}
+        run: |
+          missing=()
+          test -n "${AIPROXY_BASE_URL:-}" || missing+=("AIPROXY_BASE_URL")
+          test -n "${AIPROXY_API_TOKEN:-}" || missing+=("AIPROXY_API_TOKEN")
+          if [ "${#missing[@]}" -gt 0 ]; then
+            echo "::error::SCOPED_BLOCKED: missing GitHub secrets ${missing[*]}"
+            exit 2
+          fi
+      - name: B17 real TokenDance provider
+        env:
+          S11_SCOPE_PROFILE: knowledge-usability-v1
+          S11_PROVIDER_MODE: real
+          AIPROXY_MODE: openai
+          AIPROXY_BASE_URL: ${{ secrets.AIPROXY_BASE_URL }}
+          AIPROXY_API_TOKEN: ${{ secrets.AIPROXY_API_TOKEN }}
+          S11_AIPROXY_MODEL_MAPPING_APPROVED: 'true'
+          S11_AIPROXY_LLM_MODEL: qwen3.7-plus
+          S11_AIPROXY_EMBEDDING_MODEL: qwen3.7-text-embedding
+          S11_AIPROXY_RERANK_MODEL: qwen3.7-text-rerank
+          S11_AIPROXY_VLM_MODEL: kimi-k2.5
+          S11_AIPROXY_VISION_EMBEDDING_MODEL: qwen3.7-text-embedding
+          AIPROXY_MODEL_PROFILE_JSON: '{"models":[{"id":"qwen3.7-plus","type":"llm","capabilities":["chat"]},{"id":"qwen3.7-text-embedding","type":"embedding","capabilities":["text-embedding","caption-embedding"],"dimension":1024},{"id":"qwen3.7-text-rerank","type":"rerank","capabilities":["rerank"]},{"id":"kimi-k2.5","type":"vlm","capabilities":["vision"]}]}'
+          S11_EVIDENCE_DIR: ${{ runner.temp }}/b17-provider-evidence
+          B17_PROVIDER_EVIDENCE_DIR: ${{ runner.temp }}/b17-provider-evidence
+          CANDIDATE_SHA: ${{ github.sha }}
+          S11_PROVIDER_FIXTURE_SHA256: 992e4b4644487cfc8018b1d16b01b018ed318a371da2fdfc23fd9a2ff3da9546
+        run: pnpm test:provider:real -- s11-b17-deep-real
+      - name: Upload B17 provider evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: b17-provider-evidence-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/b17-provider-evidence
+          if-no-files-found: warn
+          retention-days: 7
+
   e2e:
     name: e2e
     runs-on: ubuntu-24.04
@@ -521,7 +576,7 @@ jobs:
 
   verify:
     name: verify
-    needs: [quality, integration, e2e, performance]
+    needs: [quality, integration, b17-provider, e2e, performance]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 2
@@ -530,5 +585,6 @@ jobs:
         run: |
           test "${{ needs.quality.result }}" = "success"
           test "${{ needs.integration.result }}" = "success"
+          test "${{ needs.b17-provider.result }}" = "success"
           test "${{ needs.e2e.result }}" = "success"
           test "${{ needs.performance.result }}" = "success"

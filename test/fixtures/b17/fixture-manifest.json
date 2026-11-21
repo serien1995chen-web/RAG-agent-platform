@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "capability": "SEARCH-008",
+  "timezone": "Asia/Shanghai",
+  "workspacePrefix": "ws_b17_e2e_",
+  "spaces": 2,
+  "sourcesPerSpace": 2,
+  "segmentsPerSource": 2,
+  "query": "Compare refund handling and escalation ownership across support policies.",
+  "plannerQueries": [
+    "refund handling policy",
+    "refund escalation owner",
+    "support policy exception approval"
+  ],
+  "budgets": {
+    "maxRounds": 3,
+    "roundTokenBudget": 5000,
+    "tokenBudget": 12000,
+    "costBudgetPoints": 1
+  },
+  "stableKeys": [
+    "knowledgeSpaceId",
+    "segmentId"
+  ],
+  "realProviderRequired": true
+}

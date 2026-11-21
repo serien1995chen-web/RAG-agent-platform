@@ -238,4 +238,16 @@ export class KnowledgeQuotaGate implements QuotaGatePort {
       await this.releaseReservation(reservation);
     }
   }
+
+  async availableAiPointsMicros(context: TenantContext): Promise<number> {
+    const snapshot = await this.snapshot(context, true);
+    const reservationKey = `kb:quota:points-reserved:${requireWorkspaceId(context)}`;
+    const reserved = Number((await this.input.redis.get(reservationKey)) ?? 0);
+    return Math.max(
+      0,
+      snapshot.quota.aiPointsLimit * 1_000_000 -
+        snapshot.usage.aiPointsMicros -
+        (Number.isFinite(reserved) && reserved > 0 ? reserved : 0),
+    );
+  }
 }

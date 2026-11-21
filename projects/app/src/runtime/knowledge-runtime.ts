@@ -53,6 +53,7 @@ import {
   S8CaptionApplication,
   S8ContentEnhancementApplication,
   S8DeepSearchApplication,
+  S8DeepCostAdapter,
   S8DeepSearchRepository,
   S8FileTicketAdapter,
   S8ImageIndexRepository,
@@ -912,6 +913,10 @@ async function bootstrapRuntime(): Promise<TelemetryKnowledgeApiRuntime> {
     authorization: s7Authorization,
     citations: s7Citations,
     audits: s7Citations,
+    cost: new S8DeepCostAdapter({
+      pricing: config.s10.pricing,
+      quota: quotaGate,
+    }),
     imagePreviews: imageTickets,
   });
   const s8Operations = new S8SearchOperationApplication(s8ImageSearch, s8DeepSearch);

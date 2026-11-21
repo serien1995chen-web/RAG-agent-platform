@@ -264,15 +264,27 @@ const DeepStopReasonSchema = z.enum([
   'sufficient',
   'round_limit',
   'token_budget',
+  'cost_budget',
   'no_new_evidence',
   'dependency_failure',
 ]);
 
 export const DeepSearchApiRequestSchema = SearchRequestObject.extend({
   knowledgeSpaceIds: z.array(SearchObjectIdSchema).min(1).max(20),
+  tokenBudget: z.number().int().min(500).max(20_000),
   maxRounds: z.number().int().min(1).max(3).default(3),
   roundTokenBudget: z.number().int().min(500).max(20_000).default(5_000),
   stopWhenNoNewEvidence: z.boolean().default(true),
+  costBudgetPoints: z
+    .number()
+    .finite()
+    .positive()
+    .max(1_000_000)
+    .refine((value) => {
+      const micros = Math.round(value * 1_000_000);
+      return micros >= 1 && Number.isSafeInteger(micros);
+    }, 'costBudgetPoints must convert to a positive safe integer number of micros')
+    .optional(),
 })
   .strict()
   .superRefine((request, context) => {
@@ -410,6 +422,10 @@ export const DeepSearchRoundSchema = z
     queries: z.array(z.string().min(1)).min(1).max(5),
     candidateCount: z.number().int().min(0),
     sufficient: z.boolean(),
+    inputTokens: z.number().int().min(0),
+    outputTokens: z.number().int().min(0),
+    aiPoints: z.number().finite().nonnegative(),
+    permissionRevision: z.number().int().nonnegative(),
   })
   .strict();
 
@@ -421,6 +437,10 @@ export const DeepSearchApiResponseSchema = SearchApiResponseSchema.extend({
     .object({
       inputTokens: z.number().int().min(0),
       outputTokens: z.number().int().min(0),
+      aiPoints: z.number().finite().nonnegative(),
+      aiPointsMicros: z.number().int().safe().nonnegative(),
+      costBudgetPoints: z.number().finite().nonnegative(),
+      remainingAiPoints: z.number().finite().nonnegative(),
     })
     .strict(),
 }).strict();

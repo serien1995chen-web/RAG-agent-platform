@@ -12,8 +12,9 @@ import { useQuery } from '@tanstack/react-query';
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { knowledgeMultipartUpload, type KnowledgeFileUploadState } from '../client/file-upload';
 import { S7MarkdownRenderer } from '../components/s7-markdown-renderer';
+import { S8SearchFormSchema } from '../forms/s8-search-form';
 import { productApi } from './api';
-import type { SearchResponse, SearchResultItem, Tag } from './types';
+import type { DeepSearchResponse, SearchResponse, SearchResultItem, Tag } from './types';
 import {
   ProductButton,
   ProductEmpty,
@@ -27,7 +28,8 @@ import {
   StatusTag,
 } from './ui';
 
-type SearchMode = 'semantic' | 'fulltext' | 'hybrid';
+type SearchMode = 'semantic' | 'fulltext' | 'hybrid' | 'deep';
+type SearchWorkspaceResult = SearchResponse | DeepSearchResponse;
 
 interface SearchSettings {
   mode: SearchMode;
@@ -42,6 +44,11 @@ interface SearchSettings {
   queryOptimizationPrompt: string;
   tagId: string;
   tagValue: string;
+  deepMaxRounds: number;
+  deepRoundTokenBudget: number;
+  deepTokenBudget: number;
+  deepCostBudgetPoints?: number;
+  stopWhenNoNewEvidence: boolean;
 }
 
 interface SearchHistoryEntry {
@@ -49,7 +56,7 @@ interface SearchHistoryEntry {
   query: string;
   imageLabel: string | null;
   createdAt: string;
-  result: SearchResponse;
+  result: SearchWorkspaceResult;
   settings: SearchSettings;
 }
 
@@ -66,7 +73,82 @@ const DEFAULT_SETTINGS: SearchSettings = {
   queryOptimizationPrompt: '',
   tagId: '',
   tagValue: '',
+  deepMaxRounds: 3,
+  deepRoundTokenBudget: 5_000,
+  deepTokenBudget: 12_000,
+  stopWhenNoNewEvidence: true,
 };
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function normalizeSearchSettings(value: Record<string, unknown>): SearchSettings {
+  const mode =
+    value.mode === 'semantic' ||
+    value.mode === 'fulltext' ||
+    value.mode === 'hybrid' ||
+    value.mode === 'deep'
+      ? value.mode
+      : DEFAULT_SETTINGS.mode;
+  const integer = (input: unknown, fallback: number) =>
+    typeof input === 'number' && Number.isInteger(input) ? input : fallback;
+  const finite = (input: unknown, fallback: number) =>
+    typeof input === 'number' && Number.isFinite(input) ? input : fallback;
+  return {
+    ...DEFAULT_SETTINGS,
+    ...value,
+    mode,
+    tokenBudget: integer(value.tokenBudget, DEFAULT_SETTINGS.tokenBudget),
+    similarity: finite(value.similarity, DEFAULT_SETTINGS.similarity),
+    embeddingWeight: finite(value.embeddingWeight, DEFAULT_SETTINGS.embeddingWeight),
+    rerankWeight: finite(value.rerankWeight, DEFAULT_SETTINGS.rerankWeight),
+    deepMaxRounds: integer(value.deepMaxRounds, DEFAULT_SETTINGS.deepMaxRounds),
+    deepRoundTokenBudget: integer(
+      value.deepRoundTokenBudget,
+      DEFAULT_SETTINGS.deepRoundTokenBudget,
+    ),
+    deepTokenBudget: integer(value.deepTokenBudget, DEFAULT_SETTINGS.deepTokenBudget),
+    deepCostBudgetPoints:
+      typeof value.deepCostBudgetPoints === 'number' &&
+      Number.isFinite(value.deepCostBudgetPoints) &&
+      value.deepCostBudgetPoints > 0
+        ? value.deepCostBudgetPoints
+        : undefined,
+    stopWhenNoNewEvidence:
+      typeof value.stopWhenNoNewEvidence === 'boolean'
+        ? value.stopWhenNoNewEvidence
+        : DEFAULT_SETTINGS.stopWhenNoNewEvidence,
+  };
+}
+
+function parseSearchHistory(value: unknown): SearchHistoryEntry[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((entry): entry is SearchHistoryEntry => {
+      if (!isRecord(entry) || !isRecord(entry.result) || !isRecord(entry.settings)) return false;
+      return (
+        typeof entry.id === 'string' &&
+        typeof entry.query === 'string' &&
+        typeof entry.createdAt === 'string' &&
+        Array.isArray(entry.result.items) &&
+        typeof entry.result.searchId === 'string' &&
+        (!('stopReason' in entry.result) ||
+          (entry.result.mode === 'multi_space' &&
+            Array.isArray(entry.result.rounds) &&
+            isRecord(entry.result.usage)))
+      );
+    })
+    .slice(0, 50)
+    .map((entry) => ({
+      id: entry.id,
+      query: entry.query,
+      imageLabel: typeof entry.imageLabel === 'string' ? entry.imageLabel : null,
+      createdAt: entry.createdAt,
+      settings: normalizeSearchSettings(entry.settings as unknown as Record<string, unknown>),
+      result: withoutEphemeralImagePreviews(entry.result),
+    }));
+}
 
 export function SearchWorkspace(props: {
   datasetId: string;
@@ -79,13 +161,14 @@ export function SearchWorkspace(props: {
   const [settingsLoaded, setSettingsLoaded] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsDraft, setSettingsDraft] = useState<SearchSettings>(DEFAULT_SETTINGS);
+  const [settingsError, setSettingsError] = useState('');
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imageUrl, setImageUrl] = useState('');
   const [imageUpload, setImageUpload] = useState<KnowledgeFileUploadState | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
   const [warning, setWarning] = useState('');
-  const [result, setResult] = useState<SearchResponse | null>(null);
+  const [result, setResult] = useState<SearchWorkspaceResult | null>(null);
   const [selectedHistoryId, setSelectedHistoryId] = useState('');
   const [history, setHistory] = useState<SearchHistoryEntry[]>([]);
 
@@ -107,10 +190,11 @@ export function SearchWorkspace(props: {
     try {
       const stored = JSON.parse(
         globalThis.localStorage.getItem(historyKey(props.datasetId)) ?? '[]',
-      ) as SearchHistoryEntry[];
-      setHistory(Array.isArray(stored) ? stored.slice(0, 50) : []);
+      ) as unknown;
+      setHistory(parseSearchHistory(stored));
     } catch {
       setHistory([]);
+      globalThis.localStorage.removeItem(historyKey(props.datasetId));
     }
     setResult(null);
     setSelectedHistoryId('');
@@ -122,8 +206,8 @@ export function SearchWorkspace(props: {
     try {
       const stored = JSON.parse(
         globalThis.localStorage.getItem(settingsKey(props.datasetId)) ?? 'null',
-      ) as SearchSettings | null;
-      setSettings(stored ? { ...DEFAULT_SETTINGS, ...stored } : DEFAULT_SETTINGS);
+      ) as unknown;
+      setSettings(isRecord(stored) ? normalizeSearchSettings(stored) : DEFAULT_SETTINGS);
     } catch {
       setSettings(DEFAULT_SETTINGS);
     } finally {
@@ -162,7 +246,6 @@ export function SearchWorkspace(props: {
         query: query.trim(),
         tokenBudget: settings.tokenBudget,
         similarity: settings.similarity,
-        searchMode: settings.mode,
         embeddingWeight: settings.embeddingWeight,
         usingRerank: settings.usingRerank,
         rerankWeight: settings.rerankWeight,
@@ -176,17 +259,36 @@ export function SearchWorkspace(props: {
           : {}),
         ...(filters ? { filters } : {}),
       };
-      const response = imageUpload?.uploadId
-        ? await productApi.searchImage({
-            ...base,
-            imageUploadIds: [imageUpload.uploadId],
-          })
-        : await productApi.search(settings.mode, base);
+      const response: SearchWorkspaceResult =
+        settings.mode === 'deep'
+          ? await productApi.searchDeep({
+              ...base,
+              knowledgeSpaceIds: [props.datasetId],
+              tokenBudget: settings.deepTokenBudget,
+              roundTokenBudget: settings.deepRoundTokenBudget,
+              maxRounds: settings.deepMaxRounds,
+              stopWhenNoNewEvidence: settings.stopWhenNoNewEvidence,
+              searchMode: 'hybrid',
+              ...(settings.deepCostBudgetPoints === undefined
+                ? {}
+                : { costBudgetPoints: settings.deepCostBudgetPoints }),
+            })
+          : imageUpload?.uploadId
+            ? await productApi.searchImage({
+                ...base,
+                searchMode: settings.mode,
+                imageUploadIds: [imageUpload.uploadId],
+              })
+            : await productApi.search(settings.mode, {
+                ...base,
+                searchMode: settings.mode,
+              });
       if (response.items.length === 0) {
         const degraded = response.degraded?.length
           ? `降级原因：${response.degraded.join(', ')}。`
           : '';
-        setWarning(`搜索结果为空。${degraded}右侧继续保留上一条测试结果。`);
+        const stopReason = 'stopReason' in response ? `停止原因：${response.stopReason}。` : '';
+        setWarning(`搜索结果为空。${stopReason}${degraded}右侧继续保留上一条测试结果。`);
         return;
       }
       setResult(response);
@@ -227,11 +329,43 @@ export function SearchWorkspace(props: {
 
   const openSettings = () => {
     setSettingsDraft(settings);
+    setSettingsError('');
     setSettingsOpen(true);
   };
 
   const applySettings = () => {
+    if (settingsDraft.mode === 'deep') {
+      const validation = S8SearchFormSchema.safeParse({
+        knowledgeSpaceId: props.datasetId,
+        knowledgeSpaceIds: [props.datasetId],
+        query: 'validation',
+        tokenBudget: settingsDraft.deepTokenBudget,
+        roundTokenBudget: settingsDraft.deepRoundTokenBudget,
+        maxRounds: settingsDraft.deepMaxRounds,
+        stopWhenNoNewEvidence: settingsDraft.stopWhenNoNewEvidence,
+        similarity: settingsDraft.similarity,
+        embeddingWeight: settingsDraft.embeddingWeight,
+        usingRerank: settingsDraft.usingRerank,
+        rerankWeight: settingsDraft.rerankWeight,
+        imageUploadIds: [],
+        ...(settingsDraft.deepCostBudgetPoints === undefined
+          ? {}
+          : { costBudgetPoints: settingsDraft.deepCostBudgetPoints }),
+      });
+      if (!validation.success) {
+        const path = validation.error.issues[0]?.path.join('.') ?? '';
+        const hints: Record<string, string> = {
+          maxRounds: '最大轮次必须在 1 到 3 之间。',
+          roundTokenBudget: '单轮 token 预算必须在 500 到 20000 之间。',
+          tokenBudget: '总 token 预算必须在 500 到 20000 之间。',
+          costBudgetPoints: 'AI Points 预算必须为可安全结算的正数。',
+        };
+        setSettingsError(hints[path] ?? 'Deep 搜索参数校验失败，请检查输入。');
+        return;
+      }
+    }
     setSettings(settingsDraft);
+    setSettingsError('');
     setSettingsOpen(false);
   };
 
@@ -286,10 +420,35 @@ export function SearchWorkspace(props: {
             参数
           </ProductButton>
         </div>
+        <fieldset className="kb2-search-mode-switch" aria-label="切换搜索模式">
+          <legend>切换搜索模式</legend>
+          {[
+            ['semantic', '语义检索'],
+            ['fulltext', '全文检索'],
+            ['hybrid', '混合检索'],
+            ['deep', 'Deep RAG 深度检索'],
+          ].map(([value, label]) => (
+            <label key={value} className="kb2-checkbox-row">
+              <input
+                type="radio"
+                name="search-mode"
+                value={value}
+                checked={settings.mode === value}
+                onChange={() => {
+                  setSettings((current) => ({ ...current, mode: value as SearchMode }));
+                  setError(null);
+                  setWarning('');
+                }}
+              />
+              <span>{label}</span>
+            </label>
+          ))}
+        </fieldset>
         <ProductTextarea
           value={query}
           onChange={(event) => setQuery(event.target.value)}
           rows={7}
+          maxLength={20_000}
           placeholder="输入要测试的问题"
           aria-label="测试查询"
         />
@@ -309,9 +468,17 @@ export function SearchWorkspace(props: {
             hidden
             onChange={(event) => void uploadImage(event.target.files?.[0] ?? null)}
           />
-          <ProductButton type="button" size="sm" onClick={() => fileInput.current?.click()}>
+          <ProductButton
+            type="button"
+            size="sm"
+            onClick={() => fileInput.current?.click()}
+            disabled={settings.mode === 'deep'}
+          >
             图片查询
           </ProductButton>
+          {settings.mode === 'deep' ? (
+            <span className="kb2-table-muted">Deep RAG 仅支持文本查询</span>
+          ) : null}
           {imageUpload ? (
             <span className="kb2-table-muted">
               {imageUpload.phase} · {imageUpload.progress}%
@@ -320,19 +487,23 @@ export function SearchWorkspace(props: {
         </div>
         <div className="kb2-search-actions">
           <span>
-            {modeLabel(settings.mode)} · Token {settings.tokenBudget} · 相似度 {settings.similarity}
+            {settings.mode === 'deep'
+              ? `Deep RAG 深度检索 · 总 token ${settings.deepTokenBudget} · 单轮 token ${settings.deepRoundTokenBudget} · 最大轮次 ${settings.deepMaxRounds}`
+              : `${modeLabel(settings.mode)} · Token ${settings.tokenBudget} · 相似度 ${settings.similarity}`}
           </span>
           <ProductButton
             type="submit"
             tone="primary"
             busy={busy}
             disabled={
-              (!query.trim() && !imageUpload?.uploadId) ||
-              (Boolean(imageFile) && imageUpload?.phase !== 'completed')
+              settings.mode === 'deep'
+                ? !query.trim()
+                : (!query.trim() && !imageUpload?.uploadId) ||
+                  (Boolean(imageFile) && imageUpload?.phase !== 'completed')
             }
           >
             <SearchIcon boxSize={3.5} />
-            开始测试
+            {busy ? '测试中' : '开始测试'}
           </ProductButton>
         </div>
         <ProductError error={error} />
@@ -360,8 +531,8 @@ export function SearchWorkspace(props: {
                   测试结果 <span>({result.durationMs} ms)</span>
                 </h2>
                 <p>
-                  {modeLabel(result.mode)} · 返回 {result.items.length} 条
-                  {result.partial ? ' · 部分结果' : ''}
+                  {'stopReason' in result ? 'Deep RAG 深度检索' : modeLabel(result.mode)} · 返回{' '}
+                  {result.items.length} 条{result.partial ? ' · 部分结果' : ''}
                 </p>
               </div>
               {result.degraded?.length ? (
@@ -369,12 +540,58 @@ export function SearchWorkspace(props: {
               ) : null}
             </div>
             <div className="kb2-search-params">
-              <StatusTag value={modeLabel(result.mode)} tone="info" />
+              <StatusTag
+                value={'stopReason' in result ? 'Deep RAG 深度检索' : modeLabel(result.mode)}
+                tone="info"
+              />
               <span>测试参数</span>
               <small>
-                Token {settings.tokenBudget} · 相似度 {settings.similarity}
+                {'stopReason' in result
+                  ? `总 token ${settings.deepTokenBudget} · 单轮 token ${settings.deepRoundTokenBudget} · 最大轮次 ${settings.deepMaxRounds}`
+                  : `Token ${settings.tokenBudget} · 相似度 ${settings.similarity}`}
               </small>
             </div>
+            {'stopReason' in result ? (
+              <div className="kb2-search-deep-summary">
+                <div>
+                  <span>停止原因</span>
+                  <strong>{result.stopReason}</strong>
+                </div>
+                <div>
+                  <span>轮次</span>
+                  <strong>{result.rounds.length}</strong>
+                </div>
+                <div>
+                  <span>耗时</span>
+                  <strong>{result.durationMs} ms</strong>
+                </div>
+                <div>
+                  <span>Token</span>
+                  <strong>
+                    {result.usage.inputTokens} 输入 / {result.usage.outputTokens} 输出
+                  </strong>
+                </div>
+                <div>
+                  <span>AI Points</span>
+                  <strong>
+                    {result.usage.aiPoints} 已用 / {result.usage.costBudgetPoints} 预算 /{' '}
+                    {result.usage.remainingAiPoints} 剩余
+                  </strong>
+                </div>
+                <ol className="kb2-search-deep-rounds">
+                  {result.rounds.map((round) => (
+                    <li key={round.round}>
+                      <strong>第 {round.round} 轮</strong>
+                      <span>
+                        {round.queries.join(' · ')} · 候选 {round.candidateCount} ·{' '}
+                        {round.sufficient ? '证据充分' : '继续检索'} · Token{' '}
+                        {round.inputTokens + round.outputTokens} · AI Points {round.aiPoints}
+                      </span>
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            ) : null}
             <div className="kb2-search-result-list">
               {result.items.map((item, index) => (
                 <SearchResultCard
@@ -422,6 +639,7 @@ export function SearchWorkspace(props: {
               <option value="semantic">语义检索</option>
               <option value="fulltext">全文检索</option>
               <option value="hybrid">混合检索</option>
+              <option value="deep">Deep RAG 深度检索</option>
             </ProductSelect>
           </ProductField>
           <ProductField label="Token 上限">
@@ -453,6 +671,88 @@ export function SearchWorkspace(props: {
               }
             />
           </ProductField>
+          {settingsDraft.mode === 'deep' ? (
+            <>
+              <ProductField label="最大轮次">
+                <ProductInput
+                  type="number"
+                  min={1}
+                  max={3}
+                  aria-label="最大轮次"
+                  value={settingsDraft.deepMaxRounds}
+                  onChange={(event) =>
+                    setSettingsDraft((current) => ({
+                      ...current,
+                      deepMaxRounds: Number(event.target.value),
+                    }))
+                  }
+                />
+              </ProductField>
+              <ProductField label="单轮 token 预算">
+                <ProductInput
+                  type="number"
+                  min={500}
+                  max={20000}
+                  aria-label="单轮 token 预算"
+                  value={settingsDraft.deepRoundTokenBudget}
+                  onChange={(event) =>
+                    setSettingsDraft((current) => ({
+                      ...current,
+                      deepRoundTokenBudget: Number(event.target.value),
+                    }))
+                  }
+                />
+              </ProductField>
+              <ProductField label="总 token 预算">
+                <ProductInput
+                  type="number"
+                  min={500}
+                  max={20000}
+                  aria-label="总 token 预算"
+                  value={settingsDraft.deepTokenBudget}
+                  onChange={(event) =>
+                    setSettingsDraft((current) => ({
+                      ...current,
+                      deepTokenBudget: Number(event.target.value),
+                    }))
+                  }
+                />
+              </ProductField>
+              <ProductField label="AI Points 费用预算">
+                <ProductInput
+                  type="number"
+                  min={0.000001}
+                  max={1000000}
+                  step={0.000001}
+                  aria-label="AI Points 费用预算"
+                  placeholder="留空使用工作区剩余额度"
+                  value={settingsDraft.deepCostBudgetPoints ?? ''}
+                  onChange={(event) =>
+                    setSettingsDraft((current) => ({
+                      ...current,
+                      deepCostBudgetPoints:
+                        event.target.value === '' ? undefined : Number(event.target.value),
+                    }))
+                  }
+                />
+              </ProductField>
+              <div className="kb2-form-grid__full">
+                <label className="kb2-checkbox-row">
+                  <input
+                    type="checkbox"
+                    checked={settingsDraft.stopWhenNoNewEvidence}
+                    onChange={(event) =>
+                      setSettingsDraft((current) => ({
+                        ...current,
+                        stopWhenNoNewEvidence: event.target.checked,
+                      }))
+                    }
+                  />
+                  <span>无新证据时停止</span>
+                </label>
+              </div>
+            </>
+          ) : null}
           {settingsDraft.mode === 'hybrid' ? (
             <ProductField label="向量权重">
               <ProductInput
@@ -600,8 +900,16 @@ export function SearchWorkspace(props: {
             onChange={(tagValue) => setSettingsDraft((current) => ({ ...current, tagValue }))}
           />
         ) : null}
+        {settingsError ? (
+          <div className="kb2-search-warning" role="alert">
+            <WarningIcon boxSize={4} />
+            {settingsError}
+          </div>
+        ) : null}
         <div className="kb2-note">
-          问题优化会先调用所选文本模型改写查询；失败时保留原查询并显示降级状态。
+          {settingsDraft.mode === 'deep'
+            ? 'Deep RAG 仅使用文本 query，在轮次、token 和 AI Points 上限内逐步收集证据并签发引用。'
+            : '问题优化会先调用所选文本模型改写查询；失败时保留原查询并显示降级状态。'}
         </div>
       </ProductModal>
     </section>
@@ -696,7 +1004,7 @@ function historyKey(datasetId: string) {
   return `kb-product-search-history:${datasetId}`;
 }
 
-function withoutEphemeralImagePreviews(result: SearchResponse): SearchResponse {
+function withoutEphemeralImagePreviews(result: SearchWorkspaceResult): SearchWorkspaceResult {
   return {
     ...result,
     items: result.items.map(({ imagePreview: _imagePreview, ...item }) => item),
@@ -711,6 +1019,7 @@ function modeLabel(mode: string) {
   if (mode === 'semantic') return '语义检索';
   if (mode === 'fulltext' || mode === 'full-text') return '全文检索';
   if (mode === 'hybrid') return '混合检索';
+  if (mode === 'deep') return 'Deep RAG 深度检索';
   if (mode === 'image') return '图片检索';
   if (mode === 'multi_space') return '多知识库检索';
   return mode;

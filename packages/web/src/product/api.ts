@@ -14,6 +14,7 @@ import type {
   ProviderCatalogItem,
   Collaborator,
   Connector,
+  DeepSearchResponse,
   Directory,
   FileTicket,
   Job,
@@ -816,6 +817,14 @@ export function searchImage(input: Record<string, unknown>) {
   });
 }
 
+export function searchDeep(input: Record<string, unknown>) {
+  return knowledgeRequest<DeepSearchResponse>('/v1/knowledge/search/deep', {
+    method: 'POST',
+    idempotencyKey: key(),
+    body: input,
+  });
+}
+
 export function importFiles(
   spaceId: string,
   input: {
@@ -1168,6 +1177,7 @@ export const productApi = {
   syncConnector,
   search,
   searchImage,
+  searchDeep,
   importFiles,
   importText,
   importUrl,

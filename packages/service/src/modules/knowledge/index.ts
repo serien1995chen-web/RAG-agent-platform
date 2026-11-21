@@ -161,6 +161,7 @@ export { S5ProcessingApplication } from './application/s5-processing.application
 export { S8CaptionApplication } from './application/s8-caption.application';
 export { S8ContentEnhancementApplication } from './application/s8-content-enhancement.application';
 export { S8DeepSearchApplication } from './application/s8-deep-search.application';
+export { S8DeepCostAdapter } from './adapter/s8-deep-cost.adapter';
 export { S8ModelResolver } from './adapter/s8-model-resolver';
 export { S8FileTicketAdapter } from './adapter/s8-file-ticket.adapter';
 export { S8ImageIndexRepository } from './repository/s8-image-index.repository';
