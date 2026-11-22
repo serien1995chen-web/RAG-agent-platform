@@ -88,6 +88,7 @@ import {
   createS5ModelGateway,
   isS04Operation,
   KnowledgeAuditRepository,
+  safeAuditDiff,
   KnowledgeApplication,
   KnowledgeArchiveRepository,
   KnowledgeCatalogRepository,
@@ -112,6 +113,8 @@ import {
   S10StatusApplication,
   S10StatusProbesAdapter,
   S10ModelHealthProbeAdapter,
+  S10ConnectorSchedulerApplication,
+  KnowledgeConnectorScheduleRepository,
   registerKnowledgeModels,
   SourceFileApplication,
   RedisKnowledgeRateLimiter,
@@ -119,6 +122,7 @@ import {
   ensureKnowledgeCollections,
   ensurePgvectorDdl,
   loadKnowledgeRuntimeConfig,
+  prefixedRedisKey,
   resolveSecretRef,
   tenantContextOf,
   type KnowledgeRuntimeConfig,
@@ -167,6 +171,7 @@ interface RuntimeState {
   s06Jobs: S06JobApplication;
   s06Processing: S06ProcessingApplication;
   s10OpsWorker: S10OpsWorkerApplication;
+  connectorScheduler: S10ConnectorSchedulerApplication;
   telemetry: TelemetryRuntime;
 }
 
@@ -176,6 +181,7 @@ interface TelemetryKnowledgeApiRuntime extends KnowledgeApiRuntime {
   s06WorkerServices(): {
     processing: S06ProcessingApplication;
     s10Ops: S10OpsWorkerApplication;
+    connectorScheduler: S10ConnectorSchedulerApplication;
     mongo: Awaited<ReturnType<typeof createKnowledgeConnections>>['mongo'];
     redis: Awaited<ReturnType<typeof createKnowledgeConnections>>['redis'];
     config: KnowledgeRuntimeConfig;
@@ -188,15 +194,21 @@ let runtimePromise: Promise<TelemetryKnowledgeApiRuntime> | undefined;
 class RedisFileTicketAtomicStore implements FileTicketAtomicStore {
   constructor(
     private readonly redis: Awaited<ReturnType<typeof createKnowledgeConnections>>['redis'],
+    private readonly prefix = '',
   ) {}
 
   async consumeOnce(key: string): Promise<boolean> {
-    const result = await this.redis.getdel(`kb:file-ticket:${key}`);
+    const result = await this.redis.getdel(prefixedRedisKey(this.prefix, `kb:file-ticket:${key}`));
     return result !== null;
   }
 
   async register(key: string, ttlMs: number): Promise<void> {
-    await this.redis.set(`kb:file-ticket:${key}`, 'issued', 'PX', Math.max(1, ttlMs));
+    await this.redis.set(
+      prefixedRedisKey(this.prefix, `kb:file-ticket:${key}`),
+      'issued',
+      'PX',
+      Math.max(1, ttlMs),
+    );
   }
 }
 
@@ -333,6 +345,7 @@ async function bootstrapRuntime(): Promise<TelemetryKnowledgeApiRuntime> {
     usage: s10Usage,
     redis,
     quota: config.s10.quota,
+    redisPrefix: config.redisPrefix,
   });
   const s5Catalog =
     s5AiproxyConfig.modelMode === 'mock'
@@ -480,7 +493,10 @@ async function bootstrapRuntime(): Promise<TelemetryKnowledgeApiRuntime> {
       };
     },
   });
-  const queueAdapter = new BullMqQueueAdapter({ connection: redis });
+  const queueAdapter = new BullMqQueueAdapter({
+    connection: redis,
+    prefix: config.queuePrefix,
+  });
   const outboxDispatcher = new KnowledgeOutboxDispatcher(mongo, queueAdapter);
   const jobExecution = new KnowledgeJobExecutionRepository(mongo);
   const vectorRepository = new KnowledgeVectorRepository(pool);
@@ -490,7 +506,7 @@ async function bootstrapRuntime(): Promise<TelemetryKnowledgeApiRuntime> {
     resolveSecretRef(config.fileTicketSecretRef),
     config.filePublicBaseUrl,
     Date.now,
-    new RedisFileTicketAtomicStore(redis),
+    new RedisFileTicketAtomicStore(redis, config.redisPrefix),
   );
   const imageTickets = new S8FileTicketAdapter(fileTickets);
   const imageIndexes = new S8ImageIndexRepository(mongo);
@@ -562,6 +578,10 @@ async function bootstrapRuntime(): Promise<TelemetryKnowledgeApiRuntime> {
   };
   const importRepository = new KnowledgeImportRepository(mongo);
   const connectorRepository = new KnowledgeConnectorRepository(mongo, credentialCipher);
+  const connectorScheduler = new S10ConnectorSchedulerApplication({
+    schedules: new KnowledgeConnectorScheduleRepository(mongo),
+    connectors: connectorRepository,
+  });
   const connectorSync = new KnowledgeConnectorSyncApplication({
     connectors: connectorRepository,
     gateway: connectorGateway,
@@ -1389,7 +1409,10 @@ async function bootstrapRuntime(): Promise<TelemetryKnowledgeApiRuntime> {
     quotaGate,
   );
   const queues = new Map(
-    KNOWLEDGE_QUEUE_NAMES.map((name) => [name, new Queue(name, { connection: redis })]),
+    KNOWLEDGE_QUEUE_NAMES.map((name) => [
+      name,
+      new Queue(name, { connection: redis, prefix: config.queuePrefix }),
+    ]),
   );
   const state: RuntimeState = {
     config,
@@ -1399,12 +1422,12 @@ async function bootstrapRuntime(): Promise<TelemetryKnowledgeApiRuntime> {
     objectStore,
     queueAdapter,
     queues,
-    idempotencyStore: new RedisIdempotencyStore(redis),
+    idempotencyStore: new RedisIdempotencyStore(redis, undefined, config.redisPrefix),
     authProvider: new KnowledgeCompositeAuthProvider(
       new KnowledgeMockAuthProvider(config.auth, config.environment),
       new KnowledgeApiKeyAuthProvider(s10ApiKeys, config.s10.apiKeyHmacSecret),
     ),
-    rateLimiter: new RedisKnowledgeRateLimiter(redis),
+    rateLimiter: new RedisKnowledgeRateLimiter(redis, config.redisPrefix),
     application,
     ingestion,
     s5Models,
@@ -1414,6 +1437,7 @@ async function bootstrapRuntime(): Promise<TelemetryKnowledgeApiRuntime> {
     s06Jobs,
     s06Processing: s6Processing,
     s10OpsWorker,
+    connectorScheduler,
     telemetry,
   };
 
@@ -1504,6 +1528,59 @@ async function bootstrapRuntime(): Promise<TelemetryKnowledgeApiRuntime> {
       readiness,
       models: s5Catalog,
       modelHealth: new S10ModelHealthProbeAdapter({ gateway: s5Gateway }),
+      securityProbe: async () => {
+        const scopeProbe = new S10StatusApplication({
+          async probe() {
+            throw createKnowledgeError({
+              code: 'KNOWLEDGE_FORBIDDEN',
+              requestId: 'security:scope',
+              traceId: 'security:scope',
+              details: { reason: 'scope_probe_must_not_run_dependencies' },
+            });
+          },
+        });
+        const scopeEnforced = await scopeProbe
+          .get({
+            workspaceId: bootstrapWorkspaceId,
+            memberId: 'system:security-probe',
+            requestId: 'security:scope',
+            traceId: 'security:scope',
+            scopes: [],
+            isWorkspaceOwner: false,
+          })
+          .then(() => false)
+          .catch(() => true);
+        const auditAppendOnly = await Promise.all([
+          audits
+            .update()
+            .then(() => false)
+            .catch(() => true),
+          audits
+            .delete()
+            .then(() => false)
+            .catch(() => true),
+          mongo.db
+            ?.listCollections({ name: 'knowledge_audit_events' }, { nameOnly: true })
+            .hasNext(),
+        ]).then(([updateRejected, deleteRejected, collectionExists]) => {
+          return updateRejected && deleteRejected && collectionExists === true;
+        });
+        const redacted = safeAuditDiff({
+          token: 'security-probe-token',
+          authorization: 'Bearer security-probe',
+          nested: { cookie: 'security-probe-cookie', safe: 'visible' },
+        }) as Record<string, unknown>;
+        const nested = redacted.nested as Record<string, unknown> | undefined;
+        return {
+          scopeEnforced,
+          auditAppendOnly,
+          secretRedactionEnabled:
+            redacted.token === '[REDACTED]' &&
+            redacted.authorization === '[REDACTED]' &&
+            nested?.cookie === '[REDACTED]' &&
+            nested?.safe === 'visible',
+        };
+      },
     }),
   );
 
@@ -1581,6 +1658,7 @@ async function bootstrapRuntime(): Promise<TelemetryKnowledgeApiRuntime> {
       return {
         processing: state.s06Processing,
         s10Ops: state.s10OpsWorker,
+        connectorScheduler: state.connectorScheduler,
         mongo: state.mongo,
         redis: state.redis,
         config: state.config,
@@ -1688,6 +1766,7 @@ export function getKnowledgeApiRuntime(): Promise<TelemetryKnowledgeApiRuntime> 
 export async function getKnowledgeWorkerServices(): Promise<{
   processing: S06ProcessingApplication;
   s10Ops: S10OpsWorkerApplication;
+  connectorScheduler: S10ConnectorSchedulerApplication;
   mongo: Awaited<ReturnType<typeof createKnowledgeConnections>>['mongo'];
   redis: Awaited<ReturnType<typeof createKnowledgeConnections>>['redis'];
   config: KnowledgeRuntimeConfig;

@@ -44,6 +44,8 @@ export interface S10StatusView {
     verificationStatus: S10VerificationStatus;
     latencyMs: number;
     modelCount?: number;
+    reason?: string;
+    errorCode?: string;
   };
   connectorProbes: Array<{
     connectorId?: string;
@@ -51,6 +53,10 @@ export interface S10StatusView {
     status: string;
     verificationStatus: S10VerificationStatus;
     lastAttemptAt?: string | null;
+    lastSuccessAt?: string | null;
+    nextSyncAt?: string | null;
+    lastError?: Record<string, unknown> | null;
+    stale?: boolean;
   }>;
   queueProbe: S10ProbeState;
   connectorProbe: S10ProbeState;
@@ -109,8 +115,8 @@ export class S10StatusApplication {
     const vectorHealthy =
       view.vector.healthy && verificationHealthy(view.vector.verificationStatus);
     const modelHealthy = verificationHealthy(view.modelProbe.verificationStatus);
-    const connectorsVerified = view.connectorProbes.every((entry) =>
-      verificationHealthy(entry.verificationStatus),
+    const connectorsVerified = view.connectorProbes.every(
+      (entry) => verificationHealthy(entry.verificationStatus) && entry.stale !== true,
     );
     const queueHealthy =
       view.queueProbe.status === 'ok' && verificationHealthy(view.queueProbe.verificationStatus);
@@ -168,6 +174,8 @@ export class S10StatusApplication {
         status: 'unknown',
         verificationStatus: 'UNKNOWN',
         latencyMs: 0,
+        reason: 'probe_failed',
+        errorCode: 'MODEL_PROBE_FAILED',
       },
       connectorProbes: [],
       queueProbe: down,

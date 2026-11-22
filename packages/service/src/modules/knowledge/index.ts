@@ -97,6 +97,14 @@ export type {
 } from './application/s10-status.application';
 export { S10StatusProbesAdapter } from './adapter/s10-status-probes.adapter';
 export { S10ModelHealthProbeAdapter } from './adapter/s10-model-health.adapter';
+export { S10ConnectorSchedulerApplication } from './application/s10-connector-scheduler.application';
+export type {
+  S10ConnectorScheduleClaim,
+  S10ConnectorScheduleRepositoryPort,
+  S10ConnectorSchedulerConnectorPort,
+  S10ConnectorSchedulerRunResult,
+} from './application/s10-connector-scheduler.application';
+export { KnowledgeConnectorScheduleRepository } from './repository/connector-scheduler.repository';
 export { KnowledgeCatalogRepository } from './repository/catalog.repository';
 export type {
   CreateDirectoryInput,

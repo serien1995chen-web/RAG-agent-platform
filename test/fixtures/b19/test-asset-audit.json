@@ -1,0 +1,106 @@
+{
+  "schemaVersion": 1,
+  "allowedStatuses": ["REUSE", "EXTEND", "NEW", "STALE", "BLOCKED"],
+  "assets": [
+    {
+      "path": "test/contract/kb-b19-api-key-contract.test.ts",
+      "status": "EXTEND",
+      "reason": "Keep the runtime registry checks and replace stale deferred/NOT_RUN success labels with live coverage metadata."
+    },
+    {
+      "path": "test/e2e/kb-b19-api-key-http.test.ts",
+      "status": "EXTEND",
+      "reason": "Reuse the real HTTP lifecycle and all-operation 401/403 gates; add success, spaceIds, and B18 closure evidence."
+    },
+    {
+      "path": "test/security/kb-b19-api-key-auth-integrity.test.ts",
+      "status": "EXTEND",
+      "reason": "Reuse prefix-collision authentication coverage and add malicious header and workspace spoofing assertions."
+    },
+    {
+      "path": "test/concurrency/kb-b19-api-key-races.test.ts",
+      "status": "EXTEND",
+      "reason": "Reuse rotation races and add duplicate usage and quota boundary races."
+    },
+    {
+      "path": "test/fault/kb-b19-api-key-fault.test.ts",
+      "status": "REUSE",
+      "reason": "The Redis outage assertion remains aligned with fail-closed behavior and must be rerun."
+    },
+    {
+      "path": "packages/service/test/integration/s10-api-key.test.ts",
+      "status": "REUSE",
+      "reason": "Real Mongo lifecycle and CAS coverage remains applicable."
+    },
+    {
+      "path": "packages/service/test/integration/s10-usage-quota.test.ts",
+      "status": "EXTEND",
+      "reason": "Reuse deduplication and rollback; add all unit classes and concurrent hard quota boundaries."
+    },
+    {
+      "path": "packages/service/test/integration/s10-b19-usage-integrity.test.ts",
+      "status": "NEW",
+      "reason": "Adds real Mongo duplicate-write, all-unit persistence, negative-value, and illegal-unit validation coverage."
+    },
+    {
+      "path": "packages/service/test/integration/s10-ops.test.ts",
+      "status": "REUSE",
+      "reason": "Append-only audit and outbox replay tests remain applicable."
+    },
+    {
+      "path": "packages/service/test/unit/s10-api-key.test.ts",
+      "status": "REUSE",
+      "reason": "Domain HMAC, expiry, scope, and overlap assertions remain applicable."
+    },
+    {
+      "path": "packages/service/test/unit/s10-ops-worker.test.ts",
+      "status": "REUSE",
+      "reason": "Outbox, cleanup, fencing, and retry assertions remain applicable."
+    },
+    {
+      "path": "packages/service/test/unit/s10-pricing.test.ts",
+      "status": "EXTEND",
+      "reason": "Reuse canonical pricing checks and add every declared usage unit."
+    },
+    {
+      "path": "packages/service/test/unit/s10-shared-usage.test.ts",
+      "status": "REUSE",
+      "reason": "Dependency failures remain relevant and must not become unlimited or successful fallbacks."
+    },
+    {
+      "path": "packages/service/test/unit/s10-status.test.ts",
+      "status": "REUSE",
+      "reason": "Fixture, external, and unknown states must remain non-healthy."
+    },
+    {
+      "path": "test/contract/s10-ops-contract.test.ts",
+      "status": "EXTEND",
+      "reason": "Update stale 140-schema wording to the live 141-schema contract."
+    },
+    {
+      "path": "test/e2e/knowledge-baseline.test.ts",
+      "status": "REUSE",
+      "reason": "Reuse the B01-B18 HTTP catalog and cleanup coverage against the run namespace."
+    },
+    {
+      "path": "test/e2e/s10-ops-admin.test.ts",
+      "status": "REUSE",
+      "reason": "Reuse API console, status, and desktop responsiveness coverage."
+    },
+    {
+      "path": "test/tenant/s10-api-key-tenant.test.ts",
+      "status": "REUSE",
+      "reason": "Cross-workspace key invisibility remains applicable."
+    },
+    {
+      "path": "test/tenant/s10-ops-tenant.test.ts",
+      "status": "REUSE",
+      "reason": "Cross-workspace audit invisibility remains applicable."
+    },
+    {
+      "path": "test/e2e/s10-downstream-real-key.test.ts",
+      "status": "BLOCKED",
+      "reason": "Rerun with non-owner API Key semantics, but the current local model provider mode is mock, so downstream success cannot count as a real-provider closure."
+    }
+  ]
+}

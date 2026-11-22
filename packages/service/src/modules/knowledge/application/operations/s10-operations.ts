@@ -1,6 +1,10 @@
 import { createKnowledgeError } from '@kb/contracts';
 import { z } from 'zod';
 import type { TenantContext } from '../../../../shared/persistence/knowledge/tenant';
+import {
+  isKnowledgeAuditAction,
+  isKnowledgeAuditResourceType,
+} from '../../../../shared/persistence/knowledge/audit';
 import type { KnowledgeOperationInput, KnowledgeOperationResult } from '../operation-types';
 import type {
   S10ApiKeyRepositoryPort,
@@ -327,6 +331,14 @@ export class S10OperationApplication {
       if (outcome && !['allowed', 'denied', 'succeeded', 'failed'].includes(outcome)) {
         return validation(input.context, { field: 'outcome', reason: 'unsupported' });
       }
+      const action = firstQuery(input.query, 'action');
+      if (action && !isKnowledgeAuditAction(action)) {
+        return validation(input.context, { field: 'action', reason: 'unsupported' });
+      }
+      const resourceType = firstQuery(input.query, 'resourceType');
+      if (resourceType && !isKnowledgeAuditResourceType(resourceType)) {
+        return validation(input.context, { field: 'resourceType', reason: 'unsupported' });
+      }
       const limitValue = firstQuery(input.query, 'limit');
       return {
         status: 200,
@@ -336,15 +348,11 @@ export class S10OperationApplication {
               ? { cursor: firstQuery(input.query, 'cursor')! }
               : {}),
             ...(limitValue ? { limit: Number(limitValue) } : {}),
-            ...(firstQuery(input.query, 'action')
-              ? { action: firstQuery(input.query, 'action')! }
-              : {}),
+            ...(action ? { action } : {}),
             ...(firstQuery(input.query, 'actor')
               ? { actor: firstQuery(input.query, 'actor')! }
               : {}),
-            ...(firstQuery(input.query, 'resourceType')
-              ? { resourceType: firstQuery(input.query, 'resourceType')! }
-              : {}),
+            ...(resourceType ? { resourceType } : {}),
             ...(firstQuery(input.query, 'resourceId')
               ? { resourceId: firstQuery(input.query, 'resourceId')! }
               : {}),

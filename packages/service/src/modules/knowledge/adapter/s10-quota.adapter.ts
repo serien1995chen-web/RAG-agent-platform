@@ -1,6 +1,7 @@
 import { createKnowledgeError } from '@kb/contracts';
 import type Redis from 'ioredis';
 import type { S10QuotaProfile } from '../../../shared/config/s10-profiles';
+import { prefixedRedisKey } from '../../../shared/config/redis-prefix';
 import type { TenantContext } from '../../../shared/persistence/knowledge/tenant';
 import { requireWorkspaceId } from '../../../shared/persistence/knowledge/tenant';
 import type { QuotaGatePort } from '../application/ingestion.ports';
@@ -46,12 +47,17 @@ export class KnowledgeQuotaGate implements QuotaGatePort {
       usage: S10UsageRepositoryPort;
       redis: Redis;
       quota: S10QuotaProfile;
+      redisPrefix?: string;
       now?: () => Date;
     },
   ) {}
 
   private now(): Date {
     return this.input.now?.() ?? new Date();
+  }
+
+  private redisKey(key: string): string {
+    return prefixedRedisKey(this.input.redisPrefix ?? '', key);
   }
 
   private async snapshot(context: TenantContext, fresh = false): Promise<S10UsageSummary> {
@@ -96,7 +102,7 @@ export class KnowledgeQuotaGate implements QuotaGatePort {
   private async consumeRpm(context: TenantContext): Promise<void> {
     const workspaceId = requireWorkspaceId(context);
     const minute = Math.floor(this.now().getTime() / 60_000);
-    const key = `kb:quota:rpm:${workspaceId}:${minute}`;
+    const key = this.redisKey(`kb:quota:rpm:${workspaceId}:${minute}`);
     const count = await this.input.redis.incr(key);
     if (count === 1) await this.input.redis.expire(key, 90);
     if (count > this.input.quota.requestsPerMinute) {
@@ -114,7 +120,7 @@ export class KnowledgeQuotaGate implements QuotaGatePort {
   ): Promise<{ key: string; pointsMicros: number } | null> {
     const pointsMicros = Math.max(0, Math.trunc(estimatedPointsMicros));
     if (pointsMicros === 0) return null;
-    const key = `kb:quota:points-reserved:${requireWorkspaceId(context)}`;
+    const key = this.redisKey(`kb:quota:points-reserved:${requireWorkspaceId(context)}`);
     const reserved = Number(await this.input.redis.incrby(key, pointsMicros));
     await this.input.redis.expire(key, S10_MODEL_LEASE_TTL_SECONDS);
     if (snapshot.usage.aiPointsMicros + reserved > snapshot.quota.aiPointsLimit * 1_000_000) {
@@ -210,7 +216,7 @@ export class KnowledgeQuotaGate implements QuotaGatePort {
     estimatedPointsMicros = 0,
   ): Promise<T> {
     const workspaceId = requireWorkspaceId(context);
-    const key = `kb:quota:model-concurrency:${workspaceId}`;
+    const key = this.redisKey(`kb:quota:model-concurrency:${workspaceId}`);
     let slotAcquired = false;
     let reservation: { key: string; pointsMicros: number } | null = null;
     try {
@@ -241,7 +247,7 @@ export class KnowledgeQuotaGate implements QuotaGatePort {
 
   async availableAiPointsMicros(context: TenantContext): Promise<number> {
     const snapshot = await this.snapshot(context, true);
-    const reservationKey = `kb:quota:points-reserved:${requireWorkspaceId(context)}`;
+    const reservationKey = this.redisKey(`kb:quota:points-reserved:${requireWorkspaceId(context)}`);
     const reserved = Number((await this.input.redis.get(reservationKey)) ?? 0);
     return Math.max(
       0,

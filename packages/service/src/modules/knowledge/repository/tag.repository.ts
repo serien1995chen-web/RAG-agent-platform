@@ -7,6 +7,8 @@ import type {
   KnowledgeTagValueDoc,
 } from '../../../shared/persistence/schemas/knowledge-taxonomy.schemas';
 import { workspaceCasUpdate } from '../../../shared/persistence/knowledge/cas';
+import { withMongoTransaction } from '../../../shared/persistence/with-mongo-transaction';
+import { KnowledgeAuditRepository } from '../../../shared/persistence/knowledge/audit';
 import type { TenantContext } from '../../../shared/persistence/knowledge/tenant';
 import {
   objectIdOf,
@@ -102,12 +104,14 @@ export class KnowledgeTagRepository {
   private readonly tags: Model<KnowledgeTagDoc>;
   private readonly tagValues: Model<KnowledgeTagValueDoc>;
   private readonly sources: Model<KnowledgeSourceDoc>;
+  private readonly audit: KnowledgeAuditRepository;
 
   constructor(private readonly connection: Connection) {
     const models = registerKnowledgeModels(connection);
     this.tags = models.KnowledgeTag as Model<KnowledgeTagDoc>;
     this.tagValues = models.KnowledgeTagValue as Model<KnowledgeTagValueDoc>;
     this.sources = models.KnowledgeSource as Model<KnowledgeSourceDoc>;
+    this.audit = new KnowledgeAuditRepository(connection);
   }
 
   async list(spaceId: string, context: TenantContext) {
@@ -137,20 +141,46 @@ export class KnowledgeTagRepository {
     if (options && options.length > 1000) throw tenantError(context);
     let created: Plain<KnowledgeTagDoc>;
     try {
-      created = (await this.tags.create({
-        workspaceId: context.workspaceId,
-        knowledgeSpaceId: objectIdOf(spaceId, context, 'spaceId'),
-        version: 1,
-        deletedAt: null,
-        createdByMemberId: context.memberId,
-        updatedByMemberId: context.memberId,
-        key: String(input.key),
-        label,
-        tagType,
-        options,
-        required: Boolean(input.required),
-        status: 'active',
-      })) as unknown as Plain<KnowledgeTagDoc>;
+      created = await withMongoTransaction(this.connection, async (session) => {
+        const [document] = await this.tags.create(
+          [
+            {
+              workspaceId: context.workspaceId,
+              knowledgeSpaceId: objectIdOf(spaceId, context, 'spaceId'),
+              version: 1,
+              deletedAt: null,
+              createdByMemberId: context.memberId,
+              updatedByMemberId: context.memberId,
+              key: String(input.key),
+              label,
+              tagType,
+              options,
+              required: Boolean(input.required),
+              status: 'active',
+            },
+          ],
+          { session },
+        );
+        if (!document) throw tenantError(context);
+        await this.audit.append(
+          {
+            knowledgeSpaceId: spaceId,
+            action: 'tag.create',
+            resourceType: 'tag',
+            resourceId: String(document._id),
+            outcome: 'succeeded',
+            safeDiff: {
+              tagType,
+              required: document.required,
+              optionCount: document.options?.length ?? 0,
+              version: document.version,
+            },
+          },
+          context,
+          session,
+        );
+        return document as unknown as Plain<KnowledgeTagDoc>;
+      });
     } catch (error) {
       if (isDuplicateKeyError(error)) {
         throw createKnowledgeError({
@@ -192,12 +222,30 @@ export class KnowledgeTagRepository {
         : null;
     }
     if (input.status !== undefined) update.status = input.status;
-    const updated = await workspaceCasUpdate(
-      this.tags,
-      { id: tagId, expectedVersion: version, update },
-      context,
-    );
-    return tagDto(updated as unknown as Plain<KnowledgeTagDoc>);
+    return withMongoTransaction(this.connection, async (session) => {
+      const updated = await workspaceCasUpdate(
+        this.tags,
+        { id: tagId, expectedVersion: version, update, session },
+        context,
+      );
+      await this.audit.append(
+        {
+          knowledgeSpaceId: String(updated.knowledgeSpaceId),
+          action: 'tag.update',
+          resourceType: 'tag',
+          resourceId: tagId,
+          outcome: 'succeeded',
+          safeDiff: {
+            fields: Object.keys(update).sort(),
+            version,
+            updatedVersion: updated.version,
+          },
+        },
+        context,
+        session,
+      );
+      return tagDto(updated as unknown as Plain<KnowledgeTagDoc>);
+    });
   }
 
   async delete(tagId: string, context: TenantContext): Promise<void> {
@@ -242,6 +290,18 @@ export class KnowledgeTagRepository {
           },
           { session },
         );
+        await this.audit.append(
+          {
+            knowledgeSpaceId: String(tag.knowledgeSpaceId),
+            action: 'tag.delete',
+            resourceType: 'tag',
+            resourceId: tagId,
+            outcome: 'succeeded',
+            safeDiff: { version: tag.version },
+          },
+          context,
+          session,
+        );
       });
     } finally {
       await session.endSession();
@@ -252,16 +312,35 @@ export class KnowledgeTagRepository {
     requireWorkspaceId(context);
     if (!Array.isArray(input.options)) throw tenantError(context);
     const options = [...new Set(input.options.map(String))];
-    const updated = await workspaceCasUpdate(
-      this.tags,
-      {
-        id: tagId,
-        expectedVersion: Number(input.version),
-        update: { options },
-      },
-      context,
-    );
-    return tagDto(updated as unknown as Plain<KnowledgeTagDoc>);
+    return withMongoTransaction(this.connection, async (session) => {
+      const updated = await workspaceCasUpdate(
+        this.tags,
+        {
+          id: tagId,
+          expectedVersion: Number(input.version),
+          update: { options },
+          session,
+        },
+        context,
+      );
+      await this.audit.append(
+        {
+          knowledgeSpaceId: String(updated.knowledgeSpaceId),
+          action: 'tag.update',
+          resourceType: 'tag',
+          resourceId: tagId,
+          outcome: 'succeeded',
+          safeDiff: {
+            fields: ['options'],
+            optionCount: options.length,
+            updatedVersion: updated.version,
+          },
+        },
+        context,
+        session,
+      );
+      return tagDto(updated as unknown as Plain<KnowledgeTagDoc>);
+    });
   }
 
   async apply(input: Record<string, unknown>, context: TenantContext): Promise<TagApplyResult> {

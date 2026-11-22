@@ -164,6 +164,7 @@ export class S10OperationsRepository implements S10AuditQueryPort, S10OpsReposit
       .find({
         workspaceId: requireWorkspaceId(context),
         deletedAt: null,
+        expiresAt: { $gt: new Date() },
         ...(query.action ? { action: query.action } : {}),
         ...(query.actor ? { actorMemberId: query.actor } : {}),
         ...(query.resourceType ? { resourceType: query.resourceType } : {}),

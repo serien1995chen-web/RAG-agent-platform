@@ -23876,6 +23876,12 @@
               },
               "modelCount": {
                 "type": "integer"
+              },
+              "reason": {
+                "type": "string"
+              },
+              "errorCode": {
+                "type": "string"
               }
             }
           },
@@ -23917,6 +23923,42 @@
                       "type": "null"
                     }
                   ]
+                },
+                "lastSuccessAt": {
+                  "oneOf": [
+                    {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "nextSyncAt": {
+                  "oneOf": [
+                    {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "lastError": {
+                  "oneOf": [
+                    {
+                      "type": "object",
+                      "additionalProperties": true
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "stale": {
+                  "type": "boolean"
                 }
               }
             }

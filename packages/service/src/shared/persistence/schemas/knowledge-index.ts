@@ -23,7 +23,9 @@ import {
 import {
   type KnowledgeConnectorCursorDoc,
   type KnowledgeConnectorDoc,
+  type KnowledgeConnectorScheduleDoc,
   KnowledgeConnectorCursorSchema,
+  KnowledgeConnectorScheduleSchema,
   KnowledgeConnectorSchema,
 } from './knowledge-connector.schemas';
 import {
@@ -144,6 +146,11 @@ export const KNOWLEDGE_SCHEMA_REGISTRY: readonly KnowledgeSchemaEntry[] = [
     schema: KnowledgeConnectorCursorSchema,
   },
   {
+    modelName: 'KnowledgeConnectorSchedule',
+    collection: 'knowledge_connector_schedules',
+    schema: KnowledgeConnectorScheduleSchema,
+  },
+  {
     modelName: 'KnowledgeUsageEvent',
     collection: 'knowledge_usage_events',
     schema: KnowledgeUsageEventSchema,
@@ -201,6 +208,7 @@ export interface KnowledgeRegisteredModels {
   KnowledgeReferenceBinding: Model<KnowledgeReferenceBindingDoc>;
   KnowledgeConnector: Model<KnowledgeConnectorDoc>;
   KnowledgeConnectorCursor: Model<KnowledgeConnectorCursorDoc>;
+  KnowledgeConnectorSchedule: Model<KnowledgeConnectorScheduleDoc>;
   KnowledgeUsageEvent: Model<KnowledgeUsageEventDoc>;
   KnowledgeAuditEvent: Model<KnowledgeAuditEventDoc>;
   KnowledgeOutboxEvent: Model<KnowledgeOutboxEventDoc>;
@@ -280,6 +288,11 @@ export function registerKnowledgeModels(connection: Connection): KnowledgeRegist
       connection,
       'KnowledgeConnectorCursor',
       KnowledgeConnectorCursorSchema,
+    ),
+    KnowledgeConnectorSchedule: modelFor<KnowledgeConnectorScheduleDoc>(
+      connection,
+      'KnowledgeConnectorSchedule',
+      KnowledgeConnectorScheduleSchema,
     ),
     KnowledgeUsageEvent: modelFor<KnowledgeUsageEventDoc>(
       connection,

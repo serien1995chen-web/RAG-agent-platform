@@ -883,6 +883,9 @@ export function DatasetDetailPage(props: {
               space={space}
               bindings={bindings}
               models={models}
+              modelsError={modelsQuery.error}
+              modelsLoading={modelsQuery.isLoading}
+              onRetryModels={() => void modelsQuery.refetch()}
               sources={sources}
               rebuilding={jobs.some(
                 (job) =>
@@ -1382,6 +1385,9 @@ export function DatasetDetailPage(props: {
                 space={space}
                 bindings={bindings}
                 models={models}
+                modelsError={modelsQuery.error}
+                modelsLoading={modelsQuery.isLoading}
+                onRetryModels={() => void modelsQuery.refetch()}
                 sources={sources}
                 rebuilding={jobs.some(
                   (job) =>
@@ -1941,6 +1947,9 @@ function DatasetInfoPanel(props: {
   space?: KnowledgeSpace;
   bindings: ModelBinding[];
   models: Model[];
+  modelsError?: unknown;
+  modelsLoading?: boolean;
+  onRetryModels?: () => void;
   sources: Source[];
   rebuilding: boolean;
   onEdit: () => void;
@@ -1969,6 +1978,8 @@ function DatasetInfoPanel(props: {
   });
   const authorizedModels = (type: Model['type']) =>
     props.models.filter((model) => model.type === type && model.authorized);
+  const modelsUnavailable =
+    Boolean(props.modelsError) || (!props.modelsLoading && props.models.length === 0);
 
   useEffect(() => {
     if (!pendingModelBindings || modelConfirmCountdown <= 0) return;
@@ -2193,12 +2204,28 @@ function DatasetInfoPanel(props: {
             <ProductButton onClick={() => setModelsOpen(false)} disabled={modelsBusy}>
               取消
             </ProductButton>
-            <ProductButton tone="primary" busy={modelsBusy} onClick={() => void saveModels()}>
+            <ProductButton
+              tone="primary"
+              busy={modelsBusy}
+              disabled={modelsBusy || props.modelsLoading || modelsUnavailable}
+              onClick={() => void saveModels()}
+            >
               保存
             </ProductButton>
           </>
         }
       >
+        {props.modelsLoading ? (
+          <div className="kb2-table-muted" role="status">
+            正在加载模型目录…
+          </div>
+        ) : null}
+        <ProductError error={props.modelsError} onRetry={props.onRetryModels} />
+        {!props.modelsLoading && !props.modelsError && props.models.length === 0 ? (
+          <div className="kb2-table-muted" role="status">
+            模型目录为空，无法保存模型配置。
+          </div>
+        ) : null}
         <div className="kb2-form-grid">
           <ProductField label="索引模型">
             <ProductSelect

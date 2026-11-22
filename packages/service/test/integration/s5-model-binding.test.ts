@@ -142,7 +142,14 @@ describe('TEST-KB-002-BLOCK Space model bindings', () => {
         knowledgeSpaceId: space.id,
       }),
     ).toBe(6);
-    expect(await models.KnowledgeAuditEvent.countDocuments({ workspaceId })).toBe(1);
+    expect(
+      await models.KnowledgeAuditEvent.find({ workspaceId }).select({ action: 1 }).lean(),
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ action: 'space.create' }),
+        expect.objectContaining({ action: 'space.model_bindings.update' }),
+      ]),
+    );
     const storedSpace = await models.KnowledgeSpace.findById(space.id).lean();
     expect(Object.keys(storedSpace?.modelBindings ?? {}).sort()).toEqual([
       'embedding',

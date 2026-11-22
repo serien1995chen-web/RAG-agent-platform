@@ -30,7 +30,7 @@ const S10_OPERATIONS = [
 ];
 
 describe('S10 operations contract', () => {
-  it('TEST-X-OPENAPI keeps 95/123/140/8 and promotes only the ten S10 operations', () => {
+  it('TEST-X-OPENAPI keeps 95/123/141/8 and promotes only the ten S10 operations', () => {
     expect(artifacts.actualCounts).toEqual({
       paths: 95,
       operations: 123,

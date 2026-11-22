@@ -91,6 +91,7 @@
     "knowledge_reference_bindings",
     "knowledge_connectors",
     "knowledge_connector_cursors",
+    "knowledge_connector_schedules",
     "knowledge_usage_events",
     "knowledge_audit_events",
     "knowledge_outbox_events",

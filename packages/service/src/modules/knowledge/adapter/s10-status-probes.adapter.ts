@@ -4,8 +4,11 @@ import type { KnowledgeRuntimeConfig } from '../../../shared/config/knowledge-ru
 import type { TenantContext } from '../../../shared/persistence/knowledge/tenant';
 import { requireWorkspaceId } from '../../../shared/persistence/knowledge/tenant';
 import { registerKnowledgeModels } from '../../../shared/persistence/schemas/knowledge-index';
+import { safeAuditDiff } from '../../../shared/persistence/knowledge/audit';
 import type { S10StatusProbePort, S10StatusView } from '../application/s10-status.application';
 import type { ModelCatalogItem, ModelCatalogPort } from '../application/s5-model-ports';
+
+export const CONNECTOR_STALE_GRACE_MS = 5 * 60_000;
 
 function state(
   status: S10StatusView['dependencies']['mongo']['status'],
@@ -41,6 +44,11 @@ export class S10StatusProbesAdapter implements S10StatusProbePort {
       connectors?: {
         list(context: TenantContext): Promise<S10StatusView['connectorProbes']>;
       };
+      securityProbe?: () => Promise<{
+        scopeEnforced: boolean;
+        auditAppendOnly: boolean;
+        secretRedactionEnabled: boolean;
+      }>;
       now?: () => Date;
     },
   ) {}
@@ -80,6 +88,43 @@ export class S10StatusProbesAdapter implements S10StatusProbePort {
     return result;
   }
 
+  private classifyModelFailure(error: unknown): { reason: string; errorCode: string } {
+    const record =
+      error !== null && typeof error === 'object'
+        ? (error as {
+            kind?: unknown;
+            status?: unknown;
+            message?: unknown;
+            problem?: { error?: { details?: { reason?: unknown } } };
+          })
+        : {};
+    const status = Number(record.status);
+    const kind = typeof record.kind === 'string' ? record.kind : '';
+    const message =
+      `${String(record.message ?? '')} ${String(record.problem?.error?.details?.reason ?? '')}`.toLowerCase();
+    let reason = 'probe_failed';
+    if (status === 401 || kind === 'auth' || /unauthori[sz]ed/.test(message)) {
+      reason = 'unauthorized';
+    } else if (status === 403 || /forbidden/.test(message)) {
+      reason = 'forbidden';
+    } else if (status === 404 || /not[_ -]?found/.test(message)) {
+      reason = 'not_found';
+    } else if (status === 429 || kind === 'rate_limit' || /rate[_ -]?limit/.test(message)) {
+      reason = 'rate_limited';
+    } else if (status >= 500 || /server|provider[_ -]?failed/.test(message)) {
+      reason = 'server_error';
+    } else if (/timeout|timed out/.test(message) || kind === 'timeout') {
+      reason = 'timeout';
+    } else if (
+      kind === 'contract' ||
+      kind === 'validation' ||
+      /invalid|contract|schema/.test(message)
+    ) {
+      reason = 'invalid_response';
+    }
+    return { reason, errorCode: `MODEL_PROBE_${reason.toUpperCase()}` };
+  }
+
   private async modelProbe(context: TenantContext) {
     const startedAt = Date.now();
     const fixture = this.input.config.externalModes.model !== 'real';
@@ -112,32 +157,89 @@ export class S10StatusProbesAdapter implements S10StatusProbePort {
         latencyMs: Date.now() - startedAt,
         modelCount: models.length,
       };
-    } catch {
+    } catch (error) {
+      const failure = this.classifyModelFailure(error);
       return {
         status: 'unavailable',
         verificationStatus: 'UNKNOWN' as const,
         latencyMs: Date.now() - startedAt,
+        ...failure,
       };
     }
   }
 
   private async connectorProbes(context: TenantContext) {
-    if (this.input.connectors) return this.input.connectors.list(context);
+    const now = this.input.now?.() ?? new Date();
+    if (this.input.connectors) {
+      return (await this.input.connectors.list(context)).map((connector) =>
+        this.connectorView(connector, now),
+      );
+    }
     const models = registerKnowledgeModels(this.input.connection);
     const connectors = await models.KnowledgeConnector.find({
       workspaceId: requireWorkspaceId(context),
       deletedAt: null,
     })
-      .select({ _id: 1, provider: 1, status: 1, lastAttemptAt: 1 })
+      .select({
+        _id: 1,
+        provider: 1,
+        status: 1,
+        syncEnabled: 1,
+        lastAttemptAt: 1,
+        lastSuccessAt: 1,
+        nextSyncAt: 1,
+        lastError: 1,
+      })
       .limit(100)
       .lean();
-    return connectors.map((connector) => ({
-      connectorId: String(connector._id),
-      provider: connector.provider,
-      status: connector.status,
-      verificationStatus: 'EXTERNAL_UNVERIFIED' as const,
-      lastAttemptAt: connector.lastAttemptAt?.toISOString() ?? null,
-    }));
+    return connectors.map((connector) =>
+      this.connectorView(
+        {
+          connectorId: String(connector._id),
+          provider: connector.provider,
+          status: connector.status,
+          verificationStatus: 'EXTERNAL_UNVERIFIED' as const,
+          lastAttemptAt: connector.lastAttemptAt?.toISOString() ?? null,
+          lastSuccessAt: connector.lastSuccessAt?.toISOString() ?? null,
+          nextSyncAt: connector.nextSyncAt?.toISOString() ?? null,
+          lastError: connector.lastError,
+        },
+        now,
+      ),
+    );
+  }
+
+  private safeLastError(value: Record<string, unknown> | null): Record<string, unknown> | null {
+    if (!value) return null;
+    const redacted = safeAuditDiff(value);
+    if (redacted === null || typeof redacted !== 'object' || Array.isArray(redacted)) return null;
+    const record = redacted as Record<string, unknown>;
+    const safe: Record<string, unknown> = {};
+    for (const key of ['code', 'message', 'messageKey', 'retryable', 'retryAfter', 'provider']) {
+      const entry = record[key];
+      if (typeof entry === 'string' && entry.length > 0) safe[key] = entry.slice(0, 512);
+      else if (typeof entry === 'boolean' || typeof entry === 'number') safe[key] = entry;
+    }
+    return Object.keys(safe).length > 0 ? safe : null;
+  }
+
+  private connectorView(
+    connector: S10StatusView['connectorProbes'][number],
+    now: Date,
+  ): S10StatusView['connectorProbes'][number] {
+    const nextSyncAt = connector.nextSyncAt ?? null;
+    const stale =
+      connector.status === 'active' &&
+      nextSyncAt !== null &&
+      Date.parse(nextSyncAt) + CONNECTOR_STALE_GRACE_MS < now.getTime();
+    return {
+      ...connector,
+      lastAttemptAt: connector.lastAttemptAt ?? null,
+      lastSuccessAt: connector.lastSuccessAt ?? null,
+      nextSyncAt,
+      lastError: this.safeLastError(connector.lastError ?? null),
+      stale,
+    };
   }
 
   private async reconciliation(context: TenantContext) {
@@ -181,6 +283,30 @@ export class S10StatusProbesAdapter implements S10StatusProbePort {
     };
   }
 
+  private async securityEvidence() {
+    if (!this.input.securityProbe) {
+      return {
+        scopeEnforced: false,
+        auditAppendOnly: false,
+        secretRedactionEnabled: false,
+      };
+    }
+    try {
+      const evidence = await this.input.securityProbe();
+      return {
+        scopeEnforced: evidence.scopeEnforced === true,
+        auditAppendOnly: evidence.auditAppendOnly === true,
+        secretRedactionEnabled: evidence.secretRedactionEnabled === true,
+      };
+    } catch {
+      return {
+        scopeEnforced: false,
+        auditAppendOnly: false,
+        secretRedactionEnabled: false,
+      };
+    }
+  }
+
   async probe(context: TenantContext): Promise<S10StatusView> {
     const startedQueueProbe = Date.now();
     const queueProbePromise = this.queueLag()
@@ -207,21 +333,28 @@ export class S10StatusProbesAdapter implements S10StatusProbePort {
           'connector_probe_failed',
         ),
       }));
-    const [dependencies, queueResult, modelProbe, connectorResult, reconciliation] =
-      await Promise.all([
-        this.dependencyProbes(context),
-        queueProbePromise,
-        this.modelProbe(context),
-        connectorProbePromise,
-        this.reconciliation(context).catch(() => ({
-          lastRunAt: null,
-          state: 'unknown' as const,
-          orphanObjects: 0,
-          orphanVectors: 0,
-          diffCount: 0,
-          repairedCount: 0,
-        })),
-      ]);
+    const [
+      dependencies,
+      queueResult,
+      modelProbe,
+      connectorResult,
+      reconciliation,
+      securityEvidence,
+    ] = await Promise.all([
+      this.dependencyProbes(context),
+      queueProbePromise,
+      this.modelProbe(context),
+      connectorProbePromise,
+      this.reconciliation(context).catch(() => ({
+        lastRunAt: null,
+        state: 'unknown' as const,
+        orphanObjects: 0,
+        orphanVectors: 0,
+        diffCount: 0,
+        repairedCount: 0,
+      })),
+      this.securityEvidence(),
+    ]);
     return {
       status: 'degraded',
       queueDepth: {},
@@ -244,9 +377,9 @@ export class S10StatusProbesAdapter implements S10StatusProbePort {
       connectorProbe: connectorResult.probe,
       securityChecks: {
         apiKeyHmacConfigured: this.input.config.s10.apiKeyHmacConfigured,
-        scopeEnforced: true,
-        auditAppendOnly: true,
-        secretRedactionEnabled: true,
+        scopeEnforced: securityEvidence.scopeEnforced,
+        auditAppendOnly: securityEvidence.auditAppendOnly,
+        secretRedactionEnabled: securityEvidence.secretRedactionEnabled,
         rateLimitEnabled: this.input.config.s10.quota.requestsPerMinute > 0,
       },
       reconciliation,
