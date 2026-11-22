@@ -5,7 +5,8 @@ import { describe, expect, it } from 'vitest';
 
 const root = resolve(import.meta.dirname, '../..');
 const fixtureRoot = join(root, 'test', 'fixtures', 'b18-b');
-const fastgptRoot = '/mnt/d/Fastgpt/FastGPT';
+const fastgptRoot = (process.env.FASTGPT_REFERENCE_ROOT ?? '/mnt/d/Fastgpt/FastGPT').trim();
+const fastgptReferenceAvailable = existsSync(fastgptRoot);
 const matrix = JSON.parse(readFileSync(join(fixtureRoot, 'behavior-matrix.json'), 'utf8')) as {
   cases: Array<{
     capability: string;
@@ -53,11 +54,16 @@ describe('B18-B behavior matrix and test asset completeness', () => {
     expect(manifest.candidateSha).toBe('c34467da5a16ef0cc0efff65c696d9a2cf408ff0');
     expect(manifest.fastgpt.observedVersion).toBe('4.17.3');
     for (const [relativePath, expectedHash] of Object.entries(manifest.fastgpt.keyFiles)) {
-      const absolutePath = join(fastgptRoot, relativePath);
-      expect(existsSync(absolutePath), relativePath).toBe(true);
-      expect(createHash('sha256').update(readFileSync(absolutePath)).digest('hex')).toBe(
-        expectedHash,
-      );
+      expect(relativePath.startsWith('/'), relativePath).toBe(false);
+      expect(relativePath.split('/'), relativePath).not.toContain('..');
+      expect(expectedHash, relativePath).toMatch(/^[a-f0-9]{64}$/);
+      if (fastgptReferenceAvailable) {
+        const absolutePath = join(fastgptRoot, relativePath);
+        expect(existsSync(absolutePath), relativePath).toBe(true);
+        expect(createHash('sha256').update(readFileSync(absolutePath)).digest('hex')).toBe(
+          expectedHash,
+        );
+      }
     }
   });
 
@@ -95,9 +101,8 @@ describe('B18-B behavior matrix and test asset completeness', () => {
     for (const row of matrix.cases) {
       expect(row.fastgptEvidence.length, row.subtestId).toBeGreaterThan(0);
       for (const evidence of row.fastgptEvidence) {
-        const absolutePath = join(fastgptRoot, evidence.path);
-        expect(existsSync(absolutePath), `${row.subtestId}: ${evidence.path}`).toBe(true);
-        const length = lineCount(absolutePath);
+        expect(evidence.path.startsWith('/'), `${row.subtestId}: ${evidence.path}`).toBe(false);
+        expect(evidence.path.split('/'), `${row.subtestId}: ${evidence.path}`).not.toContain('..');
         const ranges = parseLineRanges(evidence.lines);
         expect(
           ranges.length,
@@ -108,7 +113,13 @@ describe('B18-B behavior matrix and test asset completeness', () => {
           expect(range.end, `${row.subtestId}: ${evidence.path}`).toBeGreaterThanOrEqual(
             range.start,
           );
-          expect(range.end, `${row.subtestId}: ${evidence.path}`).toBeLessThanOrEqual(length);
+          if (fastgptReferenceAvailable) {
+            const absolutePath = join(fastgptRoot, evidence.path);
+            expect(existsSync(absolutePath), `${row.subtestId}: ${evidence.path}`).toBe(true);
+            expect(range.end, `${row.subtestId}: ${evidence.path}`).toBeLessThanOrEqual(
+              lineCount(absolutePath),
+            );
+          }
         }
       }
     }
