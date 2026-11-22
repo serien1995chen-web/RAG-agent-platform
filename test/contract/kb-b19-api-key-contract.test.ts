@@ -1,4 +1,4 @@
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
@@ -236,8 +236,8 @@ describe('L1-B19 API-001 contract and runtime coverage', () => {
   });
 });
 
-describe('L1-B19 fast source behavior matrix', () => {
-  it('L1-B19-API-003-Q01 every matrix row has a resolvable FastGPT source span and裁定', () => {
+describe('L1-B19 FastGPT behavior matrix', () => {
+  it('L1-B19-API-003-Q01 every matrix row has complete provenance and mounted source spans are valid', () => {
     const matrix = JSON.parse(
       readFileSync(join(root, 'test/fixtures/b19/api-key-behavior-matrix.json'), 'utf8'),
     ) as {
@@ -256,15 +256,21 @@ describe('L1-B19 fast source behavior matrix', () => {
       new Set(['API-001', 'API-003']),
     );
     const allowed = new Set(['MATCH', 'INTENTIONAL_DIFFERENCE', 'BLOCKED_REFERENCE']);
+    const referenceRoot = (process.env.FASTGPT_REFERENCE_ROOT ?? '/mnt/d/Fastgpt/FastGPT').trim();
+    const referenceAvailable = existsSync(referenceRoot);
     for (const row of matrix.rows) {
       expect(row.subTestId).toMatch(/^[PNASCFQ]\d{2}$/);
       expect(allowed.has(row.conclusion), row.conclusion).toBe(true);
       expect(row.frontendBehaviorId).toBeNull();
-      const source = readFileSync(join('/mnt/d/Fastgpt/FastGPT', row.sourcePath), 'utf8');
-      const lineCount = source.split('\n').length;
+      expect(row.sourcePath.startsWith('/')).toBe(false);
+      expect(row.sourcePath.split('/')).not.toContain('..');
       expect(row.sourceStartLine).toBeGreaterThanOrEqual(1);
       expect(row.sourceEndLine).toBeGreaterThanOrEqual(row.sourceStartLine);
-      expect(row.sourceEndLine).toBeLessThanOrEqual(lineCount);
+      if (referenceAvailable) {
+        const source = readFileSync(join(referenceRoot, row.sourcePath), 'utf8');
+        const lineCount = source.split('\n').length;
+        expect(row.sourceEndLine).toBeLessThanOrEqual(lineCount);
+      }
     }
   });
 });
