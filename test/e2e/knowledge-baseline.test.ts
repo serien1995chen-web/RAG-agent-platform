@@ -1,6 +1,6 @@
 import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { join, resolve } from 'node:path';
 import AxeBuilder from '@axe-core/playwright';
@@ -2646,7 +2646,7 @@ describe.sequential('knowledge architecture baseline E2E', () => {
     });
   });
 
-  it('finishes the delete paths, reads Jobs and proves all 65 baseline operations ran', async () => {
+  it('finishes the delete paths, reads Jobs and records the 65-operation central baseline', async () => {
     await callApi('API-SEGMENT-DELETE', {
       params: { segmentId: requiredId(scenario.segmentId, 'segmentId') },
       body: { version: asNumber(scenario.segmentVersion, 'segment.version') },
@@ -2697,5 +2697,25 @@ describe.sequential('knowledge architecture baseline E2E', () => {
     );
     expect([...covered].every((operationId) => runtimeIds.has(operationId))).toBe(true);
     expect(covered.size).toBe(65);
+    const evidenceDir = process.env.B19_EVIDENCE_DIR?.trim();
+    if (evidenceDir) {
+      mkdirSync(evidenceDir, { recursive: true });
+      writeFileSync(
+        join(evidenceDir, 'api-001-central-baseline-coverage.json'),
+        `${JSON.stringify(
+          {
+            runtimeCount: runtimeRegistry.count,
+            coveredCount: covered.size,
+            covered: [...covered].sort(),
+            remaining: runtimeRegistry.operations
+              .map((operation) => operation.operationId)
+              .filter((operationId) => !covered.has(operationId))
+              .sort(),
+          },
+          null,
+          2,
+        )}\n`,
+      );
+    }
   });
 });

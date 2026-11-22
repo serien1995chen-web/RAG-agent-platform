@@ -13,10 +13,11 @@ import { createSpace, startS4App, type S4AppHarness } from './s4-app-harness';
 
 const root = resolve(import.meta.dirname, '../..');
 const suffix = randomUUID().replaceAll('-', '').slice(0, 12);
-const workspaceId = `ws_b19_${suffix}`;
-const memberId = `mem_b19_${suffix}`;
-const adminToken = `kb-b19-admin-${suffix}`;
-const noScopeToken = `kb-b19-noscope-${suffix}`;
+const runId = process.env.B19_RUN_ID ?? `b19-a-20261122-220039-${suffix.slice(0, 4)}`;
+const workspaceId = `${runId}-workspace`;
+const memberId = `${runId}-member-owner`;
+const adminToken = `${runId}-admin-token`;
+const noScopeToken = `${runId}-no-scope-token`;
 
 let app: S4AppHarness;
 let noScopeApp: S4AppHarness;
@@ -552,7 +553,14 @@ describe('L1-B19-API-003 API Key lifecycle over real HTTP', () => {
         }),
       ),
     );
-    expect(creates.filter((result) => result.response.status === 201)).toHaveLength(1);
+    const successfulCreates = creates.filter((result) => result.response.status === 201);
+    expect(successfulCreates).toHaveLength(1);
+    const successfulSecret = (successfulCreates[0]!.payload as { data: { secret: string } }).data
+      .secret;
+    for (const replay of creates.filter((result) => result !== successfulCreates[0])) {
+      expect([409, 500]).toContain(replay.response.status);
+      expect(replay.text).not.toContain(successfulSecret);
+    }
     expect(
       await registerKnowledgeModels(mongo).KnowledgeApiKey.countDocuments({
         workspaceId,
@@ -702,6 +710,37 @@ describe('L1-B19-API-003 API Key lifecycle over real HTTP', () => {
         knowledgeSpaceId: deniedSpaceId,
       }),
     ).toBe(0);
+
+    expect(
+      [401, 403].includes(
+        (
+          await request(`/v1/knowledge/spaces/${allowedSpaceId}`, {
+            token: spaceScopedKey.secret,
+            workspace: `${runId}-workspace-other`,
+          })
+        ).response.status,
+      ),
+    ).toBe(true);
+    expect(
+      (
+        await request('/v1/knowledge/spaces', {
+          token: `kn_live_${'x'.repeat(10_000)}`,
+        })
+      ).response.status,
+    ).toBe(401);
+
+    const restrictedAdmin = await createKey({
+      label: 'restricted-admin',
+      scopes: ['knowledge:admin'],
+      spaceIds: [allowedSpaceId],
+    });
+    const restrictedGlobal = await request('/v1/knowledge/usage', {
+      token: restrictedAdmin.secret,
+    });
+    expect(restrictedGlobal.response.status).toBe(403);
+    expect(restrictedGlobal.payload).toMatchObject({
+      error: { code: 'KNOWLEDGE_FORBIDDEN' },
+    });
   });
 });
 
@@ -910,5 +949,226 @@ describe('L1-B19-API-003 rate limiting and audit', () => {
         });
       }
     }
+  });
+});
+
+describe('L1-B19-OPS-001 usage, quota snapshot and resource counts over real HTTP', () => {
+  it('L1-B19-OPS-001-P01 reconciles usage events, resource counts and stable period errors', async () => {
+    const spaceId = await createSpace({
+      baseUrl: app.baseUrl,
+      authToken: adminToken,
+      workspaceId,
+      suffix: `${suffix}-ops-summary`,
+    });
+    const objectSpaceId = spaceId;
+    const models = registerKnowledgeModels(mongo);
+    const now = new Date();
+    const units = [
+      'page',
+      'image',
+      'token',
+      'vector',
+      'byte',
+      'request',
+      'second',
+      'character',
+    ] as const;
+    await models.KnowledgeUsageEvent.create(
+      units.map((unit, index) => ({
+        workspaceId,
+        knowledgeSpaceId: objectSpaceId,
+        version: 1,
+        deletedAt: null,
+        createdByMemberId: memberId,
+        updatedByMemberId: memberId,
+        eventId: `${runId}-usage-${unit}`,
+        eventType: index === 0 ? 'ocr' : 'storage',
+        quantity: index + 1,
+        unit,
+        inputTokens: 0,
+        outputTokens: 0,
+        pointsMicros: index + 1,
+        pricingVersion: 'fixture-v1',
+        pricingSnapshot: { name: 'fixture-v1' },
+        modelId: null,
+        resourceType: 'space',
+        resourceId: objectSpaceId,
+        jobId: null,
+        source: 'api',
+        occurredAt: new Date(now.getTime() + index),
+        deliveredAt: null,
+        deliveryStatus: 'pending',
+        expiresAt: new Date(now.getTime() + 730 * 86_400_000),
+      })),
+    );
+    await models.KnowledgeObjectRef.create([
+      {
+        workspaceId,
+        knowledgeSpaceId: objectSpaceId,
+        version: 1,
+        deletedAt: null,
+        createdByMemberId: memberId,
+        updatedByMemberId: memberId,
+        provider: 'minio',
+        bucket: process.env.KB_TEST_S3_BUCKET ?? 'kb-test',
+        objectKey: `b19-a/${runId}/fixtures/object-a`,
+        purpose: 'source',
+        mimeType: 'text/plain',
+        sizeBytes: 40,
+        state: 'active',
+        upload: {
+          mode: 'single',
+          status: 'completed',
+          originalName: 'object-a.txt',
+        },
+      },
+      {
+        workspaceId,
+        knowledgeSpaceId: objectSpaceId,
+        version: 1,
+        deletedAt: null,
+        createdByMemberId: memberId,
+        updatedByMemberId: memberId,
+        provider: 'minio',
+        bucket: process.env.KB_TEST_S3_BUCKET ?? 'kb-test',
+        objectKey: `b19-a/${runId}/fixtures/object-b`,
+        purpose: 'source',
+        mimeType: 'text/plain',
+        sizeBytes: 60,
+        state: 'pending',
+        upload: {
+          mode: 'single',
+          status: 'uploading',
+          originalName: 'object-b.txt',
+        },
+      },
+    ]);
+    const sourceId = randomUUID().replaceAll('-', '').slice(0, 24);
+    await models.KnowledgeSegment.create([
+      {
+        workspaceId,
+        knowledgeSpaceId: objectSpaceId,
+        version: 1,
+        deletedAt: null,
+        createdByMemberId: memberId,
+        updatedByMemberId: memberId,
+        sourceId,
+        sourceVersion: 1,
+        searchEnabled: true,
+        order: 0,
+        content: 'B19 OPS fixture content',
+        fullTextVersion: 1,
+        metadata: {},
+        history: [],
+        indexStatus: 'indexed',
+        indexes: [
+          [768, 'vector'],
+          [1024, 'vector'],
+          [1536, 'vector'],
+          [3072, 'halfvec'],
+        ].map(([dimension, storageType], index) => ({
+          indexId: `${runId}-index-${dimension}`,
+          type: 'embedding',
+          modelId: `b19-embedding-${dimension}`,
+          dimension,
+          storageType,
+          vectorProfile: `${dimension}-${storageType}`,
+          vectorId: `${runId}-vector-${index}`,
+          text: `vector ${dimension}`,
+          version: 1,
+        })),
+      },
+    ]);
+
+    const from = new Date(now.getTime() - 60_000).toISOString();
+    const to = new Date(now.getTime() + 60_000).toISOString();
+    const summaryResponse = await request(
+      `/v1/knowledge/usage?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}&spaceId=${spaceId}`,
+    );
+    expect(summaryResponse.response.status, JSON.stringify(summaryResponse.payload)).toBe(200);
+    const summary = summaryResponse.payload as {
+      data: {
+        usage: Record<string, number>;
+        delivery: Record<string, number>;
+        quota: Record<string, number | string>;
+      };
+    };
+    expect(summary.data.usage).toMatchObject({
+      aiPointsMicros: 36,
+      aiPoints: 0.000036,
+      storageBytes: 100,
+      indexCount: 4,
+      spaceCount: 1,
+      parsePages: 1,
+    });
+    expect(summary.data.delivery).toEqual({ pending: 8, delivered: 0, failed: 0 });
+    expect(summary.data.quota).toMatchObject({
+      aiPointsLimit: 100,
+      maxSpaces: 3,
+      maxIndexes: 600,
+      requestsPerMinute: 30,
+      maxModelConcurrency: 10,
+    });
+
+    const reversed = await request(
+      `/v1/knowledge/usage?from=${encodeURIComponent(to)}&to=${encodeURIComponent(from)}`,
+    );
+    expect(reversed.response.status).toBe(400);
+    expect(reversed.payload).toMatchObject({
+      error: { code: 'KNOWLEDGE_VALIDATION_FAILED' },
+    });
+    const tooWideFrom = new Date(Date.now() - 367 * 86_400_000).toISOString();
+    const tooWide = await request(
+      `/v1/knowledge/usage?from=${encodeURIComponent(tooWideFrom)}&to=${encodeURIComponent(new Date().toISOString())}`,
+    );
+    expect(tooWide.response.status).toBe(400);
+    expect(tooWide.payload).toMatchObject({
+      error: { code: 'KNOWLEDGE_VALIDATION_FAILED' },
+    });
+
+    const crossWorkspace = await request('/v1/knowledge/usage', {
+      workspace: `${runId}-workspace-other`,
+    });
+    expect(crossWorkspace.response.status).toBe(403);
+    const status = await request('/v1/knowledge/operations/status');
+    expect(status.response.status, JSON.stringify(status.payload)).toBe(200);
+    expect(status.payload).toMatchObject({
+      success: true,
+      data: {
+        securityChecks: {
+          apiKeyHmacConfigured: true,
+          scopeEnforced: true,
+          auditAppendOnly: true,
+          secretRedactionEnabled: true,
+          rateLimitEnabled: true,
+        },
+      },
+    });
+    writeEvidence('ops-001-resource-reconciliation.json', {
+      candidateSha: process.env.B19_CANDIDATE_SHA,
+      runId,
+      spaceId,
+      units,
+      expected: {
+        aiPointsMicros: 36,
+        storageBytes: 100,
+        indexCount: 4,
+        spaceCount: 1,
+        parsePages: 1,
+        delivery: { pending: 8, delivered: 0, failed: 0 },
+        vectorProfiles: [768, 1024, 1536, 3072],
+      },
+      actual: {
+        usage: summary.data.usage,
+        quota: summary.data.quota,
+        delivery: summary.data.delivery,
+      },
+      periodErrors: {
+        reversed: reversed.response.status,
+        over366Days: tooWide.response.status,
+      },
+      crossWorkspaceStatus: crossWorkspace.response.status,
+      operationsStatus: status.response.status,
+    });
   });
 });

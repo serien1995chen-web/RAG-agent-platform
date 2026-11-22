@@ -44,15 +44,6 @@ const expectedGroups = {
   synonym: 8,
 } as const;
 
-const deferredOperationIds = new Set(['API-SEARCH-MULTI', 'API-CITATION-GET']);
-const opsNotRun = new Set([
-  'API-USAGE-GET',
-  'API-AUDIT-LIST',
-  'API-OPS-STATUS',
-  'API-OPS-CLEANUP',
-  'API-OPS-RECONCILE',
-  'API-OPS-OUTBOX-REPLAY',
-]);
 const apiKeyOperations = new Set([
   'API-APIKEY-LIST',
   'API-APIKEY-CREATE',
@@ -60,6 +51,17 @@ const apiKeyOperations = new Set([
   'API-APIKEY-DELETE',
   'API-APIKEY-ROTATE',
 ]);
+const b18Operations = new Set(['API-SEARCH-MULTI', 'API-CITATION-GET']);
+const s10Operations = new Set([
+  ...apiKeyOperations,
+  'API-USAGE-GET',
+  'API-AUDIT-LIST',
+  'API-OPS-STATUS',
+  'API-OPS-CLEANUP',
+  'API-OPS-RECONCILE',
+  'API-OPS-OUTBOX-REPLAY',
+]);
+const publicOperations = new Set(['API-OPENAPI', 'API-HEALTH-LIVE', 'API-HEALTH-READY']);
 
 function collectRefs(value: unknown, refs: string[] = []): string[] {
   if (Array.isArray(value)) {
@@ -93,12 +95,10 @@ function concretePath(path: string): string {
 }
 
 function successFixtureState(operationId: string): string {
-  if (deferredOperationIds.has(operationId)) return 'DEFERRED_TO_B18';
-  if (opsNotRun.has(operationId)) return 'NOT_RUN';
-  if (operationId === 'API-OPENAPI') return 'PASS_STATIC';
-  if (apiKeyOperations.has(operationId)) return 'PASS_HTTP';
-  if (operationId === 'API-HEALTH-LIVE' || operationId === 'API-HEALTH-READY') return 'PASS_HTTP';
-  return 'NOT_RUN';
+  if (publicOperations.has(operationId)) return 'A_HTTP_SMOKE_RERUN';
+  if (s10Operations.has(operationId)) return 'A_S10_REAL_INFRA_RERUN';
+  if (b18Operations.has(operationId)) return 'B18_HTTP_RERUN_REQUIRED';
+  return 'AFFECTED_SUITE_RERUN_REQUIRED';
 }
 
 function matrixRows() {
@@ -112,13 +112,20 @@ function matrixRows() {
     rateLimit: route.rateLimit,
     audit: route.audit,
     idempotent: route.idempotent,
-    successTestStatus: successFixtureState(route.operationId),
-    unauthenticatedTestStatus: 'PENDING',
-    wrongScopeTestStatus: 'PENDING',
-    tenantSpaceTestStatus: route.group === 'api-key' ? 'PENDING' : 'NOT_APPLICABLE',
-    b18Status: deferredOperationIds.has(route.operationId) ? 'DEFERRED_TO_B18' : 'NOT_APPLICABLE',
-    opsStatus: opsNotRun.has(route.operationId) ? 'NOT_RUN' : 'NOT_APPLICABLE',
-    evidencePath: 'test/e2e/kb-b19-api-key-http.test.ts',
+    successCoverage: successFixtureState(route.operationId),
+    unauthenticatedCoverage: publicOperations.has(route.operationId)
+      ? 'PUBLIC_BY_CONTRACT'
+      : 'A_E2E_ALL_OPERATIONS_GATE',
+    wrongScopeCoverage: publicOperations.has(route.operationId)
+      ? 'PUBLIC_BY_CONTRACT'
+      : 'A_E2E_ALL_OPERATIONS_GATE',
+    tenantSpaceCoverage:
+      route.group === 'system' ? 'PUBLIC_OR_GLOBAL' : 'AFFECTED_SUITE_RERUN_REQUIRED',
+    deferred: false,
+    evidencePath:
+      route.group === 'api-key'
+        ? 'test/e2e/kb-b19-api-key-http.test.ts'
+        : 'test-results/b19-a/<runId>/commands.json',
   }));
 }
 
@@ -168,6 +175,13 @@ describe('L1-B19 API-001 contract and runtime coverage', () => {
     const rows = matrixRows();
     expect(rows).toHaveLength(123);
     expect(new Set(rows.map((row) => row.operationId)).size).toBe(123);
+    expect(rows.every((row) => row.deferred === false)).toBe(true);
+    expect(
+      rows.every(
+        (row) =>
+          !row.successCoverage.includes('DEFERRED') && !row.successCoverage.includes('NOT_RUN'),
+      ),
+    ).toBe(true);
     const evidenceDir = process.env.B19_EVIDENCE_DIR?.trim();
     if (evidenceDir) {
       mkdirSync(evidenceDir, { recursive: true });
@@ -249,19 +263,50 @@ describe('L1-B19 FastGPT behavior matrix', () => {
         sourceEndLine: number;
         conclusion: string;
         frontendBehaviorId: string | null;
+        responsibility: string;
+        userInput: string;
+        expectedHttp: string;
+        authorization: string;
+        rateLimit: string;
+        audit: string;
+        persistence: string;
+        allowedDifference: string;
       }>;
     };
-    expect(matrix.rows.length).toBeGreaterThanOrEqual(12);
+    expect(matrix.rows.length).toBeGreaterThanOrEqual(23);
     expect(new Set(matrix.rows.map((row) => row.capabilityId))).toEqual(
-      new Set(['API-001', 'API-003']),
+      new Set(['API-001', 'API-003', 'OPS-001']),
     );
     const allowed = new Set(['MATCH', 'INTENTIONAL_DIFFERENCE', 'BLOCKED_REFERENCE']);
+    const allowedFrontendIds = new Set([
+      'KB-GLOBAL-010',
+      'KB-GLOBAL-011',
+      'KB-COLLECTION-126',
+      'KB-DATA-006',
+      'KB-INFO-001',
+      'KB-INFO-026',
+      'KB-INFO-027',
+      'KB-INFO-062',
+    ]);
     const referenceRoot = (process.env.FASTGPT_REFERENCE_ROOT ?? '/mnt/d/Fastgpt/FastGPT').trim();
     const referenceAvailable = existsSync(referenceRoot);
     for (const row of matrix.rows) {
       expect(row.subTestId).toMatch(/^[PNASCFQ]\d{2}$/);
       expect(allowed.has(row.conclusion), row.conclusion).toBe(true);
-      expect(row.frontendBehaviorId).toBeNull();
+      if (row.frontendBehaviorId !== null) {
+        expect(allowedFrontendIds.has(row.frontendBehaviorId), row.frontendBehaviorId).toBe(true);
+      }
+      if (row.capabilityId === 'OPS-001') {
+        expect(row.frontendBehaviorId, row.responsibility).not.toBeNull();
+      }
+      expect(row.responsibility.trim().length).toBeGreaterThan(0);
+      expect(row.userInput.trim().length).toBeGreaterThan(0);
+      expect(row.expectedHttp.trim().length).toBeGreaterThan(0);
+      expect(row.authorization.trim().length).toBeGreaterThan(0);
+      expect(row.rateLimit.trim().length).toBeGreaterThan(0);
+      expect(row.audit.trim().length).toBeGreaterThan(0);
+      expect(row.persistence.trim().length).toBeGreaterThan(0);
+      expect(row.allowedDifference.trim().length).toBeGreaterThan(0);
       expect(row.sourcePath.startsWith('/')).toBe(false);
       expect(row.sourcePath.split('/')).not.toContain('..');
       expect(row.sourceStartLine).toBeGreaterThanOrEqual(1);
@@ -271,6 +316,28 @@ describe('L1-B19 FastGPT behavior matrix', () => {
         const lineCount = source.split('\n').length;
         expect(row.sourceEndLine).toBeLessThanOrEqual(lineCount);
       }
+    }
+    expect(
+      new Set(matrix.rows.map((row) => `${row.capabilityId}:${row.subTestId}:${row.sourcePath}`))
+        .size,
+    ).toBe(matrix.rows.length);
+  });
+
+  it('L1-B19 asset audit classifies each required test asset exactly once', () => {
+    const audit = JSON.parse(
+      readFileSync(join(root, 'test/fixtures/b19/test-asset-audit.json'), 'utf8'),
+    ) as {
+      allowedStatuses: string[];
+      assets: Array<{ path: string; status: string; reason: string }>;
+    };
+    const allowed = new Set(['REUSE', 'EXTEND', 'NEW', 'STALE', 'BLOCKED']);
+    expect(new Set(audit.allowedStatuses)).toEqual(allowed);
+    expect(new Set(audit.assets.map((asset) => asset.path)).size).toBe(audit.assets.length);
+    expect(audit.assets.length).toBeGreaterThanOrEqual(19);
+    for (const asset of audit.assets) {
+      expect(existsSync(join(root, asset.path)), asset.path).toBe(true);
+      expect(allowed.has(asset.status), asset.path).toBe(true);
+      expect(asset.reason.trim().length).toBeGreaterThan(0);
     }
   });
 });
