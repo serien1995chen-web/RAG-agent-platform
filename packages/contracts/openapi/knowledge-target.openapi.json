@@ -9120,7 +9120,66 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "type": "object",
+                  "required": [
+                    "success",
+                    "data",
+                    "traceId",
+                    "requestId"
+                  ],
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "const": true
+                    },
+                    "data": {
+                      "type": "object",
+                      "required": [
+                        "format",
+                        "headers",
+                        "rowCount",
+                        "rows",
+                        "diagnostics",
+                        "truncated"
+                      ],
+                      "properties": {
+                        "format": {
+                          "type": "string"
+                        },
+                        "headers": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "rowCount": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "rows": {
+                          "type": "array",
+                          "items": {
+                            "type": "object"
+                          }
+                        },
+                        "diagnostics": {
+                          "type": "array",
+                          "items": {
+                            "type": "object"
+                          }
+                        },
+                        "truncated": {
+                          "type": "boolean"
+                        }
+                      }
+                    },
+                    "traceId": {
+                      "type": "string"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  }
                 }
               }
             }
@@ -9310,7 +9369,80 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "type": "object",
+                  "required": [
+                    "success",
+                    "data",
+                    "traceId",
+                    "requestId"
+                  ],
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "const": true
+                    },
+                    "data": {
+                      "type": "object",
+                      "required": [
+                        "format",
+                        "headers",
+                        "rowCount",
+                        "rows",
+                        "diagnostics",
+                        "conflicts",
+                        "actions",
+                        "truncated"
+                      ],
+                      "properties": {
+                        "format": {
+                          "type": "string"
+                        },
+                        "headers": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "rowCount": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "rows": {
+                          "type": "array",
+                          "items": {
+                            "type": "object"
+                          }
+                        },
+                        "diagnostics": {
+                          "type": "array",
+                          "items": {
+                            "type": "object"
+                          }
+                        },
+                        "conflicts": {
+                          "type": "array",
+                          "items": {
+                            "type": "object"
+                          }
+                        },
+                        "actions": {
+                          "type": "array",
+                          "items": {
+                            "type": "object"
+                          }
+                        },
+                        "truncated": {
+                          "type": "boolean"
+                        }
+                      }
+                    },
+                    "traceId": {
+                      "type": "string"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  }
                 }
               }
             }
@@ -16667,7 +16799,7 @@
                     "expiresAt": null,
                     "lastUsedAt": null,
                     "createdAt": "2026-10-21T10:00:00+08:00",
-                    "secret": "kn_live_example_not_valid_000000000000"
+                    "secret": "opaque-one-time-secret-not-returned-again"
                   },
                   "traceId": "4bf92f3577b34da6a3ce929d0e0e4736",
                   "requestId": "req_01JABCDEF123"
@@ -17136,7 +17268,7 @@
                     "expiresAt": null,
                     "lastUsedAt": null,
                     "createdAt": "2026-10-21T10:00:00+08:00",
-                    "secret": "kn_live_example_not_valid_000000000000"
+                    "secret": "opaque-one-time-secret-not-returned-again"
                   },
                   "traceId": "4bf92f3577b34da6a3ce929d0e0e4736",
                   "requestId": "req_01JABCDEF123"
@@ -23122,7 +23254,7 @@
               "secret": {
                 "type": "string",
                 "examples": [
-                  "kn_live_7Vf2m9Pq4xR8sT1uW6zA3bC5dE0fG7h"
+                  "opaque-one-time-secret-not-returned-again"
                 ]
               }
             }

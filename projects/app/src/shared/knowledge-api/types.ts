@@ -61,6 +61,15 @@ export interface KnowledgeApiRuntime {
     route: RouteEntry;
     requestId: string;
   }): Promise<RateLimitDecision | null>;
+  auditDenied(input: {
+    workspaceId: string;
+    subject: KnowledgeAuthSubject;
+    requestId: string;
+    traceId: string;
+    operationId: string;
+    reason: 'scope' | 'rate_limit';
+    details: Record<string, unknown>;
+  }): Promise<void>;
   readiness(requestId: string): Promise<{ status: number; body: HealthResponse }>;
   operationsStatus(input: {
     requestId: string;

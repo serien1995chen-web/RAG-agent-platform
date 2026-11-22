@@ -114,8 +114,10 @@ export function matchRuntimeRoute(
 
 export function validateRouteRegistry(): string[] {
   const problems: string[] = [];
-  if (FULL_ROUTE_REGISTRY.length !== 120) {
-    problems.push(`完整 registry 应为 120，实际 ${FULL_ROUTE_REGISTRY.length}`);
+  if (FULL_ROUTE_REGISTRY.length !== TARGET_CONTRACT_COUNTS.operations) {
+    problems.push(
+      `完整 registry 应为 ${TARGET_CONTRACT_COUNTS.operations}，实际 ${FULL_ROUTE_REGISTRY.length}`,
+    );
   }
   if (
     RUNTIME_ROUTE_REGISTRY.length + DEFERRED_OPERATION_MANIFEST.length !==

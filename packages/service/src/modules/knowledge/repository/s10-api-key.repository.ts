@@ -293,6 +293,7 @@ export class S10ApiKeyRepository implements S10ApiKeyRepositoryPort {
       if (input.name !== undefined) update.name = input.name;
       if (input.scopes !== undefined) update.scopes = input.scopes;
       if (spaceIds !== undefined) update.spaceIds = spaceIds;
+      if (input.status === 'active') update.status = 'active';
       if (Object.keys(update).length > 1) {
         const result = await this.keys.findOneAndUpdate(
           {
