@@ -53,8 +53,8 @@ for (const capability of manifest.capabilities) {
   }
 }
 
-if (manifest.mongoCollections.length !== 23) {
-  problems.push(`Mongo 集合应为 23，实际 ${manifest.mongoCollections.length}`);
+if (manifest.mongoCollections.length !== 24) {
+  problems.push(`Mongo 集合应为 24，实际 ${manifest.mongoCollections.length}`);
 }
 if (new Set(manifest.mongoCollections).size !== manifest.mongoCollections.length) {
   problems.push('Mongo 集合存在重复');

@@ -16,7 +16,13 @@ import {
   type S10PricingProfile,
   type S10QuotaProfile,
 } from '../../../shared/config/s10-profiles';
-import { computeUsagePointsMicros, pointsFromMicros } from '../domain/s10-usage';
+import {
+  assertUsageContract,
+  computeUsagePointsMicros,
+  pointsFromMicros,
+  type S10UsageKind,
+  type S10UsageUnit,
+} from '../domain/s10-usage';
 import type {
   S10UsageRepositoryPort,
   S10UsageSummary,
@@ -52,6 +58,33 @@ function objectIdOf(value: string): Types.ObjectId {
   return new Types.ObjectId(createHash('sha256').update(value).digest('hex').slice(0, 24));
 }
 
+function assertStoredUsageContract(
+  input: {
+    kind: S10UsageKind;
+    unit: S10UsageUnit;
+    quantity: number;
+    inputTokens?: number;
+    outputTokens?: number;
+  },
+  context: TenantContext,
+): void {
+  try {
+    assertUsageContract(input);
+  } catch (error) {
+    if (!(error instanceof RangeError)) throw error;
+    throw createKnowledgeError({
+      code: 'KNOWLEDGE_VALIDATION_FAILED',
+      requestId: context.requestId,
+      traceId: context.traceId,
+      details: {
+        reason: 'invalid_usage',
+        field: error.message.split(' ')[0],
+        message: error.message,
+      },
+    });
+  }
+}
+
 export class S5UsageRepository
   implements S5UsageRecorderPort, S5ProviderUsageRecorderPort, S10UsageRepositoryPort
 {
@@ -83,6 +116,16 @@ export class S5UsageRepository
         details: { field: 'workspaceId', reason: 'tenant_mismatch' },
       });
     }
+    assertStoredUsageContract(
+      {
+        kind: fact.kind,
+        unit: fact.unit,
+        quantity: fact.quantity,
+        ...(fact.inputTokens !== undefined ? { inputTokens: fact.inputTokens } : {}),
+        ...(fact.outputTokens !== undefined ? { outputTokens: fact.outputTokens } : {}),
+      },
+      context,
+    );
     const eventId = usageEventIdOf({
       workspaceId,
       operation: fact.operation,
@@ -94,8 +137,8 @@ export class S5UsageRepository
     });
     const eventType =
       fact.kind === 'embedding' ? 'embedding' : fact.kind === 'rerank' ? 'rerank' : fact.kind;
-    const inputTokens = Math.max(0, fact.inputTokens ?? 0);
-    const outputTokens = Math.max(0, fact.outputTokens ?? 0);
+    const inputTokens = fact.inputTokens ?? 0;
+    const outputTokens = fact.outputTokens ?? 0;
     const pointsMicros = computeUsagePointsMicros({
       kind: fact.kind,
       status: fact.status,
@@ -213,6 +256,14 @@ export class S5UsageRepository
         details: { field: 'workspaceId', reason: 'tenant_mismatch' },
       });
     }
+    assertStoredUsageContract(
+      {
+        kind: 'ocr',
+        unit: fact.unit,
+        quantity: fact.quantity,
+      },
+      context,
+    );
     const eventId = usageEventIdOf({
       workspaceId,
       operation: 'ocr',

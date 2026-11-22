@@ -20,6 +20,92 @@ const MAX_AUDIT_DEPTH = 5;
 const MAX_AUDIT_KEYS = 50;
 const MAX_AUDIT_ARRAY = 50;
 
+export const KNOWLEDGE_AUDIT_RESOURCE_TYPES = Object.freeze([
+  'workspace',
+  'space',
+  'directory',
+  'source',
+  'segment',
+  'job',
+  'connector',
+  'api_key',
+  'file',
+  'tag',
+  'synonym',
+] as const);
+
+export type KnowledgeAuditResourceType = (typeof KNOWLEDGE_AUDIT_RESOURCE_TYPES)[number];
+
+export const KNOWLEDGE_AUDIT_ACTIONS = Object.freeze([
+  'acl.resume',
+  'acl.update',
+  'api_key.create',
+  'api_key.list',
+  'api_key.revoke',
+  'api_key.rotate',
+  'api_key.update',
+  'batch.source.failed',
+  'cleanup.queued',
+  'collaborator.create',
+  'collaborator.delete',
+  'collaborator.update',
+  'connector.connect',
+  'connector.delete',
+  'connector.sync',
+  'connector.update',
+  'delete',
+  'directory.create',
+  'directory.delete',
+  'directory.move',
+  'directory.update',
+  'export.create',
+  'file.ticket.issue',
+  'import.files.submit',
+  'knowledge.search',
+  'knowledge.search.deep.round',
+  'model.invoke',
+  'move',
+  'ocr.invoke',
+  'ownership.transfer',
+  'reference.remove',
+  'reference.upsert',
+  'reindex',
+  'retry',
+  'segment.create',
+  'source.create',
+  'source.delete',
+  'source.move',
+  'source.update',
+  'space.create',
+  'space.delete',
+  'space.model_bindings.update',
+  'space.move',
+  'space.update',
+  'synonym.config.delete',
+  'synonym.config.toggle',
+  'synonym.file.upload',
+  'synonym.rebuild.complete',
+  'synonym.rebuild.failed',
+  'synonym.rebuild.request',
+  'tag.create',
+  'tag.delete',
+  'tag.update',
+  'upsert',
+] as const);
+
+export type KnowledgeAuditAction = (typeof KNOWLEDGE_AUDIT_ACTIONS)[number];
+
+export function isKnowledgeAuditAction(value: string): boolean {
+  return (
+    (KNOWLEDGE_AUDIT_ACTIONS as readonly string[]).includes(value) ||
+    /^API-[A-Z0-9-]+\.denied$/.test(value)
+  );
+}
+
+export function isKnowledgeAuditResourceType(value: string): value is KnowledgeAuditResourceType {
+  return (KNOWLEDGE_AUDIT_RESOURCE_TYPES as readonly string[]).includes(value);
+}
+
 function isSensitiveAuditKey(keyHint: string): boolean {
   const normalized = keyHint.replace(/[-_.\s]/g, '').toLowerCase();
   return SENSITIVE_KEYS.has(normalized) || SENSITIVE_KEY_PART.test(keyHint);
@@ -27,17 +113,8 @@ function isSensitiveAuditKey(keyHint: string): boolean {
 
 export interface KnowledgeAuditInput {
   knowledgeSpaceId: string | null;
-  action: string;
-  resourceType:
-    | 'workspace'
-    | 'space'
-    | 'directory'
-    | 'source'
-    | 'segment'
-    | 'job'
-    | 'connector'
-    | 'api_key'
-    | 'file';
+  action: KnowledgeAuditAction | (string & {});
+  resourceType: KnowledgeAuditResourceType;
   resourceId: string;
   outcome: 'allowed' | 'denied' | 'succeeded' | 'failed';
   safeDiff: Record<string, unknown>;

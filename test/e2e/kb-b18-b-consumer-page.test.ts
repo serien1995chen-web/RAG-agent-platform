@@ -24,6 +24,7 @@ import {
   registerKnowledgeModels,
   type KnowledgeConnections,
   type TenantContext,
+  prefixedRedisKey,
 } from '../../packages/service/src';
 
 const root = resolve(import.meta.dirname, '../..');
@@ -348,7 +349,10 @@ describe('L1-B18-B test-owned consumer page', () => {
   }, 180_000);
 
   it('renders 429 and controlled 504 as distinct retryable states', async () => {
-    const rateKey = `kb-rate:${workspaceId}:API-SEARCH-HYBRID`;
+    const rateKey = prefixedRedisKey(
+      process.env.KB_REDIS_PREFIX ?? '',
+      `kb-rate:${workspaceId}:API-SEARCH-HYBRID`,
+    );
     await connections.redis.hset(rateKey, 'tokens', '0', 'timestamp', String(Date.now() + 30_000));
     await connections.redis.pexpire(rateKey, 30_000);
     const limiterPage = await startConsumerPage({

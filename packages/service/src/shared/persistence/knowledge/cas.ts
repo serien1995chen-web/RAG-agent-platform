@@ -1,5 +1,5 @@
 import { createKnowledgeError } from '@kb/contracts';
-import { Types, type Model } from 'mongoose';
+import { Types, type ClientSession, type Model } from 'mongoose';
 import {
   requireWorkspaceId,
   tenantError,
@@ -12,6 +12,7 @@ export interface CasUpdateInput {
   expectedVersion: number;
   update: Record<string, unknown>;
   unset?: Record<string, 1>;
+  session?: ClientSession;
 }
 
 export async function workspaceCasUpdate<TDoc extends WorkspaceFields>(
@@ -43,7 +44,7 @@ export async function workspaceCasUpdate<TDoc extends WorkspaceFields>(
       ...(input.unset ? { $unset: input.unset } : {}),
       $inc: { version: 1 },
     },
-    { new: true, runValidators: true },
+    { new: true, runValidators: true, ...(input.session ? { session: input.session } : {}) },
   );
   if (!updated) {
     const existing = await model
@@ -53,6 +54,7 @@ export async function workspaceCasUpdate<TDoc extends WorkspaceFields>(
         deletedAt: null,
       })
       .select({ _id: 1 })
+      .session(input.session ?? null)
       .lean();
     if (!existing) {
       throw tenantError(context, 'KNOWLEDGE_NOT_FOUND');

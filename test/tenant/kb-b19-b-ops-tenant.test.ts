@@ -106,7 +106,12 @@ describe('TEST-X-TENANT-GUARD B19 audit/status/connector', () => {
       contextA,
     );
 
-    expect((await operations.list({ limit: 20 }, contextA)).items).toHaveLength(1);
+    const workspaceAAudits = (await operations.list({ limit: 20 }, contextA)).items;
+    expect(workspaceAAudits).toHaveLength(2);
+    expect(workspaceAAudits.map((item) => item.action).sort()).toEqual([
+      'connector.connect',
+      'space.create',
+    ]);
     await expect(operations.list({ limit: 20 }, contextB)).resolves.toEqual({
       items: [],
       pageInfo: { nextCursor: null, hasMore: false },

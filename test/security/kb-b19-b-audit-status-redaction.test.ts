@@ -117,12 +117,64 @@ describe('TEST-X-SECRET-LEAK / L1-B19-OPS-005-Q01 status evidence', () => {
           ];
         },
       },
+      securityProbe: async () => ({
+        scopeEnforced: true,
+        auditAppendOnly: true,
+        secretRedactionEnabled: true,
+      }),
     });
-    const serialized = JSON.stringify(await adapter.probe(context));
+    const view = await adapter.probe(context);
+    const serialized = JSON.stringify(view);
     expect(serialized).not.toContain(B19_B_RUN_ID);
     expect(serialized).not.toContain('Bearer');
     expect(serialized).not.toContain('credentialCiphertext');
     expect(serialized).not.toContain('objectKey');
     expect(serialized).not.toContain('kn_live_');
+    expect(view.securityChecks).toMatchObject({
+      scopeEnforced: true,
+      auditAppendOnly: true,
+      secretRedactionEnabled: true,
+    });
+  });
+
+  it('reports failed security evidence as disabled instead of a fabricated healthy state', async () => {
+    const adapter = new S10StatusProbesAdapter({
+      config: {
+        externalModes: { model: 'mock' },
+        s3: { provider: 'minio' },
+        s10: { apiKeyHmacConfigured: true, quota: { requestsPerMinute: 30 } },
+      } as never,
+      connection: {} as never,
+      queues: new Map(),
+      readiness: async () => ({
+        status: 200,
+        body: {
+          checks: ['mongo', 'redis', 'postgres', 's3'].map((name) => ({
+            name,
+            status: 'ok',
+            latencyMs: 1,
+          })),
+        },
+      }),
+      models: {
+        async listModels() {
+          return [];
+        },
+      },
+      connectors: {
+        async list() {
+          return [];
+        },
+      },
+      securityProbe: async () => {
+        throw new Error('security evidence unavailable');
+      },
+    });
+    const view = await adapter.probe(b19bTenantContext('security-evidence-failure'));
+    expect(view.securityChecks).toMatchObject({
+      scopeEnforced: false,
+      auditAppendOnly: false,
+      secretRedactionEnabled: false,
+    });
   });
 });

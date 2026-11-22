@@ -13,6 +13,7 @@ import { registerKnowledgeModels } from '../../../shared/persistence/schemas/kno
 import type {
   KnowledgeConnectorDoc,
   KnowledgeConnectorCursorDoc,
+  KnowledgeConnectorScheduleDoc,
 } from '../../../shared/persistence/schemas/knowledge-connector.schemas';
 import type { KnowledgeSourceDoc } from '../../../shared/persistence/schemas/knowledge-catalog.schemas';
 import type { KnowledgeJobDoc } from '../../../shared/persistence/schemas/knowledge-job.schemas';
@@ -149,6 +150,7 @@ function jobDocument(input: {
 export class KnowledgeConnectorRepository implements ConnectorRepositoryPort {
   private readonly connectors: Model<KnowledgeConnectorDoc>;
   private readonly cursors: Model<KnowledgeConnectorCursorDoc>;
+  private readonly schedules: Model<KnowledgeConnectorScheduleDoc>;
   private readonly sources: Model<KnowledgeSourceDoc>;
   private readonly jobs: Model<KnowledgeJobDoc>;
   private readonly audit: KnowledgeAuditRepository;
@@ -160,6 +162,7 @@ export class KnowledgeConnectorRepository implements ConnectorRepositoryPort {
     const models = registerKnowledgeModels(connection);
     this.connectors = models.KnowledgeConnector as Model<KnowledgeConnectorDoc>;
     this.cursors = models.KnowledgeConnectorCursor as Model<KnowledgeConnectorCursorDoc>;
+    this.schedules = models.KnowledgeConnectorSchedule as Model<KnowledgeConnectorScheduleDoc>;
     this.sources = models.KnowledgeSource as Model<KnowledgeSourceDoc>;
     this.jobs = models.KnowledgeJob as Model<KnowledgeJobDoc>;
     this.audit = new KnowledgeAuditRepository(connection);
@@ -181,6 +184,55 @@ export class KnowledgeConnectorRepository implements ConnectorRepositoryPort {
       .lean();
     if (!space) throw tenantError(context, 'KNOWLEDGE_NOT_FOUND');
     return id;
+  }
+
+  private async syncSchedule(
+    connector: Plain<KnowledgeConnectorDoc>,
+    context: TenantContext,
+    session?: ClientSession,
+  ): Promise<void> {
+    const eligible =
+      connector.deletedAt === null &&
+      connector.syncEnabled &&
+      connector.status === 'active' &&
+      connector.nextSyncAt !== null;
+    if (!eligible) {
+      await this.schedules.deleteOne(
+        {
+          workspaceId: connector.workspaceId,
+          connectorId: connector._id,
+        },
+        { ...(session ? { session } : {}) },
+      );
+      return;
+    }
+    await this.schedules.updateOne(
+      {
+        workspaceId: connector.workspaceId,
+        connectorId: connector._id,
+      },
+      {
+        $setOnInsert: {
+          workspaceId: connector.workspaceId,
+          knowledgeSpaceId: connector.knowledgeSpaceId,
+          connectorId: connector._id,
+          version: 1,
+          deletedAt: null,
+          createdByMemberId: context.memberId,
+          attempt: 0,
+          lastDispatchedAt: null,
+          lastError: null,
+        },
+        $set: {
+          dueAt: connector.nextSyncAt,
+          status: 'scheduled',
+          leaseOwner: null,
+          leaseExpiresAt: null,
+          updatedByMemberId: context.memberId,
+        },
+      },
+      { upsert: true, ...(session ? { session } : {}) },
+    );
   }
 
   async connect(
@@ -221,7 +273,9 @@ export class KnowledgeConnectorRepository implements ConnectorRepositoryPort {
         lastError: null,
         cursorVersion: 1,
       });
-      return connectorView(document.toObject() as unknown as Plain<KnowledgeConnectorDoc>);
+      const plain = document.toObject() as unknown as Plain<KnowledgeConnectorDoc>;
+      await this.syncSchedule(plain, context);
+      return connectorView(plain);
     } catch (error) {
       if (duplicateKey(error)) {
         throw createKnowledgeError({
@@ -347,6 +401,7 @@ export class KnowledgeConnectorRepository implements ConnectorRepositoryPort {
       },
       context,
     );
+    await this.syncSchedule(updated, context);
     return connectorView(updated);
   }
 
@@ -416,7 +471,7 @@ export class KnowledgeConnectorRepository implements ConnectorRepositoryPort {
     if (connector.status === 'active' || connector.status === 'failed') return;
     if (connector.status !== 'syncing') return;
     const now = new Date();
-    await this.connectors.updateOne(
+    const updated = await this.connectors.findOneAndUpdate(
       {
         _id: connector._id,
         workspaceId: connector.workspaceId,
@@ -441,7 +496,17 @@ export class KnowledgeConnectorRepository implements ConnectorRepositoryPort {
         },
         $inc: { version: 1 },
       },
+      {
+        new: true,
+        runValidators: true,
+      },
     );
+    if (updated) {
+      await this.syncSchedule(
+        updated.toObject() as unknown as Plain<KnowledgeConnectorDoc>,
+        context,
+      );
+    }
   }
 
   async preflightSync(
@@ -659,6 +724,34 @@ export class KnowledgeConnectorRepository implements ConnectorRepositoryPort {
           context,
           session,
         );
+        const dispatchedAt = new Date();
+        await this.schedules.updateOne(
+          {
+            workspaceId: context.workspaceId,
+            connectorId: current._id,
+          },
+          {
+            $setOnInsert: {
+              workspaceId: context.workspaceId,
+              knowledgeSpaceId: spaceObjectId,
+              connectorId: current._id,
+              version: 1,
+              deletedAt: null,
+              createdByMemberId: context.memberId,
+              attempt: 0,
+              lastError: null,
+            },
+            $set: {
+              dueAt: new Date(dispatchedAt.getTime() + current.syncIntervalMinutes * 60_000),
+              status: 'dispatched',
+              leaseOwner: null,
+              leaseExpiresAt: null,
+              lastDispatchedAt: dispatchedAt,
+              updatedByMemberId: context.memberId,
+            },
+          },
+          { upsert: true, session },
+        );
         return {
           connector: connectorView(updated),
           job: jobView(job.toObject() as unknown as Plain<KnowledgeJobDoc>),
@@ -815,6 +908,13 @@ export class KnowledgeConnectorRepository implements ConnectorRepositoryPort {
         },
         context,
         session,
+      );
+      await this.schedules.deleteOne(
+        {
+          workspaceId: context.workspaceId,
+          connectorId: current._id,
+        },
+        { session },
       );
       return { id: connectorId, status: 'accepted' as const, jobId: firstJobId };
     });

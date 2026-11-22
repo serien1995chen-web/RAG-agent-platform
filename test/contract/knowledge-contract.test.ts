@@ -82,7 +82,7 @@ describe('knowledge target contract', () => {
     expect(responseText).not.toContain('501999');
   });
 
-  it('contains 73 Capabilities, 23 collections, 4 vector profiles and 13 queues', () => {
+  it('contains 73 Capabilities, 24 collections, 4 vector profiles and 13 queues', () => {
     const manifest = JSON.parse(
       readFileSync(
         join(repoRoot, 'packages/contracts/src/knowledge/canonical-manifest.data.json'),
@@ -95,7 +95,7 @@ describe('knowledge target contract', () => {
       vectorProfiles: Array<{ dimension: number; storageType: string }>;
     };
     expect(manifest.capabilities).toHaveLength(73);
-    expect(manifest.mongoCollections).toHaveLength(23);
+    expect(manifest.mongoCollections).toHaveLength(24);
     expect(manifest.mongoCollections.every((name) => name.startsWith('knowledge_'))).toBe(true);
     expect(manifest.queues).toHaveLength(13);
     expect(manifest.queues.every((name) => name.startsWith('knowledge-'))).toBe(true);

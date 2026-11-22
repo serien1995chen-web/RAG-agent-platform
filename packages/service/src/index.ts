@@ -12,6 +12,7 @@ export {
 } from './shared/config/s10-profiles';
 export { loadS5AiproxyConfig } from './shared/config/s5-aiproxy-config';
 export { loadS5RuntimeEnvironment } from './shared/config/s5-runtime-env';
+export { bullMqPrefix, prefixedRedisKey } from './shared/config/redis-prefix';
 export type {
   KnowledgeMockAuthConfig,
   KnowledgeRuntimeConfig,
@@ -87,6 +88,8 @@ export {
   S10StatusApplication,
   S10StatusProbesAdapter,
   S10ModelHealthProbeAdapter,
+  S10ConnectorSchedulerApplication,
+  KnowledgeConnectorScheduleRepository,
   KnowledgeCatalogRepository,
   KnowledgeConnectorRepository,
   KnowledgeCredentialCipher,

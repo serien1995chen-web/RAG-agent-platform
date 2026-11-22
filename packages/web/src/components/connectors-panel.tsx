@@ -26,6 +26,25 @@ function updateQuery(connector: ConnectorRecord) {
   window.history.replaceState(window.history.state, '', next);
 }
 
+function displayTime(value: string | null): string {
+  if (!value) return '—';
+  const parsed = Date.parse(value);
+  return Number.isNaN(parsed) ? '—' : new Date(parsed).toLocaleString('zh-CN');
+}
+
+function connectorStale(connector: ConnectorRecord): boolean {
+  if (connector.status !== 'active' || !connector.syncEnabled || !connector.nextSyncAt)
+    return false;
+  return Date.parse(connector.nextSyncAt) + 5 * 60_000 < Date.now();
+}
+
+function lastErrorView(error: Record<string, unknown> | null): string {
+  if (!error) return '—';
+  const code = typeof error.code === 'string' ? error.code : '';
+  const message = typeof error.message === 'string' ? error.message : '';
+  return [code, message].filter(Boolean).join(' · ') || '—';
+}
+
 export function ConnectorsPanel(props: ConnectorsPanelProps) {
   const { t } = useKnowledgeI18n();
   const [connector, setConnector] = useState<ConnectorRecord | null>(null);
@@ -144,6 +163,16 @@ export function ConnectorsPanel(props: ConnectorsPanelProps) {
     }
   };
 
+  const stale = connector ? connectorStale(connector) : false;
+  const syncDisabledReason = connector
+    ? !connector.syncEnabled
+      ? t('connectors.syncDisabledPaused')
+      : ['paused', 'failed', 'syncing', 'deleting', 'deleted'].includes(connector.status)
+        ? t('connectors.syncDisabledStatus', { status: connector.status })
+        : ''
+    : '';
+  const syncDisabled = busy || syncDisabledReason.length > 0;
+
   return (
     <Box minW={0}>
       <Section title={t('connectors.formTitle')} meta={t('connectors.description')}>
@@ -172,17 +201,44 @@ export function ConnectorsPanel(props: ConnectorsPanelProps) {
               {connector.credentialMetadata.keyVersion} ·{' '}
               {connector.credentialMetadata.redactedFields.join(', ')}
             </Text>
-            <Text fontSize="sm" mt={2}>
-              cursorVersion {connector.cursorVersion} · nextSyncAt {connector.nextSyncAt ?? 'null'}
-            </Text>
+            <Box mt={2} fontSize="sm" aria-live="polite" aria-atomic="true" display="grid" gap={1}>
+              <Text>
+                {t('connectors.lastAttemptAt')}: {displayTime(connector.lastAttemptAt)}
+              </Text>
+              <Text>
+                {t('connectors.lastSuccessAt')}: {displayTime(connector.lastSuccessAt)}
+              </Text>
+              <Text>
+                {t('connectors.nextSyncAt')}: {displayTime(connector.nextSyncAt)}
+              </Text>
+              <Text>
+                {t('connectors.lastError')}: {lastErrorView(connector.lastError)}
+              </Text>
+              {stale ? (
+                <Text color="kn.danger" fontWeight="700">
+                  {t('connectors.stale')}
+                </Text>
+              ) : null}
+            </Box>
             <Flex mt={5} gap={2} wrap="wrap">
-              <Button busy={busy} onClick={() => void sync()}>
+              <Button
+                busy={busy}
+                disabled={syncDisabled}
+                aria-describedby={syncDisabledReason ? 'connector-sync-disabled-reason' : undefined}
+                title={syncDisabledReason || undefined}
+                onClick={() => void sync()}
+              >
                 {t('connectors.sync')}
               </Button>
               <Button tone="danger" busy={busy} onClick={() => setDeleteOpen(true)}>
                 {t('connectors.delete')}
               </Button>
             </Flex>
+            {syncDisabledReason ? (
+              <Text id="connector-sync-disabled-reason" mt={2} fontSize="sm" color="kn.muted">
+                {syncDisabledReason}
+              </Text>
+            ) : null}
           </Box>
         ) : (
           <Text>{t('connectors.noConnector')}</Text>

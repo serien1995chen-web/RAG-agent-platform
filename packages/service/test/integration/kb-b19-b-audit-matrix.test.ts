@@ -334,4 +334,31 @@ describe('L1-B19-OPS-003 audit event matrix', () => {
     ).rejects.toBeDefined();
     create.mockRestore();
   });
+
+  it('rolls back catalog writes when transactional audit append is unavailable', async () => {
+    const space = await catalog.createSpace(
+      {
+        kind: 'space',
+        name: `Audit Rollback ${B19_B_RUN_ID}`,
+        accessMode: 'workspace',
+        sourceAclMode: 'inherited',
+        sourcePermissionEnabled: true,
+      },
+      owner,
+    );
+    const model = registerKnowledgeModels(connection).KnowledgeAuditEvent;
+    const create = vi
+      .spyOn(model, 'create')
+      .mockRejectedValueOnce(new Error('audit transaction unavailable'));
+    await expect(
+      catalog.updateSpace(
+        space.id,
+        { version: space.version, name: `Audit Rollback Updated ${B19_B_RUN_ID}` },
+        owner,
+      ),
+    ).rejects.toBeDefined();
+    create.mockRestore();
+    const persisted = await catalog.getSpace(space.id, owner);
+    expect(persisted).toMatchObject({ version: space.version, name: space.name });
+  });
 });

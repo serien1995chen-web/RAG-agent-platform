@@ -207,4 +207,17 @@ describe('L1-B19-OPS-001 usage validation and accounting', () => {
       }),
     ).toThrow(/unit/);
   });
+
+  it('L1-B19-OPS-001-Q01 accepts native TTS character usage', () => {
+    expect(
+      computeUsagePointsMicros({
+        kind: 'tts',
+        status: 200,
+        intent: false,
+        quantity: 2,
+        unit: 'character',
+        pricing: FIXTURE_V1_PRICING,
+      }),
+    ).toBe(0);
+  });
 });

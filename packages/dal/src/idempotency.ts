@@ -64,11 +64,18 @@ export class RedisIdempotencyStore implements IdempotencyStore {
   constructor(
     private readonly redis: Redis,
     private readonly ttlSeconds: number = DEFAULT_IDEMPOTENCY_TTL_SECONDS,
+    private readonly prefix = '',
   ) {}
 
+  private key(scopeKey: string): string {
+    const normalizedPrefix = this.prefix.trim().replace(/:+$/, '');
+    return normalizedPrefix ? `${normalizedPrefix}:${scopeKey}` : scopeKey;
+  }
+
   async begin(scopeKey: string, requestHash: string): Promise<BeginIdempotencyResult> {
+    const key = this.key(scopeKey);
     const inserted = await this.redis.set(
-      scopeKey,
+      key,
       JSON.stringify({ state: 'processing', requestHash, createdAtMs: Date.now() }),
       'EX',
       this.ttlSeconds,
@@ -76,10 +83,10 @@ export class RedisIdempotencyStore implements IdempotencyStore {
     );
     if (inserted === 'OK') return { kind: 'started' };
 
-    const raw = await this.redis.get(scopeKey);
+    const raw = await this.redis.get(key);
     if (!raw) {
       const retry = await this.redis.set(
-        scopeKey,
+        key,
         JSON.stringify({ state: 'processing', requestHash, createdAtMs: Date.now() }),
         'EX',
         this.ttlSeconds,
@@ -98,11 +105,12 @@ export class RedisIdempotencyStore implements IdempotencyStore {
   }
 
   async complete(scopeKey: string, response: unknown): Promise<void> {
-    const raw = await this.redis.get(scopeKey);
+    const key = this.key(scopeKey);
+    const raw = await this.redis.get(key);
     if (!raw) return;
     const record = JSON.parse(raw) as IdempotencyRecord;
     await this.redis.set(
-      scopeKey,
+      key,
       JSON.stringify({ ...record, state: 'completed', response }),
       'EX',
       this.ttlSeconds,
@@ -110,6 +118,6 @@ export class RedisIdempotencyStore implements IdempotencyStore {
   }
 
   async fail(scopeKey: string): Promise<void> {
-    await this.redis.del(scopeKey);
+    await this.redis.del(this.key(scopeKey));
   }
 }

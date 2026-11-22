@@ -377,6 +377,25 @@ export class KnowledgeCatalogRepository {
             { session, ordered: true },
           );
         }
+        await this.audit.append(
+          {
+            knowledgeSpaceId: input.kind === 'space' ? String(created._id) : null,
+            action: 'space.create',
+            resourceType: 'space',
+            resourceId: String(created._id),
+            outcome: 'succeeded',
+            safeDiff: {
+              kind: input.kind,
+              version: created.version,
+              parentSpaceId: parentSpaceId ? String(parentSpaceId) : null,
+              accessMode: input.accessMode,
+              sourceAclMode: input.sourceAclMode,
+              modelBindingTypes: (input.modelBindings ?? []).map((binding) => binding.modelType),
+            },
+          },
+          context,
+          session,
+        );
       });
       return spaceDto(created, parentPath.map(String));
     } finally {
@@ -443,12 +462,30 @@ export class KnowledgeCatalogRepository {
       update.name = name;
       update.normalizedName = name.toLocaleLowerCase('en-US');
     }
-    const updated = await workspaceCasUpdate(
-      this.spaces,
-      { id: spaceId, expectedVersion: version, update },
-      context,
-    );
-    return spaceDto(updated as unknown as Plain<KnowledgeSpaceDoc>);
+    return withMongoTransaction(this.connection, async (session) => {
+      const updated = await workspaceCasUpdate(
+        this.spaces,
+        { id: spaceId, expectedVersion: version, update, session },
+        context,
+      );
+      await this.audit.append(
+        {
+          knowledgeSpaceId: spaceId,
+          action: 'space.update',
+          resourceType: 'space',
+          resourceId: spaceId,
+          outcome: 'succeeded',
+          safeDiff: {
+            fields: Object.keys(update).sort(),
+            version,
+            updatedVersion: updated.version,
+          },
+        },
+        context,
+        session,
+      );
+      return spaceDto(updated as unknown as Plain<KnowledgeSpaceDoc>);
+    });
   }
 
   async deleteSpace(spaceId: string, input: Record<string, unknown>, context: TenantContext) {
@@ -1013,25 +1050,49 @@ export class KnowledgeCatalogRepository {
       depth = parent.depth + 1;
       assertDirectoryDepth(depth, context);
     }
-    const created = await this.directories.create({
-      workspaceId: context.workspaceId,
-      knowledgeSpaceId: spaceObjectId,
-      version: 1,
-      deletedAt: null,
-      createdByMemberId: context.memberId,
-      updatedByMemberId: context.memberId,
-      parentDirectoryId,
-      name,
-      normalizedName: name.toLocaleLowerCase('en-US'),
-      path,
-      depth,
-      sortOrder: 0,
-      aclMode: 'inherited',
-      permissionRevision: 0,
-      aclSnapshotVersion: 1,
-      ownershipMemberId: context.memberId,
+    return withMongoTransaction(this.connection, async (session) => {
+      const [created] = await this.directories.create(
+        [
+          {
+            workspaceId: context.workspaceId,
+            knowledgeSpaceId: spaceObjectId,
+            version: 1,
+            deletedAt: null,
+            createdByMemberId: context.memberId,
+            updatedByMemberId: context.memberId,
+            parentDirectoryId,
+            name,
+            normalizedName: name.toLocaleLowerCase('en-US'),
+            path,
+            depth,
+            sortOrder: 0,
+            aclMode: 'inherited',
+            permissionRevision: 0,
+            aclSnapshotVersion: 1,
+            ownershipMemberId: context.memberId,
+          },
+        ],
+        { session },
+      );
+      if (!created) throw tenantError(context);
+      await this.audit.append(
+        {
+          knowledgeSpaceId: spaceId,
+          action: 'directory.create',
+          resourceType: 'directory',
+          resourceId: String(created._id),
+          outcome: 'succeeded',
+          safeDiff: {
+            version: created.version,
+            parentDirectoryId: parentDirectoryId ? String(parentDirectoryId) : null,
+            depth,
+          },
+        },
+        context,
+        session,
+      );
+      return directoryDto(created as unknown as Plain<KnowledgeDirectoryDoc>);
     });
-    return directoryDto(created as unknown as Plain<KnowledgeDirectoryDoc>);
   }
 
   async getDirectory(directoryId: string, context: TenantContext) {
@@ -1058,12 +1119,30 @@ export class KnowledgeCatalogRepository {
       update.name = name;
       update.normalizedName = name.toLocaleLowerCase('en-US');
     }
-    const updated = await workspaceCasUpdate(
-      this.directories,
-      { id: directoryId, expectedVersion: version, update },
-      context,
-    );
-    return directoryDto(updated as unknown as Plain<KnowledgeDirectoryDoc>);
+    return withMongoTransaction(this.connection, async (session) => {
+      const updated = await workspaceCasUpdate(
+        this.directories,
+        { id: directoryId, expectedVersion: version, update, session },
+        context,
+      );
+      await this.audit.append(
+        {
+          knowledgeSpaceId: String(updated.knowledgeSpaceId),
+          action: 'directory.update',
+          resourceType: 'directory',
+          resourceId: directoryId,
+          outcome: 'succeeded',
+          safeDiff: {
+            fields: Object.keys(update).sort(),
+            version,
+            updatedVersion: updated.version,
+          },
+        },
+        context,
+        session,
+      );
+      return directoryDto(updated as unknown as Plain<KnowledgeDirectoryDoc>);
+    });
   }
 
   async deleteDirectory(directoryId: string, context: TenantContext) {
@@ -1202,35 +1281,60 @@ export class KnowledgeCatalogRepository {
       });
       if (!directory) throw tenantError(context, 'KNOWLEDGE_NOT_FOUND');
     }
-    const created = await this.sources.create({
-      workspaceId: context.workspaceId,
-      knowledgeSpaceId: spaceObjectId,
-      version: 1,
-      deletedAt: null,
-      createdByMemberId: context.memberId,
-      updatedByMemberId: context.memberId,
-      directoryId,
-      kind: input.kind,
-      name,
-      externalId: null,
-      connectorId: null,
-      blobRefId: null,
-      originalUrl: null,
-      mimeType: 'application/octet-stream',
-      sizeBytes: 0,
-      contentHash: createHash('sha256').update('').digest('hex'),
-      parseProvider: 'liteparse',
-      processingStatus: 'draft',
-      sourceVersion: 1,
-      searchEnabled: input.searchEnabled ?? true,
-      permissionState: 'disabled',
-      permissionRevision: 0,
-      aclSnapshotVersion: 1,
-      ownershipMemberId: context.memberId,
-      metadata: input.metadata ?? {},
-      tagValues: [],
+    return withMongoTransaction(this.connection, async (session) => {
+      const [created] = await this.sources.create(
+        [
+          {
+            workspaceId: context.workspaceId,
+            knowledgeSpaceId: spaceObjectId,
+            version: 1,
+            deletedAt: null,
+            createdByMemberId: context.memberId,
+            updatedByMemberId: context.memberId,
+            directoryId,
+            kind: input.kind,
+            name,
+            externalId: null,
+            connectorId: null,
+            blobRefId: null,
+            originalUrl: null,
+            mimeType: 'application/octet-stream',
+            sizeBytes: 0,
+            contentHash: createHash('sha256').update('').digest('hex'),
+            parseProvider: 'liteparse',
+            processingStatus: 'draft',
+            sourceVersion: 1,
+            searchEnabled: input.searchEnabled ?? true,
+            permissionState: 'disabled',
+            permissionRevision: 0,
+            aclSnapshotVersion: 1,
+            ownershipMemberId: context.memberId,
+            metadata: input.metadata ?? {},
+            tagValues: [],
+          },
+        ],
+        { session },
+      );
+      if (!created) throw tenantError(context);
+      await this.audit.append(
+        {
+          knowledgeSpaceId: spaceId,
+          action: 'source.create',
+          resourceType: 'source',
+          resourceId: String(created._id),
+          outcome: 'succeeded',
+          safeDiff: {
+            kind: input.kind,
+            version: created.version,
+            directoryId: directoryId ? String(directoryId) : null,
+            searchEnabled: created.searchEnabled,
+          },
+        },
+        context,
+        session,
+      );
+      return sourceDto(created as unknown as Plain<KnowledgeSourceDoc>);
     });
-    return sourceDto(created as unknown as Plain<KnowledgeSourceDoc>);
   }
 
   async getSource(sourceId: string, context: TenantContext) {
@@ -1253,12 +1357,30 @@ export class KnowledgeCatalogRepository {
     }
     if (input.searchEnabled !== undefined) update.searchEnabled = Boolean(input.searchEnabled);
     if (input.metadata !== undefined) update.metadata = input.metadata;
-    const updated = await workspaceCasUpdate(
-      this.sources,
-      { id: sourceId, expectedVersion: version, update },
-      context,
-    );
-    return sourceDto(updated as unknown as Plain<KnowledgeSourceDoc>);
+    return withMongoTransaction(this.connection, async (session) => {
+      const updated = await workspaceCasUpdate(
+        this.sources,
+        { id: sourceId, expectedVersion: version, update, session },
+        context,
+      );
+      await this.audit.append(
+        {
+          knowledgeSpaceId: String(updated.knowledgeSpaceId),
+          action: 'source.update',
+          resourceType: 'source',
+          resourceId: sourceId,
+          outcome: 'succeeded',
+          safeDiff: {
+            fields: Object.keys(update).sort(),
+            version,
+            updatedVersion: updated.version,
+          },
+        },
+        context,
+        session,
+      );
+      return sourceDto(updated as unknown as Plain<KnowledgeSourceDoc>);
+    });
   }
 
   async deleteSource(sourceId: string, context: TenantContext, expectedVersion?: number) {

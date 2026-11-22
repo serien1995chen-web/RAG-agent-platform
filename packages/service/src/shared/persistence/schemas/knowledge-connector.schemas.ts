@@ -64,6 +64,55 @@ defineKnowledgeIndex(KnowledgeConnectorSchema, {
   key: { workspaceId: 1, syncEnabled: 1, status: 1, nextSyncAt: 1 },
 });
 
+export interface KnowledgeConnectorScheduleDoc extends WorkspaceFields {
+  connectorId: Types.ObjectId;
+  knowledgeSpaceId: Types.ObjectId;
+  dueAt: Date;
+  status: 'scheduled' | 'claimed' | 'dispatched' | 'blocked';
+  attempt: number;
+  leaseOwner: string | null;
+  leaseExpiresAt: Date | null;
+  lastDispatchedAt: Date | null;
+  lastError: Record<string, unknown> | null;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export const KnowledgeConnectorScheduleSchema = new Schema(
+  {
+    ...knowledgeCommonFields,
+    connectorId: { type: Schema.Types.ObjectId, required: true },
+    knowledgeSpaceId: { type: Schema.Types.ObjectId, required: true },
+    dueAt: { type: Date, required: true },
+    status: {
+      type: String,
+      enum: ['scheduled', 'claimed', 'dispatched', 'blocked'],
+      required: true,
+      default: 'scheduled',
+    },
+    attempt: { type: Number, required: true, min: 0, default: 0 },
+    leaseOwner: { type: String, default: null },
+    leaseExpiresAt: { type: Date, default: null },
+    lastDispatchedAt: { type: Date, default: null },
+    lastError: { type: Schema.Types.Mixed, default: null },
+  },
+  knowledgeSchemaOptions('knowledge_connector_schedules'),
+);
+
+defineKnowledgeIndex(KnowledgeConnectorScheduleSchema, {
+  name: 'ux_connector_schedule',
+  key: { workspaceId: 1, connectorId: 1 },
+  options: { unique: true },
+});
+defineKnowledgeIndex(KnowledgeConnectorScheduleSchema, {
+  name: 'ix_connector_schedule_due',
+  key: { workspaceId: 1, status: 1, dueAt: 1 },
+});
+defineKnowledgeIndex(KnowledgeConnectorScheduleSchema, {
+  name: 'ix_connector_schedule_lease',
+  key: { workspaceId: 1, leaseExpiresAt: 1 },
+});
+
 export interface KnowledgeConnectorCursorDoc extends WorkspaceFields {
   connectorId: Types.ObjectId;
   externalRootId: string;

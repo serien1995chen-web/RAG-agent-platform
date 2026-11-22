@@ -1,5 +1,6 @@
 import type { Redis } from 'ioredis';
 import type { RouteEntry } from '@kb/contracts';
+import { prefixedRedisKey } from '../../../shared/config/redis-prefix';
 
 export interface KnowledgeRateLimitDecision {
   limit: number;
@@ -39,7 +40,10 @@ return {allowed, math.floor(tokens), resetMs}
 `;
 
 export class RedisKnowledgeRateLimiter {
-  constructor(private readonly redis: Redis) {}
+  constructor(
+    private readonly redis: Redis,
+    private readonly prefix = '',
+  ) {}
 
   async consume(input: {
     workspaceId: string;
@@ -49,7 +53,10 @@ export class RedisKnowledgeRateLimiter {
     if (!Number.isFinite(limit) || limit <= 0) return null;
     const now = Date.now();
     const ttlMs = 2_000;
-    const key = `kb-rate:${input.workspaceId}:${input.route.operationId}`;
+    const key = prefixedRedisKey(
+      this.prefix,
+      `kb-rate:${input.workspaceId}:${input.route.operationId}`,
+    );
     const [allowedRaw, remainingRaw, resetRaw] = (await this.redis.eval(
       LIMIT_SCRIPT,
       1,

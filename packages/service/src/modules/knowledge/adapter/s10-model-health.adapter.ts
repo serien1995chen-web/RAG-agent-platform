@@ -101,13 +101,19 @@ export class S10ModelHealthProbeAdapter {
       throw probeFailure(context, 'embedding_probe_invalid');
     }
 
-    const rerankResult = await invoke<{ results: Array<{ index: number; score: number }> }>({
+    const rerankResult = await invoke<{
+      results: Array<{ index: number; score?: number; relevance_score?: number }>;
+    }>({
       kind: 'rerank',
       modelId: rerank.modelId,
       query: 'health check',
       candidates: ['model health probe', 'unrelated text'],
     });
-    if (!rerankResult.data.results.some((result) => Number.isFinite(result.score))) {
+    if (
+      !rerankResult.data.results.some((result) =>
+        Number.isFinite(result.score ?? result.relevance_score),
+      )
+    ) {
       throw probeFailure(context, 'rerank_probe_invalid');
     }
 

@@ -8,6 +8,7 @@ import { chromium } from '@playwright/test';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { registerKnowledgeModels } from '../../packages/service/src/shared/persistence/schemas/knowledge-index';
 import { createKnowledgeConnections } from '../../packages/service/src/shared/runtime/knowledge-connections';
+import { prefixedRedisKey } from '../../packages/service/src/shared/config/redis-prefix';
 import { messages } from '../../packages/web/src/i18n/messages';
 
 type JsonObject = Record<string, unknown>;
@@ -464,8 +465,12 @@ async function cleanupWorkspace(): Promise<void> {
       await model.deleteMany({ workspaceId });
     }
     const keys = [
-      ...(await connections.redis.keys(`kb-idem:${workspaceId}:*`)),
-      ...(await connections.redis.keys(`kb-rate:${workspaceId}:*`)),
+      ...(await connections.redis.keys(
+        prefixedRedisKey(process.env.KB_REDIS_PREFIX ?? '', `kb-idem:${workspaceId}:*`),
+      )),
+      ...(await connections.redis.keys(
+        prefixedRedisKey(process.env.KB_REDIS_PREFIX ?? '', `kb-rate:${workspaceId}:*`),
+      )),
     ];
     if (keys.length > 0) await connections.redis.del(...keys);
     await connections.close();

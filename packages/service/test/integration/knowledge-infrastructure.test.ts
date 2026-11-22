@@ -106,7 +106,7 @@ afterAll(async () => {
 });
 
 describe('knowledge architecture infrastructure', () => {
-  it('creates exactly 23 canonical Mongo collections and declared indexes', async () => {
+  it('creates exactly 24 canonical Mongo collections and declared indexes', async () => {
     const db = connection.db;
     expect(db).toBeDefined();
     const names = (await db!.listCollections({}, { nameOnly: true }).toArray()).map(
@@ -116,7 +116,7 @@ describe('knowledge architecture infrastructure', () => {
     expect(knowledgeNames).toEqual(
       KNOWLEDGE_SCHEMA_REGISTRY.map((entry) => entry.collection).sort(),
     );
-    expect(knowledgeNames).toHaveLength(23);
+    expect(knowledgeNames).toHaveLength(24);
     for (const entry of KNOWLEDGE_SCHEMA_REGISTRY) {
       const indexes = await db!.collection(entry.collection).indexes();
       expect(indexes.length, entry.collection).toBeGreaterThan(1);

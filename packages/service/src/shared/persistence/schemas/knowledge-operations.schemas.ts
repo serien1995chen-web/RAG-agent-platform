@@ -131,7 +131,9 @@ export interface KnowledgeAuditEventDoc extends WorkspaceFields {
     | 'job'
     | 'connector'
     | 'api_key'
-    | 'file';
+    | 'file'
+    | 'tag'
+    | 'synonym';
   resourceId: string;
   outcome: 'allowed' | 'denied' | 'succeeded' | 'failed';
   traceId: string;
@@ -165,6 +167,8 @@ export const KnowledgeAuditEventSchema = new Schema(
         'connector',
         'api_key',
         'file',
+        'tag',
+        'synonym',
       ],
       required: true,
     },

@@ -18,6 +18,15 @@ const EnvironmentSchema = z.object({
   KB_WORKER_READY_FILE: z.string().trim().min(1).default('/tmp/knowledge-worker-ready'),
   KB_MONGO_URI: z.string().min(1),
   KB_REDIS_URL: z.string().min(1),
+  KB_REDIS_PREFIX: z
+    .string()
+    .trim()
+    .max(120)
+    .regex(
+      /^[A-Za-z0-9_.:-]*$/,
+      'must contain only letters, numbers, dot, colon, underscore or dash',
+    )
+    .default(''),
   KB_PG_URL: z.string().min(1),
   KB_S3_VENDOR: z.enum(['minio', 'aws-s3', 'r2', 'cos', 'oss']).default('minio'),
   KB_S3_ENDPOINT: z.string().url(),
@@ -71,6 +80,8 @@ export interface KnowledgeRuntimeConfig {
   workerReadyFile: string;
   mongoUri: string;
   redisUrl: string;
+  redisPrefix: string;
+  queuePrefix: string;
   pgUrl: string;
   s3: {
     provider: 'minio' | 'aws-s3' | 'r2' | 'cos' | 'oss';
@@ -208,6 +219,8 @@ export function loadKnowledgeRuntimeConfig(
     workerReadyFile: data.KB_WORKER_READY_FILE,
     mongoUri: data.KB_MONGO_URI,
     redisUrl: data.KB_REDIS_URL,
+    redisPrefix: data.KB_REDIS_PREFIX,
+    queuePrefix: data.KB_REDIS_PREFIX ? `${data.KB_REDIS_PREFIX}:bull` : 'bull',
     pgUrl: data.KB_PG_URL,
     s3: {
       provider: data.KB_S3_VENDOR,

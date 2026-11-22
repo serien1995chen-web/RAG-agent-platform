@@ -245,7 +245,7 @@ describe('TEST-ING-007-BLOCK and ACC-UI-06 connector', () => {
 
       await page.getByRole('button', { name: /提交同步|Submit sync/ }).click();
       await expectUi(page.getByRole('status')).toContainText(/sync-ui-job/);
-      await expectUi(page.getByText('syncing')).toBeVisible();
+      await expectUi(page.getByText('未知：syncing', { exact: true })).toBeVisible();
 
       await page.getByRole('button', { name: /删除连接器|Delete connector/ }).click();
       const deleteDialog = page.getByRole('alertdialog');

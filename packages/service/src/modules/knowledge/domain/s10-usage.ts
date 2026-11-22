@@ -13,6 +13,55 @@ export type S10UsageKind =
   | 'storage'
   | 'sync';
 
+export type S10UsageUnit =
+  | 'page'
+  | 'image'
+  | 'token'
+  | 'vector'
+  | 'byte'
+  | 'request'
+  | 'second'
+  | 'character';
+
+export const S10_USAGE_KINDS = Object.freeze([
+  'llm',
+  'vlm',
+  'embedding',
+  'rerank',
+  'ocr',
+  'parse',
+  'image',
+  'stt',
+  'tts',
+  'storage',
+  'sync',
+] as const satisfies readonly S10UsageKind[]);
+
+export const S10_USAGE_UNITS = Object.freeze([
+  'page',
+  'image',
+  'token',
+  'vector',
+  'byte',
+  'request',
+  'second',
+  'character',
+] as const satisfies readonly S10UsageUnit[]);
+
+const USAGE_UNITS_BY_KIND = Object.freeze({
+  llm: Object.freeze(['token'] as const),
+  vlm: Object.freeze(['token'] as const),
+  embedding: Object.freeze(['token', 'vector'] as const),
+  rerank: Object.freeze(['token', 'vector'] as const),
+  ocr: Object.freeze(['page', 'request'] as const),
+  parse: Object.freeze(['page', 'request'] as const),
+  image: Object.freeze(['image', 'request'] as const),
+  stt: Object.freeze(['second', 'request'] as const),
+  tts: Object.freeze(['second', 'character', 'request'] as const),
+  storage: Object.freeze(['byte', 'vector'] as const),
+  sync: Object.freeze(['character', 'request'] as const),
+} satisfies Record<S10UsageKind, readonly S10UsageUnit[]>);
+
 export function assertSafePointsMicros(value: number): number {
   if (!Number.isSafeInteger(value) || value < 0) {
     throw new RangeError('pointsMicros must be a non-negative safe integer');
@@ -20,11 +69,36 @@ export function assertSafePointsMicros(value: number): number {
   return value;
 }
 
-function safeInteger(value: number, field: string): number {
+export function assertSafeUsageInteger(value: number, field: string): number {
   if (!Number.isSafeInteger(value) || value < 0) {
     throw new RangeError(`${field} must be a non-negative safe integer`);
   }
   return value;
+}
+
+export function assertUsageContract(input: {
+  kind: S10UsageKind;
+  unit: S10UsageUnit;
+  quantity: number;
+  inputTokens?: number;
+  outputTokens?: number;
+}): void {
+  if (!(S10_USAGE_KINDS as readonly string[]).includes(input.kind)) {
+    throw new RangeError('kind must be a supported usage kind');
+  }
+  if (!(S10_USAGE_UNITS as readonly string[]).includes(input.unit)) {
+    throw new RangeError('unit must be a supported usage unit');
+  }
+  if (!(USAGE_UNITS_BY_KIND[input.kind] as readonly S10UsageUnit[]).includes(input.unit)) {
+    throw new RangeError(`unit ${input.unit} is incompatible with kind ${input.kind}`);
+  }
+  assertSafeUsageInteger(input.quantity, 'quantity');
+  if (input.inputTokens !== undefined) {
+    assertSafeUsageInteger(input.inputTokens, 'inputTokens');
+  }
+  if (input.outputTokens !== undefined) {
+    assertSafeUsageInteger(input.outputTokens, 'outputTokens');
+  }
 }
 
 export function computeUsagePointsMicros(input: {
@@ -32,18 +106,19 @@ export function computeUsagePointsMicros(input: {
   status: number | null;
   intent: boolean;
   quantity: number;
-  unit: 'page' | 'image' | 'token' | 'vector' | 'byte' | 'request' | 'second' | 'character';
+  unit: S10UsageUnit;
   inputTokens?: number;
   outputTokens?: number;
   pricing: S10PricingProfile;
   now?: Date;
 }): number {
+  assertUsageContract(input);
   if (input.intent || input.status === null || input.status < 200 || input.status >= 300) {
     return 0;
   }
-  const quantity = safeInteger(input.quantity, 'quantity');
-  const inputTokens = safeInteger(input.inputTokens ?? 0, 'inputTokens');
-  const outputTokens = safeInteger(input.outputTokens ?? 0, 'outputTokens');
+  const quantity = input.quantity;
+  const inputTokens = input.inputTokens ?? 0;
+  const outputTokens = input.outputTokens ?? 0;
   switch (input.kind) {
     case 'llm':
     case 'vlm':

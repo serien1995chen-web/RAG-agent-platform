@@ -49,10 +49,14 @@ async function start(): Promise<void> {
     redis,
     processing,
     s10Ops,
+    connectorScheduler,
     close: closeServices,
   } = await getKnowledgeWorkerServices();
   const models = registerKnowledgeModels(mongo);
-  const queue = new BullMqQueueAdapter({ connection: redis });
+  const queue = new BullMqQueueAdapter({
+    connection: redis,
+    prefix: config.queuePrefix,
+  });
   const dispatcher = new KnowledgeOutboxDispatcher(mongo, queue);
   const handlers = new S06JobHandlers(processing);
   const definitions = KNOWLEDGE_QUEUE_NAMES.map((queueName) => ({
@@ -130,6 +134,7 @@ async function start(): Promise<void> {
   const workers = startWorkerRegistry({
     registry,
     connection: redis,
+    prefix: config.queuePrefix,
     workerId: `${config.instanceId}:${process.pid}:${nanoid(10)}`,
     logger: telemetry,
   });
@@ -140,12 +145,21 @@ async function start(): Promise<void> {
     instanceId: config.instanceId,
   });
   const archiveWorker = new KnowledgeArchiveWorker(mongo, config, config.instanceId);
+  const schedulerWorkerId = `${config.instanceId}:${process.pid}`;
+  let nextConnectorSchedulerAt = 0;
   let stopping = false;
   let timer: NodeJS.Timeout | undefined;
 
   const tick = async (): Promise<void> => {
     if (stopping) return;
     try {
+      if (Date.now() >= nextConnectorSchedulerAt) {
+        nextConnectorSchedulerAt = Date.now() + 60_000;
+        await connectorScheduler.runOnce({
+          workerId: schedulerWorkerId,
+          maxDispatches: 100,
+        });
+      }
       await telemetry.withSpan(
         'knowledge.worker.tick',
         { operation: 'outbox.dispatch' },

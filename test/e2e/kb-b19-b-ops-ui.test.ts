@@ -302,7 +302,7 @@ describe('L1-B19-OPS-005-UI01 current product entry', () => {
         { waitUntil: 'networkidle' },
       );
       await screenshot(page, 'connector-failed-stale-1440x900');
-      await uiExpect(page.getByText(/失败|failed/)).toBeVisible();
+      await uiExpect(page.getByText('失败', { exact: true })).toBeVisible();
       await uiExpect(page.getByText(/Provider request timed out/)).toBeVisible();
 
       await page.keyboard.press('Tab');
@@ -341,6 +341,20 @@ describe('L1-B19-OPS-005-UI01 current product entry', () => {
   });
 
   it('shows last attempt, last success and stale state for an overdue connector', async () => {
+    await registerKnowledgeModels(connection).KnowledgeConnector.updateOne(
+      { workspaceId, _id: connectorId },
+      {
+        $set: {
+          status: 'active',
+          syncEnabled: true,
+          nextSyncAt: new Date(Date.now() - 3 * 60 * 60_000),
+          lastAttemptAt: new Date(Date.now() - 3 * 60 * 60_000),
+          lastSuccessAt: new Date(Date.now() - 4 * 60 * 60_000),
+          lastError: null,
+        },
+        $inc: { version: 1 },
+      },
+    );
     const browser = await chromium.launch({ headless: true });
     try {
       const context = await browser.newContext({

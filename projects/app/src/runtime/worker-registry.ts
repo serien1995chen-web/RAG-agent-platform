@@ -86,6 +86,7 @@ function withTimeout<T>(work: Promise<T>, timeoutMs: number, queue: string): Pro
 export function startWorkerRegistry(input: {
   registry: ReadonlyMap<KnowledgeQueueName, QueueConsumerDefinition>;
   connection: ConnectionOptions;
+  prefix?: string;
   workerId: string;
   logger: KnowledgeWorkerLogger;
 }): { workers: Worker[]; ready: Promise<void>; close: () => Promise<void> } {
@@ -113,6 +114,7 @@ export function startWorkerRegistry(input: {
       },
       {
         connection: input.connection,
+        ...(input.prefix ? { prefix: input.prefix } : {}),
         concurrency: definition.concurrency,
         lockDuration: definition.timeoutMs,
         maxStalledCount: 1,

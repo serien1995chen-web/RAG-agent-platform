@@ -5,6 +5,7 @@ import Redis from '../../packages/service/node_modules/ioredis';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
   createKnowledgeMongoConnection,
+  prefixedRedisKey,
   registerKnowledgeModels,
   type KnowledgeConnections,
 } from '../../packages/service/src';
@@ -199,10 +200,12 @@ afterAll(async () => {
   let redisKeysBefore = 0;
   let redisKeysAfter = 0;
   if (redis) {
-    const keys = await redis.keys(`kb-rate:${workspaceId}:*`);
+    const rateKey = (suffix: string) =>
+      prefixedRedisKey(process.env.KB_REDIS_PREFIX ?? '', `kb-rate:${workspaceId}:${suffix}`);
+    const keys = await redis.keys(rateKey('*'));
     redisKeysBefore = keys.length;
     if (keys.length > 0) await redis.del(...keys);
-    redisKeysAfter = (await redis.keys(`kb-rate:${workspaceId}:*`)).length;
+    redisKeysAfter = (await redis.keys(rateKey('*'))).length;
     await redis.quit();
   }
   if (mongo) {
@@ -856,7 +859,12 @@ describe('L1-B19-API-001 operation auth and scope matrix', () => {
 
 describe('L1-B19-API-003 rate limiting and audit', () => {
   it('L1-B19-API-003-F01 returns frozen RateLimit and Retry-After semantics and isolates operation buckets', async () => {
-    await redis.del(`kb-rate:${workspaceId}:API-APIKEY-ROTATE`);
+    await redis.del(
+      prefixedRedisKey(
+        process.env.KB_REDIS_PREFIX ?? '',
+        `kb-rate:${workspaceId}:API-APIKEY-ROTATE`,
+      ),
+    );
     const deniedAuditBefore = await registerKnowledgeModels(
       mongo,
     ).KnowledgeAuditEvent.countDocuments({
