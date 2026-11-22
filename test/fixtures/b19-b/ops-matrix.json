@@ -1,0 +1,128 @@
+{
+  "schemaVersion": 1,
+  "batch": "B19",
+  "owner": "CodexB",
+  "scope": [
+    "OPS-003",
+    "OPS-005",
+    "OPS-005-UI01",
+    "TEST-X-SECRET-LEAK",
+    "TEST-X-TENANT-GUARD",
+    "TEST-X-OUTBOX-CRASH",
+    "TEST-X-COMPOSE-READY",
+    "TEST-X-SAAS-READY",
+    "TEST-X-SCOPE-GUARD"
+  ],
+  "assets": [
+    {
+      "path": "packages/service/test/integration/s10-audit.test.ts",
+      "decision": "REUSE"
+    },
+    {
+      "path": "packages/service/test/integration/s10-ops.test.ts",
+      "decision": "REUSE"
+    },
+    {
+      "path": "packages/service/test/unit/s10-status.test.ts",
+      "decision": "REUSE"
+    },
+    {
+      "path": "packages/service/test/unit/s10-ops-worker.test.ts",
+      "decision": "REUSE"
+    },
+    {
+      "path": "test/tenant/s10-ops-tenant.test.ts",
+      "decision": "EXTEND"
+    },
+    {
+      "path": "test/fault/s10-status-probe.test.ts",
+      "decision": "REUSE"
+    },
+    {
+      "path": "test/security/s10-audit-redaction.test.ts",
+      "decision": "EXTEND"
+    },
+    {
+      "path": "test/security/s10-status-security.test.ts",
+      "decision": "STALE"
+    },
+    {
+      "path": "test/e2e/s10-ops-admin.test.ts",
+      "decision": "STALE"
+    },
+    {
+      "path": "test/e2e/knowledge-connector.test.ts",
+      "decision": "EXTEND"
+    }
+  ],
+  "ops003": {
+    "P01": {
+      "status": "NOT_RUN",
+      "tests": ["kb-b19-b-audit-matrix"]
+    },
+    "N01": {
+      "status": "NOT_RUN",
+      "tests": ["kb-b19-b-audit-matrix", "s10-audit"]
+    },
+    "A01": {
+      "status": "NOT_RUN",
+      "tests": ["kb-b19-b-ops-tenant", "s10-ops-tenant"]
+    },
+    "S01": {
+      "status": "NOT_RUN",
+      "tests": ["kb-b19-b-audit-matrix", "s10-audit"]
+    },
+    "C01": {
+      "status": "NOT_RUN",
+      "tests": ["kb-b19-b-audit-status-concurrency"]
+    },
+    "F01": {
+      "status": "NOT_RUN",
+      "tests": ["s10-ops", "s10-ops-worker"]
+    },
+    "Q01": {
+      "status": "NOT_RUN",
+      "tests": ["kb-b19-b-audit-status-redaction"]
+    }
+  },
+  "ops005": {
+    "P01": {
+      "status": "NOT_RUN",
+      "tests": ["kb-b19-b-status-scheduler", "knowledge-connector"]
+    },
+    "N01": {
+      "status": "NOT_RUN",
+      "tests": ["kb-b19-b-status-fault", "s10-status-probe"]
+    },
+    "A01": {
+      "status": "NOT_RUN",
+      "tests": ["kb-b19-b-ops-tenant", "s10-status-security"]
+    },
+    "S01": {
+      "status": "NOT_RUN",
+      "tests": ["kb-b19-b-status-scheduler", "kb-b19-b-status-fault"]
+    },
+    "C01": {
+      "status": "NOT_RUN",
+      "tests": ["kb-b19-b-audit-status-concurrency"]
+    },
+    "F01": {
+      "status": "NOT_RUN",
+      "tests": ["kb-b19-b-status-fault"]
+    },
+    "Q01": {
+      "status": "NOT_RUN",
+      "tests": ["kb-b19-b-status-scheduler", "kb-b19-b-audit-status-redaction"]
+    },
+    "UI01": {
+      "status": "NOT_RUN",
+      "tests": ["kb-b19-b-ops-ui"]
+    }
+  },
+  "provider": {
+    "model": "BLOCKED_PROVIDER",
+    "feishu": "BLOCKED_PROVIDER",
+    "yuque": "OUT_OF_SCOPE_L1",
+    "dingtalk": "OUT_OF_SCOPE_L1"
+  }
+}
