@@ -38,7 +38,7 @@ export function isS10Operation(operationId: string): boolean {
 const CreateSchema = z
   .object({
     name: z.string().trim().min(1).max(120),
-    scopes: z.array(z.string()).min(1),
+    scopes: z.array(z.string()),
     spaceIds: z.array(z.string()).default([]),
     expiresAt: z.string().datetime({ offset: true }).nullable().optional(),
   })
@@ -47,7 +47,7 @@ const CreateSchema = z
 const UpdateSchema = z
   .object({
     name: z.string().trim().min(1).max(120).optional(),
-    scopes: z.array(z.string()).min(1).optional(),
+    scopes: z.array(z.string()).optional(),
     spaceIds: z.array(z.string()).optional(),
     status: z.enum(['active', 'revoked']).optional(),
     version: z.number().int().min(1),

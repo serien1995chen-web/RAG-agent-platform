@@ -157,6 +157,7 @@ const reruns = [
     'e2e-s7-isolated',
     'pnpm exec vitest run --config test/e2e/vitest.config.ts test/e2e/s7-search-page.test.ts',
   ],
+  ['e2e-final', 'pnpm test:e2e'],
 ];
 
 const commands =

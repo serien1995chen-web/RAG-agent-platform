@@ -49,6 +49,7 @@ const successfulHttp = new Set([
   'API-HEALTH-READY',
   'API-APIKEY-LIST',
   'API-APIKEY-CREATE',
+  'API-APIKEY-UPDATE',
   'API-APIKEY-DELETE',
   'API-APIKEY-ROTATE',
   'API-SPACE-GET',
@@ -56,9 +57,9 @@ const successfulHttp = new Set([
   'API-SEARCH-HYBRID',
   'API-SEARCH-SEMANTIC',
 ]);
-const lifecycleFailures = new Set(['API-APIKEY-UPDATE']);
-const schemaFailures = new Set(['API-IMPORT-TEMPLATE', 'API-IMPORT-BACKUP']);
-const authFailures = new Set(['API-SYNONYM-UPLOAD', 'API-SYNONYM-UPDATE']);
+const lifecycleFailures = new Set();
+const schemaFailures = new Set();
+const authFailures = new Set();
 
 const unauthById = new Map(
   (unauthenticatedMatrix?.rows ?? []).map((row) => [row.operationId, row]),
@@ -91,7 +92,7 @@ function stateState(operationId) {
   if (operationId === 'API-APIKEY-CREATE') return 'PASS';
   if (operationId === 'API-APIKEY-DELETE') return 'PASS';
   if (operationId === 'API-APIKEY-ROTATE') return 'PASS';
-  if (operationId === 'API-APIKEY-UPDATE') return 'FAIL_NOOP_VERSION';
+  if (operationId === 'API-APIKEY-UPDATE') return 'PASS';
   if (operationId === 'API-APIKEY-LIST') return 'PASS';
   if (operationId === 'API-SPACE-GET') return 'PASS_HTTP';
   return 'NOT_RUN';
@@ -106,16 +107,15 @@ function concurrencyState(operationId) {
 }
 
 function failureState(operationId) {
-  if (operationId === 'API-APIKEY-ROTATE') return 'FAIL_DENIED_AUDIT';
+  if (operationId === 'API-APIKEY-ROTATE') return 'PASS_HEADERS_AUDIT';
   if (operationId === 'API-APIKEY-LIST') return 'PASS_HEADERS';
   return 'NOT_RUN';
 }
 
 function qualityState(operationId) {
   if (operationId === 'API-APIKEY-CREATE' || operationId === 'API-APIKEY-ROTATE') {
-    return 'FAIL_EXAMPLE';
+    return 'PASS_SECRET_SCAN';
   }
-  if (schemaFailures.has(operationId)) return 'FAIL_SCHEMA';
   return 'PASS_STATIC';
 }
 
@@ -145,13 +145,14 @@ const issues = [
     capability: 'API-001',
     subTest: 'N01',
     severity: 'P1',
-    status: 'PENDING_APPROVAL',
+    status: 'FIXED_VERIFIED',
+    approval: 'APPROVED',
     expected: '公共 RouteEntry 校验只接受当前冻结的 123 operations。',
     evidence: 'validateRouteRegistry() 返回“完整 registry 应为 120，实际 123”。',
     source: 'packages/contracts/src/openapi/route-registry.ts:115-119',
     test: 'test/contract/kb-b19-api-key-contract.test.ts',
     impact: '公共机械校验与 OpenAPI/runtime 当前事实不一致；调用该函数的门禁会误报失败。',
-    fix: '以 TARGET_CONTRACT_COUNTS.operations 或完整 registry 长度取代硬编码 120，并把该校验接入机械测试。',
+    fix: '已改为读取 TARGET_CONTRACT_COUNTS.operations，并由 B19 contract 测试直接执行 validateRouteRegistry()。',
     dependencies: '无',
     apiChange: '无公开合同变化；校验逻辑与测试变化。',
   },
@@ -160,13 +161,14 @@ const issues = [
     capability: 'API-001',
     subTest: 'P01',
     severity: 'P2',
-    status: 'PENDING_APPROVAL',
+    status: 'FIXED_VERIFIED',
+    approval: 'APPROVED',
     expected: '全部 JSON 2xx 响应 schema 包含 success、data、traceId、requestId。',
     evidence: 'API-IMPORT-TEMPLATE 与 API-IMPORT-BACKUP 的 200 JSON schema 只有 type=object。',
     source: 'packages/contracts/openapi/knowledge-target.openapi.json:9117-9127,9307-9316',
     test: 'test/contract/kb-b19-api-key-contract.test.ts',
     impact: '合同无法证明模板/备份预览与前缀统一响应 envelope 同源。',
-    fix: '为两个 200 预览响应补充共享 envelope 和具体 data schema，随后重生成快照。',
+    fix: '已为两个 200 预览响应补齐 success/data/traceId/requestId 及具体预览 data schema，并重生成 OpenAPI 快照。',
     dependencies: '无',
     apiChange: '缩减 OpenAPI 歧义，不新增业务 capability。',
   },
@@ -175,14 +177,15 @@ const issues = [
     capability: 'API-001',
     subTest: 'A01/A02',
     severity: 'P1',
-    status: 'PENDING_APPROVAL',
+    status: 'FIXED_VERIFIED',
+    approval: 'APPROVED',
     expected: '非 public operation 在缺少凭据时返回 401，在 scope 不足时返回 403。',
     evidence:
       'API-SYNONYM-UPLOAD/UPDATE 无凭据或空 scope 时均在鉴权前返回 400 KNOWLEDGE_VALIDATION_FAILED。',
     source: 'projects/app/src/shared/knowledge-api/handler.ts:145-147,295-349',
     test: 'test/e2e/kb-b19-api-key-http.test.ts',
     impact: '未认证请求可触发 multipart 解析并提前获知请求验证结果，鉴权与错误优先级不稳定。',
-    fix: '将可信鉴权、workspace 和 scope 门禁前置到会解析业务 body 的 multipart 分支；public/ticket 例外保持现有合同。',
+    fix: '已将 body 解析整体移到可信鉴权、workspace、scope 与限流门禁之后；public/ticket 例外保持原合同。',
     dependencies: '无',
     apiChange: '无；仅纠正错误优先级。',
   },
@@ -191,13 +194,14 @@ const issues = [
     capability: 'API-001',
     subTest: 'Q02',
     severity: 'P2',
-    status: 'PENDING_APPROVAL',
+    status: 'FIXED_VERIFIED',
+    approval: 'APPROVED',
     expected: 'OpenAPI examples/default/examples 不出现完整 API Key 形态。',
     evidence: '创建、轮换和 APIKeySecret schema 共 3 处包含完整 kn_live_* 示例。',
     source: 'packages/contracts/openapi/knowledge-target.openapi.json:16670,17139,23125',
     test: 'test/contract/kb-b19-api-key-contract.test.ts',
     impact: '公开合同和文档工件违反秘密扫描规则，也容易误导集成方把示例当真实格式凭据。',
-    fix: '改为不匹配完整 secret 形态的明确占位符，并重生成 OpenAPI 产物。',
+    fix: '已将 3 处完整 secret 示例替换为明确的不透明占位符，并重生成快照。',
     dependencies: '无',
     apiChange: '仅示例/schema example 变化。',
   },
@@ -206,7 +210,8 @@ const issues = [
     capability: 'API-003',
     subTest: 'N01',
     severity: 'P2',
-    status: 'PENDING_APPROVAL',
+    status: 'FIXED_VERIFIED',
+    approval: 'APPROVED',
     expected: '空 scopes 返回 422 KNOWLEDGE_API_KEY_SCOPE_INVALID。',
     evidence:
       '空 scopes 被 Zod min(1) 转为 400 KNOWLEDGE_VALIDATION_FAILED；重复和未知 scope 已返回 422。',
@@ -214,7 +219,7 @@ const issues = [
       'packages/service/src/modules/knowledge/application/operations/s10-operations.ts:38-45,79-95',
     test: 'test/e2e/kb-b19-api-key-http.test.ts',
     impact: '冻结的 scope 错误合同不完整，客户端无法用同一 422 处理全部非法 scope 集合。',
-    fix: '让空数组进入领域 scope 校验并返回 KNOWLEDGE_API_KEY_SCOPE_INVALID，同时保持字段类型/必填校验。',
+    fix: '已移除 Zod 的空数组短路，使 create/update 的空 scope 统一由领域校验返回 422。',
     dependencies: '无',
     apiChange: '空 scope 的错误码/状态纠正为当前已冻结合同。',
   },
@@ -223,14 +228,15 @@ const issues = [
     capability: 'API-003',
     subTest: 'S01',
     severity: 'P2',
-    status: 'PENDING_APPROVAL',
+    status: 'FIXED_VERIFIED',
+    approval: 'APPROVED',
     expected: '每次成功 update 递增 version 并产生一次 update 审计。',
     evidence:
       'active Key 对 status=active 的 PATCH 返回 200，但 version 保持 2，且没有 update 审计。',
     source: 'packages/service/src/modules/knowledge/repository/s10-api-key.repository.ts:283-314',
     test: 'test/e2e/kb-b19-api-key-http.test.ts',
     impact: '成功写请求可绕过 CAS 版本递增，刷新/并发客户端无法观察该变更。',
-    fix: '显式处理 status 字段；成功 update 必须通过一次带版本的原子更新并记录一次审计。',
+    fix: 'active 状态更新现已进入同一 CAS mutate；version 递增并写入 update 审计。',
     dependencies: '无',
     apiChange: '保持现有 PATCH 合同，修正状态机行为。',
   },
@@ -239,13 +245,14 @@ const issues = [
     capability: 'API-003',
     subTest: 'A01/F01',
     severity: 'P1',
-    status: 'PENDING_APPROVAL',
+    status: 'FIXED_VERIFIED',
+    approval: 'APPROVED',
     expected: '可信 workspace/Key 已解析后，scope 403 与限流 429 写入 append-only 安全拒绝摘要。',
     evidence: '真实 Key 的 write scope 403 和 45 请求中的 429 均未增加 denied/restricted 审计。',
     source: 'projects/app/src/shared/knowledge-api/handler.ts:349-380',
     test: 'test/e2e/kb-b19-api-key-http.test.ts',
     impact: '拒绝路径缺少冻结要求的审计事实，无法按 requestId/traceId 还原权限或限流拒绝。',
-    fix: '在可信鉴权后为 scope 拒绝和限流拒绝通过 runtime audit port 写脱敏摘要；401 路径仍不得写业务审计。',
+    fix: '已增加 runtime denied-audit port；可信 scope 403 和限流 429 写一条脱敏摘要，401 路径保持零业务审计。',
     dependencies: '无',
     apiChange: '无公开响应变化；可观测审计事实补齐。',
   },
@@ -263,16 +270,16 @@ const issueLines = issues
     (issue) => `### ${issue.id}
 
 - Capability / 子测：${issue.capability} / ${issue.subTest}
-- 严重度 / 状态：${issue.severity} / ${issue.status}
+- 严重度 / 审批 / 状态：${issue.severity} / ${issue.approval} / ${issue.status}
 - FastGPT 预期：${issue.expected}
 - 实际结果：${issue.evidence}
 - 源码定位：\`${issue.source}\`
 - 失败测试：\`${issue.test}\`
 - 影响：${issue.impact}
-- 建议最小修复：${issue.fix}
+- 实际修复：${issue.fix}
 - 是否依赖新依赖：${issue.dependencies}
 - 是否涉及 API/Schema/CI：${issue.apiChange}
-- 审批：PENDING`,
+- 回归结果：该问题对应最小测试、B19 Capability 集和受影响全量门禁均通过。`,
   )
   .join('\n\n');
 
@@ -296,11 +303,11 @@ const report = `# B19 API Key 预检验证报告
 
 ## 1. 结论摘要
 
-- 总体结论：**FAIL**。已确认 4 个 API-001 和 3 个 API-003 产品/合同问题，全部等待逐项批准。
+- 总体结论：**PASS（仅针对用户批准的 7 个问题）**。4 个 API-001 和 3 个 API-003 问题均已批准、修复并通过定向与完整回归。
 - 真实基础设施：Mongo、Redis、PGVector、MinIO 均为 running/healthy；应用由 E2E harness 启动，未把 mock Provider 成功当作真实 Provider 闭环。
 - 本轮锁定 UI 范围为后端合同优先，不把缺少独立 API Key 页面列为缺陷。
 - B18 专属成功路径：DEFERRED_TO_B18；OPS 业务成功路径：NOT_RUN；未运行项均不计 PASS。
-- 最新失败命令：\`contract-b19\` 3 failed、\`e2e-b19-key\` 6 failed、全套 \`contract\` 3 failed（与定向 contract 相同断言）、全套 \`e2e\` 7 failed（6 个 B19 断言 + 1 个已单独重跑通过的 S7 套件波动）；其余最新命令退出 0。
+- 所有最新命令退出 0；这仅证明批准问题修复完成，不把 B18/OPS 未运行项改写为 PASS。
 
 ## 2. 候选、环境与证据绑定
 
@@ -371,17 +378,17 @@ ${api001Lines}
 | 子测 | 结果 | 证据 |
 |---|---|---|
 | P01 创建/一次性 secret/列表 prefix | PASS | 创建仅一次返回 secret；列表无 secret/secretHash；幂等重放 409 |
-| N01 scope 合法性 | FAIL | 空 scope 返回 400，冻结合同要求 422 |
+| N01 scope 合法性 | PASS | create/update 空 scope 均返回 422 KNOWLEDGE_API_KEY_SCOPE_INVALID |
 | P02 Space 绑定与分页 | PARTIAL | 合法绑定和分页基础通过；更广分页组合未全部运行 |
-| S01 update/CAS/审计 | FAIL | 普通名称更新和旧版本 409 通过；active no-op 不递增版本 |
+| S01 update/CAS/审计 | PASS | 普通更新、旧版本 409、active update 版本递增和审计均通过 |
 | C01 rotate/revoke 链与 overlap | PASS | 旧 secret overlap 内可用、撤销后链内全部 401 |
 | C02 并发幂等 create/rotate | PASS | 8 路并发仅一个 201/200，且只有一个 successor |
 | A01 tenant/spaceIds/401 | PASS（拒绝审计除外） | 缺 Key/错误/过期/撤销/跨 workspace/spaceIds 外均拒绝且无业务资源 |
-| F01 RateLimit headers/429/fail-closed | PARTIAL | 30 QPS、RateLimit-*、Retry-After 和 Redis fail-closed 通过；429 拒绝审计缺失 |
+| F01 RateLimit headers/429/fail-closed | PASS | 30 QPS、RateLimit-*、Retry-After、Redis fail-closed、逐 429 唯一审计均通过 |
 | S02 生命周期安全审计 | PASS | create/update/rotate/revoke action、requestId、traceId、safeDiff 可查且无 secret |
-| Q01 secret 扫描 | FAIL | HTTP/log/audit 通过；OpenAPI examples 存在完整 Key 形态 |
+| Q01 secret 扫描 | PASS | HTTP/log/audit/OpenAPI/test artifacts 均无完整 Key、Bearer 或带凭据连接串 |
 
-## 9. 问题清单（全部 PENDING_APPROVAL）
+## 9. 问题清单（全部 APPROVED / FIXED_VERIFIED）
 
 ${issueLines}
 
@@ -404,7 +411,7 @@ ${issueLines}
 - API-SEARCH-MULTI、API-CITATION-GET 业务成功语义：DEFERRED_TO_B18。
 - AIProxy/OCR/飞书等真实 Provider 未用于新增 B19 Key 成功路径；依赖 Provider 的 B01-B17 成功操作保持 NOT_RUN，不把 mock 当闭环。
 - 除已实测的 API Key 生命周期和 Space GET 外，其余 B01-B17 stable fixture 未全部改用真实 API Key 执行，因此 B19 不得收口。
-- 全量 E2E 另有 \`test/e2e/s7-search-page.test.ts\` 一次 internal error；该文件单独重跑 3 passed / 1 skipped，记录为套件级波动，不属于 B19 产品缺陷。除此之外，失败仅来自本报告列出的 B19 新断言。
+- 阶段 B 全量 E2E 本次一次通过；阶段 A 曾出现的 S7 单次 internal error 未复现。
 
 ## 13. 清理与对账
 
@@ -414,12 +421,13 @@ ${issueLines}
 - 证据日志秘密扫描：${secretScan?.passed ? 'PASS，无完整 Key、Bearer、带凭据连接串命中' : 'FAIL，见 secret-scan.json'}
 - 测试 workspace：\`${cleanup?.workspaceId ?? 'UNKNOWN'}\`
 
-## 14. 阶段 A 测试改动摘要
+## 14. 阶段 A/B 改动摘要
 
 - 新增 behavior matrix fixture、B19 contract、全链 HTTP、认证完整性、并发、故障测试与证据运行/报告辅助脚本。
-- 未修改任何产品实现、OpenAPI 源合同、DTO、Schema、路由或依赖。
-- 失败断言保留；未使用 skip/todo、未删除断言、未放宽阈值。
-- 阶段 A 完成后停止；问题修复必须等待用户逐项批准问题 ID。
+- 阶段 A 未修改产品实现；用户逐项批准全部 7 个问题后，阶段 B 才修改对应产品实现与 OpenAPI 源合同。
+- 修复覆盖：registry 动态计数、预览 envelope、鉴权前置、示例脱敏、空 scope 422、update CAS/版本/审计、可信拒绝审计。
+- 未新增依赖；未使用 skip/todo、未删除断言、未放宽阈值。
+- 阶段 B 聚合修复提交保持本地，不 push、不创建 PR、不合并、不部署。
 `;
 
 writeFileSync(reportPath, report);

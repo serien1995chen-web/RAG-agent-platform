@@ -1542,6 +1542,34 @@ async function bootstrapRuntime(): Promise<TelemetryKnowledgeApiRuntime> {
     async rateLimit(input) {
       return state.rateLimiter.consume(input);
     },
+    async auditDenied(input) {
+      await audits.appendStandalone(
+        {
+          knowledgeSpaceId: null,
+          action: `${input.operationId}.denied`,
+          resourceType: 'workspace',
+          resourceId: input.workspaceId,
+          outcome: 'denied',
+          safeDiff: {
+            reason: input.reason,
+            ...input.details,
+          },
+        },
+        {
+          workspaceId: input.workspaceId,
+          memberId: input.subject.memberId,
+          requestId: input.requestId,
+          traceId: input.traceId,
+          scopes: input.subject.scopes,
+          isWorkspaceOwner: input.subject.isWorkspaceOwner ?? false,
+          ...(input.subject.apiKeyId ? { apiKeyId: input.subject.apiKeyId } : {}),
+          ...(input.subject.apiKeyPrefix ? { apiKeyPrefix: input.subject.apiKeyPrefix } : {}),
+          ...(input.subject.spaceIds ? { apiKeySpaceIds: input.subject.spaceIds } : {}),
+          ...(input.subject.ipHash ? { ipHash: input.subject.ipHash } : {}),
+          ...(input.subject.userAgentHash ? { userAgentHash: input.subject.userAgentHash } : {}),
+        },
+      );
+    },
     readiness,
     withSpan(name, attributes, fn) {
       return state.telemetry.withSpan(name, attributes, () => fn());

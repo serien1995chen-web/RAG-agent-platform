@@ -192,18 +192,57 @@ function resolveWorkspace(
   return workspaceId;
 }
 
-function assertScopes(
+async function assertScopes(
+  runtime: TelemetryKnowledgeApiRuntime,
   route: RouteEntry,
   subject: KnowledgeAuthSubject,
+  workspaceId: string,
   requestId: string,
   traceId: string,
-): void {
+): Promise<void> {
   const granted = normalizeScopes(subject);
-  for (const scope of route.scopes) {
-    if (!granted.has(scope) && !granted.has('knowledge:admin')) {
-      throw forbidden(requestId, traceId);
-    }
-  }
+  const missingScopes = route.scopes.filter(
+    (scope) => !granted.has(scope) && !granted.has('knowledge:admin'),
+  );
+  if (missingScopes.length === 0) return;
+  await runtime.auditDenied({
+    workspaceId,
+    subject,
+    requestId,
+    traceId,
+    operationId: route.operationId,
+    reason: 'scope',
+    details: { missingScopes },
+  });
+  throw forbidden(requestId, traceId);
+}
+
+async function auditRateLimitDenied(
+  runtime: TelemetryKnowledgeApiRuntime,
+  route: RouteEntry,
+  subject: KnowledgeAuthSubject,
+  workspaceId: string,
+  requestId: string,
+  traceId: string,
+  rateLimit: {
+    limit: number;
+    remaining: number;
+    resetSeconds: number;
+  },
+): Promise<void> {
+  await runtime.auditDenied({
+    workspaceId,
+    subject,
+    requestId,
+    traceId,
+    operationId: route.operationId,
+    reason: 'rate_limit',
+    details: {
+      limit: rateLimit.limit,
+      remaining: rateLimit.remaining,
+      resetSeconds: rateLimit.resetSeconds,
+    },
+  });
 }
 
 function validateIdempotencyHeader(
@@ -293,29 +332,6 @@ export function createKnowledgeApiHandler(): NextApiHandler {
     }
 
     try {
-      const requestBody = await resolveRequestBody(
-        request,
-        route.operationId === 'API-UPLOAD-PART',
-        route.operationId,
-        requestId,
-        traceId,
-      );
-      const maxBodyBytes =
-        route.operationId === 'API-UPLOAD-PART'
-          ? MAX_UPLOAD_PART_BYTES
-          : SYNONYM_MULTIPART_OPERATIONS.has(route.operationId)
-            ? SYNONYM_MULTIPART_MAX_BYTES
-            : MAX_REQUEST_BODY_BYTES;
-      if (
-        !SYNONYM_MULTIPART_OPERATIONS.has(route.operationId) &&
-        bodyByteLength(requestBody) > maxBodyBytes
-      ) {
-        throw createKnowledgeError({
-          code: 'KNOWLEDGE_PAYLOAD_TOO_LARGE',
-          requestId,
-          traceId,
-        });
-      }
       const isPublic = PUBLIC_OPERATIONS.has(route.operationId);
       const ticketValue =
         route.operationId === 'API-FILE-CONTENT'
@@ -346,7 +362,9 @@ export function createKnowledgeApiHandler(): NextApiHandler {
               return ticketWorkspaceId;
             })()
           : resolveWorkspace(request, subject, requestId, traceId);
-      if (!skipAuthentication) assertScopes(route, subject, requestId, traceId);
+      if (!skipAuthentication) {
+        await assertScopes(runtime, route, subject, workspaceId, requestId, traceId);
+      }
 
       let ticketVerificationError: unknown = null;
       let ticketWorkspaceId: string | null = null;
@@ -373,6 +391,15 @@ export function createKnowledgeApiHandler(): NextApiHandler {
         response.setHeader('RateLimit-Reset', String(rateLimit.resetSeconds));
         if (!rateLimit.allowed) {
           response.setHeader('Retry-After', String(rateLimit.resetSeconds));
+          await auditRateLimitDenied(
+            runtime,
+            route,
+            subject,
+            workspaceId,
+            requestId,
+            traceId,
+            rateLimit,
+          );
           throw createKnowledgeError({
             code: 'KNOWLEDGE_RATE_LIMITED',
             requestId,
@@ -381,6 +408,30 @@ export function createKnowledgeApiHandler(): NextApiHandler {
         }
       }
       if (ticketVerificationError) throw ticketVerificationError;
+
+      const requestBody = await resolveRequestBody(
+        request,
+        route.operationId === 'API-UPLOAD-PART',
+        route.operationId,
+        requestId,
+        traceId,
+      );
+      const maxBodyBytes =
+        route.operationId === 'API-UPLOAD-PART'
+          ? MAX_UPLOAD_PART_BYTES
+          : SYNONYM_MULTIPART_OPERATIONS.has(route.operationId)
+            ? SYNONYM_MULTIPART_MAX_BYTES
+            : MAX_REQUEST_BODY_BYTES;
+      if (
+        !SYNONYM_MULTIPART_OPERATIONS.has(route.operationId) &&
+        bodyByteLength(requestBody) > maxBodyBytes
+      ) {
+        throw createKnowledgeError({
+          code: 'KNOWLEDGE_PAYLOAD_TOO_LARGE',
+          requestId,
+          traceId,
+        });
+      }
 
       const execute = () =>
         runtime.withSpan(

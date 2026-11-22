@@ -398,6 +398,24 @@ describe('L1-B19-API-003 API Key lifecycle over real HTTP', () => {
       })),
     );
     expect(await keys.countDocuments({ workspaceId })).toBe(before);
+
+    const updateTarget = await createKey({ label: 'empty-update-scope' });
+    const emptyUpdate = await request(`/v1/knowledge/api-keys/${updateTarget.id}`, {
+      method: 'PATCH',
+      idempotencyKey: `b19-empty-update-scope-${suffix}`,
+      body: { scopes: [], version: updateTarget.version },
+    });
+    expect(emptyUpdate.response.status).toBe(422);
+    expect(emptyUpdate.payload).toMatchObject({
+      success: false,
+      error: { code: 'KNOWLEDGE_API_KEY_SCOPE_INVALID' },
+    });
+    const unchanged = (
+      (await request(`/v1/knowledge/api-keys?limit=200`)).payload as {
+        data: { items: Array<{ id: string; version: number }> };
+      }
+    ).data.items.find((item) => item.id === updateTarget.id);
+    expect(unchanged?.version).toBe(updateTarget.version);
   });
 
   it('L1-B19-API-003-S01 updates name with CAS, increments version and records safe audit', async () => {
@@ -614,12 +632,37 @@ describe('L1-B19-API-003 API Key lifecycle over real HTTP', () => {
     expect(
       await registerKnowledgeModels(mongo).KnowledgeSource.countDocuments({ workspaceId }),
     ).toBe(sourcesBefore);
-    expect(
-      await registerKnowledgeModels(mongo).KnowledgeAuditEvent.countDocuments({
+    const deniedAuditAfter = await registerKnowledgeModels(
+      mongo,
+    ).KnowledgeAuditEvent.countDocuments({
+      workspaceId,
+      outcome: { $in: ['denied', 'restricted'] },
+    });
+    expect(deniedAuditAfter).toBe(deniedAuditBefore + 1);
+    const sourceCreateRoute = RUNTIME_ROUTE_REGISTRY.find(
+      (route) =>
+        route.method === 'POST' &&
+        route.path.includes('{spaceId}') &&
+        route.path.endsWith('/sources'),
+    );
+    expect(sourceCreateRoute).toBeDefined();
+    const deniedEvent = await registerKnowledgeModels(mongo)
+      .KnowledgeAuditEvent.findOne({
         workspaceId,
-        outcome: { $in: ['denied', 'restricted'] },
-      }),
-    ).toBeGreaterThan(deniedAuditBefore);
+        action: `${sourceCreateRoute!.operationId}.denied`,
+        outcome: 'denied',
+      })
+      .sort({ occurredAt: -1 })
+      .lean();
+    expect(deniedEvent).toMatchObject({
+      action: `${sourceCreateRoute!.operationId}.denied`,
+      outcome: 'denied',
+      safeDiff: {
+        reason: 'scope',
+        missingScopes: expect.arrayContaining(['knowledge:write']),
+      },
+    });
+    expect(JSON.stringify(deniedEvent)).not.toContain(readKey.secret);
 
     const allowedSpaceId = await createSpace({
       baseUrl: app.baseUrl,
@@ -810,12 +853,38 @@ describe('L1-B19-API-003 rate limiting and audit', () => {
       expect((result.payload as { requestId?: string }).requestId).toBeTruthy();
       expect((result.payload as { traceId?: string }).traceId).toBeTruthy();
     }
-    expect(
-      await registerKnowledgeModels(mongo).KnowledgeAuditEvent.countDocuments({
+    const deniedAuditAfter = await registerKnowledgeModels(
+      mongo,
+    ).KnowledgeAuditEvent.countDocuments({
+      workspaceId,
+      outcome: { $in: ['denied', 'restricted'] },
+    });
+    expect(deniedAuditAfter).toBe(deniedAuditBefore + limited.length);
+    const rateLimitAudits = await registerKnowledgeModels(mongo)
+      .KnowledgeAuditEvent.find({
         workspaceId,
-        outcome: { $in: ['denied', 'restricted'] },
-      }),
-    ).toBeGreaterThan(deniedAuditBefore);
+        action: 'API-APIKEY-ROTATE.denied',
+        outcome: 'denied',
+        'safeDiff.reason': 'rate_limit',
+      })
+      .lean();
+    const limitedRequestIds = limited
+      .map((result) => (result.payload as { requestId?: string }).requestId)
+      .filter((requestId): requestId is string => Boolean(requestId))
+      .sort();
+    const auditedRequestIds = rateLimitAudits
+      .map((event) => event.requestId)
+      .filter((requestId): requestId is string => Boolean(requestId))
+      .sort();
+    writeEvidence('api-003-rate-limit-audit.json', {
+      limitedRequestIds,
+      auditedRequestIds,
+      auditCount: rateLimitAudits.length,
+      limitedCount: limited.length,
+    });
+    expect(auditedRequestIds).toEqual(limitedRequestIds);
+    expect(new Set(auditedRequestIds).size).toBe(rateLimitAudits.length);
+    expect(rateLimitAudits.every((event) => event.safeDiff.reason === 'rate_limit')).toBe(true);
     const otherOperation = await request('/v1/knowledge/api-keys?limit=1');
     expect(otherOperation.response.headers.get('ratelimit-limit')).toBe('100');
   });
