@@ -1,0 +1,118 @@
+{
+  "schemaVersion": 1,
+  "candidateSha": "c34467da5a16ef0cc0efff65c696d9a2cf408ff0",
+  "runNamespacePrefix": "b18-a",
+  "seedPolicy": "每次集成/E2E 运行使用 b18-a 加随机后缀；共享 fixture 使用固定业务含义和固定文本，不依赖随机顺序。",
+  "canonicalTextHashRule": "SHA-256 over UTF-8 content for support-refund and operations-escalation; for duplicate-canonical over UTF-8 question + LF + answer.",
+  "workspace": {
+    "primary": "workspace-a",
+    "foreign": "workspace-b"
+  },
+  "spaces": [
+    {
+      "alias": "support",
+      "workspace": "workspace-a",
+      "purpose": "退款支持知识"
+    },
+    {
+      "alias": "operations",
+      "workspace": "workspace-a",
+      "purpose": "升级与运营知识"
+    }
+  ],
+  "sources": [
+    {
+      "alias": "support-source",
+      "space": "support",
+      "name": "Refund policy",
+      "sourceUrl": "https://example.invalid/refund-policy"
+    },
+    {
+      "alias": "operations-source",
+      "space": "operations",
+      "name": "Escalation policy",
+      "sourceUrl": "https://example.invalid/escalation-policy"
+    }
+  ],
+  "segments": [
+    {
+      "alias": "support-refund",
+      "space": "support",
+      "source": "support-source",
+      "question": "How long does a refund take?",
+      "answer": "Five business days.",
+      "content": "Refunds are processed within five business days."
+    },
+    {
+      "alias": "operations-escalation",
+      "space": "operations",
+      "source": "operations-source",
+      "question": "What is the escalation policy?",
+      "answer": "Support leads review escalations.",
+      "content": "The escalation policy routes urgent cases to support leads."
+    },
+    {
+      "alias": "duplicate-a",
+      "space": "support",
+      "source": "support-source",
+      "question": "Shared policy",
+      "answer": "Same answer.",
+      "content": "Shared policy content."
+    },
+    {
+      "alias": "duplicate-b",
+      "space": "operations",
+      "source": "operations-source",
+      "question": "Shared policy",
+      "answer": "Same answer.",
+      "content": "Shared policy content."
+    }
+  ],
+  "canonicalTextSha256": {
+    "support-refund": "e14ad89b43ed76c5d7d5ac7262bf91289bdd16b5e54123d7045c4d19105b80e4",
+    "operations-escalation": "1c7a7cfd67195dedf3b10e83b220f7a25b74c20b6233fd770e94a8d5fec3ec9e",
+    "duplicate-canonical": "3fbace10ca91887b2cb67d6d3e5e7812f328ef36dbafa33281d95d46eb14fc6c"
+  },
+  "apiKeys": [
+    {
+      "alias": "search-correct",
+      "scopes": ["knowledge:search"],
+      "spaceScope": ["support", "operations"],
+      "status": "active"
+    },
+    {
+      "alias": "search-wrong-scope",
+      "scopes": ["knowledge:read"],
+      "spaceScope": ["support"],
+      "status": "active"
+    },
+    {
+      "alias": "search-expired",
+      "scopes": ["knowledge:search"],
+      "spaceScope": ["support"],
+      "status": "expired"
+    },
+    {
+      "alias": "search-space-limited",
+      "scopes": ["knowledge:search"],
+      "spaceScope": ["support"],
+      "status": "active"
+    }
+  ],
+  "failureModes": [
+    "space timeout",
+    "citation store unavailable",
+    "citation commit deadline",
+    "source ACL revoked",
+    "source deleted",
+    "citation expired",
+    "citation deleted",
+    "tampered citation signature",
+    "tampered snapshot hash"
+  ],
+  "provider": {
+    "mode": "BLOCKED_PROVIDER",
+    "models": "UNSET",
+    "reason": "AIProxy health is available but its channel table is empty and required real model inputs are unset."
+  }
+}

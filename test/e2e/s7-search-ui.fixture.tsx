@@ -19,8 +19,12 @@ const sourceId = '65f1e5b2a1c9d4b7e8f10001';
 const segmentId = '65f1e5b2a1c9d4b7e8f20001';
 const tagId = '65f1e5b2a1c9d4b7e8f00001';
 
+const unsafeContent =
+  '<img src="x" onerror="globalThis.__b18Xss=1"> [unsafe](javascript:globalThis.__b18Xss=2)';
 const content =
-  'Refunds are processed within five business days. Escalations are reviewed by the support lead.';
+  new URLSearchParams(globalThis.location.search).get('unsafe') === '1'
+    ? unsafeContent
+    : 'Refunds are processed within five business days. Escalations are reviewed by the support lead.';
 
 const result: SearchApiResponse = {
   searchId: 'search_fixture',

@@ -416,4 +416,130 @@ describe('TEST-SEARCH-009-BLOCK real Mongo citation lifecycle', () => {
       commitSpy.mockRestore();
     }
   });
+
+  it('L1-B18-SEARCH-009-P01 exposes the persisted Space and snapshot fields to direct consumers', async () => {
+    const issued = await citations.issueWithAudit(
+      {
+        searchId: 'search_b18_citation_snapshot',
+        searchMode: 'multi_space',
+        spaceId: String(spaceId),
+        candidates: [candidate()],
+        partial: false,
+        durationMs: 10,
+        degradedCodes: [],
+        now,
+      },
+      context,
+    );
+    const citation = [...issued.values()][0]!;
+    const models = registerKnowledgeModels(connection);
+    const stored = await models.KnowledgeCitation.findOne({
+      workspaceId,
+      citationId: citation.citationId,
+    }).lean();
+    expect(stored).toMatchObject({
+      knowledgeSpaceId: spaceId,
+      snapshotHash: expect.stringMatching(/^[a-f0-9]{64}$/),
+      expiresAt: new Date(now.getTime() + 24 * 86_400_000),
+    });
+
+    const read = await application.get(citation.citationId, context);
+    expect(read).toMatchObject({
+      knowledgeSpaceId: String(spaceId),
+      quoteText: candidate().text,
+      snapshotHash: stored!.snapshotHash,
+      expiresAt: stored!.expiresAt.toISOString(),
+    });
+  });
+
+  it('L1-B18-SEARCH-009-N01 rejects deleted and expired Citation snapshots', async () => {
+    const expired = await citations.issueWithAudit(
+      {
+        searchId: 'search_b18_citation_expired',
+        searchMode: 'multi_space',
+        spaceId: String(spaceId),
+        candidates: [candidate()],
+        partial: false,
+        durationMs: 10,
+        degradedCodes: [],
+        now,
+      },
+      context,
+    );
+    const models = registerKnowledgeModels(connection);
+    const expiredId = [...expired.values()][0]!.citationId;
+    await models.KnowledgeCitation.updateOne(
+      { workspaceId, citationId: expiredId },
+      { $set: { expiresAt: new Date(now.getTime() - 1) } },
+    );
+    await expect(application.get(expiredId, context)).rejects.toMatchObject({
+      problem: { error: { code: 'KNOWLEDGE_NOT_FOUND' } },
+    });
+
+    const deleted = await citations.issueWithAudit(
+      {
+        searchId: 'search_b18_citation_deleted',
+        searchMode: 'multi_space',
+        spaceId: String(spaceId),
+        candidates: [candidate()],
+        partial: false,
+        durationMs: 10,
+        degradedCodes: [],
+        now,
+      },
+      context,
+    );
+    const deletedId = [...deleted.values()][0]!.citationId;
+    await models.KnowledgeCitation.updateOne(
+      { workspaceId, citationId: deletedId },
+      { $set: { deletedAt: now } },
+    );
+    await expect(application.get(deletedId, context)).rejects.toMatchObject({
+      problem: { error: { code: 'KNOWLEDGE_NOT_FOUND' } },
+    });
+  });
+
+  it('L1-B18-SEARCH-009-C01 returns only a complete snapshot or 404 during Source deletion', async () => {
+    const issued = await citations.issueWithAudit(
+      {
+        searchId: 'search_b18_citation_race',
+        searchMode: 'multi_space',
+        spaceId: String(spaceId),
+        candidates: [candidate()],
+        partial: false,
+        durationMs: 10,
+        degradedCodes: [],
+        now,
+      },
+      context,
+    );
+    const citationId = [...issued.values()][0]!.citationId;
+    const models = registerKnowledgeModels(connection);
+    const [readResult] = await Promise.allSettled([
+      application.get(citationId, context),
+      models.KnowledgeSource.updateOne(
+        { workspaceId, _id: sourceId },
+        {
+          $set: { deletedAt: now, searchEnabled: false },
+          $inc: { version: 1, permissionRevision: 1 },
+        },
+      ),
+    ]);
+
+    if (readResult.status === 'fulfilled') {
+      expect(readResult.value).toMatchObject({
+        citationId,
+        segmentId: String(segmentId),
+        sourceId: String(sourceId),
+        title: 'Refund policy',
+      });
+    } else {
+      expect(readResult.reason).toMatchObject({
+        problem: { error: { code: 'KNOWLEDGE_NOT_FOUND' } },
+      });
+    }
+    await expect(application.get(citationId, context)).rejects.toMatchObject({
+      problem: { error: { code: 'KNOWLEDGE_NOT_FOUND' } },
+    });
+  });
 });

@@ -1,4 +1,6 @@
 import { randomUUID } from 'node:crypto';
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { chromium, expect as playwrightExpect } from '@playwright/test';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
@@ -44,6 +46,8 @@ let spaceId = '';
 let secondSpaceId = '';
 let sourceId = '';
 let segmentId = '';
+let secondSourceId = '';
+let secondSegmentId = '';
 
 function requiredEnv(name: string): string {
   const value = process.env[name]?.trim();
@@ -79,15 +83,18 @@ async function request(
   return { response, payload };
 }
 
-async function seedS6Index(tenant: TenantContext) {
+async function seedS6Index(
+  tenant: TenantContext,
+  input: { spaceId: string; segmentId: string; text: string },
+) {
   const models = registerKnowledgeModels(connection);
   await models.KnowledgeModelBinding.deleteMany({
     workspaceId,
-    knowledgeSpaceId: new connection.base.Types.ObjectId(spaceId),
+    knowledgeSpaceId: new connection.base.Types.ObjectId(input.spaceId),
   });
   await models.KnowledgeModelBinding.create({
     workspaceId,
-    knowledgeSpaceId: new connection.base.Types.ObjectId(spaceId),
+    knowledgeSpaceId: new connection.base.Types.ObjectId(input.spaceId),
     version: 1,
     deletedAt: null,
     createdByMemberId: memberId,
@@ -103,11 +110,11 @@ async function seedS6Index(tenant: TenantContext) {
   const catalog = new S5MockModelCatalog();
   const indexes = new KnowledgeSegmentIndexRepository(connection, jobs, catalog);
   await indexes.upsert(
-    segmentId,
+    input.segmentId,
     {
       indexId: 'primary',
       type: 'custom',
-      text: 'Refunds take five business days.',
+      text: input.text,
       modelId: 'mock-embedding-768',
       version: 1,
     },
@@ -117,7 +124,7 @@ async function seedS6Index(tenant: TenantContext) {
   const job = await models.KnowledgeJob.findOne({
     workspaceId,
     kind: 'index',
-    resourceId: segmentId,
+    resourceId: input.segmentId,
   }).lean();
   expect(job).toBeTruthy();
   const processing = new S06ProcessingApplication({
@@ -209,6 +216,31 @@ beforeAll(async () => {
   expect(segment.response.status).toBe(201);
   segmentId = String((segment.payload.data as { id: string }).id);
 
+  const secondSource = await request(`/v1/knowledge/spaces/${secondSpaceId}/sources`, {
+    method: 'POST',
+    idempotencyKey: `b18-second-source-${suffix}`,
+    body: {
+      kind: 'text',
+      name: `Escalation policy ${suffix}`,
+      searchEnabled: true,
+      metadata: {},
+    },
+  });
+  expect(secondSource.response.status).toBe(201);
+  secondSourceId = String((secondSource.payload.data as { id: string }).id);
+  const secondSegment = await request(`/v1/knowledge/sources/${secondSourceId}/segments`, {
+    method: 'POST',
+    idempotencyKey: `b18-second-segment-${suffix}`,
+    body: {
+      question: 'When are refund escalations reviewed?',
+      answer: 'Refund escalations are reviewed by support leads.',
+      searchEnabled: true,
+      metadata: { title: 'Escalation policy' },
+    },
+  });
+  expect(secondSegment.response.status).toBe(201);
+  secondSegmentId = String((secondSegment.payload.data as { id: string }).id);
+
   const config = loadKnowledgeRuntimeConfig({
     ...process.env,
     API_KEY_HMAC_SECRET_FILE: `${process.cwd()}/test/fixtures/s10/api-key-hmac.secret`,
@@ -223,7 +255,16 @@ beforeAll(async () => {
   connections = await createKnowledgeConnections(config);
   connection = connections.mongo;
   pool = connections.pg;
-  await seedS6Index(context);
+  await seedS6Index(context, {
+    spaceId,
+    segmentId,
+    text: 'Refunds take five business days.',
+  });
+  await seedS6Index(context, {
+    spaceId: secondSpaceId,
+    segmentId: secondSegmentId,
+    text: 'Refund escalations are reviewed by support leads.',
+  });
 }, 180_000);
 
 afterAll(async () => {
@@ -325,6 +366,71 @@ describe('S7 real runtime Search page and HTTP contract', () => {
     expect(citation.data.segmentId).toBe(segmentId);
   });
 
+  it('L1-B18-SEARCH-007-P01-Q01 merges two indexed Spaces and keeps original-space provenance', async () => {
+    const client = new S7DownstreamKnowledgeClient({
+      baseUrl: app.baseUrl,
+      workspaceId,
+      credential: authToken,
+      requestIdFactory: () => `s7-b18-multi-${suffix}`,
+    });
+    const result = await client.searchMultiSpace({
+      knowledgeSpaceId: spaceId,
+      knowledgeSpaceIds: [spaceId, secondSpaceId],
+      query: 'refund',
+      tokenBudget: 20_000,
+      searchMode: 'fulltext',
+      usingRerank: false,
+    });
+
+    expect(result.status).toBe(200);
+    expect(result.data.mode).toBe('multi_space');
+    expect(result.data.partial).toBe(false);
+    expect(new Set(result.data.items.map((item) => item.segment.id))).toEqual(
+      new Set([segmentId, secondSegmentId]),
+    );
+    expect(new Set(result.data.items.map((item) => item.segment.knowledgeSpaceId))).toEqual(
+      new Set([spaceId, secondSpaceId]),
+    );
+    for (const item of result.data.items) {
+      const expectedSourceId =
+        item.segment.knowledgeSpaceId === spaceId ? sourceId : secondSourceId;
+      expect(item.citation.sourceId).toBe(expectedSourceId);
+    }
+
+    const models = registerKnowledgeModels(connection);
+    const stored = await models.KnowledgeCitation.find({
+      workspaceId,
+      searchRequestId: result.data.searchId,
+    }).lean();
+    expect(new Set(stored.map((citation) => String(citation.knowledgeSpaceId)))).toEqual(
+      new Set([spaceId, secondSpaceId]),
+    );
+    const evidenceDir =
+      process.env.B18_EVIDENCE_DIR ?? resolve(process.cwd(), 'test-results', 'b18-a', 'api');
+    mkdirSync(evidenceDir, { recursive: true });
+    writeFileSync(
+      resolve(evidenceDir, 'search-007-real-http-merge.json'),
+      `${JSON.stringify(
+        {
+          searchId: result.data.searchId,
+          traceId: result.traceId,
+          requestId: result.requestId,
+          partial: result.data.partial,
+          durationMs: result.data.durationMs,
+          items: result.data.items.map((item) => ({
+            segmentId: item.segment.id,
+            knowledgeSpaceId: item.segment.knowledgeSpaceId,
+            sourceId: item.citation.sourceId,
+            score: item.score,
+            citationId: item.citation.citationId,
+          })),
+        },
+        null,
+        2,
+      )}\n`,
+    );
+  }, 120_000);
+
   it('covers real app empty/degraded and 400/401/403/404/429 responses', async () => {
     let requestSequence = 0;
     const client = new S7DownstreamKnowledgeClient({
@@ -333,11 +439,11 @@ describe('S7 real runtime Search page and HTTP contract', () => {
       credential: authToken,
       requestIdFactory: () => `s7-status-${suffix}-${++requestSequence}`,
     });
-    const empty = await client.searchSemantic({
+    const empty = await client.searchFulltext({
       knowledgeSpaceId: secondSpaceId,
-      query: 'refunds',
+      query: 'b18-no-match-token',
       tokenBudget: 5_000,
-      searchMode: 'semantic',
+      searchMode: 'fulltext',
       usingRerank: false,
     });
     expect(empty.status).toBe(200);
@@ -422,6 +528,85 @@ describe('S7 real runtime Search page and HTTP contract', () => {
     );
     expect(limited.some((response) => response.status === 429)).toBe(true);
   });
+
+  it('L1-B18-SEARCH-009-P01 returns the complete direct-consumer Citation snapshot over HTTP', async () => {
+    const client = new S7DownstreamKnowledgeClient({
+      baseUrl: app.baseUrl,
+      workspaceId,
+      credential: authToken,
+      requestIdFactory: () => `s7-b18-citation-${suffix}`,
+    });
+    const search = await client.searchFulltext({
+      knowledgeSpaceId: spaceId,
+      query: 'refunds',
+      tokenBudget: 5_000,
+      searchMode: 'fulltext',
+      usingRerank: false,
+    });
+    expect(search.data.items.length).toBeGreaterThan(0);
+    const citation = await client.getCitation(search.data.items[0]!.citation.citationId);
+    const evidenceDir =
+      process.env.B18_EVIDENCE_DIR ?? resolve(process.cwd(), 'test-results', 'b18-a', 'api');
+    mkdirSync(evidenceDir, { recursive: true });
+    writeFileSync(
+      resolve(evidenceDir, 'search-009-real-http-citation.json'),
+      `${JSON.stringify(
+        {
+          searchTraceId: search.traceId,
+          citationTraceId: citation.traceId,
+          searchRequestId: search.requestId,
+          citationRequestId: citation.requestId,
+          citation: citation.data,
+        },
+        null,
+        2,
+      )}\n`,
+    );
+    expect(citation.data).toMatchObject({
+      knowledgeSpaceId: spaceId,
+      quoteText: expect.any(String),
+      snapshotHash: expect.stringMatching(/^[a-f0-9]{64}$/),
+      expiresAt: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/),
+    });
+  }, 120_000);
+
+  it('TEST-X-DOWNSTREAM-CITATION invalidates a downstream Citation after Source deletion', async () => {
+    const client = new S7DownstreamKnowledgeClient({
+      baseUrl: app.baseUrl,
+      workspaceId,
+      credential: authToken,
+      requestIdFactory: () => `s7-b18-downstream-${suffix}`,
+    });
+    const search = await client.searchFulltext({
+      knowledgeSpaceId: spaceId,
+      query: 'refunds',
+      tokenBudget: 5_000,
+      searchMode: 'fulltext',
+      usingRerank: false,
+    });
+    const issued = search.data.items[0]!.citation;
+    expect(await client.getCitation(issued.citationId)).toMatchObject({
+      status: 200,
+      data: { citationId: issued.citationId },
+    });
+
+    const models = registerKnowledgeModels(connection);
+    await models.KnowledgeSource.updateOne(
+      { workspaceId, _id: new connection.base.Types.ObjectId(sourceId) },
+      {
+        $set: { deletedAt: new Date(), searchEnabled: false },
+        $inc: { version: 1, permissionRevision: 1 },
+      },
+    );
+    await expect(client.getCitation(issued.citationId)).rejects.toMatchObject({
+      status: 404,
+      problem: {
+        error: { code: 'KNOWLEDGE_NOT_FOUND' },
+        traceId: expect.any(String),
+        requestId: expect.any(String),
+      },
+    });
+  }, 120_000);
 
   it.skip('renders Search navigation and page at 360/768/1200 with axe', async () => {
     const cookie = await consoleCookie({ baseUrl: app.baseUrl, authToken, workspaceId });

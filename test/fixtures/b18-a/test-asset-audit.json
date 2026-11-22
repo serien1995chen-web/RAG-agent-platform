@@ -1,0 +1,207 @@
+{
+  "schemaVersion": 1,
+  "candidateSha": "c34467da5a16ef0cc0efff65c696d9a2cf408ff0",
+  "statusLegend": {
+    "REUSE": "已覆盖相关行为，阶段 A 重跑并保留证据。",
+    "EXTEND": "已有测试有价值，但需要补充 B18 断言或真实 HTTP/UI 证据。",
+    "NEW": "当前候选没有覆盖，新建独立 B18 测试。",
+    "STALE": "断言与用户当前要求或 FastGPT 可观察行为不一致，不能作为通过证据。",
+    "BLOCKED": "真实 Provider、环境、数据或行为证据不足。"
+  },
+  "assets": [
+    {
+      "path": "test/contract/s7-multi-space.test.ts",
+      "status": "REUSE",
+      "scope": "MultiSpace 1/20/21、基础 Space 和 partial 合同",
+      "b18Action": "重跑；补充稳定同分和重复 Space 可解释性由新测试承担。"
+    },
+    {
+      "path": "test/contract/s7-downstream-contract.test.ts",
+      "status": "EXTEND",
+      "scope": "下游静态路径白名单和能力未关闭",
+      "b18Action": "新增 Citation 扩展字段和真实 HTTP consumer 断言。"
+    },
+    {
+      "path": "test/contract/s7-search-contract.test.ts",
+      "status": "STALE",
+      "scope": "公开 Citation 拒绝 expiry 的旧断言",
+      "b18Action": "保留原测试；新 B18 contract 测试按用户当前要求断言 knowledgeSpaceId/quoteText/snapshotHash/expiresAt。"
+    },
+    {
+      "path": "packages/search/test/unit/s7-multi.test.ts",
+      "status": "REUSE",
+      "scope": "等权 RRF、provenance 和 Space failure",
+      "b18Action": "重跑，并由新测试补充输入顺序、去重和解释性。"
+    },
+    {
+      "path": "packages/search/test/unit/s7-rrf.test.ts",
+      "status": "REUSE",
+      "scope": "加权 RRF 公式、同分排序和通道 failure",
+      "b18Action": "重跑。"
+    },
+    {
+      "path": "packages/search/test/unit/s7-dedupe-similarity-trim.test.ts",
+      "status": "REUSE",
+      "scope": "归一化去重、阈值和 token 裁剪",
+      "b18Action": "重跑，并由多 Space 测试补跨 Space 去重。"
+    },
+    {
+      "path": "packages/service/test/unit/s7-citation.test.ts",
+      "status": "EXTEND",
+      "scope": "Citation scope、TTL、篡改和 ACL",
+      "b18Action": "新增公开快照字段闭环和过期删除。"
+    },
+    {
+      "path": "packages/service/test/unit/s7-search-operation.test.ts",
+      "status": "REUSE",
+      "scope": "五类 operation 路由与 Citation GET 只读",
+      "b18Action": "重跑。"
+    },
+    {
+      "path": "packages/service/test/integration/s7-citation.test.ts",
+      "status": "EXTEND",
+      "scope": "真实 Mongo Citation 事务、ACL、版本和 TTL 索引",
+      "b18Action": "新增原始快照与公开 DTO 缺口、TTL/删除和读删竞争。"
+    },
+    {
+      "path": "packages/service/test/integration/s7-semantic-search.test.ts",
+      "status": "REUSE",
+      "scope": "搜索应用、partial、最终授权和 Citation 签发",
+      "b18Action": "重跑。"
+    },
+    {
+      "path": "packages/service/test/integration/s7-s6-integration.test.ts",
+      "status": "REUSE",
+      "scope": "真实 S6 索引到 S7 召回",
+      "b18Action": "重跑。"
+    },
+    {
+      "path": "test/tenant/s7-citation-tenant.test.ts",
+      "status": "REUSE",
+      "scope": "跨 workspace Citation 读取前的拒绝",
+      "b18Action": "重跑。"
+    },
+    {
+      "path": "test/tenant/s7-search-tenant.test.ts",
+      "status": "REUSE",
+      "scope": "检索 ACL 撤销和 Space 存在性隐藏",
+      "b18Action": "重跑。"
+    },
+    {
+      "path": "test/tenant/kb-b16-a-search-auth.test.ts",
+      "status": "REUSE",
+      "scope": "跨租户、ACL、searchEnabled 和 scope",
+      "b18Action": "作为 B18 共享租户切片重跑。"
+    },
+    {
+      "path": "test/concurrency/kb-b16-a-search-concurrency.test.ts",
+      "status": "REUSE",
+      "scope": "并发检索租户隔离和 request ID",
+      "b18Action": "作为 B18 共享并发切片重跑。"
+    },
+    {
+      "path": "test/fault/s7-citation-fault.test.ts",
+      "status": "REUSE",
+      "scope": "Citation 存储故障不转 404/空成功",
+      "b18Action": "重跑。"
+    },
+    {
+      "path": "test/fault/s7-search-fault.test.ts",
+      "status": "REUSE",
+      "scope": "S7 通道故障优先级和 partial",
+      "b18Action": "重跑。"
+    },
+    {
+      "path": "test/e2e/s7-downstream-consumers.test.ts",
+      "status": "EXTEND",
+      "scope": "Chat/Agent/Workflow 真实 HTTP client contract",
+      "b18Action": "新增 Citation 扩展字段和独立下游直接渲染。"
+    },
+    {
+      "path": "test/e2e/s7-search-page.test.ts",
+      "status": "EXTEND",
+      "scope": "真实应用 HTTP 搜索和 Citation GET",
+      "b18Action": "新增双 Space 合并和真实 Citation GET 缺口；原路由 UI 测试为既有 skip，记为 BLOCKED。"
+    },
+    {
+      "path": "test/e2e/kb-b16-a-search.test.ts",
+      "status": "REUSE",
+      "scope": "受控产品 UI 搜索、partial、空态和 axe",
+      "b18Action": "重跑；新增 B18 多 Space/来源/score 断言。"
+    },
+    {
+      "path": "packages/web/test/unit/s7-downstream-client.test.ts",
+      "status": "EXTEND",
+      "scope": "下游客户端路径、207、Problem 和凭据保护",
+      "b18Action": "由新的 E2E Citation 与 UI 断言补足新增公开字段。"
+    },
+    {
+      "path": "packages/web/test/unit/s7-search-ui.test.ts",
+      "status": "EXTEND",
+      "scope": "表单、状态映射和空/partial/degraded 区分",
+      "b18Action": "新增多 Space provenance、score 和 Citation 详情。"
+    },
+    {
+      "path": "packages/web/test/unit/kb-b16-a-search-ui-state.test.ts",
+      "status": "REUSE",
+      "scope": "B16 search UI 状态",
+      "b18Action": "重跑。"
+    },
+    {
+      "path": "packages/service/test/integration/knowledge-catalog-governance.test.ts",
+      "status": "REUSE",
+      "scope": "TEST-X-REFERENCE-DELETE block/detach、referenceRevision 和 stale binding",
+      "b18Action": "执行精确共享切片并作为 B18 删除引用证据。"
+    },
+    {
+      "path": "test/concurrency/kb-b19-api-key-races.test.ts",
+      "status": "REUSE",
+      "scope": "TEST-X-API-003 key rotation/revoke 并发",
+      "b18Action": "作为 API Key 横切切片重跑。"
+    },
+    {
+      "path": "test/e2e/kb-b19-api-key-http.test.ts",
+      "status": "REUSE",
+      "scope": "TEST-X-API-003 正确/错误/过期 Key、scope、Space binding、RateLimit 和 audit",
+      "b18Action": "执行真实 HTTP 横切切片。"
+    },
+    {
+      "path": "test/fault/kb-b19-api-key-fault.test.ts",
+      "status": "REUSE",
+      "scope": "Redis 限流依赖故障 fail closed",
+      "b18Action": "执行 B18 API Key 故障切片。"
+    },
+    {
+      "path": "packages/search/test/unit/kb-b18-a-multi-space-rrf.test.ts",
+      "status": "NEW",
+      "scope": "SEARCH-007 公式、同分、provenance、去重和无共享状态",
+      "b18Action": "阶段 A 新增。"
+    },
+    {
+      "path": "test/contract/kb-b18-a-citation-fields.test.ts",
+      "status": "NEW",
+      "scope": "SEARCH-009 公开 Citation 字段缺口",
+      "b18Action": "阶段 A 新增，预期暴露当前 DTO/OpenAPI 缺口。"
+    },
+    {
+      "path": "test/e2e/kb-b18-a-search-ui.test.ts",
+      "status": "NEW",
+      "scope": "SEARCH-007/009 1440×900 多 Space、来源、score、partial、空态、刷新和 axe",
+      "b18Action": "阶段 A 新增。"
+    }
+  ],
+  "blockedSegments": [
+    {
+      "path": "test/e2e/s7-search-page.test.ts",
+      "segment": "renders Search navigation and page at 360/768/1200 with axe",
+      "status": "BLOCKED",
+      "reason": "当前候选显式标记 it.skip；不得计为通过。B18 使用独立 1440×900 受控产品 UI 测试补证。"
+    },
+    {
+      "path": "test/real-provider/kb-b16-a-search-real.test.ts",
+      "segment": "real embedding/rerank",
+      "status": "BLOCKED",
+      "reason": "AIProxy 频道数为 0，真实模型变量未配置。"
+    }
+  ]
+}
