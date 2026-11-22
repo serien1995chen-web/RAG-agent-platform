@@ -407,7 +407,7 @@ ${issueLines}
 - API-SEARCH-MULTI、API-CITATION-GET 业务成功语义：DEFERRED_TO_B18。
 - AIProxy/OCR/飞书等真实 Provider 未用于新增 B19 Key 成功路径；依赖 Provider 的 B01-B17 成功操作保持 NOT_RUN，不把 mock 当闭环。
 - 除已实测的 API Key 生命周期和 Space GET 外，其余 B01-B17 stable fixture 未全部改用真实 API Key 执行，因此 B19 不得收口。
-- 全量 E2E 的失败仅来自本报告列出的 B19 新断言；既有 E2E 其他用例通过。
+- 全量 E2E 另有 \`test/e2e/s7-search-page.test.ts\` 一次 internal error；该文件单独重跑 3 passed / 1 skipped，记录为套件级波动，不属于 B19 产品缺陷。除此之外，失败仅来自本报告列出的 B19 新断言。
 
 ## 13. 清理与对账
 
