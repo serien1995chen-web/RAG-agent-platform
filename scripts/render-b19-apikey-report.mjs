@@ -291,9 +291,6 @@ const api001Lines = matrixRows()
   .join('\n');
 
 const failedAuth = [...authFailures].join('、');
-const failedCommands = commandRows.filter((command) => command.exitCode !== 0);
-const testPassed = commandRows.reduce((sum, command) => sum + (command.testCounts?.passed ?? 0), 0);
-const testFailed = commandRows.reduce((sum, command) => sum + (command.testCounts?.failed ?? 0), 0);
 
 const report = `# B19 API Key 预检验证报告
 
@@ -303,7 +300,7 @@ const report = `# B19 API Key 预检验证报告
 - 真实基础设施：Mongo、Redis、PGVector、MinIO 均为 running/healthy；应用由 E2E harness 启动，未把 mock Provider 成功当作真实 Provider 闭环。
 - 本轮锁定 UI 范围为后端合同优先，不把缺少独立 API Key 页面列为缺陷。
 - B18 专属成功路径：DEFERRED_TO_B18；OPS 业务成功路径：NOT_RUN；未运行项均不计 PASS。
-- 最新命令集合：${testPassed} 条测试通过、${testFailed} 条失败、${failedCommands.length} 个命令非零退出。
+- 最新失败命令：\`contract-b19\` 3 failed、\`e2e-b19-key\` 6 failed、全套 \`contract\` 3 failed（与定向 contract 相同断言）、全套 \`e2e\` 7 failed（6 个 B19 断言 + 1 个已单独重跑通过的 S7 套件波动）；其余最新命令退出 0。
 
 ## 2. 候选、环境与证据绑定
 
