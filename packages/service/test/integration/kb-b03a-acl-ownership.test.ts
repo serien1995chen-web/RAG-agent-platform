@@ -528,6 +528,57 @@ describe('B03A ACL state and persistence', () => {
     ).rejects.toMatchObject({ problem: { error: { code: 'KNOWLEDGE_CONFLICT' } } });
   });
 
+  it('L1-B18-DOWN-003-A02 never grants API Keys the workspace-owner ACL bypass', async () => {
+    const space = await createSpace(`API Key owner isolation ${suffix}`);
+    const source = await createSource(space.id, `API Key source ${suffix}`);
+    const enabled = (
+      await run('API-PERMISSION-ENABLE', {
+        params: { sourceId: source.id },
+        body: {
+          version: source.version,
+          expectedPermissionRevision: source.permissionRevision,
+        },
+      })
+    ).data as { permissionRevision: number };
+    const current = (await run('API-SOURCE-GET', { params: { sourceId: source.id } }))
+      .data as CreatedResource;
+    const detached = (
+      await run('API-PERMISSION-DETACH', {
+        params: { sourceId: source.id },
+        body: {
+          version: current.version,
+          expectedPermissionRevision: current.permissionRevision,
+        },
+      })
+    ).data as { permissionRevision: number };
+    expect(detached.permissionRevision).toBe(enabled.permissionRevision + 1);
+    const detachedSource = (await run('API-SOURCE-GET', { params: { sourceId: source.id } }))
+      .data as CreatedResource;
+    await run('API-ACL-UPDATE', {
+      params: { resourceType: 'source', resourceId: source.id },
+      body: {
+        inheritMode: 'override',
+        version: detachedSource.version,
+        entries: [],
+      },
+    });
+
+    const apiKeyContext = actor(`api-key:65f1e5b2a1c9d4b7e8f07777`, {
+      apiKeyId: '65f1e5b2a1c9d4b7e8f07777',
+      apiKeyPrefix: 'kn_live_b18',
+      apiKeySpaceIds: [space.id],
+      isWorkspaceOwner: true,
+    });
+    await expect(
+      access.assertPermission('source', source.id, 'read', apiKeyContext),
+    ).rejects.toMatchObject({ problem: { error: { code: 'KNOWLEDGE_NOT_FOUND' } } });
+    await expect(
+      access.assertPermission('source', source.id, 'read', ownerContext),
+    ).resolves.toMatchObject({
+      effectivePermission: 'owner',
+    });
+  });
+
   it('L1-B03-COL-004-F01 rolls back ACL rows when the audit write fails', async () => {
     const space = await createSpace(`Fault rollback ${suffix}`);
     const models = registerKnowledgeModels(connection);

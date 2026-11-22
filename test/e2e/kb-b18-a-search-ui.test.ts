@@ -97,8 +97,11 @@ describe('B18-A desktop Multi-Space and Citation UI', () => {
       `${JSON.stringify(accessibility.violations, null, 2)}\n`,
     );
 
-    await playwrightExpect.soft(page.getByText(/Knowledge space/i)).toBeVisible();
-    await playwrightExpect.soft(page.getByText(/0\.8700/)).toBeVisible();
+    const citationCard = page.locator('article.s7-citation').first();
+    await playwrightExpect
+      .soft(citationCard.getByText('Knowledge space 65f1e5b2a1c9d4b7e8f01234'))
+      .toBeVisible();
+    await playwrightExpect.soft(citationCard.getByText('Score 0.8700')).toBeVisible();
     expect(
       accessibility.violations.filter(
         (violation) => violation.impact === 'serious' || violation.impact === 'critical',

@@ -68,6 +68,7 @@ function citation(input: { candidate: AuthorizedCandidate; searchId: string }): 
     citationId: `cit_00000000-0000-4000-8000-${input.searchId.slice(-12).padStart(12, '0')}`,
     segmentId: input.candidate.segmentId,
     sourceId: input.candidate.sourceId,
+    knowledgeSpaceId: input.candidate.knowledgeSpaceId,
     title: input.candidate.source.name,
     sourceUrl: input.candidate.source.originalUrl,
     segmentRange: input.candidate.citationRange ?? {
@@ -76,6 +77,9 @@ function citation(input: { candidate: AuthorizedCandidate; searchId: string }): 
     },
     score: input.candidate.score,
     version: input.candidate.segment.version,
+    quoteText: input.candidate.text,
+    snapshotHash: 'e'.repeat(64),
+    expiresAt: '2099-11-23T09:13:23.000Z',
   };
 }
 

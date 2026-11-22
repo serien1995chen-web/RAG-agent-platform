@@ -254,13 +254,7 @@ export function S7SearchWorkbench(props: S7SearchWorkbenchProps) {
                 pt={index === 0 ? 0 : 5}
                 minW={0}
               >
-                <S7CitationView
-                  citation={item.citation}
-                  content={[item.segment.question, item.segment.answer, item.segment.content]
-                    .filter((value) => value.length > 0)
-                    .join('\n')}
-                  labels={props.labels.citation}
-                />
+                <S7CitationView citation={item.citation} labels={props.labels.citation} />
               </Box>
             ))}
           </Stack>

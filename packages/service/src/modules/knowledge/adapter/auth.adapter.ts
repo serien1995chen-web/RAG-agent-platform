@@ -182,7 +182,7 @@ export class KnowledgeApiKeyAuthProvider {
       ipHash,
       userAgentHash,
       scopes: record.scopes,
-      isWorkspaceOwner: true,
+      isWorkspaceOwner: false,
     };
     await this.repository.markUsed(record.id, now, context);
     return {
@@ -190,7 +190,7 @@ export class KnowledgeApiKeyAuthProvider {
       workspaceIds: [workspaceId],
       scopes: record.scopes,
       authType: 'api_key',
-      isWorkspaceOwner: true,
+      isWorkspaceOwner: false,
       apiKeyId: record.id,
       apiKeyPrefix: record.keyPrefix,
       spaceIds: record.spaceIds,

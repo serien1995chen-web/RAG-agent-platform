@@ -2,9 +2,9 @@
   "schemaVersion": 1,
   "runScope": "B18-B",
   "candidateSha": "c34467da5a16ef0cc0efff65c696d9a2cf408ff0",
-  "fastgptVersion": "4.17.4",
+  "fastgptVersion": "4.17.3",
   "authority": [
-    "用户明确决定以当前实际 FastGPT 4.17.4 源码作为行为依据",
+    "用户明确决定以当前实际 FastGPT 4.17.3 源码作为行为依据",
     "FastGPT 可观察业务行为",
     "FastGPT 前端用户交互行为规范",
     "执行手册 B18 验证不变量",
@@ -394,7 +394,7 @@
       "fastgptEvidence": [
         {
           "path": "packages/service/core/workflow/dispatch/ai/chat/datasetCite.ts",
-          "lines": "56-89",
+          "lines": "56-80",
           "behavior": "Quotes are trimmed to quoteMaxToken, rendered into the configured prompt role and sent with the user question."
         },
         {
@@ -529,7 +529,7 @@
         },
         {
           "path": "packages/service/core/workflow/dispatch/ai/chat/datasetCite.ts",
-          "lines": "74-89",
+          "lines": "74-80",
           "behavior": "Missing quote text creates an empty quote context while retaining the user question."
         }
       ],
@@ -550,7 +550,7 @@
       "fastgptEvidence": [
         {
           "path": "packages/service/core/workflow/dispatch/ai/chat/datasetCite.ts",
-          "lines": "34-89",
+          "lines": "34-80",
           "behavior": "Quote fields are substituted without recursive placeholder expansion; the quote list is cut to the model quote budget."
         }
       ],

@@ -247,15 +247,9 @@ export function applyTokenBudget<T extends Candidate>(
   return output;
 }
 
-function compareText(left: string, right: string): number {
-  return left < right ? -1 : left > right ? 1 : 0;
-}
-
 export function compareCandidates(left: Candidate, right: Candidate): number {
   if (right.score !== left.score) return right.score - left.score;
-  const segmentOrder = compareText(left.segmentId ?? left.docId, right.segmentId ?? right.docId);
-  if (segmentOrder !== 0) return segmentOrder;
-  return compareText(left.knowledgeSpaceId, right.knowledgeSpaceId);
+  return 0;
 }
 
 export function stableSortCandidates<T extends Candidate>(items: readonly T[]): T[] {

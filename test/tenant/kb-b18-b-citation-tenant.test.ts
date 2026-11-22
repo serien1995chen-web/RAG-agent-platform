@@ -110,7 +110,7 @@ describe('TEST-X-TENANT-GUARD B18-B downstream authorization', () => {
     expect(access).not.toHaveBeenCalled();
   });
 
-  it('reaches the ACL repository only after workspace, scope and Space scope pass', async () => {
+  it('authorizes API Key Space scope through explicit scopes without owner semantics', async () => {
     const { value, access } = adapter(vi.fn().mockResolvedValue({ effectivePermission: 'read' }));
     await expect(
       value.authorize({
@@ -127,5 +127,25 @@ describe('TEST-X-TENANT-GUARD B18-B downstream authorization', () => {
       }),
     ).resolves.toBeUndefined();
     expect(access).toHaveBeenCalledWith('space', spaceA, 'read', context);
+  });
+
+  it('keeps JWT Space authorization on the current ACL path', async () => {
+    const { value, access } = adapter(vi.fn().mockResolvedValue({ effectivePermission: 'read' }));
+    const jwtContext = { ...context, apiKeyId: undefined, apiKeySpaceIds: undefined };
+    await expect(
+      value.authorize({
+        subject: {
+          authType: 'jwt',
+          memberId: 'mem_b18b',
+          workspaceIds: [workspaceA],
+          scopes: ['knowledge:read', 'knowledge:search'],
+        },
+        workspaceId: workspaceA,
+        knowledgeSpaceId: spaceA,
+        requiredScope: 'knowledge:read',
+        context: jwtContext,
+      }),
+    ).resolves.toBeUndefined();
+    expect(access).toHaveBeenCalledWith('space', spaceA, 'read', jwtContext);
   });
 });

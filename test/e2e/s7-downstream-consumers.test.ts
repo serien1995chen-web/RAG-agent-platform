@@ -122,14 +122,10 @@ beforeAll(async () => {
             citationId,
             segmentId: '65f1e5b2a1c9d4b7e8f20001',
             sourceId: '65f1e5b2a1c9d4b7e8f10001',
-            ...(requestId === 'req-b18-citation'
-              ? {
-                  knowledgeSpaceId: spaceA,
-                  quoteText: 'Refunds are processed within five business days.',
-                  snapshotHash: 'a'.repeat(64),
-                  expiresAt: '2026-11-23T09:13:23.000Z',
-                }
-              : {}),
+            knowledgeSpaceId: spaceA,
+            quoteText: 'Refunds are processed within five business days.',
+            snapshotHash: 'a'.repeat(64),
+            expiresAt: '2026-11-23T09:13:23.000Z',
             title: 'Refund policy',
             sourceUrl: 'https://example.invalid/refund',
             segmentRange: { start: 0, end: 29 },

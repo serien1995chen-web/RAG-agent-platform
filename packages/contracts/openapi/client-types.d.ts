@@ -413,7 +413,7 @@ export interface SchemaPropertyMap {
   "BatchResult": "code" | "failed" | "items" | "requested" | "succeeded";
   "BinaryStream": never;
   "ChunkingSettings": "autoIndexes" | "chunkSettingMode" | "chunkSize" | "chunkSplitMode" | "chunkSplitter" | "chunkTriggerMinSize" | "chunkTriggerType" | "dataEnhanceCollectionName" | "imageIndex" | "indexPrefixTitle" | "indexSize" | "overlap" | "paragraphChunkAIMode" | "paragraphChunkDeep" | "paragraphChunkMinSize" | "qaPrompt" | "trainingType";
-  "Citation": "citationId" | "score" | "segmentId" | "segmentRange" | "sourceId" | "sourceUrl" | "title" | "version";
+  "Citation": "citationId" | "expiresAt" | "knowledgeSpaceId" | "quoteText" | "score" | "segmentId" | "segmentRange" | "snapshotHash" | "sourceId" | "sourceUrl" | "title" | "version";
   "CleanupCreate": "scope";
   "Collaborator": "grantedAt" | "memberId" | "role" | "status";
   "CollaboratorCreate": "memberId" | "role";
@@ -557,7 +557,7 @@ export interface RequiredSchemaPropertyMap {
   "BatchResult": "failed" | "items" | "requested" | "succeeded";
   "BinaryStream": never;
   "ChunkingSettings": "chunkSettingMode" | "trainingType";
-  "Citation": "citationId" | "score" | "segmentId" | "segmentRange" | "sourceId" | "sourceUrl" | "title" | "version";
+  "Citation": "citationId" | "expiresAt" | "knowledgeSpaceId" | "quoteText" | "score" | "segmentId" | "segmentRange" | "snapshotHash" | "sourceId" | "sourceUrl" | "title" | "version";
   "CleanupCreate": "scope";
   "Collaborator": "grantedAt" | "memberId" | "role" | "status";
   "CollaboratorCreate": "memberId" | "role";

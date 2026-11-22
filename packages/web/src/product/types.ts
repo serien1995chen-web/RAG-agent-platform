@@ -290,6 +290,7 @@ export interface Citation {
   citationId: string;
   segmentId: string;
   sourceId: string;
+  knowledgeSpaceId: string;
   title: string;
   sourceUrl: string;
   segmentRange: {
@@ -298,6 +299,9 @@ export interface Citation {
   };
   score: number;
   version: number;
+  quoteText: string;
+  snapshotHash: string;
+  expiresAt: string;
 }
 
 export interface SearchResultItem {

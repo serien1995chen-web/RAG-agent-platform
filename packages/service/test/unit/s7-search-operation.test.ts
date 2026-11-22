@@ -21,11 +21,15 @@ function fixture() {
     citationId,
     segmentId: '65f1e5b2a1c9d4b7e8f20001',
     sourceId: '65f1e5b2a1c9d4b7e8f10001',
+    knowledgeSpaceId: '65f1e5b2a1c9d4b7e8f01234',
     title: 'Source',
     sourceUrl: null,
     segmentRange: { start: 0, end: 4 },
     score: 0.8,
     version: 1,
+    quoteText: 'Text',
+    snapshotHash: '4'.repeat(64),
+    expiresAt: '2099-11-23T09:13:23.000Z',
   }));
   return {
     application: new S7SearchOperationApplication(

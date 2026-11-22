@@ -115,11 +115,15 @@ function citation(candidateValue: AuthorizedCandidate): CitationApi {
     citationId: `cit_b17_${candidateValue.segmentId.slice(-6)}`,
     segmentId: candidateValue.segmentId,
     sourceId: candidateValue.sourceId,
+    knowledgeSpaceId: candidateValue.knowledgeSpaceId,
     title: candidateValue.source.name,
     sourceUrl: null,
     segmentRange: { start: 0, end: candidateValue.text.length },
     score: candidateValue.score,
     version: candidateValue.segment.version,
+    quoteText: candidateValue.text,
+    snapshotHash: 'd'.repeat(64),
+    expiresAt: '2099-11-23T09:13:23.000Z',
   };
 }
 

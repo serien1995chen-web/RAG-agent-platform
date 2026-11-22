@@ -35,6 +35,14 @@ const SUBMIT_ENABLED_STYLE = {
   backgroundColor: knowledgeThemeTokens.colors.primaryHover,
   color: knowledgeThemeTokens.colors.surface,
 } as const;
+const MODE_ACTIVE_STYLE = {
+  backgroundColor: knowledgeThemeTokens.colors.primary,
+  color: knowledgeThemeTokens.colors.surface,
+} as const;
+const MODE_INACTIVE_STYLE = {
+  backgroundColor: knowledgeThemeTokens.colors.surface,
+  color: knowledgeThemeTokens.colors.ink,
+} as const;
 
 export interface S7TagChoice {
   id: string;
@@ -212,8 +220,7 @@ export function S7SearchFilters(props: {
                   size="sm"
                   borderRadius="sm"
                   aria-pressed={props.value.mode === option.mode}
-                  bg={props.value.mode === option.mode ? 'kn.primary' : 'kn.surface'}
-                  color={props.value.mode === option.mode ? 'white' : 'kn.ink'}
+                  style={props.value.mode === option.mode ? MODE_ACTIVE_STYLE : MODE_INACTIVE_STYLE}
                   onClick={() => setValue('mode', option.mode)}
                 >
                   {option.label}

@@ -145,11 +145,15 @@ export class S7CitationRepository implements S7CitationPersistencePort, S7Search
           citationId,
           segmentId: candidate.segmentId,
           sourceId: candidate.sourceId,
+          knowledgeSpaceId: candidate.knowledgeSpaceId,
           title: candidate.source.name,
           sourceUrl,
           segmentRange,
           score,
           version: candidate.segment.version,
+          quoteText,
+          snapshotHash,
+          expiresAt: new Date(now.getTime() + 24 * 86_400_000).toISOString(),
         });
         return {
           workspaceId: context.workspaceId,
