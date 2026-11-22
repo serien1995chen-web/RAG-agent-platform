@@ -1,0 +1,798 @@
+{
+  "schemaVersion": 1,
+  "runScope": "B18-B",
+  "candidateSha": "c34467da5a16ef0cc0efff65c696d9a2cf408ff0",
+  "fastgptVersion": "4.17.4",
+  "authority": [
+    "用户明确决定以当前实际 FastGPT 4.17.4 源码作为行为依据",
+    "FastGPT 可观察业务行为",
+    "FastGPT 前端用户交互行为规范",
+    "执行手册 B18 验证不变量",
+    "本项目真实合同、路由、状态机和安全边界"
+  ],
+  "cases": [
+    {
+      "capability": "DOWN-001",
+      "subtestId": "L1-B18-DOWN-001-P01",
+      "responsibility": "Workflow knowledge node merges two authorized Space results and continues.",
+      "fastgptEvidence": [
+        {
+          "path": "packages/service/core/workflow/dispatch/dataset/search.ts",
+          "lines": "148-180,224-268,386-416",
+          "behavior": "The knowledge node accepts multiple datasets, searches them, returns quoteQA, and exposes the same list to later workflow nodes."
+        },
+        {
+          "path": "packages/service/core/workflow/dispatch/dataset/concat.ts",
+          "lines": "18-44",
+          "behavior": "Multiple quote lists are merged through the shared result-concat function and then token-trimmed."
+        }
+      ],
+      "frontendBehaviorIds": ["KB-GLOBAL-005", "KB-TEST-050", "KB-TEST-051"],
+      "downstreamAction": "Call POST /v1/knowledge/search/multi-space with two real API-Key-authorized Spaces and run a side-effect-free workflow completion step.",
+      "expectedUserVisibleResult": "Merged result count, source names, Citation IDs, traceId and a successful terminal workflow step.",
+      "statusSemantics": "HTTP 200; partial=false; empty=false; response validates SearchApiResponseSchema.",
+      "persistenceAndSideEffects": "Citation/audit records only; no downstream business write or cross-request cache.",
+      "permissions": "knowledge:search and API Key Space scope for both Spaces.",
+      "allowedDifferences": "Project uses knowledgeSpaceIds and an independent HTTP consumer instead of FastGPT datasetIds and workflow runtime.",
+      "projectAcceptanceExtension": false,
+      "unresolved": false
+    },
+    {
+      "capability": "DOWN-001",
+      "subtestId": "L1-B18-DOWN-001-N01",
+      "responsibility": "The node distinguishes empty, partial and failure.",
+      "fastgptEvidence": [
+        {
+          "path": "packages/service/core/workflow/dispatch/dataset/search.ts",
+          "lines": "135-152,224-268,417-424",
+          "behavior": "No queries returns an explicit empty result; missing datasets or failed search returns a node error rather than a generic successful result."
+        },
+        {
+          "path": "packages/global/core/dataset/search/utils.ts",
+          "lines": "5-72",
+          "behavior": "Merging empty lists returns an empty list, while multi-list merge retains per-result scores."
+        }
+      ],
+      "frontendBehaviorIds": ["KB-TEST-053", "KB-GLOBAL-008"],
+      "downstreamAction": "Exercise empty hit, one failed authorized Space, invalid request, and blocked internal-import path.",
+      "expectedUserVisibleResult": "200 empty warning, 207 partial with degraded reasons, 400 for invalid input, and static dependency scan failure for internal architecture imports.",
+      "statusSemantics": "200 empty, 207 partial, 400 validation, 504 timeout are mutually distinguishable.",
+      "persistenceAndSideEffects": "No fabricated success result; failure trace retained.",
+      "permissions": "knowledge:search plus authorized Spaces.",
+      "allowedDifferences": "Project uses HTTP 207 partial and structured Problem envelopes.",
+      "projectAcceptanceExtension": true,
+      "unresolved": false
+    },
+    {
+      "capability": "DOWN-001",
+      "subtestId": "L1-B18-DOWN-001-A01",
+      "responsibility": "Workflow Key cannot query another Space or tenant.",
+      "fastgptEvidence": [
+        {
+          "path": "packages/service/core/workflow/dispatch/dataset/search.ts",
+          "lines": "155-175",
+          "behavior": "Requested datasets are filtered against the current member when authTmbId is enabled; no authorized dataset produces no usable result."
+        }
+      ],
+      "frontendBehaviorIds": ["KB-GLOBAL-009", "KB-INFO-062"],
+      "downstreamAction": "Query a Space outside the Key Space scope and a Space owned by another workspace.",
+      "expectedUserVisibleResult": "403 for Key Space scope and 403/404 for foreign tenant before any Source title is returned.",
+      "statusSemantics": "403/404 remain Problems, never empty 200.",
+      "persistenceAndSideEffects": "Denied audit may be written; no search result or Source metadata leak.",
+      "permissions": "knowledge:search, API Key Space allowlist, tenant and Source ACL.",
+      "allowedDifferences": "Project may return 403 for Key scope and 404 for hidden tenant resources.",
+      "projectAcceptanceExtension": false,
+      "unresolved": false
+    },
+    {
+      "capability": "DOWN-001",
+      "subtestId": "L1-B18-DOWN-001-S01",
+      "responsibility": "Workflow consumes knowledge reads without business writes.",
+      "fastgptEvidence": [
+        {
+          "path": "packages/service/core/workflow/dispatch/dataset/search.ts",
+          "lines": "224-268,386-416",
+          "behavior": "The workflow node receives quoteQA from the search service and returns it without mutating dataset records."
+        }
+      ],
+      "frontendBehaviorIds": ["KB-TEST-050", "KB-TEST-051"],
+      "downstreamAction": "Snapshot business collection counts and key states before and after Workflow executions.",
+      "expectedUserVisibleResult": "No Source, Segment, Space, model binding or index state changes.",
+      "statusSemantics": "Only Citation and audit writes allowed by the knowledge API.",
+      "persistenceAndSideEffects": "Citation TTL records and search audit may exist; Workflow has no knowledge business writes or shared cache.",
+      "permissions": "knowledge:search read-only consumer.",
+      "allowedDifferences": "Project documents search audit and signed Citation snapshots.",
+      "projectAcceptanceExtension": true,
+      "unresolved": false
+    },
+    {
+      "capability": "DOWN-001",
+      "subtestId": "L1-B18-DOWN-001-C01",
+      "responsibility": "Concurrent Workflow calls isolate tenant, Citation and trace context.",
+      "fastgptEvidence": [
+        {
+          "path": "packages/global/core/dataset/search/utils.ts",
+          "lines": "13-72",
+          "behavior": "Result fusion creates a request-local map keyed by result ID."
+        },
+        {
+          "path": "packages/service/core/workflow/dispatch/dataset/search.ts",
+          "lines": "148-166,224-243",
+          "behavior": "Queries, dataset IDs and result lists are scoped to the current dispatch invocation."
+        }
+      ],
+      "frontendBehaviorIds": ["KB-GLOBAL-014", "KB-XROUTE-001"],
+      "downstreamAction": "Run concurrent Workflow child processes with distinct tenants, filters and IDs.",
+      "expectedUserVisibleResult": "No mixed tenant, Citation, filter or traceId; retries do not create business resources.",
+      "statusSemantics": "Every response validates against the caller request identity.",
+      "persistenceAndSideEffects": "Only one logical Citation set per request; no duplicate business write.",
+      "permissions": "Per-request API Key and tenant context.",
+      "allowedDifferences": "Project acceptance adds concurrency isolation beyond directly observed FastGPT runtime tests.",
+      "projectAcceptanceExtension": true,
+      "unresolved": false
+    },
+    {
+      "capability": "DOWN-001",
+      "subtestId": "L1-B18-DOWN-001-F01",
+      "responsibility": "Workflow preserves actionable failure and bounded retry.",
+      "fastgptEvidence": [
+        {
+          "path": "packages/service/core/workflow/dispatch/dataset/search.ts",
+          "lines": "417-424",
+          "behavior": "Search errors are returned as a node error response with the original error classification."
+        }
+      ],
+      "frontendBehaviorIds": ["KB-GLOBAL-008", "KB-TEST-015"],
+      "downstreamAction": "Force an authorized Space dependency failure, repeat with the same request ID, and inspect terminal state.",
+      "expectedUserVisibleResult": "Partial or 504 with stopReason/Problem and traceId; retry is bounded and does not duplicate resources.",
+      "statusSemantics": "Dependency failure never becomes a 200 empty success.",
+      "persistenceAndSideEffects": "Failure evidence retained; no duplicate business object.",
+      "permissions": "knowledge:search.",
+      "allowedDifferences": "Project uses structured Problem plus stopReason.",
+      "projectAcceptanceExtension": true,
+      "unresolved": false
+    },
+    {
+      "capability": "DOWN-001",
+      "subtestId": "L1-B18-DOWN-001-Q01",
+      "responsibility": "Workflow consumer protocol and dependency boundary are safe.",
+      "fastgptEvidence": [
+        {
+          "path": "packages/global/core/dataset/search/utils.ts",
+          "lines": "4-72",
+          "behavior": "Search result IDs are stable keys used for fusion and de-duplication."
+        },
+        {
+          "path": "packages/service/core/workflow/dispatch/dataset/concat.ts",
+          "lines": "25-40",
+          "behavior": "Only array-shaped quote inputs are merged and the final list is budget-limited."
+        }
+      ],
+      "frontendBehaviorIds": ["KB-TEST-050"],
+      "downstreamAction": "Scan consumer imports and network targets; send malicious filters, file parameters and oversized data.",
+      "expectedUserVisibleResult": "No service/DAL imports, no object keys, no bypass API, and no raw storage query.",
+      "statusSemantics": "400 for invalid contracts; static scan must fail on forbidden imports.",
+      "persistenceAndSideEffects": "No business write from rejected requests.",
+      "permissions": "Only public /v1/knowledge routes plus health and test resources.",
+      "allowedDifferences": "Project test consumer allowlist is stricter than FastGPT internal runtime.",
+      "projectAcceptanceExtension": true,
+      "unresolved": false
+    },
+    {
+      "capability": "DOWN-001",
+      "subtestId": "L1-B18-DOWN-001-UI01",
+      "responsibility": "Workflow consumer page makes success, partial, empty and failure distinguishable.",
+      "fastgptEvidence": [
+        {
+          "path": "projects/app/src/pageComponents/dataset/detail/Test/components/TestResults.tsx",
+          "lines": "10-51",
+          "behavior": "Search results show parameters, duration and Citation cards; no result shows an explicit empty state."
+        },
+        {
+          "path": "projects/app/src/components/core/dataset/QuoteItem.tsx",
+          "lines": "82-195,211-220",
+          "behavior": "Quote cards show score, content and source; source detail remains traceable."
+        }
+      ],
+      "frontendBehaviorIds": ["KB-TEST-050", "KB-TEST-051", "KB-TEST-053", "KB-GLOBAL-005", "KB-GLOBAL-008"],
+      "downstreamAction": "Run the B18 test page through 200, 207, empty, timeout and permission states; expand Citations; refresh.",
+      "expectedUserVisibleResult": "Distinct labels, expandable reference source, retry path, no internal stack, state recoverable after refresh.",
+      "statusSemantics": "UI labels match response status and degraded reasons.",
+      "persistenceAndSideEffects": "Page stores only test request inputs/status needed for refresh; no Source body copy.",
+      "permissions": "Page receives responses from server-side Key injection only.",
+      "allowedDifferences": "Layout may differ; business distinctions and recovery must match.",
+      "projectAcceptanceExtension": true,
+      "unresolved": false
+    },
+    {
+      "capability": "DOWN-002",
+      "subtestId": "L1-B18-DOWN-002-P01",
+      "responsibility": "Agent tool validates input and consumes returned Cites.",
+      "fastgptEvidence": [
+        {
+          "path": "packages/service/core/workflow/dispatch/ai/agent/sub/dataset/utils.ts",
+          "lines": "5-28",
+          "behavior": "The Agent dataset tool accepts only a string or string array query; retrieval configuration comes from the app preset."
+        },
+        {
+          "path": "packages/service/core/workflow/dispatch/ai/agent/sub/dataset/index.ts",
+          "lines": "170-220,275-307,441-475",
+          "behavior": "The tool validates args, restricts datasets, searches, emits cites and records the selected quote list."
+        }
+      ],
+      "frontendBehaviorIds": ["KB-TEST-050", "KB-TEST-051", "KB-TEST-052"],
+      "downstreamAction": "Invoke the Agent consumer with a valid query, authorized Space, token budget and filters.",
+      "expectedUserVisibleResult": "Validated tool input, semantic results, Citation source data and no self-constructed Citation.",
+      "statusSemantics": "200 and complete Citation envelope.",
+      "persistenceAndSideEffects": "Search audit and Citation records only.",
+      "permissions": "Restricted kn_live_ Key with knowledge:search and Space scope.",
+      "allowedDifferences": "Project tool schema exposes filters and budget explicitly rather than Agent app preset only.",
+      "projectAcceptanceExtension": true,
+      "unresolved": false
+    },
+    {
+      "capability": "DOWN-002",
+      "subtestId": "L1-B18-DOWN-002-N01",
+      "responsibility": "Agent tool rejects unknown fields, operators and invalid budgets.",
+      "fastgptEvidence": [
+        {
+          "path": "packages/service/core/workflow/dispatch/ai/agent/sub/dataset/index.ts",
+          "lines": "179-198",
+          "behavior": "Missing datasets, invalid JSON args and empty queries return explicit tool failures."
+        },
+        {
+          "path": "packages/global/core/dataset/search/utils.ts",
+          "lines": "4-72",
+          "behavior": "Search results are merged only from stable result IDs and array inputs."
+        }
+      ],
+      "frontendBehaviorIds": ["KB-GLOBAL-008", "KB-TEST-015"],
+      "downstreamAction": "Send unknown filter field, unknown operator, missing query, negative budget, oversized query and unauthorized Space.",
+      "expectedUserVisibleResult": "400/403/404 with stable Problems and no result content.",
+      "statusSemantics": "Tool errors are distinguishable from empty hits.",
+      "persistenceAndSideEffects": "No search result or business write on rejection.",
+      "permissions": "Key scope and tenant evaluated before retrieval.",
+      "allowedDifferences": "Project has a stricter public filter schema than FastGPT Agent tool args.",
+      "projectAcceptanceExtension": true,
+      "unresolved": false
+    },
+    {
+      "capability": "DOWN-002",
+      "subtestId": "L1-B18-DOWN-002-A01",
+      "responsibility": "Agent Key scope cannot be overridden by tool arguments.",
+      "fastgptEvidence": [
+        {
+          "path": "packages/service/core/workflow/dispatch/ai/agent/sub/dataset/index.ts",
+          "lines": "208-220,222-229",
+          "behavior": "Requested datasets are filtered by current principal authorization before search."
+        }
+      ],
+      "frontendBehaviorIds": ["KB-GLOBAL-009"],
+      "downstreamAction": "Use a Space-scoped Key to request allowed and denied Spaces; use a foreign tenant Key.",
+      "expectedUserVisibleResult": "403 for denied Space and 401/403/404 for foreign tenant; no Source title.",
+      "statusSemantics": "Denial is never represented as an empty Citation list.",
+      "persistenceAndSideEffects": "Denied audit only.",
+      "permissions": "knowledge:search, API Key Space scope, Source ACL, tenant.",
+      "allowedDifferences": "Project enforces public Key Space scope in addition to resource ACL.",
+      "projectAcceptanceExtension": false,
+      "unresolved": false
+    },
+    {
+      "capability": "DOWN-002",
+      "subtestId": "L1-B18-DOWN-002-S01",
+      "responsibility": "Agent reads knowledge without business writes or shared caching.",
+      "fastgptEvidence": [
+        {
+          "path": "packages/service/core/workflow/dispatch/ai/agent/sub/dataset/index.ts",
+          "lines": "275-307,443-475",
+          "behavior": "The Agent tool returns search results and node response data without changing dataset state."
+        }
+      ],
+      "frontendBehaviorIds": ["KB-TEST-051"],
+      "downstreamAction": "Snapshot state around repeated Agent tool calls and failures.",
+      "expectedUserVisibleResult": "No Space/Source/Segment/index mutation; no reused Citation map.",
+      "statusSemantics": "Failure retains stopReason.",
+      "persistenceAndSideEffects": "Citation/audit writes only; no cross-request result cache.",
+      "permissions": "knowledge:search read-only consumer.",
+      "allowedDifferences": "Project separately audits searches.",
+      "projectAcceptanceExtension": true,
+      "unresolved": false
+    },
+    {
+      "capability": "DOWN-002",
+      "subtestId": "L1-B18-DOWN-002-C01",
+      "responsibility": "Concurrent Agent tools isolate request state and usage.",
+      "fastgptEvidence": [
+        {
+          "path": "packages/service/core/workflow/dispatch/ai/agent/sub/dataset/index.ts",
+          "lines": "275-307,384-409",
+          "behavior": "Usage and search result lists are accumulated inside each tool execution."
+        }
+      ],
+      "frontendBehaviorIds": ["KB-XROUTE-001"],
+      "downstreamAction": "Run concurrent Agent processes with different tenants, filters and Citation IDs.",
+      "expectedUserVisibleResult": "No mixed filters, results or usage; retry does not double-charge.",
+      "statusSemantics": "Each request remains independently validated.",
+      "persistenceAndSideEffects": "One usage/audit event per logical accepted search.",
+      "permissions": "Per-request Key and tenant.",
+      "allowedDifferences": "Real provider usage remains BLOCKED_PROVIDER; local mock usage is contract evidence only.",
+      "projectAcceptanceExtension": true,
+      "unresolved": false
+    },
+    {
+      "capability": "DOWN-002",
+      "subtestId": "L1-B18-DOWN-002-F01",
+      "responsibility": "Agent dependency failure returns an explicit consumable error.",
+      "fastgptEvidence": [
+        {
+          "path": "packages/service/core/workflow/dispatch/ai/agent/sub/dataset/index.ts",
+          "lines": "476-484",
+          "behavior": "Agent search exceptions produce a failed tool response with errorMessage."
+        }
+      ],
+      "frontendBehaviorIds": ["KB-GLOBAL-008", "KB-TEST-015"],
+      "downstreamAction": "Exercise provider timeout and Redis/API failure without retry amplification.",
+      "expectedUserVisibleResult": "Structured failure with stopReason and traceId; zero fabricated Citations.",
+      "statusSemantics": "504/429/5xx remains a Problem.",
+      "persistenceAndSideEffects": "No synthetic Citation or knowledge write.",
+      "permissions": "knowledge:search.",
+      "allowedDifferences": "True provider timeout result is BLOCKED_PROVIDER; controlled timeout tests contract only.",
+      "projectAcceptanceExtension": true,
+      "unresolved": false
+    },
+    {
+      "capability": "DOWN-002",
+      "subtestId": "L1-B18-DOWN-002-Q01",
+      "responsibility": "Agent tool parameters cannot become raw storage queries.",
+      "fastgptEvidence": [
+        {
+          "path": "packages/service/core/workflow/dispatch/ai/agent/sub/dataset/utils.ts",
+          "lines": "5-28",
+          "behavior": "The tool schema rejects extra argument keys by default and normalizes queries to strings."
+        }
+      ],
+      "frontendBehaviorIds": ["KB-TEST-040", "KB-TEST-045"],
+      "downstreamAction": "Send malicious regex, SSRF/file parameters, secrets and unknown fields.",
+      "expectedUserVisibleResult": "400 or safe rejection; no prompt, credential or object key echo.",
+      "statusSemantics": "Strict validation before search.",
+      "persistenceAndSideEffects": "No query or write side effect.",
+      "permissions": "knowledge:search with Space scope.",
+      "allowedDifferences": "Project enforces RE2-compatible regex subset and strict filter contract.",
+      "projectAcceptanceExtension": true,
+      "unresolved": false
+    },
+    {
+      "capability": "DOWN-002",
+      "subtestId": "L1-B18-DOWN-002-UI01",
+      "responsibility": "Agent consumer page shows sources and user-readable errors.",
+      "fastgptEvidence": [
+        {
+          "path": "projects/app/src/pageComponents/dataset/detail/Test/components/TestResults.tsx",
+          "lines": "10-51",
+          "behavior": "Results show source-backed quote cards and an explicit empty result."
+        },
+        {
+          "path": "projects/app/src/components/core/dataset/QuoteItem.tsx",
+          "lines": "192-220",
+          "behavior": "Each quote exposes content and clickable source metadata."
+        }
+      ],
+      "frontendBehaviorIds": ["KB-TEST-050", "KB-TEST-052", "KB-GLOBAL-008"],
+      "downstreamAction": "Drive Agent page states for 200, 401, 403, 429, 504, empty and retry.",
+      "expectedUserVisibleResult": "Readable messageKey-derived state, Citation source, retry affordance and no backend internals.",
+      "statusSemantics": "Each error class has distinct text and control state.",
+      "persistenceAndSideEffects": "Only render state and optional test history; no key in storage.",
+      "permissions": "Browser receives no API Key.",
+      "allowedDifferences": "Test page layout is independent from FastGPT and uses the same business distinctions.",
+      "projectAcceptanceExtension": true,
+      "unresolved": false
+    },
+    {
+      "capability": "DOWN-003",
+      "subtestId": "L1-B18-DOWN-003-P01",
+      "responsibility": "Chat gets quote context through workflow and restores Citations after refresh.",
+      "fastgptEvidence": [
+        {
+          "path": "packages/service/core/workflow/dispatch/ai/chat/datasetCite.ts",
+          "lines": "56-89",
+          "behavior": "Quotes are trimmed to quoteMaxToken, rendered into the configured prompt role and sent with the user question."
+        },
+        {
+          "path": "packages/service/core/chat/nodeResponseStorage.ts",
+          "lines": "65-94",
+          "behavior": "Chat response storage retains quote source identifiers and score while removing full quote text."
+        },
+        {
+          "path": "projects/app/src/pages/api/core/chat/record/getQuote.ts",
+          "lines": "30-71",
+          "behavior": "Refreshing quote details reauthorizes the chat/source/collection before loading current quote content."
+        }
+      ],
+      "frontendBehaviorIds": ["KB-TEST-050", "KB-TEST-051", "KB-TEST-062", "KB-TEST-066"],
+      "downstreamAction": "Ask a question, retrieve quotes through the real API, construct a bounded context and reload persisted test conversation.",
+      "expectedUserVisibleResult": "Answer state, quote list, source names, traceId and recoverable Citation IDs after refresh.",
+      "statusSemantics": "200 result, 200 empty, 200 degraded and 207 partial are distinct.",
+      "persistenceAndSideEffects": "Conversation stores only Citation identifiers/test status; Citation snapshot has TTL.",
+      "permissions": "Restricted Key, Source ACL and tenant reauthorization on Citation GET.",
+      "allowedDifferences": "Project has no product Chat module; B18 supplies an independent test consumer and page.",
+      "projectAcceptanceExtension": true,
+      "unresolved": false
+    },
+    {
+      "capability": "DOWN-003",
+      "subtestId": "L1-B18-DOWN-003-N01",
+      "responsibility": "Chat distinguishes user-facing result and failure semantics.",
+      "fastgptEvidence": [
+        {
+          "path": "packages/service/core/workflow/dispatch/ai/chat/datasetCite.ts",
+          "lines": "56-64",
+          "behavior": "Citation context may be empty while the user question is still processed."
+        },
+        {
+          "path": "projects/app/src/pageComponents/dataset/detail/Test/components/TestResults.tsx",
+          "lines": "10-17",
+          "behavior": "No results produces a dedicated empty state rather than a result card."
+        }
+      ],
+      "frontendBehaviorIds": ["KB-TEST-053", "KB-GLOBAL-008", "KB-GLOBAL-009"],
+      "downstreamAction": "Exercise 200 normal, 200 empty, 200 degraded, 207, 401, 403, 429, 504 and result-without-reference.",
+      "expectedUserVisibleResult": "Nine distinct states; no generic empty result for auth/rate/dependency failures.",
+      "statusSemantics": "HTTP status, degraded reasons, stopReason and citationMissing are retained separately.",
+      "persistenceAndSideEffects": "Failure status persisted only as test conversation state.",
+      "permissions": "Knowledge:search and restricted Key.",
+      "allowedDifferences": "Project uses stable Problem categories and messageKey+params rendering.",
+      "projectAcceptanceExtension": true,
+      "unresolved": false
+    },
+    {
+      "capability": "DOWN-003",
+      "subtestId": "L1-B18-DOWN-003-A01",
+      "responsibility": "Chat cannot replay a Citation after ACL or tenant access changes.",
+      "fastgptEvidence": [
+        {
+          "path": "projects/app/src/pages/api/core/chat/record/getQuote.ts",
+          "lines": "30-71",
+          "behavior": "Quote retrieval rechecks chat target and collection access, checks that citations are enabled and filters current dataset rows."
+        },
+        {
+          "path": "projects/app/src/pageComponents/chat/ChatQuoteList/QuoteReader.tsx",
+          "lines": "44-57",
+          "behavior": "The client re-fetches quote data using current chat, collection and source authorization inputs."
+        }
+      ],
+      "frontendBehaviorIds": ["KB-INFO-041", "KB-XROUTE-005", "KB-GLOBAL-009"],
+      "downstreamAction": "Cache only Citation IDs, revoke Source ACL, then GET each Citation again from a restricted Key.",
+      "expectedUserVisibleResult": "403/404 after revocation; no title, quote or old context injection.",
+      "statusSemantics": "Revoked Citation is not silently dropped into an empty success.",
+      "persistenceAndSideEffects": "Old Citation remains stored until TTL but cannot be read after authorization failure.",
+      "permissions": "Tenant, Key Space scope, Source ACL, permissionRevision and snapshotHash.",
+      "allowedDifferences": "Project public Citation endpoint is signed and root-cause safe.",
+      "projectAcceptanceExtension": false,
+      "unresolved": false
+    },
+    {
+      "capability": "DOWN-003",
+      "subtestId": "L1-B18-DOWN-003-S01",
+      "responsibility": "Chat has no knowledge writes and Citation TTL is enforced.",
+      "fastgptEvidence": [
+        {
+          "path": "packages/service/core/chat/nodeResponseStorage.ts",
+          "lines": "65-94",
+          "behavior": "Only slim Citation metadata is kept in chat response storage."
+        },
+        {
+          "path": "packages/service/core/workflow/dispatch/ai/chat/datasetCite.ts",
+          "lines": "56-64",
+          "behavior": "The full quote text exists only in the prompt construction path and is capped by the model quote budget."
+        }
+      ],
+      "frontendBehaviorIds": ["KB-TEST-062", "KB-GLOBAL-017"],
+      "downstreamAction": "Snapshot business state, persist a test conversation and inspect its serialization.",
+      "expectedUserVisibleResult": "No Source/Segment/index mutation; conversation contains Citation IDs, not full Source copies.",
+      "statusSemantics": "Expired Citation returns a stable 404.",
+      "persistenceAndSideEffects": "Citation record expires after its TTL; failure retains stopReason.",
+      "permissions": "knowledge:search read-only consumer.",
+      "allowedDifferences": "Project Citation TTL is 24 hours and test conversation storage is test-owned.",
+      "projectAcceptanceExtension": true,
+      "unresolved": false
+    },
+    {
+      "capability": "DOWN-003",
+      "subtestId": "L1-B18-DOWN-003-C01",
+      "responsibility": "Concurrent chat sessions isolate context, budget, usage and trace.",
+      "fastgptEvidence": [
+        {
+          "path": "packages/service/core/workflow/dispatch/ai/chat/datasetCite.ts",
+          "lines": "38-64",
+          "behavior": "Each invocation builds quote variables and filtered context from its own quoteQA and model budget."
+        }
+      ],
+      "frontendBehaviorIds": ["KB-GLOBAL-014", "KB-XROUTE-005"],
+      "downstreamAction": "Run concurrent conversations with different tenants, Space order, budgets and Citation IDs.",
+      "expectedUserVisibleResult": "No context or Citation crossing; retry usage is not duplicated.",
+      "statusSemantics": "Each conversation retains its own terminal state.",
+      "persistenceAndSideEffects": "One logical usage/audit set per accepted request.",
+      "permissions": "Per-session Key and tenant.",
+      "allowedDifferences": "Real usage cannot be verified under BLOCKED_PROVIDER.",
+      "projectAcceptanceExtension": true,
+      "unresolved": false
+    },
+    {
+      "capability": "DOWN-003",
+      "subtestId": "L1-B18-DOWN-003-F01",
+      "responsibility": "Chat retries and degradation are bounded and do not replay revoked data.",
+      "fastgptEvidence": [
+        {
+          "path": "projects/app/src/pages/api/core/chat/record/getQuote.ts",
+          "lines": "57-71",
+          "behavior": "Unauthorized chat or quote access fails before quote rows are returned."
+        },
+        {
+          "path": "packages/service/core/workflow/dispatch/ai/chat/datasetCite.ts",
+          "lines": "74-89",
+          "behavior": "Missing quote text creates an empty quote context while retaining the user question."
+        }
+      ],
+      "frontendBehaviorIds": ["KB-GLOBAL-008", "KB-GLOBAL-013"],
+      "downstreamAction": "Retry after rate limit/timeout, revoke ACL during the sequence, then restore access.",
+      "expectedUserVisibleResult": "Bounded retry, explicit failure/recovery and no replay of pre-revocation Citation content.",
+      "statusSemantics": "401/403/429 never cached as empty.",
+      "persistenceAndSideEffects": "No stale context injection or duplicate knowledge write.",
+      "permissions": "Current authorization controls every Citation read.",
+      "allowedDifferences": "Real provider recovery remains BLOCKED_PROVIDER.",
+      "projectAcceptanceExtension": true,
+      "unresolved": false
+    },
+    {
+      "capability": "DOWN-003",
+      "subtestId": "L1-B18-DOWN-003-Q01",
+      "responsibility": "Chat context injection is bounded and traceable.",
+      "fastgptEvidence": [
+        {
+          "path": "packages/service/core/workflow/dispatch/ai/chat/datasetCite.ts",
+          "lines": "34-89",
+          "behavior": "Quote fields are substituted without recursive placeholder expansion; the quote list is cut to the model quote budget."
+        }
+      ],
+      "frontendBehaviorIds": ["KB-TEST-050", "KB-TEST-051"],
+      "downstreamAction": "Use oversized and duplicate quotes, Markdown/HTML/URL content and multiple Citations.",
+      "expectedUserVisibleResult": "Within-budget quote text, no hidden off-budget Source body, safe rendering and trace continuity.",
+      "statusSemantics": "Dropped Citation is reported as budget-dropped, not silently available.",
+      "persistenceAndSideEffects": "Only selected Citation identifiers remain in conversation.",
+      "permissions": "knowledge:search.",
+      "allowedDifferences": "Project test consumer must use the actual Citation contract and cannot reconstruct citations.",
+      "projectAcceptanceExtension": true,
+      "unresolved": false
+    },
+    {
+      "capability": "DOWN-003",
+      "subtestId": "L1-B18-DOWN-003-UI01",
+      "responsibility": "Chat test page exposes answer, references, empty and failure states.",
+      "fastgptEvidence": [
+        {
+          "path": "projects/app/src/pageComponents/chat/ChatQuoteList/QuoteReader.tsx",
+          "lines": "44-57,136-159,282-290",
+          "behavior": "Quote detail is fetched separately and rendered as source-backed cards with an authorization notice."
+        },
+        {
+          "path": "projects/app/src/components/core/dataset/QuoteItem.tsx",
+          "lines": "82-220",
+          "behavior": "Quote card exposes score, content and source detail."
+        }
+      ],
+      "frontendBehaviorIds": ["KB-TEST-050", "KB-TEST-051", "KB-TEST-052", "KB-TEST-053", "KB-GLOBAL-008"],
+      "downstreamAction": "Use Playwright at 1440x900 zh-CN to run normal, empty, rate-limit, permission, timeout and stopped states; refresh and expand references.",
+      "expectedUserVisibleResult": "All states distinct, references reachable before/after refresh, no serious axe, overflow or console errors.",
+      "statusSemantics": "UI never renders authorization or dependency failure as search empty.",
+      "persistenceAndSideEffects": "Refresh restores test conversation Citation identifiers only.",
+      "permissions": "No API Key in browser-visible storage.",
+      "allowedDifferences": "Simpler test-owned Chat page is allowed if business behavior is equivalent.",
+      "projectAcceptanceExtension": true,
+      "unresolved": false
+    },
+    {
+      "capability": "DOWN-004",
+      "subtestId": "L1-B18-DOWN-004-P01",
+      "responsibility": "External text import creates a Job and completes into source/segment data.",
+      "fastgptEvidence": [
+        {
+          "path": "projects/app/src/pages/api/core/dataset/data/pushData.ts",
+          "lines": "29-131",
+          "behavior": "External data push authorizes the target collection, checks limits and model references, creates usage and queues training."
+        },
+        {
+          "path": "projects/app/src/pages/api/core/dataset/data/insertData.ts",
+          "lines": "27-110",
+          "behavior": "Immediate insert stores data in one transaction, writes vector usage and audit and returns the inserted data ID."
+        }
+      ],
+      "frontendBehaviorIds": ["KB-GLOBAL-011", "KB-GLOBAL-017", "KB-IMPORT-070"],
+      "downstreamAction": "Call the real text import API from an independent process with a write Key, poll the Job and query Source/Segment/raw data.",
+      "expectedUserVisibleResult": "202 with jobId, terminal succeeded Job, readable Source and Segment, associated usage/audit/Outbox.",
+      "statusSemantics": "Accepted, queued/running, succeeded and failed are distinct.",
+      "persistenceAndSideEffects": "One Source, one import Job and associated records per accepted idempotency key.",
+      "permissions": "knowledge:write and API Key Space scope.",
+      "allowedDifferences": "Project uses a unified import Job rather than FastGPT training collection API.",
+      "projectAcceptanceExtension": true,
+      "unresolved": false
+    },
+    {
+      "capability": "DOWN-004",
+      "subtestId": "L1-B18-DOWN-004-N01",
+      "responsibility": "Import input and idempotency are strict.",
+      "fastgptEvidence": [
+        {
+          "path": "projects/app/src/pages/api/core/dataset/data/pushData.ts",
+          "lines": "29-82",
+          "behavior": "The endpoint parses a strict body, authorizes the target, checks dataset limits and rejects unauthorized image keys before queueing."
+        },
+        {
+          "path": "projects/app/src/pages/api/core/dataset/data/insertData.ts",
+          "lines": "27-74",
+          "behavior": "Insert validates required body fields, checks permissions and quota before writing."
+        }
+      ],
+      "frontendBehaviorIds": ["KB-GLOBAL-008", "KB-IMPORT-070"],
+      "downstreamAction": "Replay same key/body, reuse key/different body, omit fields, use illegal directory, exceed payload, exhaust rate limit.",
+      "expectedUserVisibleResult": "Same Job on exact replay, 409 on hash conflict, 400 missing, 404 illegal target, 413/429 limits.",
+      "statusSemantics": "No new object after rejected/replayed requests.",
+      "persistenceAndSideEffects": "Exactly one business Job and Source for the same idempotency key.",
+      "permissions": "knowledge:write.",
+      "allowedDifferences": "Project uses central Idempotency-Key scope and payload limits.",
+      "projectAcceptanceExtension": true,
+      "unresolved": false
+    },
+    {
+      "capability": "DOWN-004",
+      "subtestId": "L1-B18-DOWN-004-A01",
+      "responsibility": "External write cannot escape Key Space scope or tenant.",
+      "fastgptEvidence": [
+        {
+          "path": "projects/app/src/pages/api/core/dataset/data/pushData.ts",
+          "lines": "36-43",
+          "behavior": "Write access is checked on the target collection before any training usage or data operation."
+        }
+      ],
+      "frontendBehaviorIds": ["KB-GLOBAL-009"],
+      "downstreamAction": "Use write Key in allowed and denied Spaces, target a foreign tenant directory, and attempt image/object key injection.",
+      "expectedUserVisibleResult": "403 for Key scope, safe 404 for foreign target, no object key accepted, no directory name leak.",
+      "statusSemantics": "Denied requests do not return accepted 202.",
+      "persistenceAndSideEffects": "No Job, Source or usage on denied requests.",
+      "permissions": "Tenant, Key Space scope, target directory permission, authorized object ownership.",
+      "allowedDifferences": "Project provides stricter public scope.",
+      "projectAcceptanceExtension": false,
+      "unresolved": false
+    },
+    {
+      "capability": "DOWN-004",
+      "subtestId": "L1-B18-DOWN-004-S01",
+      "responsibility": "Import is one logical Job with transactional associations.",
+      "fastgptEvidence": [
+        {
+          "path": "projects/app/src/pages/api/core/dataset/data/pushData.ts",
+          "lines": "85-128",
+          "behavior": "Usage and queued training are created within a Mongo session for the target collection."
+        },
+        {
+          "path": "projects/app/src/pages/api/core/dataset/data/insertData.ts",
+          "lines": "63-110",
+          "behavior": "Data creation is transactional; vector usage and audit occur only after successful insert."
+        }
+      ],
+      "frontendBehaviorIds": ["KB-GLOBAL-011", "KB-GLOBAL-020"],
+      "downstreamAction": "Complete a text import and compare Source raw text, Segment, Job, usage, audit and Outbox.",
+      "expectedUserVisibleResult": "All associations use the same workspace/Space/Source and safe diff; no partial success.",
+      "statusSemantics": "Job terminal success is consistent with readable Source/Segment.",
+      "persistenceAndSideEffects": "One transactionally associated lineage; no orphan on failure.",
+      "permissions": "knowledge:write.",
+      "allowedDifferences": "Project Job truth is Mongo with Outbox delivery.",
+      "projectAcceptanceExtension": true,
+      "unresolved": false
+    },
+    {
+      "capability": "DOWN-004",
+      "subtestId": "L1-B18-DOWN-004-C01",
+      "responsibility": "Concurrent import requests converge to one object per idempotency key.",
+      "fastgptEvidence": [
+        {
+          "path": "projects/app/src/pages/api/core/dataset/data/pushData.ts",
+          "lines": "85-128",
+          "behavior": "Usage and training queue writes share a session so one accepted operation has one usage chain."
+        }
+      ],
+      "frontendBehaviorIds": ["KB-GLOBAL-005", "KB-GLOBAL-014"],
+      "downstreamAction": "Send concurrent same-key bodies and concurrent different-key bodies across allowed Spaces.",
+      "expectedUserVisibleResult": "One Source/Job for the same key; different keys do not cross Sources, Spaces or tenants.",
+      "statusSemantics": "Winning request(s) return the same stable job identity.",
+      "persistenceAndSideEffects": "No duplicate Job/usage/audit and no cross-write.",
+      "permissions": "knowledge:write and per-target Space scope.",
+      "allowedDifferences": "Project idempotency is stronger than FastGPT's collection path.",
+      "projectAcceptanceExtension": true,
+      "unresolved": false
+    },
+    {
+      "capability": "DOWN-004",
+      "subtestId": "L1-B18-DOWN-004-F01",
+      "responsibility": "Import failure retries without duplicating business objects.",
+      "fastgptEvidence": [
+        {
+          "path": "projects/app/src/pages/api/core/dataset/data/insertData.ts",
+          "lines": "71-109",
+          "behavior": "Usage and audit are not recorded when transactional data creation fails."
+        },
+        {
+          "path": "projects/app/src/pages/api/core/dataset/data/pushData.ts",
+          "lines": "85-128",
+          "behavior": "A failed usage/queue transaction does not return a successful insert."
+        }
+      ],
+      "frontendBehaviorIds": ["KB-GLOBAL-011", "KB-GLOBAL-020"],
+      "downstreamAction": "Inject Worker/provider failure, retry the Job and inspect retry/dead-letter state.",
+      "expectedUserVisibleResult": "Bounded retry; one logical Source/Job; stable failure or recovered success.",
+      "statusSemantics": "retry_wait/dead_letter are terminal-visible.",
+      "persistenceAndSideEffects": "No duplicate Source, Segment, usage or audit.",
+      "permissions": "knowledge:write/control and system worker.",
+      "allowedDifferences": "Project worker uses fencing and dead-letter state.",
+      "projectAcceptanceExtension": true,
+      "unresolved": false
+    },
+    {
+      "capability": "DOWN-004",
+      "subtestId": "L1-B18-DOWN-004-Q01",
+      "responsibility": "Import surface enforces schema, size, scope, path and secret safety.",
+      "fastgptEvidence": [
+        {
+          "path": "projects/app/src/pages/api/core/dataset/data/pushData.ts",
+          "lines": "29-82,133-139",
+          "behavior": "Body parsing, target authorization, image key ownership and a 10MB request limit are enforced before queueing."
+        },
+        {
+          "path": "projects/app/src/pages/api/core/dataset/data/insertData.ts",
+          "lines": "27-74",
+          "behavior": "Schema and quota are checked before database write."
+        }
+      ],
+      "frontendBehaviorIds": ["KB-IMPORT-070", "KB-GLOBAL-008"],
+      "downstreamAction": "Send malformed/oversized text, unsupported file declarations, object keys, SSRF URLs and secrets.",
+      "expectedUserVisibleResult": "Contract-safe 400/413/404 rejection; no secret/object key echo or internal collection write.",
+      "statusSemantics": "Validation failures are stable Problems.",
+      "persistenceAndSideEffects": "Rejected requests leave no Source, Job, raw object or usage.",
+      "permissions": "knowledge:write and target scope.",
+      "allowedDifferences": "Project file/archive/URL security contracts are applied.",
+      "projectAcceptanceExtension": true,
+      "unresolved": false
+    },
+    {
+      "capability": "DOWN-004",
+      "subtestId": "L1-B18-DOWN-004-UI01",
+      "responsibility": "Optional console exposes import Job state.",
+      "fastgptEvidence": [
+        {
+          "path": "projects/app/src/pageComponents/dataset/detail/Test/components/TestResults.tsx",
+          "lines": "10-51",
+          "behavior": "Search-test UI uses duration, empty state and result cards; no external-write Job UI is implied."
+        }
+      ],
+      "frontendBehaviorIds": ["KB-GLOBAL-011", "KB-GLOBAL-017"],
+      "downstreamAction": "N/A: the external import API does not require a product UI for this B18 consumer.",
+      "expectedUserVisibleResult": "N/A for external API; if an existing console is used, Job loading/error/retry must remain visible.",
+      "statusSemantics": "N/A.",
+      "persistenceAndSideEffects": "API and Job evidence remain authoritative.",
+      "permissions": "knowledge:write.",
+      "allowedDifferences": "No product console is added in stage A.",
+      "projectAcceptanceExtension": true,
+      "unresolved": false
+    }
+  ],
+  "blockedReferences": [],
+  "compatibilityDifferences": [
+    "FastGPT stores quote q/a in search results and slims chat history metadata; the project's Citation GET currently exposes traceable source metadata but not quote text, so Chat context recovery is a product acceptance extension to verify.",
+    "FastGPT callers use datasetIds; this project intentionally exposes knowledgeSpaceId(s) and must not add datasetIds aliases.",
+    "FastGPT Agent tool input is primarily query-only while the project public schema explicitly validates filters, budget and Space scope."
+  ],
+  "providerConclusion": {
+    "mode": "BLOCKED_PROVIDER",
+    "reason": "The supplied handoff marks externalModelMode=mock, aiproxyChannels=0 and provider models unset; AIProxy observed exited.",
+    "realVerifiedCapabilities": []
+  }
+}

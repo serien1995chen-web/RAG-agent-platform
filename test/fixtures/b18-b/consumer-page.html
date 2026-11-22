@@ -1,0 +1,427 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>B18 下游消费测试</title>
+    <style>
+      :root {
+        color-scheme: light;
+        font-family: 'Microsoft YaHei', 'Noto Sans SC', sans-serif;
+        color: #172033;
+        background: #f4f7fb;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        min-width: 320px;
+      }
+      main {
+        max-width: 1180px;
+        margin: 0 auto;
+        padding: 32px;
+      }
+      h1 {
+        margin: 0 0 8px;
+        font-size: 24px;
+      }
+      .muted {
+        color: #5d6b82;
+      }
+      .panel {
+        margin-top: 20px;
+        padding: 20px;
+        border: 1px solid #dbe3ef;
+        border-radius: 12px;
+        background: #fff;
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: 180px minmax(0, 1fr) 130px;
+        gap: 12px;
+        align-items: end;
+      }
+      label {
+        display: grid;
+        gap: 6px;
+        font-size: 13px;
+        font-weight: 600;
+      }
+      input,
+      select,
+      button {
+        min-height: 40px;
+        border: 1px solid #c7d2e2;
+        border-radius: 8px;
+        padding: 8px 10px;
+        font: inherit;
+      }
+      button {
+        cursor: pointer;
+        background: #245fd6;
+        color: #fff;
+        border-color: #245fd6;
+        font-weight: 600;
+      }
+      button:disabled {
+        cursor: wait;
+        opacity: 0.6;
+      }
+      button.secondary {
+        background: #fff;
+        color: #245fd6;
+      }
+      #status {
+        display: inline-flex;
+        min-height: 30px;
+        align-items: center;
+        border-radius: 999px;
+        padding: 5px 10px;
+        background: #eef2f8;
+        font-size: 13px;
+        font-weight: 700;
+      }
+      #status[data-kind='success'] {
+        background: #e9f8ef;
+        color: #17653a;
+      }
+      #status[data-kind='empty'],
+      #status[data-kind='degraded'],
+      #status[data-kind='partial'] {
+        background: #fff5dd;
+        color: #7a4d00;
+      }
+      #status[data-kind='error'] {
+        background: #ffeded;
+        color: #9d1f1f;
+      }
+      #error {
+        margin-top: 14px;
+        padding: 12px;
+        border-radius: 8px;
+        background: #ffeded;
+        color: #8d1c1c;
+      }
+      #error[hidden] {
+        display: none;
+      }
+      #summary {
+        margin-top: 14px;
+        font-size: 14px;
+      }
+      #results {
+        display: grid;
+        gap: 12px;
+        margin-top: 16px;
+      }
+      article {
+        min-width: 0;
+        padding: 16px;
+        border: 1px solid #dbe3ef;
+        border-radius: 10px;
+        background: #fbfcfe;
+        overflow-wrap: anywhere;
+      }
+      article header {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        justify-content: space-between;
+      }
+      article h2 {
+        margin: 0;
+        font-size: 16px;
+      }
+      article p {
+        white-space: pre-wrap;
+      }
+      details {
+        margin-top: 10px;
+      }
+      summary {
+        cursor: pointer;
+        color: #245fd6;
+      }
+      dl {
+        display: grid;
+        grid-template-columns: 130px minmax(0, 1fr);
+        gap: 6px 12px;
+        font-size: 13px;
+      }
+      dt {
+        color: #5d6b82;
+      }
+      dd {
+        margin: 0;
+        overflow-wrap: anywhere;
+      }
+      .badge {
+        flex: none;
+        border-radius: 999px;
+        padding: 3px 8px;
+        background: #eef2f8;
+        font-size: 12px;
+      }
+      @media (max-width: 760px) {
+        main {
+          padding: 16px;
+        }
+        .grid {
+          grid-template-columns: 1fr;
+        }
+        dl {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>B18 下游消费测试</h1>
+      <p class="muted">
+        Workflow、Agent 与 Chat 测试消费端。浏览器只请求同源
+        <code>/v1/knowledge/*</code>，API Key 由测试服务器注入。
+      </p>
+
+      <section class="panel" aria-labelledby="query-title">
+        <h2 id="query-title">检索</h2>
+        <div class="grid">
+          <label>
+            消费角色
+            <select id="role">
+              <option value="workflow">Workflow</option>
+              <option value="agent">Agent</option>
+              <option value="chat">Chat</option>
+            </select>
+          </label>
+          <label>
+            查询及知识空间
+            <input id="query" value="refund policy" autocomplete="off" />
+          </label>
+          <button id="run" type="button">运行检索</button>
+        </div>
+        <div id="status" data-kind="idle" role="status" aria-live="polite">等待运行</div>
+        <div id="error" role="alert" hidden></div>
+        <div id="summary"></div>
+        <div id="results" aria-label="引用结果"></div>
+      </section>
+    </main>
+
+    <script>
+      const params = new URLSearchParams(location.search);
+      const role = document.querySelector('#role');
+      const query = document.querySelector('#query');
+      const run = document.querySelector('#run');
+      const status = document.querySelector('#status');
+      const errorBox = document.querySelector('#error');
+      const summary = document.querySelector('#summary');
+      const results = document.querySelector('#results');
+      const storageKey = `b18b:${params.get('workspaceId') || 'workspace'}`;
+
+      role.value = params.get('role') || 'workflow';
+      query.value = params.get('query') || 'refund policy';
+
+      const spaceId = params.get('spaceId') || '';
+      const spaceIds = (params.get('spaceIds') || spaceId).split(',').filter(Boolean);
+      const tokenBudget = Number(params.get('tokenBudget') || 5000);
+      const usingRerank = params.get('usingRerank') === 'true';
+
+      function setState(kind, text, problem) {
+        status.dataset.kind = kind;
+        status.textContent = text;
+        errorBox.hidden = !problem;
+        errorBox.textContent = problem
+          ? `${problem.code || '请求失败'}：${problem.message || problem.detail || '请稍后重试'}`
+          : '';
+      }
+
+      function problemFrom(payload, response) {
+        const error = payload && typeof payload === 'object' ? payload.error : null;
+        return {
+          code: error?.code || `HTTP_${response.status}`,
+          message:
+            response.status === 401
+              ? '认证失败，请重新建立测试密钥'
+              : response.status === 403
+                ? '无权访问该知识空间'
+                : response.status === 429
+                  ? '请求过于频繁，请稍后重试'
+                  : response.status === 504
+                    ? '知识依赖超时，可重试'
+                    : error?.message || '请求失败，可重试',
+          detail: error?.details?.reason,
+        };
+      }
+
+      async function parseResponse(response) {
+        const payload = await response.json().catch(() => null);
+        if (!response.ok || !payload || payload.success !== true) {
+          throw Object.assign(new Error('request failed'), problemFrom(payload, response));
+        }
+        return payload;
+      }
+
+      async function request(path, body) {
+        const requestId = `b18b-page-${crypto.randomUUID()}`;
+        const response = await fetch(path, {
+          method: body ? 'POST' : 'GET',
+          headers: {
+            accept: 'application/json',
+            'x-request-id': requestId,
+            ...(body ? { 'idempotency-key': requestId } : {}),
+            ...(body ? { 'content-type': 'application/json' } : {}),
+          },
+          ...(body ? { body: JSON.stringify(body) } : {}),
+        });
+        return { response, payload: await parseResponse(response) };
+      }
+
+      function citationCard(item, citation, restored = false) {
+        const article = document.createElement('article');
+        article.dataset.citationId = item.citation?.citationId || citation?.citationId || '';
+        article.dataset.restored = String(restored);
+        const header = document.createElement('header');
+        const title = document.createElement('h2');
+        title.textContent = citation?.title || item.segment?.metadata?.title || '引用来源';
+        const badge = document.createElement('span');
+        badge.className = 'badge';
+        badge.textContent = restored ? '刷新后恢复' : '本次检索';
+        header.append(title, badge);
+        const content = document.createElement('p');
+        content.textContent =
+          item.segment?.content ||
+          [item.segment?.question, item.segment?.answer].filter(Boolean).join('\n') ||
+          '当前 Citation 合同未返回正文，仅恢复来源标识。';
+        const details = document.createElement('details');
+        const summaryEl = document.createElement('summary');
+        summaryEl.textContent = '展开引用来源';
+        details.appendChild(summaryEl);
+        const list = document.createElement('dl');
+        const rows = [
+          ['Citation ID', article.dataset.citationId],
+          ['Source', citation?.title || item.citation?.title || ''],
+          ['Segment', citation?.segmentId || item.citation?.segmentId || ''],
+          ['Score', String(citation?.score ?? item.score ?? '')],
+          ['Version', String(citation?.version ?? item.citation?.version ?? '')],
+        ];
+        for (const [label, value] of rows) {
+          const dt = document.createElement('dt');
+          dt.textContent = label;
+          const dd = document.createElement('dd');
+          dd.textContent = value;
+          list.append(dt, dd);
+        }
+        details.appendChild(list);
+        article.append(header, content, details);
+        return article;
+      }
+
+      async function restoreCitations() {
+        const stored = JSON.parse(sessionStorage.getItem(storageKey) || 'null');
+        if (!stored?.citationIds?.length) return;
+        setState('idle', '正在恢复引用');
+        try {
+          const restored = [];
+          for (const citationId of stored.citationIds) {
+            const { payload } = await request(
+              `/v1/knowledge/citations/${encodeURIComponent(citationId)}`,
+            );
+            restored.push(payload.data);
+          }
+          results.replaceChildren(
+            ...restored.map((citation) =>
+              citationCard(
+                {
+                  citation,
+                  segment: { metadata: { title: citation.title } },
+                  score: citation.score,
+                },
+                citation,
+                true,
+              ),
+            ),
+          );
+          summary.textContent = `已恢复 ${restored.length} 个引用，来源仍可追溯。`;
+          setState('success', '引用已恢复');
+        } catch (error) {
+          setState('error', '引用恢复失败', error);
+        }
+      }
+
+      async function search() {
+        run.disabled = true;
+        setState('idle', '请求中');
+        errorBox.hidden = true;
+        summary.textContent = '';
+        results.replaceChildren();
+        const requestBody = {
+          knowledgeSpaceId: spaceId,
+          query: query.value,
+          tokenBudget,
+          usingRerank,
+          searchMode:
+            role.value === 'workflow' ? 'hybrid' : role.value === 'agent' ? 'semantic' : 'hybrid',
+          ...(role.value === 'workflow' ? { knowledgeSpaceIds: spaceIds } : {}),
+        };
+        const path =
+          role.value === 'workflow'
+            ? '/v1/knowledge/search/multi-space'
+            : role.value === 'agent'
+              ? '/v1/knowledge/search/semantic'
+              : '/v1/knowledge/search/hybrid';
+        try {
+          const { response, payload } = await request(path, requestBody);
+          const data = payload.data;
+          const citationIds = data.items.map((item) => item.citation.citationId);
+          sessionStorage.setItem(
+            storageKey,
+            JSON.stringify({ citationIds, status: response.status, role: role.value, tokenBudget }),
+          );
+          const cards = [];
+          for (const item of data.items) {
+            const citationResult = await request(
+              `/v1/knowledge/citations/${encodeURIComponent(item.citation.citationId)}`,
+            );
+            cards.push(citationCard(item, citationResult.payload.data));
+          }
+          results.replaceChildren(...cards);
+          const degraded = data.degraded?.length > 0;
+          const kind =
+            response.status === 207
+              ? 'partial'
+              : data.items.length === 0
+                ? 'empty'
+                : degraded
+                  ? 'degraded'
+                  : 'success';
+          setState(
+            kind,
+            kind === 'partial'
+              ? '部分空间失败'
+              : kind === 'empty'
+                ? '空命中'
+                : kind === 'degraded'
+                  ? '已降级返回'
+                  : '检索成功',
+          );
+          summary.textContent = `结果 ${data.items.length} 条，耗时 ${data.durationMs}ms，traceId=${payload.traceId}，引用可由刷新后 GET 恢复。`;
+        } catch (error) {
+          const isDependency =
+            error.code === 'KNOWLEDGE_DEPENDENCY_TIMEOUT' || error.code === 'HTTP_504';
+          setState(
+            isDependency ? 'error' : 'error',
+            isDependency ? '依赖超时，可重试' : '请求失败',
+            error,
+          );
+        } finally {
+          run.disabled = false;
+        }
+      }
+
+      run.addEventListener('click', search);
+      restoreCitations();
+    </script>
+  </body>
+</html>

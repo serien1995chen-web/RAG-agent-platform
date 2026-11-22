@@ -1,0 +1,77 @@
+{
+  "schemaVersion": 1,
+  "candidateSha": "c34467da5a16ef0cc0efff65c696d9a2cf408ff0",
+  "peer": {
+    "name": "CodexB",
+    "branch": "codex/kb-b18-peer-validation-20261122",
+    "testCommit": "d60e1441a4a5261658ae731924125249e41c7180",
+    "baselineSha": "c34467da5a16ef0cc0efff65c696d9a2cf408ff0",
+    "baselineMatchesA": true
+  },
+  "report": {
+    "fileName": "B18-B-下游消费-只读验证报告-20261122-175230.md",
+    "rawSha256": "7465efd90febda9ae6e16401d1b7f2a5ce5f211bef3d81f370fd719ac30039cb",
+    "declaredNormalizedSha256": "598943a067fbf3529799cc6a7af78c09ff2eef7d8134880c504c0d54aba27865",
+    "recomputedNormalizedSha256": "598943a067fbf3529799cc6a7af78c09ff2eef7d8134880c504c0d54aba27865",
+    "normalizedHashMatches": true,
+    "normalization": "Replace the declared report SHA-256 with 64 ASCII zeroes before hashing UTF-8 text."
+  },
+  "patch": {
+    "fileName": "b18-peer-tests.patch",
+    "sha256": "2651e04c667af4a804c1efec8eb48efa4ccbb5f3c648f7ec311e329b5dd2b4",
+    "declaredSha256": "2651e04c667af4a804c1efec8eb48efa4ccbb5f3c648f7ec311e329b5dd2b4",
+    "shaMatches": true,
+    "sizeBytes": 207296,
+    "applyCheckPassed": true,
+    "applied": true,
+    "fileCount": 15,
+    "allPathsAllowed": true,
+    "containsProductSource": false,
+    "containsLockfile": false,
+    "containsCi": false,
+    "containsCredentials": false
+  },
+  "fastGptReference": {
+    "aObservedVersion": "4.17.3",
+    "aObservedAppPackageSha256": "125a9378b939b2cf0cd7412ea976448dc7fb619336888ff9ac0d41b3624b231a",
+    "peerDeclaredVersion": "4.17.4",
+    "peerDeclaredAppPackageSha256": "3887440d738c05504cdba692be2142467de41a0ac7e11f828506f474bfc63d3c",
+    "versionsMatch": false,
+    "aObservedKeyFileHashes": {
+      "projects/app/package.json": "125a9378b939b2cf0cd7412ea976448dc7fb619336888ff9ac0d41b3624b231a",
+      "packages/global/core/dataset/search/utils.ts": "5f806553ffeb926bb059f8249265d8e4c7249f9d51faa0bbf1ad63380caa85fd",
+      "packages/service/core/dataset/search/defaultRecall/index.ts": "1212a3ca8b2abaf0b4fd2a52844d57c975b708db7425e733cd72a24bcde17dd5",
+      "packages/service/core/dataset/search/defaultRecall/result.ts": "d9798cd2a95c325c9d06d680bd9fe7dfb9cdd49fd05d9756ef7b04f6ff616d74",
+      "packages/service/core/workflow/dispatch/dataset/concat.ts": "35c151d6887bb78f564dfbb006504dd44ac10a4abfb09cb43a8112498d1173ca",
+      "packages/service/core/workflow/dispatch/dataset/search.ts": "9195d5eab514c439ef5254a88f2b86f64a901a173fd06df78b19e3086d4bbee8",
+      "packages/service/core/workflow/dispatch/ai/chat/datasetCite.ts": "32eda8ca4cfdad09e8762dd94b28fa7ecc37625b826d3e59d2c22607c4debce2",
+      "packages/global/core/dataset/type.ts": "c588d9967616cafdc025351b37a6134a5d8985fbc84dc19a49a8348480fc4d26",
+      "projects/app/src/components/core/dataset/QuoteItem.tsx": "3863c8b70d77395abcbbc99a11376897232b5457d6482e35589d0becfed3c350",
+      "projects/app/src/pageComponents/dataset/detail/Test/components/TestResults.tsx": "1a0de0c3914f302d95c0bd8b616e8a45a0cfb6a46023eb0eda3691993ac51cc3"
+    },
+    "decision": "Current A environment source is authoritative. Peer 4.17.4 hash and line-bound assertions are STALE for A reference validation; the reproduced P0 remains valid because the relevant current-source ACL behavior is present and observed."
+  },
+  "reproduction": {
+    "nonE2e": {
+      "contract": "6 passed, 2 STALE reference failures",
+      "security": "14 passed",
+      "tenant": "4 passed",
+      "concurrency": "4 passed",
+      "fault": "4 passed"
+    },
+    "e2e": {
+      "files": 3,
+      "tests": 17,
+      "passed": 16,
+      "failed": 1,
+      "failureId": "B18-B-DOWN-003-001"
+    },
+    "reproducedIssue": {
+      "issueId": "B18-B-DOWN-003-001",
+      "status": "PENDING_APPROVAL",
+      "source": "B_PEER_REPRODUCED",
+      "observed": "After Source ACL enable and override-to-empty revocation, permissionRevision advanced 0 -> 1 -> 2 but the scoped API Key still read the old Citation with HTTP 200.",
+      "evidence": "test-results/b18-b/20261122T171323+0800-b18b-repro/citation-revocation.json"
+    }
+  }
+}

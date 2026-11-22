@@ -1,0 +1,45 @@
+{
+  "schemaVersion": 1,
+  "scope": "B18-B",
+  "candidateSha": "c34467da5a16ef0cc0efff65c696d9a2cf408ff0",
+  "fastgpt": {
+    "sourceRoot": "/mnt/d/Fastgpt/FastGPT",
+    "declaredVersion": "4.17.3",
+    "observedVersion": "4.17.4",
+    "versionEvidenceMismatch": true,
+    "keyFiles": {
+      "projects/app/package.json": "3887440d738c05504cdba692be2142467de41a0ac7e11f828506f474bfc63d3c",
+      "packages/global/core/dataset/search/utils.ts": "5f806553ffeb926bb059f8249265d8e4c7249f9d51faa0bbf1ad63380caa85fd",
+      "packages/service/core/dataset/search/defaultRecall/index.ts": "2d63dc0c8d8a1fe8716e29b852f78166bd9ff2cc5e98ef803b58e69e9226eaaa",
+      "packages/service/core/dataset/search/defaultRecall/result.ts": "e637a5c705648ff13c1c1a0cff519b81eb722c0585045673678a25bbe86f5e80",
+      "packages/service/core/workflow/dispatch/dataset/concat.ts": "35c151d6887bb78f564dfbb006504dd44ac10a4abfb09cb43a8112498d1173ca",
+      "packages/service/core/workflow/dispatch/dataset/search.ts": "27dd7b2a4245a8d57fb9fcc812f72ce24f80da8a45cbc4c13669a8e1832fc58a",
+      "packages/service/core/workflow/dispatch/ai/chat/datasetCite.ts": "013b97b09680a69523fe65eaf55e303913afaa3e1d42768e27138467a7d4c5f4",
+      "packages/global/core/dataset/type.ts": "beced42fb54f87e372b448362c49757e353e6a577ba0af0abc0a8c96300e640b",
+      "projects/app/src/components/core/dataset/QuoteItem.tsx": "b70651e4afd7725b800b594e8c7383971a08bb6f9772741d89b9d3940485b627",
+      "projects/app/src/pageComponents/dataset/detail/Test/components/TestResults.tsx": "1a0de0c3914f302d95c0bd8b616e8a45a0cfb6a46023eb0eda3691993ac51cc3"
+    }
+  },
+  "documents": {
+    "manualSha256": "2f7099667d501b5e708d2f59501ab4c50a9357003bda8eaab58b63e0a49f4ed0",
+    "frontendSpecSha256": "26d3e570785b54cde57822ecf9f07eaa576f717c6d870aa1373a794d68c734ac",
+    "designSha256": "8e5e7300c651c4fe0478b87fc3572add52f95c3e49c8f15700b45bb8c690a26d"
+  },
+  "runtime": {
+    "nodeVersion": "22.23.2",
+    "pnpmVersion": "10.33.4",
+    "playwrightVersion": "1.64.1",
+    "timezone": "Asia/Shanghai",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "locale": "zh-CN"
+  },
+  "provider": {
+    "mode": "BLOCKED_PROVIDER",
+    "externalModelMode": "mock",
+    "aiproxyChannels": 0,
+    "models": []
+  }
+}
