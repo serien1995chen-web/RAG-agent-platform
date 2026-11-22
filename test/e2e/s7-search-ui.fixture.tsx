@@ -19,8 +19,12 @@ const sourceId = '65f1e5b2a1c9d4b7e8f10001';
 const segmentId = '65f1e5b2a1c9d4b7e8f20001';
 const tagId = '65f1e5b2a1c9d4b7e8f00001';
 
+const unsafeContent =
+  '<img src="x" onerror="globalThis.__b18Xss=1"> [unsafe](javascript:globalThis.__b18Xss=2)';
 const content =
-  'Refunds are processed within five business days. Escalations are reviewed by the support lead.';
+  new URLSearchParams(globalThis.location.search).get('unsafe') === '1'
+    ? unsafeContent
+    : 'Refunds are processed within five business days. Escalations are reviewed by the support lead.';
 
 const result: SearchApiResponse = {
   searchId: 'search_fixture',
@@ -49,11 +53,15 @@ const result: SearchApiResponse = {
         citationId: 'cit_00000000-0000-4000-8000-000000000001',
         segmentId,
         sourceId,
+        knowledgeSpaceId: spaceA,
         title: 'Support playbook',
         sourceUrl: 'https://example.invalid/support',
         segmentRange: { start: 0, end: [...content].length },
         score: 0.87,
         version: 3,
+        quoteText: content,
+        snapshotHash: 'a'.repeat(64),
+        expiresAt: '2026-11-23T09:13:23.000Z',
       },
     },
   ],
@@ -125,9 +133,15 @@ const labels: S7SearchWorkbenchLabels = {
   similarityDisabled: 'Not applicable',
   citation: {
     source: 'Source',
+    space: 'Knowledge space',
+    score: 'Score',
     range: 'Range',
     version: 'Version',
     citation: 'Citation',
+    quote: 'Quote',
+    details: 'Details',
+    snapshotHash: 'Snapshot hash',
+    expiresAt: 'Expires at',
   },
 };
 

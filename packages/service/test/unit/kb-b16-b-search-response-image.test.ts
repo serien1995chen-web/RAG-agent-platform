@@ -71,11 +71,15 @@ function citation(): CitationApi {
     citationId: 'cit_00000000-0000-4000-8000-000000000018',
     segmentId,
     sourceId,
+    knowledgeSpaceId: spaceId,
     title: 'Refund policy',
     sourceUrl: 'https://files.internal.example/dataset/team-sensitive/refund-chart.png',
     segmentRange: { start: 0, end: 17 },
     score: 0.9,
     version: 1,
+    quoteText: 'Refund policy text',
+    snapshotHash: '3'.repeat(64),
+    expiresAt: '2099-11-23T09:13:23.000Z',
   };
 }
 

@@ -99,11 +99,15 @@ export class S7CitationApplication {
       citationId: record.citationId,
       segmentId: candidate.segmentId,
       sourceId: candidate.sourceId,
+      knowledgeSpaceId: record.knowledgeSpaceId,
       title: candidate.source.name,
       sourceUrl,
       segmentRange: record.segmentRange,
       score: record.score,
       version: candidate.segment.version,
+      quoteText,
+      snapshotHash: record.snapshotHash,
+      expiresAt: record.expiresAt.toISOString(),
     });
   }
 }

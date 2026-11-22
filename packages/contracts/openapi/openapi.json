@@ -22664,11 +22664,15 @@
           "citationId",
           "segmentId",
           "sourceId",
+          "knowledgeSpaceId",
           "title",
           "sourceUrl",
           "segmentRange",
           "score",
-          "version"
+          "version",
+          "quoteText",
+          "snapshotHash",
+          "expiresAt"
         ],
         "properties": {
           "citationId": {
@@ -22685,6 +22689,13 @@
             ]
           },
           "sourceId": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{24}$",
+            "examples": [
+              "65f1e5b2a1c9d4b7e8f01234"
+            ]
+          },
+          "knowledgeSpaceId": {
             "type": "string",
             "pattern": "^[a-f0-9]{24}$",
             "examples": [
@@ -22737,6 +22748,26 @@
             "type": "integer",
             "examples": [
               9
+            ]
+          },
+          "quoteText": {
+            "type": "string",
+            "examples": [
+              "Refunds are processed within five business days."
+            ]
+          },
+          "snapshotHash": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$",
+            "examples": [
+              "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            ]
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time",
+            "examples": [
+              "2026-11-23T09:13:23.000Z"
             ]
           }
         }

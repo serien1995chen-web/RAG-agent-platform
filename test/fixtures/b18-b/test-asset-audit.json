@@ -1,0 +1,109 @@
+{
+  "schemaVersion": 1,
+  "generatedFor": "B18-B",
+  "assets": [
+    {
+      "path": "test/contract/s7-downstream-contract.test.ts",
+      "decision": "REUSE",
+      "reason": "Static allowlist and forbidden-import assertions remain valid and must be rerun; B18-B adds actual independent process enforcement."
+    },
+    {
+      "path": "test/contract/s7-multi-space.test.ts",
+      "decision": "REUSE",
+      "reason": "Schema boundaries and partial merge unit semantics remain useful but do not prove a real HTTP consumer."
+    },
+    {
+      "path": "test/e2e/s7-downstream-consumers.test.ts",
+      "decision": "REUSE",
+      "reason": "Scenario and client-error shapes are reusable, but the same-process fake HTTP server is explicitly insufficient for DOWN acceptance."
+    },
+    {
+      "path": "test/e2e/s7-search-page.test.ts",
+      "decision": "EXTEND",
+      "reason": "It starts the real app and covers indexed search/Citation, but imports service directly and has a skipped UI test; B18-B independently exercises the public boundary and a test-owned page."
+    },
+    {
+      "path": "test/e2e/s10-downstream-real-key.test.ts",
+      "decision": "EXTEND",
+      "reason": "Real API Key and HTTP coverage are reusable, but the consumer and fixture orchestration share a process and import service internals."
+    },
+    {
+      "path": "test/e2e/kb-b19-api-key-http.test.ts",
+      "decision": "REUSE",
+      "reason": "Lifecycle, scope, tenant, rate-limit and audit behavior are already covered over the real app and must be rerun."
+    },
+    {
+      "path": "test/security/s10-api-key-auth.test.ts",
+      "decision": "REUSE",
+      "reason": "Authentication and secret-hiding assertions remain relevant."
+    },
+    {
+      "path": "test/security/s10-secret-leak.test.ts",
+      "decision": "REUSE",
+      "reason": "Persistence redaction assertions remain relevant."
+    },
+    {
+      "path": "test/security/s11-api-key-tenant.test.ts",
+      "decision": "REUSE",
+      "reason": "Tenant predicates and real-credential blocking assertions remain relevant."
+    },
+    {
+      "path": "test/tenant/s10-api-key-tenant.test.ts",
+      "decision": "EXTEND",
+      "reason": "Key tenant and Space scope are reusable, while B18-B adds Citation and downstream cross-tenant cases."
+    },
+    {
+      "path": "test/concurrency/s10-api-key-concurrency.test.ts",
+      "decision": "REUSE",
+      "reason": "API Key CAS race coverage remains relevant to the shared API-003 slice."
+    },
+    {
+      "path": "test/fault/kb-b19-api-key-fault.test.ts",
+      "decision": "REUSE",
+      "reason": "Fail-closed rate-limit dependency behavior remains relevant."
+    },
+    {
+      "path": "packages/service/test/integration/s10-api-key.test.ts",
+      "decision": "REUSE",
+      "reason": "API Key lifecycle persistence is reusable service-level evidence."
+    },
+    {
+      "path": "packages/web/test/unit/s7-downstream-client.test.ts",
+      "decision": "REUSE",
+      "reason": "Client contract, 207/200 distinction and structured Problem behavior remain useful."
+    },
+    {
+      "path": "test/concurrency/knowledge-import-idempotency.test.ts",
+      "decision": "REUSE",
+      "reason": "Import idempotency service evidence remains applicable to DOWN-004 and must be rerun."
+    },
+    {
+      "path": "test/fault/knowledge-import-fault.test.ts",
+      "decision": "REUSE",
+      "reason": "Import boundary fault evidence remains applicable to DOWN-004 F/Q coverage."
+    }
+  ],
+  "newAssets": [
+    "test/fixtures/b18-b/behavior-matrix.json",
+    "test/fixtures/b18-b/test-asset-audit.json",
+    "test/fixtures/b18-b/fixture-manifest.json",
+    "test/fixtures/b18-b/support.ts",
+    "test/fixtures/b18-b/consumer-entry.ts",
+    "test/fixtures/b18-b/consumer-page.html",
+    "test/contract/kb-b18-b-consumer-boundary.test.ts",
+    "test/e2e/kb-b18-b-downstream-consumers.test.ts",
+    "test/e2e/kb-b18-b-import-consumer.test.ts",
+    "test/e2e/kb-b18-b-consumer-page.test.ts",
+    "test/security/kb-b18-b-consumer-security.test.ts",
+    "test/tenant/kb-b18-b-citation-tenant.test.ts",
+    "test/concurrency/kb-b18-b-consumer-races.test.ts",
+    "test/concurrency/kb-b18-b-reference-delete.test.ts",
+    "test/fault/kb-b18-b-consumer-fault.test.ts"
+  ],
+  "acceptanceNotes": [
+    "A same-process fake HTTP server is classified as reusable scenario code only.",
+    "A real downstream test must use the real app route, real API Key and real infrastructure while keeping the consumer in an independent process.",
+    "A mock or controlled model result cannot be labeled REAL_VERIFIED.",
+    "No existing test is changed to weaken assertions or manufacture a green result."
+  ]
+}

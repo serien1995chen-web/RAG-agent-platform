@@ -371,6 +371,7 @@ export const CitationApiSchema = z
     citationId: z.string().min(1),
     segmentId: SearchObjectIdSchema,
     sourceId: SearchObjectIdSchema,
+    knowledgeSpaceId: SearchObjectIdSchema,
     title: z.string().min(1),
     sourceUrl: CitationSourceUrlSchema.nullable(),
     segmentRange: z
@@ -382,6 +383,9 @@ export const CitationApiSchema = z
       .refine((range) => range.end >= range.start, 'segmentRange.end must be >= start'),
     score: z.number().finite(),
     version: z.number().int().nonnegative(),
+    quoteText: z.string(),
+    snapshotHash: z.string().regex(/^[a-f0-9]{64}$/),
+    expiresAt: z.string().datetime({ offset: true }),
   })
   .strict();
 

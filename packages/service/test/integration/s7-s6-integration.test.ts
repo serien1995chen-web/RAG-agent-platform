@@ -540,6 +540,7 @@ describe('C3 real S6 Job/Index output consumed by S7 recall', () => {
                 citationId: `cit_00000000-0000-4000-8000-${String(index + 1).padStart(12, '0')}`,
                 segmentId: item.segmentId,
                 sourceId: item.sourceId,
+                knowledgeSpaceId: item.knowledgeSpaceId,
                 title: item.source.name,
                 sourceUrl: item.source.originalUrl,
                 segmentRange: {
@@ -548,6 +549,9 @@ describe('C3 real S6 Job/Index output consumed by S7 recall', () => {
                 },
                 score: item.score,
                 version: item.segment.version,
+                quoteText: item.text,
+                snapshotHash: 'f'.repeat(64),
+                expiresAt: '2099-11-23T09:13:23.000Z',
               },
             ]),
           );

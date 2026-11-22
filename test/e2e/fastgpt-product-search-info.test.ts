@@ -251,7 +251,9 @@ describe('FastGPT product module 4 Search and Info', () => {
     }
     expect(searchPayloadResponse.status()).toBe(200);
     await playwrightExpect(page.getByText('测试结果', { exact: false }).first()).toBeVisible();
-    await playwrightExpect(page.locator('.kb2-search-result-card').first()).toBeVisible();
+    const resultCard = page.locator('.kb2-search-result-card').first();
+    await playwrightExpect(resultCard).toBeVisible();
+    await playwrightExpect(resultCard.getByText(`知识库 ${datasetId}`)).toBeVisible();
     await playwrightExpect(page.getByText('测试历史', { exact: true })).toBeVisible();
     await playwrightExpect(page.getByText('退款多久到账', { exact: false }).first()).toBeVisible();
 

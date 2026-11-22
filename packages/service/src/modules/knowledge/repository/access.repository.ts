@@ -364,7 +364,39 @@ export class KnowledgeAccessRepository {
         details: { reason: 'api_key_space_scope' },
       });
     }
-    if (context.isWorkspaceOwner || resource.ownershipMemberId === context.memberId) {
+    if (context.apiKeyId && resource.resourceType === 'space') {
+      const scopeAllows =
+        required === 'read'
+          ? [
+              'knowledge:read',
+              'knowledge:search',
+              'knowledge:write',
+              'knowledge:manage',
+              'knowledge:admin',
+            ].some((scope) => context.scopes.includes(scope))
+          : required === 'write'
+            ? ['knowledge:write', 'knowledge:manage', 'knowledge:admin'].some((scope) =>
+                context.scopes.includes(scope),
+              )
+            : required === 'manage'
+              ? ['knowledge:manage', 'knowledge:admin'].some((scope) =>
+                  context.scopes.includes(scope),
+                )
+              : false;
+      if (!scopeAllows) {
+        throw createKnowledgeError({
+          code: 'KNOWLEDGE_FORBIDDEN',
+          requestId: context.requestId,
+          traceId: context.traceId,
+          details: { reason: 'api_key_scope', permission: required },
+        });
+      }
+      return { ...resource, effectivePermission: required };
+    }
+    if (
+      (context.isWorkspaceOwner && !context.apiKeyId) ||
+      resource.ownershipMemberId === context.memberId
+    ) {
       return { ...resource, effectivePermission: 'owner' };
     }
     const groupIds = membershipIds(context, 'groupIds');

@@ -977,6 +977,7 @@ function SearchResultCard(props: {
       <S7MarkdownRenderer>{content}</S7MarkdownRenderer>
       {segment.answer ? <div className="kb2-search-result-answer">{segment.answer}</div> : null}
       <div className="kb2-search-result-card__footer">
+        <span title={segment.knowledgeSpaceId}>知识库 {segment.knowledgeSpaceId}</span>
         <span>
           来源 {segment.sourceId.slice(-6)} · 数据版本 {segment.version}
         </span>

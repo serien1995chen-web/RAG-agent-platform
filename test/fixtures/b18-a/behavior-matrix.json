@@ -1,0 +1,519 @@
+{
+  "schemaVersion": 1,
+  "groupId": "B18",
+  "candidateSha": "c34467da5a16ef0cc0efff65c696d9a2cf408ff0",
+  "fastgptVersion": "4.17.3",
+  "scope": {
+    "capabilities": ["SEARCH-007", "SEARCH-009"],
+    "sharedSlices": [
+      "TEST-X-REFERENCE-DELETE",
+      "TEST-X-DOWNSTREAM-CITATION",
+      "TEST-X-TENANT-GUARD",
+      "TEST-X-API-003"
+    ]
+  },
+  "evidenceSources": [
+    {
+      "id": "FG-RRF",
+      "path": "packages/global/core/dataset/search/utils.ts",
+      "lines": "5-72",
+      "fact": "按权重 * (1 / (60 + rank)) 累加，按原始 id 合并，并按 rrfScore 排序。"
+    },
+    {
+      "id": "FG-DATASETS",
+      "path": "packages/service/core/dataset/search/defaultRecall/index.ts",
+      "lines": "52-55,87-108,159-180",
+      "fact": "datasetIds 同时约束召回，文本与全文结果经加权 RRF 后执行去重、阈值和 token 裁剪。"
+    },
+    {
+      "id": "FG-RESULT",
+      "path": "packages/service/core/dataset/search/defaultRecall/result.ts",
+      "lines": "16-74",
+      "fact": "结果保留数据集、集合、来源、片段、更新时间、chunk 位置和分数字段；按归一正文和图片身份去重。"
+    },
+    {
+      "id": "FG-WORKFLOW-CONCAT",
+      "path": "packages/service/core/workflow/dispatch/dataset/concat.ts",
+      "lines": "18-44",
+      "fact": "Workflow 将多个知识结果列表等权 RRF 合并，再按字符预算裁剪后继续执行。"
+    },
+    {
+      "id": "FG-WORKFLOW-SEARCH",
+      "path": "packages/service/core/workflow/dispatch/dataset/search.ts",
+      "lines": "150-166,224-243,386-405",
+      "fact": "Workflow 知识节点按已授权 datasetIds 检索并把 quoteQA、模型 usage 和检索参数交给下游。"
+    },
+    {
+      "id": "FG-CHAT-CITE",
+      "path": "packages/service/core/workflow/dispatch/ai/chat/datasetCite.ts",
+      "lines": "33-50",
+      "fact": "Chat 使用引用模板生成 q、a、更新时间、来源和序号上下文，并按模型引用 token 上限裁剪。"
+    },
+    {
+      "id": "FG-TYPE",
+      "path": "packages/global/core/dataset/type.ts",
+      "lines": "608-638",
+      "fact": "搜索结果公开 id、datasetId、collectionId、sourceId、sourceName、updateTime、chunkIndex 和多类 score。"
+    },
+    {
+      "id": "FG-UI",
+      "path": "projects/app/src/components/core/dataset/QuoteItem.tsx",
+      "lines": "81-258",
+      "fact": "引用卡片展示主次分数、正文、来源、长度和可用的编辑/追溯入口，并以 Markdown 渲染正文。"
+    }
+  ],
+  "cases": [
+    {
+      "testId": "L1-B18-SEARCH-007-P01",
+      "capability": "SEARCH-007",
+      "subcase": "P01",
+      "responsibility": "两个已授权 Space 的同一查询进入一次工作流级合并。",
+      "fastGptEvidence": ["FG-DATASETS", "FG-WORKFLOW-CONCAT", "FG-RRF"],
+      "frontendBehaviorIds": ["KB-TEST-041", "KB-TEST-050", "KB-TEST-051"],
+      "input": "knowledgeSpaceIds=[A,B]，searchMode=fulltext，query 同时命中 A/B 的不同 Segment。",
+      "expectedUserVisible": "返回 A/B 的合并结果，结果可追溯到各自来源和 Segment。",
+      "expectedStatus": "HTTP 200，partial=false",
+      "invariants": {
+        "normal": "列表权重相同，贡献为 1/(60+rank)，最终按分数稳定排序。",
+        "error": "不把合并异常转为 200 空结果。",
+        "authorization": "只有已授权 Space 参与召回。",
+        "persistence": "为每个最终候选签发一条可读取 Citation。",
+        "concurrency": "请求级候选和计分状态不共享。"
+      },
+      "forbiddenSideEffects": ["复制 Segment", "改写 Source/Segment 内容或版本"],
+      "crossTenant": "其他 workspace 的 Space 不进入召回、模型调用或合并。",
+      "allowedUiDifferences": "本项目可使用独立多 Space 搜索页，只要来源、片段和引用入口完整。",
+      "projectAcceptanceExtension": false,
+      "unresolved": false
+    },
+    {
+      "testId": "L1-B18-SEARCH-007-P02",
+      "capability": "SEARCH-007",
+      "subcase": "P02",
+      "responsibility": "共享或重复候选只保留一个业务结果，并保留可解释的 provenance。",
+      "fastGptEvidence": ["FG-RESULT", "FG-RRF"],
+      "frontendBehaviorIds": ["KB-TEST-051"],
+      "input": "A/B 返回归一正文和图片身份相同的候选，Segment ID 不同。",
+      "expectedUserVisible": "只显示一条合并结果，来源可追溯到保留下来的原 Segment。",
+      "expectedStatus": "HTTP 200",
+      "invariants": {
+        "normal": "同一 Segment 多路命中只计一个业务结果；跨 Space 相同内容按 FastGPT 去重语义只保留首项。",
+        "error": "去重后空列表仍须区分正常空命中与依赖失败。",
+        "authorization": "被去重候选不能泄露无权来源。",
+        "persistence": "不得为被最终去重候选签发游离 Citation。",
+        "concurrency": "去重键在并发请求间不共享。"
+      },
+      "forbiddenSideEffects": ["按数组位置猜测来源", "复制正文为新 Segment"],
+      "crossTenant": "跨租户候选在去重前即被最终授权丢弃。",
+      "allowedUiDifferences": "保留顺序可按分数，但同分顺序必须与 FastGPT 稳定排序语义一致。",
+      "projectAcceptanceExtension": false,
+      "unresolved": false
+    },
+    {
+      "testId": "L1-B18-SEARCH-007-P03",
+      "capability": "SEARCH-007",
+      "subcase": "P03",
+      "responsibility": "Citation 保留原 Space、Source、Segment、quote、score 和版本。",
+      "fastGptEvidence": ["FG-RESULT", "FG-TYPE"],
+      "frontendBehaviorIds": ["KB-TEST-050", "KB-TEST-052"],
+      "input": "读取搜索结果中的 Citation，再通过 Citation GET 读取。",
+      "expectedUserVisible": "独立消费端无需猜测数组位置即可追溯原 Space、Source 和 Segment。",
+      "expectedStatus": "HTTP 200",
+      "invariants": {
+        "normal": "Citation GET 与签发快照的来源、片段、quote、分数、版本和 TTL 一致。",
+        "error": "未知或不一致 Citation 返回结构化 404。",
+        "authorization": "读取前重新校验 Space scope 和 Source ACL。",
+        "persistence": "Citation 读取不增加 audit、不延长 TTL。",
+        "concurrency": "读取与 Source 删除竞争时只返回一致快照或 404。"
+      },
+      "forbiddenSideEffects": ["返回内部 object key", "返回未签名 Citation"],
+      "crossTenant": "跨租户 Citation 统一返回 404。",
+      "allowedUiDifferences": "卡片布局可不同，但标题、quote、来源、分数和版本必须可见或可展开。",
+      "projectAcceptanceExtension": true,
+      "extensionReason": "knowledgeSpaceId、snapshotHash、expiresAt 是项目安全/追溯扩展；FastGPT 使用 datasetId/collectionId 等原字段。",
+      "unresolved": false
+    },
+    {
+      "testId": "L1-B18-SEARCH-007-N01",
+      "capability": "SEARCH-007",
+      "subcase": "N01",
+      "responsibility": "非法 Space 列表和权重稳定返回 400。",
+      "fastGptEvidence": ["FG-DATASETS"],
+      "frontendBehaviorIds": ["KB-GLOBAL-008", "KB-TEST-047"],
+      "input": "空列表、21 个 Space、非法 ID、基础 Space 不在列表、权重小于 0 或大于 1。",
+      "expectedUserVisible": "保留输入并显示可恢复的参数错误，不显示为空命中。",
+      "expectedStatus": "HTTP 400",
+      "invariants": {
+        "normal": "合法列表和边界权重通过。",
+        "error": "错误使用结构化 Problem，含 requestId/traceId。",
+        "authorization": "参数校验失败不触发无权资源探测。",
+        "persistence": "不签发 Citation、不写成功 audit。",
+        "concurrency": "重复 Space 规范化后只计一次；超过合同上限仍拒绝。"
+      },
+      "forbiddenSideEffects": ["把 400 转为 200 空结果", "重复 Space 重复计权"],
+      "crossTenant": "非法/越权 ID 不泄露存在性。",
+      "allowedUiDifferences": "错误可在表单内或 Toast 展示。",
+      "projectAcceptanceExtension": false,
+      "unresolved": false
+    },
+    {
+      "testId": "L1-B18-SEARCH-007-N02",
+      "capability": "SEARCH-007",
+      "subcase": "N02",
+      "responsibility": "部分 Space 失败返回可解释的 207，全部失败返回 Problem。",
+      "fastGptEvidence": ["FG-WORKFLOW-CONCAT", "FG-WORKFLOW-SEARCH"],
+      "frontendBehaviorIds": ["KB-GLOBAL-008", "KB-TEST-053"],
+      "input": "A 正常，B 的召回依赖超时或不可用。",
+      "expectedUserVisible": "保留 A 的结果并显示失败 Space 的 degraded 原因。",
+      "expectedStatus": "部分成功 HTTP 207；全部失败 503/504/502。",
+      "invariants": {
+        "normal": "健康 Space 的候选和 Citation 保留。",
+        "error": "失败 Space 不得变成空结果。",
+        "authorization": "失败信息不泄露来源标题或正文。",
+        "persistence": "只为最终授权候选签发 Citation。",
+        "concurrency": "各 Space 失败计数和 usage 隔离。"
+      },
+      "forbiddenSideEffects": ["伪造健康 Space 候选", "在 partial 中返回快照不一致 Citation"],
+      "crossTenant": "跨租户失败统一为不可见。",
+      "allowedUiDifferences": "以警告条、列表 badge 或其他等效反馈显示 partial。",
+      "projectAcceptanceExtension": false,
+      "unresolved": false
+    },
+    {
+      "testId": "L1-B18-SEARCH-007-A01",
+      "capability": "SEARCH-007",
+      "subcase": "A01",
+      "responsibility": "多 Space 检索只处理已授权 Space，并在返回前执行最终 ACL。",
+      "fastGptEvidence": ["FG-DATASETS", "FG-WORKFLOW-SEARCH"],
+      "frontendBehaviorIds": ["KB-TEST-040", "KB-GLOBAL-009"],
+      "input": "缺少 TenantContext、任一 Space 越权、召回后撤销 Source ACL。",
+      "expectedUserVisible": "fail closed；无权资源不显示标题、数量或正文。",
+      "expectedStatus": "401/403/404，按项目合同统一。",
+      "invariants": {
+        "normal": "已授权 Space 正常合并。",
+        "error": "存在无权 Space 时不得静默忽略并返回 200。",
+        "authorization": "模型调用、召回、合并和 audit safeDiff 均不含无权资源。",
+        "persistence": "ACL 撤销项不签发 Citation。",
+        "concurrency": "旧 permissionRevision 在途结果在返回前丢弃。"
+      },
+      "forbiddenSideEffects": ["泄露跨租户标题", "进入模型调用"],
+      "crossTenant": "强制 workspaceId 和 Space/Source ACL。",
+      "allowedUiDifferences": "可使用统一不可见文案。",
+      "projectAcceptanceExtension": false,
+      "unresolved": false
+    },
+    {
+      "testId": "L1-B18-SEARCH-007-S01",
+      "capability": "SEARCH-007",
+      "subcase": "S01",
+      "responsibility": "检索只产生允许的搜索审计、usage/outbox 和短期 Citation 快照。",
+      "fastGptEvidence": ["FG-DATASETS", "FG-RESULT"],
+      "frontendBehaviorIds": [],
+      "input": "重复执行同一多 Space 查询并比较业务文档前后状态。",
+      "expectedUserVisible": "结果和 Citation 可连续读取，业务知识内容不变。",
+      "expectedStatus": "HTTP 200/207",
+      "invariants": {
+        "normal": "Source/Segment/KnowledgeSpace 内容、搜索开关和版本不变。",
+        "error": "Citation 存储失败时不返回未持久化引用。",
+        "authorization": "只写当前 workspace。",
+        "persistence": "每次搜索有独立 searchId；重试不得重复业务结果或引用绑定。",
+        "concurrency": "无共享可变候选数组。"
+      },
+      "forbiddenSideEffects": ["复制 Segment", "修改索引版本", "重复 audit/outbox"],
+      "crossTenant": "审计和 Citation 必须带 workspaceId。",
+      "allowedUiDifferences": "搜索审计不要求 UI 展示。",
+      "projectAcceptanceExtension": false,
+      "unresolved": false
+    },
+    {
+      "testId": "L1-B18-SEARCH-007-C01",
+      "capability": "SEARCH-007",
+      "subcase": "C01",
+      "responsibility": "两个租户并发多 Space 搜索及索引切换时结果、引用和 trace 不串线。",
+      "fastGptEvidence": ["FG-DATASETS", "FG-RRF"],
+      "frontendBehaviorIds": [],
+      "input": "两 workspace 并发查询；一个 Space 正在切换 index/source version。",
+      "expectedUserVisible": "各请求只看到自己租户和稳定版本的结果。",
+      "expectedStatus": "HTTP 200/207",
+      "invariants": {
+        "normal": "重复 Space 规范化后只计权一次。",
+        "error": "单请求失败不影响其他租户请求。",
+        "authorization": "不得跨租户复用候选缓存。",
+        "persistence": "Citation 与 requestId/traceId 正确绑定。",
+        "concurrency": "单次请求只使用同一稳定索引版本。"
+      },
+      "forbiddenSideEffects": ["跨请求共享可变 Map/数组", "混用新老向量版本"],
+      "crossTenant": "结果、Citation、audit 和 trace 完全隔离。",
+      "allowedUiDifferences": "并发提示可仅显示 loading。",
+      "projectAcceptanceExtension": false,
+      "unresolved": false
+    },
+    {
+      "testId": "L1-B18-SEARCH-007-F01",
+      "capability": "SEARCH-007",
+      "subcase": "F01",
+      "responsibility": "Space、Citation 存储、audit 和瞬时依赖失败按合同降级并可恢复。",
+      "fastGptEvidence": ["FG-WORKFLOW-SEARCH", "FG-WORKFLOW-CONCAT"],
+      "frontendBehaviorIds": ["KB-GLOBAL-008"],
+      "input": "注入 Space 超时、Citation 存储超时、audit 失败和瞬时 503。",
+      "expectedUserVisible": "显示 partial 或结构化错误，保留重试入口。",
+      "expectedStatus": "207/503/504 或 500，按失败阶段。",
+      "invariants": {
+        "normal": "故障恢复后同一查询可重新成功。",
+        "error": "不得返回空成功或伪 Citation。",
+        "authorization": "partial 响应不得含未授权候选。",
+        "persistence": "重试不重复签发 Citation 或计费。",
+        "concurrency": "超时后在途提交被 fencing。"
+      },
+      "forbiddenSideEffects": ["把存储超时降级为 404"], 
+      "crossTenant": "故障日志不含正文和凭证。",
+      "allowedUiDifferences": "可使用统一错误 Toast。",
+      "projectAcceptanceExtension": false,
+      "unresolved": false
+    },
+    {
+      "testId": "L1-B18-SEARCH-007-Q01",
+      "capability": "SEARCH-007",
+      "subcase": "Q01",
+      "responsibility": "合并过程可解释且证据可复核。",
+      "fastGptEvidence": ["FG-RRF", "FG-RESULT"],
+      "frontendBehaviorIds": ["KB-TEST-050"],
+      "input": "记录 A/B 输入候选、排名、贡献、去重键、最终顺序、provenance、partial、耗时和 usage。",
+      "expectedUserVisible": "结果顺序与来源可由界面和后端证据共同解释。",
+      "expectedStatus": "HTTP 200/207",
+      "invariants": {
+        "normal": "每个候选贡献等于 weight/(60+rank)，同分顺序稳定。",
+        "error": "degraded 原因稳定且可映射。",
+        "authorization": "证据不含无权正文。",
+        "persistence": "evidence 绑定 candidate SHA 和 searchId。",
+        "concurrency": "traceId/requestId 可贯穿。"
+      },
+      "forbiddenSideEffects": ["输出完整敏感 Prompt", "输出秘密或 object key"],
+      "crossTenant": "证据按 workspace 脱敏。",
+      "allowedUiDifferences": "可仅展示最终 score，不展示全部中间通道。",
+      "projectAcceptanceExtension": false,
+      "unresolved": false
+    },
+    {
+      "testId": "L1-B18-SEARCH-007-UI01",
+      "capability": "SEARCH-007",
+      "subcase": "UI01",
+      "responsibility": "多 Space 搜索入口、来源、partial、空态和刷新恢复。",
+      "fastGptEvidence": ["FG-UI", "FG-TYPE"],
+      "frontendBehaviorIds": [
+        "KB-TEST-001",
+        "KB-TEST-041",
+        "KB-TEST-050",
+        "KB-TEST-051",
+        "KB-TEST-053",
+        "KB-XROUTE-001"
+      ],
+      "input": "1440×900、zh-CN 下选择多个 Space 并运行，随后查看 partial、空命中和刷新。",
+      "expectedUserVisible": "结果显示 Space、标题、片段、score 和引用入口；partial/empty/error 可区分。",
+      "expectedStatus": "UI 状态与 HTTP 200/207/Problem 一致",
+      "invariants": {
+        "normal": "选择多个 Space、提交一次、结果含来源和 score。",
+        "error": "partial 显示失败来源；200 空结果明确 warning。",
+        "authorization": "无权资源不显示标题或数量。",
+        "persistence": "刷新或深链恢复后结果和引用仍可解释。",
+        "concurrency": "快速提交旧响应不覆盖新结果。"
+      },
+      "forbiddenSideEffects": ["横向溢出", "阻断级 axe", "未处理 console error", "object key 泄漏"],
+      "crossTenant": "UI 不缓存其他租户结果。",
+      "allowedUiDifferences": "入口、布局、控件和文案位置可不同。",
+      "projectAcceptanceExtension": false,
+      "unresolved": false
+    },
+    {
+      "testId": "L1-B18-SEARCH-009-P01",
+      "capability": "SEARCH-009",
+      "subcase": "P01",
+      "responsibility": "搜索签发 Citation，直接读取和下游独立消费形成闭环。",
+      "fastGptEvidence": ["FG-TYPE", "FG-CHAT-CITE", "FG-UI"],
+      "frontendBehaviorIds": ["KB-TEST-050", "KB-TEST-052", "KB-TEST-055"],
+      "input": "搜索成功 → Citation GET → 刷新 → 下游仅用 Citation GET 渲染。",
+      "expectedUserVisible": "标题、quote、来源、score、版本、原 Space 和有效期一致。",
+      "expectedStatus": "HTTP 200",
+      "invariants": {
+        "normal": "公开 DTO 含 knowledgeSpaceId、quoteText、snapshotHash、expiresAt 和已有追溯字段。",
+        "error": "快照失效返回 404。",
+        "authorization": "每次读取重新授权。",
+        "persistence": "GET 只读且不延长 TTL。",
+        "concurrency": "并发只读无写副作用。"
+      },
+      "forbiddenSideEffects": ["下游自行拼接 Citation", "复制完整 Source"],
+      "crossTenant": "Citation ID 绑定 workspace。",
+      "allowedUiDifferences": "详情可折叠，但信息可追溯。",
+      "projectAcceptanceExtension": true,
+      "extensionReason": "公开 Citation 的 knowledgeSpaceId、quoteText、snapshotHash、expiresAt 为项目验收扩展。",
+      "unresolved": false
+    },
+    {
+      "testId": "L1-B18-SEARCH-009-N01",
+      "capability": "SEARCH-009",
+      "subcase": "N01",
+      "responsibility": "非法、篡改、删除、过期和快照漂移 Citation 稳定失败。",
+      "fastGptEvidence": ["FG-TYPE"],
+      "frontendBehaviorIds": ["KB-TEST-052", "KB-GLOBAL-008"],
+      "input": "非法 ID、篡改签名、篡改 hash、删除 Source/Segment/Citation、TTL 到期。",
+      "expectedUserVisible": "结构化 400/404，不泄露来源存在性。",
+      "expectedStatus": "格式非法 400；不可见/篡改/删除/过期 404",
+      "invariants": {
+        "normal": "合法 Citation 仍可读取。",
+        "error": "错误含 requestId/traceId 和稳定 code。",
+        "authorization": "错误不泄露标题、URL 或正文。",
+        "persistence": "失败读取不增 audit。",
+        "concurrency": "删除和读取竞争无半更新。"
+      },
+      "forbiddenSideEffects": ["懒删除改变业务结果", "回退到原文"],
+      "crossTenant": "未知来源与无权来源响应一致。",
+      "allowedUiDifferences": "可显示可恢复错误。",
+      "projectAcceptanceExtension": true,
+      "extensionReason": "签名、hash 和 TTL 是项目安全扩展。",
+      "unresolved": false
+    },
+    {
+      "testId": "L1-B18-SEARCH-009-A01",
+      "capability": "SEARCH-009",
+      "subcase": "A01",
+      "responsibility": "Citation 读取受租户、scope、source ACL 和 API Key Space scope 约束。",
+      "fastGptEvidence": ["FG-WORKFLOW-SEARCH", "FG-RESULT"],
+      "frontendBehaviorIds": ["KB-GLOBAL-009"],
+      "input": "跨租户、缺 knowledge:search、ACL 撤销、API Key 越 Space scope。",
+      "expectedUserVisible": "拒绝先于标题、quote、URL 返回。",
+      "expectedStatus": "403 或统一 404",
+      "invariants": {
+        "normal": "合法 scope 和 Space 可读。",
+        "error": "401/403/404 区分凭证、scope 和存在性策略。",
+        "authorization": "读取前获取当前 Space/Source ACL。",
+        "persistence": "拒绝不增 Citation 或业务审计。",
+        "concurrency": "并发 scope 使用不串租户。"
+      },
+      "forbiddenSideEffects": ["先返回内容再鉴权", "泄露存在性"],
+      "crossTenant": "workspace 绑定且不可伪造。",
+      "allowedUiDifferences": "权限失败可提示重新授权。",
+      "projectAcceptanceExtension": true,
+      "extensionReason": "API Key Space scope 是项目公共合同扩展。",
+      "unresolved": false
+    },
+    {
+      "testId": "L1-B18-SEARCH-009-S01",
+      "capability": "SEARCH-009",
+      "subcase": "S01",
+      "responsibility": "Citation 是只读短期快照，不复制完整 Source。",
+      "fastGptEvidence": ["FG-TYPE", "FG-CHAT-CITE"],
+      "frontendBehaviorIds": [],
+      "input": "签发前后比较 Citation、audit、Source/Segment 和 TTL。",
+      "expectedUserVisible": "刷新后仍可读；到期后不可读。",
+      "expectedStatus": "200 后按 TTL 变 404",
+      "invariants": {
+        "normal": "Citation GET 不写业务数据、audit 或 TTL。",
+        "error": "到期由 TTL 清理，不靠懒删除改变返回。",
+        "authorization": "快照不含内部 object key。",
+        "persistence": "只保存短期引用元数据和 quote 校验依据。",
+        "concurrency": "并发只读不产生写放大。"
+      },
+      "forbiddenSideEffects": ["复制完整 Source", "延长 TTL"],
+      "crossTenant": "快照 hash 含 workspace 边界。",
+      "allowedUiDifferences": "可不展示 TTL 倒计时。",
+      "projectAcceptanceExtension": true,
+      "extensionReason": "TTL 和 snapshotHash 是项目安全扩展。",
+      "unresolved": false
+    },
+    {
+      "testId": "L1-B18-SEARCH-009-C01",
+      "capability": "SEARCH-009",
+      "subcase": "C01",
+      "responsibility": "Citation 读取与 Source 删除并发时只返回一致快照或 404。",
+      "fastGptEvidence": ["FG-TYPE"],
+      "frontendBehaviorIds": ["KB-TEST-052"],
+      "input": "并发执行 Citation GET 和 Source 删除/版本递增。",
+      "expectedUserVisible": "要么看到完整旧快照，要么明确引用失效。",
+      "expectedStatus": "200 或 404",
+      "invariants": {
+        "normal": "完整快照字段一致。",
+        "error": "不得返回半更新 quote/title/version。",
+        "authorization": "删除后旧 Citation 不重新有效。",
+        "persistence": "并发只读不产生写副作用。",
+        "concurrency": "相同 hash 可复用但不跨权限 revision。"
+      },
+      "forbiddenSideEffects": ["半更新响应", "缓存绕过 ACL"],
+      "crossTenant": "快照缓存按 workspace/revision 隔离。",
+      "allowedUiDifferences": "并发结果可由下一次重试恢复。",
+      "projectAcceptanceExtension": true,
+      "extensionReason": "snapshotHash/revision 是项目安全扩展。",
+      "unresolved": false
+    },
+    {
+      "testId": "L1-B18-SEARCH-009-F01",
+      "capability": "SEARCH-009",
+      "subcase": "F01",
+      "responsibility": "快照依赖失败不得回退到无 ACL 原文或缓存。",
+      "fastGptEvidence": ["FG-TYPE"],
+      "frontendBehaviorIds": ["KB-GLOBAL-008"],
+      "input": "注入 Mongo/Citation 存储不可用，再恢复并尝试旧 Citation。",
+      "expectedUserVisible": "显示依赖错误，恢复后仅有效 Citation 可读。",
+      "expectedStatus": "503/504",
+      "invariants": {
+        "normal": "依赖恢复后可读有效快照。",
+        "error": "不转 404 或空成功。",
+        "authorization": "不得使用搜索结果缓存绕过 ACL。",
+        "persistence": "重试不产生重复 audit/usage/Citation。",
+        "concurrency": "超时提交被中止。"
+      },
+      "forbiddenSideEffects": ["回退原文", "旧 Citation 复活"],
+      "crossTenant": "故障响应不泄露资源身份。",
+      "allowedUiDifferences": "可提供重试按钮。",
+      "projectAcceptanceExtension": false,
+      "unresolved": false
+    },
+    {
+      "testId": "L1-B18-SEARCH-009-Q01",
+      "capability": "SEARCH-009",
+      "subcase": "Q01",
+      "responsibility": "Citation ID、hash、URL、日志和 trace 满足安全与脱敏要求。",
+      "fastGptEvidence": ["FG-TYPE", "FG-UI"],
+      "frontendBehaviorIds": ["KB-GLOBAL-008"],
+      "input": "扫描 Citation 响应、Problem、日志和 UI DOM。",
+      "expectedUserVisible": "只展示安全来源信息和可操作错误。",
+      "expectedStatus": "按成功/错误合同",
+      "invariants": {
+        "normal": "ID 具 workspace 绑定 HMAC；hash 稳定且非秘密。",
+        "error": "sourceUrl 仅 HTTP(S) 或 null。",
+        "authorization": "不存在性不可探测。",
+        "persistence": "不记录完整正文、object key 或凭证。",
+        "concurrency": "trace/request ID 贯穿。"
+      },
+      "forbiddenSideEffects": ["浏览器存储 secret", "日志记录 Authorization/Cookie"],
+      "crossTenant": "签名和 hash 不跨租户复用。",
+      "allowedUiDifferences": "不必显示 hash。",
+      "projectAcceptanceExtension": true,
+      "extensionReason": "HMAC Citation ID、snapshotHash 和 TTL 是项目验收扩展。",
+      "unresolved": false
+    },
+    {
+      "testId": "L1-B18-SEARCH-009-UI01",
+      "capability": "SEARCH-009",
+      "subcase": "UI01",
+      "responsibility": "引用卡片展示标题、quote、来源、score/版本和可展开详情。",
+      "fastGptEvidence": ["FG-UI", "FG-CHAT-CITE"],
+      "frontendBehaviorIds": ["KB-TEST-050", "KB-TEST-051", "KB-TEST-052", "KB-TEST-055"],
+      "input": "1440×900、zh-CN 展示含 Markdown 和注入内容的 Citation，随后刷新。",
+      "expectedUserVisible": "来源与结果顺序一致；quote 安全；删除/过期/权限失败可恢复。",
+      "expectedStatus": "UI 与 Citation GET/Problem 一致",
+      "invariants": {
+        "normal": "标题、quote、来源、score、版本和原 Space 可追溯。",
+        "error": "删除/过期/权限失败不伪装空结果。",
+        "authorization": "无权后不再展示 quote 或 URL。",
+        "persistence": "刷新后仍通过 Citation GET 追溯。",
+        "concurrency": "旧引用响应不覆盖新页面。"
+      },
+      "forbiddenSideEffects": ["执行注入 HTML/脚本", "横向溢出", "阻断级 axe"],
+      "crossTenant": "UI 不持久化其他租户 Citation。",
+      "allowedUiDifferences": "卡片布局和详情展开方式可不同。",
+      "projectAcceptanceExtension": true,
+      "extensionReason": "公开 quote、TTL、Space 追溯字段为项目验收扩展。",
+      "unresolved": false
+    }
+  ]
+}

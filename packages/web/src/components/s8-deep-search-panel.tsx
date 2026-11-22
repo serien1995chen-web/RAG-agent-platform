@@ -203,13 +203,7 @@ export function S8DeepSearchPanel(props: S8DeepSearchPanelProps) {
                 borderColor="kn.line"
                 minW={0}
               >
-                <S7CitationView
-                  citation={item.citation}
-                  content={[item.segment.question, item.segment.answer, item.segment.content]
-                    .filter((value) => value.length > 0)
-                    .join('\n')}
-                  labels={props.labels.citation}
-                />
+                <S7CitationView citation={item.citation} labels={props.labels.citation} />
               </Box>
             ))}
           </Box>

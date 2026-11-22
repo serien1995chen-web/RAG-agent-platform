@@ -62,6 +62,7 @@ describe('TEST-X-SECRET-LEAK API Key authentication', () => {
       apiKeyPrefix: secret.slice(0, 12),
       scopes: ['knowledge:read'],
       spaceIds: ['65f1e5b2a1c9d4b7e8f02222'],
+      isWorkspaceOwner: false,
     });
     expect(JSON.stringify(subject)).not.toContain(secret);
     expect(markUsed).toHaveBeenCalledOnce();
