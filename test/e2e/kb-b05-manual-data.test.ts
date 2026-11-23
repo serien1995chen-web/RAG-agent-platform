@@ -335,10 +335,10 @@ describe('B05 DATA-004 and ING-002 product UI', () => {
       `${app.baseUrl}/dataset/detail?datasetId=${datasetId}&currentTab=import&source=fileCustom`,
       { waitUntil: 'networkidle' },
     );
-    await page.getByRole('button', { name: /自定义文本/ }).click();
     await page.getByRole('button', { name: '下一步' }).click();
     await page.getByLabel('名称').fill(`B05 Preview ${suffix}`);
     await page.getByLabel('文本内容').fill('第一段\n\n第二段');
+    await page.getByRole('button', { name: '下一步' }).click();
     await page.getByRole('button', { name: '下一步' }).click();
     await evidence(page, 'ing-preview-placeholder', network);
     await playwrightExpect(
@@ -364,10 +364,10 @@ describe('B05 DATA-004 and ING-002 product UI', () => {
       `${app.baseUrl}/dataset/detail?datasetId=${datasetId}&currentTab=import&source=fileCustom`,
       { waitUntil: 'networkidle' },
     );
-    await page.getByRole('button', { name: /自定义文本/ }).click();
     await page.getByRole('button', { name: '下一步' }).click();
     await page.getByLabel('名称').fill(name);
     await page.getByLabel('文本内容').fill(text);
+    await page.getByRole('button', { name: '下一步' }).click();
     await page.getByRole('button', { name: '下一步' }).click();
     await page.getByRole('button', { name: '下一步' }).click();
     const submitted = page.waitForResponse(

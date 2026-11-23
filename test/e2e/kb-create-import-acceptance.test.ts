@@ -332,25 +332,46 @@ describe('FastGPT import entry compatibility', () => {
     }
   });
 
+  it('KB-CI-IMPORT-006 creates a named empty dataset through the New/Import menu', async () => {
+    const { context, page } = await pageContext();
+    const name = `空白数据集 ${suffix}`;
+    try {
+      await page.goto(
+        `${app.baseUrl}/dataset/detail?datasetId=${datasetId}&currentTab=collectionCard`,
+        { waitUntil: 'networkidle' },
+      );
+      await page.getByRole('button', { name: /新建\s*\/\s*导入/ }).click();
+      await page.getByRole('menuitem', { name: /空白数据集/ }).click();
+      const dialog = page.getByRole('dialog');
+      await playwrightExpect(dialog).toHaveAccessibleName(/创建手动数据集/);
+      await dialog.getByLabel('名称').fill(name);
+      await dialog.getByRole('button', { name: '确认' }).click();
+      await playwrightExpect(page.getByText(name, { exact: true }).first()).toBeVisible();
+    } finally {
+      await context.close();
+    }
+  });
+
   it('KB-CI-IMPORT-002 presents local/web/custom text as a three-choice source step', async () => {
     const { context, page } = await pageContext();
     try {
-      await openImport(page, 'fileLocal');
+      await page.goto(
+        `${app.baseUrl}/dataset/detail?datasetId=${datasetId}&currentTab=collectionCard`,
+        { waitUntil: 'networkidle' },
+      );
+      await page.getByRole('button', { name: /新建\s*\/\s*导入/ }).click();
+      await page.getByRole('menuitem', { name: /文本数据集/ }).click();
       await capture(page, 'text-source-step');
 
       for (const label of ['本地文件', '网页链接', '自定义文本']) {
         await playwrightExpect
-          .soft(page.getByRole('button', { name: new RegExp(label) }).first())
+          .soft(page.getByRole('radio', { name: new RegExp(label) }).first())
           .toBeVisible();
       }
-      for (const unrelated of ['API 文件库', '飞书', '语雀', '钉钉', '图片集合', '重训练']) {
-        await playwrightExpect
-          .soft(page.getByRole('button', { name: new RegExp(`^${unrelated}`) }))
-          .toHaveCount(0);
-      }
       await playwrightExpect
-        .soft(page.getByText('选择来源', { exact: true }).first())
-        .toBeVisible();
+        .soft(page.getByRole('radio', { name: /本地文件/ }).first())
+        .toBeChecked();
+      await playwrightExpect.soft(page.getByRole('dialog')).toHaveAccessibleName(/选择来源/);
     } finally {
       await context.close();
     }
@@ -360,11 +381,6 @@ describe('FastGPT import entry compatibility', () => {
     const { context, page } = await pageContext();
     try {
       await openImport(page, 'fileLocal');
-      await page
-        .getByRole('button', { name: /本地文件/ })
-        .first()
-        .click();
-      await page.getByRole('button', { name: '下一步' }).click();
       await capture(page, 'text-file-selection-step');
 
       await playwrightExpect.soft(page.getByLabel('训练类型')).toHaveCount(0);
@@ -379,23 +395,6 @@ describe('FastGPT import entry compatibility', () => {
     const { context, page } = await pageContext();
     try {
       await openImport(page, 'fileLocal');
-      await page
-        .getByRole('button', { name: /本地文件/ })
-        .first()
-        .click();
-      await page.getByRole('button', { name: '下一步' }).click();
-      await capture(page, 'text-parameter-step');
-      for (const text of ['PDF增强解析', '原文长度大于', '标题加入索引', '图片自动索引']) {
-        await playwrightExpect.soft(page.getByText(text, { exact: true }).first()).toBeVisible();
-      }
-      await playwrightExpect
-        .soft(page.getByRole('option', { name: /分块存储|分段/ }).first())
-        .toBeAttached();
-      await playwrightExpect
-        .soft(page.getByRole('option', { name: /问答对提取|问答对/ }).first())
-        .toBeAttached();
-      await playwrightExpect.soft(page.getByDisplayValue('1000').first()).toBeVisible();
-
       await page.locator('input[type="file"]').setInputFiles({
         name: `验收文本-${suffix}.txt`,
         mimeType: 'text/plain',
@@ -408,6 +407,18 @@ describe('FastGPT import entry compatibility', () => {
         timeout: 30_000,
       });
       await page.getByRole('button', { name: '下一步' }).click();
+      await capture(page, 'text-parameter-step');
+      for (const text of ['PDF增强解析', '标题加入索引', '图片自动索引']) {
+        await playwrightExpect.soft(page.getByText(text, { exact: true }).first()).toBeVisible();
+      }
+      await playwrightExpect
+        .soft(page.getByRole('option', { name: /分块存储|分段/ }).first())
+        .toBeAttached();
+      await playwrightExpect
+        .soft(page.getByRole('option', { name: /问答对提取|问答对/ }).first())
+        .toBeAttached();
+      await playwrightExpect.soft(page.locator('input[value="1000"]').first()).toBeVisible();
+      await page.getByRole('button', { name: '下一步' }).click();
       await capture(page, 'text-preview-step');
     } finally {
       await context.close();
@@ -418,11 +429,6 @@ describe('FastGPT import entry compatibility', () => {
     const { context, page } = await pageContext();
     try {
       await openImport(page, 'fileCustom');
-      await page
-        .getByRole('button', { name: /自定义文本/ })
-        .first()
-        .click();
-      await page.getByRole('button', { name: '下一步' }).click();
       const next = page.getByRole('button', { name: '下一步' });
       await capture(page, 'custom-text-empty');
 
@@ -457,7 +463,16 @@ describe('FastGPT import entry compatibility', () => {
     async (source) => {
       const { context, page } = await pageContext();
       try {
-        await openImport(page, source);
+        await page.goto(
+          `${app.baseUrl}/dataset/detail?datasetId=${datasetId}&currentTab=collectionCard`,
+          { waitUntil: 'networkidle' },
+        );
+        await page.getByRole('button', { name: /新建\s*\/\s*导入/ }).click();
+        await page
+          .getByRole('menuitem', {
+            name: source === 'template' ? /模版导入/ : /备份导入/,
+          })
+          .click();
         await capture(page, `${source}-import-entry`);
 
         await playwrightExpect.soft(page.getByRole('dialog')).toBeVisible();

@@ -393,10 +393,10 @@ describe('B13-A Job API and UI', () => {
         `${app.baseUrl}/dataset/detail?datasetId=${spaceId}&currentTab=import&source=fileCustom`,
         { waitUntil: 'networkidle' },
       );
-      await page.getByRole('button', { name: /自定义文本/ }).click();
       await page.getByRole('button', { name: '下一步' }).click();
       await page.getByLabel('名称').fill(`B13A import ${suffix}`);
       await page.getByLabel('文本内容').fill('B13A import refresh and queued status.');
+      await page.getByRole('button', { name: '下一步' }).click();
       await page.getByRole('button', { name: '下一步' }).click();
       await playwrightExpect(page.getByText('分块数量', { exact: true })).toBeVisible();
       await page.getByRole('button', { name: '下一步' }).click();

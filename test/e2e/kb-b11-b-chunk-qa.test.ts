@@ -363,11 +363,16 @@ describe('L1-B11-B-PARSE-003/004 product chain', () => {
         if (message.type() === 'error') consoleErrors.push(message.text());
       });
       try {
-        await page.goto(`${app.baseUrl}/spaces/${spaceId}/import`, { waitUntil: 'networkidle' });
-        await page.getByRole('button', { name: /自定义文本/ }).click();
+        await page.goto(
+          `${app.baseUrl}/dataset/detail?datasetId=${spaceId}&currentTab=import&source=fileCustom`,
+          { waitUntil: 'networkidle' },
+        );
         await page.getByRole('button', { name: '下一步' }).click();
         await playwrightExpect(page.getByLabel('名称')).toBeVisible();
         await playwrightExpect(page.getByLabel('文本内容')).toBeVisible();
+        await page.getByLabel('名称').fill(`Chunk QA ${viewport.width}`);
+        await page.getByLabel('文本内容').fill('第一段\n\n第二段');
+        await page.getByRole('button', { name: '下一步' }).click();
         const missingControls: string[] = [];
         for (const name of [
           '训练类型',

@@ -275,10 +275,10 @@ describe('FastGPT product module 3 Data and Import', () => {
       { waitUntil: 'networkidle' },
     );
     await playwrightExpect(page.getByText('网站知识库')).toHaveCount(0);
-    await page.getByRole('button', { name: /自定义文本/ }).click();
     await page.getByRole('button', { name: '下一步' }).click();
     await page.getByLabel('名称').fill(`手工导入 ${suffix}`);
     await page.getByLabel('文本内容').fill('这是一段通过真实导入 API 提交的文本。');
+    await page.getByRole('button', { name: '下一步' }).click();
     await page.getByRole('button', { name: '下一步' }).click();
     await playwrightExpect(page.getByText('分块数量', { exact: true })).toBeVisible();
     await playwrightExpect(page.getByText('这是一段通过真实导入 API 提交的文本。')).toBeVisible();
@@ -313,8 +313,8 @@ describe('FastGPT product module 3 Data and Import', () => {
     await page.getByRole('button', { name: '返回 Collection' }).first().click();
     await page.getByRole('tab', { name: '数据集' }).click();
     await page.getByRole('button', { name: '新建 / 导入' }).click();
-    await page.getByRole('button', { name: /本地文件/ }).click();
-    await page.getByRole('button', { name: '下一步' }).click();
+    await page.getByRole('menuitem', { name: /文本数据集/ }).click();
+    await page.getByRole('button', { name: '确认', exact: true }).click();
     await page.locator('input[type="file"]').setInputFiles({
       name: `模块三上传-${suffix}.txt`,
       mimeType: 'text/plain',
@@ -324,6 +324,7 @@ describe('FastGPT product module 3 Data and Import', () => {
       page.getByText(`模块三上传-${suffix}.txt`, { exact: true }),
     ).toBeVisible();
     await playwrightExpect(page.getByText('completed', { exact: true })).toBeVisible();
+    await page.getByRole('button', { name: '下一步' }).click();
     await page.getByRole('button', { name: '下一步' }).click();
     await page.getByRole('button', { name: '下一步' }).click();
     const fileImport = page.waitForResponse(

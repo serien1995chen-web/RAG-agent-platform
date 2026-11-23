@@ -302,10 +302,17 @@ describe('L1-B11-A import settings UI', () => {
       await context.addCookies([cookie]);
       const page = await context.newPage();
       await page.goto(
-        `${app.baseUrl}/dataset/detail?datasetId=${spaceId}&currentTab=import&source=fileCustom`,
+        `${app.baseUrl}/dataset/detail?datasetId=${spaceId}&currentTab=import&source=fileLocal`,
         { waitUntil: 'networkidle' },
       );
-      await page.getByRole('button', { name: /本地文件/ }).click();
+      await page.locator('input[type="file"]').setInputFiles({
+        name: `parse-settings-${viewport.width}.txt`,
+        mimeType: 'text/plain',
+        buffer: Buffer.from('parse settings fixture', 'utf8'),
+      });
+      await playwrightExpect(page.getByText('completed', { exact: true })).toBeVisible({
+        timeout: 30_000,
+      });
       await page.getByRole('button', { name: '下一步' }).click();
       await playwrightExpect(page.getByText('解析器', { exact: true })).toBeVisible();
       await page.getByLabel('解析器').selectOption('somark');

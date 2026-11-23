@@ -101,6 +101,13 @@ import {
 } from './ui';
 import { DataWorkspace } from './data-workspace';
 import { ImportWorkspace } from './import-workspace';
+import {
+  EmptySourceDialog,
+  StructuredImportDialog,
+  TextSourceDialog,
+  type StructuredImportKind,
+  type TextImportSource,
+} from './import-entry-dialogs';
 import { SearchWorkspace } from './search-workspace';
 
 export interface DatasetDetailQuery {
@@ -140,6 +147,12 @@ export function DatasetDetailPage(props: {
   const [search, setSearch] = useState('');
   const [tagId, setTagId] = useState('');
   const [tagValue, setTagValue] = useState('');
+  const [importMenuOpen, setImportMenuOpen] = useState(false);
+  const [textSourceDialogOpen, setTextSourceDialogOpen] = useState(false);
+  const [emptyDatasetOpen, setEmptyDatasetOpen] = useState(false);
+  const [structuredImportKind, setStructuredImportKind] = useState<StructuredImportKind | null>(
+    null,
+  );
   const [batchMode, setBatchMode] = useState(false);
   const [selectedSourceIds, setSelectedSourceIds] = useState<string[]>([]);
   const [rowMenuId, setRowMenuId] = useState<string | null>(null);
@@ -940,21 +953,89 @@ export function DatasetDetailPage(props: {
                     <AddIcon boxSize={3.5} />
                     新建目录
                   </ProductButton>
-                  <ProductButton
-                    size="sm"
-                    tone="primary"
-                    onClick={() =>
-                      navigate({
-                        datasetId,
-                        currentTab: 'import',
-                        ...(currentDirectoryId ? { parentId: currentDirectoryId } : {}),
-                        source: 'fileLocal',
-                      })
-                    }
-                  >
-                    <ExternalLinkIcon boxSize={3.5} />
-                    新建 / 导入
-                  </ProductButton>
+                  <div className="kb2-new-wrap">
+                    <ProductButton
+                      size="sm"
+                      tone="primary"
+                      aria-expanded={importMenuOpen}
+                      aria-haspopup="menu"
+                      onClick={() => setImportMenuOpen((value) => !value)}
+                    >
+                      <ExternalLinkIcon boxSize={3.5} />
+                      新建 / 导入
+                    </ProductButton>
+                    <ProductMenu
+                      open={importMenuOpen}
+                      onClose={() => setImportMenuOpen(false)}
+                      align="right"
+                    >
+                      <ProductMenuItem
+                        icon={<AddIcon boxSize={3.5} />}
+                        hint="创建一个目录整理 Source"
+                        onClick={() => {
+                          setImportMenuOpen(false);
+                          openDirectory();
+                        }}
+                      >
+                        文件夹
+                      </ProductMenuItem>
+                      <ProductMenuItem
+                        icon={<AddIcon boxSize={3.5} />}
+                        hint="上传文件、网页或自定义文本"
+                        onClick={() => {
+                          setImportMenuOpen(false);
+                          setTextSourceDialogOpen(true);
+                        }}
+                      >
+                        文本数据集
+                      </ProductMenuItem>
+                      <ProductMenuItem
+                        icon={<AttachmentIcon boxSize={3.5} />}
+                        hint="上传图片并建立图片知识"
+                        onClick={() => {
+                          setImportMenuOpen(false);
+                          navigate({
+                            datasetId,
+                            currentTab: 'import',
+                            ...(currentDirectoryId ? { parentId: currentDirectoryId } : {}),
+                            source: 'imageDataset',
+                          });
+                        }}
+                      >
+                        图片数据集
+                      </ProductMenuItem>
+                      <ProductMenuItem
+                        icon={<AddIcon boxSize={3.5} />}
+                        hint="创建一个空的容器装入数据"
+                        onClick={() => {
+                          setImportMenuOpen(false);
+                          setEmptyDatasetOpen(true);
+                        }}
+                      >
+                        空白数据集
+                      </ProductMenuItem>
+                      <ProductMenuItem
+                        icon={<CopyIcon boxSize={3.5} />}
+                        hint="导入 CSV / XLSX 模版数据"
+                        onClick={() => {
+                          setImportMenuOpen(false);
+                          setStructuredImportKind('template');
+                        }}
+                      >
+                        模版导入
+                      </ProductMenuItem>
+                      <ProductMenuItem
+                        icon={<DownloadIcon boxSize={3.5} />}
+                        hint="恢复导出的知识库 CSV / XLSX"
+                        onClick={() => {
+                          setImportMenuOpen(false);
+                          setStructuredImportKind('backup');
+                        }}
+                      >
+                        备份导入
+                      </ProductMenuItem>
+                    </ProductMenu>
+                  </div>
                 </div>
               </div>
 
@@ -1460,6 +1541,38 @@ export function DatasetDetailPage(props: {
           </div>
         ) : null}
       </ProductPage>
+
+      <TextSourceDialog
+        open={textSourceDialogOpen}
+        onClose={() => setTextSourceDialogOpen(false)}
+        onChoose={(source: TextImportSource) =>
+          navigate({
+            datasetId,
+            currentTab: 'import',
+            ...(currentDirectoryId ? { parentId: currentDirectoryId } : {}),
+            source,
+          })
+        }
+      />
+
+      <EmptySourceDialog
+        open={emptyDatasetOpen}
+        spaceId={datasetId}
+        directoryId={currentDirectoryId}
+        onClose={() => setEmptyDatasetOpen(false)}
+        onCompleted={() => void invalidateCollection()}
+      />
+
+      {structuredImportKind ? (
+        <StructuredImportDialog
+          open
+          kind={structuredImportKind}
+          spaceId={datasetId}
+          directoryId={currentDirectoryId}
+          onClose={() => setStructuredImportKind(null)}
+          onCompleted={() => void invalidateCollection()}
+        />
+      ) : null}
 
       <ProductModal
         open={Boolean(directoryForm)}
