@@ -50,7 +50,7 @@ describe('TEST-X-SECURITY-APIKEY-SCOPE / ROTATION / TENANT-GUARD', () => {
     ) as { operations: Array<{ operationId: string }> };
     const runtimeIds = new Set(runtime.operations.map((operation) => operation.operationId));
     const deferredIds = new Set(deferred.operations.map((operation) => operation.operationId));
-    expect(runtime.operations).toHaveLength(123);
+    expect(runtime.operations).toHaveLength(124);
     expect(deferred.operations).toHaveLength(0);
     expect(runtimeIds.has('API-APIKEY-CREATE')).toBe(true);
     expect(runtimeIds.has('API-APIKEY-ROTATE')).toBe(true);

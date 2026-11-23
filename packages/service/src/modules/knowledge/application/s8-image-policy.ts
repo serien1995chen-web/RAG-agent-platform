@@ -1,7 +1,7 @@
 import { createKnowledgeError } from '@kb/contracts';
 
 export const S8_IMAGE_MAX_BATCH = 10;
-export const S8_IMAGE_MAX_BYTES = 20 * 1024 * 1024;
+export const S8_IMAGE_MAX_BYTES = 50 * 1024 * 1024;
 export const S8_IMAGE_MIME_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'] as const;
 
 export type S8ImageMimeType = (typeof S8_IMAGE_MIME_TYPES)[number];

@@ -2,7 +2,7 @@
 
 import { AttachmentIcon, CheckIcon } from '@chakra-ui/icons';
 import { useEffect, useRef, useState } from 'react';
-import { importBackup, importTemplate, createSource } from './api';
+import { importBackup, importImageDataset, importTemplate, createSource } from './api';
 import type { Job } from './types';
 import {
   ProductButton,
@@ -327,6 +327,172 @@ export function StructuredImportDialog(props: {
         ) : null}
       </label>
       <ProductError error={error} />
+    </ProductModal>
+  );
+}
+
+export function ImageDatasetDialog(props: {
+  open: boolean;
+  spaceId: string;
+  directoryId?: string;
+  onClose: () => void;
+  onCompleted: (job: Job) => void;
+}) {
+  const toast = useProductToast();
+  const [name, setName] = useState('');
+  const [files, setFiles] = useState<File[]>([]);
+  const [progress, setProgress] = useState(0);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<unknown>(null);
+  const nameRef = useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (!props.open) return;
+    setName('');
+    setFiles([]);
+    setProgress(0);
+    setError(null);
+    window.setTimeout(() => nameRef.current?.focus(), 60);
+  }, [props.open]);
+
+  const chooseFiles = (input: FileList | null) => {
+    const next = Array.from(input ?? []);
+    setError(null);
+    if (next.length > 5) {
+      setFiles([]);
+      setError(new Error('单次最多上传 5 张图片'));
+      return;
+    }
+    const unsupported = next.find(
+      (file) => !['image/jpeg', 'image/png'].includes(file.type.toLowerCase()),
+    );
+    if (unsupported) {
+      setFiles([]);
+      setError(new Error('仅支持 JPG、JPEG 或 PNG 图片'));
+      return;
+    }
+    const oversized = next.find((file) => file.size > 50 * 1024 * 1024);
+    if (oversized) {
+      setFiles([]);
+      setError(new Error('单张图片不能超过 50 MB'));
+      return;
+    }
+    setFiles(next);
+  };
+
+  const submit = async () => {
+    if (!name.trim()) {
+      setError(new Error('请输入数据集名称'));
+      nameRef.current?.focus();
+      return;
+    }
+    if (files.length === 0) {
+      setError(new Error('请选择图片'));
+      fileInputRef.current?.focus();
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    const uploadIds: string[] = [];
+    try {
+      for (const [index, file] of files.entries()) {
+        let uploadId = '';
+        await knowledgeMultipartUpload(file, {
+          knowledgeSpaceId: props.spaceId,
+          onState: (state) => {
+            if (state.uploadId) uploadId = state.uploadId;
+            const completed = index + state.progress / 100;
+            setProgress(Math.round((completed / files.length) * 100));
+            if (state.error) setError(state.error);
+          },
+        });
+        if (!uploadId) throw new Error('图片上传完成但未返回 uploadId');
+        uploadIds.push(uploadId);
+      }
+      const job = await importImageDataset(props.spaceId, {
+        name: name.trim(),
+        uploadIds,
+        directoryId: props.directoryId || null,
+      });
+      toast.success('图片数据集创建任务已提交');
+      props.onCompleted(job);
+      props.onClose();
+    } catch (caught) {
+      setError(caught);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <ProductModal
+      open={props.open}
+      title="创建图片数据集"
+      size="md"
+      onClose={() => !busy && props.onClose()}
+      footer={
+        <>
+          <ProductButton disabled={busy} onClick={props.onClose}>
+            关闭
+          </ProductButton>
+          <ProductButton
+            tone="primary"
+            busy={busy}
+            disabled={!name.trim() || files.length === 0}
+            onClick={() => void submit()}
+          >
+            {busy
+              ? `上传中: ${progress}%`
+              : files.length > 0
+                ? `共 ${files.length} 张图片 | 确认创建`
+                : '确认创建'}
+          </ProductButton>
+        </>
+      }
+    >
+      <div className="kb2-form-stack">
+        <ProductField label="数据集名称">
+          <ProductInput
+            ref={nameRef}
+            value={name}
+            maxLength={240}
+            placeholder="请输入数据集名称"
+            onChange={(event) => setName(event.target.value)}
+          />
+        </ProductField>
+        <ProductField label="数据集内容">
+          <label className="kb2-upload-zone">
+            <input
+              ref={fileInputRef}
+              type="file"
+              aria-label="数据集内容"
+              accept=".jpg,.jpeg,.png,image/jpeg,image/png"
+              multiple
+              onChange={(event) => chooseFiles(event.target.files)}
+              disabled={busy}
+            />
+            <AttachmentIcon boxSize={7} />
+            <strong>{files.length > 0 ? `已选择 ${files.length} 张图片` : '选择图片'}</strong>
+            <span>支持 JPG、JPEG、PNG，单次最多 5 张，单张不超过 50 MB</span>
+          </label>
+          {files.length > 0 ? (
+            <div className="kb2-upload-list">
+              {files.map((file) => (
+                <div className="kb2-upload-row" key={`${file.name}:${file.lastModified}`}>
+                  <span>
+                    <strong>{file.name}</strong>
+                    <small>{Math.max(1, Math.round(file.size / 1024))} KB</small>
+                  </span>
+                  <span />
+                  <span className="kb2-table-muted">等待上传</span>
+                </div>
+              ))}
+            </div>
+          ) : null}
+        </ProductField>
+        <ProductError error={error} />
+      </div>
     </ProductModal>
   );
 }

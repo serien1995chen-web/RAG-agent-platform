@@ -3,6 +3,7 @@ import type { ObjectRefView } from './ports';
 
 export type ImportKind =
   | 'files'
+  | 'images'
   | 'text'
   | 'url'
   | 'template'
@@ -42,6 +43,7 @@ export interface ImportSourceDraft {
   name: string;
   directoryId: string | null;
   blobRefId: string | null;
+  blobRefIds?: string[];
   externalId: string | null;
   connectorId: string | null;
   mimeType: string;

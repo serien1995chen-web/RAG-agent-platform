@@ -319,12 +319,14 @@ export class KnowledgeImportRepository implements ImportSubmissionPort {
     session: ClientSession,
     context: TenantContext,
   ): Promise<void> {
-    if (!draft.blobRefId || draft.object) return;
-    const result = await this.objects.updateOne(
+    const blobRefIds = [...new Set(draft.blobRefIds ?? (draft.blobRefId ? [draft.blobRefId] : []))];
+    if (blobRefIds.length === 0 || draft.object) return;
+    const objectIds = blobRefIds.map((blobRefId) => objectIdOf(blobRefId, context, 'blobRefId'));
+    const result = await this.objects.updateMany(
       {
         workspaceId: requireWorkspaceId(context),
         knowledgeSpaceId: spaceId,
-        _id: objectIdOf(draft.blobRefId, context, 'blobRefId'),
+        _id: { $in: objectIds },
         purpose: 'source',
         state: 'active',
         sourceId: null,
@@ -340,7 +342,7 @@ export class KnowledgeImportRepository implements ImportSubmissionPort {
       },
       { session },
     );
-    if (result.modifiedCount !== 1) {
+    if (result.modifiedCount !== objectIds.length) {
       throw tenantError(context, 'KNOWLEDGE_NOT_FOUND', {
         field: 'uploadIds',
         reason: 'active_unbound_object_required',

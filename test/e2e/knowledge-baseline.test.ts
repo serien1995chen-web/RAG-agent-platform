@@ -609,7 +609,7 @@ describe.sequential('knowledge architecture baseline E2E', () => {
 
     const openapi = asObject(await callApi('API-OPENAPI'));
     expect(openapi.openapi).toBe('3.1.0');
-    expect(Object.keys(asObject(openapi.paths))).toHaveLength(95);
+    expect(Object.keys(asObject(openapi.paths))).toHaveLength(96);
     expect(asObject(openapi.components).schemas).toBeDefined();
 
     await callApi('API-SPACE-LIST', { query: { limit: 200 } });
@@ -2696,7 +2696,7 @@ describe.sequential('knowledge architecture baseline E2E', () => {
       },
     });
 
-    expect(runtimeRegistry.count).toBe(123);
+    expect(runtimeRegistry.count).toBe(124);
     const runtimeIds = new Set(
       runtimeRegistry.operations.map((operation) => operation.operationId),
     );

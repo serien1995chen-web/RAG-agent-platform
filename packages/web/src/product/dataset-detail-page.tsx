@@ -103,6 +103,7 @@ import { DataWorkspace } from './data-workspace';
 import { ImportWorkspace } from './import-workspace';
 import {
   EmptySourceDialog,
+  ImageDatasetDialog,
   StructuredImportDialog,
   TextSourceDialog,
   type StructuredImportKind,
@@ -150,6 +151,7 @@ export function DatasetDetailPage(props: {
   const [importMenuOpen, setImportMenuOpen] = useState(false);
   const [textSourceDialogOpen, setTextSourceDialogOpen] = useState(false);
   const [emptyDatasetOpen, setEmptyDatasetOpen] = useState(false);
+  const [imageDatasetOpen, setImageDatasetOpen] = useState(false);
   const [structuredImportKind, setStructuredImportKind] = useState<StructuredImportKind | null>(
     null,
   );
@@ -994,12 +996,7 @@ export function DatasetDetailPage(props: {
                         hint="上传图片并建立图片知识"
                         onClick={() => {
                           setImportMenuOpen(false);
-                          navigate({
-                            datasetId,
-                            currentTab: 'import',
-                            ...(currentDirectoryId ? { parentId: currentDirectoryId } : {}),
-                            source: 'imageDataset',
-                          });
+                          setImageDatasetOpen(true);
                         }}
                       >
                         图片数据集
@@ -1560,6 +1557,14 @@ export function DatasetDetailPage(props: {
         spaceId={datasetId}
         directoryId={currentDirectoryId}
         onClose={() => setEmptyDatasetOpen(false)}
+        onCompleted={() => void invalidateCollection()}
+      />
+
+      <ImageDatasetDialog
+        open={imageDatasetOpen}
+        spaceId={datasetId}
+        directoryId={currentDirectoryId}
+        onClose={() => setImageDatasetOpen(false)}
         onCompleted={() => void invalidateCollection()}
       />
 

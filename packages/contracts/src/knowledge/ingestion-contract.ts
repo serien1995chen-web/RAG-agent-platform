@@ -210,6 +210,18 @@ export const ImportFilesSchema = z
   })
   .strict();
 
+export const ImportImageDatasetSchema = z
+  .object({
+    name: z.string().trim().min(1).max(240),
+    directoryId: ObjectIdSchema.nullable().optional(),
+    uploadIds: z.array(z.string()).min(1).max(5),
+    chunking: ChunkingSettingsSchema.default({
+      trainingType: 'imageParse',
+      chunkSettingMode: 'auto',
+    }),
+  })
+  .strict();
+
 export const ImportTextSchema = z
   .object({
     knowledgeSpaceId: ObjectIdSchema,

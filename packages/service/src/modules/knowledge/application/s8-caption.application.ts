@@ -566,12 +566,20 @@ export class S8CaptionApplication implements S8CaptionExecutorPort {
     context: TenantContext,
   ): Promise<{ result: Record<string, unknown>; value: string }> {
     const input = await this.sourceForJob(job, context);
+    const imageOrder = Number(job.inputSnapshot.imageOrder ?? 0);
+    const imageCount = Number(
+      job.inputSnapshot.imageCount ?? input.source.metadata?.imageCount ?? 1,
+    );
     const result = await this.indexImage(
       {
         ...input,
-        order: 0,
-        metadata: { imageSource: true },
-        updateSourceStatus: true,
+        order: Number.isInteger(imageOrder) && imageOrder >= 0 ? imageOrder : 0,
+        metadata: {
+          imageSource: true,
+          imageOrder: Number.isInteger(imageOrder) && imageOrder >= 0 ? imageOrder : 0,
+          imageCount: Number.isInteger(imageCount) && imageCount > 0 ? imageCount : 1,
+        },
+        updateSourceStatus: imageCount <= 1,
       },
       context,
     );

@@ -3,6 +3,7 @@ import {
   ConnectorConnectSchema,
   CustomApiConnectorConfigSchema,
   ImportFilesSchema,
+  ImportImageDatasetSchema,
   ImportTextSchema,
 } from '../../src/knowledge/ingestion-contract';
 
@@ -19,6 +20,21 @@ describe('S4 ingestion contracts', () => {
       }).parseProvider,
     ).toBe('liteparse');
     expect(ImportFilesSchema.safeParse({ uploadIds: [], chunking }).success).toBe(false);
+  });
+
+  it('accepts a named image collection of at most five uploads', () => {
+    expect(
+      ImportImageDatasetSchema.parse({
+        name: '产品截图',
+        uploadIds: ['upl-1', 'upl-2'],
+      }).chunking,
+    ).toEqual({ trainingType: 'imageParse', chunkSettingMode: 'auto' });
+    expect(
+      ImportImageDatasetSchema.safeParse({
+        name: 'too-many',
+        uploadIds: ['1', '2', '3', '4', '5', '6'],
+      }).success,
+    ).toBe(false);
   });
 
   it('requires path/body space coherence fields and strict unknown-field rejection', () => {

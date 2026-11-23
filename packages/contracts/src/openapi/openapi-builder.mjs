@@ -2,9 +2,9 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 export const TARGET_CONTRACT_COUNTS = Object.freeze({
-  paths: 95,
-  operations: 123,
-  schemas: 141,
+  paths: 96,
+  operations: 124,
+  schemas: 142,
   parameters: 8,
 });
 
@@ -79,6 +79,7 @@ export const RUNTIME_OPERATION_IDS = Object.freeze([
   'API-JOB-LIST',
   'API-JOB-GET',
   'API-IMPORT-FILES',
+  'API-IMPORT-IMAGES',
   'API-IMPORT-TEXT',
   'API-IMPORT-URL',
   'API-IMPORT-TEMPLATE',
@@ -284,6 +285,7 @@ function capabilityIdsOf(operationId) {
   }
   if (operationId.startsWith('API-JOB-')) return ['TRAIN-001', 'TRAIN-005', 'TRAIN-007'];
   if (operationId.startsWith('API-IMPORT-')) {
+    if (operationId.endsWith('IMAGES')) return ['ING-001', 'MULTI-001'];
     if (operationId.endsWith('FILES')) return ['ING-001'];
     if (operationId.endsWith('TEXT')) return ['ING-002', 'DOWN-004'];
     if (operationId.endsWith('URL')) return ['ING-003'];

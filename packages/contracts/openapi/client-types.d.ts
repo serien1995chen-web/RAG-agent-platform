@@ -90,6 +90,7 @@ export type OperationId =
   | 'API-IMPORT-API-PREVIEW'
   | 'API-IMPORT-BACKUP'
   | 'API-IMPORT-FILES'
+  | 'API-IMPORT-IMAGES'
   | 'API-IMPORT-TEMPLATE'
   | 'API-IMPORT-TEXT'
   | 'API-IMPORT-URL'
@@ -215,6 +216,7 @@ export type RuntimeOperationId =
   | 'API-IMPORT-API-PREVIEW'
   | 'API-IMPORT-BACKUP'
   | 'API-IMPORT-FILES'
+  | 'API-IMPORT-IMAGES'
   | 'API-IMPORT-TEMPLATE'
   | 'API-IMPORT-TEXT'
   | 'API-IMPORT-URL'
@@ -309,6 +311,7 @@ export type SchemaName =
   | 'ImportApiLibrary'
   | 'ImportBackup'
   | 'ImportFiles'
+  | 'ImportImageDataset'
   | 'ImportTemplate'
   | 'ImportText'
   | 'ImportUrl'
@@ -452,6 +455,7 @@ export interface SchemaPropertyMap {
   "ImportApiLibrary": "config" | "credentials" | "directoryId" | "fileIds";
   "ImportBackup": "conflictStrategy" | "directoryId" | "dryRun" | "previewOnly" | "uploadId";
   "ImportFiles": "chunking" | "directoryId" | "parseConfig" | "parseProvider" | "uploadIds";
+  "ImportImageDataset": "chunking" | "directoryId" | "name" | "uploadIds";
   "ImportTemplate": "directoryId" | "previewOnly" | "uploadId";
   "ImportText": "chunking" | "directoryId" | "dryRun" | "knowledgeSpaceId" | "name" | "text";
   "ImportUrl": "chunking" | "directoryId" | "dryRun" | "selector" | "url";
@@ -596,6 +600,7 @@ export interface RequiredSchemaPropertyMap {
   "ImportApiLibrary": "config" | "credentials" | "fileIds";
   "ImportBackup": "uploadId";
   "ImportFiles": "chunking" | "parseProvider" | "uploadIds";
+  "ImportImageDataset": "name" | "uploadIds";
   "ImportTemplate": "uploadId";
   "ImportText": "chunking" | "knowledgeSpaceId" | "name" | "text";
   "ImportUrl": "chunking" | "selector" | "url";
@@ -774,6 +779,7 @@ export interface RuntimeRouteMethodPathMap {
   'API-IMPORT-API-PREVIEW': 'POST /v1/knowledge/spaces/{spaceId}/imports/api-library/preview';
   'API-IMPORT-BACKUP': 'POST /v1/knowledge/spaces/{spaceId}/imports/backup';
   'API-IMPORT-FILES': 'POST /v1/knowledge/spaces/{spaceId}/imports/files';
+  'API-IMPORT-IMAGES': 'POST /v1/knowledge/spaces/{spaceId}/imports/images';
   'API-IMPORT-TEMPLATE': 'POST /v1/knowledge/spaces/{spaceId}/imports/template';
   'API-IMPORT-TEXT': 'POST /v1/knowledge/spaces/{spaceId}/imports/text';
   'API-IMPORT-URL': 'POST /v1/knowledge/spaces/{spaceId}/imports/url';

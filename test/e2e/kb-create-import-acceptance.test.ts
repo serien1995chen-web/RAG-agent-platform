@@ -444,15 +444,44 @@ describe('FastGPT import entry compatibility', () => {
 
   it('KB-CI-IMPORT-011 opens the image dataset form directly from the import menu', async () => {
     const { context, page } = await pageContext();
+    const name = `图片数据集 ${suffix}`;
     try {
-      await openImport(page, 'imageDataset');
+      await page.goto(
+        `${app.baseUrl}/dataset/detail?datasetId=${datasetId}&currentTab=collectionCard`,
+        { waitUntil: 'networkidle' },
+      );
+      await page.getByRole('button', { name: /新建\s*\/\s*导入/ }).click();
+      await page.getByRole('menuitem', { name: /图片数据集/ }).click();
       await capture(page, 'image-import-entry');
 
       const dialog = page.getByRole('dialog');
-      await playwrightExpect.soft(page.getByText(/数据集名称|名称/).first()).toBeVisible();
-      await playwrightExpect.soft(page.getByText(/数据集内容|选择图片/).first()).toBeVisible();
+      await playwrightExpect.soft(dialog.getByLabel('数据集名称')).toBeVisible();
+      await playwrightExpect.soft(dialog.getByLabel('数据集内容')).toBeVisible();
       await playwrightExpect.soft(dialog.locator('input[type="file"]')).toHaveCount(1);
       await playwrightExpect.soft(page.getByText('参数设置', { exact: true })).toHaveCount(0);
+      await dialog.getByLabel('数据集名称').fill(name);
+      await dialog.locator('input[type="file"]').setInputFiles({
+        name: `image-${suffix}.png`,
+        mimeType: 'image/png',
+        buffer: Buffer.from(
+          'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Wl2nXQAAAAASUVORK5CYII=',
+          'base64',
+        ),
+      });
+      const submitted = page.waitForResponse(
+        (response) =>
+          response.request().method() === 'POST' &&
+          response.url().endsWith(`/spaces/${datasetId}/imports/images`),
+      );
+      await dialog.getByRole('button', { name: /确认创建/ }).click();
+      expect((await submitted).status()).toBe(202);
+      await playwrightExpect(dialog).toHaveCount(0);
+      const sources = await api<{
+        items: Array<{ name: string; kind: string; sizeBytes: number }>;
+      }>(`/v1/knowledge/spaces/${datasetId}/sources?limit=200`, 'GET');
+      expect(
+        sources.items.find((source) => source.name === name && source.kind === 'image'),
+      ).toMatchObject({ name, kind: 'image' });
     } finally {
       await context.close();
     }

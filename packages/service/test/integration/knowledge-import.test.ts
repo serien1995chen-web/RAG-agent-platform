@@ -167,7 +167,7 @@ function uploadRef(uploadId: string, fileName: string, mimeType: string): Object
     purpose: 'source',
     sourceId: null,
     mimeType,
-    sizeBytes: objectBytes.get(uploadId)?.byteLength ?? 0,
+    sizeBytes: objectBytes.get(`uploads/${uploadId}/${fileName}`)?.byteLength ?? 0,
     etag: 'etag',
     sha256: 'sha256',
     state: 'active',
@@ -177,6 +177,47 @@ function uploadRef(uploadId: string, fileName: string, mimeType: string): Object
     updatedAt: now,
     deletedAt: null,
   };
+}
+
+async function seedUploadRef(uploadId: string, fileName: string, mimeType: string) {
+  const bytes = objectBytes.get(`uploads/${uploadId}/${fileName}`) ?? new Uint8Array();
+  const reference = uploadRef(uploadId, fileName, mimeType);
+  uploadRefs.set(uploadId, reference);
+  await connection.models.KnowledgeObjectRef.create({
+    _id: new mongoose.Types.ObjectId(uploadId),
+    workspaceId,
+    knowledgeSpaceId: new mongoose.Types.ObjectId(spaceId),
+    version: 1,
+    deletedAt: null,
+    createdByMemberId: context.memberId,
+    updatedByMemberId: context.memberId,
+    provider: 'minio',
+    bucket: 'kb-test',
+    objectKey: reference.objectKey,
+    purpose: 'source',
+    sourceId: null,
+    mimeType,
+    sizeBytes: bytes.byteLength,
+    etag: 'etag',
+    sha256: reference.sha256,
+    state: 'active',
+    expiresAt: null,
+    upload: {
+      mode: 'single',
+      status: 'completed',
+      providerUploadId: null,
+      pendingObjectKey: null,
+      finalObjectKey: reference.objectKey,
+      finalizedAt: new Date(),
+      pendingUrlExpiresAt: null,
+      partSizeBytes: bytes.byteLength || 1,
+      partCount: 1,
+      parts: [],
+      originalName: fileName,
+      completedAt: new Date(),
+      abortedAt: null,
+    },
+  });
 }
 
 function ingestionApplication(
@@ -468,6 +509,94 @@ describe('TEST-ING-001-BLOCK C1 import submission', () => {
 });
 
 describe('S4 import entry workflows', () => {
+  it('L1-KB-CI-IMAGES-001 creates one named image Source bound to all uploads', async () => {
+    const ingestion = ingestionApplication();
+    const first = id();
+    const second = id();
+    objectBytes.set(
+      `uploads/${first}/one.png`,
+      Buffer.from(
+        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Wl2nXQAAAAASUVORK5CYII=',
+        'base64',
+      ),
+    );
+    objectBytes.set(
+      `uploads/${second}/two.png`,
+      Buffer.from(
+        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Wl2nXQAAAAASUVORK5CYII=',
+        'base64',
+      ),
+    );
+    await seedUploadRef(first, 'one.png', 'image/png');
+    await seedUploadRef(second, 'two.png', 'image/png');
+
+    const result = await ingestion.dispatch({
+      operationId: 'API-IMPORT-IMAGES',
+      params: { spaceId },
+      query: {},
+      headers: { 'idempotency-key': `named-images-${suffix}-001` },
+      body: {
+        name: '产品截图',
+        uploadIds: [first, second],
+      },
+      context,
+    });
+    expect(result.status).toBe(202);
+
+    const sources = await connection.models.KnowledgeSource.find({ workspaceId }).lean();
+    expect(sources).toHaveLength(1);
+    expect(sources[0]).toMatchObject({
+      name: '产品截图',
+      kind: 'image',
+      blobRefId: new mongoose.Types.ObjectId(first),
+      metadata: { imageCount: 2 },
+    });
+    expect(sources[0]?.metadata.imageBlobRefIds).toEqual([first, second]);
+    const objects = await connection.models.KnowledgeObjectRef.find({
+      workspaceId,
+      _id: {
+        $in: [new mongoose.Types.ObjectId(first), new mongoose.Types.ObjectId(second)],
+      },
+    }).lean();
+    expect(objects).toHaveLength(2);
+    expect(objects.every((object) => object.purpose === 'image')).toBe(true);
+    expect(objects.every((object) => String(object.sourceId) === String(sources[0]?._id))).toBe(
+      true,
+    );
+    const job = await connection.models.KnowledgeJob.findOne({
+      workspaceId,
+      kind: 'import',
+    }).lean();
+    expect(job).toMatchObject({ inputSnapshot: { importKind: 'images' } });
+    expect(job?.inputSnapshot.sourceIds).toHaveLength(1);
+  });
+
+  it('L1-KB-CI-IMAGES-002 rejects a non-image upload in an image dataset', async () => {
+    const ingestion = ingestionApplication();
+    const imageUploadId = id();
+    const textUploadId = id();
+    objectBytes.set(`uploads/${imageUploadId}/image.png`, Buffer.from('image'));
+    objectBytes.set(`uploads/${textUploadId}/note.txt`, Buffer.from('note'));
+    await seedUploadRef(imageUploadId, 'image.png', 'image/png');
+    await seedUploadRef(textUploadId, 'note.txt', 'text/plain');
+    await expect(
+      ingestion.dispatch({
+        operationId: 'API-IMPORT-IMAGES',
+        params: { spaceId },
+        query: {},
+        headers: { 'idempotency-key': `mixed-images-${suffix}-001` },
+        body: {
+          name: '混合集合',
+          uploadIds: [imageUploadId, textUploadId],
+        },
+        context,
+      }),
+    ).rejects.toMatchObject({
+      problem: { error: { code: 'KNOWLEDGE_UNSUPPORTED_CONTENT' } },
+    });
+    expect(await connection.models.KnowledgeSource.countDocuments({ workspaceId })).toBe(0);
+  });
+
   it('TEST-ING-001-U01/U02 rejects empty and cross-Space uploadRefs before writes', async () => {
     const ingestion = ingestionApplication();
     await expect(

@@ -408,36 +408,79 @@ export class S06ProcessingApplication {
         const source = await this.input.store.getSource(sourceId, context);
         if (!source) throw tenantError(context, 'KNOWLEDGE_NOT_FOUND', { sourceId });
         const image = source.kind === 'image';
-        const child = await this.input.jobs.createChild(
-          {
-            kind: image ? 'caption' : 'parse',
-            resourceType: 'source',
-            resourceId: sourceId,
-            knowledgeSpaceId: source.knowledgeSpaceId,
-            inputSnapshot: {
-              sourceId,
-              sourceVersion: source.sourceVersion,
-              imageBlobRefId: image ? source.blobRefId : null,
-              parseProvider: source.parseProvider,
-              configHash: String(job.inputSnapshot.configurationHash ?? ''),
-              parseConfigSnapshot: job.inputSnapshot.parseConfigSnapshot ?? {},
-              chunkingConfigSnapshot: job.inputSnapshot.chunkingConfigSnapshot ?? {
-                trainingType: 'chunk',
-                chunkSettingMode: 'auto',
+        const commonSnapshot = {
+          sourceId,
+          sourceVersion: source.sourceVersion,
+          parseProvider: source.parseProvider,
+          configHash: String(job.inputSnapshot.configurationHash ?? ''),
+          parseConfigSnapshot: job.inputSnapshot.parseConfigSnapshot ?? {},
+          chunkingConfigSnapshot: job.inputSnapshot.chunkingConfigSnapshot ?? {
+            trainingType: 'chunk',
+            chunkSettingMode: 'auto',
+          },
+          qaConfigSnapshot: job.inputSnapshot.qaConfigSnapshot ?? {},
+          rootJobId: parentJobId,
+          parentJobId,
+        };
+        if (image) {
+          const metadata = source.metadata ?? {};
+          const storedRefs = Array.isArray(metadata.imageBlobRefIds)
+            ? metadata.imageBlobRefIds.filter(
+                (value): value is string => typeof value === 'string' && value.length > 0,
+              )
+            : [];
+          const imageBlobRefIds = [
+            ...new Set(storedRefs.length > 0 ? storedRefs : [source.blobRefId]),
+          ].filter((value): value is string => Boolean(value));
+          if (imageBlobRefIds.length === 0) {
+            throw createKnowledgeError({
+              code: 'KNOWLEDGE_VALIDATION_FAILED',
+              requestId: context.requestId,
+              traceId: context.traceId,
+              details: { sourceId, field: 'metadata.imageBlobRefIds', min: 1 },
+            });
+          }
+          for (const [imageOrder, imageBlobRefId] of imageBlobRefIds.entries()) {
+            const child = await this.input.jobs.createChild(
+              {
+                kind: 'caption',
+                resourceType: 'source',
+                resourceId: sourceId,
+                knowledgeSpaceId: source.knowledgeSpaceId,
+                inputSnapshot: {
+                  ...commonSnapshot,
+                  imageBlobRefId,
+                  imageOrder,
+                  imageCount: imageBlobRefIds.length,
+                },
+                rootJobId: parentJobId,
+                parentJobId,
+                priority: job.priority,
+                idempotencyKey: `${parentJobId}:${sourceId}:${source.sourceVersion}:caption:${imageOrder}:${imageBlobRefId}`,
               },
-              qaConfigSnapshot: job.inputSnapshot.qaConfigSnapshot ?? {},
+              context,
+            );
+            childJobIds.push(child.jobId);
+          }
+          imageSourceIds.push(sourceId);
+        } else {
+          const child = await this.input.jobs.createChild(
+            {
+              kind: 'parse',
+              resourceType: 'source',
+              resourceId: sourceId,
+              knowledgeSpaceId: source.knowledgeSpaceId,
+              inputSnapshot: commonSnapshot,
               rootJobId: parentJobId,
               parentJobId,
+              priority: job.priority,
+              idempotencyKey: `${parentJobId}:${sourceId}:${source.sourceVersion}:parse`,
             },
-            rootJobId: parentJobId,
-            parentJobId,
-            priority: job.priority,
-            idempotencyKey: `${parentJobId}:${sourceId}:${source.sourceVersion}:${image ? 'caption' : 'parse'}`,
-          },
-          context,
-        );
-        childJobIds.push(child.jobId);
-        (image ? imageSourceIds : parseSourceIds).push(sourceId);
+            context,
+          );
+          childJobIds.push(child.jobId);
+          parseSourceIds.push(sourceId);
+        }
       }
       if (parseSourceIds.length > 0) {
         await this.input.store.updateSourcesStatus(parseSourceIds, 'parsing', context);
