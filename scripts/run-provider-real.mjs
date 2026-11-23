@@ -13,6 +13,7 @@ export function requestedScenario(argv) {
 }
 
 const SCENARIO_EVIDENCE = Object.freeze({
+  'b20-ops-real': 'b20-ops-provider.json',
   's11-aiproxy-real': 't02-aiproxy.json',
   's11-b17-deep-real': 'b17-provider.json',
   's11-ocr-real': 't02-ocr.json',

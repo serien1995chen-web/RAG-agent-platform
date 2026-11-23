@@ -67,6 +67,7 @@ export const PROVIDER_SCOPE_PROFILES = Object.freeze({
 });
 
 export const PROVIDER_SCENARIOS = Object.freeze({
+  'b20-ops-real': Object.freeze(['aiproxy', 'ocr-somark', 'ocr-textin', 'ocr-doc2x']),
   's11-aiproxy-real': Object.freeze(['aiproxy']),
   's11-aiproxy-catalog-preflight': Object.freeze(['aiproxy']),
   's11-provider-quota': Object.freeze(['aiproxy']),

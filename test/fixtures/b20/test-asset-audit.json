@@ -1,0 +1,116 @@
+{
+  "schemaVersion": 1,
+  "capabilityId": "OPS-002",
+  "assets": [
+    {
+      "path": "packages/service/test/integration/s10-b19-usage-integrity.test.ts",
+      "classification": "REUSE",
+      "coverage": "usage kind/unit、event/outbox 唯一性"
+    },
+    {
+      "path": "packages/service/test/integration/s10-usage-quota.test.ts",
+      "classification": "REUSE",
+      "coverage": "pricing snapshot、delivery、事务回滚、quota 无副作用"
+    },
+    {
+      "path": "packages/service/test/integration/s10-ops.test.ts",
+      "classification": "REUSE",
+      "coverage": "Job、replay CAS、dead_letter、Outbox delivery failure"
+    },
+    {
+      "path": "packages/service/test/integration/s5-usage-outbox.test.ts",
+      "classification": "REUSE",
+      "coverage": "usage/outbox/audit 原子事实与 stale publishing"
+    },
+    {
+      "path": "packages/service/test/integration/s5-ocr-assets.test.ts",
+      "classification": "REUSE",
+      "coverage": "OCR 产物与对象存储"
+    },
+    {
+      "path": "packages/service/test/unit/s10-ops-worker.test.ts",
+      "classification": "REUSE",
+      "coverage": "Worker fencing、重试、死信和 replay dispatch"
+    },
+    {
+      "path": "packages/service/test/unit/s10-shared-usage.test.ts",
+      "classification": "REUSE",
+      "coverage": "共享 usage 投递失败分类"
+    },
+    {
+      "path": "packages/service/test/unit/s5-model-gateway.test.ts",
+      "classification": "REUSE",
+      "coverage": "模型 quota、重试、fallback、embedding 维度"
+    },
+    {
+      "path": "packages/service/test/unit/s5-ocr-provider.test.ts",
+      "classification": "REUSE",
+      "coverage": "四 OCR 合同、超时、fallback、资产安全"
+    },
+    {
+      "path": "test/fault/s11-provider-fault.test.ts",
+      "classification": "REUSE",
+      "coverage": "Provider 合同故障"
+    },
+    {
+      "path": "test/fault/kb-b11-a-ocr-fault.test.ts",
+      "classification": "REUSE",
+      "coverage": "OCR 重试、fallback 和 usage 数量"
+    },
+    {
+      "path": "test/fault/kb-b15-b-model-fault.test.ts",
+      "classification": "REUSE",
+      "coverage": "模型 401/429/5xx/invalid output"
+    },
+    {
+      "path": "test/real-provider/s11-aiproxy-real.test.ts",
+      "classification": "REUSE",
+      "coverage": "真实 LLM/Embedding/Rerank/VLM"
+    },
+    {
+      "path": "test/real-provider/s11-ocr-real.test.ts",
+      "classification": "EXTEND",
+      "coverage": "三 OCR 聚合测试；B20 新增逐 Provider 独立判定"
+    },
+    {
+      "path": "test/real-provider/b12-image-caption-real.test.ts",
+      "classification": "REUSE",
+      "coverage": "真实 Caption、1024 图片向量和图片召回"
+    },
+    {
+      "path": "test/real-provider/kb-b16-a-search-real.test.ts",
+      "classification": "REUSE",
+      "coverage": "真实 Embedding、Rerank、citation"
+    },
+    {
+      "path": "test/tenant/s10-ops-tenant.test.ts",
+      "classification": "REUSE",
+      "coverage": "Operations 跨租户隔离"
+    },
+    {
+      "path": "test/e2e/s10-ops-admin.test.ts",
+      "classification": "STALE",
+      "coverage": "运营页已退出产品，原页面 E2E 被跳过；不能作为 UI PASS"
+    },
+    {
+      "path": "test/e2e/kb-b19-b-ops-ui.test.ts",
+      "classification": "REUSE",
+      "coverage": "当前产品入口、readiness、Worker 和 UI 取证方法"
+    },
+    {
+      "path": "packages/service/test/integration/kb-b20-ops-governance.test.ts",
+      "classification": "NEW",
+      "coverage": "B20 独立 P/N/A/S/C/F/Q 聚合治理"
+    },
+    {
+      "path": "test/real-provider/b20-ops-real.test.ts",
+      "classification": "NEW",
+      "coverage": "B20 独立三 OCR 与 TokenDance 真实 Provider 证据"
+    },
+    {
+      "path": "test/e2e/kb-b20-ops-ui.test.ts",
+      "classification": "NEW",
+      "coverage": "运营/用量入口、刷新、响应式、axe 和 console"
+    }
+  ]
+}
