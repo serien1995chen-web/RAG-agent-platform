@@ -575,7 +575,7 @@ a:hover {
 }
 
 .kb2-modal header span {
-  color: var(--kb2-muted);
+  color: var(--kb2-text);
   font-size: 12px;
 }
 
@@ -1430,7 +1430,7 @@ a:hover {
 
 .kb2-compliance-note {
   padding: 10px 12px;
-  color: var(--kb2-muted);
+  color: var(--kb2-text);
   background: var(--kb2-surface-muted);
   border: 1px solid var(--kb2-line-soft);
   border-radius: 6px;
