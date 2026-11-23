@@ -25,23 +25,25 @@ export interface WorkspaceFields {
 }
 
 export function tenantError(
-  context: Pick<TenantContext, 'requestId' | 'traceId'>,
+  context: Partial<Pick<TenantContext, 'requestId' | 'traceId'>> | null | undefined,
   code:
     | 'KNOWLEDGE_VALIDATION_FAILED'
     | 'KNOWLEDGE_NOT_FOUND'
     | 'KNOWLEDGE_CONFLICT' = 'KNOWLEDGE_VALIDATION_FAILED',
   details: Record<string, unknown> = {},
 ) {
+  const requestId = context?.requestId?.trim() || 'req_missing_context';
+  const traceId = context?.traceId?.trim() || 'trace_missing_context';
   return createKnowledgeError({
     code,
-    requestId: context.requestId,
-    traceId: context.traceId,
+    requestId,
+    traceId,
     details,
   });
 }
 
 export function requireWorkspaceId(context: TenantContext): string {
-  const workspaceId = context.workspaceId?.trim();
+  const workspaceId = context?.workspaceId?.trim();
   if (!workspaceId) {
     throw tenantError(context, 'KNOWLEDGE_VALIDATION_FAILED', {
       field: 'workspaceId',
@@ -53,7 +55,7 @@ export function requireWorkspaceId(context: TenantContext): string {
 }
 
 export function requireMemberId(context: TenantContext): string {
-  const memberId = context.memberId?.trim();
+  const memberId = context?.memberId?.trim();
   if (!memberId) {
     throw tenantError(context, 'KNOWLEDGE_VALIDATION_FAILED', {
       field: 'memberId',

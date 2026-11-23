@@ -361,7 +361,11 @@ describe('L1-B20-OPS-002 operations governance', () => {
         {} as TenantContext,
       ),
     ).rejects.toMatchObject({
-      problem: { error: { code: 'KNOWLEDGE_VALIDATION_FAILED' } },
+      problem: {
+        error: { code: 'KNOWLEDGE_VALIDATION_FAILED' },
+        requestId: 'req_missing_context',
+        traceId: 'trace_missing_context',
+      },
     });
   });
 

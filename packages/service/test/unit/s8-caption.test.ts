@@ -339,6 +339,19 @@ describe('TEST-X-IMAGE-CAPTION executor', () => {
     expect(updateStatus).toHaveBeenCalledWith(source.id, 'partial', context, 2);
   });
 
+  it('L1-B20-OPS-002-P01 accepts one Markdown JSON fence without changing the caption contract', async () => {
+    const { instance } = application({
+      vlmContent: '```json\n{"caption":"A fenced refund flow diagram"}\n```',
+      embeddingMode: 'caption-embedding',
+    });
+    await expect(instance.execute(job, context)).resolves.toMatchObject({
+      result: {
+        captionStatus: 'indexed',
+        vectorStatus: 'indexed',
+      },
+    });
+  });
+
   it('L1-B12-PARSE-005-N02 fails when corrupt VLM output leaves no usable image channel', async () => {
     const { instance, commit } = application({
       vlmContent: '{"caption":',
@@ -348,7 +361,7 @@ describe('TEST-X-IMAGE-CAPTION executor', () => {
       problem: {
         error: {
           code: 'KNOWLEDGE_MODEL_OUTPUT_INVALID',
-          details: { reason: 'caption_required_for_caption_embedding' },
+          details: { reason: 'caption_json_invalid' },
         },
       },
     });

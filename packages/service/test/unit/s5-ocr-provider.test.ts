@@ -97,7 +97,7 @@ describe('TEST-PARSE-002-BLOCK four OCR provider contracts', () => {
       async request<T>(request) {
         calls.push(request);
         const url = new URL(request.url);
-        if (url.pathname.endsWith('/parse/preupload')) {
+        if (url.pathname.endsWith('/v2/parse/preupload')) {
           return response({
             uploadUrl: 'https://upload.example.invalid/put',
             statusUrl: 'https://upload.example.invalid/status',

@@ -136,7 +136,7 @@ export class S5MockOcrProvider implements OcrProviderPort {
 function providerPath(provider: S5OcrRequest['config']['provider']): string {
   if (provider === 'somark') return '/parse/sync';
   if (provider === 'textin') return '/pdf_to_markdown';
-  if (provider === 'doc2x') return '/parse/preupload';
+  if (provider === 'doc2x') return '/v2/parse/preupload';
   return '/ocr';
 }
 
@@ -330,7 +330,7 @@ export class S5OcrHttpAdapter implements OcrProviderPort {
         const statusUrl =
           parsedPreupload.data.statusUrl ??
           (() => {
-            const value = new URL(appendPath(profile.endpoint, '/parse/status'));
+            const value = new URL(appendPath(profile.endpoint, '/v2/parse/status'));
             value.searchParams.set('uid', parsedPreupload.data.data!.uid);
             return value.toString();
           })();
