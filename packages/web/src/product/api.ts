@@ -851,6 +851,33 @@ export function importFiles(
   );
 }
 
+export function importImageDataset(
+  spaceId: string,
+  input: {
+    name: string;
+    uploadIds: string[];
+    directoryId?: string | null;
+    chunking?: Record<string, unknown>;
+  },
+) {
+  return knowledgeRequest<Job>(
+    `/v1/knowledge/spaces/${encodeURIComponent(spaceId)}/imports/images`,
+    {
+      method: 'POST',
+      idempotencyKey: key(),
+      body: {
+        name: input.name,
+        uploadIds: input.uploadIds,
+        directoryId: input.directoryId ?? null,
+        chunking: input.chunking ?? {
+          trainingType: 'imageParse',
+          chunkSettingMode: 'auto',
+        },
+      },
+    },
+  );
+}
+
 export function importText(
   spaceId: string,
   input: {
@@ -1179,6 +1206,7 @@ export const productApi = {
   searchImage,
   searchDeep,
   importFiles,
+  importImageDataset,
   importText,
   importUrl,
   importTemplate,

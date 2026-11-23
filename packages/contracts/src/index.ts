@@ -83,6 +83,7 @@ export {
   ImportApiLibrarySchema,
   ImportBackupSchema,
   ImportFilesSchema,
+  ImportImageDatasetSchema,
   ImportTemplateSchema,
   ImportTextSchema,
   ImportUrlPreviewChunkSchema,

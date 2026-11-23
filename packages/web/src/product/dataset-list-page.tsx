@@ -26,9 +26,17 @@ import {
   productApi,
   productSession,
   removeCollaborator,
+  updateModelBindings,
   updateSpace,
 } from './api';
-import type { Acl, BatchResult, Collaborator, KnowledgeSpace, PermissionLevel } from './types';
+import type {
+  Acl,
+  BatchResult,
+  Collaborator,
+  KnowledgeSpace,
+  ModelBinding,
+  PermissionLevel,
+} from './types';
 import { ProductAppShell } from './shell';
 import {
   ProductButton,
@@ -47,6 +55,7 @@ import {
   ProductSelect,
   ProductSkeleton,
   ProductStat,
+  ProductTextarea,
   StatusTag,
   ProductTypeIcon,
   formatDate,
@@ -71,19 +80,12 @@ function permissionRank(permission: PermissionLevel | null | undefined): number 
   return permission ? { read: 10, write: 20, manage: 30, owner: 40 }[permission] : 0;
 }
 
-const CREATE_OPTIONS: Array<{
+const THIRD_PARTY_CREATE_OPTIONS: Array<{
   type: CreatableType;
   title: string;
   description: string;
   icon: typeof CopyIcon;
 }> = [
-  {
-    type: 'general',
-    title: '通用知识库',
-    description: '上传文件、网页或自定义文本',
-    icon: CopyIcon,
-  },
-  { type: 'folder', title: '文件夹', description: '整理知识库并控制访问权限', icon: CopyIcon },
   {
     type: 'api',
     title: 'API 文件库',
@@ -117,7 +119,18 @@ function iconKeyOf(type: CreatableType) {
 }
 
 function createLabel(type: CreatableType) {
-  return CREATE_OPTIONS.find((option) => option.type === type)?.title ?? '知识库';
+  if (type === 'general') return '通用知识库';
+  if (type === 'folder') return '文件夹';
+  return THIRD_PARTY_CREATE_OPTIONS.find((option) => option.type === type)?.title ?? '知识库';
+}
+
+function isHttpUrl(value: string): boolean {
+  try {
+    const parsed = new URL(value);
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+  } catch {
+    return false;
+  }
 }
 
 export function DatasetListPage(props: { parentId: string }) {
@@ -130,11 +143,16 @@ export function DatasetListPage(props: { parentId: string }) {
   const [sort, setSort] = useState<SpaceSort>('-updatedAt');
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const [createMenuOpen, setCreateMenuOpen] = useState(false);
+  const [thirdPartyMenuOpen, setThirdPartyMenuOpen] = useState(false);
   const [createType, setCreateType] = useState<CreatableType>('general');
   const [createOpen, setCreateOpen] = useState(false);
   const [createName, setCreateName] = useState('');
   const [createDescription, setCreateDescription] = useState('');
+  const [vectorModelId, setVectorModelId] = useState('');
+  const [agentModelId, setAgentModelId] = useState('');
+  const [vlmModelId, setVlmModelId] = useState('');
   const [baseUrl, setBaseUrl] = useState('');
+  const [apiBasePath, setApiBasePath] = useState('');
   const [authorization, setAuthorization] = useState('');
   const [appId, setAppId] = useState('');
   const [appSecret, setAppSecret] = useState('');
@@ -147,6 +165,7 @@ export function DatasetListPage(props: { parentId: string }) {
   const [dingWorkspaceId, setDingWorkspaceId] = useState('');
   const [createBusy, setCreateBusy] = useState(false);
   const [createError, setCreateError] = useState<unknown>(null);
+  const [apiUrlError, setApiUrlError] = useState('');
   const [editTarget, setEditTarget] = useState<KnowledgeSpace | null>(null);
   const [editName, setEditName] = useState('');
   const [editDescription, setEditDescription] = useState('');
@@ -189,6 +208,20 @@ export function DatasetListPage(props: { parentId: string }) {
     queryKey: ['kb-product', 'session'],
     queryFn: productSession,
   });
+  const modelsQuery = useQuery({
+    queryKey: ['kb-product', 'models'],
+    queryFn: () => productApi.listModels(),
+    enabled: createOpen,
+  });
+  const availableModels = (modelsQuery.data ?? []).filter((model) => model.authorized);
+  const embeddingModels = availableModels.filter((model) => model.type === 'embedding');
+  const llmModels = availableModels.filter(
+    (model) => model.type === 'llm' && model.capabilities.includes('chat'),
+  );
+  const vlmModels = availableModels.filter(
+    (model) =>
+      (model.type === 'vlm' || model.type === 'llm') && model.capabilities.includes('vision'),
+  );
   const canCreate =
     sessionQuery.data?.isWorkspaceOwner === true ||
     sessionQuery.data?.scopes.includes('knowledge:write') === true;
@@ -260,6 +293,13 @@ export function DatasetListPage(props: { parentId: string }) {
   }, [createOpen]);
 
   useEffect(() => {
+    if (!createOpen || modelsQuery.isLoading) return;
+    setVectorModelId((current) => current || embeddingModels[0]?.modelId || '');
+    setAgentModelId((current) => current || llmModels[0]?.modelId || '');
+    setVlmModelId((current) => current || vlmModels[0]?.modelId || '');
+  }, [createOpen, embeddingModels, llmModels, modelsQuery.isLoading, vlmModels]);
+
+  useEffect(() => {
     if (!editTarget) return;
     const timer = setTimeout(() => editNameRef.current?.focus(), 60);
     return () => clearTimeout(timer);
@@ -280,7 +320,11 @@ export function DatasetListPage(props: { parentId: string }) {
     setCreateType(type);
     setCreateName('');
     setCreateDescription('');
+    setVectorModelId('');
+    setAgentModelId('');
+    setVlmModelId('');
     setBaseUrl('');
+    setApiBasePath('');
     setAuthorization('');
     setAppId('');
     setAppSecret('');
@@ -292,6 +336,8 @@ export function DatasetListPage(props: { parentId: string }) {
     setDingUserId('');
     setDingWorkspaceId('');
     setCreateError(null);
+    setApiUrlError('');
+    setThirdPartyMenuOpen(false);
     setCreateMenuOpen(false);
     setCreateOpen(true);
   };
@@ -303,6 +349,7 @@ export function DatasetListPage(props: { parentId: string }) {
         config: {
           provider: 'custom_api' as const,
           baseUrl,
+          ...(apiBasePath.trim() ? { basePath: apiBasePath.trim() } : {}),
           catalogPath: '/v1/file/list' as const,
           detailPath: '/v1/file/detail' as const,
           contentPath: '/v1/file/content' as const,
@@ -345,8 +392,45 @@ export function DatasetListPage(props: { parentId: string }) {
     };
   };
 
+  const selectedModelBindings = (): ModelBinding[] => {
+    const roles: Array<{
+      modelType: ModelBinding['modelType'];
+      modelId: string;
+    }> = [
+      { modelType: 'embedding', modelId: vectorModelId },
+      { modelType: 'llm', modelId: agentModelId },
+      { modelType: 'vlm', modelId: vlmModelId },
+    ];
+    return roles.flatMap(({ modelType, modelId }) => {
+      if (!modelId) return [];
+      const model = availableModels.find((candidate) => candidate.modelId === modelId);
+      if (!model) return [];
+      return [
+        {
+          modelType,
+          modelId: model.modelId,
+          displayName: model.displayName,
+          requiredCapabilities: model.capabilities,
+          status: 'active' as const,
+        },
+      ];
+    });
+  };
+
+  const persistCreateModelBindings = async (space: KnowledgeSpace) => {
+    const current = await productApi.getModelBindings(space.id);
+    const selected = selectedModelBindings();
+    const replacedTypes = new Set<ModelBinding['modelType']>(['embedding', 'llm', 'vlm']);
+    const next = [
+      ...current.items.filter((binding) => !replacedTypes.has(binding.modelType)),
+      ...selected,
+    ];
+    await updateModelBindings(space.id, next, space.version);
+  };
+
   const submitCreate = async (event: FormEvent) => {
     event.preventDefault();
+    setApiUrlError('');
     const name = createName.trim();
     if (!name) {
       setCreateError(new Error('请输入名称'));
@@ -354,6 +438,10 @@ export function DatasetListPage(props: { parentId: string }) {
       return;
     }
     if (createType !== 'general' && createType !== 'folder') {
+      if (createType === 'api' && !isHttpUrl(baseUrl.trim())) {
+        setApiUrlError('请输入完整地址，需以 http:// 或 https:// 开头');
+        return;
+      }
       if (createType === 'api' && (!baseUrl || !authorization)) {
         setCreateError(new Error('请填写 API 地址和访问令牌'));
         return;
@@ -371,6 +459,10 @@ export function DatasetListPage(props: { parentId: string }) {
         return;
       }
     }
+    if (createType !== 'folder' && (!vectorModelId || !agentModelId)) {
+      setCreateError(new Error('请选择索引模型和文本理解模型'));
+      return;
+    }
     setCreateBusy(true);
     setCreateError(null);
     try {
@@ -384,6 +476,14 @@ export function DatasetListPage(props: { parentId: string }) {
         sourceAclMode: 'inherited',
         sourcePermissionEnabled: true,
       });
+      if (createType !== 'folder') {
+        try {
+          await persistCreateModelBindings(created);
+        } catch (error) {
+          await deleteSpace(created).catch(() => undefined);
+          throw error;
+        }
+      }
       if (createType !== 'general' && createType !== 'folder') {
         const payload = connectorPayload();
         await connectConnector(created.id, payload.provider, {
@@ -637,19 +737,58 @@ export function DatasetListPage(props: { parentId: string }) {
                   </ProductButton>
                   <ProductMenu
                     open={createMenuOpen}
-                    onClose={() => setCreateMenuOpen(false)}
+                    onClose={() => {
+                      setCreateMenuOpen(false);
+                      setThirdPartyMenuOpen(false);
+                    }}
                     align="right"
                   >
-                    {CREATE_OPTIONS.map((option) => (
-                      <ProductMenuItem
-                        key={option.type}
-                        icon={<option.icon boxSize={3.5} />}
-                        hint={option.description}
-                        onClick={() => openCreate(option.type)}
-                      >
-                        {option.title}
-                      </ProductMenuItem>
-                    ))}
+                    <ProductMenuItem
+                      icon={<CopyIcon boxSize={3.5} />}
+                      hint="上传文件、网页或自定义文本"
+                      onClick={() => openCreate('general')}
+                    >
+                      通用知识库
+                    </ProductMenuItem>
+                    <ProductMenuItem
+                      icon={<CopyIcon boxSize={3.5} />}
+                      hint="通过爬虫，批量爬取网页数据构建知识库"
+                      disabled
+                    >
+                      网站知识库
+                    </ProductMenuItem>
+                    <ProductMenuItem
+                      icon={<ExternalLinkIcon boxSize={3.5} />}
+                      hint="API、飞书、语雀、钉钉等外部文档"
+                      expanded={thirdPartyMenuOpen}
+                      hasPopup
+                      onMouseEnter={() => setThirdPartyMenuOpen(true)}
+                      onFocus={() => setThirdPartyMenuOpen(true)}
+                      onClick={() => setThirdPartyMenuOpen((value) => !value)}
+                    >
+                      第三方知识库
+                    </ProductMenuItem>
+                    {thirdPartyMenuOpen ? (
+                      <div className="kb2-menu-submenu" role="group" aria-label="第三方知识库">
+                        {THIRD_PARTY_CREATE_OPTIONS.map((option) => (
+                          <ProductMenuItem
+                            key={option.type}
+                            icon={<option.icon boxSize={3.5} />}
+                            hint={option.description}
+                            onClick={() => openCreate(option.type)}
+                          >
+                            {option.title}
+                          </ProductMenuItem>
+                        ))}
+                      </div>
+                    ) : null}
+                    <ProductMenuItem
+                      icon={<CopyIcon boxSize={3.5} />}
+                      hint="整理知识库并控制访问权限"
+                      onClick={() => openCreate('folder')}
+                    >
+                      文件夹
+                    </ProductMenuItem>
                   </ProductMenu>
                 </div>
               ) : null}
@@ -1068,56 +1207,143 @@ export function DatasetListPage(props: { parentId: string }) {
         footer={
           <>
             <ProductButton onClick={() => setCreateOpen(false)} disabled={createBusy}>
-              取消
+              {createType === 'folder' ? '取消' : '关闭'}
             </ProductButton>
             <ProductButton
               tone="primary"
               busy={createBusy}
+              disabled={createType !== 'folder' && modelsQuery.isLoading}
               onClick={() => {
                 const form = document.getElementById('kb2-create-form') as HTMLFormElement | null;
                 form?.requestSubmit();
               }}
             >
-              创建
+              {createType === 'folder' ? '确认' : '创建'}
             </ProductButton>
           </>
         }
       >
-        <form id="kb2-create-form" className="kb2-form-grid" onSubmit={submitCreate}>
-          <ProductField label="名称">
+        <form
+          id="kb2-create-form"
+          className={createType === 'folder' ? 'kb2-form-stack' : 'kb2-form-grid'}
+          onSubmit={submitCreate}
+          noValidate
+        >
+          <ProductField label={createType === 'folder' ? '取个名字' : '名称'}>
             <ProductInput
               ref={createNameRef}
               value={createName}
               onChange={(event) => setCreateName(event.target.value)}
-              maxLength={30}
-              placeholder={`输入${createLabel(createType)}名称`}
+              maxLength={createType === 'folder' ? 100 : 30}
+              placeholder={
+                createType === 'folder'
+                  ? '请输入文件夹名'
+                  : `给${createLabel(createType)}取一个名字`
+              }
               required
             />
           </ProductField>
-          <ProductField label="说明">
-            <ProductInput
-              value={createDescription}
-              onChange={(event) => setCreateDescription(event.target.value)}
-              maxLength={2000}
-              placeholder="可选"
-            />
-          </ProductField>
-          {createType === 'api' ? (
+          {createType === 'folder' ? (
+            <ProductField label="文件夹描述">
+              <ProductTextarea
+                value={createDescription}
+                onChange={(event) => setCreateDescription(event.target.value)}
+                maxLength={200}
+                rows={4}
+                placeholder="请输入文件夹描述"
+              />
+            </ProductField>
+          ) : (
             <>
-              <ProductField label="API 基础地址">
+              <ProductField label="说明">
                 <ProductInput
-                  value={baseUrl}
-                  onChange={(event) => setBaseUrl(event.target.value)}
-                  placeholder="https://example.com/api"
-                  type="url"
+                  value={createDescription}
+                  onChange={(event) => setCreateDescription(event.target.value)}
+                  maxLength={2000}
+                  placeholder="可选"
                 />
               </ProductField>
-              <ProductField label="访问令牌" hint="使用 Bearer 认证；令牌只提交给后端。">
+              <ProductField label="索引模型" hint="用于构建知识库向量索引">
+                <ProductSelect
+                  aria-label="索引模型"
+                  value={vectorModelId}
+                  onChange={(event) => setVectorModelId(event.target.value)}
+                  required
+                >
+                  <option value="">
+                    {modelsQuery.isLoading ? '正在加载模型…' : '请选择索引模型'}
+                  </option>
+                  {embeddingModels.map((model) => (
+                    <option key={model.modelId} value={model.modelId}>
+                      {model.displayName}
+                    </option>
+                  ))}
+                </ProductSelect>
+              </ProductField>
+              <ProductField label="文本理解模型" hint="用于文档理解、问答和索引增强">
+                <ProductSelect
+                  aria-label="文本理解模型"
+                  value={agentModelId}
+                  onChange={(event) => setAgentModelId(event.target.value)}
+                  required
+                >
+                  <option value="">
+                    {modelsQuery.isLoading ? '正在加载模型…' : '请选择文本理解模型'}
+                  </option>
+                  {llmModels.map((model) => (
+                    <option key={model.modelId} value={model.modelId}>
+                      {model.displayName}
+                    </option>
+                  ))}
+                </ProductSelect>
+              </ProductField>
+              <ProductField label="图片理解模型" hint="可选；用于图片理解与描述">
+                <ProductSelect
+                  aria-label="图片理解模型"
+                  value={vlmModelId}
+                  onChange={(event) => setVlmModelId(event.target.value)}
+                >
+                  <option value="">不设置</option>
+                  {vlmModels.map((model) => (
+                    <option key={model.modelId} value={model.modelId}>
+                      {model.displayName}
+                    </option>
+                  ))}
+                </ProductSelect>
+              </ProductField>
+            </>
+          )}
+          {createType === 'api' ? (
+            <>
+              <ProductField label="接口地址" error={apiUrlError}>
+                <ProductInput
+                  value={baseUrl}
+                  onChange={(event) => {
+                    setBaseUrl(event.target.value);
+                    setApiUrlError('');
+                  }}
+                  placeholder="接口地址"
+                  type="url"
+                  maxLength={200}
+                  required
+                />
+              </ProductField>
+              <ProductField label="根目录" hint="可选；相对于接口地址的目录路径">
+                <ProductInput
+                  value={apiBasePath}
+                  onChange={(event) => setApiBasePath(event.target.value)}
+                  placeholder="/"
+                  maxLength={512}
+                  disabled={!isHttpUrl(baseUrl.trim())}
+                />
+              </ProductField>
+              <ProductField label="Authorization" hint="请求头参数，会自动补充 Bearer">
                 <ProductInput
                   value={authorization}
                   onChange={(event) => setAuthorization(event.target.value)}
                   type="password"
                   autoComplete="off"
+                  maxLength={2000}
                 />
               </ProductField>
             </>
@@ -1190,6 +1416,11 @@ export function DatasetListPage(props: { parentId: string }) {
                 />
               </ProductField>
             </>
+          ) : null}
+          {createType !== 'folder' ? (
+            <div className="kb2-form-grid__full kb2-compliance-note" role="note">
+              请确保您的内容严格遵守相关法律法规，避免包含任何违法或侵权的内容。请谨慎上传可能涉及敏感信息的资料。
+            </div>
           ) : null}
           <div className="kb2-form-grid__full">
             <ProductError error={createError} />

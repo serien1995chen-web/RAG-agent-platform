@@ -8,6 +8,7 @@ import {
   ImportApiLibrarySchema,
   ImportBackupSchema,
   ImportFilesSchema,
+  ImportImageDatasetSchema,
   ImportTemplateSchema,
   ImportTextSchema,
   ImportUrlPreviewSchema,
@@ -508,6 +509,39 @@ async function fileDrafts(
   return drafts;
 }
 
+function imageDatasetDraft(
+  drafts: readonly ImportSourceDraft[],
+  name: string,
+  input: KnowledgeOperationInput,
+): ImportSourceDraft {
+  if (drafts.length === 0 || drafts.some((draft) => draft.kind !== 'image')) {
+    throw createKnowledgeError({
+      code: 'KNOWLEDGE_UNSUPPORTED_CONTENT',
+      requestId: input.context.requestId,
+      traceId: input.context.traceId,
+      details: { field: 'uploadIds', reason: 'image_uploads_required' },
+    });
+  }
+  const first = drafts[0]!;
+  const imageBlobRefIds = drafts
+    .map((draft) => draft.blobRefId)
+    .filter((blobRefId): blobRefId is string => Boolean(blobRefId));
+  assertS8ImageCount(imageBlobRefIds.length, input.context);
+  return {
+    ...first,
+    name,
+    blobRefId: imageBlobRefIds[0] ?? null,
+    blobRefIds: imageBlobRefIds,
+    sizeBytes: drafts.reduce((total, draft) => total + draft.sizeBytes, 0),
+    contentHash: sha256Of([...imageBlobRefIds].sort().join('\u0000')),
+    metadata: {
+      ...first.metadata,
+      imageBlobRefIds,
+      imageCount: imageBlobRefIds.length,
+    },
+  };
+}
+
 function backupExternalId(question: string, answer: string): string {
   return `backup:${sha256Of(`${question}\u0000${answer}`)}`;
 }
@@ -571,6 +605,53 @@ export class S04IngestionApplication {
             importKind: 'files',
             sources,
             parseConfig: body.parseConfig,
+            chunking: body.chunking as Record<string, unknown>,
+            idempotencyKey: idempotency,
+            requestHash,
+          }),
+          input.context,
+        );
+        return { status: 202, data: result.job };
+      }
+      case 'API-IMPORT-IMAGES': {
+        const body = parseBody(ImportImageDatasetSchema, input);
+        const targetSpaceId = spaceId(input);
+        await assertWriteAccess(this.dependencies, targetSpaceId, input.context);
+        const idempotency = idempotencyKey(input);
+        const requestHash = operationHash(input);
+        const replay = await preflightImport({
+          dependencies: this.dependencies,
+          operation: input,
+          knowledgeSpaceId: targetSpaceId,
+          importKind: 'images',
+          idempotencyKey: idempotency,
+          requestHash,
+        });
+        if (replay) return { status: 202, data: replay.job };
+        const drafts = await fileDrafts(
+          this.dependencies,
+          input,
+          body.uploadIds,
+          targetSpaceId,
+          body.directoryId ?? null,
+          'liteparse',
+        );
+        const source = imageDatasetDraft(drafts, body.name, input);
+        await assertQuota(this.dependencies, {
+          operation: 'import',
+          knowledgeSpaceId: targetSpaceId,
+          sourceCount: 1,
+          sizeBytes: source.sizeBytes,
+          context: input.context,
+        });
+        const result = await this.dependencies.imports.submit(
+          commandOf({
+            operation: input,
+            knowledgeSpaceId: targetSpaceId,
+            directoryId: body.directoryId ?? null,
+            importKind: 'images',
+            sources: [source],
+            parseConfig: {},
             chunking: body.chunking as Record<string, unknown>,
             idempotencyKey: idempotency,
             requestHash,
@@ -1465,6 +1546,7 @@ export class S04IngestionApplication {
 export function isS04Operation(operationId: string): boolean {
   return new Set([
     'API-IMPORT-FILES',
+    'API-IMPORT-IMAGES',
     'API-IMPORT-TEXT',
     'API-IMPORT-URL',
     'API-IMPORT-TEMPLATE',

@@ -155,11 +155,9 @@ async function uploadAndImport(input: {
 
 async function openImport(page: Page) {
   await page.goto(
-    app.baseUrl + '/dataset/detail?datasetId=' + datasetId + '&currentTab=import&source=fileCustom',
+    app.baseUrl + '/dataset/detail?datasetId=' + datasetId + '&currentTab=import&source=fileLocal',
     { waitUntil: 'networkidle' },
   );
-  await page.getByRole('button', { name: /本地文件/ }).click();
-  await page.getByRole('button', { name: '下一步' }).click();
   await page.locator('input[type="file"]').waitFor();
 }
 
@@ -277,6 +275,7 @@ describe('L1-B06-ING-001 product upload flow', () => {
     });
     await playwrightExpect(page.getByText(name, { exact: true })).toBeVisible();
 
+    await page.getByRole('button', { name: '下一步' }).click();
     await page.getByRole('button', { name: '下一步' }).click();
     await page.getByRole('button', { name: '下一步' }).click();
     const responsePromise = page.waitForResponse(

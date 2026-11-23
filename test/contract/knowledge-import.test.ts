@@ -21,6 +21,7 @@ const deferred = JSON.parse(
 
 const IMPORT_OPERATIONS = [
   'API-IMPORT-FILES',
+  'API-IMPORT-IMAGES',
   'API-IMPORT-TEXT',
   'API-IMPORT-URL',
   'API-IMPORT-TEMPLATE',
@@ -33,8 +34,8 @@ const IMPORT_OPERATIONS = [
 ];
 
 describe('S4 import contract', () => {
-  it('keeps exactly the ten import operations in the W2 runtime', () => {
-    expect(runtime.count).toBe(123);
+  it('keeps exactly the eleven import operations in the W2 runtime', () => {
+    expect(runtime.count).toBe(124);
     expect(deferred.count).toBe(0);
     const runtimeIds = new Set(runtime.operations.map((entry) => entry.operationId));
     const deferredIds = new Set(deferred.operations.map((entry) => entry.operationId));
@@ -47,6 +48,7 @@ describe('S4 import contract', () => {
   it('maps import operations to S4 Capabilities only', () => {
     const expected = new Map([
       ['API-IMPORT-FILES', ['ING-001']],
+      ['API-IMPORT-IMAGES', ['ING-001', 'MULTI-001']],
       ['API-IMPORT-TEXT', ['ING-002', 'DOWN-004']],
       ['API-IMPORT-URL', ['ING-003']],
       ['API-IMPORT-TEMPLATE', ['ING-004']],
@@ -112,6 +114,30 @@ describe('S4 import contract', () => {
     expect(exportSchema.properties.format.enum).toEqual(['zip', 'csv']);
   });
 
+  it('exposes a dedicated named image dataset import contract', () => {
+    const path = openapi.paths['/v1/knowledge/spaces/{spaceId}/imports/images']?.post as {
+      requestBody: {
+        content: {
+          'application/json': {
+            schema: { $ref: string };
+          };
+        };
+      };
+    };
+    expect(path.requestBody.content['application/json'].schema.$ref).toBe(
+      '#/components/schemas/ImportImageDataset',
+    );
+    const schema = openapi.components.schemas.ImportImageDataset as {
+      properties: {
+        name: { maxLength: number };
+        uploadIds: { minItems: number; maxItems: number };
+      };
+    };
+    expect(schema.properties.name.maxLength).toBe(240);
+    expect(schema.properties.uploadIds.minItems).toBe(1);
+    expect(schema.properties.uploadIds.maxItems).toBe(5);
+  });
+
   it('L1-B10-ING-003-001 exposes URL preview without adding a public path', () => {
     const urlPath = openapi.paths['/v1/knowledge/spaces/{spaceId}/imports/url']?.post as {
       requestBody: {
@@ -123,7 +149,7 @@ describe('S4 import contract', () => {
       };
       responses: Record<string, unknown>;
     };
-    expect(Object.keys(openapi.paths)).toHaveLength(95);
+    expect(Object.keys(openapi.paths)).toHaveLength(96);
     expect(urlPath.responses).toHaveProperty('200');
     expect(urlPath.responses).toHaveProperty('202');
     expect(urlPath.requestBody.content['application/json'].schema.$ref).toBe(

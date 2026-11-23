@@ -247,6 +247,17 @@ beforeAll(async () => {
         return 7;
       },
     },
+    caption: {
+      async execute() {
+        return { result: { partial: false }, value: new mongoose.Types.ObjectId().toString() };
+      },
+      async markFinalFailure() {
+        return undefined;
+      },
+      async processAsset() {
+        return { segmentId: new mongoose.Types.ObjectId().toString(), partial: false };
+      },
+    },
     port: {
       async parse(input) {
         capturedParseMetadata = input.metadata;
@@ -313,6 +324,149 @@ afterAll(async () => {
 });
 
 describe('S6 C1/C2/C3 processing chain', () => {
+  it('fans a multi-image Source out to one caption job per image', async () => {
+    const models = registerKnowledgeModels(connection);
+    const imageSourceId = new mongoose.Types.ObjectId();
+    const imageJobId = new mongoose.Types.ObjectId();
+    const imageOutboxId = new mongoose.Types.ObjectId();
+    const firstImageId = new mongoose.Types.ObjectId();
+    const secondImageId = new mongoose.Types.ObjectId();
+    const now = new Date();
+    await models.KnowledgeSource.create({
+      _id: imageSourceId,
+      workspaceId,
+      knowledgeSpaceId,
+      version: 1,
+      deletedAt: null,
+      createdByMemberId: context.memberId,
+      updatedByMemberId: context.memberId,
+      directoryId: null,
+      kind: 'image',
+      name: '产品截图',
+      externalId: null,
+      connectorId: null,
+      blobRefId: firstImageId,
+      mimeType: 'application/octet-stream',
+      sizeBytes: 2,
+      contentHash: 'image-set',
+      parseProvider: 'liteparse',
+      processingStatus: 'queued',
+      sourceVersion: 1,
+      searchEnabled: true,
+      permissionState: 'disabled',
+      permissionRevision: 0,
+      ownershipMemberId: context.memberId,
+      metadata: {
+        imageCount: 2,
+        imageBlobRefIds: [String(firstImageId), String(secondImageId)],
+      },
+      tagValues: [],
+    });
+    await models.KnowledgeJob.create({
+      _id: imageJobId,
+      workspaceId,
+      knowledgeSpaceId,
+      version: 1,
+      deletedAt: null,
+      createdByMemberId: context.memberId,
+      updatedByMemberId: context.memberId,
+      kind: 'import',
+      resourceType: 'space',
+      resourceId: String(knowledgeSpaceId),
+      status: 'queued',
+      priority: 5,
+      idempotencyKey: `multi-image-import-${suffix}`,
+      inputSnapshot: {
+        sourceIds: [String(imageSourceId)],
+        sourceVersions: { [String(imageSourceId)]: 1 },
+        configurationHash: 'image-config',
+        importKind: 'images',
+        chunkingConfigSnapshot: { trainingType: 'imageParse', chunkSettingMode: 'auto' },
+      },
+      progress: { stage: 'queued', completed: 0, total: 1, percent: 0 },
+      attempts: 0,
+      maxAttempts: 3,
+      attemptEpoch: 0,
+      fencingToken: 'unassigned',
+      leaseOwner: null,
+      leaseExpiresAt: null,
+      heartbeatAt: null,
+      availableAt: now,
+      cancelRequestedAt: null,
+      pausedAt: null,
+      error: null,
+      result: null,
+      expiresAt: new Date(now.getTime() + 86_400_000),
+    });
+    await models.KnowledgeOutboxEvent.create({
+      _id: imageOutboxId,
+      workspaceId,
+      knowledgeSpaceId,
+      version: 1,
+      deletedAt: null,
+      createdByMemberId: context.memberId,
+      updatedByMemberId: context.memberId,
+      eventKey: `multi-image-${suffix}`,
+      eventType: 'import.submit',
+      aggregateType: 'job',
+      aggregateId: String(imageJobId),
+      payload: {
+        queue: 'knowledge-import',
+        parentJobId: String(imageJobId),
+        sourceIds: [String(imageSourceId)],
+        importKind: 'images',
+      },
+      status: 'published',
+      attempts: 1,
+      availableAt: now,
+      publishedAt: now,
+      error: null,
+      expiresAt: new Date(now.getTime() + 86_400_000),
+    });
+    expect(
+      await processing.handleImport(String(imageOutboxId), `worker-image-${suffix}`, context),
+    ).toBe('succeeded');
+    const captionJobs = await models.KnowledgeJob.find({
+      workspaceId,
+      kind: 'caption',
+      resourceId: String(imageSourceId),
+    })
+      .sort({ 'inputSnapshot.imageOrder': 1 })
+      .lean();
+    expect(captionJobs).toHaveLength(2);
+    expect(
+      captionJobs.map((job) => ({
+        imageBlobRefId: job.inputSnapshot.imageBlobRefId,
+        imageOrder: job.inputSnapshot.imageOrder,
+        imageCount: job.inputSnapshot.imageCount,
+      })),
+    ).toEqual([
+      {
+        imageBlobRefId: String(firstImageId),
+        imageOrder: 0,
+        imageCount: 2,
+      },
+      {
+        imageBlobRefId: String(secondImageId),
+        imageOrder: 1,
+        imageCount: 2,
+      },
+    ]);
+    for (const job of captionJobs) {
+      expect(
+        await processing.handleQueue(
+          'knowledge-caption',
+          String(job._id),
+          `worker-image-${suffix}`,
+          context,
+        ),
+      ).toBe('succeeded');
+    }
+    expect(await models.KnowledgeSource.findById(imageSourceId).lean()).toMatchObject({
+      processingStatus: 'ready',
+    });
+  });
+
   it('fans out parent, parses through S5, indexes vector/fulltext and aggregates', async () => {
     const importOutcome = await processing.handleImport(
       String(outboxEventId),

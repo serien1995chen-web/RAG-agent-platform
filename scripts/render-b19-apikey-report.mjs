@@ -147,7 +147,7 @@ const issues = [
     severity: 'P1',
     status: 'FIXED_VERIFIED',
     approval: 'APPROVED',
-    expected: '公共 RouteEntry 校验只接受当前冻结的 123 operations。',
+    expected: '公共 RouteEntry 校验只接受当前冻结的 124 operations。',
     evidence: 'validateRouteRegistry() 返回“完整 registry 应为 120，实际 123”。',
     source: 'packages/contracts/src/openapi/route-registry.ts:115-119',
     test: 'test/contract/kb-b19-api-key-contract.test.ts',
@@ -328,9 +328,9 @@ const report = `# B19 API Key 预检验证报告
 
 ## 3. DOC_DRIFT
 
-- 当前源码实测：95 paths、123 operations、141 schemas、8 parameters；runtime 123、deferred 0、交集 0。
+- 当前源码实测：96 paths、124 operations、142 schemas、8 parameters；runtime 124、deferred 0、交集 0。
 - 执行手册旧基线仍写 92/120/139 和旧 HEAD \`257f501…\`；AGENTS.md 仍写 92/120/139、runtime 65。
-- 当前合同与用户冻结的 95/123/141/8 一致，不要求退版；报告以当前源码为准。
+- 当前合同与用户冻结的 96/124/142/8 一致，不要求退版；报告以当前源码为准。
 
 ## 4. FastGPT 行为矩阵
 
@@ -351,7 +351,7 @@ ${behaviorLines}
 | \`test/security/s10-api-key-auth.test.ts\` / \`s10-audit-redaction.test.ts\` / \`s10-secret-leak.test.ts\` | REUSE | 既有鉴权、脱敏和幂等 secret 测试通过 |
 | \`test/security/s11-api-key-tenant.test.ts\` | STALE | 含恒真 BLOCKED 占位断言，不能作为当前 Key 证据 |
 | \`test/tenant/s10-api-key-tenant.test.ts\` / \`test/concurrency/s10-api-key-concurrency.test.ts\` | REUSE | 跨租户、Space scope、同版本 CAS 基线通过 |
-| \`test/contract/kb-b19-api-key-contract.test.ts\` | NEW | 123-operation 合同/route/envelope/秘密扫描与行为矩阵校验 |
+| \`test/contract/kb-b19-api-key-contract.test.ts\` | NEW | 124-operation 合同/route/envelope/秘密扫描与行为矩阵校验 |
 | \`test/e2e/kb-b19-api-key-http.test.ts\` | NEW | 真实 HTTP 生命周期、123×401/403、限流、审计、清理 |
 | \`test/security/kb-b19-api-key-auth-integrity.test.ts\` | NEW | workspace-unique prefix 与 HMAC 认证完整性 |
 | \`test/concurrency/kb-b19-api-key-races.test.ts\` | NEW | rotate 竞争与 rotate/revoke 竞争 |
@@ -363,7 +363,7 @@ ${behaviorLines}
 |---|---|---:|---:|---:|---:|---:|---|
 ${commandLines}
 
-## 7. API-001 123-operation 覆盖表
+## 7. API-001 124-operation 覆盖表
 
 | operationId | group | P | N | A | S | C | F | Q | 成功调用 | B18 | OPS |
 |---|---|---|---|---|---|---|---|---|---|---|---|

@@ -85,12 +85,14 @@ async function capturePage(page: Page, name: string, diagnostics: PageDiagnostic
 async function enterUrlForm(page: Page) {
   const heading = page.getByRole('heading', { name: /新建 \/ 导入/ });
   await playwrightExpect(heading).toBeVisible();
+  const urlInput = page.getByLabel('网页地址');
   const urlSource = page.getByRole('button', { name: /网页链接/ });
-  if (await urlSource.isVisible()) await urlSource.click();
-  const next = page.getByRole('button', { name: '下一步' });
-  await playwrightExpect(next).toBeEnabled();
-  await next.click();
-  await playwrightExpect(page.getByLabel('网页地址')).toBeVisible();
+  await playwrightExpect(urlSource.or(urlInput).first()).toBeVisible();
+  if (!(await urlInput.isVisible())) {
+    await urlSource.click();
+    await page.getByRole('button', { name: '下一步' }).click();
+  }
+  await playwrightExpect(urlInput).toBeVisible();
 }
 
 beforeAll(async () => {
@@ -177,6 +179,7 @@ describe('L1-B10-ING-003 UI single-page URL import', () => {
       await page.getByLabel('网页地址').fill('https://public.example.test/not-previewed');
       await page.getByLabel('内容选择器').fill('main');
       await page.getByRole('button', { name: '下一步' }).click();
+      await page.getByRole('button', { name: '下一步' }).click();
       const previewStep = page.getByText('数据预览', { exact: true }).last();
       await playwrightExpect(previewStep).toBeVisible();
       await capturePage(page, 'preview-gating', diagnostics);
@@ -194,6 +197,7 @@ describe('L1-B10-ING-003 UI single-page URL import', () => {
       await enterUrlForm(page);
       const blockedUrl = 'http://169.254.169.254/latest/meta-data';
       await page.getByLabel('网页地址').fill(blockedUrl);
+      await page.getByRole('button', { name: '下一步' }).click();
       await page.getByRole('button', { name: '下一步' }).click();
       const response = page.waitForResponse(
         (candidate) =>
@@ -224,6 +228,7 @@ describe('L1-B10-ING-003 UI single-page URL import', () => {
         page.getByTestId('b10-url-preview-row').getByRole('alert'),
       ).toContainText(/不支持|unsupported/i);
       await page.getByRole('button', { name: '上一步' }).click();
+      await page.getByRole('button', { name: '上一步' }).click();
       await playwrightExpect(page.getByLabel('网页地址')).toHaveValue(blockedUrl);
     } finally {
       await context.close();
@@ -238,6 +243,8 @@ describe('L1-B10-ING-003 UI single-page URL import', () => {
       await page.getByLabel('网页地址').fill(url);
       await page.getByLabel('内容选择器').fill('main');
       await page.getByRole('button', { name: '下一步' }).click();
+      await page.getByRole('button', { name: '下一步' }).click();
+      await page.getByRole('button', { name: '上一步' }).click();
       await page.getByRole('button', { name: '上一步' }).click();
       await capturePage(page, 'back-retention', diagnostics);
       await playwrightExpect(page.getByLabel('网页地址')).toHaveValue(url);
@@ -321,6 +328,7 @@ describe('L1-B10-ING-003 UI single-page URL import', () => {
         .getByLabel('网页地址')
         .fill('https://public.example.test/one\nhttps://public.example.test/two');
       await page.getByRole('button', { name: '下一步' }).click();
+      await page.getByRole('button', { name: '下一步' }).click();
       for (const row of await page.getByTestId('b10-url-preview-row').all()) {
         await row.getByRole('button', { name: '预览', exact: true }).click();
         await playwrightExpect(row.getByText(/Preview body/)).toBeVisible();
@@ -358,7 +366,7 @@ describe('L1-B10-ING-003 UI single-page URL import', () => {
       await page.getByLabel('网页地址').fill('https://public.example.test/refresh');
       await page.reload({ waitUntil: 'networkidle' });
       await playwrightExpect(page.getByRole('heading', { name: /新建 \/ 导入/ })).toBeVisible();
-      await playwrightExpect(page.getByRole('button', { name: /网页链接/ })).toBeVisible();
+      await playwrightExpect(page.getByLabel('网页地址')).toBeVisible();
       await capturePage(page, 'refresh-restored-entry', diagnostics);
     } finally {
       await context.close();
@@ -446,6 +454,7 @@ describe.skipIf(!B10_PUBLIC_FIXTURE_BASE_URL)(
             ].join('\n'),
           );
         await page.getByLabel('内容选择器').fill('main');
+        await page.getByRole('button', { name: '下一步' }).click();
         await page.getByRole('button', { name: '下一步' }).click();
         const rows = page.getByTestId('b10-url-preview-row');
         await playwrightExpect(rows).toHaveCount(2);

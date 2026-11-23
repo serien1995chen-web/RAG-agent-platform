@@ -149,6 +149,7 @@ const IMPORT_OPTIONS: Array<{
 ];
 
 const STEP_LABELS = ['选择来源', '参数设置', '数据预览', '确认导入'] as const;
+const DIRECT_SELECTION_KINDS: ImportKind[] = ['local', 'text', 'url'];
 
 export function ImportWorkspace(props: {
   spaceId: string;
@@ -168,6 +169,7 @@ export function ImportWorkspace(props: {
   const [step, setStep] = useState(props.initialJobId ? 3 : initialKind === 'retraining' ? 1 : 0);
   const [directoryId, setDirectoryId] = useState(props.initialDirectoryId ?? '');
   const [parseProvider, setParseProvider] = useState('liteparse');
+  const [customPdfParse, setCustomPdfParse] = useState(true);
   const [credentialProfileId, setCredentialProfileId] = useState('');
   const [fallbackProvider, setFallbackProvider] = useState<'liteparse' | 'none'>('liteparse');
   const [imageHandling, setImageHandling] = useState<'upload_to_storage' | 'keep_url' | 'drop'>(
@@ -224,6 +226,9 @@ export function ImportWorkspace(props: {
   const [error, setError] = useState<unknown>(null);
   const [jobId, setJobId] = useState(props.initialJobId ?? '');
   const [submitError, setSubmitError] = useState<unknown>(null);
+  const textNameRef = useRef<HTMLInputElement>(null);
+  const textBodyRef = useRef<HTMLTextAreaElement>(null);
+  const urlTextRef = useRef<HTMLTextAreaElement>(null);
 
   const directoriesQuery = useQuery<Directory[]>({
     queryKey: ['kb-product', 'import-directories', props.spaceId],
@@ -320,7 +325,7 @@ export function ImportWorkspace(props: {
     modelsQuery.isLoading,
   ]);
   const parseConfig = useMemo<Record<string, unknown>>(() => {
-    if (parseProvider === 'liteparse') return {};
+    if (parseProvider === 'liteparse') return { customPdfParse };
     const common = {
       provider: parseProvider,
       credentialProfileId: credentialProfileId.trim(),
@@ -357,6 +362,7 @@ export function ImportWorkspace(props: {
     fallbackProvider,
     imageHandling,
     parseProvider,
+    customPdfParse,
     parseTimeoutMs,
     textinParseMode,
     textinRemoveWatermark,
@@ -451,6 +457,14 @@ export function ImportWorkspace(props: {
     enabled: step === 2 && kind === 'text' && Boolean(textName.trim()) && Boolean(textBody.trim()),
   });
   const activeOption = IMPORT_OPTIONS.find((option) => option.kind === kind)!;
+  const directSelection = DIRECT_SELECTION_KINDS.includes(kind);
+  const showFormStep = directSelection ? step <= 1 : step === 1;
+  const stepLabels =
+    kind === 'url'
+      ? (['输入链接', '参数设置', '数据预览', '确认导入'] as const)
+      : directSelection
+        ? (['选择文件', '参数设置', '数据预览', '确认导入'] as const)
+        : STEP_LABELS;
   const completedUploads = uploaded.filter(
     (item) => item.phase === 'completed' && Boolean(item.id),
   );
@@ -885,6 +899,24 @@ export function ImportWorkspace(props: {
             )
           : true);
 
+  const advanceStep = () => {
+    if (step === 0 && kind === 'text') {
+      if (!textName.trim()) {
+        textNameRef.current?.focus();
+        return;
+      }
+      if (!textBody.trim()) {
+        textBodyRef.current?.focus();
+        return;
+      }
+    }
+    if (step === 0 && kind === 'url' && urlEntries.length === 0) {
+      urlTextRef.current?.focus();
+      return;
+    }
+    setStep((value) => Math.min(3, value + 1));
+  };
+
   return (
     <ProductPage className="kb2-import-page">
       <ProductPageHeader
@@ -898,7 +930,7 @@ export function ImportWorkspace(props: {
         }
       />
       <div className="kb2-import-steps" aria-label="导入步骤">
-        {STEP_LABELS.map((label, index) => (
+        {stepLabels.map((label, index) => (
           <div
             key={label}
             className={`kb2-import-step${step === index ? ' is-current' : ''}${step > index ? ' is-complete' : ''}`}
@@ -940,7 +972,7 @@ export function ImportWorkspace(props: {
         </aside>
 
         <main className="kb2-import-main">
-          {step === 0 ? (
+          {step === 0 && !directSelection ? (
             <div className="kb2-import-source-grid" role="group" aria-label="导入来源">
               {IMPORT_OPTIONS.map((option) => {
                 const Icon = option.icon;
@@ -962,9 +994,10 @@ export function ImportWorkspace(props: {
             </div>
           ) : null}
 
-          {step === 1 ? (
+          {showFormStep ? (
             <div className="kb2-import-form">
-              {['local', 'image', 'template', 'backup'].includes(kind) ? (
+              {(step === 0 && kind === 'local') ||
+              (step === 1 && ['image', 'template', 'backup'].includes(kind)) ? (
                 <label className="kb2-upload-zone">
                   <input
                     type="file"
@@ -1067,10 +1100,11 @@ export function ImportWorkspace(props: {
                 </ProductButton>
               ) : null}
 
-              {kind === 'text' ? (
+              {step === 0 && kind === 'text' ? (
                 <div className="kb2-form-grid">
                   <ProductField label="名称">
                     <ProductInput
+                      ref={textNameRef}
                       value={textName}
                       onChange={(event) => setTextName(event.target.value)}
                     />
@@ -1078,6 +1112,7 @@ export function ImportWorkspace(props: {
                   <div className="kb2-form-grid__full">
                     <ProductField label="文本内容">
                       <ProductTextarea
+                        ref={textBodyRef}
                         value={textBody}
                         onChange={(event) => setTextBody(event.target.value)}
                         rows={10}
@@ -1087,13 +1122,14 @@ export function ImportWorkspace(props: {
                 </div>
               ) : null}
 
-              {kind === 'url' ? (
+              {step === 0 && kind === 'url' ? (
                 <div className="kb2-form-grid">
                   <ProductField
                     label="网页地址"
                     hint="每行一个 URL；空白行会忽略，每个条目只抓取当前页面"
                   >
                     <ProductTextarea
+                      ref={urlTextRef}
                       value={urlText}
                       onChange={(event) => updateUrlText(event.target.value)}
                       rows={7}
@@ -1202,10 +1238,21 @@ export function ImportWorkspace(props: {
                 </div>
               ) : null}
 
-              {kind === 'local' || kind === 'image' || kind === 'text' || kind === 'url' ? (
+              {step === 1 &&
+              (kind === 'local' || kind === 'image' || kind === 'text' || kind === 'url') ? (
                 <div className="kb2-import-settings">
                   <h3>训练参数</h3>
                   <div className="kb2-form-grid">
+                    {kind === 'local' || kind === 'image' ? (
+                      <label className="kb2-checkbox-row kb2-form-grid__full">
+                        <input
+                          type="checkbox"
+                          checked={customPdfParse}
+                          onChange={(event) => setCustomPdfParse(event.target.checked)}
+                        />
+                        <span>PDF增强解析</span>
+                      </label>
+                    ) : null}
                     {kind === 'local' || kind === 'image' ? (
                       <ProductField label="解析器">
                         <ProductSelect
@@ -1927,8 +1974,12 @@ export function ImportWorkspace(props: {
             {step < 3 ? (
               <ProductButton
                 tone="primary"
-                disabled={(step === 1 && !uploadsReady) || (step === 2 && !previewReady)}
-                onClick={() => setStep((value) => value + 1)}
+                disabled={
+                  (step === 0 && directSelection && kind === 'local' && !uploadsReady) ||
+                  (step === 1 && !uploadsReady) ||
+                  (step === 2 && !previewReady)
+                }
+                onClick={advanceStep}
               >
                 下一步
                 <ChevronRightIcon boxSize={3.5} />

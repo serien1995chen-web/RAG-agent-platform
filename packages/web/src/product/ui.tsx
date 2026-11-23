@@ -297,6 +297,10 @@ export function ProductMenuItem(props: {
   danger?: boolean;
   disabled?: boolean;
   hint?: string;
+  expanded?: boolean;
+  hasPopup?: boolean;
+  onMouseEnter?: () => void;
+  onFocus?: () => void;
   onClick?: () => void;
 }) {
   return (
@@ -305,6 +309,10 @@ export function ProductMenuItem(props: {
       role="menuitem"
       className={`kb2-menu-item${props.danger ? ' kb2-menu-item--danger' : ''}`}
       disabled={props.disabled}
+      aria-expanded={props.expanded}
+      aria-haspopup={props.hasPopup ? 'menu' : undefined}
+      onMouseEnter={props.onMouseEnter}
+      onFocus={props.onFocus}
       onClick={props.onClick}
     >
       {props.icon ? <span className="kb2-menu-item__icon">{props.icon}</span> : null}

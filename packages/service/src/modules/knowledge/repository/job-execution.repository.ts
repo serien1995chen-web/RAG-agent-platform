@@ -913,6 +913,44 @@ export class KnowledgeJobExecutionRepository {
         },
       );
     }
+    const aggregateSources = Array.isArray(
+      (latestRoot.result as { sources?: unknown } | null)?.sources,
+    )
+      ? ((latestRoot.result as { sources: Array<Record<string, unknown>> }).sources ?? [])
+      : [];
+    const sourceResults = new Map<string, JobState[]>();
+    for (const source of aggregateSources) {
+      const sourceId = typeof source.sourceId === 'string' ? source.sourceId : '';
+      const sourceStatus =
+        typeof source.status === 'string' && TERMINAL_STATES.includes(source.status as JobState)
+          ? (source.status as JobState)
+          : null;
+      if (!sourceId || !sourceStatus) continue;
+      const statuses = sourceResults.get(sourceId) ?? [];
+      statuses.push(sourceStatus);
+      sourceResults.set(sourceId, statuses);
+    }
+    for (const [sourceId, statuses] of sourceResults) {
+      if (statuses.length <= 1) continue;
+      const succeeded = statuses.filter((sourceStatus) => sourceStatus === 'succeeded').length;
+      const processingStatus =
+        succeeded === statuses.length ? 'ready' : succeeded > 0 ? 'partial' : 'failed';
+      await this.sources.updateOne(
+        {
+          workspaceId: requireWorkspaceId(context),
+          knowledgeSpaceId: latestRoot.knowledgeSpaceId,
+          _id: objectIdOf(sourceId, context, 'sourceId'),
+          deletedAt: null,
+        },
+        {
+          $set: {
+            processingStatus,
+            updatedByMemberId: context.memberId,
+          },
+          $inc: { version: 1 },
+        },
+      );
+    }
     return jobDto(latestRoot);
   }
 

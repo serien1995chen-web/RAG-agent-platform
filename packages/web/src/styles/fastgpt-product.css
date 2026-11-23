@@ -536,6 +536,11 @@ a:hover {
   gap: 16px;
 }
 
+.kb2-form-stack {
+  display: grid;
+  gap: 16px;
+}
+
 .kb2-form-grid > .kb2-field--full {
   grid-column: 1 / -1;
 }
@@ -570,7 +575,7 @@ a:hover {
 }
 
 .kb2-modal header span {
-  color: var(--kb2-muted);
+  color: var(--kb2-text);
   font-size: 12px;
 }
 
@@ -665,6 +670,14 @@ a:hover {
   color: var(--kb2-muted);
   font-size: 11px;
   line-height: 15px;
+}
+
+.kb2-menu-submenu {
+  margin: 2px 0 4px 20px;
+  padding: 4px;
+  border-left: 2px solid var(--kb2-primary-subtle);
+  border-radius: 0 6px 6px 0;
+  background: rgba(244, 247, 252, 0.8);
 }
 
 .kb2-status {
@@ -1413,6 +1426,85 @@ a:hover {
 .kb2-form-grid__full {
   grid-column: 1 / -1;
   min-width: 0;
+}
+
+.kb2-compliance-note {
+  padding: 10px 12px;
+  color: var(--kb2-text);
+  background: var(--kb2-surface-muted);
+  border: 1px solid var(--kb2-line-soft);
+  border-radius: 6px;
+  font-size: 12px;
+  line-height: 19px;
+}
+
+.kb2-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.kb2-source-choice-list {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.kb2-source-choice {
+  display: grid;
+  grid-template-columns: 18px 32px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  min-height: 68px;
+  padding: 12px 14px;
+  color: var(--kb2-text);
+  background: var(--kb2-surface);
+  border: 1px solid var(--kb2-line-soft);
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.kb2-source-choice.is-selected {
+  background: var(--kb2-primary-subtle);
+  border-color: var(--kb2-primary);
+}
+
+.kb2-source-choice input {
+  margin: 0;
+  accent-color: var(--kb2-primary);
+}
+
+.kb2-source-choice__icon {
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  color: var(--kb2-primary);
+  background: var(--kb2-surface);
+  border: 1px solid var(--kb2-line-soft);
+  border-radius: 6px;
+}
+
+.kb2-source-choice > span:last-child {
+  display: grid;
+  gap: 3px;
+}
+
+.kb2-source-choice small {
+  color: var(--kb2-muted);
+  font-size: 12px;
+}
+
+.kb2-structured-upload {
+  margin-bottom: 12px;
 }
 
 .kb2-center-state {
@@ -3831,6 +3923,15 @@ a:hover {
 
   .kb2-form-grid {
     grid-template-columns: 1fr;
+  }
+
+  .kb2-upload-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .kb2-upload-row .kb2-progress-track {
+    grid-column: 1 / -1;
+    grid-row: 2;
   }
 
   .kb2-permission-add {
