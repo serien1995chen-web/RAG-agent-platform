@@ -104,7 +104,7 @@ afterAll(async () => {
 }, 60_000);
 
 describe('FastGPT product module 1 list', () => {
-  it('renders real list data, excludes website, and keeps the layout desktop-safe', async () => {
+  it('renders real list data with the FastGPT creation entry and keeps the layout desktop-safe', async () => {
     const context = await browser.newContext({
       viewport: { width: 1440, height: 900 },
       locale: 'zh-CN',
@@ -140,7 +140,10 @@ describe('FastGPT product module 1 list', () => {
 
     await page.getByRole('button', { name: '新建' }).click();
     await playwrightExpect(page.getByRole('menuitem', { name: /通用知识库/ })).toBeVisible();
-    await playwrightExpect(page.getByRole('menuitem', { name: /网站知识库/ })).toHaveCount(0);
+    await playwrightExpect(page.getByRole('menuitem', { name: /网站知识库/ })).toBeVisible();
+    const thirdParty = page.getByRole('menuitem', { name: /第三方知识库/ });
+    await playwrightExpect(thirdParty).toBeVisible();
+    await thirdParty.hover();
     await playwrightExpect(page.getByRole('menuitem', { name: /API 文件库/ })).toBeVisible();
     await playwrightExpect(page.getByRole('menuitem', { name: /飞书知识库/ })).toBeVisible();
     await playwrightExpect(page.getByRole('menuitem', { name: /语雀知识库/ })).toBeVisible();
