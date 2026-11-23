@@ -4,19 +4,19 @@
   "candidateSha": "c34467da5a16ef0cc0efff65c696d9a2cf408ff0",
   "fastgpt": {
     "sourceRoot": "/mnt/d/Fastgpt/FastGPT",
-    "declaredVersion": "4.17.3",
-    "observedVersion": "4.17.3",
+    "declaredVersion": "4.17.4",
+    "observedVersion": "4.17.4",
     "versionEvidenceMismatch": false,
     "keyFiles": {
-      "projects/app/package.json": "125a9378b939b2cf0cd7412ea976448dc7fb619336888ff9ac0d41b3624b231a",
+      "projects/app/package.json": "3887440d738c05504cdba692be2142467de41a0ac7e11f828506f474bfc63d3c",
       "packages/global/core/dataset/search/utils.ts": "5f806553ffeb926bb059f8249265d8e4c7249f9d51faa0bbf1ad63380caa85fd",
-      "packages/service/core/dataset/search/defaultRecall/index.ts": "1212a3ca8b2abaf0b4fd2a52844d57c975b708db7425e733cd72a24bcde17dd5",
-      "packages/service/core/dataset/search/defaultRecall/result.ts": "d9798cd2a95c325c9d06d680bd9fe7dfb9cdd49fd05d9756ef7b04f6ff616d74",
+      "packages/service/core/dataset/search/defaultRecall/index.ts": "2d63dc0c8d8a1fe8716e29b852f78166bd9ff2cc5e98ef803b58e69e9226eaaa",
+      "packages/service/core/dataset/search/defaultRecall/result.ts": "e637a5c705648ff13c1c1a0cff519b81eb722c0585045673678a25bbe86f5e80",
       "packages/service/core/workflow/dispatch/dataset/concat.ts": "35c151d6887bb78f564dfbb006504dd44ac10a4abfb09cb43a8112498d1173ca",
-      "packages/service/core/workflow/dispatch/dataset/search.ts": "9195d5eab514c439ef5254a88f2b86f64a901a173fd06df78b19e3086d4bbee8",
-      "packages/service/core/workflow/dispatch/ai/chat/datasetCite.ts": "32eda8ca4cfdad09e8762dd94b28fa7ecc37625b826d3e59d2c22607c4debce2",
-      "packages/global/core/dataset/type.ts": "c588d9967616cafdc025351b37a6134a5d8985fbc84dc19a49a8348480fc4d26",
-      "projects/app/src/components/core/dataset/QuoteItem.tsx": "3863c8b70d77395abcbbc99a11376897232b5457d6482e35589d0becfed3c350",
+      "packages/service/core/workflow/dispatch/dataset/search.ts": "27dd7b2a4245a8d57fb9fcc812f72ce24f80da8a45cbc4c13669a8e1832fc58a",
+      "packages/service/core/workflow/dispatch/ai/chat/datasetCite.ts": "013b97b09680a69523fe65eaf55e303913afaa3e1d42768e27138467a7d4c5f4",
+      "packages/global/core/dataset/type.ts": "beced42fb54f87e372b448362c49757e353e6a577ba0af0abc0a8c96300e640b",
+      "projects/app/src/components/core/dataset/QuoteItem.tsx": "b70651e4afd7725b800b594e8c7383971a08bb6f9772741d89b9d3940485b627",
       "projects/app/src/pageComponents/dataset/detail/Test/components/TestResults.tsx": "1a0de0c3914f302d95c0bd8b616e8a45a0cfb6a46023eb0eda3691993ac51cc3"
     }
   },

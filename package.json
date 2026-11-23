@@ -25,6 +25,7 @@
     "test:recovery": "node scripts/run-recovery-drill.mjs",
     "test:security": "vitest run --config test/security/vitest.config.ts",
     "test:provider:real": "node scripts/run-provider-real.mjs",
+    "test:provider:real:b20": "node scripts/run-provider-real.mjs -- b20-ops-real",
     "probe:aiproxy:catalog": "node scripts/probe-aiproxy-catalog.mjs",
     "test:tenant": "vitest run --config test/tenant/vitest.config.ts",
     "test:concurrency": "vitest run --config test/concurrency/vitest.config.ts",

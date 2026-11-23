@@ -179,6 +179,19 @@ a:hover {
   display: none;
 }
 
+.kb2-mobile-header__links {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--kb2-muted);
+  font-size: 12px;
+}
+
+.kb2-mobile-header__links a[aria-current='page'] {
+  color: var(--kb2-primary-pressed);
+  font-weight: 700;
+}
+
 .kb2-page {
   min-height: calc(100vh - 32px);
   padding: 24px;
@@ -223,6 +236,34 @@ a:hover {
   flex-wrap: wrap;
   gap: 10px;
   align-items: center;
+}
+
+.kb2-ops-section {
+  margin-top: 22px;
+  padding-top: 20px;
+  border-top: 1px solid var(--kb2-line);
+}
+
+.kb2-ops-section__heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+
+.kb2-ops-section__heading h2 {
+  margin: 0;
+  color: var(--kb2-ink);
+  font-size: 16px;
+  line-height: 24px;
+}
+
+.kb2-ops-section__heading p {
+  margin: 4px 0 0;
+  color: var(--kb2-muted);
+  font-size: 13px;
+  line-height: 20px;
 }
 
 .kb2-breadcrumbs {

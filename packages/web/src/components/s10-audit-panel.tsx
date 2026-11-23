@@ -142,6 +142,30 @@ export function S10AuditPanel(props: {
                 render: (row) => `${row.resourceType}:${row.resourceId}`,
               },
               {
+                key: 'provider',
+                label: 'Provider',
+                render: (row) => String(row.safeDiff.provider ?? '—'),
+              },
+              {
+                key: 'kind',
+                label: '类型',
+                render: (row) => String(row.safeDiff.kind ?? '—'),
+              },
+              {
+                key: 'quantity',
+                label: '数量 / 单位',
+                render: (row) =>
+                  `${String(row.safeDiff.quantity ?? '—')} ${String(row.safeDiff.unit ?? '')}`.trim(),
+              },
+              {
+                key: 'attempt',
+                label: '尝试 / 回退',
+                render: (row) =>
+                  `${String(row.safeDiff.attempt ?? '—')} / ${
+                    row.safeDiff.fallbackUsed === true ? '是' : '否'
+                  }`,
+              },
+              {
                 key: 'outcome',
                 label: t('audit.outcome'),
                 render: (row) => (

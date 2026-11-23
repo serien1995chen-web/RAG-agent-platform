@@ -1,0 +1,219 @@
+{
+  "schemaVersion": 1,
+  "capabilityId": "OPS-002",
+  "fastGptVersion": "4.17.4",
+  "items": [
+    {
+      "id": "B20-M01",
+      "responsibility": "PDF 外部增强解析按实际页数计量",
+      "fastGptSources": [
+        "packages/service/common/file/read/utils.ts:226",
+        "packages/service/support/wallet/usage/controller.ts:45"
+      ],
+      "frontendBehaviorIds": ["KB-IMPORT-100", "KB-IMPORT-125"],
+      "userOperation": "选择双页 PDF 并开启增强解析",
+      "expectedResult": "解析正文成功，usage 记录实际页数；内容为空不得成为成功",
+      "jobStepTransitions": ["queued", "parse", "index", "ready|error"],
+      "providerCall": "OCR/PDF provider",
+      "usage": "OCR 优先按 page，无法得到页数时只记录实际 request",
+      "dedupeKey": "workspace+operation+request+provider+attempt+eventSequence",
+      "outbox": "usage.recorded 最终 delivered/published",
+      "permission": "仅被授权 Source/Job 可见",
+      "allowedDifference": "允许本项目的 Step 名称和页面布局不同",
+      "unresolved": null
+    },
+    {
+      "id": "B20-M02",
+      "responsibility": "解析、索引、QA、自动索引和图片索引分阶段可见",
+      "fastGptSources": [
+        "projects/app/src/web/core/dataset/trainingStatus.ts:9",
+        "projects/app/src/web/core/dataset/trainingStatus.ts:37",
+        "projects/app/src/pageComponents/dataset/detail/CollectionCard/TrainingStates.tsx:201"
+      ],
+      "frontendBehaviorIds": [
+        "KB-GLOBAL-011",
+        "KB-GLOBAL-017",
+        "KB-COLLECTION-100",
+        "KB-COLLECTION-102"
+      ],
+      "userOperation": "上传后查看 Source 列表并刷新",
+      "expectedResult": "区分排队、解析、向量化、自动索引、图片解析/索引、已就绪和训练异常",
+      "jobStepTransitions": ["queued", "running", "retry", "succeeded|failed|dead_letter"],
+      "providerCall": "按阶段调用 OCR、Embedding、Rerank、LLM 或 VLM",
+      "usage": "每个实际调用独立记录 attempt 与单位",
+      "dedupeKey": "按调用 attempt/eventSequence 去重",
+      "outbox": "失败与实际调用均保留可审计事实",
+      "permission": "普通成员只看到其可见资源状态",
+      "allowedDifference": "允许状态文案位置不同",
+      "unresolved": null
+    },
+    {
+      "id": "B20-M03",
+      "responsibility": "训练异常支持重试、编辑和删除",
+      "fastGptSources": [
+        "projects/app/src/pageComponents/dataset/detail/CollectionCard/TrainingErrorList.tsx:152",
+        "projects/app/src/pageComponents/dataset/detail/CollectionCard/TrainingStates.tsx:201"
+      ],
+      "frontendBehaviorIds": [
+        "KB-COLLECTION-103",
+        "KB-COLLECTION-110",
+        "KB-COLLECTION-111",
+        "KB-COLLECTION-113"
+      ],
+      "userOperation": "打开训练异常并处理单条/全部失败项",
+      "expectedResult": "错误项可重试、编辑或删除；操作后列表刷新且状态保持",
+      "jobStepTransitions": ["failed", "queued", "running", "succeeded"],
+      "providerCall": "重试只针对失败 item，不重复成功调用",
+      "usage": "失败 attempt 与重试 attempt 分开记录",
+      "dedupeKey": "Job+item+attempt",
+      "outbox": "重试不重复成功 usage",
+      "permission": "写权限；删除受 Owner/管理权限约束",
+      "allowedDifference": "允许异常列表布局不同",
+      "unresolved": null
+    },
+    {
+      "id": "B20-M04",
+      "responsibility": "文本 Embedding 入库与查询计量",
+      "fastGptSources": [
+        "packages/service/core/ai/embedding/index.ts:127",
+        "packages/service/core/ai/embedding/index.ts:171"
+      ],
+      "frontendBehaviorIds": ["KB-IMPORT-103", "KB-TEST-010"],
+      "userOperation": "完成 Source 索引并使用搜索测试查询",
+      "expectedResult": "入库与查询向量维度一致，pgvector 可召回，usage 含 token",
+      "jobStepTransitions": ["parse", "index", "ready"],
+      "providerCall": "Text Embedding",
+      "usage": "token；inputTokens 来自 Provider 实际返回值",
+      "dedupeKey": "调用 attempt 与 eventSequence",
+      "outbox": "每次实际调用一条 usage.recorded",
+      "permission": "检索前后均执行 ACL",
+      "allowedDifference": "允许索引实现与批次策略不同",
+      "unresolved": null
+    },
+    {
+      "id": "B20-M05",
+      "responsibility": "Rerank 改变候选顺序且 citation 保持",
+      "fastGptSources": [
+        "projects/app/src/pageComponents/dataset/detail/Test/components/TestResults.tsx:10",
+        "projects/app/src/components/core/dataset/QuoteItem.tsx:81"
+      ],
+      "frontendBehaviorIds": ["KB-TEST-042", "KB-TEST-050", "KB-TEST-051"],
+      "userOperation": "打开 ReRank 执行搜索测试",
+      "expectedResult": "结果按重排分数展示，引用仍映射原 Segment/Source",
+      "jobStepTransitions": ["search.requested", "rerank", "citation", "completed"],
+      "providerCall": "Rerank",
+      "usage": "token 与重排分数分别记录",
+      "dedupeKey": "searchId+candidateId+attempt",
+      "outbox": "usage.recorded 幂等投递",
+      "permission": "不得返回未授权候选或可伪造 citation",
+      "allowedDifference": "允许结果卡片视觉不同",
+      "unresolved": null
+    },
+    {
+      "id": "B20-M06",
+      "responsibility": "LLM 生成和 token usage",
+      "fastGptSources": [
+        "packages/service/core/ai/functions/createQuestionGuide.ts:38",
+        "packages/service/support/wallet/usage/controller.ts:66"
+      ],
+      "frontendBehaviorIds": ["KB-IMPORT-101", "KB-IMPORT-110"],
+      "userOperation": "执行 QA 提取、自动索引或查询优化",
+      "expectedResult": "输出可用并记录 inputTokens/outputTokens",
+      "jobStepTransitions": ["qa|auto", "running", "succeeded|failed"],
+      "providerCall": "LLM",
+      "usage": "token；inputTokens/outputTokens 分开保存",
+      "dedupeKey": "requestId+model+attempt+eventSequence",
+      "outbox": "成功事实只在实际调用后产生",
+      "permission": "模型绑定必须已授权",
+      "allowedDifference": "允许 Prompt 与业务入口不同",
+      "unresolved": null
+    },
+    {
+      "id": "B20-M07",
+      "responsibility": "VLM Caption 与图片向量索引",
+      "fastGptSources": [
+        "projects/app/src/pageComponents/dataset/detail/Import/commonProgress/DataProcess.tsx:24",
+        "projects/app/src/pageComponents/dataset/detail/Import/diffSource/ImageDataset.tsx:27"
+      ],
+      "frontendBehaviorIds": [
+        "KB-IMPORT-080",
+        "KB-IMPORT-083",
+        "KB-IMPORT-104"
+      ],
+      "userOperation": "导入 JPG/PNG，开启图片自动索引并刷新",
+      "expectedResult": "Caption、图片向量和图片索引可用；失败允许明确 partial，不得伪造成功",
+      "jobStepTransitions": ["imageParse", "caption", "imageIndex", "ready|partial|error"],
+      "providerCall": "VLM + caption/text or vision Embedding",
+      "usage": "token 与 image 分开记录",
+      "dedupeKey": "sourceVersion+imageBlobRefId+model+attempt",
+      "outbox": "caption 与 vector 事实可分别审计",
+      "permission": "图片 ticket 和检索二次授权一致",
+      "allowedDifference": "允许图片预览布局不同",
+      "unresolved": null
+    },
+    {
+      "id": "B20-M08",
+      "responsibility": "失败反馈、刷新和长任务恢复",
+      "fastGptSources": [
+        "projects/app/src/web/core/dataset/hooks/useDatasetStatusPolling.ts:3",
+        "projects/app/src/web/core/dataset/hooks/useDatasetStatusPolling.ts:45"
+      ],
+      "frontendBehaviorIds": [
+        "KB-GLOBAL-008",
+        "KB-GLOBAL-012",
+        "KB-GLOBAL-017",
+        "KB-XROUTE-007"
+      ],
+      "userOperation": "断网、刷新或切换页面后恢复任务",
+      "expectedResult": "错误可恢复，刷新后状态与服务器事实一致，旧响应不覆盖新页面",
+      "jobStepTransitions": ["running", "retry", "running", "ready|failed"],
+      "providerCall": "重试使用同一 Job fencing 边界",
+      "usage": "只记录真实 attempt",
+      "dedupeKey": "Job+fencingToken+attemptEpoch",
+      "outbox": "stale publishing 可恢复且只投递一次",
+      "permission": "刷新后仍执行租户与资源权限",
+      "allowedDifference": "允许轮询间隔与入口不同",
+      "unresolved": null
+    },
+    {
+      "id": "B20-M09",
+      "responsibility": "管理员查看用量、失败、重试和投递状态",
+      "fastGptSources": [
+        "projects/app/src/pages/account/usage/index.tsx:28",
+        "projects/app/src/pageComponents/account/usage/UsageTable.tsx:56"
+      ],
+      "frontendBehaviorIds": ["KB-TEST-050", "KB-INFO-001"],
+      "userOperation": "管理员打开用量/运营入口并刷新",
+      "expectedResult": "可查看 Provider/类型、单位、数量、失败、重试、投递和任务状态，并可进入重放",
+      "jobStepTransitions": ["usage.query", "job.list", "outbox.replay"],
+      "providerCall": "只读聚合，不触发 Provider",
+      "usage": "按 provider/unit/kind 聚合，不错误合并",
+      "dedupeKey": "eventId",
+      "outbox": "展示 pending/delivered/failed/dead_letter/published",
+      "permission": "全局数据仅管理员；普通用户不可见",
+      "allowedDifference": "允许本项目独立运营页或等价入口",
+      "unresolved": null
+    },
+    {
+      "id": "B20-M10",
+      "responsibility": "Provider 路径与真实请求契约",
+      "fastGptSources": [
+        "packages/service/thirdProvider/somark/index.ts:31",
+        "packages/service/thirdProvider/somark/index.ts:56",
+        "packages/service/thirdProvider/textin/index.ts:101",
+        "packages/service/thirdProvider/doc2x/index.ts:132"
+      ],
+      "frontendBehaviorIds": ["KB-IMPORT-100"],
+      "userOperation": "分别选择 SomArk、TextIn、Doc2X 解析双页 PDF",
+      "expectedResult": "每家 Provider 独立调用、独立判定，不因另一家成功而略过",
+      "jobStepTransitions": ["queued", "parse", "succeeded|failed"],
+      "providerCall": "SomArk/TextIn/Doc2X",
+      "usage": "page 或 request",
+      "dedupeKey": "provider+requestId+attempt",
+      "outbox": "实际请求失败也记录脱敏事实",
+      "permission": "凭据只在仓库外受保护文件",
+      "allowedDifference": "允许内部适配器命名不同，但外部路径与响应语义必须等价",
+      "unresolved": null
+    }
+  ]
+}

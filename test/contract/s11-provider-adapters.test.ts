@@ -401,7 +401,7 @@ describe('TEST-X-S11-PROVIDER-REAL contract adapters', () => {
       expect(result.pages.length).toBeGreaterThan(0);
       expect(result.usage.some((usage) => usage.unit === 'page')).toBe(true);
       expect(new URL(transport.requests[0]!.url).pathname).toMatch(
-        /\/api\/(ocr|parse\/sync|pdf_to_markdown|parse\/preupload)$/,
+        /\/api\/(ocr|parse\/sync|pdf_to_markdown|v2\/parse\/preupload)$/,
       );
       expect(JSON.stringify(result.requestEvidence)).not.toMatch(
         /sg-token|sm-key|ti-secret|dx-key|S11_OCR_.*PROFILE_JSON/,
@@ -480,7 +480,7 @@ describe('TEST-X-S11-PROVIDER-REAL contract adapters', () => {
     });
     const doc2x = await doc2xAdapter.parse(ocrRequest('doc2x') as never, context);
     expect(doc2x.markdown).toBe('# Doc2X native');
-    expect(doc2xTransport.requests[2]?.url).toContain('/parse/status?uid=doc2x-uid');
+    expect(doc2xTransport.requests[2]?.url).toContain('/v2/parse/status?uid=doc2x-uid');
   });
 
   it('maps OCR auth and invalid schema to retry-safe provider categories', async () => {

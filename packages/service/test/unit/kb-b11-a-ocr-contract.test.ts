@@ -161,7 +161,7 @@ describe('L1-B11-A PARSE-002 provider request contract', () => {
       async request<T>(input): Promise<S5OcrHttpResponse<T>> {
         calls.push(input);
         const url = new URL(input.url);
-        if (url.pathname.endsWith('/parse/preupload')) {
+        if (url.pathname.endsWith('/v2/parse/preupload')) {
           return {
             status: 200,
             headers: {},
@@ -226,7 +226,7 @@ describe('L1-B11-A PARSE-002 provider request contract', () => {
     const textin = calls.find((call) => call.url.includes('/pdf_to_markdown'));
     expect(textin?.headers['x-ti-app-id']).toBe('app-b11');
     expect(textin?.headers['x-ti-secret-code']).toBe('secret-b11');
-    const doc2x = calls.find((call) => call.url.endsWith('/parse/preupload'));
+    const doc2x = calls.find((call) => call.url.endsWith('/v2/parse/preupload'));
     expect(doc2x?.headers.Authorization).toBe('Bearer key-doc2x');
   });
 

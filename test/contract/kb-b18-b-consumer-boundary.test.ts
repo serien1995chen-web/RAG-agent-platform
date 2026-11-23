@@ -50,9 +50,9 @@ function parseLineRanges(value: string): Array<{ start: number; end: number }> {
 }
 
 describe('B18-B behavior matrix and test asset completeness', () => {
-  it('binds the frozen project SHA and actual FastGPT 4.17.3 source', () => {
+  it('binds the frozen project SHA and actual FastGPT 4.17.4 source', () => {
     expect(manifest.candidateSha).toBe('c34467da5a16ef0cc0efff65c696d9a2cf408ff0');
-    expect(manifest.fastgpt.observedVersion).toBe('4.17.3');
+    expect(manifest.fastgpt.observedVersion).toBe('4.17.4');
     for (const [relativePath, expectedHash] of Object.entries(manifest.fastgpt.keyFiles)) {
       expect(relativePath.startsWith('/'), relativePath).toBe(false);
       expect(relativePath.split('/'), relativePath).not.toContain('..');

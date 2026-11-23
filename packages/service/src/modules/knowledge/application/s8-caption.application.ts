@@ -52,7 +52,9 @@ function contentOf(data: unknown, context: TenantContext): string {
 }
 
 function captionOf(data: unknown, context: TenantContext): string {
-  const content = contentOf(data, context);
+  const raw = contentOf(data, context).trim();
+  const fenced = raw.match(/^```(?:json)?\s*\n?([\s\S]*?)\n?```$/i);
+  const content = fenced?.[1]?.trim() ?? raw;
   let parsed: unknown;
   try {
     parsed = JSON.parse(content);
@@ -364,7 +366,7 @@ export class S8CaptionApplication implements S8CaptionExecutorPort {
     const captionIndexed = caption !== null;
     const vectorIndexed = vectors.length === embeddingInput.length && vectors.length > 0;
     if (!captionIndexed && !vectorIndexed) {
-      throw embeddingFailure ?? captionFailure ?? outputInvalid(context, 'image_index_failed');
+      throw captionFailure ?? embeddingFailure ?? outputInvalid(context, 'image_index_failed');
     }
     let projectedVersion = segment.version;
     if (caption !== null) {
