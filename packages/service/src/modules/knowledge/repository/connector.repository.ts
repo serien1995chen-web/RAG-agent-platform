@@ -302,6 +302,18 @@ export class KnowledgeConnectorRepository implements ConnectorRepositoryPort {
     return connectorView(document);
   }
 
+  async isAutoSyncEnabled(knowledgeSpaceId: string, context: TenantContext): Promise<boolean> {
+    const space = await this.connection.models.KnowledgeSpace?.findOne({
+      _id: objectIdOf(knowledgeSpaceId, context, 'knowledgeSpaceId'),
+      workspaceId: requireWorkspaceId(context),
+      kind: 'space',
+      deletedAt: null,
+    })
+      .lean<{ autoSync?: boolean }>()
+      .exec();
+    return space?.autoSync !== false;
+  }
+
   async findByProvider(
     spaceId: string,
     provider: ConnectorView['provider'],

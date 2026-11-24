@@ -6,12 +6,20 @@ export type S5ModelType = (typeof S5_MODEL_TYPES)[number];
 export const S5_VECTOR_DIMENSIONS = [768, 1024, 1536, 3072] as const;
 export type S5VectorDimension = (typeof S5_VECTOR_DIMENSIONS)[number];
 
+export interface ModelLimits {
+  maxToken?: number;
+  defaultToken?: number;
+  maxContext?: number;
+  maxResponse?: number;
+}
+
 export interface ModelCatalogItem {
   modelId: string;
   displayName: string;
   type: S5ModelType;
   capabilities: string[];
   dimension: S5VectorDimension | null;
+  limits?: ModelLimits;
   authorized: boolean;
 }
 

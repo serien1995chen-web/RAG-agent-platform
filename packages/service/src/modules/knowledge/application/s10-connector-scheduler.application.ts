@@ -40,6 +40,7 @@ export interface S10ConnectorScheduleRepositoryPort {
 
 export interface S10ConnectorSchedulerConnectorPort {
   get(connectorId: string, context: TenantContext): Promise<ConnectorView>;
+  isAutoSyncEnabled?(knowledgeSpaceId: string, context: TenantContext): Promise<boolean>;
   markSyncing(
     connectorId: string,
     command: {
@@ -118,6 +119,14 @@ export class S10ConnectorSchedulerApplication {
       while (result.dispatched + result.failed < maxDispatches) {
         const claim = await this.input.schedules.claimNext(context, input.workerId, now);
         if (!claim) break;
+        const autoSyncEnabled = this.input.connectors.isAutoSyncEnabled
+          ? await this.input.connectors.isAutoSyncEnabled(claim.knowledgeSpaceId, context)
+          : true;
+        if (!autoSyncEnabled) {
+          await this.input.schedules.reschedule(claim, null, context);
+          result.skipped += 1;
+          continue;
+        }
         let connector: ConnectorView;
         try {
           connector = await this.input.connectors.get(claim.connectorId, context);

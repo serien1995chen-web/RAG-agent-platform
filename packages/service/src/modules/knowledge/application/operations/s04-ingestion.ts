@@ -34,6 +34,7 @@ import type {
   UrlImportAdapterPort,
   ImportTemplateParserPort,
   QuotaGatePort,
+  FilePreviewParsePort,
 } from '../ingestion.ports';
 import type { ConnectorRepositoryPort } from '../ingestion.ports';
 import type { AccessPort, ObjectRefRepositoryPort } from '../ports';
@@ -61,6 +62,7 @@ export interface S04IngestionDependencies {
   scopedAuth: ScopedAuthPort;
   quotaGate: QuotaGatePort;
   templateParser: ImportTemplateParserPort;
+  filePreview?: FilePreviewParsePort;
   queuePort?: QueuePort;
 }
 
@@ -571,6 +573,47 @@ export class S04IngestionApplication {
         const body = parseBody(ImportFilesSchema, input);
         const targetSpaceId = spaceId(input);
         await assertWriteAccess(this.dependencies, targetSpaceId, input.context);
+        if (body.dryRun) {
+          if (!this.dependencies.filePreview) {
+            throw createKnowledgeError({
+              code: 'KNOWLEDGE_INTERNAL_ERROR',
+              requestId: input.context.requestId,
+              traceId: input.context.traceId,
+              details: { reason: 'file_preview_port_missing' },
+            });
+          }
+          const draft = (
+            await fileDrafts(
+              this.dependencies,
+              input,
+              body.uploadIds,
+              targetSpaceId,
+              body.directoryId ?? null,
+              body.parseProvider,
+            )
+          )[0]!;
+          const parsed = await this.dependencies.filePreview.parse(
+            {
+              source: draft,
+              parseConfig: body.parseConfig,
+            },
+            input.context,
+          );
+          const chunks = chunkText({
+            text: parsed.rawText,
+            policy: toChunkPolicy(body.chunking),
+          }).chunks;
+          return {
+            status: 200,
+            data: {
+              name: draft.name,
+              contentHash: parsed.contentHash ?? draft.contentHash,
+              totalChunks: chunks.length,
+              chunks: chunks.slice(0, 10),
+              truncated: chunks.length > 10,
+            },
+          };
+        }
         const idempotency = idempotencyKey(input);
         const requestHash = operationHash(input);
         const replay = await preflightImport({

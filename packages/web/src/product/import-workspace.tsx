@@ -14,7 +14,7 @@ import {
 } from '@chakra-ui/icons';
 import { Spinner } from '@chakra-ui/react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from 'react';
 import { S7MarkdownRenderer } from '../components/s7-markdown-renderer';
 import {
   apiLibraryCatalog,
@@ -27,6 +27,7 @@ import {
   importText,
   importUrl,
   previewImportBackup,
+  previewImportFile,
   previewImportTemplate,
   previewImportText,
   productApi,
@@ -182,23 +183,21 @@ export function ImportWorkspace(props: {
   const [trainingType, setTrainingType] = useState<'chunk' | 'qa' | 'imageParse'>(
     initialKind === 'image' ? 'imageParse' : 'chunk',
   );
-  const [chunkSettingMode, setChunkSettingMode] = useState<'auto' | 'custom' | 'intelligent'>(
-    'auto',
-  );
+  const [chunkSettingMode, setChunkSettingMode] = useState<'auto' | 'custom'>('auto');
   const [chunkTriggerType, setChunkTriggerType] = useState<'minSize' | 'forceChunk' | 'maxSize'>(
     'minSize',
   );
-  const [chunkTriggerMinSize, setChunkTriggerMinSize] = useState('1');
+  const [chunkTriggerMinSize, setChunkTriggerMinSize] = useState('1000');
   const [chunkSize, setChunkSize] = useState('1000');
   const [chunkSplitMode, setChunkSplitMode] = useState<'paragraph' | 'size' | 'char'>('paragraph');
   const [paragraphChunkAIMode, setParagraphChunkAIMode] = useState<'auto' | 'force' | 'forbid'>(
-    'auto',
+    'forbid',
   );
   const [paragraphChunkDeep, setParagraphChunkDeep] = useState('5');
   const [paragraphChunkMinSize, setParagraphChunkMinSize] = useState('100');
   const [chunkSplitter, setChunkSplitter] = useState('');
   const [overlap, setOverlap] = useState('100');
-  const [indexSize, setIndexSize] = useState('1000');
+  const [indexSize, setIndexSize] = useState('512');
   const [autoIndexes, setAutoIndexes] = useState(false);
   const [imageIndex, setImageIndex] = useState(false);
   const [indexPrefixTitle, setIndexPrefixTitle] = useState(false);
@@ -226,9 +225,12 @@ export function ImportWorkspace(props: {
   const [error, setError] = useState<unknown>(null);
   const [jobId, setJobId] = useState(props.initialJobId ?? '');
   const [submitError, setSubmitError] = useState<unknown>(null);
+  const [localPreviewUploadId, setLocalPreviewUploadId] = useState<string | null>(null);
+  const [showLegacyProcessingSettings] = useState(false);
   const textNameRef = useRef<HTMLInputElement>(null);
   const textBodyRef = useRef<HTMLTextAreaElement>(null);
   const urlTextRef = useRef<HTMLTextAreaElement>(null);
+  const localPreviewScrollRef = useRef<HTMLDivElement>(null);
 
   const directoriesQuery = useQuery<Directory[]>({
     queryKey: ['kb-product', 'import-directories', props.spaceId],
@@ -237,6 +239,10 @@ export function ImportWorkspace(props: {
   const modelsQuery = useQuery({
     queryKey: ['kb-product', 'models'],
     queryFn: () => productApi.listModels(),
+  });
+  const bindingsQuery = useQuery({
+    queryKey: ['kb-product', 'model-bindings', props.spaceId],
+    queryFn: () => productApi.getModelBindings(props.spaceId),
   });
   const jobQuery = useQuery<Job>({
     queryKey: ['kb-product', 'import-job', jobId],
@@ -312,6 +318,58 @@ export function ImportWorkspace(props: {
       imageIndex: trainingType === 'chunk' && hasVlmModel && hasImageEmbeddingModel,
     };
   }, [autoIndexes, modelsQuery.data, trainingType]);
+
+  const boundModel = useMemo(
+    () => (type: 'llm' | 'embedding') => {
+      const modelId =
+        bindingsQuery.data?.items.find(
+          (binding) => binding.modelType === type && binding.status === 'active',
+        )?.modelId ?? '';
+      const models = modelsQuery.data ?? [];
+      return (
+        models.find((model) => model.modelId === modelId && model.authorized) ??
+        models.find((model) => model.type === type && model.authorized)
+      );
+    },
+    [bindingsQuery.data, modelsQuery.data],
+  );
+  const modelLimits = useMemo(() => {
+    const llm = boundModel('llm');
+    const embedding = boundModel('embedding');
+    const maxContext = llm?.limits?.maxContext ?? 8_000;
+    const maxResponse = llm?.limits?.maxResponse ?? 0;
+    return {
+      maxChunkSize: Math.min(Math.max(maxContext - maxResponse, 2_000), 100_000),
+      maxIndexSize: embedding?.limits?.maxToken ?? 512,
+      defaultIndexSize: embedding?.limits?.defaultToken ?? 512,
+    };
+  }, [boundModel]);
+  const indexSizeOptions = useMemo(
+    () =>
+      [64, 128, 256, 512, 768, 1024, 1536, 2048, 3072, 4096, 5120, 6144, 7168, 8192].filter(
+        (value) => value <= modelLimits.maxIndexSize,
+      ),
+    [modelLimits.maxIndexSize],
+  );
+  useEffect(() => {
+    if (modelsQuery.isLoading || bindingsQuery.isLoading) return;
+    setIndexSize((current) => {
+      const parsed = Number(current);
+      if (indexSizeOptions.includes(parsed)) return current;
+      return String(modelLimits.defaultIndexSize);
+    });
+    setChunkSize((current) => {
+      const parsed = Number(current);
+      if (!Number.isFinite(parsed)) return '1000';
+      return String(Math.min(Math.max(parsed, 64), modelLimits.maxChunkSize));
+    });
+  }, [
+    bindingsQuery.isLoading,
+    indexSizeOptions,
+    modelLimits.defaultIndexSize,
+    modelLimits.maxChunkSize,
+    modelsQuery.isLoading,
+  ]);
 
   useEffect(() => {
     if (modelsQuery.isLoading) return;
@@ -437,6 +495,9 @@ export function ImportWorkspace(props: {
       );
     }
   };
+  const completedUploads = uploaded.filter(
+    (item) => item.phase === 'completed' && Boolean(item.id),
+  );
   const previewQuery = useQuery({
     queryKey: [
       'kb-product',
@@ -456,6 +517,29 @@ export function ImportWorkspace(props: {
       }),
     enabled: step === 2 && kind === 'text' && Boolean(textName.trim()) && Boolean(textBody.trim()),
   });
+  const localPreviewUpload = completedUploads.find((item) => item.id === localPreviewUploadId);
+  const localFilePreviewQuery = useQuery({
+    queryKey: [
+      'kb-product',
+      'local-file-preview',
+      props.spaceId,
+      localPreviewUploadId,
+      parseConfig,
+      chunking,
+    ],
+    queryFn: () =>
+      previewImportFile(props.spaceId, {
+        uploadId: localPreviewUploadId!,
+        directoryId: directoryId || null,
+        parseProvider,
+        parseConfig,
+        chunking,
+      }),
+    enabled: step === 2 && (kind === 'local' || kind === 'image') && Boolean(localPreviewUploadId),
+  });
+  useEffect(() => {
+    localPreviewScrollRef.current?.scrollTo({ top: 0, left: 0 });
+  }, [localPreviewUploadId]);
   const activeOption = IMPORT_OPTIONS.find((option) => option.kind === kind)!;
   const directSelection = DIRECT_SELECTION_KINDS.includes(kind);
   const showFormStep = directSelection ? step <= 1 : step === 1;
@@ -465,9 +549,6 @@ export function ImportWorkspace(props: {
       : directSelection
         ? (['选择文件', '参数设置', '数据预览', '确认导入'] as const)
         : STEP_LABELS;
-  const completedUploads = uploaded.filter(
-    (item) => item.phase === 'completed' && Boolean(item.id),
-  );
   const structuredPreviewQuery = useQuery({
     queryKey: [
       'kb-product',
@@ -943,33 +1024,35 @@ export function ImportWorkspace(props: {
       </div>
       <ProductError error={error} />
 
-      <div className="kb2-import-body">
-        <aside className="kb2-import-summary">
-          <div className="kb2-import-summary__head">
-            <ProductTypeIcon kind={activeOption.kind === 'api' ? 'api' : 'general'} />
-            <div>
-              <strong>{activeOption.title}</strong>
-              <span>{activeOption.description}</span>
+      <div className={`kb2-import-body${step > 0 ? ' is-centered' : ''}`}>
+        {step === 0 ? (
+          <aside className="kb2-import-summary">
+            <div className="kb2-import-summary__head">
+              <ProductTypeIcon kind={activeOption.kind === 'api' ? 'api' : 'general'} />
+              <div>
+                <strong>{activeOption.title}</strong>
+                <span>{activeOption.description}</span>
+              </div>
             </div>
-          </div>
-          <div className="kb2-info-line">
-            <span>目标知识库</span>
-            <strong>{props.datasetName}</strong>
-          </div>
-          <ProductField label="目标目录">
-            <ProductSelect
-              value={directoryId}
-              onChange={(event) => setDirectoryId(event.target.value)}
-            >
-              <option value="">知识库根目录</option>
-              {(directoriesQuery.data ?? []).map((directory) => (
-                <option key={directory.id} value={directory.id}>
-                  {directory.name}
-                </option>
-              ))}
-            </ProductSelect>
-          </ProductField>
-        </aside>
+            <div className="kb2-info-line">
+              <span>目标知识库</span>
+              <strong>{props.datasetName}</strong>
+            </div>
+            <ProductField label="目标目录">
+              <ProductSelect
+                value={directoryId}
+                onChange={(event) => setDirectoryId(event.target.value)}
+              >
+                <option value="">知识库根目录</option>
+                {(directoriesQuery.data ?? []).map((directory) => (
+                  <option key={directory.id} value={directory.id}>
+                    {directory.name}
+                  </option>
+                ))}
+              </ProductSelect>
+            </ProductField>
+          </aside>
+        ) : null}
 
         <main className="kb2-import-main">
           {step === 0 && !directSelection ? (
@@ -1239,6 +1322,49 @@ export function ImportWorkspace(props: {
               ) : null}
 
               {step === 1 &&
+              (kind === 'local' || kind === 'image' || kind === 'text' || kind === 'url') ? (
+                <ProcessingSettings
+                  kind={kind}
+                  customPdfParse={customPdfParse}
+                  setCustomPdfParse={setCustomPdfParse}
+                  trainingType={trainingType}
+                  setTrainingType={setTrainingType}
+                  chunkSettingMode={chunkSettingMode}
+                  setChunkSettingMode={setChunkSettingMode}
+                  chunkTriggerType={chunkTriggerType}
+                  setChunkTriggerType={setChunkTriggerType}
+                  chunkTriggerMinSize={chunkTriggerMinSize}
+                  setChunkTriggerMinSize={setChunkTriggerMinSize}
+                  chunkSplitMode={chunkSplitMode}
+                  setChunkSplitMode={setChunkSplitMode}
+                  chunkSize={chunkSize}
+                  setChunkSize={setChunkSize}
+                  chunkSplitter={chunkSplitter}
+                  setChunkSplitter={setChunkSplitter}
+                  paragraphChunkAIMode={paragraphChunkAIMode}
+                  setParagraphChunkAIMode={setParagraphChunkAIMode}
+                  paragraphChunkDeep={paragraphChunkDeep}
+                  setParagraphChunkDeep={setParagraphChunkDeep}
+                  indexSize={indexSize}
+                  setIndexSize={setIndexSize}
+                  indexSizeOptions={indexSizeOptions}
+                  maxChunkSize={modelLimits.maxChunkSize}
+                  autoIndexes={autoIndexes}
+                  setAutoIndexes={setAutoIndexes}
+                  imageIndex={imageIndex}
+                  setImageIndex={setImageIndex}
+                  indexPrefixTitle={indexPrefixTitle}
+                  setIndexPrefixTitle={setIndexPrefixTitle}
+                  indexCapabilities={indexCapabilities}
+                  modelsLoading={modelsQuery.isLoading}
+                  qaPrompt={qaPrompt}
+                  setQaPrompt={setQaPrompt}
+                  onInvalidate={invalidateUrlPreviews}
+                />
+              ) : null}
+
+              {showLegacyProcessingSettings &&
+              step === 1 &&
               (kind === 'local' || kind === 'image' || kind === 'text' || kind === 'url') ? (
                 <div className="kb2-import-settings">
                   <h3>训练参数</h3>
@@ -1635,6 +1761,83 @@ export function ImportWorkspace(props: {
                     <span>未提交任何重训练请求。</span>
                   </div>
                 </div>
+              ) : kind === 'local' || kind === 'image' ? (
+                <section className="kb2-local-file-preview" aria-label="本地文件分块预览">
+                  <div className="kb2-local-file-list">
+                    <header>
+                      <strong>文件列表</strong>
+                      <small>{completedUploads.length} 个文件</small>
+                    </header>
+                    <div role="listbox" aria-label="选择要预览的文件">
+                      {completedUploads.map((item) => (
+                        <button
+                          key={item.id}
+                          type="button"
+                          role="option"
+                          aria-selected={localPreviewUploadId === item.id}
+                          className={
+                            localPreviewUploadId === item.id
+                              ? 'kb2-local-file-row is-selected'
+                              : 'kb2-local-file-row'
+                          }
+                          onClick={() => setLocalPreviewUploadId(item.id)}
+                        >
+                          <AttachmentIcon boxSize={4} />
+                          <span>{item.name}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="kb2-local-chunk-preview">
+                    <header>
+                      <strong>分块预览</strong>
+                      <small>
+                        {localFilePreviewQuery.data
+                          ? `共 ${localFilePreviewQuery.data.totalChunks} 个分块，最多展示 ${localFilePreviewQuery.data.chunks.length} 个`
+                          : '选择文件后加载'}
+                      </small>
+                    </header>
+                    <ProductError
+                      error={localFilePreviewQuery.error}
+                      onRetry={() => void localFilePreviewQuery.refetch()}
+                    />
+                    <div ref={localPreviewScrollRef} className="kb2-local-chunk-scroll">
+                      {!localPreviewUploadId ? (
+                        <ProductEmpty
+                          title="尚未选择文件"
+                          description="从左侧文件列表选择一个文件查看真实分块。"
+                        />
+                      ) : localFilePreviewQuery.isLoading ? (
+                        <div className="kb2-center-state" role="status">
+                          <Spinner size="sm" /> 正在解析并生成分块…
+                        </div>
+                      ) : localFilePreviewQuery.data ? (
+                        localFilePreviewQuery.data.totalChunks === 0 ? (
+                          <div className="kb2-error-panel" role="alert">
+                            <WarningIcon boxSize={4} />
+                            <div>
+                              <strong>没有生成分块</strong>
+                              <span>请返回参数设置调整解析方式或分块条件后重试。</span>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="kb2-chunk-preview-list">
+                            {localFilePreviewQuery.data.chunks.map((chunk) => (
+                              <article className="kb2-chunk-preview" key={chunk.index}>
+                                <span>#{chunk.index + 1}</span>
+                                <S7MarkdownRenderer>{chunk.text}</S7MarkdownRenderer>
+                              </article>
+                            ))}
+                          </div>
+                        )
+                      ) : (
+                        <div className="kb2-note">
+                          {localPreviewUpload?.name ?? '文件'} 尚未生成可预览内容。
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </section>
               ) : kind === 'text' ? (
                 <section aria-label="文本分块预览">
                   <ProductError
@@ -1993,6 +2196,410 @@ export function ImportWorkspace(props: {
         </main>
       </div>
     </ProductPage>
+  );
+}
+
+function ProcessingSettings(props: {
+  kind: ImportKind;
+  customPdfParse: boolean;
+  setCustomPdfParse: Dispatch<SetStateAction<boolean>>;
+  trainingType: 'chunk' | 'qa' | 'imageParse';
+  setTrainingType: Dispatch<SetStateAction<'chunk' | 'qa' | 'imageParse'>>;
+  chunkSettingMode: 'auto' | 'custom';
+  setChunkSettingMode: Dispatch<SetStateAction<'auto' | 'custom'>>;
+  chunkTriggerType: 'minSize' | 'forceChunk' | 'maxSize';
+  setChunkTriggerType: Dispatch<SetStateAction<'minSize' | 'forceChunk' | 'maxSize'>>;
+  chunkTriggerMinSize: string;
+  setChunkTriggerMinSize: Dispatch<SetStateAction<string>>;
+  chunkSplitMode: 'paragraph' | 'size' | 'char';
+  setChunkSplitMode: Dispatch<SetStateAction<'paragraph' | 'size' | 'char'>>;
+  chunkSize: string;
+  setChunkSize: Dispatch<SetStateAction<string>>;
+  chunkSplitter: string;
+  setChunkSplitter: Dispatch<SetStateAction<string>>;
+  paragraphChunkAIMode: 'auto' | 'force' | 'forbid';
+  setParagraphChunkAIMode: Dispatch<SetStateAction<'auto' | 'force' | 'forbid'>>;
+  paragraphChunkDeep: string;
+  setParagraphChunkDeep: Dispatch<SetStateAction<string>>;
+  indexSize: string;
+  setIndexSize: Dispatch<SetStateAction<string>>;
+  indexSizeOptions: number[];
+  maxChunkSize: number;
+  autoIndexes: boolean;
+  setAutoIndexes: Dispatch<SetStateAction<boolean>>;
+  imageIndex: boolean;
+  setImageIndex: Dispatch<SetStateAction<boolean>>;
+  indexPrefixTitle: boolean;
+  setIndexPrefixTitle: Dispatch<SetStateAction<boolean>>;
+  indexCapabilities: {
+    autoIndexes: boolean;
+    indexPrefixTitle: boolean;
+    imageIndex: boolean;
+  };
+  modelsLoading: boolean;
+  qaPrompt: string;
+  setQaPrompt: Dispatch<SetStateAction<string>>;
+  onInvalidate: () => void;
+}) {
+  const showFileParsing = props.kind === 'local' || props.kind === 'image';
+  const isChunk = props.trainingType === 'chunk';
+  return (
+    <div className="kb2-import-settings">
+      {showFileParsing ? (
+        <details className="kb2-settings-section" open>
+          <summary>
+            <span>
+              <i aria-hidden="true" />
+              文件解析设置
+            </span>
+            <span aria-hidden="true">⌄</span>
+          </summary>
+          <div className="kb2-settings-section__body">
+            <label className="kb2-parse-card">
+              <input
+                type="checkbox"
+                checked={props.customPdfParse}
+                onChange={(event) => {
+                  props.setCustomPdfParse(event.target.checked);
+                  props.onInvalidate();
+                }}
+              />
+              <span>
+                <strong>PDF 增强解析</strong>
+                <small>提升复杂 PDF 中表格、扫描页和版面内容的解析效果。</small>
+              </span>
+            </label>
+          </div>
+        </details>
+      ) : null}
+
+      <details className="kb2-settings-section" open>
+        <summary>
+          <span>
+            <i aria-hidden="true" />
+            数据处理方式设置
+          </span>
+          <span aria-hidden="true">⌄</span>
+        </summary>
+        <div className="kb2-settings-section__body">
+          <div className="kb2-setting-label">处理方式</div>
+          <div className="kb2-choice-grid" role="radiogroup" aria-label="处理方式">
+            <label className={isChunk ? 'kb2-choice-card is-selected' : 'kb2-choice-card'}>
+              <input
+                type="radio"
+                name="training-type"
+                value="chunk"
+                checked={isChunk}
+                onChange={() => {
+                  props.setTrainingType('chunk');
+                  props.onInvalidate();
+                }}
+              />
+              <span>
+                <strong>分块存储</strong>
+                <small>按规则切分原文并建立索引</small>
+              </span>
+            </label>
+            {props.kind !== 'image' ? (
+              <label
+                className={
+                  props.trainingType === 'qa' ? 'kb2-choice-card is-selected' : 'kb2-choice-card'
+                }
+              >
+                <input
+                  type="radio"
+                  name="training-type"
+                  value="qa"
+                  checked={props.trainingType === 'qa'}
+                  onChange={() => {
+                    props.setTrainingType('qa');
+                    props.onInvalidate();
+                  }}
+                />
+                <span>
+                  <strong>问答对提取</strong>
+                  <small>由文本模型从原文生成问答对</small>
+                </span>
+              </label>
+            ) : null}
+          </div>
+
+          {isChunk ? (
+            <>
+              <div className="kb2-setting-row">
+                <div>
+                  <label htmlFor="kb2-chunk-trigger">分块条件</label>
+                </div>
+                <div className="kb2-setting-row__controls">
+                  <ProductSelect
+                    id="kb2-chunk-trigger"
+                    value={props.chunkTriggerType}
+                    onChange={(event) => {
+                      props.setChunkTriggerType(
+                        event.target.value as 'minSize' | 'forceChunk' | 'maxSize',
+                      );
+                      props.onInvalidate();
+                    }}
+                  >
+                    <option value="minSize">原文长度大于</option>
+                    <option value="maxSize">原文长度小于</option>
+                    <option value="forceChunk">强制分块</option>
+                  </ProductSelect>
+                  {props.chunkTriggerType === 'minSize' ? (
+                    <ProductInput
+                      aria-label="分块条件值"
+                      type="number"
+                      min={1}
+                      max={100_000}
+                      value={props.chunkTriggerMinSize}
+                      onChange={(event) => {
+                        props.setChunkTriggerMinSize(event.target.value);
+                        props.onInvalidate();
+                      }}
+                    />
+                  ) : null}
+                </div>
+              </div>
+
+              <div className="kb2-setting-block">
+                <div className="kb2-setting-label">索引增强</div>
+                <div className="kb2-index-enhancements">
+                  <label className="kb2-checkbox-row">
+                    <input
+                      type="checkbox"
+                      checked={props.indexPrefixTitle}
+                      disabled={!props.indexCapabilities.indexPrefixTitle}
+                      onChange={(event) => {
+                        props.setIndexPrefixTitle(event.target.checked);
+                        props.onInvalidate();
+                      }}
+                    />
+                    <span>将标题加入索引</span>
+                  </label>
+                  <label className="kb2-checkbox-row">
+                    <input
+                      type="checkbox"
+                      checked={props.autoIndexes}
+                      disabled={!props.indexCapabilities.autoIndexes}
+                      onChange={(event) => {
+                        props.setAutoIndexes(event.target.checked);
+                        if (!event.target.checked) props.setIndexPrefixTitle(false);
+                        props.onInvalidate();
+                      }}
+                    />
+                    <span>自动生成补充索引</span>
+                  </label>
+                  <label className="kb2-checkbox-row">
+                    <input
+                      type="checkbox"
+                      checked={props.imageIndex}
+                      disabled={!props.indexCapabilities.imageIndex}
+                      onChange={(event) => {
+                        props.setImageIndex(event.target.checked);
+                        props.onInvalidate();
+                      }}
+                    />
+                    <span>图片自动索引</span>
+                  </label>
+                </div>
+              </div>
+            </>
+          ) : null}
+
+          {isChunk ? (
+            <div className="kb2-setting-block">
+              <div className="kb2-setting-label">分块处理参数</div>
+              <div className="kb2-parameter-modes" role="radiogroup" aria-label="分块处理参数">
+                <label
+                  className={
+                    props.chunkSettingMode === 'auto'
+                      ? 'kb2-parameter-card is-selected'
+                      : 'kb2-parameter-card'
+                  }
+                >
+                  <input
+                    type="radio"
+                    name="chunk-setting-mode"
+                    value="auto"
+                    checked={props.chunkSettingMode === 'auto'}
+                    onChange={() => {
+                      props.setChunkSettingMode('auto');
+                      props.onInvalidate();
+                    }}
+                  />
+                  <span>
+                    <strong>默认</strong>
+                    <small>使用系统默认的参数和规则</small>
+                  </span>
+                </label>
+                <label
+                  className={
+                    props.chunkSettingMode === 'custom'
+                      ? 'kb2-parameter-card is-selected'
+                      : 'kb2-parameter-card'
+                  }
+                >
+                  <input
+                    type="radio"
+                    name="chunk-setting-mode"
+                    value="custom"
+                    checked={props.chunkSettingMode === 'custom'}
+                    onChange={() => {
+                      props.setChunkSettingMode('custom');
+                      props.onInvalidate();
+                    }}
+                  />
+                  <span>
+                    <strong>自定义</strong>
+                    <small>自定义设置数据处理规则</small>
+                  </span>
+                </label>
+              </div>
+
+              {props.chunkSettingMode === 'custom' ? (
+                <div className="kb2-custom-parameters">
+                  <div className="kb2-setting-label">切分方式</div>
+                  <div className="kb2-inline-radio" role="radiogroup" aria-label="切分方式">
+                    {[
+                      ['paragraph', '按段落分块'],
+                      ['size', '按长度分块'],
+                      ['char', '按指定分隔符分块'],
+                    ].map(([value, label]) => (
+                      <label key={value}>
+                        <input
+                          type="radio"
+                          name="chunk-split-mode"
+                          value={value}
+                          checked={props.chunkSplitMode === value}
+                          onChange={() => {
+                            props.setChunkSplitMode(value as 'paragraph' | 'size' | 'char');
+                            props.onInvalidate();
+                          }}
+                        />
+                        <span>{label}</span>
+                      </label>
+                    ))}
+                  </div>
+
+                  {props.chunkSplitMode === 'paragraph' ? (
+                    <div className="kb2-custom-fields">
+                      <ProductField label="模型识别段落">
+                        <ProductSelect
+                          value={props.paragraphChunkAIMode}
+                          onChange={(event) => {
+                            props.setParagraphChunkAIMode(
+                              event.target.value as 'auto' | 'force' | 'forbid',
+                            );
+                            props.onInvalidate();
+                          }}
+                        >
+                          <option value="forbid">禁用</option>
+                          <option value="auto">自动</option>
+                          <option value="force">强制</option>
+                        </ProductSelect>
+                      </ProductField>
+                      <ProductField label="最大段落深度">
+                        <ProductInput
+                          type="number"
+                          min={1}
+                          max={8}
+                          value={props.paragraphChunkDeep}
+                          onChange={(event) => {
+                            props.setParagraphChunkDeep(event.target.value);
+                            props.onInvalidate();
+                          }}
+                        />
+                      </ProductField>
+                      <ProductField label="最大分块大小">
+                        <ProductInput
+                          type="number"
+                          min={64}
+                          max={props.maxChunkSize}
+                          value={props.chunkSize}
+                          onChange={(event) => {
+                            props.setChunkSize(event.target.value);
+                            props.onInvalidate();
+                          }}
+                        />
+                      </ProductField>
+                    </div>
+                  ) : null}
+
+                  {props.chunkSplitMode === 'size' ? (
+                    <div className="kb2-custom-fields">
+                      <ProductField label="分块大小">
+                        <ProductInput
+                          type="number"
+                          min={64}
+                          max={props.maxChunkSize}
+                          value={props.chunkSize}
+                          onChange={(event) => {
+                            props.setChunkSize(event.target.value);
+                            props.onInvalidate();
+                          }}
+                        />
+                      </ProductField>
+                    </div>
+                  ) : null}
+
+                  {props.chunkSplitMode === 'char' ? (
+                    <div className="kb2-custom-fields">
+                      <ProductField label="自定义分隔符">
+                        <ProductTextarea
+                          value={props.chunkSplitter}
+                          placeholder="每行一个正则分隔符"
+                          maxLength={1000}
+                          onChange={(event) => {
+                            props.setChunkSplitter(event.target.value);
+                            props.onInvalidate();
+                          }}
+                        />
+                      </ProductField>
+                    </div>
+                  ) : null}
+
+                  <ProductField label="索引大小">
+                    <ProductSelect
+                      value={props.indexSize}
+                      onChange={(event) => {
+                        props.setIndexSize(event.target.value);
+                        props.onInvalidate();
+                      }}
+                    >
+                      {props.indexSizeOptions.map((size) => (
+                        <option key={size} value={size}>
+                          {size}
+                        </option>
+                      ))}
+                    </ProductSelect>
+                  </ProductField>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+
+          {props.trainingType === 'qa' ? (
+            <div className="kb2-setting-block">
+              <ProductField label="QA Prompt">
+                <ProductTextarea
+                  value={props.qaPrompt}
+                  maxLength={20000}
+                  placeholder="留空时使用系统 QA Prompt"
+                  onChange={(event) => {
+                    props.setQaPrompt(event.target.value);
+                    props.onInvalidate();
+                  }}
+                />
+              </ProductField>
+              <div className="kb2-note" role="status" aria-label="QA 状态说明">
+                QA 成功会写入问答 Segment；无效输出使用原文回退；模型或权限失败保持 QA
+                失败，不会伪装成成功。
+              </div>
+            </div>
+          ) : null}
+        </div>
+      </details>
+    </div>
   );
 }
 

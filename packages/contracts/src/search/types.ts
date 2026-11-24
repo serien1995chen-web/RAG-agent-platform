@@ -60,6 +60,7 @@ export const SearchRequestSchema = z.object({
   limit: z.number().int().min(1).max(50).default(10),
   maxTokens: z.number().int().positive().default(4000),
   similarity: z.number().min(0).max(1).default(0),
+  rerankCandidateNum: z.number().int().min(10).max(100).optional(),
   weights: SearchWeightsSchema.optional(),
   budgets: SearchBudgetsSchema.optional(),
   versionPolicy: SearchVersionPolicySchema.optional(),

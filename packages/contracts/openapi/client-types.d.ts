@@ -454,7 +454,7 @@ export interface SchemaPropertyMap {
   "ImageSearchRequest": never;
   "ImportApiLibrary": "config" | "credentials" | "directoryId" | "fileIds";
   "ImportBackup": "conflictStrategy" | "directoryId" | "dryRun" | "previewOnly" | "uploadId";
-  "ImportFiles": "chunking" | "directoryId" | "parseConfig" | "parseProvider" | "uploadIds";
+  "ImportFiles": "chunking" | "directoryId" | "dryRun" | "parseConfig" | "parseProvider" | "uploadIds";
   "ImportImageDataset": "chunking" | "directoryId" | "name" | "uploadIds";
   "ImportTemplate": "directoryId" | "previewOnly" | "uploadId";
   "ImportText": "chunking" | "directoryId" | "dryRun" | "knowledgeSpaceId" | "name" | "text";
@@ -465,15 +465,15 @@ export interface SchemaPropertyMap {
   "JobList": "items" | "pageInfo";
   "JobStatus": never;
   "JobStep": "attempts" | "compensationState" | "externalEvidence" | "status" | "stepKey";
-  "KnowledgeSpace": "accessMode" | "createdAt" | "description" | "iconKey" | "id" | "kind" | "modelBindings" | "name" | "ownershipMemberId" | "parentPath" | "parentSpaceId" | "referenceRevision" | "sourceAclMode" | "sourcePermissionEnabled" | "status" | "updatedAt" | "version" | "workspaceId";
+  "KnowledgeSpace": "accessMode" | "autoSync" | "createdAt" | "description" | "iconKey" | "id" | "kind" | "modelBindings" | "name" | "ownershipMemberId" | "parentPath" | "parentSpaceId" | "referenceRevision" | "sourceAclMode" | "sourcePermissionEnabled" | "status" | "updatedAt" | "version" | "workspaceId";
   "KnowledgeSpaceBatchAction": "action" | "ids" | "targetParentId" | "versions";
-  "KnowledgeSpaceCreate": "accessMode" | "description" | "iconKey" | "kind" | "name" | "parentSpaceId" | "sourceAclMode" | "sourcePermissionEnabled";
+  "KnowledgeSpaceCreate": "accessMode" | "autoSync" | "description" | "iconKey" | "kind" | "name" | "parentSpaceId" | "sourceAclMode" | "sourcePermissionEnabled";
   "KnowledgeSpaceDeleteRequest": "expectedReferenceRevision" | "referenceStrategy" | "version";
   "KnowledgeSpaceList": "items" | "pageInfo";
   "KnowledgeSpaceReferences": "count" | "items" | "referenceRevision";
-  "KnowledgeSpaceUpdate": "accessMode" | "description" | "iconKey" | "name" | "sourceAclMode" | "sourcePermissionEnabled" | "version";
+  "KnowledgeSpaceUpdate": "accessMode" | "autoSync" | "description" | "iconKey" | "name" | "sourceAclMode" | "sourcePermissionEnabled" | "version";
   "LiteParseConfig": "batchPages" | "fallbackPdfJsOnWasmLoadError" | "maxPages" | "ocrEnabled" | "provider" | "timeoutMs";
-  "Model": "authorized" | "capabilities" | "displayName" | "modelId" | "type";
+  "Model": "authorized" | "capabilities" | "displayName" | "limits" | "modelId" | "type";
   "ModelBinding": "displayName" | "modelId" | "modelType" | "requiredCapabilities" | "status";
   "ModelBindingList": "items" | "pageInfo";
   "ModelBindingUpdate": "bindings" | "version";
@@ -498,7 +498,7 @@ export interface SchemaPropertyMap {
   "ReindexRequest": "modelId" | "reason" | "version";
   "SangforParseConfig": "allowedExtensions" | "chartAnalysis" | "credentialProfileId" | "fallbackProvider" | "imageAnalysis" | "imageHandling" | "keepAppendix" | "keepHeaderFooter" | "provider" | "timeoutMs";
   "SearchFilter": "conditions" | "createdAt" | "directoryIds" | "logic" | "sourceIds";
-  "SearchRequest": "embeddingWeight" | "filters" | "knowledgeSpaceId" | "query" | "rerankWeight" | "searchMode" | "similarity" | "tokenBudget" | "usingRerank";
+  "SearchRequest": "embeddingWeight" | "filters" | "knowledgeSpaceId" | "query" | "rerankCandidateNum" | "rerankWeight" | "searchMode" | "similarity" | "tokenBudget" | "usingRerank";
   "SearchResponse": "degraded" | "durationMs" | "items" | "mode" | "partial" | "rerankApplied" | "searchId";
   "Segment": "answer" | "chunkSettingsHash" | "content" | "contentHash" | "fullTextTokens" | "fullTextVersion" | "id" | "imageBlobRefId" | "indexErrorCode" | "indexStatus" | "indexes" | "knowledgeSpaceId" | "metadata" | "order" | "question" | "searchEnabled" | "sourceId" | "sourceVersion" | "version" | "workspaceId";
   "SegmentBatchAction": "action" | "items";
@@ -529,7 +529,7 @@ export interface SchemaPropertyMap {
   "TagList": "items";
   "TagNumberFilterCondition": "operator" | "tagId" | "tagType" | "value";
   "TagStringFilterCondition": "operator" | "tagId" | "tagType" | "value";
-  "TagUpdate": "label" | "options" | "required" | "status" | "version";
+  "TagUpdate": "label" | "options" | "renames" | "required" | "status" | "version";
   "TagValuesUpdate": "options" | "version";
   "TextinParseConfig": "credentialProfileId" | "fallbackProvider" | "imageHandling" | "parseMode" | "provider" | "removeWatermark" | "timeoutMs";
   "UploadComplete": "parts";
@@ -610,7 +610,7 @@ export interface RequiredSchemaPropertyMap {
   "JobList": "items" | "pageInfo";
   "JobStatus": never;
   "JobStep": "attempts" | "compensationState" | "status" | "stepKey";
-  "KnowledgeSpace": "accessMode" | "createdAt" | "id" | "kind" | "name" | "ownershipMemberId" | "parentSpaceId" | "referenceRevision" | "sourceAclMode" | "sourcePermissionEnabled" | "status" | "updatedAt" | "version" | "workspaceId";
+  "KnowledgeSpace": "accessMode" | "autoSync" | "createdAt" | "id" | "kind" | "name" | "ownershipMemberId" | "parentSpaceId" | "referenceRevision" | "sourceAclMode" | "sourcePermissionEnabled" | "status" | "updatedAt" | "version" | "workspaceId";
   "KnowledgeSpaceBatchAction": "action" | "ids" | "versions";
   "KnowledgeSpaceCreate": "accessMode" | "kind" | "name" | "sourceAclMode" | "sourcePermissionEnabled";
   "KnowledgeSpaceDeleteRequest": "expectedReferenceRevision" | "version";

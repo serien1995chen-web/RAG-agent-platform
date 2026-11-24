@@ -368,6 +368,7 @@ export class KnowledgeApplication {
               typeof body.sourcePermissionEnabled === 'boolean'
                 ? body.sourcePermissionEnabled
                 : true,
+            autoSync: body.autoSync === true,
             modelBindings: body.kind === 'space' ? await this.defaultModelBindings(context) : [],
           },
           context,
@@ -416,7 +417,12 @@ export class KnowledgeApplication {
         };
       }
       case 'API-SPACE-UPDATE': {
-        await this.access.assertPermission('space', params.spaceId ?? '', 'write', context);
+        await this.access.assertPermission(
+          'space',
+          params.spaceId ?? '',
+          body.autoSync === undefined ? 'write' : 'manage',
+          context,
+        );
         return {
           status: 200,
           data: await this.catalog.updateSpace(params.spaceId ?? '', body, context),

@@ -1,29 +1,13 @@
 'use client';
 
-import { CopyIcon, SettingsIcon } from '@chakra-ui/icons';
-import { useEffect, useState, type ReactNode } from 'react';
-import { ensureConsoleSession, type ConsoleSession } from '../client/knowledge-client';
+import { CopyIcon } from '@chakra-ui/icons';
+import type { ReactNode } from 'react';
 
 export function ProductAppShell(props: {
   children: ReactNode;
-  active?: 'knowledge' | 'operations';
+  active?: 'knowledge';
   title?: string;
 }) {
-  const [session, setSession] = useState<ConsoleSession | null>(null);
-  useEffect(() => {
-    let active = true;
-    void ensureConsoleSession()
-      .then((value) => {
-        if (active) setSession(value);
-      })
-      .catch(() => {
-        if (active) setSession(null);
-      });
-    return () => {
-      active = false;
-    };
-  }, []);
-  const canManageOperations = session?.scopes.includes('knowledge:admin') === true;
   return (
     <div className="kb2-shell">
       <a className="kb2-skip-link" href="#kb2-main">
@@ -43,16 +27,6 @@ export function ProductAppShell(props: {
             <CopyIcon boxSize="22px" />
             <span>知识库</span>
           </a>
-          {canManageOperations ? (
-            <a
-              href="/settings/operations"
-              className="kb2-rail__item"
-              aria-current={props.active === 'operations' ? 'page' : undefined}
-            >
-              <SettingsIcon boxSize="22px" />
-              <span>运营</span>
-            </a>
-          ) : null}
         </nav>
         <div className="kb2-rail__footer" aria-hidden="true">
           <span>KB</span>
@@ -62,14 +36,6 @@ export function ProductAppShell(props: {
         <header className="kb2-mobile-header">
           <a href="/dataset/list">知识库</a>
           <div className="kb2-mobile-header__links">
-            {canManageOperations ? (
-              <a
-                href="/settings/operations"
-                aria-current={props.active === 'operations' ? 'page' : undefined}
-              >
-                运营
-              </a>
-            ) : null}
             <span>{props.title ?? '知识库'}</span>
           </div>
         </header>

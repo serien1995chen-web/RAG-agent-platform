@@ -570,6 +570,7 @@ export class S8ImageSearchApplication {
                 usingRerank: request.usingRerank,
                 queryOptimizationEnabled: false,
                 rerankWeight: request.rerankWeight,
+                rerankCandidateNum: request.rerankCandidateNum,
                 ...(request.filters ? { filters: request.filters } : {}),
               },
               knowledgeSpaceIds: [request.knowledgeSpaceId],

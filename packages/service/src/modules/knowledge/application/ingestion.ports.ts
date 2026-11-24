@@ -90,6 +90,16 @@ export interface ImportSubmissionPort {
   submit(command: ImportSubmissionCommand, context: TenantContext): Promise<ImportSubmissionResult>;
 }
 
+export interface FilePreviewParsePort {
+  parse(
+    input: {
+      source: ImportSourceDraft;
+      parseConfig: Record<string, unknown>;
+    },
+    context: TenantContext,
+  ): Promise<{ rawText: string; contentHash?: string }>;
+}
+
 export interface BackupConflict {
   rowNumber: number;
   code: 'KNOWLEDGE_CONFLICT';

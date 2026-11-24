@@ -87,7 +87,7 @@ async function createSpace(name = `B02 space ${suffix}`) {
         sourcePermissionEnabled: true,
       },
     })
-  ).data as { id: string; version: number };
+  ).data as { id: string; version: number; autoSync: boolean };
 }
 
 async function createDirectory(
@@ -608,6 +608,94 @@ describe('L1 B02 Directory, Source and Tag integration', () => {
     );
     const datetimeValue = firstSource.tagValues.find((entry) => entry.tagId === datetimeTag.id);
     expect(datetimeValue?.value).toBe(Date.parse('2026-11-10T12:00:00.000Z'));
+  });
+
+  it('KB-PARITY-019 renames and removes array options transactionally', async () => {
+    const space = await createSpace();
+    const source = await createSource(space.id, `选项迁移来源 ${suffix}`);
+    const tag = await createTag(space.id, {
+      key: `option_${suffix.slice(0, 8)}`,
+      label: '来源区域',
+      tagType: 'array',
+      options: ['旧值', '保留值'],
+    });
+    await run({
+      operationId: 'API-TAG-APPLY',
+      body: {
+        items: [{ sourceId: source.id, tagId: tag.id, value: ['旧值', '保留值'] }],
+        sourceVersions: { [source.id]: source.version },
+      },
+    });
+
+    const renamed = await run({
+      operationId: 'API-TAG-UPDATE',
+      params: { tagId: tag.id },
+      body: {
+        version: tag.version,
+        options: ['新值', '保留值'],
+        renames: [{ from: '旧值', to: '新值' }],
+      },
+    });
+    expect(renamed.data).toMatchObject({
+      options: ['新值', '保留值'],
+      version: tag.version + 1,
+    });
+    let current = (
+      await run({
+        operationId: 'API-SOURCE-GET',
+        params: { sourceId: source.id },
+      })
+    ).data as {
+      tagValues: Array<{ tagId: string; value: unknown; valueKey: string }>;
+      version: number;
+    };
+    expect(current.tagValues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          tagId: tag.id,
+          value: ['保留值', '新值'],
+          valueKey: '保留值\u0000新值',
+        }),
+      ]),
+    );
+
+    await run({
+      operationId: 'API-TAG-UPDATE',
+      params: { tagId: tag.id },
+      body: {
+        version: tag.version + 1,
+        options: ['新值'],
+      },
+    });
+    current = (
+      await run({
+        operationId: 'API-SOURCE-GET',
+        params: { sourceId: source.id },
+      })
+    ).data as typeof current;
+    expect(current.tagValues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          tagId: tag.id,
+          value: ['新值'],
+          valueKey: '新值',
+        }),
+      ]),
+    );
+  });
+
+  it('KB-PARITY-016 stores the knowledge-base scheduled sync switch', async () => {
+    const space = await createSpace();
+    expect(space).toMatchObject({ autoSync: false });
+    const updated = await run({
+      operationId: 'API-SPACE-UPDATE',
+      params: { spaceId: space.id },
+      body: { version: space.version, autoSync: true },
+    });
+    expect(updated.data).toMatchObject({ autoSync: true, version: space.version + 1 });
+    await expect(catalog.getSpace(space.id, ownerContext)).resolves.toMatchObject({
+      autoSync: true,
+    });
   });
 
   it('L1-B02-COL-003-N01 重复 key、非法 options 和 required 未赋值被稳定拒绝', async () => {

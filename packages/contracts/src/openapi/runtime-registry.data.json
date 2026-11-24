@@ -2204,7 +2204,7 @@
       "path": "/v1/knowledge/spaces/{spaceId}/imports/files",
       "group": "import",
       "requestSchema": "ImportFiles",
-      "responseSchema": "Job",
+      "responseSchema": null,
       "scopes": [
         "knowledge:write"
       ],

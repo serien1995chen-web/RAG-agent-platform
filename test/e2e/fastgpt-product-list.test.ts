@@ -160,8 +160,8 @@ describe('FastGPT product module 1 list', () => {
     ).toBeVisible();
     await playwrightExpect(page.getByText(`模块一子库 ${suffix}`, { exact: true })).toBeVisible();
     await page.getByRole('button', { name: '权限', exact: true }).click();
-    await playwrightExpect(page.getByText('权限配置', { exact: true })).toBeVisible();
-    await playwrightExpect(page.getByText(/ACL 状态：/)).toBeVisible();
+    await playwrightExpect(page.getByRole('dialog', { name: '管理协作者' })).toBeVisible();
+    await playwrightExpect(page.getByText(/ACL|权限版本|主体 ID/)).toHaveCount(0);
     await page.getByRole('button', { name: '关闭弹窗' }).click();
     await playwrightExpect(page.locator('.kb2-modal')).toHaveCount(0);
 

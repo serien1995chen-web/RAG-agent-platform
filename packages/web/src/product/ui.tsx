@@ -29,6 +29,7 @@ import {
   ModalFooter,
   ModalHeader,
   ModalOverlay,
+  Portal,
   Spinner,
   Text,
   useToast,
@@ -41,7 +42,7 @@ import type {
   SelectHTMLAttributes,
   TextareaHTMLAttributes,
 } from 'react';
-import { forwardRef } from 'react';
+import { forwardRef, useCallback, useEffect, useRef, useState } from 'react';
 import { productErrorView } from './api';
 import { productTokens } from './tokens';
 
@@ -274,21 +275,158 @@ export function ProductMenu(props: {
   onClose: () => void;
   children: ReactNode;
   align?: 'left' | 'right';
+  triggerElement?: HTMLElement | null;
+  initialFocus?: 'first' | 'last';
 }) {
+  const menuRef = useRef<HTMLDivElement | null>(null);
+  const [position, setPosition] = useState<{
+    top: number;
+    left: number;
+    minWidth: number;
+  } | null>(null);
+
+  const updatePosition = useCallback(() => {
+    if (!props.triggerElement || !menuRef.current) return;
+    const anchor = props.triggerElement.getBoundingClientRect();
+    const menu = menuRef.current.getBoundingClientRect();
+    const margin = 8;
+    const minWidth = Math.min(240, window.innerWidth - margin * 2);
+    const height = menu.height || 240;
+    const width = Math.max(menu.width, minWidth);
+    const canOpenBelow = anchor.bottom + 5 + height <= window.innerHeight - margin;
+    const top = canOpenBelow ? anchor.bottom + 5 : Math.max(margin, anchor.top - height - 5);
+    const left = Math.min(
+      Math.max(margin, anchor.right - width),
+      window.innerWidth - width - margin,
+    );
+    setPosition({ top, left, minWidth });
+  }, [props.triggerElement]);
+  const setMenuNode = useCallback(
+    (element: HTMLDivElement | null) => {
+      menuRef.current = element;
+      if (element) {
+        window.requestAnimationFrame(updatePosition);
+      }
+    },
+    [updatePosition],
+  );
+
+  useEffect(() => {
+    if (!props.open || !props.triggerElement) {
+      setPosition(null);
+      return;
+    }
+    updatePosition();
+  }, [props.open, props.triggerElement, updatePosition]);
+
+  useEffect(() => {
+    if (!props.open || !props.initialFocus || !position) return;
+    const frame = window.requestAnimationFrame(() => {
+      const items = Array.from(
+        menuRef.current?.querySelectorAll<HTMLButtonElement>('[role="menuitem"]:not(:disabled)') ??
+          [],
+      );
+      (props.initialFocus === 'last' ? items.at(-1) : items[0])?.focus();
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [position, props.initialFocus, props.open]);
+
+  useEffect(() => {
+    if (!props.open) return;
+    const trigger = props.triggerElement;
+    const previousHaspopup = trigger?.getAttribute('aria-haspopup');
+    const previousControls = trigger?.getAttribute('aria-controls');
+    if (trigger) {
+      trigger.setAttribute('aria-haspopup', 'menu');
+      trigger.setAttribute('aria-controls', 'kb2-product-menu');
+    }
+    const close = (restoreFocus: boolean) => {
+      props.onClose();
+      if (restoreFocus) trigger?.focus();
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      const items = Array.from(
+        menuRef.current?.querySelectorAll<HTMLButtonElement>('[role="menuitem"]:not(:disabled)') ??
+          [],
+      );
+      const currentIndex = items.indexOf(document.activeElement as HTMLButtonElement);
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        close(true);
+      } else if (event.key === 'ArrowDown') {
+        event.preventDefault();
+        items[(currentIndex + 1 + items.length) % Math.max(items.length, 1)]?.focus();
+      } else if (event.key === 'ArrowUp') {
+        event.preventDefault();
+        items[(currentIndex - 1 + items.length) % Math.max(items.length, 1)]?.focus();
+      } else if (event.key === 'Home') {
+        event.preventDefault();
+        items[0]?.focus();
+      } else if (event.key === 'End') {
+        event.preventDefault();
+        items.at(-1)?.focus();
+      } else if (event.key === 'Tab') {
+        close(false);
+      }
+    };
+    const onViewportChange = () => updatePosition();
+    const onPointerDown = (event: PointerEvent) => {
+      const target = event.target;
+      if (!(target instanceof Node)) return;
+      if (menuRef.current?.contains(target) || trigger?.contains(target)) return;
+      close(false);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    window.addEventListener('resize', onViewportChange);
+    window.addEventListener('scroll', onViewportChange, true);
+    document.addEventListener('pointerdown', onPointerDown);
+    return () => {
+      window.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener('resize', onViewportChange);
+      window.removeEventListener('scroll', onViewportChange, true);
+      document.removeEventListener('pointerdown', onPointerDown);
+      if (trigger) {
+        if (previousHaspopup == null) trigger.removeAttribute('aria-haspopup');
+        else trigger.setAttribute('aria-haspopup', previousHaspopup);
+        if (previousControls == null) trigger.removeAttribute('aria-controls');
+        else trigger.setAttribute('aria-controls', previousControls);
+      }
+    };
+  }, [props.onClose, props.open, props.triggerElement]);
+
   if (!props.open) return null;
-  return (
+  const content = (
     <>
-      <button
-        className="kb2-menu-scrim"
-        type="button"
-        aria-label="关闭菜单"
-        onClick={props.onClose}
-      />
-      <div className={`kb2-menu kb2-menu--${props.align ?? 'right'}`} role="menu">
+      {!props.triggerElement ? (
+        <button
+          className="kb2-menu-scrim"
+          type="button"
+          aria-label="关闭菜单"
+          onClick={props.onClose}
+        />
+      ) : null}
+      <div
+        ref={setMenuNode}
+        id="kb2-product-menu"
+        className={`kb2-menu kb2-menu--${props.align ?? 'right'}${props.triggerElement ? ' is-fixed' : ''}`}
+        role="menu"
+        style={
+          props.triggerElement
+            ? {
+                position: 'fixed',
+                top: position?.top ?? 0,
+                left: position?.left ?? 0,
+                minWidth: position?.minWidth,
+                visibility: position ? 'visible' : 'hidden',
+              }
+            : undefined
+        }
+      >
         {props.children}
       </div>
     </>
   );
+  return props.triggerElement ? <Portal>{content}</Portal> : content;
 }
 
 export function ProductMenuItem(props: {

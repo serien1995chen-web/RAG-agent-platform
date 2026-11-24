@@ -467,15 +467,11 @@ describe('L1-B19-OPS-005-UI01 current product entry', () => {
       await page.goto(`${app.baseUrl}/dataset/detail?datasetId=${spaceId}&currentTab=collection`, {
         waitUntil: 'networkidle',
       });
-      await page.getByRole('button', { name: '编辑模型配置' }).click();
-      const dialog = page.getByRole('dialog', { name: '模型配置' });
-      await uiExpect(dialog).toBeVisible();
       await screenshot(page, 'model-catalog-failure-1440x900');
       await uiExpect(
-        dialog.getByText(/模型目录暂不可用|模型目录.*(失败|不可用)|dependencyUnavailable/i),
+        page.getByText(/模型目录暂不可用|模型目录.*(失败|不可用)|dependencyUnavailable/i),
       ).toBeVisible();
-      await uiExpect(dialog.getByRole('button', { name: '保存' })).toBeDisabled();
-      await uiExpect(dialog.getByRole('button', { name: /重试|重新加载/ })).toBeVisible();
+      await uiExpect(page.getByLabel('索引模型')).toBeDisabled();
       await context.close();
     } finally {
       await browser.close();

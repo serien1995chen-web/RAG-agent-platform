@@ -22,6 +22,23 @@ describe('S4 ingestion contracts', () => {
     expect(ImportFilesSchema.safeParse({ uploadIds: [], chunking }).success).toBe(false);
   });
 
+  it('requires exactly one upload for file dry-run previews', () => {
+    expect(
+      ImportFilesSchema.safeParse({
+        uploadIds: ['upl-preview'],
+        chunking,
+        dryRun: true,
+      }).success,
+    ).toBe(true);
+    expect(
+      ImportFilesSchema.safeParse({
+        uploadIds: ['upl-1', 'upl-2'],
+        chunking,
+        dryRun: true,
+      }).success,
+    ).toBe(false);
+  });
+
   it('accepts a named image collection of at most five uploads', () => {
     expect(
       ImportImageDatasetSchema.parse({

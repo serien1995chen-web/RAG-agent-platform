@@ -30,6 +30,15 @@ const ModelProfileSchema = z
           type: z.enum(S5_MODEL_TYPES),
           capabilities: z.array(z.string().min(1).max(128)).min(1),
           dimension: z.number().int().nullable().optional(),
+          limits: z
+            .object({
+              maxToken: z.number().int().positive().optional(),
+              defaultToken: z.number().int().positive().optional(),
+              maxContext: z.number().int().positive().optional(),
+              maxResponse: z.number().int().positive().optional(),
+            })
+            .strict()
+            .optional(),
         })
         .strict(),
     ),
@@ -73,6 +82,7 @@ function mergeCatalogWithProfile(
           type: configured.type,
           capabilities: configured.capabilities,
           ...(typeof configured.dimension === 'number' ? { dimension: configured.dimension } : {}),
+          ...(configured.limits ? { limits: configured.limits } : {}),
         },
       ];
     }),
@@ -201,6 +211,7 @@ export class S5MockModelCatalog implements ModelCatalogPort {
         type: 'llm',
         capabilities: ['chat', 'structured-output'],
         dimension: null,
+        limits: { maxContext: 32_000, maxResponse: 4_000 },
         authorized: true,
       },
       ...([768, 1024, 1536, 3072] as const).map((dimension) => ({
@@ -209,6 +220,7 @@ export class S5MockModelCatalog implements ModelCatalogPort {
         type: 'embedding' as const,
         capabilities: ['text-embedding', 'vision', `dimension:${dimension}`],
         dimension,
+        limits: { maxToken: 8_192, defaultToken: 512 },
         authorized: true,
       })),
       {

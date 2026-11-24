@@ -5,6 +5,8 @@
 export const PACKAGE_NAME = '@kb/service' as const;
 
 export { loadKnowledgeRuntimeConfig } from './shared/config/knowledge-runtime-config';
+export { loadConsoleDirectory } from './shared/config/console-directory';
+export type { ConsoleDirectory } from './shared/config/console-directory';
 export {
   canonicalJson,
   loadS10PricingProfile,

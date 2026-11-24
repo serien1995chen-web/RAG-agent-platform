@@ -93,6 +93,7 @@ import {
   KnowledgeArchiveRepository,
   KnowledgeCatalogRepository,
   FileApplication,
+  type ImportSourceDraft,
   KnowledgeObjectRefRepository,
   ObjectLifecycleService,
   KnowledgeOutboxDispatcher,
@@ -527,6 +528,82 @@ async function bootstrapRuntime(): Promise<TelemetryKnowledgeApiRuntime> {
     caption: s8Caption,
   });
   const s5Processing = new S5ProcessingApplication(s5Qa, s8Enhancement);
+  const parsePreviewFile = async (
+    input: { source: ImportSourceDraft; parseConfig: Record<string, unknown> },
+    context: TenantContext,
+  ) => {
+    const { source } = input;
+    if (!source.blobRefId) {
+      throw createKnowledgeError({
+        code: 'KNOWLEDGE_UNSUPPORTED_CONTENT',
+        requestId: context.requestId,
+        traceId: context.traceId,
+        details: { field: 'blobRefId', reason: 'required' },
+      });
+    }
+    const objectRef = await objectRefs.findObjectRef(source.blobRefId, context);
+    if (!objectRef || objectRef.state !== 'active') {
+      throw createKnowledgeError({
+        code: 'KNOWLEDGE_NOT_FOUND',
+        requestId: context.requestId,
+        traceId: context.traceId,
+        details: { blobRefId: source.blobRefId },
+      });
+    }
+    const object = await objectStore.getObject(objectRef.bucket, objectRef.objectKey, null, {
+      workspaceId: context.workspaceId,
+      knowledgeSpaceId: objectRef.knowledgeSpaceId,
+      requestId: context.requestId,
+      traceId: context.traceId,
+    });
+    const chunks: Uint8Array[] = [];
+    for await (const chunk of object.body) chunks.push(Buffer.from(chunk));
+    const bytes = Buffer.concat(chunks);
+    if (source.parseProvider !== 'liteparse') {
+      const config = parseS5OcrProviderConfig(input.parseConfig, source.parseProvider, context);
+      const result = await s5Ocr.parse({
+        workspaceId: context.workspaceId,
+        knowledgeSpaceId: objectRef.knowledgeSpaceId,
+        sourceId: source.id,
+        sourceVersion: 1,
+        bytes,
+        fileName: source.name,
+        mimeType: source.mimeType,
+        config,
+        timeoutMs: config.timeoutMs,
+        requestId: context.requestId,
+        traceId: context.traceId,
+        context,
+      });
+      return {
+        rawText: result.markdown,
+        contentHash: `sha256:${createHash('sha256').update(result.markdown).digest('hex')}`,
+      };
+    }
+    const extension = source.name.includes('.')
+      ? source.name.split('.').at(-1)!.toLowerCase()
+      : 'txt';
+    const request = {
+      workspaceId: context.workspaceId,
+      knowledgeSpaceId: objectRef.knowledgeSpaceId,
+      sourceId: source.id,
+      fileRef: source.blobRefId,
+      extension,
+      mimeType: source.mimeType,
+      timeoutMs: 600_000,
+      requestId: context.requestId,
+      traceId: context.traceId,
+    };
+    const previewRequest = { ...request, bytes };
+    const result =
+      source.mimeType === 'application/pdf' || extension === 'pdf'
+        ? await parseWithLiteParse({ request, bytes, mimeType: source.mimeType })
+        : await createDefaultDocumentParser().parse(previewRequest);
+    return {
+      rawText: result.rawText,
+      contentHash: result.contentHash,
+    };
+  };
   const segmentIndexes = new KnowledgeSegmentIndexRepository(mongo, jobExecution, s5Catalog);
   const credentialCipher = new KnowledgeCredentialCipher(
     resolveSecretRef(config.credentialEncryptionKeyRef),
@@ -953,6 +1030,7 @@ async function bootstrapRuntime(): Promise<TelemetryKnowledgeApiRuntime> {
     access,
     scopedAuth: new KnowledgeScopedAuthAdapter(access),
     quotaGate,
+    filePreview: { parse: parsePreviewFile },
     templateParser: {
       parse(input) {
         return parseImportTemplate(input);

@@ -23,16 +23,16 @@ export const ChunkingSettingsSchema = z
   .object({
     trainingType: z.enum(['chunk', 'qa', 'imageParse', 'backup', 'template']),
     chunkTriggerType: z.enum(['minSize', 'forceChunk', 'maxSize']).optional(),
-    chunkTriggerMinSize: z.number().int().min(1).max(8_000).optional(),
+    chunkTriggerMinSize: z.number().int().min(1).max(100_000).optional(),
     chunkSettingMode: z.enum(['auto', 'custom', 'intelligent']),
     chunkSplitMode: z.enum(['paragraph', 'size', 'char']).optional(),
     paragraphChunkAIMode: z.enum(['auto', 'force', 'forbid']).optional(),
-    paragraphChunkDeep: z.number().int().min(0).max(5).optional(),
-    paragraphChunkMinSize: z.number().int().min(1).max(8_000).optional(),
-    chunkSize: z.number().int().min(64).max(8000).optional(),
+    paragraphChunkDeep: z.number().int().min(0).max(8).optional(),
+    paragraphChunkMinSize: z.number().int().min(1).max(100_000).optional(),
+    chunkSize: z.number().int().min(64).max(100_000).optional(),
     chunkSplitter: z.string().max(1_000).optional(),
-    overlap: z.number().int().min(0).max(8_000).optional(),
-    indexSize: z.number().int().min(1).max(8_000).optional(),
+    overlap: z.number().int().min(0).max(100_000).optional(),
+    indexSize: z.number().int().min(1).max(8_192).optional(),
     dataEnhanceCollectionName: z.boolean().optional(),
     imageIndex: z.boolean().optional(),
     autoIndexes: z.boolean().optional(),
@@ -207,8 +207,18 @@ export const ImportFilesSchema = z
     parseProvider: z.enum(PARSE_PROVIDERS).default('liteparse'),
     parseConfig: JsonObjectSchema.default({}),
     chunking: ChunkingSettingsSchema,
+    dryRun: z.boolean().default(false),
   })
-  .strict();
+  .strict()
+  .superRefine((value, context) => {
+    if (value.dryRun && value.uploadIds.length !== 1) {
+      context.addIssue({
+        code: 'custom',
+        path: ['uploadIds'],
+        message: 'dryRun requires exactly one uploadId',
+      });
+    }
+  });
 
 export const ImportImageDatasetSchema = z
   .object({

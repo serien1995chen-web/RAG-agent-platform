@@ -20,6 +20,14 @@ let app: S4AppHarness;
 let connection: Awaited<ReturnType<typeof createKnowledgeMongoConnection>>;
 
 beforeAll(async () => {
+  process.env.KB_TEST_MONGO_URI ??= 'mongodb://127.0.0.1:27017/kb_b20_ui?replicaSet=rs0';
+  process.env.KB_TEST_REDIS_URL ??= 'redis://127.0.0.1:6379/0';
+  process.env.KB_TEST_PG_URL ??= 'postgresql://kb:kb_dev_password@127.0.0.1:5432/kb';
+  process.env.KB_TEST_S3_ENDPOINT ??= 'http://127.0.0.1:9000';
+  process.env.KB_TEST_S3_REGION ??= 'us-east-1';
+  process.env.KB_TEST_S3_BUCKET ??= 'kb-local';
+  process.env.KB_TEST_S3_ACCESS_KEY ??= 'minioadmin';
+  process.env.KB_TEST_S3_SECRET_KEY ??= 'minioadmin';
   app = await startS4App({
     suffix: `b20-${suffix}`,
     workspaceId,
@@ -133,7 +141,7 @@ afterAll(async () => {
 });
 
 describe('L1-B20-OPS-002 UI operations and usage governance', () => {
-  it('L1-B20-OPS-002-UI01 exposes admin usage, failures, delivery and replay from a refreshable product entry', async () => {
+  it('L1-B20-OPS-002-UI01 removes operations from the knowledge product while retaining a redirect', async () => {
     await mkdir(resultRoot, { recursive: true });
     const browser = await chromium.launch({ headless: true });
     try {
@@ -149,7 +157,7 @@ describe('L1-B20-OPS-002 UI operations and usage governance', () => {
       page.on('console', (message) => {
         if (message.type() === 'error') consoleErrors.push(message.text());
       });
-      await page.goto(`${app.baseUrl}/spaces`, { waitUntil: 'networkidle' });
+      await page.goto(`${app.baseUrl}/dataset/list`, { waitUntil: 'networkidle' });
       const operationsEntry = page
         .getByRole('link', { name: /用量|运营|Usage|Operations/i })
         .or(page.getByRole('button', { name: /用量|运营|Usage|Operations/i }));
@@ -173,18 +181,11 @@ describe('L1-B20-OPS-002 UI operations and usage governance', () => {
           2,
         )}\n`,
       );
-      uiExpect(
-        entryVisible,
-        'No usage/operations entry is exposed in the current product console.',
-      ).toBe(true);
-      await operationsEntry.first().click();
-      await page.waitForURL(/\/settings\/operations/);
-      await page.waitForLoadState('networkidle');
-      await uiExpect(page.getByRole('heading', { name: '运营与用量' }).first()).toBeVisible();
-      await uiExpect(page.getByText('1.200000').first()).toBeVisible();
-      await uiExpect(page.getByText('aiproxy').first()).toBeVisible();
-      await uiExpect(page.getByText('dead_letter').first()).toBeVisible();
-      await uiExpect(page.getByRole('button', { name: '重放' }).first()).toBeVisible();
+      uiExpect(entryVisible, 'Operations must not be exposed in the knowledge product.').toBe(
+        false,
+      );
+      await page.goto(`${app.baseUrl}/settings/operations`, { waitUntil: 'networkidle' });
+      await page.waitForURL(/\/dataset\/list/);
       for (const viewport of [
         { width: 360, height: 800 },
         { width: 768, height: 900 },
@@ -197,12 +198,11 @@ describe('L1-B20-OPS-002 UI operations and usage governance', () => {
         }));
         expect(overflow.scrollWidth).toBeLessThanOrEqual(overflow.clientWidth + 1);
         await page.screenshot({
-          path: join(resultRoot, `operations-${viewport.width}x${viewport.height}.png`),
+          path: join(resultRoot, `operations-redirect-${viewport.width}x${viewport.height}.png`),
         });
       }
       await page.reload({ waitUntil: 'networkidle' });
-      await uiExpect(page.getByRole('heading', { name: '运营与用量' }).first()).toBeVisible();
-      await uiExpect(page.getByText('aiproxy').first()).toBeVisible();
+      await uiExpect(page.getByRole('heading', { level: 1 })).toBeVisible();
       const accessibility = await new AxeBuilder({ page }).analyze();
       expect(
         accessibility.violations.filter(
@@ -242,7 +242,8 @@ describe('L1-B20-OPS-002 UI operations and usage governance', () => {
       await page.goto(`${readOnlyApp.baseUrl}/dataset/list`, { waitUntil: 'networkidle' });
       await uiExpect(page.getByRole('link', { name: '运营' })).toHaveCount(0);
       await page.goto(`${readOnlyApp.baseUrl}/settings/operations`, { waitUntil: 'networkidle' });
-      await uiExpect(page.getByText('需要管理员权限')).toBeVisible();
+      await page.waitForURL(/\/dataset\/list/);
+      await uiExpect(page.getByText('需要管理员权限')).toHaveCount(0);
       await uiExpect(page.getByText('aiproxy')).toHaveCount(0);
       await context.close();
     } finally {

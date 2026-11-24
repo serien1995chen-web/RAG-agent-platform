@@ -71,7 +71,7 @@ describe('L1-B16-B-SEARCH-005-UI01 product Search Test history and result state'
     const page = await context.newPage();
     await page.goto(baseUrl, { waitUntil: 'networkidle' });
 
-    await playwrightExpect(page.getByRole('heading', { name: '搜索测试' })).toBeVisible();
+    await playwrightExpect(page.getByRole('heading', { name: '输入测试内容' })).toBeVisible();
     await playwrightExpect(page.locator('.kb2-search-history')).toHaveCount(50);
 
     await page.reload({ waitUntil: 'networkidle' });
@@ -84,7 +84,8 @@ describe('L1-B16-B-SEARCH-005-UI01 product Search Test history and result state'
     const page = await context.newPage();
     await page.goto(baseUrl, { waitUntil: 'networkidle' });
 
-    await page.getByRole('button', { name: '参数' }).click();
+    await page.getByRole('button', { name: '搜索配置' }).click();
+    await page.getByRole('tab', { name: '问题优化' }).click();
     await page.getByRole('checkbox', { name: '启用问题优化' }).check();
     const noModelSelect = page.locator('select').filter({ hasText: '没有可用的文本模型' });
     await playwrightExpect(noModelSelect).toBeDisabled();
@@ -97,25 +98,25 @@ describe('L1-B16-B-SEARCH-005-UI01 product Search Test history and result state'
     await page.goto(baseUrl, { waitUntil: 'networkidle' });
 
     await page.getByLabel('测试查询').fill('refund');
-    await page.getByRole('button', { name: '开始测试' }).click();
+    await page.getByRole('button', { name: '测试', exact: true }).click();
     await playwrightExpect(page.getByText('Where is the refund policy?')).toBeVisible();
 
     await page.getByLabel('测试查询').fill('empty');
-    await page.getByRole('button', { name: '开始测试' }).click();
+    await page.getByRole('button', { name: '测试', exact: true }).click();
     await playwrightExpect(
       page.getByText('搜索结果为空。右侧继续保留上一条测试结果。'),
     ).toBeVisible();
     await playwrightExpect(page.getByText('Where is the refund policy?')).toBeVisible();
 
     await page.getByLabel('测试查询').fill('empty-degraded');
-    await page.getByRole('button', { name: '开始测试' }).click();
+    await page.getByRole('button', { name: '测试', exact: true }).click();
     await playwrightExpect(
       page.getByText('降级原因：image_preview_unavailable。', { exact: false }),
     ).toBeVisible();
     await playwrightExpect(page.getByText('Where is the refund policy?')).toBeVisible();
 
     await page.getByLabel('测试查询').fill('image');
-    await page.getByRole('button', { name: '开始测试' }).click();
+    await page.getByRole('button', { name: '测试', exact: true }).click();
     await page.screenshot({
       path: join(evidenceDirectory, 'search-image-result-1440x900.png'),
       fullPage: true,
@@ -134,7 +135,7 @@ describe('L1-B16-B-SEARCH-005-UI01 product Search Test history and result state'
     expect(storedHistory).not.toContain('data:image/svg');
 
     await page.getByLabel('测试查询').fill('image-expired');
-    await page.getByRole('button', { name: '开始测试' }).click();
+    await page.getByRole('button', { name: '测试', exact: true }).click();
     await playwrightExpect(page.getByText('图片预览已过期或不可用，请重新测试。')).toBeVisible();
     await context.close();
   }, 120_000);

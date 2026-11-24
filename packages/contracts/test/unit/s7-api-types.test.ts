@@ -102,6 +102,28 @@ describe('S7 public API DTOs', () => {
     ).toThrowError();
   });
 
+  it('carries an optional FastGPT-aligned rerank candidate count into the pipeline', () => {
+    expect(
+      SearchApiRequestSchema.safeParse({
+        ...request(),
+        rerankCandidateNum: 9,
+      }).success,
+    ).toBe(false);
+    const parsed = SearchApiRequestSchema.parse({
+      ...request(),
+      usingRerank: true,
+      rerankCandidateNum: 30,
+    });
+    const internal = toPipelineSearchRequest(parsed, {
+      requestId: 'req-candidate',
+      workspaceId: 'ws-a',
+      memberId: 'mem-a',
+      models: { embeddingModel: 'embedding', rerankModel: 'rerank' },
+      mode: 'semantic',
+    });
+    expect(internal.rerankCandidateNum).toBe(30);
+  });
+
   it('deduplicates nothing implicitly but requires the base space in multi-space input', () => {
     expect(
       MultiSpaceSearchApiRequestSchema.safeParse({

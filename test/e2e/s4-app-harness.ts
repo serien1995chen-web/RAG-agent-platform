@@ -64,6 +64,8 @@ export async function startS4App(input: {
   connectorMode?: 'mock' | 'real';
   pricingProfile?: 'zero-v1' | 'fixture-v1';
   quotaProfile?: 'free-v1' | 's11-perf-v1';
+  workspaceMemberIds?: string[];
+  consoleDirectoryFile?: string;
 }): Promise<S4AppHarness> {
   const port = await freePort();
   const baseUrl = `http://127.0.0.1:${port}`;
@@ -102,6 +104,12 @@ export async function startS4App(input: {
       API_KEY_HMAC_SECRET_FILE: `${process.cwd()}/test/fixtures/s10/api-key-hmac.secret`,
       KB_MOCK_WORKSPACE_ID: input.workspaceId,
       KB_MOCK_MEMBER_ID: input.memberId,
+      ...(input.workspaceMemberIds?.length
+        ? { KB_MOCK_MEMBER_IDS: input.workspaceMemberIds.join(',') }
+        : {}),
+      ...(input.consoleDirectoryFile
+        ? { KB_CONSOLE_DIRECTORY_FILE: input.consoleDirectoryFile }
+        : {}),
       KB_MOCK_SCOPES:
         input.scopes ?? 'knowledge:read,knowledge:write,knowledge:manage,knowledge:admin',
       KB_MOCK_WORKSPACE_OWNER: String(input.isWorkspaceOwner ?? true),

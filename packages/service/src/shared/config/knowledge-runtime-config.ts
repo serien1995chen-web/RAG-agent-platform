@@ -42,6 +42,7 @@ const EnvironmentSchema = z.object({
   KB_MOCK_WORKSPACE_ID: z.string().min(1).max(64).optional(),
   KB_MOCK_MEMBER_ID: z.string().min(1).max(128).optional(),
   KB_MOCK_MEMBER_IDS: z.string().optional(),
+  KB_CONSOLE_DIRECTORY_FILE: z.string().trim().min(1).optional(),
   KB_MOCK_SCOPES: z.string().default('knowledge:read,knowledge:write,knowledge:manage'),
   KB_MOCK_WORKSPACE_OWNER: z.enum(['true', 'false']).default('false'),
   API_KEY_HMAC_SECRET_FILE: z.string().trim().min(1).optional(),
@@ -96,6 +97,7 @@ export interface KnowledgeRuntimeConfig {
   fileTicketSecretRef: string;
   credentialEncryptionKeyRef: string;
   auth: { mode: 'mock'; fixture: KnowledgeMockAuthConfig } | { mode: 'iam' } | { mode: 'disabled' };
+  consoleDirectoryFile?: string;
   s10: {
     apiKeyHmacSecret: string;
     apiKeyHmacConfigured: boolean;
@@ -235,6 +237,9 @@ export function loadKnowledgeRuntimeConfig(
     fileTicketSecretRef: data.KB_FILE_TICKET_SECRET_REF,
     credentialEncryptionKeyRef: data.KB_CREDENTIAL_ENCRYPTION_KEY_REF,
     auth,
+    ...(data.KB_CONSOLE_DIRECTORY_FILE
+      ? { consoleDirectoryFile: data.KB_CONSOLE_DIRECTORY_FILE }
+      : {}),
     s10: {
       apiKeyHmacSecret,
       apiKeyHmacConfigured: true,

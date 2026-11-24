@@ -28,9 +28,9 @@ function validatePolicy(policy: ChunkPolicy): void {
   const fail = (actual: number): never => {
     throw chunkLimitError({ maxChunks: policy.maxChunks, actual, chunkSize: policy.chunkSize });
   };
-  if (policy.chunkSize < 64 || policy.chunkSize > 8000) fail(policy.chunkSize);
-  if (policy.minSize < 1 || policy.minSize > 4000) fail(policy.minSize);
-  if (policy.maxSize < 500 || policy.maxSize > 8000) fail(policy.maxSize);
+  if (policy.chunkSize < 64 || policy.chunkSize > 100_000) fail(policy.chunkSize);
+  if (policy.minSize < 1 || policy.minSize > 100_000) fail(policy.minSize);
+  if (policy.maxSize < 500 || policy.maxSize > 100_000) fail(policy.maxSize);
   if (!(policy.minSize <= policy.chunkSize && policy.chunkSize <= policy.maxSize))
     fail(policy.chunkSize);
   if (policy.overlapRatio < 0 || policy.overlapRatio > 0.9) fail(policy.overlapRatio);
@@ -42,7 +42,7 @@ function validatePolicy(policy: ChunkPolicy): void {
   ) {
     fail(policy.overlapSize);
   }
-  if (policy.paragraphDeep < 1 || policy.paragraphDeep > 5) fail(policy.paragraphDeep);
+  if (policy.paragraphDeep < 1 || policy.paragraphDeep > 8) fail(policy.paragraphDeep);
   if (policy.customRegs.length > 5 || policy.customRegs.some((reg) => reg.length > 200)) {
     fail(policy.customRegs.length);
   }
