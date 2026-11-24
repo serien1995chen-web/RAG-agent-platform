@@ -54,6 +54,7 @@ function spaceDto(document: Plain<KnowledgeSpaceDoc>, parentPath?: string[]) {
     accessMode: document.accessMode,
     sourceAclMode: document.sourceAclMode,
     sourcePermissionEnabled: document.sourcePermissionEnabled,
+    autoSync: document.autoSync !== false,
     modelBindings: document.modelBindings,
     referenceRevision: document.referenceRevision,
     status: document.status,
@@ -187,6 +188,7 @@ export interface CreateSpaceInput {
   accessMode: 'workspace' | 'restricted';
   sourceAclMode: 'inherited' | 'enforced';
   sourcePermissionEnabled?: boolean;
+  autoSync?: boolean;
   modelBindings?: Array<{
     modelType: 'llm' | 'embedding' | 'rerank' | 'vlm' | 'stt' | 'tts';
     modelId: string;
@@ -343,6 +345,7 @@ export class KnowledgeCatalogRepository {
               accessMode: input.accessMode,
               sourceAclMode: input.sourceAclMode,
               sourcePermissionEnabled: input.sourcePermissionEnabled ?? true,
+              autoSync: input.autoSync ?? false,
               permissionState: input.accessMode === 'restricted' ? 'independent' : 'inherited',
               aclSnapshotVersion: 1,
               referenceRevision: 0,
@@ -447,6 +450,12 @@ export class KnowledgeCatalogRepository {
         reason: 'boolean_required',
       });
     }
+    if (input.autoSync !== undefined && typeof input.autoSync !== 'boolean') {
+      throw tenantError(context, 'KNOWLEDGE_VALIDATION_FAILED', {
+        field: 'autoSync',
+        reason: 'boolean_required',
+      });
+    }
     const update: Record<string, unknown> = {};
     for (const field of [
       'description',
@@ -454,6 +463,7 @@ export class KnowledgeCatalogRepository {
       'accessMode',
       'sourceAclMode',
       'sourcePermissionEnabled',
+      'autoSync',
     ]) {
       if (input[field] !== undefined) update[field] = input[field];
     }

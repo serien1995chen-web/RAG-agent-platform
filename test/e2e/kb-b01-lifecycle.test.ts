@@ -335,11 +335,29 @@ describe('B01 lifecycle desktop behavior', () => {
         waitUntil: 'networkidle',
       });
       await playwrightExpect(page.getByRole('complementary', { name: '知识库信息' })).toBeVisible();
-      await page.getByRole('button', { name: '编辑模型配置' }).click();
-      const modelSelects = page.locator('.kb2-modal select');
-      await modelSelects.nth(0).selectOption({ index: 1 });
-      await modelSelects.nth(1).selectOption({ index: 1 });
-      await page.getByRole('button', { name: '保存' }).click();
+      const llmSelect = page.getByLabel('文本理解模型');
+      const currentLlm = await llmSelect.inputValue();
+      const alternateLlm = await llmSelect
+        .locator('option')
+        .evaluateAll(
+          (options, current) =>
+            options
+              .map((option) => (option as HTMLOptionElement).value)
+              .find((value) => value.length > 0 && value !== current),
+          currentLlm,
+        );
+      if (alternateLlm) {
+        const saved = page.waitForResponse(
+          (response) =>
+            response.request().method() === 'PUT' &&
+            response.url().endsWith(`/spaces/${id}/model-bindings`),
+        );
+        await llmSelect.selectOption(alternateLlm);
+        expect((await saved).status()).toBe(200);
+      } else {
+        expect(currentLlm).not.toBe('');
+        await playwrightExpect(page.locator('.kb2-modal')).toHaveCount(0);
+      }
       await page.reload({ waitUntil: 'networkidle' });
       await capture('L1-B01-KB-002-UI01', page, async () => {
         await playwrightExpect(page.getByText('后端未提供')).toHaveCount(0);

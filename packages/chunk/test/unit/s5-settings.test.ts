@@ -108,4 +108,26 @@ describe('TEST-PARSE-003-BLOCK deterministic chunk settings', () => {
     expect(second).toEqual(first);
     expect(first.chunks.length).toBeGreaterThan(1);
   });
+
+  it('accepts FastGPT paragraph depth 8 and the 8192 index ceiling', () => {
+    expect(
+      S5ChunkingSettingsSchema.safeParse({
+        trainingType: 'chunk',
+        chunkSettingMode: 'custom',
+        chunkSplitMode: 'paragraph',
+        chunkSize: 8192,
+        paragraphChunkDeep: 8,
+        indexSize: 8192,
+      }).success,
+    ).toBe(true);
+    expect(
+      S5ChunkingSettingsSchema.safeParse({
+        trainingType: 'chunk',
+        chunkSettingMode: 'custom',
+        chunkSize: 8192,
+        paragraphChunkDeep: 9,
+        indexSize: 8193,
+      }).success,
+    ).toBe(false);
+  });
 });

@@ -65,6 +65,7 @@ let spaceId = '';
 let pdfBytes = Buffer.alloc(0);
 const createdObjects = new Set<string>();
 let denySpaceWrite = false;
+let previewParseCalls = 0;
 
 function errorCode(error: unknown): string {
   expect(error).toBeInstanceOf(KnowledgeApiError);
@@ -176,6 +177,15 @@ function ingestionApplication(): S04IngestionApplication {
     access,
     scopedAuth: new FixtureScopedAuthPort(),
     quotaGate: new FixtureQuotaGatePort(),
+    filePreview: {
+      async parse() {
+        previewParseCalls += 1;
+        return {
+          rawText: '第一段内容。\n\n第二段内容。',
+          contentHash: `sha256:${createHash('sha256').update('preview').digest('hex')}`,
+        };
+      },
+    },
     templateParser: {} as never,
   });
 }
@@ -329,6 +339,58 @@ afterAll(async () => {
 });
 
 describe('TEST-ING-001-BLOCK upload to Source', () => {
+  it('KB-PARITY-015 previews one upload without creating an import job', async () => {
+    const upload = await uploadObject({
+      name: 'preview.txt',
+      mimeType: 'text/plain',
+      body: Buffer.from('第一段内容。\n\n第二段内容。'),
+    });
+    const before = await connection.models.KnowledgeJob.countDocuments({
+      workspaceId,
+      knowledgeSpaceId: spaceId,
+    });
+    previewParseCalls = 0;
+    const result = await dispatchImport({
+      key: `preview-${suffix}-${randomUUID()}`,
+      body: {
+        ...importBody([upload.uploadId]),
+        chunking: {
+          trainingType: 'chunk',
+          chunkSettingMode: 'custom',
+          chunkSplitMode: 'size',
+          chunkSize: 64,
+        },
+        dryRun: true,
+      },
+    });
+    expect(result.status).toBe(200);
+    expect(result.data).toMatchObject({
+      name: 'preview.txt',
+      totalChunks: expect.any(Number),
+      chunks: expect.any(Array),
+      truncated: false,
+    });
+    expect((result.data as { totalChunks: number }).totalChunks).toBeGreaterThan(0);
+    expect(previewParseCalls).toBe(1);
+    expect(
+      await connection.models.KnowledgeJob.countDocuments({
+        workspaceId,
+        knowledgeSpaceId: spaceId,
+      }),
+    ).toBe(before);
+    await expect(
+      dispatchImport({
+        key: `preview-many-${suffix}-${randomUUID()}`,
+        body: {
+          ...importBody([upload.uploadId, upload.uploadId]),
+          dryRun: true,
+        },
+      }),
+    ).rejects.toMatchObject({
+      problem: { error: { code: 'KNOWLEDGE_VALIDATION_FAILED' } },
+    });
+  });
+
   it('L1-B06-ING-001-P01 上传 PDF 后创建 Source 与 Job 并写入审计和 Outbox', async () => {
     const { uploadId, completed } = await uploadObject({
       name: 'b06a-sample.pdf',

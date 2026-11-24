@@ -677,7 +677,7 @@ describe('L1-B18-B independent downstream consumers over real HTTP', () => {
       },
     });
     expect(degraded.response.status).toBe(200);
-    expect((degraded.payload.data as SearchApiResponse).degraded).toContain(
+    expect((degraded.payload.data as SearchApiResponse).degraded ?? []).not.toContain(
       'rerank_not_configured',
     );
   }, 120_000);

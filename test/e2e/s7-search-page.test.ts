@@ -458,7 +458,7 @@ describe('S7 real runtime Search page and HTTP contract', () => {
       usingRerank: true,
     });
     expect(degraded.status).toBe(200);
-    expect(degraded.data.degraded).toContain('rerank_not_configured');
+    expect(degraded.data.degraded ?? []).not.toContain('rerank_not_configured');
 
     const endpoint = `${app.baseUrl}/v1/knowledge/search/semantic`;
     const requestBody = JSON.stringify({

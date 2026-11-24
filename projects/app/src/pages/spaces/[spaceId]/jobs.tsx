@@ -1,19 +1,17 @@
-import { JobsPage } from '@kb/web';
-import Head from 'next/head';
-import { useRouter } from 'next/router';
+import type { GetServerSideProps } from 'next';
+
+export const getServerSideProps: GetServerSideProps = async (context) => {
+  const spaceId = typeof context.query.spaceId === 'string' ? context.query.spaceId : '';
+  return {
+    redirect: {
+      destination: spaceId
+        ? `/dataset/detail?datasetId=${encodeURIComponent(spaceId)}&currentTab=collectionCard`
+        : '/dataset/list',
+      permanent: false,
+    },
+  };
+};
 
 export default function JobsRoute() {
-  const router = useRouter();
-  const spaceId = Array.isArray(router.query.spaceId)
-    ? (router.query.spaceId[0] ?? '')
-    : (router.query.spaceId ?? '');
-
-  return (
-    <>
-      <Head>
-        <title>任务中心</title>
-      </Head>
-      {router.isReady ? <JobsPage spaceId={spaceId} /> : null}
-    </>
-  );
+  return null;
 }

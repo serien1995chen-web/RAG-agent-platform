@@ -57,6 +57,7 @@ function modelView(item: ModelCatalogItem) {
     displayName: item.displayName,
     type: item.type,
     capabilities: modelCapabilities(item),
+    ...(item.limits ? { limits: item.limits } : {}),
     authorized: item.authorized,
   };
 }

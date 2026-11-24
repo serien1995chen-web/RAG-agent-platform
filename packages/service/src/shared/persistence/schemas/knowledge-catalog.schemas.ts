@@ -18,6 +18,7 @@ export interface KnowledgeSpaceDoc extends WorkspaceFields {
   accessMode: 'workspace' | 'restricted';
   sourceAclMode: 'inherited' | 'enforced';
   sourcePermissionEnabled: boolean;
+  autoSync: boolean;
   permissionState: 'disabled' | 'inherited' | 'independent';
   aclSnapshotVersion: number;
   referenceRevision: number;
@@ -42,6 +43,7 @@ export const KnowledgeSpaceSchema = new Schema(
     accessMode: { type: String, enum: ['workspace', 'restricted'], required: true },
     sourceAclMode: { type: String, enum: ['inherited', 'enforced'], required: true },
     sourcePermissionEnabled: { type: Boolean, required: true, default: true },
+    autoSync: { type: Boolean, required: true, default: false },
     permissionState: {
       type: String,
       enum: ['disabled', 'inherited', 'independent'],

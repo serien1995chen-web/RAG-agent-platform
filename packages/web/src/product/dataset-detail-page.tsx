@@ -12,11 +12,10 @@ import {
   ExternalLinkIcon,
   LockIcon,
   RepeatIcon,
-  TimeIcon,
   WarningIcon,
 } from '@chakra-ui/icons';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useMemo, useState, type FormEvent, type RefObject } from 'react';
+import { useEffect, useMemo, useRef, useState, type FormEvent, type RefObject } from 'react';
 import {
   addCollaborator,
   applyTags,
@@ -100,6 +99,7 @@ import {
   useProductToast,
 } from './ui';
 import { DataWorkspace } from './data-workspace';
+import { CollaboratorManagerDialog } from './collaborator-manager';
 import { ImportWorkspace } from './import-workspace';
 import {
   EmptySourceDialog,
@@ -122,7 +122,6 @@ export interface DatasetDetailQuery {
 
 type DetailQueryChange = (query: DatasetDetailQuery, options?: { replace?: boolean }) => void;
 
-const ACTIVE_JOB_STATUSES = new Set(['queued', 'running', 'retry_wait', 'paused']);
 const MODEL_REBUILD_CONFIRM_SECONDS = 3;
 
 type SourcePreviewView =
@@ -158,13 +157,19 @@ export function DatasetDetailPage(props: {
   const [batchMode, setBatchMode] = useState(false);
   const [selectedSourceIds, setSelectedSourceIds] = useState<string[]>([]);
   const [rowMenuId, setRowMenuId] = useState<string | null>(null);
+  const [rowMenuInitialFocus, setRowMenuInitialFocus] = useState<'first' | 'last' | null>(null);
+  const [rowMenuTriggerElement, setRowMenuTriggerElement] = useState<HTMLButtonElement | null>(
+    null,
+  );
   const [previewSourceTarget, setPreviewSourceTarget] = useState<Source | null>(null);
   const [previewRequest, setPreviewRequest] = useState(0);
   const [previewTriggerElement, setPreviewTriggerElement] = useState<HTMLButtonElement | null>(
     null,
   );
   const [sourceToggleBusyId, setSourceToggleBusyId] = useState<string | null>(null);
+  const [sourceSyncBusyId, setSourceSyncBusyId] = useState<string | null>(null);
   const [sourceError, setSourceError] = useState<unknown>(null);
+  const [renameSourceTarget, setRenameSourceTarget] = useState<Source | null>(null);
   const [directoryForm, setDirectoryForm] = useState<{
     mode: 'create' | 'edit';
     directory?: Directory;
@@ -308,9 +313,6 @@ export function DatasetDetailPage(props: {
           job.knowledgeSpaceId === datasetId && ['failed', 'dead_letter'].includes(job.status),
       ),
     [datasetId, jobs],
-  );
-  const activeJobs = jobs.filter(
-    (job) => job.knowledgeSpaceId === datasetId && ACTIVE_JOB_STATUSES.has(job.status),
   );
   const selectedTag = tags.find((tag) => tag.id === tagId);
   const batchTag = tags.find((tag) => tag.id === batchTagId);
@@ -492,6 +494,33 @@ export function DatasetDetailPage(props: {
     } finally {
       setSourceToggleBusyId(null);
     }
+  };
+
+  const syncSource = async (source: Source) => {
+    if (!source.connectorId) return;
+    setRowMenuId(null);
+    setSourceSyncBusyId(source.id);
+    setSourceError(null);
+    try {
+      const connector = await getConnector(source.connectorId);
+      await syncConnector(connector.id, {
+        full: false,
+        expectedCursorVersion: connector.cursorVersion,
+        reason: 'manual_source_menu_sync',
+      });
+      await invalidateCollection();
+      toast.success('同步任务已提交');
+    } catch (error) {
+      setSourceError(error);
+      toast.error(error);
+    } finally {
+      setSourceSyncBusyId(null);
+    }
+  };
+
+  const openRenameSource = (source: Source) => {
+    setRowMenuId(null);
+    setRenameSourceTarget(source);
   };
 
   const removeSource = async () => {
@@ -687,20 +716,6 @@ export function DatasetDetailPage(props: {
     }
   };
 
-  const toggleSourcePermission = async (enabled: boolean) => {
-    if (!space) return;
-    try {
-      await updateSpace(space.id, {
-        version: space.version,
-        sourcePermissionEnabled: enabled,
-      });
-      await invalidateCollection();
-      toast.success(enabled ? 'Source 权限已开启' : 'Source 权限已关闭');
-    } catch (error) {
-      toast.error(error);
-    }
-  };
-
   if (!datasetId) return null;
 
   if (tab === 'dataCard') {
@@ -864,19 +879,6 @@ export function DatasetDetailPage(props: {
               搜索测试
             </button>
           </div>
-          <div className="kb2-detail-nav__status">
-            <a
-              className="kb2-detail-nav__jobs-link"
-              href={`/spaces/${encodeURIComponent(datasetId)}/jobs`}
-            >
-              任务中心
-            </a>
-            {activeJobs.length > 0 ? (
-              <StatusTag value={`${activeJobs.length} 个任务处理中`} tone="info" dot />
-            ) : (
-              <StatusTag value="无进行中任务" tone="neutral" />
-            )}
-          </div>
         </div>
 
         {tab === 'test' ? (
@@ -901,7 +903,6 @@ export function DatasetDetailPage(props: {
               modelsError={modelsQuery.error}
               modelsLoading={modelsQuery.isLoading}
               onRetryModels={() => void modelsQuery.refetch()}
-              sources={sources}
               rebuilding={jobs.some(
                 (job) =>
                   job.knowledgeSpaceId === datasetId &&
@@ -918,7 +919,6 @@ export function DatasetDetailPage(props: {
                   version: space.version,
                 })
               }
-              onSourcePermissionChange={(enabled) => void toggleSourcePermission(enabled)}
               onChanged={() => void invalidateCollection()}
             />
           </div>
@@ -1254,7 +1254,6 @@ export function DatasetDetailPage(props: {
                       {currentSources.map((source) => {
                         const status = sourceStatusView(source.processingStatus);
                         const sourceTags = tagValuesForSource(source, tags);
-                        const job = latestJobs.get(source.id);
                         const canRead = permissionRank(source.effectivePermission) >= 10;
                         const canWrite = permissionRank(source.effectivePermission) >= 20;
                         const canManage = permissionRank(source.effectivePermission) >= 30;
@@ -1339,8 +1338,8 @@ export function DatasetDetailPage(props: {
                               </label>
                             </td>
                             <td>
-                              {canRead ? (
-                                <div className="kb2-row-actions">
+                              <div className="kb2-row-actions">
+                                {canRead ? (
                                   <ProductButton
                                     size="sm"
                                     tone="ghost"
@@ -1353,84 +1352,105 @@ export function DatasetDetailPage(props: {
                                   >
                                     预览
                                   </ProductButton>
-                                  <ProductIconButton
-                                    label={`${source.name} 的更多操作`}
-                                    onClick={() =>
-                                      setRowMenuId(rowMenuId === source.id ? null : source.id)
-                                    }
-                                  >
-                                    <span className="kb2-more-dots">···</span>
-                                  </ProductIconButton>
-                                  <ProductMenu
-                                    open={rowMenuId === source.id}
-                                    onClose={() => setRowMenuId(null)}
-                                  >
-                                    <ProductMenuItem
-                                      icon={<DownloadIcon boxSize={3.5} />}
-                                      onClick={() => void downloadOne(source)}
+                                ) : null}
+                                {canWrite ? (
+                                  <>
+                                    <ProductIconButton
+                                      label={`${source.name} 的更多操作`}
+                                      aria-expanded={rowMenuId === source.id}
+                                      onClick={(event) => {
+                                        setRowMenuInitialFocus(null);
+                                        setRowMenuTriggerElement(event.currentTarget);
+                                        setRowMenuId(rowMenuId === source.id ? null : source.id);
+                                      }}
+                                      onKeyDown={(event) => {
+                                        if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') {
+                                          return;
+                                        }
+                                        event.preventDefault();
+                                        setRowMenuTriggerElement(event.currentTarget);
+                                        setRowMenuInitialFocus(
+                                          event.key === 'ArrowDown' ? 'first' : 'last',
+                                        );
+                                        setRowMenuId(source.id);
+                                      }}
                                     >
-                                      下载原始文件
-                                    </ProductMenuItem>
-                                    {canWrite ? (
-                                      <ProductMenuItem
-                                        icon={<AttachmentIcon boxSize={3.5} />}
-                                        onClick={() => openTagAssignment(source)}
-                                      >
-                                        标签设置
-                                      </ProductMenuItem>
-                                    ) : null}
-                                    {canManage ? (
-                                      <ProductMenuItem
-                                        icon={<LockIcon boxSize={3.5} />}
-                                        onClick={() => {
-                                          setRowMenuId(null);
-                                          setPermissionTarget({
-                                            kind: 'source',
-                                            id: source.id,
-                                            name: source.name,
-                                            version: source.version,
-                                            source,
-                                          });
-                                        }}
-                                      >
-                                        Source 权限
-                                      </ProductMenuItem>
-                                    ) : null}
-                                    {canWrite ? (
+                                      <span className="kb2-more-dots">···</span>
+                                    </ProductIconButton>
+                                    <ProductMenu
+                                      open={rowMenuId === source.id}
+                                      triggerElement={rowMenuTriggerElement}
+                                      initialFocus={rowMenuInitialFocus ?? undefined}
+                                      onClose={() => {
+                                        setRowMenuId(null);
+                                        setRowMenuTriggerElement(null);
+                                        setRowMenuInitialFocus(null);
+                                      }}
+                                    >
+                                      {source.connectorId ? (
+                                        <ProductMenuItem
+                                          icon={<RepeatIcon boxSize={3.5} />}
+                                          disabled={sourceSyncBusyId === source.id}
+                                          onClick={() => void syncSource(source)}
+                                        >
+                                          同步
+                                        </ProductMenuItem>
+                                      ) : null}
                                       <ProductMenuItem
                                         icon={<CopyIcon boxSize={3.5} />}
                                         onClick={() => openMoveSource(source)}
                                       >
                                         移动
                                       </ProductMenuItem>
-                                    ) : null}
-                                    {job ? (
                                       <ProductMenuItem
-                                        icon={<TimeIcon boxSize={3.5} />}
+                                        icon={<EditIcon boxSize={3.5} />}
+                                        onClick={() => openRenameSource(source)}
+                                      >
+                                        重命名
+                                      </ProductMenuItem>
+                                      {canManage ? (
+                                        <ProductMenuItem
+                                          icon={<LockIcon boxSize={3.5} />}
+                                          onClick={() => {
+                                            setRowMenuId(null);
+                                            setPermissionTarget({
+                                              kind: 'source',
+                                              id: source.id,
+                                              name: source.name,
+                                              version: source.version,
+                                              source,
+                                            });
+                                          }}
+                                        >
+                                          权限
+                                        </ProductMenuItem>
+                                      ) : null}
+                                      <ProductMenuItem
+                                        icon={<AttachmentIcon boxSize={3.5} />}
                                         onClick={() => {
                                           setRowMenuId(null);
-                                          setTrainingSource(source);
+                                          openTagAssignment(source);
                                         }}
                                       >
-                                        训练详情
+                                        标签设置
                                       </ProductMenuItem>
-                                    ) : null}
-                                    {canOwn ? (
-                                      <ProductMenuItem
-                                        icon={<DeleteIcon boxSize={3.5} />}
-                                        danger
-                                        onClick={() => {
-                                          setRowMenuId(null);
-                                          setDeleteSourceTarget(source);
-                                          setDeleteError(null);
-                                        }}
-                                      >
-                                        删除文件
-                                      </ProductMenuItem>
-                                    ) : null}
-                                  </ProductMenu>
-                                </div>
-                              ) : null}
+                                      {canOwn ? (
+                                        <ProductMenuItem
+                                          icon={<DeleteIcon boxSize={3.5} />}
+                                          danger
+                                          onClick={() => {
+                                            setRowMenuId(null);
+                                            setDeleteSourceTarget(source);
+                                            setDeleteError(null);
+                                          }}
+                                        >
+                                          删除
+                                        </ProductMenuItem>
+                                      ) : null}
+                                    </ProductMenu>
+                                  </>
+                                ) : null}
+                              </div>
                             </td>
                           </tr>
                         );
@@ -1466,7 +1486,6 @@ export function DatasetDetailPage(props: {
                 modelsError={modelsQuery.error}
                 modelsLoading={modelsQuery.isLoading}
                 onRetryModels={() => void modelsQuery.refetch()}
-                sources={sources}
                 rebuilding={jobs.some(
                   (job) =>
                     job.knowledgeSpaceId === datasetId &&
@@ -1483,7 +1502,6 @@ export function DatasetDetailPage(props: {
                     version: space.version,
                   })
                 }
-                onSourcePermissionChange={(enabled) => void toggleSourcePermission(enabled)}
                 onChanged={() => void invalidateCollection()}
               />
             )}
@@ -1870,6 +1888,12 @@ export function DatasetDetailPage(props: {
         <ProductError error={tagAssignmentError} />
       </ProductModal>
 
+      <SourceRenameDialog
+        source={renameSourceTarget}
+        onClose={() => setRenameSourceTarget(null)}
+        onChanged={() => void invalidateCollection()}
+      />
+
       <ResourcePermissionDialog
         target={permissionTarget}
         space={space}
@@ -2068,11 +2092,9 @@ function DatasetInfoPanel(props: {
   modelsError?: unknown;
   modelsLoading?: boolean;
   onRetryModels?: () => void;
-  sources: Source[];
   rebuilding: boolean;
   onEdit: () => void;
   onPermission: () => void;
-  onSourcePermissionChange: (enabled: boolean) => void;
   onChanged: () => void;
 }) {
   const toast = useProductToast();
@@ -2082,18 +2104,13 @@ function DatasetInfoPanel(props: {
   const [modelsError, setModelsError] = useState<unknown>(null);
   const [pendingModelBindings, setPendingModelBindings] = useState<ModelBinding[] | null>(null);
   const [modelConfirmCountdown, setModelConfirmCountdown] = useState(0);
-  const [connectorBusy, setConnectorBusy] = useState(false);
-  const [connectorError, setConnectorError] = useState<unknown>(null);
+  const [pendingAutoSync, setPendingAutoSync] = useState<boolean | null>(null);
+  const [autoSyncBusy, setAutoSyncBusy] = useState(false);
+  const [autoSyncError, setAutoSyncError] = useState<unknown>(null);
   const type = productTypeOf(props.space?.iconKey);
   const canManage = permissionRank(props.space?.effectivePermission) >= 30;
   const binding = (modelType: ModelBinding['modelType']) =>
     props.bindings.find((entry) => entry.modelType === modelType && entry.status === 'active');
-  const connectorId = props.sources.find((source) => source.connectorId)?.connectorId;
-  const connectorQuery = useQuery({
-    queryKey: ['kb-product', 'connector', connectorId],
-    queryFn: () => getConnector(connectorId!),
-    enabled: Boolean(connectorId),
-  });
   const authorizedModels = (type: Model['type']) =>
     props.models.filter((model) => model.type === type && model.authorized);
   const modelsUnavailable =
@@ -2107,19 +2124,6 @@ function DatasetInfoPanel(props: {
     );
     return () => window.clearTimeout(timer);
   }, [modelConfirmCountdown, pendingModelBindings]);
-
-  const openModels = () => {
-    setModelDraft({
-      llm: binding('llm')?.modelId ?? '',
-      embedding: binding('embedding')?.modelId ?? '',
-      rerank: binding('rerank')?.modelId ?? '',
-      vlm: binding('vlm')?.modelId ?? '',
-      stt: binding('stt')?.modelId ?? '',
-      tts: binding('tts')?.modelId ?? '',
-    });
-    setModelsError(null);
-    setModelsOpen(true);
-  };
 
   const persistModels = async (next: ModelBinding[]) => {
     if (!props.space) return false;
@@ -2138,6 +2142,41 @@ function DatasetInfoPanel(props: {
     } finally {
       setModelsBusy(false);
     }
+  };
+
+  const changeModel = async (modelType: ModelBinding['modelType'], modelId: string) => {
+    if (!props.space || modelsBusy || props.rebuilding || !canManage) return;
+    const selected = props.models.find(
+      (item) => item.modelId === modelId && item.type === modelType && item.authorized,
+    );
+    if (modelId && !selected) return;
+    const next = props.bindings
+      .filter((entry) => entry.modelType !== modelType && entry.status === 'active')
+      .concat(
+        selected
+          ? [
+              {
+                modelType,
+                modelId: selected.modelId,
+                displayName: selected.displayName,
+                requiredCapabilities: selected.capabilities,
+                status: 'active' as const,
+              },
+            ]
+          : [],
+      );
+    const currentEmbeddingModelId = binding('embedding')?.modelId ?? '';
+    if (
+      modelType === 'embedding' &&
+      currentEmbeddingModelId &&
+      currentEmbeddingModelId !== modelId
+    ) {
+      setModelsError(null);
+      setModelConfirmCountdown(MODEL_REBUILD_CONFIRM_SECONDS);
+      setPendingModelBindings(next);
+      return;
+    }
+    await persistModels(next);
   };
 
   const saveModels = async () => {
@@ -2175,23 +2214,22 @@ function DatasetInfoPanel(props: {
     setModelsError(null);
   };
 
-  const syncDataSource = async () => {
-    const connector = connectorQuery.data;
-    if (!connector) return;
-    setConnectorBusy(true);
-    setConnectorError(null);
+  const saveAutoSync = async () => {
+    if (!props.space || pendingAutoSync === null) return;
+    setAutoSyncBusy(true);
+    setAutoSyncError(null);
     try {
-      await syncConnector(connector.id, {
-        full: false,
-        expectedCursorVersion: connector.cursorVersion,
-        reason: 'manual_ui_sync',
+      await updateSpace(props.space.id, {
+        version: props.space.version,
+        autoSync: pendingAutoSync,
       });
       props.onChanged();
-      toast.success('同步任务已提交');
+      setPendingAutoSync(null);
+      toast.success(pendingAutoSync ? '定时同步已开启' : '定时同步已关闭');
     } catch (caught) {
-      setConnectorError(caught);
+      setAutoSyncError(caught);
     } finally {
-      setConnectorBusy(false);
+      setAutoSyncBusy(false);
     }
   };
 
@@ -2222,20 +2260,71 @@ function DatasetInfoPanel(props: {
         <div className="kb2-info-group">
           <div className="kb2-info-group__title">
             <h3>模型配置</h3>
-            <ProductIconButton
-              label="编辑模型配置"
-              onClick={openModels}
-              disabled={props.rebuilding}
-            >
-              <EditIcon boxSize={3.5} />
-            </ProductIconButton>
           </div>
-          <InfoLine label="索引模型" value={binding('embedding')?.displayName ?? '后端未提供'} />
-          <InfoLine label="文本理解模型" value={binding('llm')?.displayName ?? '后端未提供'} />
-          <InfoLine label="重排模型" value={binding('rerank')?.displayName ?? '未设置'} />
-          <InfoLine label="图片理解模型" value={binding('vlm')?.displayName ?? '未设置'} />
-          <InfoLine label="语音识别模型" value={binding('stt')?.displayName ?? '未设置'} />
-          <InfoLine label="语音合成模型" value={binding('tts')?.displayName ?? '未设置'} />
+          <label className="kb2-model-select-row">
+            <span>索引模型</span>
+            <ProductSelect
+              value={binding('embedding')?.modelId ?? ''}
+              disabled={
+                modelsBusy ||
+                props.rebuilding ||
+                !canManage ||
+                modelsUnavailable ||
+                authorizedModels('embedding').length === 0
+              }
+              onChange={(event) => void changeModel('embedding', event.target.value)}
+            >
+              <option value="">未设置</option>
+              {authorizedModels('embedding').map((model) => (
+                <option key={model.modelId} value={model.modelId}>
+                  {model.displayName}
+                </option>
+              ))}
+            </ProductSelect>
+          </label>
+          <label className="kb2-model-select-row">
+            <span>文本理解模型</span>
+            <ProductSelect
+              value={binding('llm')?.modelId ?? ''}
+              disabled={
+                modelsBusy ||
+                props.rebuilding ||
+                !canManage ||
+                modelsUnavailable ||
+                authorizedModels('llm').length === 0
+              }
+              onChange={(event) => void changeModel('llm', event.target.value)}
+            >
+              <option value="">未设置</option>
+              {authorizedModels('llm').map((model) => (
+                <option key={model.modelId} value={model.modelId}>
+                  {model.displayName}
+                </option>
+              ))}
+            </ProductSelect>
+          </label>
+          <label className="kb2-model-select-row">
+            <span>图片理解模型</span>
+            <ProductSelect
+              value={binding('vlm')?.modelId ?? ''}
+              disabled={
+                modelsBusy ||
+                props.rebuilding ||
+                !canManage ||
+                modelsUnavailable ||
+                authorizedModels('vlm').length === 0
+              }
+              onChange={(event) => void changeModel('vlm', event.target.value)}
+            >
+              <option value="">未设置</option>
+              {authorizedModels('vlm').map((model) => (
+                <option key={model.modelId} value={model.modelId}>
+                  {model.displayName}
+                </option>
+              ))}
+            </ProductSelect>
+          </label>
+          <ProductError error={modelsError} />
           {props.models.length === 0 ? (
             <div className="kb2-table-muted">模型目录暂不可用</div>
           ) : null}
@@ -2244,70 +2333,44 @@ function DatasetInfoPanel(props: {
           ) : null}
         </div>
         <div className="kb2-info-group">
-          <h3>数据源同步</h3>
-          {props.space ? (
-            <ProductButton
-              size="sm"
-              className="kb2-full-button"
-              onClick={() => {
-                const provider = connectorQuery.data?.provider ?? 'feishu';
-                const query = new URLSearchParams({
-                  spaceId: props.space!.id,
-                  provider,
-                  ...(connectorId ? { connectorId } : {}),
-                });
-                window.location.assign(`/settings/connectors?${query.toString()}`);
+          <div className="kb2-info-group__title">
+            <h3>定时同步</h3>
+            <span title="开启后，知识库内支持同步的数据源会按连接器配置自动同步。">?</span>
+          </div>
+          <label className="kb2-model-select-row">
+            <span>自动同步</span>
+            <input
+              type="checkbox"
+              role="switch"
+              aria-label="定时同步"
+              checked={Boolean(props.space?.autoSync)}
+              disabled={!canManage || autoSyncBusy}
+              onChange={(event) => {
+                setAutoSyncError(null);
+                setPendingAutoSync(event.target.checked);
               }}
-            >
-              管理连接器
-            </ProductButton>
-          ) : null}
-          {connectorId ? (
-            <>
-              <InfoLine label="连接器" value={connectorQuery.data?.provider ?? connectorId} />
-              <InfoLine label="状态" value={connectorQuery.data?.status ?? '正在读取'} />
-              <InfoLine
-                label="上次同步"
-                value={formatDate(connectorQuery.data?.lastSuccessAt ?? undefined)}
-              />
-              <ProductButton
-                size="sm"
-                className="kb2-full-button"
-                busy={connectorBusy}
-                disabled={!connectorQuery.data || connectorQuery.data.status === 'syncing'}
-                onClick={() => void syncDataSource()}
-              >
-                <RepeatIcon boxSize={3.5} />
-                立即同步
-              </ProductButton>
-              <ProductError error={connectorError ?? connectorQuery.error} />
-            </>
-          ) : (
-            <div className="kb2-table-muted">当前知识库没有外部数据源连接器。</div>
-          )}
+            />
+          </label>
+          <div className="kb2-table-muted">
+            开启后，同步型数据源会按既定周期更新；手动同步仍可在来源操作菜单中执行。
+          </div>
+          <ProductError error={autoSyncError} />
         </div>
         {canManage ? (
           <div className="kb2-info-group">
-            <h3>权限</h3>
-            <label className="kb2-switch-row">
-              <span>
-                <strong>Source 权限</strong>
-                <small>开启后可配置每个 Source 的独立协作者</small>
-              </span>
-              <span className="kb2-switch">
-                <input
-                  type="checkbox"
-                  checked={props.space?.sourcePermissionEnabled ?? false}
-                  onChange={(event) => props.onSourcePermissionChange(event.target.checked)}
-                  aria-label="Source 权限总开关"
-                />
-                <span />
-              </span>
-            </label>
-            <ProductButton size="sm" className="kb2-full-button" onClick={props.onPermission}>
-              <LockIcon boxSize={3.5} />
-              管理知识库权限
-            </ProductButton>
+            <div className="kb2-info-group__title">
+              <h3>协作者</h3>
+              <ProductIconButton label="管理协作者" onClick={props.onPermission}>
+                <EditIcon boxSize={3.5} />
+              </ProductIconButton>
+            </div>
+            <div className="kb2-collaborator-summary">
+              <span className="kb2-collaborator-summary__avatar">创</span>
+              <div>
+                <strong>知识库创建者</strong>
+                <small>知识库创建者与已授权成员</small>
+              </div>
+            </div>
           </div>
         ) : null}
       </aside>
@@ -2375,21 +2438,6 @@ function DatasetInfoPanel(props: {
               ))}
             </ProductSelect>
           </ProductField>
-          <ProductField label="重排模型">
-            <ProductSelect
-              value={modelDraft.rerank ?? ''}
-              onChange={(event) =>
-                setModelDraft((current) => ({ ...current, rerank: event.target.value }))
-              }
-            >
-              <option value="">未设置</option>
-              {authorizedModels('rerank').map((model) => (
-                <option key={model.modelId} value={model.modelId}>
-                  {model.displayName}
-                </option>
-              ))}
-            </ProductSelect>
-          </ProductField>
           <ProductField label="图片理解模型">
             <ProductSelect
               value={modelDraft.vlm ?? ''}
@@ -2399,36 +2447,6 @@ function DatasetInfoPanel(props: {
             >
               <option value="">未设置</option>
               {authorizedModels('vlm').map((model) => (
-                <option key={model.modelId} value={model.modelId}>
-                  {model.displayName}
-                </option>
-              ))}
-            </ProductSelect>
-          </ProductField>
-          <ProductField label="语音识别模型">
-            <ProductSelect
-              value={modelDraft.stt ?? ''}
-              onChange={(event) =>
-                setModelDraft((current) => ({ ...current, stt: event.target.value }))
-              }
-            >
-              <option value="">未设置</option>
-              {authorizedModels('stt').map((model) => (
-                <option key={model.modelId} value={model.modelId}>
-                  {model.displayName}
-                </option>
-              ))}
-            </ProductSelect>
-          </ProductField>
-          <ProductField label="语音合成模型">
-            <ProductSelect
-              value={modelDraft.tts ?? ''}
-              onChange={(event) =>
-                setModelDraft((current) => ({ ...current, tts: event.target.value }))
-              }
-            >
-              <option value="">未设置</option>
-              {authorizedModels('tts').map((model) => (
                 <option key={model.modelId} value={model.modelId}>
                   {model.displayName}
                 </option>
@@ -2472,6 +2490,34 @@ function DatasetInfoPanel(props: {
           为避免误操作，确认按钮将在 {modelConfirmCountdown} 秒后启用。
         </p>
         <ProductError error={modelsError} />
+      </ProductModal>
+
+      <ProductModal
+        open={pendingAutoSync !== null}
+        title={pendingAutoSync ? '开启定时同步' : '关闭定时同步'}
+        onClose={() => !autoSyncBusy && setPendingAutoSync(null)}
+        footer={
+          <>
+            <ProductButton onClick={() => setPendingAutoSync(null)} disabled={autoSyncBusy}>
+              取消
+            </ProductButton>
+            <ProductButton
+              tone="primary"
+              busy={autoSyncBusy}
+              disabled={autoSyncBusy}
+              onClick={() => void saveAutoSync()}
+            >
+              确认
+            </ProductButton>
+          </>
+        }
+      >
+        <p className="kb2-confirm-copy">
+          {pendingAutoSync
+            ? '开启后，知识库内支持同步的数据源会按连接器周期自动更新。'
+            : '关闭后，所有自动同步计划将暂停；已有数据和连接器配置不会被删除。'}
+        </p>
+        <ProductError error={autoSyncError} />
       </ProductModal>
     </>
   );
@@ -2613,6 +2659,80 @@ function parseTagInput(tag: Tag, raw: string): unknown {
   return raw.trim() || null;
 }
 
+function SourceRenameDialog(props: {
+  source: Source | null;
+  onClose: () => void;
+  onChanged: () => void;
+}) {
+  const toast = useProductToast();
+  const [name, setName] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<unknown>(null);
+
+  useEffect(() => {
+    if (!props.source) return;
+    setName(props.source.name);
+    setError(null);
+  }, [props.source]);
+
+  const submit = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!props.source || !name.trim()) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await updateSource(props.source, { name: name.trim() });
+      props.onChanged();
+      props.onClose();
+      toast.success('文件已重命名');
+    } catch (caught) {
+      setError(caught);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <ProductModal
+      open={Boolean(props.source)}
+      title="重命名文件"
+      description={props.source?.name}
+      onClose={() => !busy && props.onClose()}
+      footer={
+        <>
+          <ProductButton onClick={props.onClose} disabled={busy}>
+            取消
+          </ProductButton>
+          <ProductButton
+            tone="primary"
+            busy={busy}
+            disabled={!name.trim()}
+            onClick={() =>
+              (
+                document.getElementById('kb2-source-rename-form') as HTMLFormElement | null
+              )?.requestSubmit()
+            }
+          >
+            保存
+          </ProductButton>
+        </>
+      }
+    >
+      <form id="kb2-source-rename-form" onSubmit={submit}>
+        <ProductField label="文件名称">
+          <ProductInput
+            value={name}
+            maxLength={240}
+            autoFocus
+            onChange={(event) => setName(event.target.value)}
+          />
+        </ProductField>
+      </form>
+      <ProductError error={error} />
+    </ProductModal>
+  );
+}
+
 function TagManagerDialog(props: {
   open: boolean;
   spaceId: string;
@@ -2621,48 +2741,58 @@ function TagManagerDialog(props: {
   onChanged: () => void;
 }) {
   const toast = useProductToast();
-  const [key, setKey] = useState('');
-  const [label, setLabel] = useState('');
-  const [tagType, setTagType] = useState<Tag['tagType']>('array');
-  const [options, setOptions] = useState('');
-  const [required, setRequired] = useState(false);
+  const [adding, setAdding] = useState(false);
+  const [newLabel, setNewLabel] = useState('');
+  const [newType, setNewType] = useState<Tag['tagType']>('array');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
   const [editing, setEditing] = useState<Tag | null>(null);
   const [editingLabel, setEditingLabel] = useState('');
+  const [optionsTag, setOptionsTag] = useState<Tag | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Tag | null>(null);
 
   useEffect(() => {
     if (!props.open) return;
-    setKey('');
-    setLabel('');
-    setOptions('');
-    setRequired(false);
+    setAdding(false);
+    setNewLabel('');
+    setNewType('array');
     setEditing(null);
     setError(null);
+    setOptionsTag(null);
+    setDeleteTarget(null);
   }, [props.open]);
 
-  const add = async (event: FormEvent) => {
-    event.preventDefault();
+  const createKey = (label: string) => {
+    const base = label
+      .normalize('NFKD')
+      .toLocaleLowerCase('en-US')
+      .replace(/[^a-z0-9_]+/g, '_')
+      .replace(/^_+|_+$/g, '')
+      .slice(0, 48);
+    const safeBase = /^[a-z].{0,47}$/.test(base) ? base : `tag_${base || 'field'}`;
+    return `${safeBase}_${globalThis.crypto.randomUUID().replaceAll('-', '').slice(0, 8)}`.slice(
+      0,
+      64,
+    );
+  };
+
+  const add = async () => {
+    const label = newLabel.trim();
+    if (!label) return;
     setBusy(true);
     setError(null);
     try {
       await createTag(props.spaceId, {
-        key,
+        key: createKey(label),
         label,
-        tagType,
-        required,
-        options:
-          tagType === 'string' || tagType === 'array'
-            ? options
-                .split(',')
-                .map((value) => value.trim())
-                .filter(Boolean)
-            : null,
+        tagType: newType,
+        required: false,
+        options: newType === 'array' ? [] : null,
       });
       props.onChanged();
-      setKey('');
-      setLabel('');
-      setOptions('');
+      setNewLabel('');
+      setNewType('array');
+      setAdding(false);
       toast.success('标签已创建');
     } catch (caught) {
       setError(caught);
@@ -2693,6 +2823,7 @@ function TagManagerDialog(props: {
     try {
       await deleteTag(tag);
       props.onChanged();
+      setDeleteTarget(null);
       toast.success('标签已删除');
     } catch (caught) {
       setError(caught);
@@ -2702,110 +2833,330 @@ function TagManagerDialog(props: {
   };
 
   return (
-    <ProductModal
-      open={props.open}
-      title="标签管理"
-      description="标签定义属于当前知识库，可应用到文件和批量操作。"
-      size="lg"
-      onClose={() => !busy && props.onClose()}
-    >
-      <form className="kb2-tag-create" onSubmit={add}>
-        <ProductField label="标签键">
-          <ProductInput
-            value={key}
-            onChange={(event) => setKey(event.target.value)}
-            placeholder="department"
-            pattern="[a-z][a-z0-9_]{1,63}"
-          />
-        </ProductField>
-        <ProductField label="显示名称">
-          <ProductInput value={label} onChange={(event) => setLabel(event.target.value)} />
-        </ProductField>
-        <ProductField label="类型">
-          <ProductSelect
-            value={tagType}
-            onChange={(event) => setTagType(event.target.value as Tag['tagType'])}
+    <>
+      <ProductModal
+        open={props.open}
+        title="标签管理"
+        description="标签定义属于当前知识库，可应用到文件和批量操作。"
+        size="lg"
+        onClose={() => !busy && props.onClose()}
+        footer={
+          <ProductButton
+            size="sm"
+            onClick={() => {
+              setEditing(null);
+              setAdding(true);
+              setNewLabel('');
+              setNewType('array');
+            }}
           >
-            <option value="array">选项</option>
-            <option value="string">字符串</option>
-            <option value="number">数字</option>
-            <option value="datetime">日期</option>
-          </ProductSelect>
-        </ProductField>
-        {tagType === 'string' || tagType === 'array' ? (
-          <ProductField label="可选项" hint="英文逗号分隔">
-            <ProductInput value={options} onChange={(event) => setOptions(event.target.value)} />
-          </ProductField>
-        ) : null}
-        <div className="kb2-checkbox-row">
-          <ProductCheckbox checked={required} onChange={setRequired} label="必填标签" />
-          <span>必填标签</span>
-        </div>
-        <ProductButton type="submit" tone="primary" busy={busy} disabled={!key || !label}>
-          添加标签
-        </ProductButton>
-      </form>
-      <ProductError error={error} />
-      <div className="kb2-tag-manager-list">
-        {props.tags.length === 0 ? (
-          <div className="kb2-center-state">尚未定义标签</div>
-        ) : (
-          props.tags.map((tag) => (
-            <div className="kb2-tag-manager-row" key={tag.id}>
-              {editing?.id === tag.id ? (
-                <ProductInput
-                  value={editingLabel}
-                  onChange={(event) => setEditingLabel(event.target.value)}
-                  autoFocus
-                />
-              ) : (
-                <span>
-                  <strong>{tag.label}</strong>
-                  <small>
-                    {tag.key} · {tag.tagType} · 版本 {tag.version}
-                  </small>
-                </span>
-              )}
-              <StatusTag
-                value={tag.status === 'active' ? '启用' : '停用'}
-                tone={tag.status === 'active' ? 'success' : 'neutral'}
-              />
-              {editing?.id === tag.id ? (
-                <ProductButton
-                  size="sm"
-                  tone="primary"
-                  busy={busy}
-                  onClick={() => void rename(tag)}
-                >
-                  保存
-                </ProductButton>
-              ) : (
-                <ProductIconButton
-                  label={`编辑标签 ${tag.label}`}
-                  onClick={() => {
-                    setEditing(tag);
-                    setEditingLabel(tag.label);
-                  }}
-                >
-                  <EditIcon boxSize={3.5} />
-                </ProductIconButton>
-              )}
-              <ProductIconButton
-                label={`删除标签 ${tag.label}`}
-                tone="danger"
-                onClick={() => void remove(tag)}
-              >
-                <DeleteIcon boxSize={3.5} />
-              </ProductIconButton>
+            <AddIcon boxSize={3.5} />
+            添加标签
+          </ProductButton>
+        }
+      >
+        <ProductError error={error} />
+        <div className="kb2-tag-table-wrap">
+          <div className="kb2-tag-table" role="table" aria-label="知识库标签">
+            <div className="kb2-tag-table__head" role="row">
+              <span role="columnheader">标签名称</span>
+              <span role="columnheader">属性</span>
+              <span role="columnheader">操作</span>
             </div>
-          ))
-        )}
+            {props.tags.length === 0 && !adding ? (
+              <div className="kb2-center-state">尚未定义标签</div>
+            ) : null}
+            {props.tags.map((tag) => {
+              const typeLabel =
+                tag.tagType === 'array'
+                  ? '选项'
+                  : tag.tagType === 'number'
+                    ? '数字'
+                    : tag.tagType === 'datetime'
+                      ? '日期'
+                      : '字符串';
+              return (
+                <div className="kb2-tag-table__row" role="row" key={tag.id}>
+                  <div role="cell">
+                    {editing?.id === tag.id ? (
+                      <ProductInput
+                        value={editingLabel}
+                        maxLength={80}
+                        aria-label="标签名称"
+                        onChange={(event) => setEditingLabel(event.target.value)}
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter') void rename(tag);
+                          if (event.key === 'Escape') setEditing(null);
+                        }}
+                        autoFocus
+                      />
+                    ) : (
+                      <span className="kb2-tag-table__name">{tag.label}</span>
+                    )}
+                  </div>
+                  <div role="cell" className="kb2-tag-table__attribute">
+                    <span>{typeLabel}</span>
+                    {tag.required ? <small>必填</small> : null}
+                    {tag.tagType === 'array' ? (
+                      <ProductIconButton
+                        label={`管理 ${tag.label} 的选项`}
+                        onClick={() => setOptionsTag(tag)}
+                      >
+                        <EditIcon boxSize={3.5} />
+                      </ProductIconButton>
+                    ) : null}
+                  </div>
+                  <div role="cell" className="kb2-tag-table__actions">
+                    {editing?.id === tag.id ? (
+                      <>
+                        <ProductIconButton
+                          label="保存标签名称"
+                          disabled={!editingLabel.trim()}
+                          onClick={() => void rename(tag)}
+                        >
+                          <CheckIcon boxSize={3.5} />
+                        </ProductIconButton>
+                        <ProductIconButton label="取消编辑" onClick={() => setEditing(null)}>
+                          <DeleteIcon boxSize={3.5} />
+                        </ProductIconButton>
+                      </>
+                    ) : (
+                      <>
+                        <ProductIconButton
+                          label={`编辑标签 ${tag.label}`}
+                          onClick={() => {
+                            setEditing(tag);
+                            setEditingLabel(tag.label);
+                          }}
+                        >
+                          <EditIcon boxSize={3.5} />
+                        </ProductIconButton>
+                        <ProductIconButton
+                          label={`删除标签 ${tag.label}`}
+                          tone="danger"
+                          onClick={() => setDeleteTarget(tag)}
+                        >
+                          <DeleteIcon boxSize={3.5} />
+                        </ProductIconButton>
+                      </>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+            {adding ? (
+              <div className="kb2-tag-table__row is-new" role="row">
+                <div role="cell">
+                  <ProductInput
+                    value={newLabel}
+                    maxLength={80}
+                    aria-label="新标签名称"
+                    placeholder="请输入标签名称"
+                    onChange={(event) => setNewLabel(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter') void add();
+                      if (event.key === 'Escape') setAdding(false);
+                    }}
+                    autoFocus
+                  />
+                </div>
+                <div role="cell">
+                  <ProductSelect
+                    aria-label="新标签属性"
+                    value={newType}
+                    onChange={(event) => setNewType(event.target.value as Tag['tagType'])}
+                  >
+                    <option value="array">选项</option>
+                    <option value="number">数字</option>
+                    <option value="datetime">日期</option>
+                  </ProductSelect>
+                </div>
+                <div role="cell" className="kb2-tag-table__actions">
+                  <ProductIconButton
+                    label="保存新标签"
+                    disabled={!newLabel.trim() || busy}
+                    onClick={() => void add()}
+                  >
+                    <CheckIcon boxSize={3.5} />
+                  </ProductIconButton>
+                  <ProductIconButton label="取消新增" onClick={() => setAdding(false)}>
+                    <DeleteIcon boxSize={3.5} />
+                  </ProductIconButton>
+                </div>
+              </div>
+            ) : null}
+          </div>
+        </div>
+      </ProductModal>
+
+      <TagOptionsDialog
+        tag={optionsTag}
+        onClose={() => setOptionsTag(null)}
+        onSave={async (options, renames) => {
+          if (!optionsTag) return;
+          await updateTag(optionsTag, { options, renames });
+          props.onChanged();
+          setOptionsTag(null);
+          toast.success('标签选项已更新');
+        }}
+      />
+
+      <ProductModal
+        open={Boolean(deleteTarget)}
+        title="删除标签"
+        onClose={() => !busy && setDeleteTarget(null)}
+        footer={
+          <>
+            <ProductButton onClick={() => setDeleteTarget(null)} disabled={busy}>
+              取消
+            </ProductButton>
+            <ProductButton
+              tone="danger"
+              busy={busy}
+              onClick={() => deleteTarget && void remove(deleteTarget)}
+            >
+              确认删除
+            </ProductButton>
+          </>
+        }
+      >
+        <p className="kb2-confirm-copy">
+          删除“{deleteTarget?.label}”后，文件上的该标签值也会被移除。
+        </p>
+        <ProductError error={error} />
+      </ProductModal>
+    </>
+  );
+}
+
+type TagOptionDraft = { id: string; original: string; value: string };
+
+function TagOptionsDialog(props: {
+  tag: Tag | null;
+  onClose: () => void;
+  onSave: (options: string[], renames: Array<{ from: string; to: string }>) => Promise<void>;
+}) {
+  const [rows, setRows] = useState<TagOptionDraft[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<unknown>(null);
+  const inputRefs = useRef<Array<HTMLInputElement | null>>([]);
+
+  useEffect(() => {
+    if (!props.tag) return;
+    setRows(
+      (props.tag.options ?? []).map((option) => ({
+        id: globalThis.crypto.randomUUID(),
+        original: option,
+        value: option,
+      })),
+    );
+    setError(null);
+    setBusy(false);
+  }, [props.tag]);
+
+  const focusRow = (index: number) => {
+    window.setTimeout(() => inputRefs.current[index]?.focus(), 0);
+  };
+
+  const addRow = () => {
+    setRows((current) => {
+      if (current.at(-1)?.value.trim() === '') {
+        focusRow(current.length - 1);
+        return current;
+      }
+      focusRow(current.length);
+      return [...current, { id: globalThis.crypto.randomUUID(), original: '', value: '' }];
+    });
+  };
+
+  const save = async () => {
+    const options = rows.map((row) => row.value.trim()).filter(Boolean);
+    if (new Set(options).size !== options.length) {
+      setError(new Error('选项名称不能重复。'));
+      return;
+    }
+    const renames = rows.flatMap((row) => {
+      const from = row.original.trim();
+      const to = row.value.trim();
+      return from && to && from !== to ? [{ from, to }] : [];
+    });
+    setBusy(true);
+    setError(null);
+    try {
+      await props.onSave(options, renames);
+    } catch (caught) {
+      setError(caught);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <ProductModal
+      open={Boolean(props.tag)}
+      title={`管理选项 · ${props.tag?.label ?? ''}`}
+      description="每一行是一个独立选项，可以包含逗号；回车保存当前项并进入下一行。"
+      onClose={() => !busy && props.onClose()}
+      footer={
+        <>
+          <ProductButton onClick={props.onClose} disabled={busy}>
+            取消
+          </ProductButton>
+          <ProductButton tone="primary" busy={busy} onClick={() => void save()}>
+            保存
+          </ProductButton>
+        </>
+      }
+    >
+      <div className="kb2-tag-option-list">
+        {rows.map((row, index) => (
+          <div className="kb2-tag-option-row" key={row.id}>
+            <ProductInput
+              ref={(element) => {
+                inputRefs.current[index] = element;
+              }}
+              value={row.value}
+              aria-label={`选项 ${index + 1}`}
+              placeholder="输入选项"
+              onChange={(event) =>
+                setRows((current) =>
+                  current.map((item, itemIndex) =>
+                    itemIndex === index ? { ...item, value: event.target.value } : item,
+                  ),
+                )
+              }
+              onKeyDown={(event) => {
+                if (event.key !== 'Enter') return;
+                event.preventDefault();
+                if (index === rows.length - 1) addRow();
+                else focusRow(index + 1);
+              }}
+            />
+            <ProductIconButton
+              label={`删除选项 ${index + 1}`}
+              tone="danger"
+              onClick={() => {
+                if (!window.confirm('确认删除这个选项？已使用该选项的文件会同步移除该值。')) {
+                  return;
+                }
+                setRows((current) => current.filter((_, itemIndex) => itemIndex !== index));
+              }}
+            >
+              <DeleteIcon boxSize={3.5} />
+            </ProductIconButton>
+          </div>
+        ))}
       </div>
+      <ProductButton size="sm" onClick={addRow}>
+        <AddIcon boxSize={3.5} />
+        添加选项
+      </ProductButton>
+      <ProductError error={error} />
     </ProductModal>
   );
 }
 
-function ResourcePermissionDialog(props: {
+export function LegacyResourcePermissionDialog(props: {
   target: {
     kind: 'space' | 'directory' | 'source';
     id: string;
@@ -3142,6 +3493,28 @@ function ResourcePermissionDialog(props: {
         <p className="kb2-confirm-copy">请确认继续执行该权限变更。</p>
       </ProductModal>
     </>
+  );
+}
+
+function ResourcePermissionDialog(props: {
+  target: {
+    kind: 'space' | 'directory' | 'source';
+    id: string;
+    name: string;
+    version: number;
+    source?: Source;
+  } | null;
+  space?: KnowledgeSpace;
+  onClose: () => void;
+  onChanged: () => void;
+}) {
+  return (
+    <CollaboratorManagerDialog
+      target={props.target}
+      space={props.space}
+      onClose={props.onClose}
+      onChanged={props.onChanged}
+    />
   );
 }
 

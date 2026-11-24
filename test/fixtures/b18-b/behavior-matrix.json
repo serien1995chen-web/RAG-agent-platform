@@ -18,7 +18,7 @@
       "fastgptEvidence": [
         {
           "path": "packages/service/core/workflow/dispatch/dataset/search.ts",
-          "lines": "148-180,224-268,386-416",
+          "lines": "148-180,224-268,386-406",
           "behavior": "The knowledge node accepts multiple datasets, searches them, returns quoteQA, and exposes the same list to later workflow nodes."
         },
         {
@@ -44,7 +44,7 @@
       "fastgptEvidence": [
         {
           "path": "packages/service/core/workflow/dispatch/dataset/search.ts",
-          "lines": "135-152,224-268,417-424",
+          "lines": "135-152,224-268,398-406",
           "behavior": "No queries returns an explicit empty result; missing datasets or failed search returns a node error rather than a generic successful result."
         },
         {
@@ -91,7 +91,7 @@
       "fastgptEvidence": [
         {
           "path": "packages/service/core/workflow/dispatch/dataset/search.ts",
-          "lines": "224-268,386-416",
+          "lines": "224-268,386-406",
           "behavior": "The workflow node receives quoteQA from the search service and returns it without mutating dataset records."
         }
       ],
@@ -138,7 +138,7 @@
       "fastgptEvidence": [
         {
           "path": "packages/service/core/workflow/dispatch/dataset/search.ts",
-          "lines": "417-424",
+          "lines": "398-406",
           "behavior": "Search errors are returned as a node error response with the original error classification."
         }
       ],

@@ -114,16 +114,11 @@ export class S7SearchRepository {
     }
     const llmBinding = bindings.find((binding) => binding.modelType === 'llm');
     const llm = llmBinding ? modelOfType(catalog, llmBinding.modelId, 'llm') : undefined;
-    const rerankBinding = usingRerank
-      ? bindings.find((binding) => binding.modelType === 'rerank')
-      : undefined;
-    const rerank = usingRerank
-      ? rerankModelId
+    const rerank = !usingRerank
+      ? undefined
+      : rerankModelId
         ? modelOfType(catalog, rerankModelId, 'rerank')
-        : rerankBinding
-          ? modelOfType(catalog, rerankBinding.modelId, 'rerank')
-          : undefined
-      : undefined;
+        : catalog.find((model) => model.type === 'rerank' && model.authorized);
     if (usingRerank && rerankModelId && !rerank) {
       throw tenantError(context, 'KNOWLEDGE_VALIDATION_FAILED', {
         field: 'rerankModelId',

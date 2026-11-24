@@ -300,6 +300,7 @@ describe('L1-B19-OPS-005 scheduler and stale status', () => {
         accessMode: 'workspace',
         sourceAclMode: 'inherited',
         sourcePermissionEnabled: true,
+        autoSync: true,
       },
       context,
     );
@@ -358,6 +359,10 @@ describe('L1-B19-OPS-005 scheduler and stale status', () => {
       deletedAt: null,
     }).lean();
     expect(activeConnector).not.toBeNull();
+    await models.KnowledgeSpace.updateOne(
+      { workspaceId: context.workspaceId, _id: activeConnector!.knowledgeSpaceId },
+      { $set: { autoSync: true } },
+    );
     await models.KnowledgeConnector.updateOne(
       { workspaceId: context.workspaceId, _id: activeConnector!._id },
       {
@@ -392,5 +397,64 @@ describe('L1-B19-OPS-005 scheduler and stale status', () => {
         ).map((job) => job.idempotencyKey),
       ).size,
     ).toBe(1);
+  });
+
+  it('KB-PARITY-016 skips automatic dispatch when the knowledge base gate is off', async () => {
+    const models = registerKnowledgeModels(connection);
+    const catalog = new KnowledgeCatalogRepository(connection);
+    const connectors = new KnowledgeConnectorRepository(
+      connection,
+      new KnowledgeCredentialCipher(`b19-scheduler-gate-${B19_B_RUN_ID}`),
+    );
+    const schedules = new KnowledgeConnectorScheduleRepository(connection);
+    const scheduler = new S10ConnectorSchedulerApplication({ schedules, connectors });
+    const space = await catalog.createSpace(
+      {
+        kind: 'space',
+        name: `Scheduler Gate ${B19_B_RUN_ID}`,
+        accessMode: 'workspace',
+        sourceAclMode: 'inherited',
+        sourcePermissionEnabled: true,
+        autoSync: false,
+      },
+      context,
+    );
+    const connector = await connectors.connect(
+      space.id,
+      {
+        provider: 'feishu',
+        name: `Scheduler Gate Connector ${B19_B_RUN_ID}`,
+        credentials: {
+          provider: 'feishu',
+          appId: `safe-gate-app-${B19_B_RUN_ID}`,
+          appSecret: `safe-gate-secret-${B19_B_RUN_ID}`,
+        },
+        config: { provider: 'feishu', folderToken: `safe-gate-folder-${B19_B_RUN_ID}` },
+        syncEnabled: true,
+        syncIntervalMinutes: 15,
+      },
+      context,
+    );
+    await models.KnowledgeConnector.updateOne(
+      { workspaceId: context.workspaceId, _id: connector.id },
+      { $set: { nextSyncAt: new Date(Date.now() - 1_000) } },
+    );
+    const jobsBefore = await models.KnowledgeJob.countDocuments({
+      workspaceId: context.workspaceId,
+      knowledgeSpaceId: space.id,
+      kind: 'sync',
+    });
+    const result = await scheduler.runOnce({
+      workerId: 'worker-auto-sync-off',
+      now: new Date(Date.now() + 1_000),
+    });
+    expect(result.dispatched).toBe(0);
+    expect(
+      await models.KnowledgeJob.countDocuments({
+        workspaceId: context.workspaceId,
+        knowledgeSpaceId: space.id,
+        kind: 'sync',
+      }),
+    ).toBe(jobsBefore);
   });
 });

@@ -12,6 +12,7 @@ const root = resolve(import.meta.dirname, '../..');
 const suffix = randomUUID().replaceAll('-', '').slice(0, 10);
 const workspaceId = `ws_product_search_${suffix}`;
 const memberId = `mem_product_search_${suffix}`;
+const collaboratorId = `mem_search_collaborator_${suffix}`;
 const authToken = `kb-product-search-${suffix}`;
 const resultDir = join(root, 'test-results', 'fastgpt-product-module4');
 
@@ -157,7 +158,13 @@ beforeAll(async () => {
   process.env.KB_TEST_S3_ACCESS_KEY ??= 'minioadmin';
   process.env.KB_TEST_S3_SECRET_KEY ??= 'minioadmin';
 
-  app = await startS4App({ suffix, workspaceId, memberId, authToken });
+  app = await startS4App({
+    suffix,
+    workspaceId,
+    memberId,
+    authToken,
+    workspaceMemberIds: [collaboratorId],
+  });
   cookie = await consoleCookie({ baseUrl: app.baseUrl, authToken, workspaceId });
   await seed();
   connections = await createKnowledgeConnections({
@@ -234,8 +241,8 @@ describe('FastGPT product module 4 Search and Info', () => {
       'aria-selected',
       'true',
     );
-    await page.getByRole('button', { name: '参数' }).click();
-    await page.getByLabel('检索模式').selectOption('fulltext');
+    await page.getByRole('button', { name: '搜索配置' }).click();
+    await page.getByRole('radio', { name: '全文检索' }).check();
     await page.getByRole('button', { name: '完成' }).click();
     await page.getByLabel('测试查询').fill('退款多久到账');
     const searchResponse = page.waitForResponse(
@@ -243,7 +250,7 @@ describe('FastGPT product module 4 Search and Info', () => {
         response.request().method() === 'POST' &&
         response.url().endsWith('/v1/knowledge/search/full-text'),
     );
-    await page.getByRole('button', { name: '开始测试' }).click();
+    await page.getByRole('button', { name: '测试', exact: true }).click();
     const searchPayloadResponse = await searchResponse;
     if (searchPayloadResponse.status() !== 200) {
       console.log('search-request', searchPayloadResponse.request().postData());
@@ -268,7 +275,7 @@ describe('FastGPT product module 4 Search and Info', () => {
         response.request().method() === 'POST' &&
         response.url().endsWith('/v1/knowledge/search/full-text'),
     );
-    await page.getByRole('button', { name: '开始测试' }).click();
+    await page.getByRole('button', { name: '测试', exact: true }).click();
     expect((await emptyResponse).status()).toBe(200);
     await playwrightExpect(page.getByText('搜索结果为空').last()).toBeVisible();
     await playwrightExpect(page.locator('.kb2-search-result-card').first()).toBeVisible();
@@ -300,7 +307,7 @@ describe('FastGPT product module 4 Search and Info', () => {
         response.request().method() === 'POST' &&
         response.url().endsWith('/v1/knowledge/search/image'),
     );
-    await page.getByRole('button', { name: '开始测试' }).click();
+    await page.getByRole('button', { name: '测试', exact: true }).click();
     expect((await imageResponse).url()).toContain('/search/image');
     await context.close();
   });
@@ -320,10 +327,7 @@ describe('FastGPT product module 4 Search and Info', () => {
     await playwrightExpect(
       page.getByRole('heading', { level: 1, name: new RegExp(`模块四知识库 ${suffix}`) }),
     ).toBeVisible();
-    await page.getByRole('button', { name: '编辑模型配置' }).click();
-    const modelModal = page.locator('.kb2-modal');
-    await playwrightExpect(modelModal.getByText('模型配置', { exact: true })).toBeVisible();
-    const llmSelect = modelModal.getByLabel('文本理解模型');
+    const llmSelect = page.getByLabel('文本理解模型');
     const selectedLlm = await llmSelect.inputValue();
     const alternateLlm = await llmSelect
       .locator('option')
@@ -335,36 +339,28 @@ describe('FastGPT product module 4 Search and Info', () => {
         selectedLlm,
       );
     if (alternateLlm !== undefined) {
-      await llmSelect.selectOption(alternateLlm);
       const saveResponse = page.waitForResponse(
         (response) =>
           response.request().method() === 'PUT' &&
           response.url().endsWith(`/spaces/${datasetId}/model-bindings`),
       );
-      await modelModal.getByRole('button', { name: '保存' }).click();
+      await llmSelect.selectOption(alternateLlm);
       expect((await saveResponse).status()).toBe(200);
-    } else {
-      await modelModal.getByRole('button', { name: '取消' }).click();
     }
 
-    await page.getByRole('button', { name: '管理知识库权限' }).click();
+    await page.getByRole('button', { name: '管理协作者' }).click();
     const permissionModal = page.locator('.kb2-modal');
-    await permissionModal.getByLabel('成员 ID').fill(`mem_search_collaborator_${suffix}`);
-    await permissionModal.getByLabel('角色').selectOption('read');
+    await permissionModal.getByRole('button', { name: '成员' }).click();
+    await permissionModal.getByRole('button', { name: collaboratorId }).click();
+    await permissionModal.getByLabel(`${collaboratorId} 的角色`).selectOption('read');
     const collaboratorResponse = page.waitForResponse(
       (response) =>
         response.request().method() === 'POST' &&
         response.url().endsWith(`/spaces/${datasetId}/collaborators`),
     );
-    await permissionModal.getByRole('button', { name: '添加', exact: true }).click();
+    await permissionModal.getByRole('button', { name: '确认', exact: true }).click();
     expect((await collaboratorResponse).status()).toBe(201);
-    await playwrightExpect(
-      permissionModal
-        .locator('.kb2-tag-manager-row')
-        .first()
-        .getByText(`mem_search_collaborator_${suffix}`),
-    ).toBeVisible();
-    await permissionModal.getByRole('button', { name: '关闭弹窗' }).click();
+    await playwrightExpect(permissionModal).toHaveCount(0);
     await playwrightExpect(page.locator('.kb2-modal')).toHaveCount(0);
 
     await context.close();
@@ -430,9 +426,7 @@ describe('FastGPT product module 4 Search and Info', () => {
         }>
       >();
     const jobIdsBefore = new Set(jobsBefore.map((job) => String(job._id)));
-    await page.getByRole('button', { name: '编辑模型配置' }).click();
-    const modelModal = page.locator('.kb2-modal');
-    const embedding = modelModal.getByLabel('索引模型');
+    const embedding = page.getByLabel('索引模型');
     expect(await embedding.locator('option').count()).toBeGreaterThan(1);
     const currentEmbeddingModel = await embedding.inputValue();
     const alternateEmbeddingModel = await embedding
@@ -445,9 +439,8 @@ describe('FastGPT product module 4 Search and Info', () => {
         currentEmbeddingModel,
       );
     expect(alternateEmbeddingModel).toBeTruthy();
-    await embedding.selectOption(alternateEmbeddingModel!);
-    await modelModal.getByRole('button', { name: '保存' }).click();
     const confirmModal = page.locator('.kb2-modal');
+    await embedding.selectOption(alternateEmbeddingModel!);
     await playwrightExpect(confirmModal.getByText('确认重建索引')).toBeVisible();
     const confirmRebuild = confirmModal.getByRole('button', { name: /确认重建/ });
     await playwrightExpect(confirmRebuild).toBeDisabled();
@@ -585,10 +578,7 @@ describe('FastGPT product module 4 Search and Info', () => {
       `${app.baseUrl}/dataset/detail?datasetId=${confirmationSpace.id}&currentTab=collectionCard`,
       { waitUntil: 'networkidle' },
     );
-    await page.getByRole('button', { name: '编辑模型配置' }).click();
-    const modal = page.locator('.kb2-modal');
-    await modal.getByLabel('索引模型').selectOption(alternateModel.modelId);
-    await modal.getByRole('button', { name: '保存' }).click();
+    await page.getByLabel('索引模型').selectOption(alternateModel.modelId);
     await page.waitForTimeout(500);
 
     expect(immediateBindingUpdate).toBe(false);
@@ -602,9 +592,7 @@ describe('FastGPT product module 4 Search and Info', () => {
     await playwrightExpect(page.locator('.kb2-modal')).toHaveCount(0);
     expect(immediateBindingUpdate).toBe(false);
 
-    await page.getByRole('button', { name: '编辑模型配置' }).click();
-    await page.locator('.kb2-modal').getByLabel('索引模型').selectOption(alternateModel.modelId);
-    await page.locator('.kb2-modal').getByRole('button', { name: '保存' }).click();
+    await page.getByLabel('索引模型').selectOption(alternateModel.modelId);
     const rebuilt = page.waitForResponse(
       (response) =>
         response.request().method() === 'PUT' &&

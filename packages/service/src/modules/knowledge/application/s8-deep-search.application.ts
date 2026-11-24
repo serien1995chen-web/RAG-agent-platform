@@ -363,6 +363,7 @@ export class S8DeepSearchApplication {
       usingRerank: request.usingRerank,
       queryOptimizationEnabled: false,
       rerankWeight: request.rerankWeight,
+      rerankCandidateNum: request.rerankCandidateNum,
       ...(request.filters ? { filters: request.filters } : {}),
     };
   }

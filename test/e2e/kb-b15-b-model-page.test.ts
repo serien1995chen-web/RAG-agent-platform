@@ -22,6 +22,14 @@ let spaceId = '';
 let browser: Browser | undefined;
 
 beforeAll(async () => {
+  process.env.KB_TEST_MONGO_URI ??= 'mongodb://127.0.0.1:27017/kb_b15_b?replicaSet=rs0';
+  process.env.KB_TEST_REDIS_URL ??= 'redis://127.0.0.1:6379/0';
+  process.env.KB_TEST_PG_URL ??= 'postgresql://kb:kb_dev_password@127.0.0.1:5432/kb';
+  process.env.KB_TEST_S3_ENDPOINT ??= 'http://127.0.0.1:9000';
+  process.env.KB_TEST_S3_REGION ??= 'us-east-1';
+  process.env.KB_TEST_S3_BUCKET ??= 'kb-local';
+  process.env.KB_TEST_S3_ACCESS_KEY ??= 'minioadmin';
+  process.env.KB_TEST_S3_SECRET_KEY ??= 'minioadmin';
   app = await startS4App({ suffix, workspaceId, memberId, authToken });
   spaceId = await createSpace({
     baseUrl: app.baseUrl,
@@ -90,9 +98,9 @@ describe('L1-B15-B Web model gateway configuration', () => {
     });
     await page.goto(`${app.baseUrl}/spaces/${spaceId}/search`, { waitUntil: 'networkidle' });
 
-    await playwrightExpect(page.getByRole('button', { name: '参数' })).toBeVisible();
-    await page.getByRole('button', { name: '参数' }).click();
-    await playwrightExpect(page.getByRole('dialog', { name: '搜索参数' })).toBeVisible();
+    await playwrightExpect(page.getByRole('button', { name: '搜索配置' })).toBeVisible();
+    await page.getByRole('button', { name: '搜索配置' }).click();
+    await playwrightExpect(page.getByRole('dialog', { name: '知识库搜索配置' })).toBeVisible();
     await page.screenshot({
       path: join(evidenceDir, 'b15-model-settings.png'),
       fullPage: true,
@@ -115,9 +123,23 @@ describe('L1-B15-B Web model gateway configuration', () => {
       )}\n`,
       'utf8',
     );
-    await playwrightExpect.soft(page.getByLabel('ReRank 模型')).toBeVisible();
-    await playwrightExpect.soft(page.getByLabel('问题优化模型')).toBeVisible();
-    await playwrightExpect.soft(page.getByLabel('问题优化背景 Prompt')).toBeVisible();
+    await playwrightExpect(page.getByRole('tab', { name: '搜索方式' })).toBeVisible();
+    await playwrightExpect(page.getByRole('tab', { name: '搜索过滤' })).toBeVisible();
+    await playwrightExpect(page.getByRole('tab', { name: '问题优化' })).toBeVisible();
+    await playwrightExpect(page.getByLabel('重排模型')).toHaveCount(0);
+    const rerank = page.getByLabel('结果重排');
+    if (await rerank.isVisible()) {
+      await rerank.check();
+      await playwrightExpect(page.getByLabel('重排模型')).toBeVisible();
+      await playwrightExpect(page.getByLabel('重排候选数')).toBeVisible();
+    } else {
+      await playwrightExpect(page.getByText('未部署重排模型')).toBeVisible();
+    }
+    await page.getByRole('tab', { name: '问题优化' }).click();
+    await playwrightExpect(page.getByLabel('问题优化模型')).toHaveCount(0);
+    await page.getByLabel('启用问题优化').check();
+    await playwrightExpect(page.getByLabel('问题优化模型')).toBeVisible();
+    await playwrightExpect(page.getByLabel('问题优化背景 Prompt')).toBeVisible();
     await playwrightExpect
       .soft(page.getByText('当前合同未提供查询扩展 Prompt 和重排模型选择字段'))
       .toHaveCount(0);

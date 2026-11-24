@@ -69,6 +69,7 @@ try {
 }
 
 const allowedApiPages = new Set([
+  'console/directory.ts',
   'console/session.ts',
   'healthz.ts',
   'readyz.ts',

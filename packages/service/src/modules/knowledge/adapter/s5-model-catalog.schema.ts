@@ -14,6 +14,15 @@ const DimensionSchema = z.union([
   z.literal(3072),
 ]);
 
+const ModelLimitsSchema = z
+  .object({
+    maxToken: z.number().int().positive().optional(),
+    defaultToken: z.number().int().positive().optional(),
+    maxContext: z.number().int().positive().optional(),
+    maxResponse: z.number().int().positive().optional(),
+  })
+  .strict();
+
 const CatalogItemSchema = z
   .object({
     id: z.string().min(1).max(256),
@@ -22,6 +31,7 @@ const CatalogItemSchema = z
     type: z.enum(S5_MODEL_TYPES),
     capabilities: z.array(z.string().min(1).max(128)),
     dimension: z.number().int().optional(),
+    limits: ModelLimitsSchema.optional(),
   })
   .passthrough();
 
@@ -69,6 +79,7 @@ export function normalizeCatalog(
         type,
         capabilities: [...new Set(item.capabilities)].sort(),
         dimension,
+        ...(item.limits ? { limits: item.limits } : {}),
         authorized: true,
       } satisfies ModelCatalogItem;
     })

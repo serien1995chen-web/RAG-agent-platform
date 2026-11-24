@@ -100,6 +100,61 @@ function knowledgeErrorCode(error: unknown): string | null {
   return null;
 }
 
+function remapArrayOptions(
+  value: string[],
+  renameByValue: ReadonlyMap<string, string>,
+  removed: ReadonlySet<string>,
+): string[] {
+  return [...new Set(value.map((item) => renameByValue.get(item) ?? item))]
+    .filter((item) => !removed.has(item))
+    .sort();
+}
+
+function tagOptionChanges(input: {
+  current: string[] | null;
+  next: string[] | null;
+  renames: unknown;
+  context: TenantContext;
+}) {
+  const current = input.current ?? [];
+  const next = input.next ?? [];
+  const nextSet = new Set(next);
+  const renameMap = new Map<string, string>();
+  if (input.renames !== undefined) {
+    if (!Array.isArray(input.renames)) {
+      throw tenantError(input.context, 'KNOWLEDGE_VALIDATION_FAILED', {
+        field: 'renames',
+        reason: 'array_required',
+      });
+    }
+    for (const [index, raw] of input.renames.entries()) {
+      const item =
+        typeof raw === 'object' && raw !== null && !Array.isArray(raw)
+          ? (raw as Record<string, unknown>)
+          : null;
+      const from = typeof item?.from === 'string' ? item.from.trim() : '';
+      const to = typeof item?.to === 'string' ? item.to.trim() : '';
+      if (!from || !to || from === to || !current.includes(from) || !nextSet.has(to)) {
+        throw tenantError(input.context, 'KNOWLEDGE_VALIDATION_FAILED', {
+          field: `renames.${index}`,
+          reason: 'invalid_option_rename',
+        });
+      }
+      if (renameMap.has(from) || [...renameMap.values()].includes(to)) {
+        throw tenantError(input.context, 'KNOWLEDGE_VALIDATION_FAILED', {
+          field: `renames.${index}`,
+          reason: 'duplicate_option_rename',
+        });
+      }
+      renameMap.set(from, to);
+    }
+  }
+  return {
+    renameMap,
+    removed: new Set(current.filter((option) => !nextSet.has(option))),
+  };
+}
+
 export class KnowledgeTagRepository {
   private readonly tags: Model<KnowledgeTagDoc>;
   private readonly tagValues: Model<KnowledgeTagValueDoc>;
@@ -211,23 +266,169 @@ export class KnowledgeTagRepository {
   async update(tagId: string, input: Record<string, unknown>, context: TenantContext) {
     requireWorkspaceId(context);
     const version = Number(input.version);
-    const update: Record<string, unknown> = {};
-    if (input.label !== undefined) {
-      update.label = assertResourceName(input.label, 'label', 80, context);
-    }
-    if (input.required !== undefined) update.required = Boolean(input.required);
-    if (input.options !== undefined) {
-      update.options = Array.isArray(input.options)
-        ? [...new Set(input.options.map(String))]
-        : null;
-    }
-    if (input.status !== undefined) update.status = input.status;
     return withMongoTransaction(this.connection, async (session) => {
+      const current = (await this.tags
+        .findOne({
+          _id: objectIdOf(tagId, context, 'tagId'),
+          workspaceId: requireWorkspaceId(context),
+          deletedAt: null,
+        })
+        .session(session)
+        .lean()) as unknown as Plain<KnowledgeTagDoc> | null;
+      if (!current) throw tenantError(context, 'KNOWLEDGE_NOT_FOUND');
+      if (current.version !== version) {
+        throw tenantError(context, 'KNOWLEDGE_CONFLICT');
+      }
+      const update: Record<string, unknown> = {};
+      if (input.label !== undefined) {
+        update.label = assertResourceName(input.label, 'label', 80, context);
+      }
+      if (input.required !== undefined) update.required = Boolean(input.required);
+      if (input.options !== undefined) {
+        if (
+          !Array.isArray(input.options) ||
+          input.options.some((item) => typeof item !== 'string')
+        ) {
+          throw tenantError(context, 'KNOWLEDGE_VALIDATION_FAILED', {
+            field: 'options',
+            reason: 'string_array_required',
+          });
+        }
+        const options = [
+          ...new Set(input.options.map((item) => item.trim()).filter((item) => item.length > 0)),
+        ];
+        if (options.some((item) => item.length > 256) || options.length > 1000) {
+          throw tenantError(context, 'KNOWLEDGE_VALIDATION_FAILED', { field: 'options' });
+        }
+        update.options = options;
+      }
+      if (input.status !== undefined) update.status = input.status;
+      const changes =
+        input.options === undefined
+          ? { renameMap: new Map<string, string>(), removed: new Set<string>() }
+          : tagOptionChanges({
+              current: current.options,
+              next: (update.options as string[] | undefined) ?? current.options,
+              renames: input.renames,
+              context,
+            });
       const updated = await workspaceCasUpdate(
         this.tags,
         { id: tagId, expectedVersion: version, update, session },
         context,
       );
+      if (changes.renameMap.size > 0 || changes.removed.size > 0) {
+        const sources = (await this.sources
+          .find({
+            workspaceId: context.workspaceId,
+            'tagValues.tagId': current._id,
+            deletedAt: null,
+          })
+          .session(session)
+          .lean()) as unknown as Plain<KnowledgeSourceDoc>[];
+        const nextSourceVersions = new Map<string, number>();
+        for (const source of sources) {
+          let changed = false;
+          const tagValues = source.tagValues.flatMap((entry) => {
+            if (String(entry.tagId) !== String(current._id)) return [entry];
+            if (current.tagType !== 'array' || !Array.isArray(entry.value)) {
+              if (changes.removed.has(String(entry.value))) {
+                changed = true;
+                return [];
+              }
+              return [entry];
+            }
+            const value = remapArrayOptions(
+              entry.value.filter((item): item is string => typeof item === 'string'),
+              changes.renameMap,
+              changes.removed,
+            );
+            if (value.length === 0) {
+              changed = true;
+              return [];
+            }
+            if (value.join('\u0000') !== entry.value.join('\u0000')) {
+              changed = true;
+              return [{ ...entry, value, valueKey: valueKey(value) }];
+            }
+            return [entry];
+          });
+          if (!changed) continue;
+          const sourceResult = await this.sources.updateOne(
+            {
+              _id: source._id,
+              workspaceId: context.workspaceId,
+              version: source.version,
+              deletedAt: null,
+            },
+            {
+              $set: { tagValues, updatedByMemberId: context.memberId },
+              $inc: { version: 1 },
+            },
+            { session },
+          );
+          if (sourceResult.modifiedCount !== 1) {
+            throw tenantError(context, 'KNOWLEDGE_CONFLICT', {
+              sourceId: String(source._id),
+            });
+          }
+          nextSourceVersions.set(String(source._id), source.version + 1);
+        }
+        const values = (await this.tagValues
+          .find({
+            workspaceId: context.workspaceId,
+            tagId: current._id,
+            deletedAt: null,
+          })
+          .session(session)
+          .lean()) as unknown as Plain<KnowledgeTagValueDoc>[];
+        for (const valueDocument of values) {
+          let value = valueDocument.value;
+          if (Array.isArray(value)) {
+            value = remapArrayOptions(
+              value.filter((item): item is string => typeof item === 'string'),
+              changes.renameMap,
+              changes.removed,
+            );
+          } else if (changes.removed.has(String(value))) {
+            value = [];
+          }
+          if (Array.isArray(value) && value.length === 0) {
+            await this.tagValues.updateOne(
+              {
+                _id: valueDocument._id,
+                workspaceId: context.workspaceId,
+                version: valueDocument.version,
+              },
+              {
+                $set: { deletedAt: new Date(), updatedByMemberId: context.memberId },
+                $inc: { version: 1 },
+              },
+              { session },
+            );
+            continue;
+          }
+          await this.tagValues.updateOne(
+            {
+              _id: valueDocument._id,
+              workspaceId: context.workspaceId,
+              version: valueDocument.version,
+            },
+            {
+              $set: {
+                value,
+                valueKey: valueKey(value),
+                sourceVersion:
+                  nextSourceVersions.get(String(valueDocument.sourceId)) ??
+                  valueDocument.sourceVersion,
+                updatedByMemberId: context.memberId,
+              },
+              $inc: { version: 1 },
+            },
+            { session },
+          );
+        }
+      }
       await this.audit.append(
         {
           knowledgeSpaceId: String(updated.knowledgeSpaceId),
@@ -237,6 +438,8 @@ export class KnowledgeTagRepository {
           outcome: 'succeeded',
           safeDiff: {
             fields: Object.keys(update).sort(),
+            optionRenames: changes.renameMap.size,
+            removedOptions: changes.removed.size,
             version,
             updatedVersion: updated.version,
           },

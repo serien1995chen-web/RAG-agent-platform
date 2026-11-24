@@ -25,6 +25,7 @@ export interface SpaceView {
   accessMode: 'workspace' | 'restricted';
   sourceAclMode: 'inherited' | 'enforced';
   sourcePermissionEnabled: boolean;
+  autoSync: boolean;
   [key: string]: unknown;
 }
 
@@ -81,6 +82,7 @@ export interface CreateSpacePortInput {
   accessMode: 'workspace' | 'restricted';
   sourceAclMode: 'inherited' | 'enforced';
   sourcePermissionEnabled?: boolean;
+  autoSync?: boolean;
   modelBindings?: Array<{
     modelType: 'llm' | 'embedding' | 'rerank' | 'vlm' | 'stt' | 'tts';
     modelId: string;

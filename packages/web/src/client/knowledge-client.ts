@@ -10,6 +10,26 @@ export interface ConsoleSession {
   expiresIn: number;
 }
 
+export interface ConsoleDirectoryMember {
+  memberId: string;
+  name: string;
+  avatarUrl?: string;
+  departmentIds?: string[];
+  groupIds?: string[];
+}
+
+export interface ConsoleDirectoryUnit {
+  id: string;
+  name: string;
+  parentId?: string | null;
+}
+
+export interface ConsoleDirectory {
+  members: ConsoleDirectoryMember[];
+  departments: ConsoleDirectoryUnit[];
+  groups: ConsoleDirectoryUnit[];
+}
+
 export class KnowledgeRequestError extends Error {
   constructor(
     readonly status: number,
@@ -35,6 +55,7 @@ export class ConsoleRequestPathError extends Error {
 }
 
 let sessionPromise: Promise<ConsoleSession> | undefined;
+let directoryPromise: Promise<ConsoleDirectory> | undefined;
 
 export function ensureConsoleSession(): Promise<ConsoleSession> {
   sessionPromise ??= fetch('/api/console/session', {
@@ -48,6 +69,20 @@ export function ensureConsoleSession(): Promise<ConsoleSession> {
     return (await response.json()) as ConsoleSession;
   });
   return sessionPromise;
+}
+
+export function ensureConsoleDirectory(): Promise<ConsoleDirectory> {
+  directoryPromise ??= fetch('/api/console/directory', {
+    method: 'GET',
+    credentials: 'same-origin',
+    headers: { accept: 'application/json' },
+  }).then(async (response) => {
+    if (!response.ok) {
+      throw new ConsoleSessionError();
+    }
+    return (await response.json()) as ConsoleDirectory;
+  });
+  return directoryPromise;
 }
 
 function idempotencyKey(): string {

@@ -8433,6 +8433,83 @@
         "x-audit": true,
         "x-downstream-allowed": false,
         "responses": {
+          "200": {
+            "description": "本地文件分块预览",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "success",
+                    "data",
+                    "traceId",
+                    "requestId"
+                  ],
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "const": true
+                    },
+                    "data": {
+                      "type": "object",
+                      "required": [
+                        "name",
+                        "contentHash",
+                        "totalChunks",
+                        "chunks",
+                        "truncated"
+                      ],
+                      "properties": {
+                        "name": {
+                          "type": "string"
+                        },
+                        "contentHash": {
+                          "type": "string"
+                        },
+                        "totalChunks": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "chunks": {
+                          "type": "array",
+                          "maxItems": 10,
+                          "items": {
+                            "type": "object",
+                            "required": [
+                              "index",
+                              "text",
+                              "contentHash"
+                            ],
+                            "properties": {
+                              "index": {
+                                "type": "integer",
+                                "minimum": 0
+                              },
+                              "text": {
+                                "type": "string"
+                              },
+                              "contentHash": {
+                                "type": "string"
+                              }
+                            }
+                          }
+                        },
+                        "truncated": {
+                          "type": "boolean"
+                        }
+                      }
+                    },
+                    "traceId": {
+                      "type": "string"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
           "202": {
             "description": "异步任务",
             "content": {
@@ -20962,6 +21039,7 @@
           "accessMode",
           "sourceAclMode",
           "sourcePermissionEnabled",
+          "autoSync",
           "referenceRevision",
           "status",
           "version",
@@ -21063,6 +21141,12 @@
             "type": "boolean",
             "examples": [
               true
+            ]
+          },
+          "autoSync": {
+            "type": "boolean",
+            "examples": [
+              false
             ]
           },
           "modelBindings": {
@@ -23235,6 +23319,28 @@
               ]
             ]
           },
+          "limits": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "maxToken": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "defaultToken": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "maxContext": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "maxResponse": {
+                "type": "integer",
+                "minimum": 1
+              }
+            }
+          },
           "authorized": {
             "type": "boolean",
             "examples": [
@@ -24912,6 +25018,10 @@
           "sourcePermissionEnabled": {
             "type": "boolean",
             "default": true
+          },
+          "autoSync": {
+            "type": "boolean",
+            "default": false
           }
         }
       },
@@ -24952,6 +25062,9 @@
             ]
           },
           "sourcePermissionEnabled": {
+            "type": "boolean"
+          },
+          "autoSync": {
             "type": "boolean"
           }
         }
@@ -25565,6 +25678,30 @@
               "maxLength": 256
             }
           },
+          "renames": {
+            "type": "array",
+            "maxItems": 1000,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "from",
+                "to"
+              ],
+              "properties": {
+                "from": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256
+                },
+                "to": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256
+                }
+              }
+            }
+          },
           "status": {
             "type": "string",
             "enum": [
@@ -25825,7 +25962,7 @@
           "chunkTriggerMinSize": {
             "type": "integer",
             "minimum": 1,
-            "maximum": 8000
+            "maximum": 100000
           },
           "chunkSettingMode": {
             "type": "string",
@@ -25854,17 +25991,17 @@
           "paragraphChunkDeep": {
             "type": "integer",
             "minimum": 0,
-            "maximum": 5
+            "maximum": 8
           },
           "paragraphChunkMinSize": {
             "type": "integer",
             "minimum": 1,
-            "maximum": 8000
+            "maximum": 100000
           },
           "chunkSize": {
             "type": "integer",
             "minimum": 64,
-            "maximum": 8000
+            "maximum": 100000
           },
           "chunkSplitter": {
             "type": "string",
@@ -25873,12 +26010,12 @@
           "overlap": {
             "type": "integer",
             "minimum": 0,
-            "maximum": 8000
+            "maximum": 100000
           },
           "indexSize": {
             "type": "integer",
             "minimum": 1,
-            "maximum": 8000
+            "maximum": 8192
           },
           "dataEnhanceCollectionName": {
             "type": "boolean",
@@ -26233,6 +26370,10 @@
           },
           "chunking": {
             "$ref": "#/components/schemas/ChunkingSettings"
+          },
+          "dryRun": {
+            "type": "boolean",
+            "default": false
           }
         }
       },
@@ -27261,6 +27402,13 @@
             "minimum": 0,
             "maximum": 1,
             "default": 0.5
+          },
+          "rerankCandidateNum": {
+            "type": "integer",
+            "minimum": 10,
+            "maximum": 100,
+            "default": 100,
+            "description": "Number of recall candidates sent to the rerank model."
           },
           "filters": {
             "$ref": "#/components/schemas/SearchFilter"

@@ -11,33 +11,22 @@ import {
   ExternalLinkIcon,
   LockIcon,
 } from '@chakra-ui/icons';
-import { Spinner } from '@chakra-ui/react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useRef, useState, type DragEvent, type FormEvent } from 'react';
 import {
-  addCollaborator,
   batchSpaces,
   connectConnector,
   deleteSpace,
   exportSpace,
-  getAcl,
-  listCollaborators,
   moveSpace,
   productApi,
   productSession,
-  removeCollaborator,
   updateModelBindings,
   updateSpace,
 } from './api';
-import type {
-  Acl,
-  BatchResult,
-  Collaborator,
-  KnowledgeSpace,
-  ModelBinding,
-  PermissionLevel,
-} from './types';
+import type { BatchResult, KnowledgeSpace, ModelBinding, PermissionLevel } from './types';
 import { ProductAppShell } from './shell';
+import { CollaboratorManagerDialog } from './collaborator-manager';
 import {
   ProductButton,
   ProductCheckbox,
@@ -1654,223 +1643,24 @@ export function DatasetListPage(props: { parentId: string }) {
 }
 
 function PermissionDialog(props: { target: KnowledgeSpace | null; onClose: () => void }) {
-  const toast = useProductToast();
   const queryClient = useQueryClient();
-  const [memberId, setMemberId] = useState('');
-  const [role, setRole] = useState<'read' | 'write' | 'manage'>('read');
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<unknown>(null);
-  const [transferOpen, setTransferOpen] = useState(false);
-  const [transferMemberId, setTransferMemberId] = useState('');
-  const session = useQuery({
-    queryKey: ['kb-product', 'session'],
-    queryFn: productSession,
-    enabled: Boolean(props.target),
-  });
-  const currentSpace = useQuery({
-    queryKey: ['kb-product', 'space', props.target?.id],
-    queryFn: () => productApi.getSpace(props.target!.id),
-    enabled: Boolean(props.target),
-  });
-  const collaborators = useQuery({
-    queryKey: ['kb-product', 'collaborators', props.target?.id],
-    queryFn: () => listCollaborators(props.target!.id),
-    enabled: Boolean(props.target),
-  });
-  const acl = useQuery<Acl>({
-    queryKey: ['kb-product', 'acl', 'space', props.target?.id],
-    queryFn: () => getAcl('space', props.target!.id),
-    enabled: Boolean(props.target),
-  });
-
-  useEffect(() => {
-    setMemberId('');
-    setRole('read');
-    setError(null);
-    setTransferOpen(false);
-    setTransferMemberId('');
-  }, [props.target]);
-
-  const add = async (event: FormEvent) => {
-    event.preventDefault();
-    if (!props.target || !memberId.trim()) return;
-    setBusy(true);
-    setError(null);
-    try {
-      await addCollaborator(props.target.id, { memberId: memberId.trim(), role });
-      await Promise.all([
-        collaborators.refetch(),
-        acl.refetch(),
-        currentSpace.refetch(),
-        queryClient.invalidateQueries({ queryKey: ['kb-product', 'spaces'] }),
-      ]);
-      setMemberId('');
-      toast.success('协作者已添加');
-    } catch (caught) {
-      setError(caught);
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const remove = async (item: Collaborator) => {
-    if (!props.target) return;
-    setBusy(true);
-    setError(null);
-    try {
-      await removeCollaborator(props.target.id, item);
-      await Promise.all([collaborators.refetch(), acl.refetch()]);
-      toast.success('协作者已移除');
-    } catch (caught) {
-      setError(caught);
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const transfer = async () => {
-    if (!props.target || !transferMemberId || !currentSpace.data) return;
-    setBusy(true);
-    setError(null);
-    try {
-      await productApi.transferSpaceOwnership(
-        props.target.id,
-        transferMemberId,
-        currentSpace.data.version,
-      );
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ['kb-product', 'spaces'] }),
-        queryClient.invalidateQueries({ queryKey: ['kb-product', 'space', props.target.id] }),
-        queryClient.invalidateQueries({
-          queryKey: ['kb-product', 'collaborators', props.target.id],
-        }),
-        queryClient.invalidateQueries({
-          queryKey: ['kb-product', 'acl', 'space', props.target.id],
-        }),
-      ]);
-      toast.success('所有权已转移');
-      props.onClose();
-    } catch (caught) {
-      setError(caught);
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const ownerId = currentSpace.data?.ownershipMemberId ?? props.target?.ownershipMemberId;
-  const canTransfer =
-    Boolean(session.data) && (session.data!.isWorkspaceOwner || session.data!.memberId === ownerId);
-  const transferCandidates = (collaborators.data?.items ?? []).filter(
-    (item) => item.status === 'active' && item.role === 'manage' && item.memberId !== ownerId,
-  );
-
   return (
-    <ProductModal
-      open={Boolean(props.target)}
-      title="权限配置"
-      description={props.target?.name}
-      onClose={() => !busy && props.onClose()}
-    >
-      <ProductError error={error ?? collaborators.error ?? acl.error} />
-      <div className="kb2-note">
-        ACL 状态：
-        {acl.data
-          ? `${acl.data.permissionState} / ${acl.data.inheritMode}，权限版本 ${acl.data.permissionRevision}`
-          : '正在读取'}
-      </div>
-      <div className="kb2-divider" />
-      <form className="kb2-permission-add" onSubmit={add}>
-        <ProductField label="成员 ID">
-          <ProductInput
-            value={memberId}
-            onChange={(event) => setMemberId(event.target.value)}
-            placeholder="输入成员标识"
-          />
-        </ProductField>
-        <ProductField label="角色">
-          <ProductSelect
-            value={role}
-            onChange={(event) => setRole(event.target.value as typeof role)}
-          >
-            <option value="read">只读</option>
-            <option value="write">可写</option>
-            <option value="manage">可管理</option>
-          </ProductSelect>
-        </ProductField>
-        <ProductButton type="submit" tone="primary" busy={busy} disabled={!memberId.trim()}>
-          添加
-        </ProductButton>
-      </form>
-      <div className="kb2-permission-list">
-        <h3>协作者</h3>
-        {collaborators.isLoading ? (
-          <div className="kb2-center-state">
-            <Spinner size="sm" /> 正在读取协作者
-          </div>
-        ) : (collaborators.data?.items ?? []).filter((item) => item.status === 'active').length ===
-          0 ? (
-          <div className="kb2-center-state">暂时没有独立协作者</div>
-        ) : (
-          (collaborators.data?.items ?? [])
-            .filter((item) => item.status === 'active')
-            .map((item) => (
-              <div className="kb2-permission-row" key={item.memberId}>
-                <span>
-                  <strong>{item.memberId}</strong>
-                  <small>授予于 {formatDate(item.grantedAt)}</small>
-                </span>
-                <StatusTag value={item.role} tone={item.role === 'owner' ? 'purple' : 'info'} />
-                <ProductIconButton
-                  label={`移除协作者 ${item.memberId}`}
-                  tone="danger"
-                  onClick={() => void remove(item)}
-                >
-                  <DeleteIcon boxSize={3.5} />
-                </ProductIconButton>
-              </div>
-            ))
-        )}
-      </div>
-      {canTransfer ? (
-        <div className="kb2-permission-transfer">
-          <ProductButton
-            tone="danger"
-            aria-expanded={transferOpen}
-            onClick={() => setTransferOpen((value) => !value)}
-          >
-            转移所有权
-          </ProductButton>
-          {transferOpen ? (
-            <div className="kb2-form-grid">
-              <ProductField label="新所有者">
-                <ProductSelect
-                  value={transferMemberId}
-                  onChange={(event) => setTransferMemberId(event.target.value)}
-                  disabled={transferCandidates.length === 0}
-                >
-                  <option value="">
-                    {transferCandidates.length === 0 ? '暂无满足条件的协作者' : '选择可管理协作者'}
-                  </option>
-                  {transferCandidates.map((item) => (
-                    <option key={item.memberId} value={item.memberId}>
-                      {item.memberId}
-                    </option>
-                  ))}
-                </ProductSelect>
-              </ProductField>
-              <p className="kb2-table-muted">转移后您的 Owner 权限不会保留。</p>
-              <ProductButton
-                tone="danger"
-                busy={busy}
-                disabled={!transferMemberId}
-                onClick={() => void transfer()}
-              >
-                确认转移所有权
-              </ProductButton>
-            </div>
-          ) : null}
-        </div>
-      ) : null}
-    </ProductModal>
+    <CollaboratorManagerDialog
+      target={
+        props.target
+          ? {
+              kind: 'space',
+              id: props.target.id,
+              name: props.target.name,
+              version: props.target.version,
+            }
+          : null
+      }
+      space={props.target ?? undefined}
+      onClose={props.onClose}
+      onChanged={() => {
+        void queryClient.invalidateQueries({ queryKey: ['kb-product', 'spaces'] });
+      }}
+    />
   );
 }

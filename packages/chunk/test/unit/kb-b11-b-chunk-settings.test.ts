@@ -65,7 +65,7 @@ describe('L1-B11-B-PARSE-003 settings and boundaries', () => {
   it('L1-B11-B-PARSE-003-N01/N02 rejects illegal sizes, overlap and trigger combinations', () => {
     for (const invalid of [
       policy({ chunkSize: 63 }),
-      policy({ chunkSize: 8001 }),
+      policy({ chunkSize: 100_001 }),
       policy({ minSize: 513, chunkSize: 512 }),
       policy({ overlapRatio: -0.01 }),
       policy({ overlapRatio: 1 }),

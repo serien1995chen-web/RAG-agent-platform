@@ -210,6 +210,7 @@ const SearchRequestObject = z.object({
   usingRerank: z.boolean().default(false),
   rerankWeight: z.number().min(0).max(1).default(0.5),
   rerankModelId: z.string().min(1).max(256).optional(),
+  rerankCandidateNum: z.number().int().min(10).max(100).optional(),
   queryOptimizationEnabled: z.boolean().default(false),
   queryOptimizationModelId: z.string().min(1).max(256).optional(),
   queryOptimizationPrompt: z.string().max(20_000).optional(),
@@ -536,6 +537,7 @@ export function toPipelineSearchRequest(
     limit: context.limit ?? 10,
     maxTokens: request.tokenBudget,
     similarity: request.similarity,
+    rerankCandidateNum: request.rerankCandidateNum,
     weights: {
       embedding: request.embeddingWeight,
       rerank: request.rerankWeight,

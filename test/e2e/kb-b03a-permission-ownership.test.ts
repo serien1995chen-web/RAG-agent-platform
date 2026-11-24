@@ -14,6 +14,7 @@ const ownerMemberId = `mem_b03a_owner_${suffix}`;
 const viewerMemberId = `mem_b03a_viewer_${suffix}`;
 const ownerToken = `b03a-owner-${suffix}`;
 const viewerToken = `b03a-viewer-${suffix}`;
+const transferTargetMemberId = `mem_b03a_target_${suffix}`;
 
 let ownerApp: S4AppHarness;
 let viewerApp: S4AppHarness;
@@ -114,8 +115,8 @@ async function openSourcePermission(
     waitUntil: 'networkidle',
   });
   await page.getByRole('button', { name: `${sourceName} 的更多操作` }).click();
-  await page.getByRole('menuitem', { name: 'Source 权限' }).click();
-  await playwrightExpect(page.getByRole('dialog', { name: '权限配置' })).toBeVisible();
+  await page.getByRole('menuitem', { name: '权限' }).click();
+  await playwrightExpect(page.getByRole('dialog', { name: '管理协作者' })).toBeVisible();
 }
 
 beforeAll(async () => {
@@ -133,6 +134,7 @@ beforeAll(async () => {
     workspaceId,
     memberId: ownerMemberId,
     authToken: ownerToken,
+    workspaceMemberIds: [viewerMemberId, transferTargetMemberId],
   });
   viewerApp = await startS4App({
     suffix: `b03a-viewer-${suffix}`,
@@ -174,38 +176,20 @@ describe('B03A ACL and ownership desktop behavior', () => {
     try {
       await openSourcePermission(page, spaceId, sourceName);
       await capture('L1-B03-COL-004-UI01', page, async () => {
-        for (const step of [
-          { button: '启用 Source 权限', endpoint: 'enable', state: 'inherited / inherit' },
-          {
-            button: '解除继承',
-            endpoint: 'detach',
-            state: 'independent / override',
-            confirm: true,
-          },
-          { button: '恢复继承', endpoint: 'resume-inherit', state: 'inherited / inherit' },
-          {
-            button: '关闭 Source 权限',
-            endpoint: 'disable',
-            state: 'disabled / inherit',
-            confirm: true,
-          },
-        ]) {
-          const response = page.waitForResponse(
-            (item) =>
-              item.request().method() === 'POST' &&
-              new URL(item.url()).pathname ===
-                `/v1/knowledge/sources/${source.payload.data?.id}/permissions/${step.endpoint}`,
-          );
-          await page.getByRole('button', { name: step.button }).click();
-          if ('confirm' in step && step.confirm) {
-            await page
-              .getByRole('dialog', { name: '确认权限变更' })
-              .getByRole('button', { name: '确认' })
-              .click();
-          }
-          expect((await response).status(), step.button).toBe(200);
-          await playwrightExpect(page.getByText(step.state, { exact: false })).toBeVisible();
-        }
+        const dialog = page.getByRole('dialog', { name: '管理协作者' });
+        await playwrightExpect(dialog.getByText(/ACL 状态|ACL：|权限版本|主体 ID/)).toHaveCount(0);
+        await dialog.getByRole('button', { name: '成员' }).click();
+        await dialog.getByRole('button', { name: viewerMemberId }).click();
+        await dialog.getByLabel(`${viewerMemberId} 的角色`).selectOption('read');
+        const saved = page.waitForResponse(
+          (item) =>
+            item.request().method() === 'PUT' &&
+            new URL(item.url()).pathname ===
+              `/v1/knowledge/resources/source/${source.payload.data?.id}/acl`,
+        );
+        await dialog.getByRole('button', { name: '确认', exact: true }).click();
+        expect((await saved).status()).toBe(200);
+        await playwrightExpect(dialog).toHaveCount(0);
         expect(consoleErrors).toEqual([]);
       });
     } finally {
@@ -214,41 +198,31 @@ describe('B03A ACL and ownership desktop behavior', () => {
     }
   });
 
-  it('L1-B03-COL-004-UI02 keeps the permission dialog and shows a recoverable conflict', async () => {
+  it('L1-B03-COL-004-UI02 keeps collaborator cancellation free of writes', async () => {
     const { context, page } = await newPage(ownerCookie);
     const name = `ACL error UI ${suffix}`;
     const sourceName = `ACL error source ${suffix}`;
     const space = await createSpace(name);
     const spaceId = space.payload.data?.id ?? '';
-    const source = await createTextSource(spaceId, sourceName);
+    await createTextSource(spaceId, sourceName);
     try {
       await openSourcePermission(page, spaceId, sourceName);
-      await page.route(
-        `**/v1/knowledge/sources/${source.payload.data?.id}/permissions/enable`,
-        (route) =>
-          route.fulfill({
-            status: 409,
-            contentType: 'application/json',
-            body: JSON.stringify({
-              success: false,
-              error: {
-                code: 'KNOWLEDGE_CONFLICT',
-                message: 'conflict',
-                retryable: true,
-                details: {},
-              },
-              traceId: `trace-b03a-${suffix}`,
-              requestId: `request-b03a-${suffix}`,
-            }),
-          }),
-      );
-      await page.getByRole('button', { name: '启用 Source 权限' }).click();
+      let writes = 0;
+      page.on('request', (request) => {
+        if (
+          request.method() !== 'GET' &&
+          new URL(request.url()).pathname.startsWith('/v1/knowledge/')
+        ) {
+          writes += 1;
+        }
+      });
+      const dialog = page.getByRole('dialog', { name: '管理协作者' });
+      await dialog.getByRole('button', { name: '成员' }).click();
+      await dialog.getByRole('button', { name: viewerMemberId }).click();
+      await dialog.getByRole('button', { name: '取消' }).click();
       await capture('L1-B03-COL-004-UI02', page, async () => {
-        const dialog = page.getByRole('dialog', { name: '权限配置' });
-        await playwrightExpect(dialog).toBeVisible();
-        await playwrightExpect(dialog.getByRole('alert')).toContainText(
-          '数据已被其他操作更新，请刷新后重试。',
-        );
+        expect(writes).toBe(0);
+        await playwrightExpect(dialog).toHaveCount(0);
       });
     } finally {
       await context.close();
@@ -282,7 +256,7 @@ describe('B03A ACL and ownership desktop behavior', () => {
   it('L1-B03-AUTH-004-UI01 transfers ownership and refreshes the visible owner', async () => {
     const { context, page } = await newPage(ownerCookie);
     const name = `Ownership UI ${suffix}`;
-    const targetMemberId = `mem_b03a_target_${suffix}`;
+    const targetMemberId = transferTargetMemberId;
     const space = await createSpace(name);
     const spaceId = space.payload.data?.id ?? '';
     await api(`/v1/knowledge/spaces/${spaceId}/collaborators`, 'POST', {

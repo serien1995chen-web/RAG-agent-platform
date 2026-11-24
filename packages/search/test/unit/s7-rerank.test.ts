@@ -55,6 +55,39 @@ describe('TEST-SEARCH-004-BLOCK rerank ranked-list RRF', () => {
     expect(full.stats.rerankApplied).toBe(true);
   });
 
+  it('limits rerank input to rerankCandidateNum and defaults to 100', async () => {
+    const seen: number[] = [];
+    const run = (rerankCandidateNum?: number) =>
+      createSearchEngine(
+        deps({
+          vectors: {
+            embRecall: async () =>
+              Array.from({ length: 120 }, (_, index) => ({
+                segmentId: `seg-${index}`,
+                sourceId: `source-${index}`,
+                indexId: `index-${index}`,
+                score: 1 - index / 1000,
+              })),
+          },
+          rerank: {
+            rerank: async ({ items }) => {
+              seen.push(items.length);
+              return items.map((item) => ({ id: item.id, score: item.score }));
+            },
+          },
+        }),
+      ).search(
+        {
+          ...request(),
+          ...(rerankCandidateNum === undefined ? {} : { rerankCandidateNum }),
+        },
+        context,
+      );
+    await run();
+    await run(30);
+    expect(seen).toEqual([100, 30]);
+  });
+
   it('keeps original order and reports degraded on rerank timeout', async () => {
     const result = await createSearchEngine(
       deps({

@@ -21,6 +21,7 @@ export {
 } from '@chakra-ui/icons';
 export {
   ensureConsoleSession,
+  ensureConsoleDirectory,
   knowledgeBinaryRequest,
   knowledgeRequest,
   KnowledgeRequestError,
@@ -47,6 +48,11 @@ export type {
   UploadSession,
 } from './client/file-upload';
 export type { ConsoleSession } from './client/knowledge-client';
+export type {
+  ConsoleDirectory,
+  ConsoleDirectoryMember,
+  ConsoleDirectoryUnit,
+} from './client/knowledge-client';
 export {
   apiKeysPath,
   auditPath,

@@ -8,15 +8,15 @@
     "observedVersion": "4.0",
     "versionEvidenceMismatch": false,
     "keyFiles": {
-      "projects/app/package.json": "125a9378b939b2cf0cd7412ea976448dc7fb619336888ff9ac0d41b3624b231a",
-      "packages/global/core/dataset/search/utils.ts": "5f806553ffeb926bb059f8249265d8e4c7249f9d51faa0bbf1ad63380caa85fd",
-      "packages/service/core/dataset/search/defaultRecall/index.ts": "1212a3ca8b2abaf0b4fd2a52844d57c975b708db7425e733cd72a24bcde17dd5",
-      "packages/service/core/dataset/search/defaultRecall/result.ts": "d9798cd2a95c325c9d06d680bd9fe7dfb9cdd49fd05d9756ef7b04f6ff616d74",
+    "projects/app/package.json": "8bc9ba7dd4dae3f3f5e7c02476312f19bb40b9a0d78b9619839e247c2b10e021",
+    "packages/global/core/dataset/search/utils.ts": "b1cbfea25efd251555bb521dde64eead676521655ad9a391625b81e5f610157a",
+    "packages/service/core/dataset/search/defaultRecall/index.ts": "7cefb3af4f7c5b68d11cffcedc5b62bf5f3ef824072d3672a6dde722094e9b8a",
+    "packages/service/core/dataset/search/defaultRecall/result.ts": "e637a5c705648ff13c1c1a0cff519b81eb722c0585045673678a25bbe86f5e80",
       "packages/service/core/workflow/dispatch/dataset/concat.ts": "35c151d6887bb78f564dfbb006504dd44ac10a4abfb09cb43a8112498d1173ca",
-      "packages/service/core/workflow/dispatch/dataset/search.ts": "9195d5eab514c439ef5254a88f2b86f64a901a173fd06df78b19e3086d4bbee8",
-      "packages/service/core/workflow/dispatch/ai/chat/datasetCite.ts": "32eda8ca4cfdad09e8762dd94b28fa7ecc37625b826d3e59d2c22607c4debce2",
-      "packages/global/core/dataset/type.ts": "c588d9967616cafdc025351b37a6134a5d8985fbc84dc19a49a8348480fc4d26",
-      "projects/app/src/components/core/dataset/QuoteItem.tsx": "3863c8b70d77395abcbbc99a11376897232b5457d6482e35589d0becfed3c350",
+    "packages/service/core/workflow/dispatch/dataset/search.ts": "920d9e520eae8c1e733b74672104508b1ce2bff414a2cdff7e72e2f3343b4245",
+    "packages/service/core/workflow/dispatch/ai/chat/datasetCite.ts": "013b97b09680a69523fe65eaf55e303913afaa3e1d42768e27138467a7d4c5f4",
+    "packages/global/core/dataset/type.ts": "5b64f6287e749e5014f45447ddb97966ecb586eb0eba8dae06a52fa5a02036cb",
+    "projects/app/src/components/core/dataset/QuoteItem.tsx": "6a8f4686d4823bac474fd4afadc75cc48f202ca1620fab8c4a710e6f7b2e0470",
       "projects/app/src/pageComponents/dataset/detail/Test/components/TestResults.tsx": "1a0de0c3914f302d95c0bd8b616e8a45a0cfb6a46023eb0eda3691993ac51cc3"
     }
   },

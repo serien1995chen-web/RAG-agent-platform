@@ -23,6 +23,7 @@ export interface KnowledgeSpace {
   accessMode: 'workspace' | 'restricted';
   sourceAclMode: 'inherited' | 'enforced';
   sourcePermissionEnabled: boolean;
+  autoSync: boolean;
   effectivePermission?: PermissionLevel;
   modelBindings?: Record<string, unknown>;
   referenceRevision: number;
@@ -189,6 +190,12 @@ export interface Model {
   displayName: string;
   type: 'llm' | 'embedding' | 'rerank' | 'vlm' | 'stt' | 'tts';
   capabilities: string[];
+  limits?: {
+    maxToken?: number;
+    defaultToken?: number;
+    maxContext?: number;
+    maxResponse?: number;
+  };
   authorized: boolean;
 }
 

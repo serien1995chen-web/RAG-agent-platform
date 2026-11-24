@@ -2,7 +2,9 @@
 
 import {
   KnowledgeRequestError,
+  ensureConsoleDirectory,
   knowledgeRequest,
+  type ConsoleDirectory,
   type ConsoleSession,
   ensureConsoleSession,
 } from '../client/knowledge-client';
@@ -74,6 +76,10 @@ export function productSession(): Promise<ConsoleSession> {
   return ensureConsoleSession();
 }
 
+export function productDirectory(): Promise<ConsoleDirectory> {
+  return ensureConsoleDirectory();
+}
+
 export function productErrorView(error: unknown): {
   code: string;
   message: string;
@@ -137,6 +143,7 @@ export function createSpace(input: {
   accessMode?: 'workspace' | 'restricted';
   sourceAclMode?: 'inherited' | 'enforced';
   sourcePermissionEnabled?: boolean;
+  autoSync?: boolean;
 }) {
   return knowledgeRequest<KnowledgeSpace>('/v1/knowledge/spaces', {
     method: 'POST',
@@ -150,6 +157,7 @@ export function createSpace(input: {
       accessMode: input.accessMode ?? 'workspace',
       sourceAclMode: input.sourceAclMode ?? 'inherited',
       sourcePermissionEnabled: input.sourcePermissionEnabled ?? true,
+      autoSync: input.autoSync ?? false,
     },
   });
 }
@@ -427,6 +435,21 @@ export function updateAcl(
   );
 }
 
+export function resumeAcl(
+  resourceType: 'directory' | 'source',
+  resourceId: string,
+  version: number,
+) {
+  return knowledgeRequest<Acl>(
+    `/v1/knowledge/resources/${resourceType}/${encodeURIComponent(resourceId)}/resume-inheritance`,
+    {
+      method: 'POST',
+      idempotencyKey: key(),
+      body: { version },
+    },
+  );
+}
+
 export function previewSource(sourceId: string) {
   return knowledgeRequest<{ sections: Array<{ title?: string; text: string; page?: number }> }>(
     `/v1/knowledge/sources/${encodeURIComponent(sourceId)}/preview`,
@@ -598,7 +621,9 @@ export function createTag(
 
 export function updateTag(
   tag: Tag,
-  input: Partial<Pick<Tag, 'label' | 'required' | 'options' | 'status'>>,
+  input: Partial<Pick<Tag, 'label' | 'required' | 'options' | 'status'>> & {
+    renames?: Array<{ from: string; to: string }>;
+  },
 ) {
   return knowledgeRequest<Tag>(`/v1/knowledge/tags/${encodeURIComponent(tag.id)}`, {
     method: 'PATCH',
@@ -846,6 +871,33 @@ export function importFiles(
         parseProvider: input.parseProvider ?? 'liteparse',
         parseConfig: input.parseConfig ?? {},
         chunking: input.chunking,
+      },
+    },
+  );
+}
+
+export function previewImportFile(
+  spaceId: string,
+  input: {
+    uploadId: string;
+    directoryId?: string | null;
+    parseProvider?: string;
+    parseConfig?: Record<string, unknown>;
+    chunking: Record<string, unknown>;
+  },
+) {
+  return knowledgeRequest<ImportTextPreview>(
+    `/v1/knowledge/spaces/${encodeURIComponent(spaceId)}/imports/files`,
+    {
+      method: 'POST',
+      idempotencyKey: key(),
+      body: {
+        uploadIds: [input.uploadId],
+        directoryId: input.directoryId ?? null,
+        parseProvider: input.parseProvider ?? 'liteparse',
+        parseConfig: input.parseConfig ?? {},
+        chunking: input.chunking,
+        dryRun: true,
       },
     },
   );
@@ -1206,6 +1258,7 @@ export const productApi = {
   searchImage,
   searchDeep,
   importFiles,
+  previewImportFile,
   importImageDataset,
   importText,
   importUrl,

@@ -26,7 +26,7 @@ export const DEFAULT_CHUNK_POLICY: ChunkPolicy = {
   mode: 'auto',
   chunkSize: 1000,
   minSize: 100,
-  maxSize: 8000,
+  maxSize: 100_000,
   overlapRatio: 0.2,
   paragraphDeep: 5,
   customRegs: [],

@@ -117,6 +117,14 @@ async function createJob(kind: string, key: string) {
 }
 
 beforeAll(async () => {
+  process.env.KB_TEST_MONGO_URI ??= 'mongodb://127.0.0.1:27017/kb_b13a_jobs?replicaSet=rs0';
+  process.env.KB_TEST_REDIS_URL ??= 'redis://127.0.0.1:6379/0';
+  process.env.KB_TEST_PG_URL ??= 'postgresql://kb:kb_dev_password@127.0.0.1:5432/kb';
+  process.env.KB_TEST_S3_ENDPOINT ??= 'http://127.0.0.1:9000';
+  process.env.KB_TEST_S3_REGION ??= 'us-east-1';
+  process.env.KB_TEST_S3_BUCKET ??= 'kb-local';
+  process.env.KB_TEST_S3_ACCESS_KEY ??= 'minioadmin';
+  process.env.KB_TEST_S3_SECRET_KEY ??= 'minioadmin';
   await mkdir(resultDir, { recursive: true });
   app = await startS4App({ suffix, workspaceId, memberId, authToken });
   connections = await createKnowledgeConnections({
@@ -430,7 +438,7 @@ describe('B13-A Job API and UI', () => {
     }
   });
 
-  it('L1-B13-A-TRAIN-001-UI01 exposes the Jobs task center with status and progress', async () => {
+  it('L1-B13-A-TRAIN-001-UI01 routes the removed Jobs center back to source status', async () => {
     const context = await browser.newContext({
       viewport: { width: 1440, height: 900 },
       locale: 'zh-CN',
@@ -444,9 +452,9 @@ describe('B13-A Job API and UI', () => {
         waitUntil: 'networkidle',
       });
       expect(response?.status()).toBe(200);
-      await playwrightExpect(page.getByRole('heading', { name: '任务中心' })).toBeVisible();
-      await playwrightExpect(page.getByLabel('任务概览')).toBeVisible();
-      await playwrightExpect(page.getByLabel('任务列表')).toBeVisible();
+      await page.waitForURL(/\/dataset\/detail/);
+      await playwrightExpect(page.getByText('任务中心')).toHaveCount(0);
+      await playwrightExpect(page.locator('.kb2-status-button').first()).toBeVisible();
       const accessibility = await new AxeBuilder({ page }).analyze();
       expect(
         accessibility.violations.filter(

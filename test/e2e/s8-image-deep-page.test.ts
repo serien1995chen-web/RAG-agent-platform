@@ -80,6 +80,14 @@ async function request(path: string, input: B12ImageDeepRequest = {}) {
 }
 
 beforeAll(async () => {
+  process.env.KB_TEST_MONGO_URI ??= 'mongodb://127.0.0.1:27017/kb_s8_page?replicaSet=rs0';
+  process.env.KB_TEST_REDIS_URL ??= 'redis://127.0.0.1:6379/0';
+  process.env.KB_TEST_PG_URL ??= 'postgresql://kb:kb_dev_password@127.0.0.1:5432/kb';
+  process.env.KB_TEST_S3_ENDPOINT ??= 'http://127.0.0.1:9000';
+  process.env.KB_TEST_S3_REGION ??= 'us-east-1';
+  process.env.KB_TEST_S3_BUCKET ??= 'kb-local';
+  process.env.KB_TEST_S3_ACCESS_KEY ??= 'minioadmin';
+  process.env.KB_TEST_S3_SECRET_KEY ??= 'minioadmin';
   fixture = await startB12ImageDeepHarness();
   ({
     suffix,
@@ -345,7 +353,7 @@ describe('S8 real app image and deep search routes', () => {
           waitUntil: 'networkidle',
         });
         await playwrightExpect(
-          page.getByRole('heading', { level: 2, name: '搜索测试' }),
+          page.getByRole('heading', { level: 2, name: '输入测试内容' }),
         ).toBeVisible();
         const uploadResponsePromise = page.waitForResponse(
           (response) =>
@@ -360,9 +368,11 @@ describe('S8 real app image and deep search routes', () => {
         const uploadedSession = (await uploadResponse.json()) as {
           data: { uploadId: string };
         };
-        await playwrightExpect(page.getByRole('button', { name: '开始测试' })).toBeEnabled({
-          timeout: 30_000,
-        });
+        await playwrightExpect(page.getByRole('button', { name: '测试', exact: true })).toBeEnabled(
+          {
+            timeout: 30_000,
+          },
+        );
         const uploadedObject = await connection.models.KnowledgeObjectRef.findOne({
           workspaceId,
           _id: new connection.base.Types.ObjectId(uploadedSession.data.uploadId),
@@ -384,7 +394,7 @@ describe('S8 real app image and deep search routes', () => {
             response.request().method() === 'POST' &&
             new URL(response.url()).pathname === '/v1/knowledge/search/image',
         );
-        await page.getByRole('button', { name: '开始测试' }).click();
+        await page.getByRole('button', { name: '测试', exact: true }).click();
         const response = await responsePromise;
         statuses.push(response.status());
         if (!response.ok()) {

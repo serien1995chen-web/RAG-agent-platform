@@ -128,22 +128,22 @@ export function validateChunkingSettings(
     issues.push({ path: 'paragraphChunkAIMode', message: 'unsupported value' });
   }
   if (input.chunkTriggerMinSize !== undefined) {
-    integerInRange(input.chunkTriggerMinSize, 'chunkTriggerMinSize', 1, 8_000, issues);
+    integerInRange(input.chunkTriggerMinSize, 'chunkTriggerMinSize', 1, 100_000, issues);
   }
   if (input.paragraphChunkDeep !== undefined) {
-    integerInRange(input.paragraphChunkDeep, 'paragraphChunkDeep', 0, 5, issues);
+    integerInRange(input.paragraphChunkDeep, 'paragraphChunkDeep', 0, 8, issues);
   }
   if (input.paragraphChunkMinSize !== undefined) {
-    integerInRange(input.paragraphChunkMinSize, 'paragraphChunkMinSize', 1, 8_000, issues);
+    integerInRange(input.paragraphChunkMinSize, 'paragraphChunkMinSize', 1, 100_000, issues);
   }
   if (input.chunkSize !== undefined) {
-    integerInRange(input.chunkSize, 'chunkSize', 64, 8_000, issues);
+    integerInRange(input.chunkSize, 'chunkSize', 64, 100_000, issues);
   }
   if (input.overlap !== undefined) {
-    integerInRange(input.overlap, 'overlap', 0, 8_000, issues);
+    integerInRange(input.overlap, 'overlap', 0, 100_000, issues);
   }
   if (input.indexSize !== undefined) {
-    integerInRange(input.indexSize, 'indexSize', 1, 8_000, issues);
+    integerInRange(input.indexSize, 'indexSize', 1, 8_192, issues);
   }
   if (input.chunkSettingMode === 'custom' && input.chunkSize === undefined) {
     issues.push({ path: 'chunkSize', message: 'required in custom mode' });

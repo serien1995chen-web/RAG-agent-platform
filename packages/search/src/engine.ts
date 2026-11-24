@@ -384,11 +384,13 @@ export function createSearchEngine(
     let rerankApplied = false;
     let rerankInputTokens = 0;
     if (request.models.rerankModel && candidates.length > 0) {
-      const rerankItems = candidates.slice(0, 100).map((candidate) => ({
-        id: candidate.docId,
-        text: visibleTextOf(candidate),
-        score: candidate.score,
-      }));
+      const rerankItems = candidates
+        .slice(0, request.rerankCandidateNum ?? 100)
+        .map((candidate) => ({
+          id: candidate.docId,
+          text: visibleTextOf(candidate),
+          score: candidate.score,
+        }));
       rerankInputTokens = countTokens(rerankItems.map((item) => item.text).join(' '));
       if (!deps.rerank) {
         degraded.push({ stage: 'rerank', reason: 'rerank_not_configured' });

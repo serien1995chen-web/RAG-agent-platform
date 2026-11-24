@@ -13,17 +13,20 @@ import type {
   KnowledgeConnectorDoc,
   KnowledgeConnectorScheduleDoc,
 } from '../../../shared/persistence/schemas/knowledge-connector.schemas';
+import type { KnowledgeSpaceDoc } from '../../../shared/persistence/schemas/knowledge-catalog.schemas';
 
 type Plain<T> = T & { _id: Types.ObjectId };
 
 export class KnowledgeConnectorScheduleRepository implements S10ConnectorScheduleRepositoryPort {
   private readonly connectors: Model<KnowledgeConnectorDoc>;
   private readonly schedules: Model<KnowledgeConnectorScheduleDoc>;
+  private readonly spaces: Model<KnowledgeSpaceDoc>;
 
   constructor(connection: Connection) {
     const models = registerKnowledgeModels(connection);
     this.connectors = models.KnowledgeConnector;
     this.schedules = models.KnowledgeConnectorSchedule;
+    this.spaces = models.KnowledgeSpace as Model<KnowledgeSpaceDoc>;
   }
 
   async listWorkspaceIds(): Promise<string[]> {
@@ -41,7 +44,7 @@ export class KnowledgeConnectorScheduleRepository implements S10ConnectorSchedul
     now: Date,
   ): Promise<{ inserted: number; removed: number }> {
     const workspaceId = requireWorkspaceId(context);
-    const [connectors, schedules] = await Promise.all([
+    const [connectors, schedules, spaces] = await Promise.all([
       this.connectors
         .find({ workspaceId, deletedAt: null })
         .select({
@@ -63,7 +66,14 @@ export class KnowledgeConnectorScheduleRepository implements S10ConnectorSchedul
       this.schedules
         .find({ workspaceId, deletedAt: null })
         .lean<Plain<KnowledgeConnectorScheduleDoc>[]>(),
+      this.spaces
+        .find({ workspaceId, deletedAt: null })
+        .select({ _id: 1, autoSync: 1 })
+        .lean<Array<Plain<KnowledgeSpaceDoc>>>(),
     ]);
+    const autoSyncBySpace = new Map(
+      spaces.map((space) => [String(space._id), space.autoSync !== false]),
+    );
     const scheduleByConnector = new Map(
       schedules.map((schedule) => [String(schedule.connectorId), schedule]),
     );
@@ -74,7 +84,10 @@ export class KnowledgeConnectorScheduleRepository implements S10ConnectorSchedul
     for (const connector of connectors) {
       const connectorId = String(connector._id);
       const eligible =
-        connector.syncEnabled && connector.status === 'active' && connector.nextSyncAt !== null;
+        autoSyncBySpace.get(String(connector.knowledgeSpaceId)) === true &&
+        connector.syncEnabled &&
+        connector.status === 'active' &&
+        connector.nextSyncAt !== null;
       if (!eligible) continue;
       eligibleConnectorIds.add(connectorId);
       const existing = scheduleByConnector.get(connectorId);

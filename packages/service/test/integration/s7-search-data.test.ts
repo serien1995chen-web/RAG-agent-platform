@@ -368,5 +368,9 @@ describe('TEST-SEARCH-001/002/005-BLOCK S7 Mongo data integration', () => {
       modelId: 'mock-embedding-1536',
       dimension: 1536,
     });
+    expect((await search.resolveModels(String(spaceId), true, context)).rerank).toEqual({
+      modelId: 'mock-rerank',
+      dimension: 768,
+    });
   });
 });
