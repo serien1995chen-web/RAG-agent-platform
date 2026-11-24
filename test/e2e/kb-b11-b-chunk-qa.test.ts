@@ -340,7 +340,7 @@ describe('L1-B11-B-PARSE-003/004 product chain', () => {
       .toHaveLength(1);
   });
 
-  it('L1-B11-B-PARSE-003-UI01/UI02 shows full chunk/QA controls at 360/768/1200 and passes axe', async () => {
+  it('L1-B11-B-PARSE-003-UI01/UI02 shows FastGPT grouped chunk/QA controls at 360/768/1200 and passes axe', async () => {
     const cookie = await consoleCookie({ baseUrl: app.baseUrl, authToken, workspaceId });
     for (const viewport of [
       { width: 360, height: 900 },
@@ -374,27 +374,19 @@ describe('L1-B11-B-PARSE-003/004 product chain', () => {
         await page.getByLabel('文本内容').fill('第一段\n\n第二段');
         await page.getByRole('button', { name: '下一步' }).click();
         const missingControls: string[] = [];
-        for (const name of [
-          '训练类型',
-          '切分方式',
-          '分块条件',
-          '段落 AI 模式',
-          '最大段落深度',
-          '最小分块长度',
-          '分隔符',
-          '重叠长度',
-          '索引大小',
-        ]) {
-          const control = page.getByLabel(name, { exact: false });
-          if ((await control.count()) === 0 || !(await control.first().isVisible())) {
+        for (const name of ['处理方式', '分块条件', '索引增强', '分块处理参数']) {
+          if ((await page.getByText(name, { exact: false }).count()) === 0) {
             missingControls.push(name);
           }
         }
         expect.soft(missingControls, `${viewport.width}px missing controls`).toEqual([]);
-        if (missingControls.length === 0) {
-          await page.getByLabel('训练类型').selectOption('qa');
-          await playwrightExpect(page.getByLabel(/QA Prompt/)).toBeVisible();
+        await page.getByRole('radio', { name: /自定义/ }).check();
+        for (const name of ['切分方式', '模型识别段落', '最大段落深度', '索引大小']) {
+          await playwrightExpect(page.getByText(name, { exact: false }).first()).toBeVisible();
         }
+        await playwrightExpect(page.getByLabel('最大段落深度')).toHaveAttribute('max', '8');
+        await page.getByRole('radio', { name: /问答对提取/ }).check();
+        await playwrightExpect(page.getByLabel(/QA Prompt/)).toBeVisible();
         const dimensions = await page.evaluate(() => ({
           scrollWidth: document.documentElement.scrollWidth,
           clientWidth: document.documentElement.clientWidth,

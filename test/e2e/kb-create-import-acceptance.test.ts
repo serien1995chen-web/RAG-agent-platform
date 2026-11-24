@@ -384,7 +384,7 @@ describe('FastGPT import entry compatibility', () => {
       await capture(page, 'text-file-selection-step');
 
       await playwrightExpect.soft(page.getByLabel('训练类型')).toHaveCount(0);
-      await playwrightExpect.soft(page.getByText('PDF增强解析', { exact: true })).toHaveCount(0);
+      await playwrightExpect.soft(page.getByText('PDF 增强解析', { exact: true })).toHaveCount(0);
       await playwrightExpect.soft(page.locator('input[type="file"]')).toHaveCount(1);
     } finally {
       await context.close();
@@ -408,15 +408,15 @@ describe('FastGPT import entry compatibility', () => {
       });
       await page.getByRole('button', { name: '下一步' }).click();
       await capture(page, 'text-parameter-step');
-      for (const text of ['PDF增强解析', '标题加入索引', '图片自动索引']) {
+      for (const text of ['PDF 增强解析', '将标题加入索引', '图片自动索引']) {
         await playwrightExpect.soft(page.getByText(text, { exact: true }).first()).toBeVisible();
       }
       await playwrightExpect
-        .soft(page.getByRole('option', { name: /分块存储|分段/ }).first())
-        .toBeAttached();
+        .soft(page.getByRole('radio', { name: /分块存储/ }).first())
+        .toBeVisible();
       await playwrightExpect
-        .soft(page.getByRole('option', { name: /问答对提取|问答对/ }).first())
-        .toBeAttached();
+        .soft(page.getByRole('radio', { name: /问答对提取/ }).first())
+        .toBeVisible();
       await playwrightExpect.soft(page.locator('input[value="1000"]').first()).toBeVisible();
       await page.getByRole('button', { name: '下一步' }).click();
       await capture(page, 'text-preview-step');

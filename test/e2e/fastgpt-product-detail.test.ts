@@ -249,7 +249,7 @@ describe('FastGPT product module 2 detail and collection', () => {
     await playwrightExpect(page.locator('.kb2-modal')).toHaveCount(0);
 
     await page.getByRole('button', { name: `子目录网页 ${suffix} 的更多操作` }).click();
-    await page.getByRole('menuitem', { name: 'Source 权限' }).click();
+    await page.getByRole('menuitem', { name: '权限' }).click();
     await playwrightExpect(page.getByRole('dialog', { name: '管理协作者' })).toBeVisible();
     await playwrightExpect(page.getByRole('button', { name: '成员' })).toBeVisible();
     await playwrightExpect(page.getByText(/ACL|权限版本|主体 ID/)).toHaveCount(0);

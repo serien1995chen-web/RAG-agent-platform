@@ -292,7 +292,7 @@ describe('L1-B11-A real import, parse, preview and segment chain', () => {
 });
 
 describe('L1-B11-A import settings UI', () => {
-  it('L1-B11-A-PARSE-002-UI04 exposes recoverable Provider, credential, fallback, image and timeout controls at three viewports', async () => {
+  it('L1-B11-A-PARSE-002-UI04 keeps provider and credential controls out of the FastGPT import flow', async () => {
     for (const viewport of [
       { width: 360, height: 800 },
       { width: 768, height: 1024 },
@@ -314,14 +314,11 @@ describe('L1-B11-A import settings UI', () => {
         timeout: 30_000,
       });
       await page.getByRole('button', { name: '下一步' }).click();
-      await playwrightExpect(page.getByText('解析器', { exact: true })).toBeVisible();
-      await page.getByLabel('解析器').selectOption('somark');
-      for (const label of ['凭据配置', '回退', '图片处理', '超时']) {
-        await playwrightExpect(page.getByText(label, { exact: true })).toBeVisible();
+      await playwrightExpect(page.getByText('文件解析设置', { exact: true })).toBeVisible();
+      await playwrightExpect(page.getByText('PDF 增强解析', { exact: true })).toBeVisible();
+      for (const label of ['解析器', '凭据配置', '回退', '图片处理', '超时']) {
+        await playwrightExpect(page.getByText(label, { exact: true })).toHaveCount(0);
       }
-      await page.getByLabel('凭据配置').fill('env:S11_OCR_SOMARK_PROFILE_JSON');
-      await page.getByLabel('回退').selectOption('none');
-      await page.getByLabel('图片处理').selectOption('drop');
       await page.screenshot({
         path: join(resultDir, `parse-ocr-settings-${viewport.width}.png`),
         fullPage: true,

@@ -2325,85 +2325,85 @@ function ProcessingSettings(props: {
           </div>
 
           {isChunk ? (
-            <>
-              <div className="kb2-setting-row">
-                <div>
-                  <label htmlFor="kb2-chunk-trigger">分块条件</label>
-                </div>
-                <div className="kb2-setting-row__controls">
-                  <ProductSelect
-                    id="kb2-chunk-trigger"
-                    value={props.chunkTriggerType}
+            <div className="kb2-setting-row">
+              <div>
+                <label htmlFor="kb2-chunk-trigger">分块条件</label>
+              </div>
+              <div className="kb2-setting-row__controls">
+                <ProductSelect
+                  id="kb2-chunk-trigger"
+                  value={props.chunkTriggerType}
+                  onChange={(event) => {
+                    props.setChunkTriggerType(
+                      event.target.value as 'minSize' | 'forceChunk' | 'maxSize',
+                    );
+                    props.onInvalidate();
+                  }}
+                >
+                  <option value="minSize">原文长度大于</option>
+                  <option value="maxSize">原文长度小于</option>
+                  <option value="forceChunk">强制分块</option>
+                </ProductSelect>
+                {props.chunkTriggerType === 'minSize' ? (
+                  <ProductInput
+                    aria-label="分块条件值"
+                    type="number"
+                    min={1}
+                    max={100_000}
+                    value={props.chunkTriggerMinSize}
                     onChange={(event) => {
-                      props.setChunkTriggerType(
-                        event.target.value as 'minSize' | 'forceChunk' | 'maxSize',
-                      );
+                      props.setChunkTriggerMinSize(event.target.value);
                       props.onInvalidate();
                     }}
-                  >
-                    <option value="minSize">原文长度大于</option>
-                    <option value="maxSize">原文长度小于</option>
-                    <option value="forceChunk">强制分块</option>
-                  </ProductSelect>
-                  {props.chunkTriggerType === 'minSize' ? (
-                    <ProductInput
-                      aria-label="分块条件值"
-                      type="number"
-                      min={1}
-                      max={100_000}
-                      value={props.chunkTriggerMinSize}
-                      onChange={(event) => {
-                        props.setChunkTriggerMinSize(event.target.value);
-                        props.onInvalidate();
-                      }}
-                    />
-                  ) : null}
-                </div>
+                  />
+                ) : null}
               </div>
+            </div>
+          ) : null}
 
-              <div className="kb2-setting-block">
-                <div className="kb2-setting-label">索引增强</div>
-                <div className="kb2-index-enhancements">
-                  <label className="kb2-checkbox-row">
-                    <input
-                      type="checkbox"
-                      checked={props.indexPrefixTitle}
-                      disabled={!props.indexCapabilities.indexPrefixTitle}
-                      onChange={(event) => {
-                        props.setIndexPrefixTitle(event.target.checked);
-                        props.onInvalidate();
-                      }}
-                    />
-                    <span>将标题加入索引</span>
-                  </label>
-                  <label className="kb2-checkbox-row">
-                    <input
-                      type="checkbox"
-                      checked={props.autoIndexes}
-                      disabled={!props.indexCapabilities.autoIndexes}
-                      onChange={(event) => {
-                        props.setAutoIndexes(event.target.checked);
-                        if (!event.target.checked) props.setIndexPrefixTitle(false);
-                        props.onInvalidate();
-                      }}
-                    />
-                    <span>自动生成补充索引</span>
-                  </label>
-                  <label className="kb2-checkbox-row">
-                    <input
-                      type="checkbox"
-                      checked={props.imageIndex}
-                      disabled={!props.indexCapabilities.imageIndex}
-                      onChange={(event) => {
-                        props.setImageIndex(event.target.checked);
-                        props.onInvalidate();
-                      }}
-                    />
-                    <span>图片自动索引</span>
-                  </label>
-                </div>
+          {isChunk || props.kind === 'image' ? (
+            <div className="kb2-setting-block">
+              <div className="kb2-setting-label">索引增强</div>
+              <div className="kb2-index-enhancements">
+                <label className="kb2-checkbox-row">
+                  <input
+                    type="checkbox"
+                    checked={props.indexPrefixTitle}
+                    disabled={!props.indexCapabilities.indexPrefixTitle}
+                    onChange={(event) => {
+                      props.setIndexPrefixTitle(event.target.checked);
+                      props.onInvalidate();
+                    }}
+                  />
+                  <span>将标题加入索引</span>
+                </label>
+                <label className="kb2-checkbox-row">
+                  <input
+                    type="checkbox"
+                    checked={props.autoIndexes}
+                    disabled={!props.indexCapabilities.autoIndexes}
+                    onChange={(event) => {
+                      props.setAutoIndexes(event.target.checked);
+                      if (!event.target.checked) props.setIndexPrefixTitle(false);
+                      props.onInvalidate();
+                    }}
+                  />
+                  <span>自动生成补充索引</span>
+                </label>
+                <label className="kb2-checkbox-row">
+                  <input
+                    type="checkbox"
+                    checked={props.imageIndex}
+                    disabled={!props.indexCapabilities.imageIndex}
+                    onChange={(event) => {
+                      props.setImageIndex(event.target.checked);
+                      props.onInvalidate();
+                    }}
+                  />
+                  <span>图片自动索引</span>
+                </label>
               </div>
-            </>
+            </div>
           ) : null}
 
           {isChunk ? (

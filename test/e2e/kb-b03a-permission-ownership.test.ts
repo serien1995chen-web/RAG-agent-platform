@@ -115,7 +115,7 @@ async function openSourcePermission(
     waitUntil: 'networkidle',
   });
   await page.getByRole('button', { name: `${sourceName} 的更多操作` }).click();
-  await page.getByRole('menuitem', { name: 'Source 权限' }).click();
+  await page.getByRole('menuitem', { name: '权限' }).click();
   await playwrightExpect(page.getByRole('dialog', { name: '管理协作者' })).toBeVisible();
 }
 

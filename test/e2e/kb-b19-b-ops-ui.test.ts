@@ -224,7 +224,7 @@ describe('L1-B19-OPS-005-UI01 current product entry', () => {
     }
   }, 90_000);
 
-  it('navigates from the Knowledge detail Info rail to the connector business entry', async () => {
+  it('shows scheduled sync without exposing connector management in the Info rail', async () => {
     const browser = await chromium.launch({ headless: true });
     try {
       const context = await browser.newContext({
@@ -242,12 +242,13 @@ describe('L1-B19-OPS-005-UI01 current product entry', () => {
       await page.goto(`${app.baseUrl}/dataset/detail?datasetId=${spaceId}&currentTab=collection`, {
         waitUntil: 'networkidle',
       });
-      await uiExpect(page.getByRole('complementary', { name: '知识库信息' })).toBeVisible();
-      await page.getByRole('button', { name: '管理连接器' }).click();
-      await page.waitForURL(/\/settings\/connectors\?/);
-      expect(page.url()).toContain(`spaceId=${spaceId}`);
-      await uiExpect(page.getByRole('heading', { name: '数据源连接器' })).toBeVisible();
-      await uiExpect(page.getByText('配置飞书等外部来源，管理同步状态和凭证。')).toBeVisible();
+      const info = page.getByRole('complementary', { name: '知识库信息' });
+      await uiExpect(info).toBeVisible();
+      await uiExpect(info.getByText('定时同步', { exact: true })).toBeVisible();
+      await uiExpect(info.getByRole('switch', { name: '定时同步' })).toBeVisible();
+      await uiExpect(info.getByRole('button', { name: '管理连接器' })).toHaveCount(0);
+      await uiExpect(info.getByRole('button', { name: '立即同步' })).toHaveCount(0);
+      await uiExpect(page).toHaveURL(new RegExp(`datasetId=${spaceId}`));
       const accessibility = await new AxeBuilder({ page }).analyze();
       expect(
         accessibility.violations.filter(

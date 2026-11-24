@@ -572,16 +572,15 @@ describe('L1-B06-ING-001 product upload flow', () => {
       downloadStatus: 200,
       downloadError: null,
       previewEntryCount: 1,
-      downloadEntryCount: 1,
+      downloadEntryCount: 0,
     });
     await previewEntry.click();
     const dialog = page.getByRole('dialog', { name: /预览原始内容/ });
     await playwrightExpect(dialog).toBeVisible();
     await playwrightExpect(dialog.getByText(/B06A e2e upload body/i)).toBeVisible();
+    await playwrightExpect(dialog.getByRole('button', { name: '下载原始文件' })).toBeVisible();
     await dialog.getByRole('button', { name: '关闭弹窗' }).click();
     await playwrightExpect(previewEntry).toBeFocused();
-    await row.getByRole('button', { name: /更多操作/ }).click();
-    await playwrightExpect(row.getByRole('menuitem', { name: /下载原始文件/ })).toBeVisible();
     expect(ticketUrl).toContain('/v1/knowledge/files/');
     for (const url of [...networkUrls, ticketUrl]) {
       expect(url).not.toContain('source/unbound');
