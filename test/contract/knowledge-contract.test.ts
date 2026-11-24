@@ -46,18 +46,18 @@ function resolvePointer(ref: string): unknown {
 }
 
 describe('knowledge target contract', () => {
-  it('freezes 96 paths, 124 operations, 142 schemas and 8 parameters', () => {
+  it('freezes 97 paths, 126 operations, 146 schemas and 8 parameters', () => {
     expect(artifacts.actualCounts).toEqual({
-      paths: 96,
-      operations: 124,
-      schemas: 142,
+      paths: 97,
+      operations: 126,
+      schemas: 146,
       parameters: 8,
     });
     expect(Object.keys(document.components.securitySchemes)).toEqual(['JWTAuth', 'APIKeyAuth']);
   });
 
-  it('splits runtime 124 and deferred 0 with no overlap and full union', () => {
-    expect(artifacts.runtimeRegistry.count).toBe(124);
+  it('splits runtime 126 and deferred 0 with no overlap and full union', () => {
+    expect(artifacts.runtimeRegistry.count).toBe(126);
     expect(artifacts.deferredManifest.count).toBe(0);
     const full = new Set(artifacts.fullRegistry.routes.map((route) => route.operationId));
     const runtime = new Set(artifacts.runtimeRegistry.operations.map((route) => route.operationId));
@@ -67,7 +67,7 @@ describe('knowledge target contract', () => {
     expect([...runtime].sort()).toEqual([...RUNTIME_OPERATION_IDS].sort());
     expect([...runtime].filter((id) => deferred.has(id))).toEqual([]);
     expect(new Set([...runtime, ...deferred])).toEqual(full);
-    expect(runtime.size + deferred.size).toBe(124);
+    expect(runtime.size + deferred.size).toBe(126);
   });
 
   it('resolves every component reference and uses only KNOWLEDGE errors', () => {

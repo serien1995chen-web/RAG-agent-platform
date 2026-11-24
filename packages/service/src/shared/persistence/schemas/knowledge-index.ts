@@ -30,9 +30,11 @@ import {
 } from './knowledge-connector.schemas';
 import {
   type KnowledgeModelBindingDoc,
+  type KnowledgeModelSettingsDoc,
   type KnowledgeSynonymConfigDoc,
   type KnowledgeSynonymMappingDoc,
   KnowledgeModelBindingSchema,
+  KnowledgeModelSettingsSchema,
   KnowledgeSynonymConfigSchema,
   KnowledgeSynonymMappingSchema,
 } from './knowledge-governance.schemas';
@@ -186,6 +188,11 @@ export const KNOWLEDGE_SCHEMA_REGISTRY: readonly KnowledgeSchemaEntry[] = [
     schema: KnowledgeModelBindingSchema,
   },
   {
+    modelName: 'KnowledgeModelSettings',
+    collection: 'knowledge_model_settings',
+    schema: KnowledgeModelSettingsSchema,
+  },
+  {
     modelName: 'KnowledgeCitation',
     collection: 'knowledge_citations',
     schema: KnowledgeCitationSchema,
@@ -216,6 +223,7 @@ export interface KnowledgeRegisteredModels {
   KnowledgeApiKey: Model<KnowledgeApiKeyDoc>;
   KnowledgeIdempotencyRecord: Model<KnowledgeIdempotencyRecordDoc>;
   KnowledgeModelBinding: Model<KnowledgeModelBindingDoc>;
+  KnowledgeModelSettings: Model<KnowledgeModelSettingsDoc>;
   KnowledgeCitation: Model<KnowledgeCitationDoc>;
 }
 
@@ -328,6 +336,11 @@ export function registerKnowledgeModels(connection: Connection): KnowledgeRegist
       connection,
       'KnowledgeModelBinding',
       KnowledgeModelBindingSchema,
+    ),
+    KnowledgeModelSettings: modelFor<KnowledgeModelSettingsDoc>(
+      connection,
+      'KnowledgeModelSettings',
+      KnowledgeModelSettingsSchema,
     ),
     KnowledgeCitation: modelFor<KnowledgeCitationDoc>(
       connection,

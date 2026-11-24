@@ -2,9 +2,9 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 export const TARGET_CONTRACT_COUNTS = Object.freeze({
-  paths: 96,
-  operations: 124,
-  schemas: 142,
+  paths: 97,
+  operations: 126,
+  schemas: 146,
   parameters: 8,
 });
 
@@ -97,6 +97,8 @@ export const RUNTIME_OPERATION_IDS = Object.freeze([
   'API-CONNECTOR-GET',
   'API-CONNECTOR-DELETE',
   'API-MODEL-LIST',
+  'API-MODEL-SETTINGS-GET',
+  'API-MODEL-SETTINGS-UPDATE',
   'API-MODEL-BINDING-GET',
   'API-MODEL-BINDING-UPDATE',
   'API-MODEL-BINDING-VALIDATE',
@@ -428,7 +430,7 @@ export function buildKnowledgeContractArtifacts(repoRoot) {
       parameters: actualCounts.parameters,
       runtimeOperations: runtimeRoutes.length,
       deferredOperations: deferredRoutes.length,
-      canonicalCollections: 23,
+      canonicalCollections: 25,
       vectorProfiles: 4,
       canonicalQueues: 13,
     },

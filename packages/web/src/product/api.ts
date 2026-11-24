@@ -22,7 +22,9 @@ import type {
   Job,
   KnowledgeSpace,
   Model,
+  ModelCatalog,
   ModelBinding,
+  ModelSettings,
   PageResult,
   SearchResponse,
   Segment,
@@ -144,6 +146,7 @@ export function createSpace(input: {
   sourceAclMode?: 'inherited' | 'enforced';
   sourcePermissionEnabled?: boolean;
   autoSync?: boolean;
+  modelBindings?: ModelBinding[];
 }) {
   return knowledgeRequest<KnowledgeSpace>('/v1/knowledge/spaces', {
     method: 'POST',
@@ -158,6 +161,7 @@ export function createSpace(input: {
       sourceAclMode: input.sourceAclMode ?? 'inherited',
       sourcePermissionEnabled: input.sourcePermissionEnabled ?? true,
       autoSync: input.autoSync ?? false,
+      ...(input.modelBindings?.length ? { modelBindings: input.modelBindings } : {}),
     },
   });
 }
@@ -676,8 +680,51 @@ export function controlJob(action: JobControlAction, job: Job) {
   });
 }
 
-export function listModels() {
-  return allPages<Model>('/v1/knowledge/models', {}, 'modelType');
+export async function listModelCatalog(): Promise<ModelCatalog> {
+  const items: Model[] = [];
+  let cursor: string | undefined;
+  let defaults: ModelCatalog['defaults'] = {
+    embedding: null,
+    textLLM: null,
+    imageLLM: null,
+  };
+  let source: ModelCatalog['source'] = 'mock';
+  do {
+    const page = await knowledgeRequest<
+      PageResult<Model> & {
+        defaults?: ModelCatalog['defaults'];
+        source?: ModelCatalog['source'];
+      }
+    >(
+      `/v1/knowledge/models${queryString({
+        limit: 200,
+        cursor,
+        sort: 'modelType',
+      })}`,
+    );
+    items.push(...page.items);
+    defaults = page.defaults ?? defaults;
+    source = page.source ?? source;
+    cursor =
+      page.pageInfo?.hasMore && page.pageInfo.nextCursor ? page.pageInfo.nextCursor : undefined;
+  } while (cursor);
+  return { items, defaults, source };
+}
+
+export async function listModels() {
+  return (await listModelCatalog()).items;
+}
+
+export function getModelSettings() {
+  return knowledgeRequest<ModelSettings>('/v1/knowledge/model-settings');
+}
+
+export function updateModelSettings(settings: Omit<ModelSettings, 'source'>) {
+  return knowledgeRequest<ModelSettings>('/v1/knowledge/model-settings', {
+    method: 'PUT',
+    idempotencyKey: key(),
+    body: settings,
+  });
 }
 
 export function getModelBindings(spaceId: string) {
@@ -1242,6 +1289,9 @@ export const productApi = {
   retryJob,
   controlJob,
   listModels,
+  listModelCatalog,
+  getModelSettings,
+  updateModelSettings,
   getModelBindings,
   updateModelBindings,
   getAcl,

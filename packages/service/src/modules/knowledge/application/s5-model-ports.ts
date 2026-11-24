@@ -16,11 +16,43 @@ export interface ModelLimits {
 export interface ModelCatalogItem {
   modelId: string;
   displayName: string;
+  provider?: string;
   type: S5ModelType;
   capabilities: string[];
+  tags?: string[];
   dimension: S5VectorDimension | null;
   limits?: ModelLimits;
   authorized: boolean;
+}
+
+export interface ModelDefaults {
+  embedding: string | null;
+  textLLM: string | null;
+  imageLLM: string | null;
+}
+
+export interface ModelCatalogMetadata {
+  defaults: ModelDefaults;
+  source: 'database' | 'environment' | 'mock';
+}
+
+export interface ModelSettingItem {
+  modelId: string;
+  displayName: string;
+  provider: string;
+  type: S5ModelType;
+  capabilities: string[];
+  tags: string[];
+  enabled: boolean;
+  dimension: S5VectorDimension | null;
+  limits?: ModelLimits;
+}
+
+export interface ModelSettingsView {
+  version: number;
+  source: 'database' | 'environment';
+  models: ModelSettingItem[];
+  defaults: ModelDefaults;
 }
 
 export interface ModelCatalogPort {
@@ -29,6 +61,25 @@ export interface ModelCatalogPort {
     requestId: string;
     traceId: string;
   }): Promise<ModelCatalogItem[]>;
+  getMetadata?(input: {
+    workspaceId: string;
+    requestId: string;
+    traceId: string;
+  }): Promise<ModelCatalogMetadata>;
+  getSettings?(input: {
+    workspaceId: string;
+    requestId: string;
+    traceId: string;
+  }): Promise<ModelSettingsView>;
+  updateSettings?(
+    input: {
+      workspaceId: string;
+      memberId: string;
+      requestId: string;
+      traceId: string;
+    },
+    settings: Omit<ModelSettingsView, 'source'>,
+  ): Promise<ModelSettingsView>;
 }
 
 export interface ModelValidation {

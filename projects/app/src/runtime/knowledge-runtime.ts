@@ -32,7 +32,6 @@ import {
   CustomApiLibraryClient,
   createConnectorProviderClients,
   S04IngestionApplication,
-  S5AiproxyCatalogAdapter,
   S5AiproxyHttpAdapter,
   S5ArtifactRepository,
   S5KeyedSemaphore,
@@ -41,6 +40,7 @@ import {
   S5ModelApplication,
   S5ModelBindingApplication,
   S5ModelBindingRepository,
+  S5WorkspaceModelCatalogAdapter,
   S5OcrApplication,
   S5OcrCredentialProfileAdapter,
   S5OcrHttpAdapter,
@@ -351,10 +351,12 @@ async function bootstrapRuntime(): Promise<TelemetryKnowledgeApiRuntime> {
   const s5Catalog =
     s5AiproxyConfig.modelMode === 'mock'
       ? new S5MockModelCatalog()
-      : new S5AiproxyCatalogAdapter({
+      : new S5WorkspaceModelCatalogAdapter({
+          connection: mongo,
           config: s5AiproxyConfig,
           transport: new AxiosS5HttpTransport(),
           env: s5RuntimeEnv,
+          token: resolveSecretRef(s5AiproxyConfig.apiTokenRef, s5RuntimeEnv),
         });
   const s5ModelTransport =
     s5AiproxyConfig.modelMode === 'mock'

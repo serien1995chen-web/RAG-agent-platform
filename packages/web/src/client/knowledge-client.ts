@@ -57,31 +57,70 @@ export class ConsoleRequestPathError extends Error {
 let sessionPromise: Promise<ConsoleSession> | undefined;
 let directoryPromise: Promise<ConsoleDirectory> | undefined;
 
+function timeoutSignal(timeoutMs: number) {
+  const controller = new AbortController();
+  const timer = setTimeout(
+    () => controller.abort(new DOMException('Request timed out', 'TimeoutError')),
+    timeoutMs,
+  );
+  return {
+    signal: controller.signal,
+    clear: () => clearTimeout(timer),
+  };
+}
+
+async function fetchWithTimeout(input: RequestInfo | URL, init: RequestInit, timeoutMs: number) {
+  const timeout = timeoutSignal(timeoutMs);
+  try {
+    return await fetch(input, { ...init, signal: timeout.signal });
+  } finally {
+    timeout.clear();
+  }
+}
+
 export function ensureConsoleSession(): Promise<ConsoleSession> {
-  sessionPromise ??= fetch('/api/console/session', {
-    method: 'POST',
-    credentials: 'same-origin',
-    headers: { accept: 'application/json' },
-  }).then(async (response) => {
-    if (!response.ok) {
-      throw new ConsoleSessionError();
-    }
-    return (await response.json()) as ConsoleSession;
-  });
+  sessionPromise ??= fetchWithTimeout(
+    '/api/console/session',
+    {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { accept: 'application/json' },
+    },
+    15_000,
+  )
+    .then(async (response) => {
+      if (!response.ok) {
+        throw new ConsoleSessionError();
+      }
+      return (await response.json()) as ConsoleSession;
+    })
+    .catch((error) => {
+      sessionPromise = undefined;
+      throw error;
+    });
   return sessionPromise;
 }
 
 export function ensureConsoleDirectory(): Promise<ConsoleDirectory> {
-  directoryPromise ??= fetch('/api/console/directory', {
-    method: 'GET',
-    credentials: 'same-origin',
-    headers: { accept: 'application/json' },
-  }).then(async (response) => {
-    if (!response.ok) {
-      throw new ConsoleSessionError();
-    }
-    return (await response.json()) as ConsoleDirectory;
-  });
+  directoryPromise ??= fetchWithTimeout(
+    '/api/console/directory',
+    {
+      method: 'GET',
+      credentials: 'same-origin',
+      headers: { accept: 'application/json' },
+    },
+    15_000,
+  )
+    .then(async (response) => {
+      if (!response.ok) {
+        throw new ConsoleSessionError();
+      }
+      return (await response.json()) as ConsoleDirectory;
+    })
+    .catch((error) => {
+      directoryPromise = undefined;
+      throw error;
+    });
   return directoryPromise;
 }
 
@@ -104,18 +143,22 @@ export async function knowledgeRequest<T>(
   const session = await ensureConsoleSession();
   const method = options.method ?? 'GET';
   const mutationKey = method === 'GET' ? undefined : (options.idempotencyKey ?? idempotencyKey());
-  const response = await fetch(path, {
-    method,
-    credentials: 'same-origin',
-    headers: {
-      accept: 'application/json',
-      'X-Workspace-Id': session.workspaceId,
-      ...(options.body !== undefined ? { 'content-type': 'application/json' } : {}),
-      ...(mutationKey !== undefined ? { 'Idempotency-Key': mutationKey } : {}),
-      ...(options.headers ?? {}),
+  const response = await fetchWithTimeout(
+    path,
+    {
+      method,
+      credentials: 'same-origin',
+      headers: {
+        accept: 'application/json',
+        'X-Workspace-Id': session.workspaceId,
+        ...(options.body !== undefined ? { 'content-type': 'application/json' } : {}),
+        ...(mutationKey !== undefined ? { 'Idempotency-Key': mutationKey } : {}),
+        ...(options.headers ?? {}),
+      },
+      ...(options.body !== undefined ? { body: JSON.stringify(options.body) } : {}),
     },
-    ...(options.body !== undefined ? { body: JSON.stringify(options.body) } : {}),
-  });
+    30_000,
+  );
   if (response.status === 204) {
     return undefined as T;
   }
@@ -146,17 +189,21 @@ export async function knowledgeBinaryRequest<T>(
     body instanceof Blob
       ? body
       : new Blob([body instanceof Uint8Array ? new Uint8Array(body).buffer : body]);
-  const response = await fetch(path, {
-    method,
-    credentials: 'same-origin',
-    headers: {
-      accept: 'application/json',
-      'content-type': 'application/octet-stream',
-      'X-Workspace-Id': session.workspaceId,
-      'Idempotency-Key': options.idempotencyKey ?? idempotencyKey(),
+  const response = await fetchWithTimeout(
+    path,
+    {
+      method,
+      credentials: 'same-origin',
+      headers: {
+        accept: 'application/json',
+        'content-type': 'application/octet-stream',
+        'X-Workspace-Id': session.workspaceId,
+        'Idempotency-Key': options.idempotencyKey ?? idempotencyKey(),
+      },
+      body: requestBody,
     },
-    body: requestBody,
-  });
+    120_000,
+  );
   const payload = (await response.json()) as
     | { success: true; data: T; traceId: string; requestId: string }
     | KnowledgeProblem;

@@ -42,7 +42,8 @@ export class S8ModelResolver implements S8ImageModelResolverPort {
       ? catalog.find(
           (item): item is ModelCatalogItem =>
             item.modelId === binding.modelId &&
-            item.type === 'vlm' &&
+            (item.type === 'vlm' ||
+              (item.type === 'llm' && item.capabilities.includes('vision'))) &&
             item.authorized &&
             item.capabilities.includes('vision'),
         )

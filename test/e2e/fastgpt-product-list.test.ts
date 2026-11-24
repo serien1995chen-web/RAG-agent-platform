@@ -43,7 +43,7 @@ async function api<T = Record<string, unknown>>(
     error?: { code?: string };
   };
   if (!response.ok || payload.success !== true) {
-    throw new Error(`${method} ${path} failed: ${response.status} ${payload.error?.code ?? ''}`);
+    throw new Error(`${method} ${path} failed: ${response.status} ${JSON.stringify(payload)}`);
   }
   return payload.data as T;
 }
