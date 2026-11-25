@@ -522,7 +522,7 @@ export interface SchemaPropertyMap {
   "SegmentList": "items" | "pageInfo";
   "SegmentUpdate": "answer" | "metadata" | "question" | "searchEnabled" | "version";
   "SomarkParseConfig": "credentialProfileId" | "fallbackProvider" | "imageHandling" | "provider" | "timeoutMs";
-  "Source": "blobRefId" | "connectorId" | "contentHash" | "directoryId" | "externalId" | "id" | "kind" | "knowledgeSpaceId" | "metadata" | "mimeType" | "name" | "parentPath" | "permissionRevision" | "permissionState" | "processingStatus" | "searchEnabled" | "sizeBytes" | "sourceVersion" | "version" | "workspaceId";
+  "Source": "blobRefId" | "connectorId" | "contentHash" | "directoryId" | "externalId" | "id" | "kind" | "knowledgeSpaceId" | "metadata" | "mimeType" | "name" | "parentPath" | "permissionRevision" | "permissionState" | "processingStatus" | "searchEnabled" | "segmentCount" | "sizeBytes" | "sourceVersion" | "version" | "workspaceId";
   "SourceBatchAction": "action" | "ids" | "targetDirectoryId" | "versions";
   "SourceCreate": "directoryId" | "kind" | "metadata" | "name" | "searchEnabled";
   "SourceList": "items" | "pageInfo";
@@ -671,7 +671,7 @@ export interface RequiredSchemaPropertyMap {
   "SegmentList": "items" | "pageInfo";
   "SegmentUpdate": "version";
   "SomarkParseConfig": "credentialProfileId" | "fallbackProvider" | "provider";
-  "Source": "directoryId" | "id" | "kind" | "knowledgeSpaceId" | "name" | "permissionRevision" | "permissionState" | "processingStatus" | "searchEnabled" | "sourceVersion" | "version" | "workspaceId";
+  "Source": "directoryId" | "id" | "kind" | "knowledgeSpaceId" | "name" | "permissionRevision" | "permissionState" | "processingStatus" | "searchEnabled" | "segmentCount" | "sourceVersion" | "version" | "workspaceId";
   "SourceBatchAction": "action" | "ids" | "versions";
   "SourceCreate": "kind" | "name";
   "SourceList": "items" | "pageInfo";

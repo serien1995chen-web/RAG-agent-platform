@@ -239,6 +239,7 @@ export function ProductModal(props: {
   children: ReactNode;
   footer?: ReactNode;
   size?: 'sm' | 'md' | 'lg' | 'xl';
+  width?: string;
   finalFocusRef?: RefObject<HTMLButtonElement | null>;
 }) {
   return (
@@ -253,7 +254,12 @@ export function ProductModal(props: {
       returnFocusOnClose={Boolean(props.finalFocusRef)}
     >
       <ModalOverlay bg="rgba(17,24,36,.36)" backdropFilter="blur(2px)" />
-      <ModalContent className="kb2-modal" role="dialog" aria-modal="true">
+      <ModalContent
+        className="kb2-modal"
+        role="dialog"
+        aria-modal="true"
+        style={props.width ? { width: props.width, maxWidth: props.width } : undefined}
+      >
         <ModalHeader>
           <div>
             <strong>{props.title}</strong>

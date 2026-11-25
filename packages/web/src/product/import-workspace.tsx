@@ -15,6 +15,12 @@ import {
 import { Spinner } from '@chakra-ui/react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from 'react';
+import {
+  DOCUMENT_ACCEPT,
+  MAX_KNOWLEDGE_FILE_BYTES,
+  MAX_LOCAL_IMPORT_FILES,
+  isDocumentFileExtension,
+} from '@kb/contracts';
 import { S7MarkdownRenderer } from '../components/s7-markdown-renderer';
 import {
   apiLibraryCatalog,
@@ -30,6 +36,7 @@ import {
   previewImportFile,
   previewImportTemplate,
   previewImportText,
+  ProductBatchError,
   productApi,
   productErrorView,
   type ImportUrlPreview,
@@ -41,6 +48,7 @@ import {
   ProductField,
   ProductIconButton,
   ProductInput,
+  ProductModal,
   ProductPage,
   ProductPageHeader,
   ProductSelect,
@@ -50,6 +58,7 @@ import {
 } from './ui';
 import type { CatalogItem, Directory, Job, ProviderCatalogItem } from './types';
 import { knowledgeMultipartUpload, type KnowledgeFileUploadState } from '../client/file-upload';
+import { modelsForRole } from './model-candidates';
 
 // This product form mirrors the shared S5ParseSettingsPanel contract while preserving
 // the product workspace layout and its three-viewport import flow.
@@ -71,9 +80,36 @@ interface ImportedUpload {
   rowId: string;
   id: string;
   name: string;
+  sizeBytes: number;
   progress: number;
   phase: KnowledgeFileUploadState['phase'];
   error: unknown;
+}
+
+function formatFileSize(bytes: number): string {
+  if (!Number.isFinite(bytes) || bytes <= 0) return '0 B';
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(bytes < 10 * 1024 ? 1 : 0)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(bytes < 10 * 1024 * 1024 ? 1 : 0)} MB`;
+}
+
+function isAllowedLocalFile(file: File): boolean {
+  const extension = `.${file.name.split('.').at(-1)?.toLowerCase() ?? ''}`;
+  return isDocumentFileExtension(extension);
+}
+
+function uploadPhaseLabel(phase: KnowledgeFileUploadState['phase']): string {
+  const labels: Record<KnowledgeFileUploadState['phase'], string> = {
+    initializing: '准备上传',
+    uploading: '上传中',
+    completing: '正在完成上传',
+    completed: '上传完成',
+    error: '上传失败',
+    aborted: '已取消',
+    expired: '上传已过期',
+    idle: '等待选择文件',
+  };
+  return labels[phase] ?? phase;
 }
 
 type UrlEntryPhase = 'waiting' | 'previewing' | 'ready' | 'creating' | 'finished' | 'error';
@@ -203,6 +239,7 @@ export function ImportWorkspace(props: {
   const [indexPrefixTitle, setIndexPrefixTitle] = useState(false);
   const [qaPrompt, setQaPrompt] = useState('');
   const [uploaded, setUploaded] = useState<ImportedUpload[]>([]);
+  const [uploadSelectionError, setUploadSelectionError] = useState('');
   const [uploading, setUploading] = useState(false);
   const uploadControllers = useRef(new Map<string, AbortController>());
   const uploadFilesByRow = useRef(new Map<string, File>());
@@ -304,8 +341,8 @@ export function ImportWorkspace(props: {
   );
   const indexCapabilities = useMemo(() => {
     const models = modelsQuery.data ?? [];
-    const hasAutoIndexModel = models.some((model) => model.authorized && model.type === 'llm');
-    const hasVlmModel = models.some((model) => model.authorized && model.type === 'vlm');
+    const hasAutoIndexModel = modelsForRole(models, 'llm').length > 0;
+    const hasVlmModel = modelsForRole(models, 'vlm').length > 0;
     const hasImageEmbeddingModel = models.some(
       (model) =>
         model.authorized &&
@@ -314,7 +351,7 @@ export function ImportWorkspace(props: {
     );
     return {
       autoIndexes: trainingType === 'chunk' && hasAutoIndexModel,
-      indexPrefixTitle: trainingType === 'chunk' && hasAutoIndexModel && autoIndexes,
+      indexPrefixTitle: hasAutoIndexModel,
       imageIndex: trainingType === 'chunk' && hasVlmModel && hasImageEmbeddingModel,
     };
   }, [autoIndexes, modelsQuery.data, trainingType]);
@@ -663,7 +700,42 @@ export function ImportWorkspace(props: {
   const uploadFiles = async (files: FileList | null) => {
     if (!files?.length) return;
     setError(null);
-    const rows = Array.from(files).map((file) => ({
+    setUploadSelectionError('');
+    const incoming = Array.from(files);
+    const existingCount = uploaded.filter(
+      (item) => !['error', 'aborted'].includes(item.phase),
+    ).length;
+    const isStructured = kind === 'template' || kind === 'backup';
+    const maxCount = isStructured ? 1 : MAX_LOCAL_IMPORT_FILES;
+    const accepted: File[] = [];
+    const rejected: string[] = [];
+    for (const file of incoming) {
+      if (accepted.length + existingCount >= maxCount) {
+        rejected.push(`单次最多上传 ${maxCount} 个文件`);
+        break;
+      }
+      if (!isStructured && !isAllowedLocalFile(file)) {
+        rejected.push(`${file.name}：文件类型不受支持`);
+        continue;
+      }
+      if (file.size <= 0) {
+        rejected.push(`${file.name}：文件为空`);
+        continue;
+      }
+      if (file.size > MAX_KNOWLEDGE_FILE_BYTES) {
+        rejected.push(`${file.name}：超过 ${formatFileSize(MAX_KNOWLEDGE_FILE_BYTES)}`);
+        continue;
+      }
+      accepted.push(file);
+    }
+    if (accepted.length === 0) {
+      setUploadSelectionError([...new Set(rejected)].join('；') || '没有可上传的文件');
+      return;
+    }
+    if (rejected.length > 0) {
+      setUploadSelectionError([...new Set(rejected)].join('；'));
+    }
+    const rows = accepted.map((file) => ({
       rowId: globalThis.crypto.randomUUID(),
       file,
     }));
@@ -674,6 +746,7 @@ export function ImportWorkspace(props: {
         rowId,
         id: '',
         name: file.name,
+        sizeBytes: file.size,
         progress: 0,
         phase: 'initializing' as const,
         error: null,
@@ -1024,36 +1097,30 @@ export function ImportWorkspace(props: {
       </div>
       <ProductError error={error} />
 
-      <div className={`kb2-import-body${step > 0 ? ' is-centered' : ''}`}>
-        {step === 0 ? (
-          <aside className="kb2-import-summary">
-            <div className="kb2-import-summary__head">
-              <ProductTypeIcon kind={activeOption.kind === 'api' ? 'api' : 'general'} />
-              <div>
-                <strong>{activeOption.title}</strong>
-                <span>{activeOption.description}</span>
-              </div>
-            </div>
-            <div className="kb2-info-line">
-              <span>目标知识库</span>
-              <strong>{props.datasetName}</strong>
-            </div>
-            <ProductField label="目标目录">
-              <ProductSelect
-                value={directoryId}
-                onChange={(event) => setDirectoryId(event.target.value)}
-              >
-                <option value="">知识库根目录</option>
-                {(directoriesQuery.data ?? []).map((directory) => (
-                  <option key={directory.id} value={directory.id}>
-                    {directory.name}
-                  </option>
-                ))}
-              </ProductSelect>
-            </ProductField>
-          </aside>
-        ) : null}
+      <div className="kb2-import-context">
+        <div className="kb2-import-context__source">
+          <ProductTypeIcon kind={activeOption.kind === 'api' ? 'api' : 'general'} />
+          <span>
+            <strong>{activeOption.title}</strong>
+            <small>{props.datasetName}</small>
+          </span>
+        </div>
+        <ProductField label="目标目录">
+          <ProductSelect
+            value={directoryId}
+            onChange={(event) => setDirectoryId(event.target.value)}
+          >
+            <option value="">知识库根目录</option>
+            {(directoriesQuery.data ?? []).map((directory) => (
+              <option key={directory.id} value={directory.id}>
+                {directory.name}
+              </option>
+            ))}
+          </ProductSelect>
+        </ProductField>
+      </div>
 
+      <div className="kb2-import-body is-centered">
         <main className="kb2-import-main">
           {step === 0 && !directSelection ? (
             <div className="kb2-import-source-grid" role="group" aria-label="导入来源">
@@ -1081,18 +1148,31 @@ export function ImportWorkspace(props: {
             <div className="kb2-import-form">
               {(step === 0 && kind === 'local') ||
               (step === 1 && ['image', 'template', 'backup'].includes(kind)) ? (
-                <label className="kb2-upload-zone">
+                <label
+                  className="kb2-upload-zone"
+                  onDragOver={(event) => {
+                    event.preventDefault();
+                    if (!uploading) event.dataTransfer.dropEffect = 'copy';
+                  }}
+                  onDrop={(event) => {
+                    event.preventDefault();
+                    if (!uploading) void uploadFiles(event.dataTransfer.files);
+                  }}
+                >
                   <input
                     type="file"
                     multiple={kind !== 'template' && kind !== 'backup'}
                     accept={
                       kind === 'image'
-                        ? 'image/jpeg,image/png,image/webp'
+                        ? '.jpg,.jpeg,.png,.webp'
                         : kind === 'template' || kind === 'backup'
                           ? '.csv,.xlsx'
-                          : undefined
+                          : DOCUMENT_ACCEPT
                     }
-                    onChange={(event) => void uploadFiles(event.target.files)}
+                    onChange={(event) => {
+                      void uploadFiles(event.target.files);
+                      event.currentTarget.value = '';
+                    }}
                     disabled={uploading}
                   />
                   <AttachmentIcon boxSize={7} />
@@ -1100,9 +1180,15 @@ export function ImportWorkspace(props: {
                   <span>
                     {kind === 'template' || kind === 'backup'
                       ? '支持 CSV、XLSX'
-                      : '文件将直接上传到知识库服务，不使用本地模拟结果'}
+                      : `支持 ${DOCUMENT_ACCEPT}。单次最多 ${MAX_LOCAL_IMPORT_FILES} 个，单个文件最大 ${formatFileSize(MAX_KNOWLEDGE_FILE_BYTES)}。`}
                   </span>
                 </label>
+              ) : null}
+
+              {uploadSelectionError ? (
+                <div className="kb2-inline-error" role="alert">
+                  {uploadSelectionError}
+                </div>
               ) : null}
 
               {kind === 'template' ? (
@@ -1132,16 +1218,24 @@ export function ImportWorkspace(props: {
                         key={item.rowId}
                         aria-label={`上传文件 ${item.name}`}
                       >
-                        <span>
-                          <strong>{item.name}</strong>
+                        <span className="kb2-upload-row__file">
+                          <strong>
+                            {item.name}
+                            <i className="kb2-upload-row__format">
+                              {item.name.split('.').at(-1)?.toUpperCase() || 'FILE'}
+                            </i>
+                          </strong>
                           <small className="kb2-upload-row__status">
                             {errorView
                               ? `${errorView.message} · ${errorView.code}${
                                   errorView.traceId ? ` · Trace ${errorView.traceId}` : ''
                                 }`
-                              : item.phase}
+                              : uploadPhaseLabel(item.phase)}
                           </small>
                         </span>
+                        <small className="kb2-upload-row__size">
+                          {formatFileSize(item.sizeBytes)}
+                        </small>
                         <div className="kb2-progress-track">
                           <span style={{ width: `${item.progress}%` }} />
                         </div>
@@ -1710,22 +1804,6 @@ export function ImportWorkspace(props: {
                         ) : null}
                       </div>
                     </div>
-                    {trainingType === 'qa' ? (
-                      <ProductField label="QA Prompt">
-                        <ProductTextarea
-                          value={qaPrompt}
-                          maxLength={20000}
-                          placeholder="留空时使用系统 QA Prompt"
-                          onChange={(event) => setQaPrompt(event.target.value)}
-                        />
-                      </ProductField>
-                    ) : null}
-                    {trainingType === 'qa' ? (
-                      <div className="kb2-note" role="status" aria-label="QA 状态说明">
-                        {'QA 成功'}会写入问答 Segment；无效输出使用{'原文回退'}
-                        ；模型或权限失败保持{'QA 失败'}，不会伪装成成功。
-                      </div>
-                    ) : null}
                   </div>
                 </div>
               ) : null}
@@ -2243,6 +2321,8 @@ function ProcessingSettings(props: {
 }) {
   const showFileParsing = props.kind === 'local' || props.kind === 'image';
   const isChunk = props.trainingType === 'chunk';
+  const showChunkParameters = isChunk || props.trainingType === 'qa';
+  const [qaPromptOpen, setQaPromptOpen] = useState(false);
   return (
     <div className="kb2-import-settings">
       {showFileParsing ? (
@@ -2361,7 +2441,7 @@ function ProcessingSettings(props: {
             </div>
           ) : null}
 
-          {isChunk || props.kind === 'image' ? (
+          {showChunkParameters || props.kind === 'image' ? (
             <div className="kb2-setting-block">
               <div className="kb2-setting-label">索引增强</div>
               <div className="kb2-index-enhancements">
@@ -2406,7 +2486,7 @@ function ProcessingSettings(props: {
             </div>
           ) : null}
 
-          {isChunk ? (
+          {showChunkParameters ? (
             <div className="kb2-setting-block">
               <div className="kb2-setting-label">分块处理参数</div>
               <div className="kb2-parameter-modes" role="radiogroup" aria-label="分块处理参数">
@@ -2558,47 +2638,77 @@ function ProcessingSettings(props: {
                     </div>
                   ) : null}
 
-                  <ProductField label="索引大小">
-                    <ProductSelect
-                      value={props.indexSize}
-                      onChange={(event) => {
-                        props.setIndexSize(event.target.value);
-                        props.onInvalidate();
-                      }}
-                    >
-                      {props.indexSizeOptions.map((size) => (
-                        <option key={size} value={size}>
-                          {size}
-                        </option>
-                      ))}
-                    </ProductSelect>
-                  </ProductField>
+                  {isChunk ? (
+                    <ProductField label="索引大小">
+                      <ProductSelect
+                        value={props.indexSize}
+                        onChange={(event) => {
+                          props.setIndexSize(event.target.value);
+                          props.onInvalidate();
+                        }}
+                      >
+                        {props.indexSizeOptions.map((size) => (
+                          <option key={size} value={size}>
+                            {size}
+                          </option>
+                        ))}
+                      </ProductSelect>
+                    </ProductField>
+                  ) : null}
                 </div>
               ) : null}
             </div>
           ) : null}
 
-          {props.trainingType === 'qa' ? (
+          {props.trainingType === 'qa' && props.chunkSettingMode === 'custom' ? (
             <div className="kb2-setting-block">
-              <ProductField label="QA Prompt">
-                <ProductTextarea
-                  value={props.qaPrompt}
-                  maxLength={20000}
-                  placeholder="留空时使用系统 QA Prompt"
-                  onChange={(event) => {
-                    props.setQaPrompt(event.target.value);
-                    props.onInvalidate();
-                  }}
-                />
-              </ProductField>
+              <div className="kb2-setting-label">QA Prompt</div>
+              <div className="kb2-prompt-preview">
+                {props.qaPrompt || '使用系统默认 QA Prompt，根据原文生成结构化问答对。'}
+              </div>
+              <ProductButton size="sm" onClick={() => setQaPromptOpen(true)}>
+                自定义 Prompt
+              </ProductButton>
               <div className="kb2-note" role="status" aria-label="QA 状态说明">
-                QA 成功会写入问答 Segment；无效输出使用原文回退；模型或权限失败保持 QA
-                失败，不会伪装成成功。
+                QA 成功会写入问答 Segment；无效输出最多自动修复一次，仍无效时任务明确失败。
               </div>
             </div>
           ) : null}
         </div>
       </details>
+      <ProductModal
+        open={qaPromptOpen}
+        title="自定义 QA Prompt"
+        description="留空时使用系统默认 Prompt。"
+        onClose={() => setQaPromptOpen(false)}
+        footer={
+          <>
+            <ProductButton
+              onClick={() => {
+                props.setQaPrompt('');
+                props.onInvalidate();
+                setQaPromptOpen(false);
+              }}
+            >
+              恢复默认
+            </ProductButton>
+            <ProductButton tone="primary" onClick={() => setQaPromptOpen(false)}>
+              完成
+            </ProductButton>
+          </>
+        }
+      >
+        <ProductTextarea
+          value={props.qaPrompt}
+          maxLength={20000}
+          rows={12}
+          placeholder="留空时使用系统 QA Prompt"
+          onChange={(event) => {
+            props.setQaPrompt(event.target.value);
+            props.onInvalidate();
+          }}
+        />
+      </ProductModal>
     </div>
   );
 }
@@ -2750,6 +2860,16 @@ function JobResultView(props: {
         existingVersion: number;
       }>)
     : [];
+  const diagnostics = Array.isArray(props.job.result?.diagnostics)
+    ? (props.job.result.diagnostics as Array<{ severity?: string; code?: string }>)
+    : [];
+  const errorDetails =
+    props.job.error?.details &&
+    typeof props.job.error.details === 'object' &&
+    !Array.isArray(props.job.error.details)
+      ? (props.job.error.details as Record<string, unknown>)
+      : {};
+  const errorReason = typeof errorDetails.reason === 'string' ? errorDetails.reason : null;
   const actionCount = (action: string) => actions.filter((item) => item.action === action).length;
   return (
     <div className="kb2-job-result">
@@ -2836,9 +2956,24 @@ function JobResultView(props: {
         <div className="kb2-error-panel" role="alert">
           <WarningIcon boxSize={4} />
           <div>
-            <strong>{props.job.error.code ?? '导入失败'}</strong>
-            <span>请根据任务 ID 查看服务端错误详情。</span>
+            <strong>
+              {
+                productErrorView(
+                  new ProductBatchError(props.job.error.code ?? 'KNOWLEDGE_JOB_FAILED'),
+                ).message
+              }
+            </strong>
+            <span>
+              错误代码：{props.job.error.code ?? 'KNOWLEDGE_JOB_FAILED'}
+              {errorReason ? `；原因：${errorReason}` : ''}。请根据任务 ID查看服务端错误详情。
+            </span>
           </div>
+        </div>
+      ) : null}
+      {diagnostics.length > 0 ? (
+        <div className="kb2-note" role="status">
+          诊断：
+          {diagnostics.map((item) => item.code ?? item.severity ?? 'unknown').join('；')}
         </div>
       ) : null}
     </div>

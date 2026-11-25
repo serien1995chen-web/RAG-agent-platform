@@ -191,7 +191,12 @@ describe('TEST-PARSE-003/004-BLOCK S5 processing application', () => {
         context,
       }),
     ).rejects.toMatchObject({
-      problem: { error: { code: 'KNOWLEDGE_MODEL_OUTPUT_INVALID' } },
+      problem: {
+        error: {
+          code: 'KNOWLEDGE_MODEL_OUTPUT_INVALID',
+          details: { reason: 'qa_output_invalid', fallbackPolicy: 'none' },
+        },
+      },
     });
   });
 });

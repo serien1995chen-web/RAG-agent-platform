@@ -60,10 +60,10 @@ export interface DependencyAuditEntry {
 }
 
 export const DEPENDENCY_LEDGER_TOTALS = {
-  total: 166,
-  design: 164,
+  total: 168,
+  design: 166,
   testOnlySupplements: 2,
-  catalog: 166,
+  catalog: 168,
 } as const;
 
 export const DEPENDENCY_OWNER_STAGE_COUNTS: Readonly<Record<DependencyStage, number>> = {
@@ -71,7 +71,7 @@ export const DEPENDENCY_OWNER_STAGE_COUNTS: Readonly<Record<DependencyStage, num
   S2: 13,
   S3: 0,
   S4: 24,
-  S5: 2,
+  S5: 4,
   S6: 6,
   S7: 21,
   S8: 1,
@@ -115,13 +115,15 @@ const BASELINE_DESIGN_CATEGORY_COUNTS: Readonly<Record<DependencyAuditCategory, 
   DECLARED_INSTALLED: 52,
   DECLARED_NOT_INSTALLED: 5,
   UNDECLARED_INSTALLED: 15,
-  UNDECLARED_NOT_INSTALLED: 92,
+  UNDECLARED_NOT_INSTALLED: 94,
 };
 
 const CATALOG_ONLY_LATER_STAGE_DEPENDENCIES = new Set([
   'ajv',
   '@llamaindex/liteparse-wasm',
   '@types/turndown',
+  'office-oxide-wasm',
+  'officeparser',
 ]);
 const CATALOG_DECLARED_STAGES = new Set<DependencyStage>([
   'S1',

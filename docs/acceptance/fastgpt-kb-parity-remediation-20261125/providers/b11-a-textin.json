@@ -1,0 +1,30 @@
+{
+  "testId": "TEST-X-S11-PROVIDER-REAL",
+  "generatedAt": "2026-11-25T14:54:28.944Z",
+  "candidateSha": "UNFROZEN",
+  "status": "REAL_VERIFIED",
+  "provider": "textin",
+  "endpointHostHash": "36881d09daf6b092",
+  "requestId": "req-b11-textin",
+  "traceId": "trace-b11-textin",
+  "upstreamRequestId": null,
+  "fixtureSha256": "5aada2540ac65a8007c1ffc6ba0d279f293a43b9acaa978ef3d500bba18e35f8",
+  "inputPages": 2,
+  "outputPages": 2,
+  "markdownSha256": "44475c92eacb3e32679643b50aa114748d4c6dcb4599e478c4c8022a9476b15f",
+  "imageCount": 0,
+  "objectRefCount": 0,
+  "imageHandling": "drop",
+  "usage": [
+    {
+      "provider": "textin",
+      "unit": "page",
+      "quantity": 2,
+      "status": 200
+    }
+  ],
+  "attempt": 1,
+  "actualProvider": "textin",
+  "fallbackUsed": false,
+  "elapsedMs": 1224
+}

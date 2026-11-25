@@ -170,7 +170,13 @@ export class S5ProcessingApplication {
             requestId: input.context.requestId,
             traceId: input.context.traceId,
             retryable: false,
-            details: { chunkHash: chunk.contentHash, fallbackPolicy: 'none' },
+            details: {
+              reason: 'qa_output_invalid',
+              chunkHash: chunk.contentHash,
+              fallbackPolicy: 'none',
+              attempts: result.attempts,
+              diagnostics: result.diagnostics,
+            },
           });
         }
         diagnostics.push({

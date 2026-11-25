@@ -1,0 +1,11 @@
+{
+  "testId": "TEST-X-S11-PROVIDER-REAL",
+  "generatedAt": "2026-11-25T14:54:45.079Z",
+  "candidateSha": "UNFROZEN",
+  "status": "REAL_VERIFIED",
+  "endpointHostHash": "04b0afbac4bca387",
+  "modelId": "deepseek-v4.1-flash",
+  "providerCalls": 1,
+  "classification": "KNOWLEDGE_MODEL_FAILED",
+  "retryable": false
+}

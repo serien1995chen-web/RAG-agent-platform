@@ -4,6 +4,7 @@ dist
 .turbo
 coverage
 artifacts
+work
 pnpm-lock.yaml
 *.json
 *.generated.*

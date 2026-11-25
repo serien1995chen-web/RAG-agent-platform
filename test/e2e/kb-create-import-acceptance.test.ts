@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
-import { mkdir } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import AxeBuilder from '@axe-core/playwright';
 import { chromium, expect as playwrightExpect, type Browser, type Page } from '@playwright/test';
@@ -385,7 +386,13 @@ describe('FastGPT import entry compatibility', () => {
 
       await playwrightExpect.soft(page.getByLabel('训练类型')).toHaveCount(0);
       await playwrightExpect.soft(page.getByText('PDF 增强解析', { exact: true })).toHaveCount(0);
-      await playwrightExpect.soft(page.locator('input[type="file"]')).toHaveCount(1);
+      const input = page.locator('input[type="file"]');
+      await playwrightExpect.soft(input).toHaveCount(1);
+      await playwrightExpect.soft(input).toHaveAttribute('accept', /\.txt/);
+      await playwrightExpect.soft(input).toHaveAttribute('accept', /\.wps/);
+      const main = page.locator('.kb2-import-main');
+      const mainBox = await main.boundingBox();
+      expect(mainBox?.width ?? 0).toBeGreaterThan(1000);
     } finally {
       await context.close();
     }
@@ -403,7 +410,7 @@ describe('FastGPT import entry compatibility', () => {
           'utf8',
         ),
       });
-      await playwrightExpect(page.getByText('completed', { exact: true })).toBeVisible({
+      await playwrightExpect(page.getByText('上传完成', { exact: true })).toBeVisible({
         timeout: 30_000,
       });
       await page.getByRole('button', { name: '下一步' }).click();
@@ -421,6 +428,59 @@ describe('FastGPT import entry compatibility', () => {
       await page.getByRole('button', { name: '下一步' }).click();
       await capture(page, 'text-preview-step');
     } finally {
+      await context.close();
+    }
+  });
+
+  it('KB-CI-IMPORT-004 blocks the sixth file before starting its upload', async () => {
+    const { context, page } = await pageContext();
+    try {
+      await openImport(page, 'fileLocal');
+      const uploadRequests: string[] = [];
+      page.on('request', (request) => {
+        if (request.method() === 'POST' && request.url().endsWith('/v1/knowledge/uploads')) {
+          uploadRequests.push(request.url());
+        }
+      });
+      await page.locator('input[type="file"]').setInputFiles(
+        Array.from({ length: 6 }, (_, index) => ({
+          name: `验收-${index + 1}.txt`,
+          mimeType: 'text/plain',
+          buffer: Buffer.from(`file ${index + 1}`, 'utf8'),
+        })),
+      );
+      await playwrightExpect(page.getByText('单次最多上传 5 个文件')).toBeVisible();
+      await playwrightExpect(page.locator('.kb2-upload-row')).toHaveCount(5);
+      expect(uploadRequests.length).toBeLessThanOrEqual(5);
+    } finally {
+      await context.close();
+    }
+  });
+
+  it('KB-CI-IMPORT-005 blocks oversized and unsupported files before upload', async () => {
+    const { context, page } = await pageContext();
+    const fixtureDir = await mkdtemp(join(tmpdir(), 'kb-import-limit-'));
+    const oversizedPath = join(fixtureDir, 'oversized.txt');
+    try {
+      await openImport(page, 'fileLocal');
+      const uploadRequests: string[] = [];
+      page.on('request', (request) => {
+        if (request.method() === 'POST' && request.url().endsWith('/v1/knowledge/uploads')) {
+          uploadRequests.push(request.url());
+        }
+      });
+      await writeFile(oversizedPath, Buffer.alloc(50 * 1024 * 1024 + 1));
+      await page.locator('input[type="file"]').setInputFiles(oversizedPath);
+      await playwrightExpect(page.getByText(/oversized\.txt：超过 50 MB/)).toBeVisible();
+      await page.locator('input[type="file"]').setInputFiles({
+        name: 'unsupported.exe',
+        mimeType: 'application/octet-stream',
+        buffer: Buffer.from('not supported'),
+      });
+      await playwrightExpect(page.getByText(/unsupported\.exe：文件类型不受支持/)).toBeVisible();
+      expect(uploadRequests).toHaveLength(0);
+    } finally {
+      await rm(fixtureDir, { recursive: true, force: true });
       await context.close();
     }
   });

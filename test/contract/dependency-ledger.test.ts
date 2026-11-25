@@ -27,7 +27,9 @@ function realCatalog(): Map<string, string> {
         entry.ownerStage === 'S8' ||
         entry.ownerStage === 'S10' ||
         entry.name === '@llamaindex/liteparse-wasm' ||
-        entry.name === '@types/turndown',
+        entry.name === '@types/turndown' ||
+        entry.name === 'office-oxide-wasm' ||
+        entry.name === 'officeparser',
     ).map((entry) => [entry.name, entry.version]),
   );
 }
@@ -37,9 +39,9 @@ function mutableAudit(): DependencyAuditEntry[] {
 }
 
 describe('npm dependency ledger', () => {
-  it('contains 166 unique entries, 164 design entries and 2 approved test-only entries', () => {
-    expect(NPM_DEPENDENCY_BASELINE).toHaveLength(166);
-    expect(new Set(NPM_DEPENDENCY_BASELINE.map((entry) => entry.name)).size).toBe(166);
+  it('contains 168 unique entries, 166 design entries and 2 approved test-only entries', () => {
+    expect(NPM_DEPENDENCY_BASELINE).toHaveLength(168);
+    expect(new Set(NPM_DEPENDENCY_BASELINE.map((entry) => entry.name)).size).toBe(168);
     expect(
       NPM_DEPENDENCY_BASELINE.filter((entry) => entry.source === 'USER_APPROVED_S1_BROWSER_E2E'),
     ).toHaveLength(2);
@@ -57,7 +59,7 @@ describe('npm dependency ledger', () => {
     );
     expect(counts).toEqual(DEPENDENCY_OWNER_STAGE_COUNTS);
     expect(NPM_DEPENDENCY_BASELINE.find((entry) => entry.name === 'ajv')?.ownerStage).toBe('S4');
-    expect(DEPENDENCY_LEDGER_TOTALS.catalog).toBe(166);
+    expect(DEPENDENCY_LEDGER_TOTALS.catalog).toBe(168);
     expect(NPM_DEPENDENCY_BASELINE.filter((entry) => entry.ownerStage === 'S2')).toHaveLength(13);
     expect(
       NPM_DEPENDENCY_BASELINE.find((entry) => entry.name === '@llamaindex/liteparse-wasm')
@@ -91,7 +93,7 @@ describe('npm dependency ledger', () => {
 
   it('rejects missing entries', () => {
     expect(validateDependencyLedger(mutableLedger().slice(0, -1)).join('\n')).toContain(
-      '应为 166 项',
+      '应为 168 项',
     );
   });
 
@@ -130,8 +132,8 @@ describe('npm dependency ledger', () => {
 });
 
 describe('npm dependency baseline audit', () => {
-  it('matches the frozen baseline state and 52/5/15/92 classification', () => {
-    expect(NPM_DEPENDENCY_AUDIT).toHaveLength(166);
+  it('matches the frozen baseline state and 52/5/15/94 design classification', () => {
+    expect(NPM_DEPENDENCY_AUDIT).toHaveLength(168);
     expect(validateDependencyAudit()).toEqual([]);
     expect(
       NPM_DEPENDENCY_AUDIT.filter((entry) => entry.baselineCategory === 'DECLARED_INSTALLED'),
@@ -140,11 +142,14 @@ describe('npm dependency baseline audit', () => {
       NPM_DEPENDENCY_AUDIT.filter((entry) => entry.baselineCategory === 'DECLARED_NOT_INSTALLED'),
     ).toHaveLength(5);
     expect(NPM_DEPENDENCY_AUDIT.filter((entry) => entry.baselineTransitiveOnly)).toHaveLength(15);
+    expect(
+      NPM_DEPENDENCY_AUDIT.filter((entry) => entry.baselineCategory === 'UNDECLARED_NOT_INSTALLED'),
+    ).toHaveLength(96);
   });
 
   it('rejects a missing or duplicate audit entry', () => {
     const missing = mutableAudit().slice(0, -1);
-    expect(validateDependencyAudit(missing).join('\n')).toContain('应为 166 项');
+    expect(validateDependencyAudit(missing).join('\n')).toContain('应为 168 项');
 
     const duplicate = mutableAudit();
     duplicate[1] = structuredClone(duplicate[0]!);

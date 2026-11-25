@@ -93,6 +93,15 @@ export {
   credentialMetadataOf,
 } from './knowledge/ingestion-contract';
 export type { ImportUrlPreview } from './knowledge/ingestion-contract';
+export {
+  DOCUMENT_ACCEPT,
+  DOCUMENT_FILE_EXTENSIONS,
+  DOCUMENT_MIME_BY_EXTENSION,
+  MAX_KNOWLEDGE_FILE_BYTES,
+  MAX_LOCAL_IMPORT_FILES,
+  isDocumentFileExtension,
+} from './knowledge/file-policy';
+export type { DocumentFileExtension } from './knowledge/file-policy';
 
 export {
   DEFERRED_OPERATION_MANIFEST,

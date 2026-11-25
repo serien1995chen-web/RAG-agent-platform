@@ -57,11 +57,23 @@ describe('FILE OpenAPI and runtime contract', () => {
     };
     expect(uploadInit.required).toContain('knowledgeSpaceId');
     expect(uploadInit.properties.name?.maxLength).toBe(180);
-    expect(uploadInit.properties.sizeBytes?.maximum).toBe(1048576000);
+    expect(uploadInit.properties.sizeBytes?.maximum).toBe(52428800);
     const presign = openapi.components.schemas.PresignUploadParts as {
       properties: Record<string, Record<string, unknown>>;
     };
     expect(presign.properties.partNumbers?.maxItems).toBe(10000);
+  });
+
+  it('requires a stable Source segment count in list and detail responses', () => {
+    const source = openapi.components.schemas.Source as {
+      required: string[];
+      properties: Record<string, Record<string, unknown>>;
+    };
+    expect(source.required).toContain('segmentCount');
+    expect(source.properties.segmentCount).toMatchObject({
+      type: 'integer',
+      minimum: 0,
+    });
   });
 
   it('allows content ticket authentication and Range without X-Workspace-Id', () => {

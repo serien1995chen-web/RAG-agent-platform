@@ -1,0 +1,106 @@
+{
+  "generatedAt": "2026-11-25T15:03:51.889Z",
+  "baseUrl": "http://127.0.0.1:3010",
+  "spaceId": "6b06f879d02e637945014b43",
+  "modelSource": "environment",
+  "defaults": {
+    "embedding": "qwen3.7-text-embedding",
+    "textLLM": "deepseek-v4.1-flash",
+    "imageLLM": "kimi-k2.5"
+  },
+  "office": {
+    "parentStatus": "succeeded",
+    "childStatus": "succeeded",
+    "parserVersion": "office-oxide-wasm@0.1.8",
+    "source": {
+      "id": "65e2d2928fbc81106e754f30",
+      "name": "apache-poi-d316c3aec6.doc",
+      "processingStatus": "ready",
+      "segmentCount": 1,
+      "sizeBytes": 9216
+    }
+  },
+  "qa": {
+    "parentStatus": "succeeded",
+    "source": {
+      "id": "1dc019f4a5820f6fde48f07d",
+      "name": "qa-d316c3aec6.txt",
+      "processingStatus": "ready",
+      "segmentCount": 5,
+      "sizeBytes": 499
+    },
+    "segmentCount": 5,
+    "segmentsWithQuestionAndAnswer": 5,
+    "externalEvidence": {
+      "segmentIds": [
+        "6b06f8d01d9e1f6e0d8e90d0",
+        "6b06f8d01d9e1f6e0d8e90d2",
+        "6b06f8d01d9e1f6e0d8e90d4",
+        "6b06f8d01d9e1f6e0d8e90d6",
+        "6b06f8d01d9e1f6e0d8e90d8"
+      ],
+      "parserVersion": "native-text@1",
+      "rawTextHash": "sha256:7886a55907132d647fa2bf093f8ac1ffa18e65f5005b275a7aa76b14fa0afc6f",
+      "chunkingConfigHash": "sha256:b17d35e35ae949cf01db1a7e705d3912fc9014b175737215455c1ab0b2e607c0",
+      "qaPromptVersion": "qa.default@1",
+      "qaCount": 5,
+      "fallbackUsed": false,
+      "qaAttempts": 1,
+      "qaUsage": {
+        "inputTokens": 213,
+        "outputTokens": 1993
+      },
+      "parserAttempts": 1,
+      "providerUsage": [],
+      "requestEvidence": null,
+      "ocrFallbackUsed": false,
+      "structuredImport": false
+    }
+  },
+  "ocr": {
+    "parentStatus": "succeeded",
+    "childStatus": "succeeded",
+    "parserVersion": "textin@1",
+    "externalEvidence": {
+      "segmentIds": [
+        "6b06f8d61d9e1f6e0d8ea675"
+      ],
+      "parserVersion": "textin@1",
+      "rawTextHash": "sha256:78503af61777e5b644fb3d57f5eaab6f1fa7e981b4ada0ce0d571fea790107db",
+      "chunkingConfigHash": "sha256:c9acafb4ed6f125a1a89cf627fbb7714b6f2314361a0ecb4e0218d9c51a3fade",
+      "qaPromptVersion": null,
+      "qaCount": 0,
+      "fallbackUsed": false,
+      "qaAttempts": 0,
+      "qaUsage": {
+        "inputTokens": 0,
+        "outputTokens": 0
+      },
+      "parserAttempts": 1,
+      "providerUsage": [
+        {
+          "provider": "textin",
+          "unit": "page",
+          "quantity": 1,
+          "status": 200
+        }
+      ],
+      "requestEvidence": {
+        "provider": "textin",
+        "status": 200,
+        "pageCount": 1,
+        "requests": 1
+      },
+      "ocrFallbackUsed": false,
+      "structuredImport": false
+    },
+    "source": {
+      "id": "b8fe2a4ff9eeaa2cb88fa2c2",
+      "name": "ocr-d316c3aec6.pdf",
+      "processingStatus": "ready",
+      "segmentCount": 1,
+      "sizeBytes": 30508
+    },
+    "fixtureSha256": "8dfd0a0c4c96a28547dea2108b13987b14303ccc3f42533c18be709bc831aa1e"
+  }
+}

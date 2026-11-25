@@ -73,7 +73,11 @@ export function tagValuesForSource(source: Source, tags: Tag[]) {
 }
 
 export function sourceStatusView(status: string) {
+  if (status === 'initializing') return { label: '初始化中', tone: 'info' as const };
+  if (status === 'uploading') return { label: '上传中', tone: 'info' as const };
+  if (status === 'completed') return { label: '已完成', tone: 'success' as const };
   if (status === 'ready') return { label: '已就绪', tone: 'success' as const };
+  if (status === 'succeeded') return { label: '已完成', tone: 'success' as const };
   if (status === 'failed') return { label: '训练异常', tone: 'danger' as const };
   if (status === 'partial') return { label: '部分完成', tone: 'warning' as const };
   if (status === 'parsing') return { label: '内容解析中', tone: 'info' as const };
@@ -86,7 +90,52 @@ export function sourceStatusView(status: string) {
   if (status === 'deleting') return { label: '删除中', tone: 'warning' as const };
   if (status === 'deleted') return { label: '已删除', tone: 'neutral' as const };
   if (status === 'draft') return { label: '未开始', tone: 'neutral' as const };
-  return { label: status || '未知', tone: 'neutral' as const };
+  return { label: '未知状态', tone: 'neutral' as const };
+}
+
+export function jobStatusView(status: string) {
+  const labels: Record<
+    string,
+    { label: string; tone: 'neutral' | 'info' | 'success' | 'warning' | 'danger' | 'purple' }
+  > = {
+    queued: { label: '等待处理', tone: 'warning' },
+    initializing: { label: '初始化中', tone: 'info' },
+    leased: { label: '已领取', tone: 'info' },
+    running: { label: '处理中', tone: 'info' },
+    cancelling: { label: '取消中', tone: 'warning' },
+    paused: { label: '已暂停', tone: 'warning' },
+    retry_wait: { label: '等待重试', tone: 'warning' },
+    succeeded: { label: '已完成', tone: 'success' },
+    failed: { label: '失败', tone: 'danger' },
+    dead_letter: { label: '重试耗尽', tone: 'danger' },
+    cancelled: { label: '已取消', tone: 'neutral' },
+  };
+  return labels[status] ?? { label: '未知状态', tone: 'neutral' as const };
+}
+
+export function jobStageLabel(stage: string) {
+  const labels: Record<string, string> = {
+    queued: '等待处理',
+    initializing: '初始化中',
+    leased: '已领取',
+    running: '处理中',
+    parse: '内容解析',
+    parsing: '内容解析',
+    segment: '数据分块',
+    'persist-segments': '保存分块',
+    qa: '问答生成',
+    ocr: '图片识别',
+    caption: '图片描述',
+    embed: '向量化',
+    index: '建立索引',
+    fulltext: '全文索引',
+    rebuild: '重建索引',
+    sync: '同步数据',
+    succeeded: '已完成',
+    failed: '失败',
+    completed: '已完成',
+  };
+  return labels[stage] ?? '处理中';
 }
 
 export function sourceKindLabel(kind: Source['kind']) {

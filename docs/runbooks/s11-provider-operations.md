@@ -33,6 +33,8 @@ S11_AIPROXY_RERANK_MODEL
 S11_AIPROXY_VLM_MODEL
 S11_AIPROXY_VISION_EMBEDDING_MODEL
 AIPROXY_MODEL_PROFILE_JSON
+KB_DEFAULT_OCR_PROVIDER
+KB_DEFAULT_OCR_TIMEOUT_MS
 S11_OCR_SOMARK_PROFILE_JSON
 S11_OCR_TEXTIN_PROFILE_JSON
 S11_OCR_DOC2X_PROFILE_JSON
@@ -48,6 +50,11 @@ S11_FEISHU_DELETE_PROPAGATION_VERIFIED=true
 `AIPROXY_MODEL_PROFILE_JSON` is required when the catalog returns only model
 IDs and does not supply role, capability and embedding-dimension metadata. It
 is internal test/deployment configuration, not a public API or DTO.
+
+The product import page exposes only the FastGPT-style “PDF enhanced parsing”
+switch. The server selects `KB_DEFAULT_OCR_PROVIDER` (TextIn by default) for
+PDF files and resolves `env:S11_OCR_<PROVIDER>_PROFILE_JSON` internally. OCR
+failure is explicit; the product path never silently falls back to LiteParse.
 
 Never print or persist tokens, app secrets, authorization headers, raw response
 bodies, connection strings or object keys.

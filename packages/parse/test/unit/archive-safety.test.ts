@@ -98,6 +98,21 @@ function epubZip(): Buffer {
   ]);
 }
 
+function odfZip(mimeType: string): Buffer {
+  return buildZip([
+    { name: 'mimetype', data: Buffer.from(mimeType), method: 0 },
+    { name: 'content.xml', data: Buffer.from('<office:document-content/>') },
+    { name: 'META-INF/manifest.xml', data: Buffer.from('<manifest/>') },
+  ]);
+}
+
+function ofdZip(): Buffer {
+  return buildZip([
+    { name: 'OFD.xml', data: Buffer.from('<ofd:OFD/>') },
+    { name: 'Doc_0/Document.xml', data: Buffer.from('<ofd:Document/>') },
+  ]);
+}
+
 function centralSignatureOffset(zip: Buffer): number {
   const offset = zip.indexOf(Buffer.from([0x50, 0x4b, 0x01, 0x02]));
   if (offset < 0) throw new Error('central directory not found');
@@ -136,17 +151,52 @@ function withSingleDataDescriptor(data: Buffer, name = 'descriptor.txt'): Buffer
 }
 
 describe('TEST-X-SECURITY-UPLOAD archive safety inspector', () => {
-  it('TEST-FILE-001-U21 accepts valid ZIP, DOCX, PPTX, XLSX and EPUB containers', async () => {
+  it('TEST-FILE-001-U21 accepts valid ZIP and all supported Office container families', async () => {
     const cases = [
       ['fixture.zip', 'zip', buildZip([{ name: 'hello.txt', data: Buffer.from('hello') }])],
       ['fixture.docx', 'docx', docxZip()],
+      ['fixture.docm', 'zip', docxZip()],
+      ['fixture.wps', 'zip', docxZip()],
       ['fixture.pptx', 'pptx', pptxZip()],
+      ['fixture.pptm', 'zip', pptxZip()],
+      ['fixture.ppsx', 'zip', pptxZip()],
       ['fixture.xlsx', 'xlsx', xlsxZip()],
+      ['fixture.xlsm', 'zip', xlsxZip()],
+      ['fixture.xlsb', 'zip', xlsxZip()],
       ['fixture.epub', 'epub', epubZip()],
+      ['fixture.odt', 'zip', odfZip('application/vnd.oasis.opendocument.text')],
+      ['fixture.ods', 'zip', odfZip('application/vnd.oasis.opendocument.spreadsheet')],
+      ['fixture.odp', 'zip', odfZip('application/vnd.oasis.opendocument.presentation')],
+      ['fixture.ofd', 'zip', ofdZip()],
     ] as const;
     for (const [originalName, container, bytes] of cases) {
       const result = await inspectArchiveBuffer(bytes, { originalName, container });
-      expect(result).toMatchObject({ archive: true, safe: true, status: 'safe' });
+      expect(result, originalName).toMatchObject({
+        archive: true,
+        safe: true,
+        status: 'safe',
+      });
+    }
+  });
+
+  it('TEST-FILE-001-U24 rejects spoofed renamed ZIP Office documents', async () => {
+    for (const originalName of [
+      'spoofed.docm',
+      'spoofed.wps',
+      'spoofed.pptm',
+      'spoofed.xlsm',
+      'spoofed.odt',
+      'spoofed.ofd',
+    ]) {
+      expect(
+        await inspectArchiveBuffer(
+          buildZip([{ name: 'readme.txt', data: Buffer.from('not an office document') }]),
+          { originalName, container: 'zip' },
+        ),
+      ).toMatchObject({
+        safe: false,
+        reason: expect.stringMatching(/archive_structure_invalid|epub_mimetype_invalid/),
+      });
     }
   });
 

@@ -1,0 +1,31 @@
+{
+  "testId": "TEST-X-S11-PROVIDER-REAL",
+  "generatedAt": "2026-11-25T14:54:27.714Z",
+  "candidateSha": "UNFROZEN",
+  "status": "BLOCKED_PROVIDER",
+  "provider": "somark",
+  "endpointHostHash": "a374814b1a1e4fee",
+  "requestId": "req-b11-somark",
+  "traceId": "trace-b11-somark",
+  "fixtureSha256": "5aada2540ac65a8007c1ffc6ba0d279f293a43b9acaa978ef3d500bba18e35f8",
+  "inputPages": 2,
+  "outputPages": null,
+  "markdownSha256": null,
+  "imageCount": 0,
+  "objectRefCount": 0,
+  "imageHandling": "drop",
+  "usage": [
+    {
+      "provider": "somark",
+      "unit": "request",
+      "quantity": 1,
+      "status": 200
+    }
+  ],
+  "attempt": 1,
+  "actualProvider": "somark",
+  "fallbackUsed": false,
+  "elapsedMs": 3135,
+  "errorKind": "auth",
+  "upstreamStatus": 200
+}

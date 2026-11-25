@@ -1553,6 +1553,34 @@
     ]
   },
   {
+    "name": "office-oxide-wasm",
+    "version": "0.1.8",
+    "source": "FASTGPT_SUPPLEMENT",
+    "ownerStage": "S5",
+    "scope": "RUNTIME",
+    "environments": [
+      "APP_RUNTIME",
+      "WORKER_RUNTIME"
+    ],
+    "usage": [
+      "parse-file"
+    ]
+  },
+  {
+    "name": "officeparser",
+    "version": "7.8.0",
+    "source": "FASTGPT_SUPPLEMENT",
+    "ownerStage": "S5",
+    "scope": "RUNTIME",
+    "environments": [
+      "APP_RUNTIME",
+      "WORKER_RUNTIME"
+    ],
+    "usage": [
+      "parse-file"
+    ]
+  },
+  {
     "name": "openai",
     "version": "6.34.0",
     "source": "PROJECT_BASELINE",

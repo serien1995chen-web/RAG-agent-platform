@@ -50,7 +50,7 @@ export interface ModelSettingItem {
 
 export interface ModelSettingsView {
   version: number;
-  source: 'database' | 'environment';
+  source: 'database' | 'environment' | 'mock';
   models: ModelSettingItem[];
   defaults: ModelDefaults;
 }

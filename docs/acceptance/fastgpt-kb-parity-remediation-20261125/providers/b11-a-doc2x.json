@@ -1,0 +1,60 @@
+{
+  "testId": "TEST-X-S11-PROVIDER-REAL",
+  "generatedAt": "2026-11-25T14:54:31.787Z",
+  "candidateSha": "UNFROZEN",
+  "status": "REAL_VERIFIED",
+  "provider": "doc2x",
+  "endpointHostHash": "8bcfb900e1a0f598",
+  "requestId": "req-b11-doc2x",
+  "traceId": "trace-b11-doc2x",
+  "upstreamRequestId": null,
+  "fixtureSha256": "5aada2540ac65a8007c1ffc6ba0d279f293a43b9acaa978ef3d500bba18e35f8",
+  "inputPages": 2,
+  "outputPages": 2,
+  "markdownSha256": "c3e6244c1149023ca1ddfcabcc548533f91eb89ba4181d4e58c7f0d61d0469e3",
+  "imageCount": 0,
+  "objectRefCount": 0,
+  "imageHandling": "drop",
+  "usage": [
+    {
+      "provider": "doc2x",
+      "unit": "request",
+      "quantity": 1,
+      "status": 200
+    },
+    {
+      "provider": "doc2x",
+      "unit": "request",
+      "quantity": 1,
+      "status": 200
+    },
+    {
+      "provider": "doc2x",
+      "unit": "request",
+      "quantity": 1,
+      "status": 200
+    },
+    {
+      "provider": "doc2x",
+      "unit": "request",
+      "quantity": 1,
+      "status": 200
+    },
+    {
+      "provider": "doc2x",
+      "unit": "request",
+      "quantity": 1,
+      "status": 200
+    },
+    {
+      "provider": "doc2x",
+      "unit": "page",
+      "quantity": 2,
+      "status": 200
+    }
+  ],
+  "attempt": 1,
+  "actualProvider": "doc2x",
+  "fallbackUsed": false,
+  "elapsedMs": 2842
+}

@@ -1,0 +1,16 @@
+{
+  "testId": "TEST-X-S11-PROVIDER-REAL",
+  "generatedAt": "2026-11-25T14:54:45.011Z",
+  "candidateSha": "UNFROZEN",
+  "status": "REAL_VERIFIED",
+  "endpointHostHash": "04b0afbac4bca387",
+  "modelId": "deepseek-v4.1-flash",
+  "promptMarkerPresent": true,
+  "promptVersion": "sha256:44bb661a73a1bf6c6f92cff3294c2af490f968ae86f7ca75a6eed2f4d9776844",
+  "providerCalls": 1,
+  "qaCount": 1,
+  "usage": {
+    "inputTokens": 122,
+    "outputTokens": 408
+  }
+}

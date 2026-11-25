@@ -1,0 +1,396 @@
+{
+  "models": [
+    {
+      "id": "qwen3.7-text-embedding",
+      "displayName": "Qwen3.7 Text Embedding",
+      "provider": "通义千问",
+      "type": "embedding",
+      "capabilities": ["text-embedding", "caption-embedding", "dimension:1024"],
+      "dimension": 1024,
+      "tags": ["多模态"]
+    },
+    {
+      "id": "qwen-text-embedding-v4",
+      "displayName": "Qwen Text Embedding v4",
+      "provider": "通义千问",
+      "type": "embedding",
+      "capabilities": ["text-embedding", "dimension:1024"],
+      "dimension": 1024,
+      "tags": []
+    },
+    {
+      "id": "qwen3.7-text-rerank",
+      "displayName": "Qwen3.7 Text Rerank",
+      "provider": "通义千问",
+      "type": "rerank",
+      "capabilities": ["rerank"],
+      "dimension": null,
+      "tags": []
+    },
+    {
+      "id": "deepseek-v4.1-flash",
+      "displayName": "DeepSeek V4.1 Flash",
+      "provider": "深度求索",
+      "type": "llm",
+      "capabilities": ["chat", "structured-output"],
+      "tags": []
+    },
+    {
+      "id": "deepseek-v4-pro",
+      "displayName": "DeepSeek V4 Pro",
+      "provider": "深度求索",
+      "type": "llm",
+      "capabilities": ["chat", "structured-output"],
+      "tags": []
+    },
+    {
+      "id": "deepseek-v4-flash-0731",
+      "displayName": "DeepSeek V4 Flash 0731",
+      "provider": "深度求索",
+      "type": "llm",
+      "capabilities": ["chat"],
+      "tags": []
+    },
+    {
+      "id": "deepseek-v4-pro-0813",
+      "displayName": "DeepSeek V4 Pro 0813",
+      "provider": "深度求索",
+      "type": "llm",
+      "capabilities": ["chat"],
+      "tags": []
+    },
+    {
+      "id": "deepseek-flash-latest",
+      "displayName": "DeepSeek Flash Latest",
+      "provider": "深度求索",
+      "type": "llm",
+      "capabilities": ["chat"],
+      "tags": []
+    },
+    {
+      "id": "qwen3.8-flash",
+      "displayName": "Qwen3.8 Flash",
+      "provider": "通义千问",
+      "type": "llm",
+      "capabilities": ["chat", "structured-output"],
+      "tags": []
+    },
+    {
+      "id": "qwen3.8-max",
+      "displayName": "Qwen3.8 Max",
+      "provider": "通义千问",
+      "type": "llm",
+      "capabilities": ["chat", "structured-output"],
+      "tags": []
+    },
+    {
+      "id": "qwen3.7-plus",
+      "displayName": "Qwen3.7 Plus",
+      "provider": "通义千问",
+      "type": "llm",
+      "capabilities": ["chat"],
+      "tags": []
+    },
+    {
+      "id": "qwen3.7-max",
+      "displayName": "Qwen3.7 Max",
+      "provider": "通义千问",
+      "type": "llm",
+      "capabilities": ["chat"],
+      "tags": []
+    },
+    {
+      "id": "qwen3.6-plus",
+      "displayName": "Qwen3.6 Plus",
+      "provider": "通义千问",
+      "type": "llm",
+      "capabilities": ["chat"],
+      "tags": []
+    },
+    {
+      "id": "qwen3.5-plus",
+      "displayName": "Qwen3.5 Plus",
+      "provider": "通义千问",
+      "type": "llm",
+      "capabilities": ["chat"],
+      "tags": []
+    },
+    {
+      "id": "qwen3.5-flash",
+      "displayName": "Qwen3.5 Flash",
+      "provider": "通义千问",
+      "type": "llm",
+      "capabilities": ["chat"],
+      "tags": []
+    },
+    {
+      "id": "qwen3.5-35b-a3b",
+      "displayName": "Qwen3.5 35B A3B",
+      "provider": "通义千问",
+      "type": "llm",
+      "capabilities": ["chat"],
+      "tags": []
+    },
+    {
+      "id": "qwen4-max",
+      "displayName": "Qwen4 Max",
+      "provider": "通义千问",
+      "type": "llm",
+      "capabilities": ["chat"],
+      "tags": []
+    },
+    {
+      "id": "kimi-k2.5",
+      "displayName": "Kimi K2.5",
+      "provider": "月之暗面",
+      "type": "llm",
+      "capabilities": ["chat", "vision"],
+      "tags": ["多模态"]
+    },
+    {
+      "id": "kimi-k2.6",
+      "displayName": "Kimi K2.6",
+      "provider": "月之暗面",
+      "type": "llm",
+      "capabilities": ["chat", "vision"],
+      "tags": ["多模态"]
+    },
+    {
+      "id": "kimi-k3",
+      "displayName": "Kimi K3",
+      "provider": "月之暗面",
+      "type": "llm",
+      "capabilities": ["chat", "vision"],
+      "tags": ["多模态"]
+    },
+    {
+      "id": "kimi-k3.1-pro",
+      "displayName": "Kimi K3.1 Pro",
+      "provider": "月之暗面",
+      "type": "llm",
+      "capabilities": ["chat", "vision"],
+      "tags": ["多模态"]
+    },
+    {
+      "id": "kimi-k2.7-code",
+      "displayName": "Kimi K2.7 Code",
+      "provider": "月之暗面",
+      "type": "llm",
+      "capabilities": ["chat"],
+      "tags": []
+    },
+    {
+      "id": "glm-4.7",
+      "displayName": "GLM-4.7",
+      "provider": "ChatGLM",
+      "type": "llm",
+      "capabilities": ["chat"],
+      "tags": []
+    },
+    {
+      "id": "glm-5",
+      "displayName": "GLM-5",
+      "provider": "ChatGLM",
+      "type": "llm",
+      "capabilities": ["chat"],
+      "tags": []
+    },
+    {
+      "id": "glm-5.1",
+      "displayName": "GLM-5.1",
+      "provider": "ChatGLM",
+      "type": "llm",
+      "capabilities": ["chat"],
+      "tags": []
+    },
+    {
+      "id": "glm-5.2",
+      "displayName": "GLM-5.2",
+      "provider": "ChatGLM",
+      "type": "llm",
+      "capabilities": ["chat"],
+      "tags": []
+    },
+    {
+      "id": "glm-5.3",
+      "displayName": "GLM-5.3",
+      "provider": "ChatGLM",
+      "type": "llm",
+      "capabilities": ["chat"],
+      "tags": []
+    },
+    {
+      "id": "glm-5.3-flash",
+      "displayName": "GLM-5.3 Flash",
+      "provider": "ChatGLM",
+      "type": "llm",
+      "capabilities": ["chat"],
+      "tags": []
+    },
+    {
+      "id": "glm-5v-turbo",
+      "displayName": "GLM-5V Turbo",
+      "provider": "ChatGLM",
+      "type": "llm",
+      "capabilities": ["chat", "vision"],
+      "tags": ["多模态"]
+    },
+    {
+      "id": "minimax-h3-max",
+      "displayName": "MiniMax H3 Max",
+      "provider": "MiniMax",
+      "type": "llm",
+      "capabilities": ["chat"],
+      "tags": []
+    },
+    {
+      "id": "minimax-h3",
+      "displayName": "MiniMax H3",
+      "provider": "MiniMax",
+      "type": "llm",
+      "capabilities": ["chat"],
+      "tags": []
+    },
+    {
+      "id": "minimax-m2.5",
+      "displayName": "MiniMax M2.5",
+      "provider": "MiniMax",
+      "type": "llm",
+      "capabilities": ["chat"],
+      "tags": []
+    },
+    {
+      "id": "minimax-m2.7",
+      "displayName": "MiniMax M2.7",
+      "provider": "MiniMax",
+      "type": "llm",
+      "capabilities": ["chat"],
+      "tags": []
+    },
+    {
+      "id": "minimax-m3",
+      "displayName": "MiniMax M3",
+      "provider": "MiniMax",
+      "type": "llm",
+      "capabilities": ["chat"],
+      "tags": []
+    },
+    {
+      "id": "minimax-m3.1-flash",
+      "displayName": "MiniMax M3.1 Flash",
+      "provider": "MiniMax",
+      "type": "llm",
+      "capabilities": ["chat"],
+      "tags": []
+    },
+    {
+      "id": "seed-2.0-pro",
+      "displayName": "Doubao Seed 2.0 Pro",
+      "provider": "豆包",
+      "type": "llm",
+      "capabilities": ["chat"],
+      "tags": []
+    },
+    {
+      "id": "seed-2.0-mini",
+      "displayName": "Doubao Seed 2.0 Mini",
+      "provider": "豆包",
+      "type": "llm",
+      "capabilities": ["chat"],
+      "tags": []
+    },
+    {
+      "id": "seed-2.0-lite",
+      "displayName": "Doubao Seed 2.0 Lite",
+      "provider": "豆包",
+      "type": "llm",
+      "capabilities": ["chat"],
+      "tags": []
+    },
+    {
+      "id": "seed-2.1-pro",
+      "displayName": "Doubao Seed 2.1 Pro",
+      "provider": "豆包",
+      "type": "llm",
+      "capabilities": ["chat"],
+      "tags": []
+    },
+    {
+      "id": "seed-2.1-turbo",
+      "displayName": "Doubao Seed 2.1 Turbo",
+      "provider": "豆包",
+      "type": "llm",
+      "capabilities": ["chat"],
+      "tags": []
+    },
+    {
+      "id": "step-3.5-flash",
+      "displayName": "Step 3.5 Flash",
+      "provider": "阶跃星辰",
+      "type": "llm",
+      "capabilities": ["chat"],
+      "tags": []
+    },
+    {
+      "id": "step-3.7-flash",
+      "displayName": "Step 3.7 Flash",
+      "provider": "阶跃星辰",
+      "type": "llm",
+      "capabilities": ["chat"],
+      "tags": []
+    },
+    {
+      "id": "step-5-preview",
+      "displayName": "Step 5 Preview",
+      "provider": "阶跃星辰",
+      "type": "llm",
+      "capabilities": ["chat"],
+      "tags": ["beta"]
+    },
+    {
+      "id": "ling-3.1-flash",
+      "displayName": "Ling 3.1 Flash",
+      "provider": "蚂蚁 Ling",
+      "type": "llm",
+      "capabilities": ["chat"],
+      "tags": []
+    },
+    {
+      "id": "mimo-v2.6-flash",
+      "displayName": "MiMo V2.6 Flash",
+      "provider": "小米",
+      "type": "llm",
+      "capabilities": ["chat"],
+      "tags": []
+    },
+    {
+      "id": "mimo-v2.6-pro",
+      "displayName": "MiMo V2.6 Pro",
+      "provider": "小米",
+      "type": "llm",
+      "capabilities": ["chat"],
+      "tags": []
+    },
+    {
+      "id": "longcat-2.0",
+      "displayName": "LongCat 2.0",
+      "provider": "美团 LongCat",
+      "type": "llm",
+      "capabilities": ["chat"],
+      "tags": []
+    },
+    {
+      "id": "ernie-5.5-flash-preview",
+      "displayName": "ERNIE 5.5 Flash Preview",
+      "provider": "文心一言",
+      "type": "llm",
+      "capabilities": ["chat"],
+      "tags": ["beta"]
+    }
+  ],
+  "defaults": {
+    "embedding": "qwen3.7-text-embedding",
+    "textLLM": "deepseek-v4.1-flash",
+    "imageLLM": "kimi-k2.5"
+  }
+}

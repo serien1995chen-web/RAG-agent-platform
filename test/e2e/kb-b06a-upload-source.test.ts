@@ -270,7 +270,7 @@ describe('L1-B06-ING-001 product upload flow', () => {
       mimeType: 'text/plain',
       buffer: Buffer.from('B06A e2e upload body ' + suffix, 'utf8'),
     });
-    await playwrightExpect(page.getByText('completed', { exact: true })).toBeVisible({
+    await playwrightExpect(page.getByText('上传完成', { exact: true })).toBeVisible({
       timeout: 60_000,
     });
     await playwrightExpect(page.getByText(name, { exact: true })).toBeVisible();
@@ -441,7 +441,7 @@ describe('L1-B06-ING-001 product upload flow', () => {
     const survivingId = ((await survivingInit.json()) as { data: { uploadId: string } }).data
       .uploadId;
     const survivingRow = page.locator('.kb2-upload-row').filter({ hasText: survivingName });
-    await playwrightExpect(survivingRow.getByText('completed', { exact: true })).toBeVisible({
+    await playwrightExpect(survivingRow.getByText('上传完成', { exact: true })).toBeVisible({
       timeout: 60_000,
     });
 
@@ -485,7 +485,7 @@ describe('L1-B06-ING-001 product upload flow', () => {
     const init = await initPromise;
     const initPayload = (await init.json()) as { data: { uploadId: string } };
     const uploadId = initPayload.data.uploadId;
-    await playwrightExpect(page.getByText('completed', { exact: true })).toBeVisible({
+    await playwrightExpect(page.getByText('上传完成', { exact: true })).toBeVisible({
       timeout: 60_000,
     });
     const row = page.locator('.kb2-upload-row').filter({ hasText: name });

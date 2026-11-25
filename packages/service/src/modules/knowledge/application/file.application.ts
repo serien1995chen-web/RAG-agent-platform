@@ -1,5 +1,10 @@
 import { createHash, randomBytes } from 'node:crypto';
-import { KnowledgeApiError, createKnowledgeError } from '@kb/contracts';
+import {
+  DOCUMENT_MIME_BY_EXTENSION,
+  KnowledgeApiError,
+  MAX_KNOWLEDGE_FILE_BYTES,
+  createKnowledgeError,
+} from '@kb/contracts';
 import type { TenantContext } from '../../../shared/persistence/knowledge/tenant';
 import type {
   AccessPort,
@@ -20,21 +25,18 @@ import type {
 
 export const UPLOAD_PART_SIZE_BYTES = 8 * 1024 * 1024;
 export const UPLOAD_MAX_PARTS = 10_000;
-export const UPLOAD_MAX_BYTES = 1_000 * 1024 * 1024;
+export const UPLOAD_MAX_BYTES = MAX_KNOWLEDGE_FILE_BYTES;
 export const UPLOAD_SESSION_TTL_MS = 3 * 60 * 60 * 1000;
 
 const MIME_BY_EXTENSION: Record<string, readonly string[]> = {
-  txt: ['text/plain'],
-  md: ['text/markdown', 'text/x-markdown'],
+  ...Object.fromEntries(
+    Object.entries(DOCUMENT_MIME_BY_EXTENSION).map(([extension, mimes]) => [
+      extension.slice(1),
+      mimes,
+    ]),
+  ),
   markdown: ['text/markdown', 'text/x-markdown'],
-  html: ['text/html', 'application/xhtml+xml'],
   htm: ['text/html', 'application/xhtml+xml'],
-  pdf: ['application/pdf'],
-  docx: ['application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
-  pptx: ['application/vnd.openxmlformats-officedocument.presentationml.presentation'],
-  xlsx: ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'],
-  csv: ['text/csv', 'application/csv'],
-  epub: ['application/epub+zip'],
   zip: ['application/zip'],
   png: ['image/png'],
   jpg: ['image/jpeg'],
@@ -182,12 +184,26 @@ function validateNameAndMime(name: string, mimeType: string, context: TenantCont
   }
 }
 
-function magicMatches(mimeType: string, bytes: Uint8Array): boolean {
+function magicMatches(mimeType: string, bytes: Uint8Array, originalName: string): boolean {
   const buffer = Buffer.from(bytes);
+  const extension = `.${originalName.split('.').at(-1)?.toLowerCase() ?? ''}`;
   const zipMagic =
     buffer.subarray(0, 4).equals(Buffer.from([0x50, 0x4b, 0x03, 0x04])) ||
     buffer.subarray(0, 4).equals(Buffer.from([0x50, 0x4b, 0x05, 0x06])) ||
     buffer.subarray(0, 4).equals(Buffer.from([0x50, 0x4b, 0x07, 0x08]));
+  const oleMagic = buffer
+    .subarray(0, 8)
+    .equals(Buffer.from([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1]));
+  if (extension === '.wps') return oleMagic || zipMagic;
+  if (['.doc', '.ppt', '.pps', '.pot', '.xls'].includes(extension)) return oleMagic;
+  if (extension === '.rtf') return buffer.subarray(0, 5).toString('ascii') === '{\\rtf';
+  if (
+    ['.docm', '.pptm', '.ppsx', '.ppsm', '.xlsm', '.xlsb', '.odt', '.ods', '.odp'].includes(
+      extension,
+    )
+  ) {
+    return zipMagic;
+  }
   switch (mimeType) {
     case 'application/pdf':
       return buffer.subarray(0, 5).toString('ascii') === '%PDF-';
@@ -224,13 +240,37 @@ function magicMatches(mimeType: string, bytes: Uint8Array): boolean {
   }
 }
 
-function isZipContainer(mimeType: string): boolean {
+function isZipContainer(mimeType: string, originalName: string): boolean {
+  const extension = `.${originalName.split('.').at(-1)?.toLowerCase() ?? ''}`;
   return (
     mimeType === 'application/zip' ||
     mimeType === 'application/epub+zip' ||
+    mimeType === 'application/vnd.oasis.opendocument.text' ||
+    mimeType === 'application/vnd.oasis.opendocument.spreadsheet' ||
+    mimeType === 'application/vnd.oasis.opendocument.presentation' ||
+    mimeType === 'application/vnd.ms-word.document.macroEnabled.12' ||
+    mimeType === 'application/vnd.ms-excel.sheet.macroEnabled.12' ||
+    mimeType === 'application/vnd.ms-excel.sheet.binary.macroEnabled.12' ||
+    mimeType === 'application/vnd.ms-powerpoint.presentation.macroEnabled.12' ||
+    mimeType === 'application/vnd.openxmlformats-officedocument.presentationml.slideshow' ||
+    mimeType === 'application/vnd.ms-powerpoint.slideshow.macroEnabled.12' ||
     mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
     mimeType === 'application/vnd.openxmlformats-officedocument.presentationml.presentation' ||
-    mimeType === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    mimeType === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ||
+    [
+      '.docm',
+      '.wps',
+      '.pptm',
+      '.ppsx',
+      '.ppsm',
+      '.xlsm',
+      '.xlsb',
+      '.odt',
+      '.ods',
+      '.odp',
+      '.ofd',
+      '.epub',
+    ].includes(extension)
   );
 }
 
@@ -313,7 +353,7 @@ export class FileApplication {
     if (!Number.isSafeInteger(input.sizeBytes) || input.sizeBytes <= 0) {
       throw payloadError(context, 'sizeBytes must be greater than zero');
     }
-    if (input.sizeBytes > UPLOAD_MAX_BYTES) throw payloadError(context, '1000 MiB');
+    if (input.sizeBytes > UPLOAD_MAX_BYTES) throw payloadError(context, '50 MiB');
     const partCount = Math.ceil(input.sizeBytes / UPLOAD_PART_SIZE_BYTES);
     if (partCount > UPLOAD_MAX_PARTS) throw payloadError(context, '10000 parts');
 
@@ -578,14 +618,14 @@ export class FileApplication {
         storage,
       );
       const hashed = await hashObject(object.body);
-      if (!magicMatches(ref.mimeType, hashed.prefix)) {
+      if (!magicMatches(ref.mimeType, hashed.prefix, ref.originalName)) {
         await this.objectStore.deleteObject(ref.objectKey, storage);
         await this.objectRefs
           .markUploadAborted(input.uploadId, session.version, context)
           .catch(() => undefined);
         throw unsupported(context, { reason: 'magic_mime_mismatch' });
       }
-      if (isZipContainer(ref.mimeType)) {
+      if (isZipContainer(ref.mimeType, ref.originalName)) {
         if (!this.archiveSafety) {
           await this.objectStore.deleteObject(ref.objectKey, storage).catch(() => undefined);
           await this.objectRefs

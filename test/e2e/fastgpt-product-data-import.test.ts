@@ -323,7 +323,7 @@ describe('FastGPT product module 3 Data and Import', () => {
     await playwrightExpect(
       page.getByText(`模块三上传-${suffix}.txt`, { exact: true }),
     ).toBeVisible();
-    await playwrightExpect(page.getByText('completed', { exact: true })).toBeVisible();
+    await playwrightExpect(page.getByText('上传完成', { exact: true })).toBeVisible();
     await page.getByRole('button', { name: '下一步' }).click();
     await page.getByRole('button', { name: '下一步' }).click();
     await page.getByRole('button', { name: '下一步' }).click();

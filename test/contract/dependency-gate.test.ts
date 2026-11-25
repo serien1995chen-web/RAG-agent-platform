@@ -83,6 +83,8 @@ const workspaceManifestExtras: Record<
       encoding: 'catalog:',
       'iconv-lite': 'catalog:',
       jschardet: 'catalog:',
+      'office-oxide-wasm': 'catalog:',
+      officeparser: 'catalog:',
     },
     devDependencies: {
       '@types/mime-types': 'catalog:',
@@ -207,7 +209,7 @@ describe('dependency-only license gate', () => {
       ledger: (entries) => entries.pop(),
     });
     expect(result.status).not.toBe(0);
-    expect(result.stderr).toContain('dependency ledger 应为 166 项');
+    expect(result.stderr).toContain('dependency ledger 应为 168 项');
   });
 
   it('fails when a ledger name is duplicated', () => {

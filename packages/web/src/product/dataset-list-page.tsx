@@ -27,6 +27,7 @@ import type { BatchResult, KnowledgeSpace, ModelBinding, PermissionLevel } from 
 import { ProductAppShell } from './shell';
 import { CollaboratorManagerDialog } from './collaborator-manager';
 import { ModelSelect } from './model-selector';
+import { modelsForRole } from './model-candidates';
 import {
   ProductButton,
   ProductCheckbox,
@@ -204,14 +205,9 @@ export function DatasetListPage(props: { parentId: string }) {
     enabled: createOpen,
   });
   const availableModels = (modelsQuery.data?.items ?? []).filter((model) => model.authorized);
-  const embeddingModels = availableModels.filter((model) => model.type === 'embedding');
-  const llmModels = availableModels.filter(
-    (model) => model.type === 'llm' && model.capabilities.includes('chat'),
-  );
-  const vlmModels = availableModels.filter(
-    (model) =>
-      (model.type === 'vlm' || model.type === 'llm') && model.capabilities.includes('vision'),
-  );
+  const embeddingModels = modelsForRole(availableModels, 'embedding');
+  const llmModels = modelsForRole(availableModels, 'llm');
+  const vlmModels = modelsForRole(availableModels, 'vlm');
   const canCreate =
     sessionQuery.data?.isWorkspaceOwner === true ||
     sessionQuery.data?.scopes.includes('knowledge:write') === true;
@@ -1175,6 +1171,8 @@ export function DatasetListPage(props: { parentId: string }) {
 
       <ProductModal
         open={createOpen}
+        size="lg"
+        width="min(560px, calc(100vw - 24px))"
         title={`创建${createLabel(createType)}`}
         description={
           createType === 'folder'

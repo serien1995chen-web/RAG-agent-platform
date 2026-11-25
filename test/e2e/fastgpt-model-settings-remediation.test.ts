@@ -17,7 +17,7 @@ const profile = {
       displayName: 'Qwen3.8 Flash',
       provider: 'Qwen',
       type: 'llm',
-      capabilities: ['chat', 'structured-output', 'vision'],
+      capabilities: ['chat', 'structured-output'],
       tags: [],
     },
     {
@@ -33,7 +33,15 @@ const profile = {
       id: 'kimi-k2.5',
       displayName: 'Kimi K2.5',
       provider: 'MoonshotAI',
-      type: 'vlm',
+      type: 'llm',
+      capabilities: ['chat', 'vision'],
+      tags: [],
+    },
+    {
+      id: 'glm-5v-turbo',
+      displayName: 'GLM-5V Turbo',
+      provider: 'ChatGLM',
+      type: 'llm',
       capabilities: ['chat', 'vision'],
       tags: [],
     },
@@ -41,7 +49,7 @@ const profile = {
   defaults: {
     embedding: 'qwen3.7-text-embedding',
     textLLM: 'qwen3.8-flash',
-    imageLLM: 'qwen3.8-flash',
+    imageLLM: 'kimi-k2.5',
   },
 };
 
@@ -151,7 +159,7 @@ describe('FastGPT model settings remediation', () => {
     ).rejects.toThrow('KNOWLEDGE_CONFLICT');
   }, 120_000);
 
-  it('creates with the same LLM in text and image slots and shows provider groups', async () => {
+  it('creates with real text and visual LLM candidates and shows provider groups', async () => {
     const context = await browser.newContext({
       viewport: { width: 1200, height: 900 },
       locale: 'zh-CN',
@@ -167,7 +175,7 @@ describe('FastGPT model settings remediation', () => {
       'Qwen3.8 Flash',
     );
     await playwrightExpect(page.getByRole('button', { name: /图片理解模型/ })).toContainText(
-      'Qwen3.8 Flash',
+      'Kimi K2.5',
     );
     await page.getByRole('button', { name: /图片理解模型/ }).click();
     await playwrightExpect(page.getByText('MoonshotAI', { exact: true })).toBeVisible();
@@ -198,7 +206,7 @@ describe('FastGPT model settings remediation', () => {
     expect(bindings.items).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ modelType: 'llm', modelId: 'qwen3.8-flash' }),
-        expect.objectContaining({ modelType: 'vlm', modelId: 'qwen3.8-flash' }),
+        expect.objectContaining({ modelType: 'vlm', modelId: 'kimi-k2.5' }),
       ]),
     );
     await context.close();
@@ -275,5 +283,46 @@ describe('FastGPT model settings remediation', () => {
       }
       await context.close();
     }
+  });
+
+  it('keeps the model selector inside 1200, 768 and 360 viewports', async () => {
+    const context = await browser.newContext({
+      viewport: { width: 1200, height: 900 },
+      locale: 'zh-CN',
+    });
+    await context.addCookies([cookie]);
+    const page = await context.newPage();
+    await page.goto(`${app.baseUrl}/dataset/list`, { waitUntil: 'networkidle' });
+    await page.getByRole('button', { name: '新建', exact: true }).click();
+    await page.getByRole('menuitem', { name: /通用知识库/ }).click();
+    for (const viewport of [
+      { width: 1200, height: 900 },
+      { width: 768, height: 1024 },
+      { width: 360, height: 800 },
+    ]) {
+      await page.setViewportSize(viewport);
+      const trigger = page.getByRole('button', { name: /文本理解模型/ });
+      await trigger.focus();
+      await page.keyboard.press('ArrowDown');
+      const listbox = page.getByRole('listbox', { name: '文本理解模型' });
+      await playwrightExpect(listbox).toBeVisible();
+      const box = await listbox.boundingBox();
+      expect(box).not.toBeNull();
+      expect(box!.x).toBeGreaterThanOrEqual(0);
+      expect(box!.x + box!.width).toBeLessThanOrEqual(viewport.width + 1);
+      expect(box!.y).toBeGreaterThanOrEqual(0);
+      expect(box!.y + box!.height).toBeLessThanOrEqual(viewport.height + 1);
+      await page.keyboard.press('ArrowDown');
+      await playwrightExpect(listbox.getByRole('option').first()).toBeFocused();
+      await listbox.getByRole('option').last().scrollIntoViewIfNeeded();
+      await playwrightExpect(listbox.getByRole('option').last()).toBeVisible();
+      await page.keyboard.press('Escape');
+      await playwrightExpect(trigger).toBeFocused();
+      await playwrightExpect(listbox).toHaveCount(0);
+      await trigger.click();
+      await page.locator('body').click({ position: { x: 2, y: 2 } });
+      await playwrightExpect(listbox).toHaveCount(0);
+    }
+    await context.close();
   });
 });

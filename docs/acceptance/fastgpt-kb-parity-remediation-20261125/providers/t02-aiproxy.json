@@ -1,0 +1,53 @@
+{
+  "testId": "TEST-X-S11-PROVIDER-REAL",
+  "generatedAt": "2026-11-25T14:54:21.671Z",
+  "candidateSha": "UNFROZEN",
+  "provider": "aiproxy",
+  "status": "REAL_VERIFIED",
+  "endpointHostHash": "04b0afbac4bca387",
+  "catalogModelCount": 133,
+  "modelRoleCount": 5,
+  "modelIds": {
+    "llm": "deepseek-v4.1-flash",
+    "embedding": "qwen3.7-text-embedding",
+    "rerank": "qwen3.7-text-rerank",
+    "vlm": "kimi-k2.5",
+    "visionEmbedding": "qwen3.7-text-embedding"
+  },
+  "visionEmbeddingMode": "caption-embedding",
+  "statuses": {
+    "llm": 200,
+    "embedding": 200,
+    "rerank": 200,
+    "vlm": 200,
+    "visionEmbedding": 200
+  },
+  "usage": {
+    "llm": {
+      "quantity": 43,
+      "inputTokens": 35,
+      "outputTokens": 8
+    },
+    "embedding": {
+      "quantity": 20,
+      "inputTokens": 20,
+      "outputTokens": 0
+    },
+    "rerank": {
+      "quantity": 36,
+      "inputTokens": 36,
+      "outputTokens": 0
+    },
+    "vlm": {
+      "quantity": 52,
+      "inputTokens": 20,
+      "outputTokens": 32
+    },
+    "visionEmbedding": {
+      "quantity": 22,
+      "inputTokens": 22,
+      "outputTokens": 0
+    }
+  },
+  "blockers": []
+}

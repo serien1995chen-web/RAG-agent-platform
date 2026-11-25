@@ -35,6 +35,7 @@ export interface S5OcrApplicationInput {
   requestId: string;
   traceId: string;
   context: TenantContext;
+  assertSource?: boolean;
 }
 
 export interface S5OcrApplicationResult extends S5OcrProviderResult {
@@ -259,15 +260,17 @@ export class S5OcrApplication {
         details: { field: 'workspaceId' },
       });
     }
-    await this.input.sourceGuard.assertSource(
-      {
-        workspaceId: input.workspaceId,
-        knowledgeSpaceId: input.knowledgeSpaceId,
-        sourceId: input.sourceId,
-        sourceVersion: input.sourceVersion,
-      },
-      input.context,
-    );
+    if (input.assertSource !== false) {
+      await this.input.sourceGuard.assertSource(
+        {
+          workspaceId: input.workspaceId,
+          knowledgeSpaceId: input.knowledgeSpaceId,
+          sourceId: input.sourceId,
+          sourceVersion: input.sourceVersion,
+        },
+        input.context,
+      );
+    }
     let sequence = 0;
     let schemaRetries = 0;
     let lastError: ProviderError | null = null;

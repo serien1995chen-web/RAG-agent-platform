@@ -35,7 +35,17 @@ export type ArchiveSafetyReason =
   | 'unsupported_compression_method'
   | 'zip64_unsupported';
 
-export type ArchiveContainer = 'archive' | 'docx' | 'epub' | 'pptx' | 'xlsx' | 'zip';
+export type ArchiveContainer =
+  | 'archive'
+  | 'docx'
+  | 'epub'
+  | 'odp'
+  | 'ods'
+  | 'odt'
+  | 'ofd'
+  | 'pptx'
+  | 'xlsx'
+  | 'zip';
 
 export interface ArchiveRangeSource {
   size: number;
@@ -185,9 +195,13 @@ function isZipSignature(bytes: Uint8Array): boolean {
 function normalizedContainer(name: string, fallback: ArchiveContainer): ArchiveContainer {
   if (fallback === 'archive') return 'archive';
   const extension = extname(name).toLowerCase();
-  if (extension === '.docx') return 'docx';
-  if (extension === '.pptx') return 'pptx';
-  if (extension === '.xlsx') return 'xlsx';
+  if (['.docx', '.docm', '.wps'].includes(extension)) return 'docx';
+  if (['.pptx', '.pptm', '.ppsx', '.ppsm'].includes(extension)) return 'pptx';
+  if (['.xlsx', '.xlsm', '.xlsb'].includes(extension)) return 'xlsx';
+  if (extension === '.odt') return 'odt';
+  if (extension === '.ods') return 'ods';
+  if (extension === '.odp') return 'odp';
+  if (extension === '.ofd') return 'ofd';
   if (extension === '.epub') return 'epub';
   if (extension === '.zip') return 'zip';
   return fallback;
@@ -644,9 +658,30 @@ async function validateContainerMarkers(
     if (!names.has('[content_types].xml') || !names.has('xl/workbook.xml')) {
       throw new ArchiveSafetyError('archive_structure_invalid');
     }
-  } else if (container === 'epub') {
-    if (plans[0]?.name !== 'mimetype' || mimetype !== 'application/epub+zip') {
+  } else if (
+    container === 'epub' ||
+    container === 'odt' ||
+    container === 'ods' ||
+    container === 'odp'
+  ) {
+    const expectedMime =
+      container === 'epub'
+        ? 'application/epub+zip'
+        : container === 'odt'
+          ? 'application/vnd.oasis.opendocument.text'
+          : container === 'ods'
+            ? 'application/vnd.oasis.opendocument.spreadsheet'
+            : 'application/vnd.oasis.opendocument.presentation';
+    const hasRequiredEntries =
+      container === 'epub'
+        ? names.has('meta-inf/container.xml')
+        : names.has('content.xml') && names.has('meta-inf/manifest.xml');
+    if (plans[0]?.name !== 'mimetype' || mimetype !== expectedMime || !hasRequiredEntries) {
       throw new ArchiveSafetyError('epub_mimetype_invalid');
+    }
+  } else if (container === 'ofd') {
+    if (!names.has('ofd.xml') || ![...names].some((name) => name.endsWith('/document.xml'))) {
+      throw new ArchiveSafetyError('archive_structure_invalid');
     }
   } else if (container === 'archive') {
     const manifests = plans.filter((plan) => plan.normalizedName === 'manifest.json');
@@ -831,7 +866,11 @@ async function inspectArchive(
         plan,
         limits,
         ensureAlive,
-        container === 'epub' && entryIndex === 0,
+        (container === 'epub' ||
+          container === 'odt' ||
+          container === 'ods' ||
+          container === 'odp') &&
+          entryIndex === 0,
         (bytes) => {
           actualTotal += bytes;
           metrics.actualUncompressedBytes = actualTotal;
@@ -864,7 +903,13 @@ async function inspectArchive(
       if (inspected.crc >>> 0 !== plan.entry.crc32 >>> 0) {
         throw new ArchiveSafetyError('archive_structure_invalid', 'unsupported', metrics);
       }
-      if (container === 'epub' && entryIndex === 0) {
+      if (
+        (container === 'epub' ||
+          container === 'odt' ||
+          container === 'ods' ||
+          container === 'odp') &&
+        entryIndex === 0
+      ) {
         mimetype = inspected.capturedPrefix.toString('utf8');
       }
     }

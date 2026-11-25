@@ -171,6 +171,7 @@ async function inspectImport(input: { name: string; trainingType: 'chunk' | 'qa'
     content: string;
     version: number;
   }>;
+  parseJobs: Array<{ status?: string; progress?: { stage?: string } }>;
 }> {
   const chunking = {
     trainingType: input.trainingType,
@@ -276,6 +277,8 @@ beforeAll(async () => {
   process.env.KB_TEST_S3_ENDPOINT ??= 'http://127.0.0.1:9000';
   process.env.KB_TEST_S3_REGION ??= 'us-east-1';
   process.env.KB_TEST_S3_BUCKET ??= 'kb-local';
+  process.env.KB_TEST_S3_ACCESS_KEY ??= 'minioadmin';
+  process.env.KB_TEST_S3_SECRET_KEY ??= 'minioadmin';
   app = await startB06aApp({ suffix, workspaceId, memberId, authToken });
   spaceId = await createSpace({ baseUrl: app.baseUrl, authToken, workspaceId, suffix });
   connection = await createKnowledgeMongoConnection(
@@ -322,22 +325,15 @@ describe('L1-B11-B-PARSE-003/004 product chain', () => {
     }
   });
 
-  it('L1-B11-B-PARSE-004-F01 imports invalid mock QA as raw fallback without duplicate Segments', async () => {
+  it('L1-B11-B-PARSE-004-F01 fails explicit QA instead of silently storing raw chunks', async () => {
     const result = await inspectImport({ name: `B11B qa ${suffix}`, trainingType: 'qa' });
     await writeRecord('parse-004-preview-segment', result);
-    expect.soft(result.job.status).toBe('succeeded');
-    expect.soft(result.segments.length).toBe(result.preview.totalChunks);
-    expect.soft(result.segments.every((segment) => segment.question.trim().length > 0)).toBe(true);
-    expect.soft(result.segments.every((segment) => segment.answer === '')).toBe(true);
-    const persistStep = result.job.steps?.find((step) => step.stepKey === 'persist-segments');
-    expect.soft(persistStep?.externalEvidence).toMatchObject({
-      fallbackUsed: true,
-      qaPromptVersion: 'qa.default@1',
-      qaCount: result.segments.length,
-    });
+    expect.soft(result.job.status).toBe('failed');
+    expect.soft(result.segments).toHaveLength(0);
+    expect.soft(result.parseJobs.some((job) => job.status === 'failed')).toBe(true);
     expect
-      .soft(result.job.steps?.filter((step) => step.stepKey === 'persist-segments'))
-      .toHaveLength(1);
+      .soft(result.job.steps?.some((step) => step.stepKey === 'persist-segments'))
+      .not.toBe(true);
   });
 
   it('L1-B11-B-PARSE-003-UI01/UI02 shows FastGPT grouped chunk/QA controls at 360/768/1200 and passes axe', async () => {
@@ -386,7 +382,16 @@ describe('L1-B11-B-PARSE-003/004 product chain', () => {
         }
         await playwrightExpect(page.getByLabel('最大段落深度')).toHaveAttribute('max', '8');
         await page.getByRole('radio', { name: /问答对提取/ }).check();
-        await playwrightExpect(page.getByLabel(/QA Prompt/)).toBeVisible();
+        await playwrightExpect(page.getByText('QA Prompt', { exact: true }).first()).toBeVisible();
+        await playwrightExpect(
+          page.getByRole('button', { name: '自定义 Prompt', exact: true }),
+        ).toBeVisible();
+        await page.getByRole('button', { name: '自定义 Prompt', exact: true }).click();
+        await playwrightExpect(
+          page.getByRole('dialog', { name: '自定义 QA Prompt' }).getByRole('textbox'),
+        ).toBeVisible();
+        await page.getByRole('button', { name: '完成', exact: true }).click();
+        await page.waitForTimeout(400);
         const dimensions = await page.evaluate(() => ({
           scrollWidth: document.documentElement.scrollWidth,
           clientWidth: document.documentElement.clientWidth,

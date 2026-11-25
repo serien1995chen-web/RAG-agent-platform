@@ -66,6 +66,7 @@ export {
 export type { LiteParseLoader, S5LiteParseConfig } from './s5/liteparse-provider';
 export { detectAnyDocExtension } from './s5/anydoc-detector';
 export { parseOfd } from './s5/ofd-parser';
+export { parseOfficeDocument } from './parsers/office';
 export { convertHtmlToMarkdown, extractHtmlDocument, extractImageSources } from './parsers/html';
 export type { HtmlDocumentExtraction } from './parsers/html';
 export {

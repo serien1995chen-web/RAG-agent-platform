@@ -1661,6 +1661,34 @@
     "baselineTargetVersionInstalled": false
   },
   {
+    "name": "office-oxide-wasm",
+    "designVersion": "0.1.8",
+    "ownerStage": "S5",
+    "source": "FASTGPT_SUPPLEMENT",
+    "baselineDeclaration": false,
+    "baselineInstallation": false,
+    "baselineTransitiveOnly": false,
+    "baselineCategory": "UNDECLARED_NOT_INSTALLED",
+    "baselineCatalogSpec": null,
+    "baselineLockVersions": [],
+    "baselineVersionMatchesDesign": false,
+    "baselineTargetVersionInstalled": false
+  },
+  {
+    "name": "officeparser",
+    "designVersion": "7.8.0",
+    "ownerStage": "S5",
+    "source": "FASTGPT_SUPPLEMENT",
+    "baselineDeclaration": false,
+    "baselineInstallation": false,
+    "baselineTransitiveOnly": false,
+    "baselineCategory": "UNDECLARED_NOT_INSTALLED",
+    "baselineCatalogSpec": null,
+    "baselineLockVersions": [],
+    "baselineVersionMatchesDesign": false,
+    "baselineTargetVersionInstalled": false
+  },
+  {
     "name": "openai",
     "designVersion": "6.34.0",
     "ownerStage": "S1",

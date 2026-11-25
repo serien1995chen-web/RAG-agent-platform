@@ -43,6 +43,18 @@ export class CapabilityUnavailableError extends Error {
   }
 }
 
+export class ProductBatchError extends Error {
+  constructor(
+    readonly code: string,
+    message = '批量操作未全部完成。',
+    readonly traceId?: string,
+    readonly requestId?: string,
+  ) {
+    super(message);
+    this.name = 'ProductBatchError';
+  }
+}
+
 function key(): string {
   return globalThis.crypto.randomUUID();
 }
@@ -92,6 +104,14 @@ export function productErrorView(error: unknown): {
   if (error instanceof CapabilityUnavailableError) {
     return { code: 'CAPABILITY_UNAVAILABLE', message: error.message };
   }
+  if (error instanceof ProductBatchError) {
+    return {
+      code: error.code,
+      message: localizedErrorCode(error.code),
+      ...(error.traceId ? { traceId: error.traceId } : {}),
+      ...(error.requestId ? { requestId: error.requestId } : {}),
+    };
+  }
   if (error instanceof KnowledgeRequestError) {
     return {
       code: error.problem.error.code,
@@ -108,6 +128,10 @@ export function productErrorView(error: unknown): {
 }
 
 function localizedError(problem: KnowledgeProblem): string {
+  return localizedErrorCode(problem.error.code);
+}
+
+function localizedErrorCode(code: string): string {
   const messages: Record<string, string> = {
     KNOWLEDGE_AUTH_REQUIRED: '登录状态已失效，请重新登录。',
     KNOWLEDGE_FORBIDDEN: '当前账号没有执行该操作的权限。',
@@ -125,7 +149,7 @@ function localizedError(problem: KnowledgeProblem): string {
     KNOWLEDGE_JOB_FAILED: '后台任务当前状态不允许该操作。',
     KNOWLEDGE_PARTIAL_SUCCESS: '操作仅部分成功，请检查失败项。',
   };
-  return messages[problem.error.code] ?? '服务返回错误，请重试。';
+  return messages[code] ?? '服务返回错误，请重试。';
 }
 
 export async function listSpaces(sort = '-updatedAt') {

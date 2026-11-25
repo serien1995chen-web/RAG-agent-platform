@@ -21540,7 +21540,8 @@
           "sourceVersion",
           "searchEnabled",
           "permissionState",
-          "permissionRevision",
+    "permissionRevision",
+          "segmentCount",
           "version"
         ],
         "properties": {
@@ -21722,6 +21723,13 @@
               4
             ]
           },
+    "segmentCount": {
+      "type": "integer",
+      "minimum": 0,
+      "examples": [
+        20
+      ]
+    },
           "metadata": {
             "type": "object",
             "description": "Source kind-specific public metadata. Source detail responses expose only safe webpage provenance fields.",
@@ -27386,7 +27394,7 @@
           "sizeBytes": {
             "type": "integer",
             "minimum": 1,
-            "maximum": 1048576000
+      "maximum": 52428800
           },
           "purpose": {
             "type": "string",

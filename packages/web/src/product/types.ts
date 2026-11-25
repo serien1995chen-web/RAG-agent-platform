@@ -90,7 +90,7 @@ export interface Source {
   aclSnapshotVersion?: number;
   ownershipMemberId?: string;
   effectivePermission?: PermissionLevel;
-  segmentCount?: number;
+  segmentCount: number;
   metadata?: Record<string, unknown>;
   tagValues?: SourceTagValue[];
   version: number;
@@ -216,7 +216,7 @@ export interface ModelCatalog {
 
 export interface ModelSettings {
   version: number;
-  source: 'database' | 'environment';
+  source: 'database' | 'environment' | 'mock';
   models: Array<Omit<Model, 'authorized'> & { enabled: boolean }>;
   defaults: ModelDefaults;
 }

@@ -5,6 +5,7 @@ import {
   type ModelCatalogItem,
   type ModelCatalogMetadata,
   type ModelCatalogPort,
+  type ModelSettingsView,
 } from '../application/s5-model-ports';
 import { resolveSecretRef } from '../../../shared/config/secret-ref';
 import type { S5AiproxyConfig } from '../../../shared/config/s5-aiproxy-config';
@@ -317,5 +318,44 @@ export class S5MockModelCatalog implements ModelCatalogPort {
         imageLLM: null,
       },
     };
+  }
+
+  async getSettings(): Promise<ModelSettingsView> {
+    const models = await this.listModels();
+    return {
+      version: 0,
+      source: 'mock',
+      models: models.map((model) => ({
+        modelId: model.modelId,
+        displayName: model.displayName,
+        provider: model.provider ?? 'Mock',
+        type: model.type,
+        capabilities: model.capabilities,
+        tags: model.tags ?? [],
+        enabled: model.authorized,
+        dimension: model.dimension,
+        ...(model.limits ? { limits: model.limits } : {}),
+      })),
+      defaults: {
+        embedding: 'mock-embedding-1024',
+        textLLM: 'mock-llm-general',
+        imageLLM: null,
+      },
+    };
+  }
+
+  async updateSettings(
+    input: { requestId: string; traceId: string },
+    _settings: Omit<ModelSettingsView, 'source'>,
+  ): Promise<ModelSettingsView> {
+    throw createKnowledgeError({
+      code: 'KNOWLEDGE_UNSUPPORTED_CONTENT',
+      requestId: input.requestId,
+      traceId: input.traceId,
+      details: {
+        field: 'modelSettings',
+        reason: 'mock_mode_read_only',
+      },
+    });
   }
 }

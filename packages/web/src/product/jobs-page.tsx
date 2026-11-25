@@ -3,7 +3,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
 import { controlJob, listJobs, type JobControlAction } from './api';
-import { sourceStatusView } from './dataset-detail-state';
+import { jobStageLabel, jobStatusView } from './dataset-detail-state';
 import { ProductAppShell } from './shell';
 import type { Job } from './types';
 import {
@@ -129,7 +129,7 @@ export function JobsPage(props: { spaceId: string }) {
                 'cancelled',
               ].map((value) => (
                 <option key={value} value={value}>
-                  {sourceStatusView(value).label}
+                  {jobStatusView(value).label}
                 </option>
               ))}
             </ProductSelect>
@@ -148,7 +148,7 @@ export function JobsPage(props: { spaceId: string }) {
           <div className="kb2-jobs-layout">
             <div className="kb2-jobs-list" aria-label="任务列表">
               {visible.map((job) => {
-                const statusView = sourceStatusView(job.status);
+                const statusView = jobStatusView(job.status);
                 return (
                   <button
                     type="button"
@@ -161,7 +161,7 @@ export function JobsPage(props: { spaceId: string }) {
                     <span className="kb2-job-row__id">{job.jobId}</span>
                     <StatusTag value={statusView.label} tone={statusView.tone} />
                     <span className="kb2-job-row__progress">
-                      {job.progress.stage} · {job.progress.percent}%
+                      {jobStageLabel(job.progress.stage)} · {job.progress.percent}%
                     </span>
                   </button>
                 );
@@ -176,8 +176,8 @@ export function JobsPage(props: { spaceId: string }) {
                       <h2>{selected.jobId}</h2>
                     </div>
                     <StatusTag
-                      value={sourceStatusView(selected.status).label}
-                      tone={sourceStatusView(selected.status).tone}
+                      value={jobStatusView(selected.status).label}
+                      tone={jobStatusView(selected.status).tone}
                       dot
                     />
                   </div>
@@ -216,8 +216,8 @@ export function JobsPage(props: { spaceId: string }) {
                     <ol className="kb2-job-steps">
                       {selected.steps.map((step, index) => (
                         <li key={`${String(step.stepKey ?? 'step')}-${index}`}>
-                          <strong>{String(step.stepKey ?? 'step')}</strong>
-                          <span>{String(step.status ?? 'pending')}</span>
+                          <strong>{jobStageLabel(String(step.stepKey ?? 'step'))}</strong>
+                          <span>{jobStatusView(String(step.status ?? 'queued')).label}</span>
                           {step.error ? <code>{JSON.stringify(step.error)}</code> : null}
                         </li>
                       ))}
