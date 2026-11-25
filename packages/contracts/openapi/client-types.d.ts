@@ -29,6 +29,8 @@ export type OperationId =
   | 'API-JOB-RESUME'
   | 'API-JOB-RETRY'
   | 'API-MODEL-BINDING-VALIDATE'
+  | 'API-MODEL-SETTINGS-GET'
+  | 'API-MODEL-SETTINGS-UPDATE'
   | 'API-MODEL-LIST'
   | 'API-OPENAPI'
   | 'API-OPS-CLEANUP'
@@ -155,6 +157,8 @@ export type RuntimeOperationId =
   | 'API-JOB-RESUME'
   | 'API-JOB-RETRY'
   | 'API-MODEL-BINDING-VALIDATE'
+  | 'API-MODEL-SETTINGS-GET'
+  | 'API-MODEL-SETTINGS-UPDATE'
   | 'API-MODEL-LIST'
   | 'API-OPENAPI'
   | 'API-OPS-CLEANUP'
@@ -334,7 +338,11 @@ export type SchemaName =
   | 'ModelBindingList'
   | 'ModelBindingUpdate'
   | 'ModelBindingValidate'
+  | 'ModelDefaults'
   | 'ModelList'
+  | 'ModelSetting'
+  | 'ModelSettings'
+  | 'ModelSettingsUpdate'
   | 'ModelValidationResult'
   | 'MoveResource'
   | 'MultiSpaceSearchRequest'
@@ -467,18 +475,22 @@ export interface SchemaPropertyMap {
   "JobStep": "attempts" | "compensationState" | "externalEvidence" | "status" | "stepKey";
   "KnowledgeSpace": "accessMode" | "autoSync" | "createdAt" | "description" | "iconKey" | "id" | "kind" | "modelBindings" | "name" | "ownershipMemberId" | "parentPath" | "parentSpaceId" | "referenceRevision" | "sourceAclMode" | "sourcePermissionEnabled" | "status" | "updatedAt" | "version" | "workspaceId";
   "KnowledgeSpaceBatchAction": "action" | "ids" | "targetParentId" | "versions";
-  "KnowledgeSpaceCreate": "accessMode" | "autoSync" | "description" | "iconKey" | "kind" | "name" | "parentSpaceId" | "sourceAclMode" | "sourcePermissionEnabled";
+  "KnowledgeSpaceCreate": "accessMode" | "autoSync" | "description" | "iconKey" | "kind" | "modelBindings" | "name" | "parentSpaceId" | "sourceAclMode" | "sourcePermissionEnabled";
   "KnowledgeSpaceDeleteRequest": "expectedReferenceRevision" | "referenceStrategy" | "version";
   "KnowledgeSpaceList": "items" | "pageInfo";
   "KnowledgeSpaceReferences": "count" | "items" | "referenceRevision";
   "KnowledgeSpaceUpdate": "accessMode" | "autoSync" | "description" | "iconKey" | "name" | "sourceAclMode" | "sourcePermissionEnabled" | "version";
   "LiteParseConfig": "batchPages" | "fallbackPdfJsOnWasmLoadError" | "maxPages" | "ocrEnabled" | "provider" | "timeoutMs";
-  "Model": "authorized" | "capabilities" | "displayName" | "limits" | "modelId" | "type";
+  "Model": "authorized" | "capabilities" | "displayName" | "limits" | "modelId" | "provider" | "tags" | "type";
   "ModelBinding": "displayName" | "modelId" | "modelType" | "requiredCapabilities" | "status";
   "ModelBindingList": "items" | "pageInfo";
   "ModelBindingUpdate": "bindings" | "version";
   "ModelBindingValidate": "modelId" | "modelType" | "requiredCapabilities";
-  "ModelList": "items" | "pageInfo";
+  "ModelDefaults": "embedding" | "imageLLM" | "textLLM";
+  "ModelList": "defaults" | "items" | "pageInfo" | "source";
+  "ModelSetting": "capabilities" | "dimension" | "displayName" | "enabled" | "limits" | "modelId" | "provider" | "tags" | "type";
+  "ModelSettings": "defaults" | "models" | "source" | "version";
+  "ModelSettingsUpdate": "defaults" | "models" | "version";
   "ModelValidationResult": "capabilities" | "modelId" | "modelType" | "valid";
   "MoveResource": "targetParentId" | "version";
   "MultiSpaceSearchRequest": never;
@@ -510,7 +522,7 @@ export interface SchemaPropertyMap {
   "SegmentList": "items" | "pageInfo";
   "SegmentUpdate": "answer" | "metadata" | "question" | "searchEnabled" | "version";
   "SomarkParseConfig": "credentialProfileId" | "fallbackProvider" | "imageHandling" | "provider" | "timeoutMs";
-  "Source": "blobRefId" | "connectorId" | "contentHash" | "directoryId" | "externalId" | "id" | "kind" | "knowledgeSpaceId" | "metadata" | "mimeType" | "name" | "parentPath" | "permissionRevision" | "permissionState" | "processingStatus" | "searchEnabled" | "sizeBytes" | "sourceVersion" | "version" | "workspaceId";
+  "Source": "blobRefId" | "connectorId" | "contentHash" | "directoryId" | "externalId" | "id" | "kind" | "knowledgeSpaceId" | "metadata" | "mimeType" | "name" | "parentPath" | "permissionRevision" | "permissionState" | "processingStatus" | "searchEnabled" | "segmentCount" | "sizeBytes" | "sourceVersion" | "version" | "workspaceId";
   "SourceBatchAction": "action" | "ids" | "targetDirectoryId" | "versions";
   "SourceCreate": "directoryId" | "kind" | "metadata" | "name" | "searchEnabled";
   "SourceList": "items" | "pageInfo";
@@ -618,12 +630,16 @@ export interface RequiredSchemaPropertyMap {
   "KnowledgeSpaceReferences": "count" | "items" | "referenceRevision";
   "KnowledgeSpaceUpdate": "version";
   "LiteParseConfig": "batchPages" | "maxPages" | "ocrEnabled" | "provider";
-  "Model": "authorized" | "capabilities" | "displayName" | "modelId" | "type";
+  "Model": "authorized" | "capabilities" | "displayName" | "modelId" | "provider" | "tags" | "type";
   "ModelBinding": "displayName" | "modelId" | "modelType" | "requiredCapabilities" | "status";
   "ModelBindingList": "items" | "pageInfo";
   "ModelBindingUpdate": "bindings" | "version";
   "ModelBindingValidate": "modelId" | "modelType" | "requiredCapabilities";
-  "ModelList": "items" | "pageInfo";
+  "ModelDefaults": "embedding" | "imageLLM" | "textLLM";
+  "ModelList": "defaults" | "items" | "pageInfo" | "source";
+  "ModelSetting": "capabilities" | "dimension" | "displayName" | "enabled" | "modelId" | "provider" | "tags" | "type";
+  "ModelSettings": "defaults" | "models" | "source" | "version";
+  "ModelSettingsUpdate": "defaults" | "models" | "version";
   "ModelValidationResult": "capabilities" | "modelId" | "modelType" | "valid";
   "MoveResource": "targetParentId" | "version";
   "MultiSpaceSearchRequest": never;
@@ -655,7 +671,7 @@ export interface RequiredSchemaPropertyMap {
   "SegmentList": "items" | "pageInfo";
   "SegmentUpdate": "version";
   "SomarkParseConfig": "credentialProfileId" | "fallbackProvider" | "provider";
-  "Source": "directoryId" | "id" | "kind" | "knowledgeSpaceId" | "name" | "permissionRevision" | "permissionState" | "processingStatus" | "searchEnabled" | "sourceVersion" | "version" | "workspaceId";
+  "Source": "directoryId" | "id" | "kind" | "knowledgeSpaceId" | "name" | "permissionRevision" | "permissionState" | "processingStatus" | "searchEnabled" | "segmentCount" | "sourceVersion" | "version" | "workspaceId";
   "SourceBatchAction": "action" | "ids" | "versions";
   "SourceCreate": "kind" | "name";
   "SourceList": "items" | "pageInfo";
@@ -718,6 +734,8 @@ export interface RuntimeRouteMethodPathMap {
   'API-JOB-RESUME': 'POST /v1/knowledge/jobs/{jobId}/resume';
   'API-JOB-RETRY': 'POST /v1/knowledge/jobs/{jobId}/retry';
   'API-MODEL-BINDING-VALIDATE': 'POST /v1/knowledge/model-bindings/validate';
+  'API-MODEL-SETTINGS-GET': 'GET /v1/knowledge/model-settings';
+  'API-MODEL-SETTINGS-UPDATE': 'PUT /v1/knowledge/model-settings';
   'API-MODEL-LIST': 'GET /v1/knowledge/models';
   'API-OPENAPI': 'GET /v1/knowledge/openapi.json';
   'API-OPS-CLEANUP': 'POST /v1/knowledge/operations/cleanup';

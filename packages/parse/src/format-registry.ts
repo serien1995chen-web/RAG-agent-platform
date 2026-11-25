@@ -53,6 +53,29 @@ export const PARSE_FORMAT_MATRIX: readonly ParseFormatSpec[] = [
   { format: 'csv', extensions: ['csv'], parser: 'csv-parser', fallback: 'none' },
   { format: 'ebook', extensions: ['epub'], parser: 'document-parser-port', fallback: 'none' },
   { format: 'ofd', extensions: ['ofd'], parser: 'ofd-parser', fallback: 'none' },
+  {
+    format: 'office',
+    extensions: [
+      'docm',
+      'pptm',
+      'ppsx',
+      'ppsm',
+      'xlsm',
+      'xlsb',
+      'doc',
+      'wps',
+      'ppt',
+      'pps',
+      'pot',
+      'xls',
+      'odt',
+      'ods',
+      'odp',
+      'rtf',
+    ],
+    parser: 'office-compat-parser',
+    fallback: 'none',
+  },
 ];
 
 export interface ParseRequest {
@@ -141,7 +164,8 @@ export type ParseFormat =
   | 'xlsx'
   | 'csv'
   | 'ebook'
-  | 'ofd';
+  | 'ofd'
+  | 'office';
 
 export interface ParseHandlerContext {
   request: ParseRequest;
@@ -180,6 +204,24 @@ const MIME_BY_FORMAT: Record<ParseFormat, readonly string[]> = {
   csv: ['text/csv', 'application/csv'],
   ebook: ['application/epub+zip'],
   ofd: ['application/ofd', 'application/ofd+xml'],
+  office: [
+    'application/msword',
+    'application/vnd.ms-word.document.macroEnabled.12',
+    'application/vnd.ms-powerpoint',
+    'application/vnd.ms-powerpoint.presentation.macroEnabled.12',
+    'application/vnd.openxmlformats-officedocument.presentationml.slideshow',
+    'application/vnd.ms-powerpoint.slideshow.macroEnabled.12',
+    'application/vnd.ms-excel',
+    'application/vnd.ms-excel.sheet.macroEnabled.12',
+    'application/vnd.ms-excel.sheet.binary.macroEnabled.12',
+    'application/vnd.oasis.opendocument.text',
+    'application/vnd.oasis.opendocument.spreadsheet',
+    'application/vnd.oasis.opendocument.presentation',
+    'application/rtf',
+    'text/rtf',
+    'application/zip',
+    'application/octet-stream',
+  ],
 };
 
 /** 归一化扩展名：去前导点、小写。 */

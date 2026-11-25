@@ -333,6 +333,7 @@ export { knowledgeThemeTokens } from './theme';
 
 export { CapabilityUnavailableError, productApi, productErrorView } from './product/api';
 export { DatasetListPage } from './product/dataset-list-page';
+export { ModelSettingsPage } from './product/model-settings-page';
 export { DatasetDetailPage } from './product/dataset-detail-page';
 export type { DatasetDetailQuery } from './product/dataset-detail-page';
 export { JobsPage } from './product/jobs-page';

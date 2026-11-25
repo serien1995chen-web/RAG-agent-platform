@@ -9,6 +9,7 @@ test-results/
 *.tsbuildinfo
 artifacts/*
 !artifacts/sbom.json
+work/
 *.log
 .env
 .env.local

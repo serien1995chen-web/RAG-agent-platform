@@ -124,6 +124,7 @@ export {
   isS04Operation,
   S5AiproxyCatalogAdapter,
   S5MockModelCatalog,
+  S5WorkspaceModelCatalogAdapter,
   AxiosS5HttpTransport,
   S5AiproxyHttpAdapter,
   S5MockAiproxyTransport,

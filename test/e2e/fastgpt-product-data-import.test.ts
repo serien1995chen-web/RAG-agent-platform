@@ -321,9 +321,9 @@ describe('FastGPT product module 3 Data and Import', () => {
       buffer: Buffer.from('真实上传文件内容', 'utf8'),
     });
     await playwrightExpect(
-      page.getByText(`模块三上传-${suffix}.txt`, { exact: true }),
+      page.locator('.kb2-upload-row').filter({ hasText: `模块三上传-${suffix}.txt` }),
     ).toBeVisible();
-    await playwrightExpect(page.getByText('completed', { exact: true })).toBeVisible();
+    await playwrightExpect(page.getByText('上传完成', { exact: true })).toBeVisible();
     await page.getByRole('button', { name: '下一步' }).click();
     await page.getByRole('button', { name: '下一步' }).click();
     await page.getByRole('button', { name: '下一步' }).click();

@@ -8,6 +8,7 @@ import {
 import {
   createKnowledgeError,
   KnowledgeApiError,
+  MAX_KNOWLEDGE_FILE_BYTES,
   type HealthResponse,
   type RouteEntry,
 } from '@kb/contracts';
@@ -32,7 +33,6 @@ import {
   CustomApiLibraryClient,
   createConnectorProviderClients,
   S04IngestionApplication,
-  S5AiproxyCatalogAdapter,
   S5AiproxyHttpAdapter,
   S5ArtifactRepository,
   S5KeyedSemaphore,
@@ -41,6 +41,7 @@ import {
   S5ModelApplication,
   S5ModelBindingApplication,
   S5ModelBindingRepository,
+  S5WorkspaceModelCatalogAdapter,
   S5OcrApplication,
   S5OcrCredentialProfileAdapter,
   S5OcrHttpAdapter,
@@ -128,6 +129,7 @@ import {
   tenantContextOf,
   type KnowledgeRuntimeConfig,
   type S5ArtifactStorePort,
+  type S5OcrProviderConfig,
   type TenantContext,
 } from '@kb/service';
 import { mergeExpansions } from '@kb/search';
@@ -351,10 +353,12 @@ async function bootstrapRuntime(): Promise<TelemetryKnowledgeApiRuntime> {
   const s5Catalog =
     s5AiproxyConfig.modelMode === 'mock'
       ? new S5MockModelCatalog()
-      : new S5AiproxyCatalogAdapter({
+      : new S5WorkspaceModelCatalogAdapter({
+          connection: mongo,
           config: s5AiproxyConfig,
           transport: new AxiosS5HttpTransport(),
           env: s5RuntimeEnv,
+          token: resolveSecretRef(s5AiproxyConfig.apiTokenRef, s5RuntimeEnv),
         });
   const s5ModelTransport =
     s5AiproxyConfig.modelMode === 'mock'
@@ -382,13 +386,38 @@ async function bootstrapRuntime(): Promise<TelemetryKnowledgeApiRuntime> {
     limiter: new S5KeyedSemaphore(10),
   });
   const s5Models = new S5ModelApplication(s5Catalog);
+  const defaultOcrConfig = (): S5OcrProviderConfig => {
+    const provider = config.defaultOcr.provider;
+    const common = {
+      credentialProfileId: `env:S11_OCR_${provider.toUpperCase()}_PROFILE_JSON`,
+      timeoutMs: config.defaultOcr.timeoutMs,
+      fallbackProvider: 'none' as const,
+      imageHandling: 'upload_to_storage' as const,
+    };
+    if (provider === 'textin') {
+      return {
+        ...common,
+        provider,
+        removeWatermark: true,
+        parseMode: 'auto',
+      };
+    }
+    if (provider === 'doc2x') {
+      return {
+        ...common,
+        provider,
+        pollIntervalMs: 5_000,
+      };
+    }
+    return { ...common, provider };
+  };
   const synonymRepository = new KnowledgeSynonymRepository(mongo);
   const s5BindingRepository = new S5ModelBindingRepository(mongo, synonymRepository);
   const s5ModelBindings = new S5ModelBindingApplication(s5BindingRepository, s5Catalog, access);
   const s5Artifacts = new S5ArtifactRepository(mongo, s5ArtifactStore);
   const s5Qa = new S5QaPipelineAdapter({
     gateway: s5Gateway,
-    qaSchemaRetries: 0,
+    qaSchemaRetries: 1,
     resolveModels: async ({ knowledgeSpaceId, context }) => {
       const bindings = await s5BindingRepository.list(knowledgeSpaceId, context);
       const llm = bindings.find(
@@ -559,8 +588,18 @@ async function bootstrapRuntime(): Promise<TelemetryKnowledgeApiRuntime> {
     const chunks: Uint8Array[] = [];
     for await (const chunk of object.body) chunks.push(Buffer.from(chunk));
     const bytes = Buffer.concat(chunks);
-    if (source.parseProvider !== 'liteparse') {
-      const config = parseS5OcrProviderConfig(input.parseConfig, source.parseProvider, context);
+    const useDefaultOcr =
+      source.parseProvider === 'liteparse' &&
+      Boolean(input.parseConfig.customPdfParse) &&
+      (source.mimeType === 'application/pdf' || source.name.toLowerCase().endsWith('.pdf'));
+    if (source.parseProvider !== 'liteparse' || useDefaultOcr) {
+      const ocrConfig = useDefaultOcr
+        ? defaultOcrConfig()
+        : parseS5OcrProviderConfig(
+            input.parseConfig,
+            source.parseProvider as 'sangfor' | 'somark' | 'textin' | 'doc2x',
+            context,
+          );
       const result = await s5Ocr.parse({
         workspaceId: context.workspaceId,
         knowledgeSpaceId: objectRef.knowledgeSpaceId,
@@ -569,11 +608,12 @@ async function bootstrapRuntime(): Promise<TelemetryKnowledgeApiRuntime> {
         bytes,
         fileName: source.name,
         mimeType: source.mimeType,
-        config,
-        timeoutMs: config.timeoutMs,
+        config: ocrConfig,
+        timeoutMs: ocrConfig.timeoutMs,
         requestId: context.requestId,
         traceId: context.traceId,
         context,
+        ...(useDefaultOcr ? { assertSource: false } : {}),
       });
       return {
         rawText: result.markdown,
@@ -702,12 +742,12 @@ async function bootstrapRuntime(): Promise<TelemetryKnowledgeApiRuntime> {
         for await (const chunk of object.body) {
           const bytes = Buffer.from(chunk);
           sizeBytes += bytes.byteLength;
-          if (sizeBytes > 50 * 1024 * 1024) {
+          if (sizeBytes > MAX_KNOWLEDGE_FILE_BYTES) {
             throw createKnowledgeError({
               code: 'KNOWLEDGE_PAYLOAD_TOO_LARGE',
               requestId: input.requestId,
               traceId: input.traceId,
-              details: { field: 'source', maxBytes: 50 * 1024 * 1024 },
+              details: { field: 'source', maxBytes: MAX_KNOWLEDGE_FILE_BYTES },
             });
           }
           chunks.push(bytes);
@@ -767,12 +807,21 @@ async function bootstrapRuntime(): Promise<TelemetryKnowledgeApiRuntime> {
           | 'somark'
           | 'textin'
           | 'doc2x';
-        if (parseProvider !== 'liteparse') {
-          const config = parseS5OcrProviderConfig(
-            input.metadata?.parseConfigSnapshot,
-            parseProvider,
-            context,
-          );
+        const parseConfigSnapshot = input.metadata?.parseConfigSnapshot as
+          | Record<string, unknown>
+          | undefined;
+        const useDefaultOcr =
+          parseProvider === 'liteparse' &&
+          parseConfigSnapshot?.customPdfParse === true &&
+          (input.mimeType === 'application/pdf' || input.fileName.toLowerCase().endsWith('.pdf'));
+        if (parseProvider !== 'liteparse' || useDefaultOcr) {
+          const ocrConfig = useDefaultOcr
+            ? defaultOcrConfig()
+            : parseS5OcrProviderConfig(
+                parseConfigSnapshot,
+                parseProvider as 'sangfor' | 'somark' | 'textin' | 'doc2x',
+                context,
+              );
           const result = await s5Ocr.parse({
             workspaceId: context.workspaceId,
             knowledgeSpaceId: input.knowledgeSpaceId,
@@ -781,8 +830,8 @@ async function bootstrapRuntime(): Promise<TelemetryKnowledgeApiRuntime> {
             bytes,
             fileName: input.fileName,
             mimeType: input.mimeType,
-            config,
-            timeoutMs: config.timeoutMs,
+            config: ocrConfig,
+            timeoutMs: ocrConfig.timeoutMs,
             requestId: context.requestId,
             traceId: context.traceId,
             context,
@@ -800,7 +849,7 @@ async function bootstrapRuntime(): Promise<TelemetryKnowledgeApiRuntime> {
             contentHash: `sha256:${createHash('sha256').update(result.markdown).digest('hex')}`,
             parserVersion: `${result.actualProvider}@1`,
             configHash: `sha256:${createHash('sha256')
-              .update(JSON.stringify(config))
+              .update(JSON.stringify(ocrConfig))
               .digest('hex')}`,
             requestEvidence: result.requestEvidence,
             attempts: result.attempts,

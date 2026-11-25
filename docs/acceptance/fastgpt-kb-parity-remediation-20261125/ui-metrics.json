@@ -1,0 +1,77 @@
+{
+  "generatedAt": "2026-11-25T15:06:05.933Z",
+  "spaceId": "6b06f879d02e637945014b43",
+  "metrics": [
+    {
+      "viewport": {
+        "name": "1200",
+        "width": 1200,
+        "height": 900
+      },
+      "listbox": {
+        "x": 495,
+        "y": 615,
+        "width": 268,
+        "height": 261
+      },
+      "importOverflow": 0,
+      "tagDialog": {
+        "x": 211.17678833007812,
+        "y": 185.11416625976562,
+        "width": 777.6464538574219,
+        "height": 529.7716979980469
+      }
+    },
+    {
+      "viewport": {
+        "name": "768",
+        "width": 768,
+        "height": 1024
+      },
+      "listbox": {
+        "x": 279,
+        "y": 677,
+        "width": 268,
+        "height": 305
+      },
+      "importOverflow": 0,
+      "tagDialog": {
+        "x": 22.3944091796875,
+        "y": 247.11416625976562,
+        "width": 723.211181640625,
+        "height": 529.7716979980469
+      }
+    },
+    {
+      "viewport": {
+        "name": "360",
+        "width": 360,
+        "height": 800
+      },
+      "listbox": {
+        "x": 13,
+        "y": 605.5,
+        "width": 334,
+        "height": 170.5
+      },
+      "importOverflow": 0,
+      "tagDialog": {
+        "x": 16.688125610351562,
+        "y": 81.15301513671875,
+        "width": 326.62376403808594,
+        "height": 637.6939697265625
+      }
+    }
+  ],
+  "hashes": {
+    "model-selector-1200.png": "4d93f3eb854367edcc0164a60c9487b7871e72c529b0180fb3b4f14c109e51fc",
+    "import-workspace-1200.png": "0dfc4fa2d89b6ecb51ef491bc112d6083fc812e3c2bd746ee85f44b5d69b7ede",
+    "tag-settings-1200.png": "af61fdcf451507c0e0e6168df708d048300ba4c3f7b0e7f37b98973942dfd070",
+    "model-selector-768.png": "495f28cffe7bb33a7c9d0a695771f595a6444ec9c56d07eda752bbbfeba24a56",
+    "import-workspace-768.png": "1f6f9358446f572c76bf8f70a51bc7a6db2cd0e7e970fd21c33c81607215e69c",
+    "tag-settings-768.png": "56c029fd8adbb2a3b04c42c163e255cb6932ab2b67ef2e62bf0063dbdc9fe86f",
+    "model-selector-360.png": "93eec29e3eb3fbb89b34b95d9b26fb9afb5974efa6105ff6bf8ade7615eb80cd",
+    "import-workspace-360.png": "86c9241fdba57dcdf460dbc4ea21a2be43c935a13bc389eb9665276268c7f919",
+    "tag-settings-360.png": "57b29071e90cf464a04b8cf7d572e311a2c6c4e39060d5b0fe04e288a8a7f287"
+  }
+}

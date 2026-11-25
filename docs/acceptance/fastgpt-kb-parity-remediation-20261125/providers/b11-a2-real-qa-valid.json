@@ -1,0 +1,41 @@
+{
+  "testId": "TEST-X-S11-PROVIDER-REAL",
+  "generatedAt": "2026-11-25T14:54:39.154Z",
+  "candidateSha": "UNFROZEN",
+  "status": "REAL_VERIFIED",
+  "endpointHostHash": "04b0afbac4bca387",
+  "modelId": "deepseek-v4.1-flash",
+  "fixtureSha256": "b520a98862812d9c828bcd2782f78178cd167a78bb2551a8a4a0ae55e9bc7166",
+  "qaCount": 1,
+  "fallback": "none",
+  "promptVersion": "sha256:3a70e70c815b834f57b3e0ed13c8123e0dca8662b8b38a34f875c846e7a02f82",
+  "providerCalls": 1,
+  "usageFacts": 2,
+  "usage": {
+    "inputTokens": 114,
+    "outputTokens": 176
+  },
+  "actualFacts": [
+    {
+      "workspaceId": "ws_b11_a2_real_qa",
+      "knowledgeSpaceId": "65f1e5b2a1c9d4b7e8f10001",
+      "operation": "qa:sha256:b520a98862812d9c828bcd2782f78178cd167a78bb2551a8a4a0ae55e9bc7166",
+      "requestId": "req-b11-a2-real-qa",
+      "traceId": "trace-b11-a2-real-qa",
+      "modelId": "deepseek-v4.1-flash",
+      "kind": "llm",
+      "attempt": 1,
+      "eventSequence": 2,
+      "quantity": 290,
+      "unit": "token",
+      "inputTokens": 114,
+      "outputTokens": 176,
+      "status": 200,
+      "fallbackUsed": false,
+      "provider": "aiproxy",
+      "resourceType": "space",
+      "resourceId": "65f1e5b2a1c9d4b7e8f10001",
+      "intent": false
+    }
+  ]
+}

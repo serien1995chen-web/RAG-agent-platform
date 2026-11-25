@@ -56,6 +56,8 @@ const EnvironmentSchema = z.object({
   KB_EXTERNAL_MODEL_MODE: z.enum(['mock', 'real']).default('mock'),
   KB_EXTERNAL_OCR_MODE: z.enum(['mock', 'real']).default('mock'),
   KB_EXTERNAL_CONNECTOR_MODE: z.enum(['mock', 'real']).default('mock'),
+  KB_DEFAULT_OCR_PROVIDER: z.enum(['textin', 'somark', 'doc2x']).default('textin'),
+  KB_DEFAULT_OCR_TIMEOUT_MS: z.coerce.number().int().min(1_000).max(600_000).default(120_000),
   S11_SCOPE_PROFILE: z.enum(['canonical-v1', 'knowledge-usability-v1']).default('canonical-v1'),
   OTEL_EXPORTER_OTLP_ENDPOINT: z.preprocess(
     (value) => (typeof value === 'string' && value.trim() === '' ? undefined : value),
@@ -113,6 +115,10 @@ export interface KnowledgeRuntimeConfig {
     model: 'mock' | 'real';
     ocr: 'mock' | 'real';
     connector: 'mock' | 'real';
+  };
+  defaultOcr: {
+    provider: 'textin' | 'somark' | 'doc2x';
+    timeoutMs: number;
   };
   scopeProfile?: 'canonical-v1' | 'knowledge-usability-v1';
   otelEndpoint?: string;
@@ -259,6 +265,10 @@ export function loadKnowledgeRuntimeConfig(
       model: data.KB_EXTERNAL_MODEL_MODE,
       ocr: data.KB_EXTERNAL_OCR_MODE,
       connector: data.KB_EXTERNAL_CONNECTOR_MODE,
+    },
+    defaultOcr: {
+      provider: data.KB_DEFAULT_OCR_PROVIDER,
+      timeoutMs: data.KB_DEFAULT_OCR_TIMEOUT_MS,
     },
     scopeProfile: data.S11_SCOPE_PROFILE,
     ...(data.OTEL_EXPORTER_OTLP_ENDPOINT ? { otelEndpoint: data.OTEL_EXPORTER_OTLP_ENDPOINT } : {}),

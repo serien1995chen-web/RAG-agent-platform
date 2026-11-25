@@ -22,7 +22,9 @@ import type {
   Job,
   KnowledgeSpace,
   Model,
+  ModelCatalog,
   ModelBinding,
+  ModelSettings,
   PageResult,
   SearchResponse,
   Segment,
@@ -38,6 +40,18 @@ export class CapabilityUnavailableError extends Error {
   ) {
     super(message);
     this.name = 'CapabilityUnavailableError';
+  }
+}
+
+export class ProductBatchError extends Error {
+  constructor(
+    readonly code: string,
+    message = '批量操作未全部完成。',
+    readonly traceId?: string,
+    readonly requestId?: string,
+  ) {
+    super(message);
+    this.name = 'ProductBatchError';
   }
 }
 
@@ -90,6 +104,14 @@ export function productErrorView(error: unknown): {
   if (error instanceof CapabilityUnavailableError) {
     return { code: 'CAPABILITY_UNAVAILABLE', message: error.message };
   }
+  if (error instanceof ProductBatchError) {
+    return {
+      code: error.code,
+      message: localizedErrorCode(error.code),
+      ...(error.traceId ? { traceId: error.traceId } : {}),
+      ...(error.requestId ? { requestId: error.requestId } : {}),
+    };
+  }
   if (error instanceof KnowledgeRequestError) {
     return {
       code: error.problem.error.code,
@@ -106,6 +128,10 @@ export function productErrorView(error: unknown): {
 }
 
 function localizedError(problem: KnowledgeProblem): string {
+  return localizedErrorCode(problem.error.code);
+}
+
+function localizedErrorCode(code: string): string {
   const messages: Record<string, string> = {
     KNOWLEDGE_AUTH_REQUIRED: '登录状态已失效，请重新登录。',
     KNOWLEDGE_FORBIDDEN: '当前账号没有执行该操作的权限。',
@@ -123,7 +149,7 @@ function localizedError(problem: KnowledgeProblem): string {
     KNOWLEDGE_JOB_FAILED: '后台任务当前状态不允许该操作。',
     KNOWLEDGE_PARTIAL_SUCCESS: '操作仅部分成功，请检查失败项。',
   };
-  return messages[problem.error.code] ?? '服务返回错误，请重试。';
+  return messages[code] ?? '服务返回错误，请重试。';
 }
 
 export async function listSpaces(sort = '-updatedAt') {
@@ -144,6 +170,7 @@ export function createSpace(input: {
   sourceAclMode?: 'inherited' | 'enforced';
   sourcePermissionEnabled?: boolean;
   autoSync?: boolean;
+  modelBindings?: ModelBinding[];
 }) {
   return knowledgeRequest<KnowledgeSpace>('/v1/knowledge/spaces', {
     method: 'POST',
@@ -158,6 +185,7 @@ export function createSpace(input: {
       sourceAclMode: input.sourceAclMode ?? 'inherited',
       sourcePermissionEnabled: input.sourcePermissionEnabled ?? true,
       autoSync: input.autoSync ?? false,
+      ...(input.modelBindings?.length ? { modelBindings: input.modelBindings } : {}),
     },
   });
 }
@@ -676,8 +704,51 @@ export function controlJob(action: JobControlAction, job: Job) {
   });
 }
 
-export function listModels() {
-  return allPages<Model>('/v1/knowledge/models', {}, 'modelType');
+export async function listModelCatalog(): Promise<ModelCatalog> {
+  const items: Model[] = [];
+  let cursor: string | undefined;
+  let defaults: ModelCatalog['defaults'] = {
+    embedding: null,
+    textLLM: null,
+    imageLLM: null,
+  };
+  let source: ModelCatalog['source'] = 'mock';
+  do {
+    const page = await knowledgeRequest<
+      PageResult<Model> & {
+        defaults?: ModelCatalog['defaults'];
+        source?: ModelCatalog['source'];
+      }
+    >(
+      `/v1/knowledge/models${queryString({
+        limit: 200,
+        cursor,
+        sort: 'modelType',
+      })}`,
+    );
+    items.push(...page.items);
+    defaults = page.defaults ?? defaults;
+    source = page.source ?? source;
+    cursor =
+      page.pageInfo?.hasMore && page.pageInfo.nextCursor ? page.pageInfo.nextCursor : undefined;
+  } while (cursor);
+  return { items, defaults, source };
+}
+
+export async function listModels() {
+  return (await listModelCatalog()).items;
+}
+
+export function getModelSettings() {
+  return knowledgeRequest<ModelSettings>('/v1/knowledge/model-settings');
+}
+
+export function updateModelSettings(settings: Omit<ModelSettings, 'source'>) {
+  return knowledgeRequest<ModelSettings>('/v1/knowledge/model-settings', {
+    method: 'PUT',
+    idempotencyKey: key(),
+    body: settings,
+  });
 }
 
 export function getModelBindings(spaceId: string) {
@@ -1242,6 +1313,9 @@ export const productApi = {
   retryJob,
   controlJob,
   listModels,
+  listModelCatalog,
+  getModelSettings,
+  updateModelSettings,
   getModelBindings,
   updateModelBindings,
   getAcl,

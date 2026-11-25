@@ -3,7 +3,9 @@ import { createKnowledgeError } from '@kb/contracts';
 import {
   S5_MODEL_TYPES,
   type ModelCatalogItem,
+  type ModelCatalogMetadata,
   type ModelCatalogPort,
+  type ModelSettingsView,
 } from '../application/s5-model-ports';
 import { resolveSecretRef } from '../../../shared/config/secret-ref';
 import type { S5AiproxyConfig } from '../../../shared/config/s5-aiproxy-config';
@@ -27,8 +29,12 @@ const ModelProfileSchema = z
       z
         .object({
           id: z.string().min(1).max(256),
+          displayName: z.string().min(1).max(256).optional(),
+          provider: z.string().min(1).max(128).optional(),
           type: z.enum(S5_MODEL_TYPES),
           capabilities: z.array(z.string().min(1).max(128)).min(1),
+          tags: z.array(z.string().min(1).max(64)).optional(),
+          enabled: z.boolean().optional(),
           dimension: z.number().int().nullable().optional(),
           limits: z
             .object({
@@ -42,6 +48,14 @@ const ModelProfileSchema = z
         })
         .strict(),
     ),
+    defaults: z
+      .object({
+        embedding: z.string().min(1).optional(),
+        textLLM: z.string().min(1).optional(),
+        imageLLM: z.string().min(1).optional(),
+      })
+      .strict()
+      .optional(),
   })
   .strict();
 
@@ -63,7 +77,7 @@ function modelProfile(env: Readonly<Record<string, string | undefined>>) {
     if (profile.has(entry.id)) return null;
     profile.set(entry.id, entry);
   }
-  return profile;
+  return { models: profile, defaults: parsed.data.defaults };
 }
 
 function mergeCatalogWithProfile(
@@ -79,6 +93,9 @@ function mergeCatalogWithProfile(
       return [
         {
           ...item,
+          ...(configured.displayName ? { displayName: configured.displayName } : {}),
+          ...(configured.provider ? { provider: configured.provider } : {}),
+          tags: configured.tags ?? [],
           type: configured.type,
           capabilities: configured.capabilities,
           ...(typeof configured.dimension === 'number' ? { dimension: configured.dimension } : {}),
@@ -178,7 +195,7 @@ export class S5AiproxyCatalogAdapter implements ModelCatalogPort {
       );
     }
     const catalogPayload = profile
-      ? mergeCatalogWithProfile(response.data, profile)
+      ? mergeCatalogWithProfile(response.data, profile.models)
       : response.data;
     const parsed = S5AiproxyCatalogEnvelopeSchema.safeParse(catalogPayload);
     if (!parsed.success) {
@@ -190,7 +207,16 @@ export class S5AiproxyCatalogAdapter implements ModelCatalogPort {
       );
     }
     try {
-      return normalizeCatalog(parsed.data);
+      return normalizeCatalog(parsed.data).map((model) => ({
+        ...model,
+        authorized: profile?.models.get(model.modelId)?.enabled !== false,
+        provider:
+          model.provider ??
+          profile?.models.get(model.modelId)?.provider ??
+          model.displayName.split(':')[0]?.trim() ??
+          'Other',
+        tags: profile?.models.get(model.modelId)?.tags ?? model.tags ?? [],
+      }));
     } catch {
       throw catalogError(
         'KNOWLEDGE_PROVIDER_CONTRACT_INVALID',
@@ -200,6 +226,18 @@ export class S5AiproxyCatalogAdapter implements ModelCatalogPort {
       );
     }
   }
+
+  async getMetadata(): Promise<ModelCatalogMetadata> {
+    const profile = modelProfile(this.env);
+    return {
+      source: 'environment',
+      defaults: {
+        embedding: profile?.defaults?.embedding ?? null,
+        textLLM: profile?.defaults?.textLLM ?? null,
+        imageLLM: profile?.defaults?.imageLLM ?? null,
+      },
+    };
+  }
 }
 
 export class S5MockModelCatalog implements ModelCatalogPort {
@@ -208,6 +246,8 @@ export class S5MockModelCatalog implements ModelCatalogPort {
       {
         modelId: 'mock-llm-general',
         displayName: 'Mock general LLM',
+        provider: 'Mock',
+        tags: [],
         type: 'llm',
         capabilities: ['chat', 'structured-output'],
         dimension: null,
@@ -217,6 +257,8 @@ export class S5MockModelCatalog implements ModelCatalogPort {
       ...([768, 1024, 1536, 3072] as const).map((dimension) => ({
         modelId: `mock-embedding-${dimension}`,
         displayName: `Mock embedding ${dimension}`,
+        provider: 'Mock',
+        tags: [],
         type: 'embedding' as const,
         capabilities: ['text-embedding', 'vision', `dimension:${dimension}`],
         dimension,
@@ -226,6 +268,8 @@ export class S5MockModelCatalog implements ModelCatalogPort {
       {
         modelId: 'mock-rerank',
         displayName: 'Mock rerank',
+        provider: 'Mock',
+        tags: [],
         type: 'rerank',
         capabilities: ['rerank'],
         dimension: null,
@@ -234,6 +278,8 @@ export class S5MockModelCatalog implements ModelCatalogPort {
       {
         modelId: 'mock-vlm',
         displayName: 'Mock vision model',
+        provider: 'Mock',
+        tags: ['vision'],
         type: 'vlm',
         capabilities: ['vision', 'structured-output'],
         dimension: null,
@@ -242,6 +288,8 @@ export class S5MockModelCatalog implements ModelCatalogPort {
       {
         modelId: 'mock-stt',
         displayName: 'Mock speech recognition',
+        provider: 'Mock',
+        tags: [],
         type: 'stt',
         capabilities: ['speech-to-text'],
         dimension: null,
@@ -250,6 +298,8 @@ export class S5MockModelCatalog implements ModelCatalogPort {
       {
         modelId: 'mock-tts',
         displayName: 'Mock speech synthesis',
+        provider: 'Mock',
+        tags: [],
         type: 'tts',
         capabilities: ['text-to-speech'],
         dimension: null,
@@ -257,5 +307,55 @@ export class S5MockModelCatalog implements ModelCatalogPort {
       },
     ];
     return models.sort((left, right) => left.modelId.localeCompare(right.modelId));
+  }
+
+  async getMetadata(): Promise<ModelCatalogMetadata> {
+    return {
+      source: 'mock',
+      defaults: {
+        embedding: 'mock-embedding-1024',
+        textLLM: 'mock-llm-general',
+        imageLLM: null,
+      },
+    };
+  }
+
+  async getSettings(): Promise<ModelSettingsView> {
+    const models = await this.listModels();
+    return {
+      version: 0,
+      source: 'mock',
+      models: models.map((model) => ({
+        modelId: model.modelId,
+        displayName: model.displayName,
+        provider: model.provider ?? 'Mock',
+        type: model.type,
+        capabilities: model.capabilities,
+        tags: model.tags ?? [],
+        enabled: model.authorized,
+        dimension: model.dimension,
+        ...(model.limits ? { limits: model.limits } : {}),
+      })),
+      defaults: {
+        embedding: 'mock-embedding-1024',
+        textLLM: 'mock-llm-general',
+        imageLLM: null,
+      },
+    };
+  }
+
+  async updateSettings(
+    input: { requestId: string; traceId: string },
+    _settings: Omit<ModelSettingsView, 'source'>,
+  ): Promise<ModelSettingsView> {
+    throw createKnowledgeError({
+      code: 'KNOWLEDGE_UNSUPPORTED_CONTENT',
+      requestId: input.requestId,
+      traceId: input.traceId,
+      details: {
+        field: 'modelSettings',
+        reason: 'mock_mode_read_only',
+      },
+    });
   }
 }

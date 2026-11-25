@@ -76,10 +76,35 @@ describe('L1-B11-B chunk and QA desktop controls', () => {
     expectSourceContains(panel, 'qaPrompt');
   });
 
-  it('L1-B11-B-PARSE-004-UI02 keeps QA success, raw fallback and explicit failure distinct', () => {
+  it('L1-B11-B-PARSE-004-UI02 never exposes implicit raw fallback as success', () => {
     const importWorkspace = readFileSync(join(root, 'product', 'import-workspace.tsx'), 'utf8');
-    for (const token of ['QA 成功', '原文回退', 'QA 失败']) {
+    for (const token of [
+      'QA 成功',
+      '无效输出最多自动修复一次',
+      '任务明确失败',
+      'errorReason',
+      '原因：',
+    ]) {
       expectSourceContains(importWorkspace, token);
     }
+    expect(importWorkspace.includes('无效输出使用') && importWorkspace.includes('原文回退')).toBe(
+      false,
+    );
+    const processing = readFileSync(
+      join(
+        import.meta.dirname,
+        '..',
+        '..',
+        '..',
+        'service',
+        'src',
+        'modules',
+        'knowledge',
+        'application',
+        's06-processing.application.ts',
+      ),
+      'utf8',
+    );
+    expectSourceContains(processing, "qaFallbackPolicy: 'none'");
   });
 });

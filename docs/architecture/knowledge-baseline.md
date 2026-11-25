@@ -18,7 +18,7 @@
 | OpenAPI schemas     |  139 |
 | runtime operations  |   65 |
 | deferred operations |   55 |
-| Mongo collections   |   23 |
+| Mongo collections   |   25 |
 | pgvector profiles   |    4 |
 | BullMQ queues       |   13 |
 

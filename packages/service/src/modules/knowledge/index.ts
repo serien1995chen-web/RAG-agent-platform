@@ -149,6 +149,7 @@ export {
 } from './adapter/external-providers';
 export { MockReferenceRegistryAdapter } from './adapter/reference-registry.mock';
 export { S5AiproxyCatalogAdapter, S5MockModelCatalog } from './adapter/s5-aiproxy-catalog.adapter';
+export { S5WorkspaceModelCatalogAdapter } from './adapter/s5-workspace-model-catalog.adapter';
 export {
   AxiosS5HttpTransport,
   S5AiproxyHttpAdapter,

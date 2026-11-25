@@ -28,6 +28,8 @@
     "joplin-turndown-plugin-gfm": "catalog:",
     "mammoth": "catalog:",
     "mime-types": "catalog:",
+    "office-oxide-wasm": "catalog:",
+    "officeparser": "catalog:",
     "papaparse": "catalog:",
     "pdfjs-dist": "catalog:",
     "turndown": "catalog:",

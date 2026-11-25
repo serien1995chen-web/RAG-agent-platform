@@ -38,7 +38,9 @@ import {
   moveSource,
   previewFile,
   previewSource,
+  ProductBatchError,
   productApi,
+  productErrorView,
   removeCollaborator,
   transitionSourcePermission,
   updateAcl,
@@ -53,6 +55,7 @@ import {
   directoryPath,
   descendantDirectoryIds,
   filterSourceRows,
+  formatTagValueKey,
   hasActiveSourceStatus,
   latestJobsByResource,
   normalizeDetailTab,
@@ -110,6 +113,8 @@ import {
   type TextImportSource,
 } from './import-entry-dialogs';
 import { SearchWorkspace } from './search-workspace';
+import { modelsForRole, type KnowledgeModelRole } from './model-candidates';
+import { ModelSelect } from './model-selector';
 
 export interface DatasetDetailQuery {
   datasetId: string;
@@ -130,6 +135,13 @@ type SourcePreviewView =
       kind: 'text';
       sections: Array<{ title?: string; text: string; page?: number }>;
     };
+
+interface TagAssignmentRow {
+  id: string;
+  tagId: string;
+  value: string;
+  existing: boolean;
+}
 
 function permissionRank(permission: PermissionLevel | null | undefined): number {
   return permission ? { read: 10, write: 20, manage: 30, owner: 40 }[permission] : 0;
@@ -196,8 +208,8 @@ export function DatasetDetailPage(props: {
   const [archiveStage, setArchiveStage] = useState<'idle' | 'queued' | 'running' | 'ready'>('idle');
   const [tagManagerOpen, setTagManagerOpen] = useState(false);
   const [tagAssignmentTarget, setTagAssignmentTarget] = useState<Source | null>(null);
-  const [tagAssignmentId, setTagAssignmentId] = useState('');
-  const [tagAssignmentValue, setTagAssignmentValue] = useState('');
+  const [tagAssignmentRows, setTagAssignmentRows] = useState<TagAssignmentRow[]>([]);
+  const [removedTagIds, setRemovedTagIds] = useState<string[]>([]);
   const [tagAssignmentBusy, setTagAssignmentBusy] = useState(false);
   const [tagAssignmentError, setTagAssignmentError] = useState<unknown>(null);
   const [permissionTarget, setPermissionTarget] = useState<{
@@ -316,7 +328,6 @@ export function DatasetDetailPage(props: {
   );
   const selectedTag = tags.find((tag) => tag.id === tagId);
   const batchTag = tags.find((tag) => tag.id === batchTagId);
-  const assignmentTag = tags.find((tag) => tag.id === tagAssignmentId);
 
   useEffect(() => {
     if (!datasetId) {
@@ -654,34 +665,88 @@ export function DatasetDetailPage(props: {
   const openTagAssignment = (source: Source) => {
     setRowMenuId(null);
     setTagAssignmentTarget(source);
-    setTagAssignmentId('');
-    setTagAssignmentValue('');
+    const rows = (source.tagValues ?? []).map((entry) => ({
+      id: globalThis.crypto.randomUUID(),
+      tagId: entry.tagId,
+      value: formatTagValueKey(entry.value),
+      existing: true,
+    }));
+    setTagAssignmentRows(
+      rows.length > 0
+        ? rows
+        : [{ id: globalThis.crypto.randomUUID(), tagId: '', value: '', existing: false }],
+    );
+    setRemovedTagIds([]);
     setTagAssignmentError(null);
   };
 
   const assignSourceTag = async () => {
-    if (!tagAssignmentTarget || !assignmentTag) return;
+    if (!tagAssignmentTarget) return;
+    if (
+      tagAssignmentRows.some(
+        (row) => !row.tagId || !row.value.trim() || !tags.some((tag) => tag.id === row.tagId),
+      )
+    ) {
+      setTagAssignmentError(new ProductBatchError('KNOWLEDGE_VALIDATION_FAILED'));
+      return;
+    }
     setTagAssignmentBusy(true);
     setTagAssignmentError(null);
     try {
-      const result = await applyTags(
-        [
-          {
-            sourceId: tagAssignmentTarget.id,
-            tagId: assignmentTag.id,
-            value: parseTagInput(assignmentTag, tagAssignmentValue),
-          },
-        ],
-        { [tagAssignmentTarget.id]: tagAssignmentTarget.version },
-      );
-      if (result.failed > 0) {
-        throw new Error(result.items.find((item) => !item.success)?.code ?? '标签设置失败');
+      const latestTags = new Map(tags.map((tag) => [tag.id, tag]));
+      for (const row of tagAssignmentRows) {
+        const tag = latestTags.get(row.tagId);
+        if (!tag || tag.options === null) continue;
+        const parsed = parseTagInput(tag, row.value);
+        const values = Array.isArray(parsed) ? parsed : [parsed];
+        const missing = values
+          .filter((value): value is string => typeof value === 'string')
+          .filter((value) => !tag.options!.includes(value));
+        if (missing.length === 0) continue;
+        const updated = await updateTag(tag, {
+          options: [...new Set([...tag.options, ...missing])],
+        });
+        latestTags.set(tag.id, updated);
       }
-      await invalidateCollection();
+      const items: Array<{ sourceId: string; tagId: string; value: unknown }> =
+        tagAssignmentRows.map((row) => {
+          const tag = latestTags.get(row.tagId)!;
+          return {
+            sourceId: tagAssignmentTarget.id,
+            tagId: row.tagId,
+            value: parseTagInput(tag, row.value),
+          };
+        });
+      for (const tagId of removedTagIds) {
+        const tag = latestTags.get(tagId);
+        if (tag && !tag.required) {
+          items.push({ sourceId: tagAssignmentTarget.id, tagId, value: null });
+        }
+      }
+      const result = await applyTags(items, {
+        [tagAssignmentTarget.id]: tagAssignmentTarget.version,
+      });
+      if (result.failed > 0) {
+        throw new ProductBatchError(
+          result.items.find((item) => !item.success)?.code ?? 'KNOWLEDGE_PARTIAL_SUCCESS',
+        );
+      }
+      await Promise.all([
+        invalidateCollection(),
+        queryClient.invalidateQueries({ queryKey: ['kb-product', 'tags', datasetId] }),
+      ]);
       setTagAssignmentTarget(null);
       toast.success('标签设置成功');
     } catch (error) {
       setTagAssignmentError(error);
+      if (productErrorView(error).code === 'KNOWLEDGE_CONFLICT' && tagAssignmentTarget) {
+        const [latestSource] = await Promise.all([
+          getSource(tagAssignmentTarget.id),
+          invalidateCollection(),
+          queryClient.invalidateQueries({ queryKey: ['kb-product', 'tags', datasetId] }),
+        ]);
+        setTagAssignmentTarget(latestSource);
+      }
     } finally {
       setTagAssignmentBusy(false);
     }
@@ -1312,7 +1377,7 @@ export function DatasetDetailPage(props: {
                               </div>
                             </td>
                             <td>{sourceKindLabel(source.kind)}</td>
-                            <td>{source.segmentCount ?? '后端未提供'}</td>
+                            <td>{source.segmentCount ?? 0}</td>
                             <td>
                               <button
                                 type="button"
@@ -1846,6 +1911,8 @@ export function DatasetDetailPage(props: {
         open={Boolean(tagAssignmentTarget)}
         title="标签设置"
         description={tagAssignmentTarget?.name}
+        size="xl"
+        width="min(800px, calc(100vw - 24px))"
         onClose={() => !tagAssignmentBusy && setTagAssignmentTarget(null)}
         footer={
           <>
@@ -1858,7 +1925,14 @@ export function DatasetDetailPage(props: {
             <ProductButton
               tone="primary"
               busy={tagAssignmentBusy}
-              disabled={!assignmentTag}
+              disabled={
+                tagAssignmentBusy ||
+                tagAssignmentRows.length === 0 ||
+                tagAssignmentRows.some(
+                  (row) =>
+                    !row.tagId || !row.value.trim() || !tags.some((tag) => tag.id === row.tagId),
+                )
+              }
               onClick={() => void assignSourceTag()}
             >
               保存
@@ -1866,17 +1940,159 @@ export function DatasetDetailPage(props: {
           </>
         }
       >
-        <TagValueEditor
-          tags={tags}
-          selectedTagId={tagAssignmentId}
-          value={tagAssignmentValue}
-          onTagChange={(value) => {
-            setTagAssignmentId(value);
-            setTagAssignmentValue('');
-          }}
-          onValueChange={setTagAssignmentValue}
-          tag={assignmentTag}
-        />
+        <div className="kb2-tag-table kb2-source-tag-table">
+          <div className="kb2-tag-table__head" role="row">
+            <span>标签名称</span>
+            <span>标签值</span>
+            <span>操作</span>
+          </div>
+          {tagAssignmentRows.length === 0 ? (
+            <div className="kb2-tag-table__empty">当前没有标签，请先添加或打开标签管理。</div>
+          ) : (
+            tagAssignmentRows.map((row) => {
+              const selectedTag = tags.find((tag) => tag.id === row.tagId);
+              const usedByOtherRows = new Set(
+                tagAssignmentRows
+                  .filter((candidate) => candidate.id !== row.id)
+                  .map((candidate) => candidate.tagId)
+                  .filter(Boolean),
+              );
+              const inputType =
+                selectedTag?.tagType === 'number'
+                  ? 'number'
+                  : selectedTag?.tagType === 'datetime'
+                    ? 'datetime-local'
+                    : 'text';
+              return (
+                <div className="kb2-tag-table__row" role="row" key={row.id}>
+                  <span className="kb2-tag-table__name">
+                    <ProductSelect
+                      aria-label="标签名称"
+                      value={row.tagId}
+                      onChange={(event) => {
+                        const tagId = event.target.value;
+                        setTagAssignmentRows((current) =>
+                          current.map((item) =>
+                            item.id === row.id ? { ...item, tagId, value: '' } : item,
+                          ),
+                        );
+                      }}
+                    >
+                      <option value="">请选择标签</option>
+                      {tags
+                        .filter((tag) => tag.status === 'active' && !usedByOtherRows.has(tag.id))
+                        .map((tag) => (
+                          <option key={tag.id} value={tag.id}>
+                            {tag.label}
+                          </option>
+                        ))}
+                    </ProductSelect>
+                  </span>
+                  <span className="kb2-tag-table__attribute">
+                    <ProductInput
+                      aria-label={`${selectedTag?.label ?? '标签'}值`}
+                      type={inputType}
+                      list={
+                        selectedTag?.options?.length ? `tag-options-${selectedTag.id}` : undefined
+                      }
+                      value={row.value}
+                      placeholder={
+                        selectedTag?.tagType === 'array'
+                          ? '选择或输入多个选项，使用逗号分隔'
+                          : selectedTag?.tagType === 'number'
+                            ? '输入数字'
+                            : selectedTag?.tagType === 'datetime'
+                              ? '选择日期时间'
+                              : '输入标签值'
+                      }
+                      onChange={(event) => {
+                        const value = event.target.value;
+                        setTagAssignmentRows((current) =>
+                          current.map((item) => (item.id === row.id ? { ...item, value } : item)),
+                        );
+                      }}
+                    />
+                    {selectedTag?.options?.length ? (
+                      <datalist id={`tag-options-${selectedTag.id}`}>
+                        {selectedTag.options.map((option) => (
+                          <option value={option} key={option} />
+                        ))}
+                      </datalist>
+                    ) : null}
+                    {selectedTag ? (
+                      <small>
+                        {selectedTag.tagType === 'array'
+                          ? '选项标签；不存在的值会在保存前加入标签选项'
+                          : selectedTag.tagType === 'number'
+                            ? '数字标签'
+                            : selectedTag.tagType === 'datetime'
+                              ? '日期标签'
+                              : '文本标签'}
+                      </small>
+                    ) : null}
+                  </span>
+                  <span className="kb2-tag-table__actions">
+                    <ProductIconButton
+                      label={`删除 ${selectedTag?.label ?? '标签行'}`}
+                      tone="danger"
+                      onClick={() => {
+                        setTagAssignmentRows((current) => {
+                          const next = current.filter((item) => item.id !== row.id);
+                          return next.length > 0
+                            ? next
+                            : [
+                                {
+                                  id: globalThis.crypto.randomUUID(),
+                                  tagId: '',
+                                  value: '',
+                                  existing: false,
+                                },
+                              ];
+                        });
+                        if (row.existing && row.tagId) {
+                          setRemovedTagIds((current) =>
+                            current.includes(row.tagId) ? current : [...current, row.tagId],
+                          );
+                        }
+                      }}
+                    >
+                      <DeleteIcon boxSize={3.5} />
+                    </ProductIconButton>
+                  </span>
+                </div>
+              );
+            })
+          )}
+        </div>
+        <div className="kb2-tag-assignment-actions">
+          <ProductButton
+            size="sm"
+            disabled={
+              tags.length === 0 ||
+              tagAssignmentRows.length >= tags.length ||
+              tagAssignmentRows.some((row) => !row.tagId || !row.value.trim())
+            }
+            onClick={() => {
+              const used = new Set(tagAssignmentRows.map((row) => row.tagId));
+              const next = tags.find((tag) => tag.status === 'active' && !used.has(tag.id));
+              setTagAssignmentRows((current) => [
+                ...current,
+                {
+                  id: globalThis.crypto.randomUUID(),
+                  tagId: next?.id ?? '',
+                  value: '',
+                  existing: false,
+                },
+              ]);
+            }}
+          >
+            <AddIcon boxSize={3.5} />
+            添加标签
+          </ProductButton>
+          <ProductButton size="sm" onClick={() => setTagManagerOpen(true)}>
+            标签管理
+          </ProductButton>
+        </div>
         {tagAssignmentTarget ? (
           <div className="kb2-note">
             当前标签：
@@ -2111,8 +2327,7 @@ function DatasetInfoPanel(props: {
   const canManage = permissionRank(props.space?.effectivePermission) >= 30;
   const binding = (modelType: ModelBinding['modelType']) =>
     props.bindings.find((entry) => entry.modelType === modelType && entry.status === 'active');
-  const authorizedModels = (type: Model['type']) =>
-    props.models.filter((model) => model.type === type && model.authorized);
+  const authorizedModels = (role: KnowledgeModelRole) => modelsForRole(props.models, role);
   const modelsUnavailable =
     Boolean(props.modelsError) || (!props.modelsLoading && props.models.length === 0);
 
@@ -2146,9 +2361,10 @@ function DatasetInfoPanel(props: {
 
   const changeModel = async (modelType: ModelBinding['modelType'], modelId: string) => {
     if (!props.space || modelsBusy || props.rebuilding || !canManage) return;
-    const selected = props.models.find(
-      (item) => item.modelId === modelId && item.type === modelType && item.authorized,
-    );
+    const role =
+      modelType === 'embedding' || modelType === 'llm' || modelType === 'vlm' ? modelType : null;
+    if (!role) return;
+    const selected = modelsForRole(props.models, role).find((item) => item.modelId === modelId);
     if (modelId && !selected) return;
     const next = props.bindings
       .filter((entry) => entry.modelType !== modelType && entry.status === 'active')
@@ -2181,21 +2397,21 @@ function DatasetInfoPanel(props: {
 
   const saveModels = async () => {
     if (!props.space) return;
-    const next = (['llm', 'embedding', 'rerank', 'vlm', 'stt', 'tts'] as const).flatMap(
-      (modelType) => {
-        const model = props.models.find((item) => item.modelId === modelDraft[modelType]);
-        if (!model) return [];
-        return [
-          {
-            modelType,
-            modelId: model.modelId,
-            displayName: model.displayName,
-            requiredCapabilities: model.capabilities,
-            status: 'active' as const,
-          },
-        ];
-      },
-    );
+    const next = (['llm', 'embedding', 'vlm'] as const).flatMap((modelType) => {
+      const model = modelsForRole(props.models, modelType).find(
+        (item) => item.modelId === modelDraft[modelType],
+      );
+      if (!model) return [];
+      return [
+        {
+          modelType,
+          modelId: model.modelId,
+          displayName: model.displayName,
+          requiredCapabilities: model.capabilities,
+          status: 'active' as const,
+        },
+      ];
+    });
     const currentEmbeddingModelId = binding('embedding')?.modelId ?? '';
     if (currentEmbeddingModelId && currentEmbeddingModelId !== modelDraft.embedding) {
       setModelsError(null);
@@ -2261,69 +2477,56 @@ function DatasetInfoPanel(props: {
           <div className="kb2-info-group__title">
             <h3>模型配置</h3>
           </div>
-          <label className="kb2-model-select-row">
+          <div className="kb2-model-select-row">
             <span>索引模型</span>
-            <ProductSelect
+            <ModelSelect
+              label="索引模型"
+              models={authorizedModels('embedding')}
               value={binding('embedding')?.modelId ?? ''}
-              disabled={
-                modelsBusy ||
-                props.rebuilding ||
-                !canManage ||
-                modelsUnavailable ||
-                authorizedModels('embedding').length === 0
-              }
-              onChange={(event) => void changeModel('embedding', event.target.value)}
-            >
-              <option value="">未设置</option>
-              {authorizedModels('embedding').map((model) => (
-                <option key={model.modelId} value={model.modelId}>
-                  {model.displayName}
-                </option>
-              ))}
-            </ProductSelect>
-          </label>
-          <label className="kb2-model-select-row">
+              onChange={(modelId) => void changeModel('embedding', modelId)}
+              unsetLabel="未设置"
+              disabled={modelsBusy || props.rebuilding || !canManage || modelsUnavailable}
+            />
+          </div>
+          <div className="kb2-model-select-row">
             <span>文本理解模型</span>
-            <ProductSelect
+            <ModelSelect
+              label="文本理解模型"
+              models={authorizedModels('llm')}
               value={binding('llm')?.modelId ?? ''}
-              disabled={
-                modelsBusy ||
-                props.rebuilding ||
-                !canManage ||
-                modelsUnavailable ||
-                authorizedModels('llm').length === 0
-              }
-              onChange={(event) => void changeModel('llm', event.target.value)}
-            >
-              <option value="">未设置</option>
-              {authorizedModels('llm').map((model) => (
-                <option key={model.modelId} value={model.modelId}>
-                  {model.displayName}
-                </option>
-              ))}
-            </ProductSelect>
-          </label>
-          <label className="kb2-model-select-row">
+              onChange={(modelId) => void changeModel('llm', modelId)}
+              unsetLabel="未设置"
+              twoColumn
+              disabled={modelsBusy || props.rebuilding || !canManage || modelsUnavailable}
+            />
+          </div>
+          <div className="kb2-model-select-row">
             <span>图片理解模型</span>
-            <ProductSelect
+            <ModelSelect
+              label="图片理解模型"
+              models={authorizedModels('vlm')}
               value={binding('vlm')?.modelId ?? ''}
-              disabled={
-                modelsBusy ||
-                props.rebuilding ||
-                !canManage ||
-                modelsUnavailable ||
-                authorizedModels('vlm').length === 0
-              }
-              onChange={(event) => void changeModel('vlm', event.target.value)}
-            >
-              <option value="">未设置</option>
-              {authorizedModels('vlm').map((model) => (
-                <option key={model.modelId} value={model.modelId}>
-                  {model.displayName}
-                </option>
-              ))}
-            </ProductSelect>
-          </label>
+              onChange={(modelId) => void changeModel('vlm', modelId)}
+              unsetLabel="不设置"
+              twoColumn
+              disabled={modelsBusy || props.rebuilding || !canManage || modelsUnavailable}
+            />
+          </div>
+          {!props.modelsLoading &&
+          (['embedding', 'llm', 'vlm'] as const).some((role) => {
+            const modelId = binding(role)?.modelId;
+            return Boolean(
+              modelId && !authorizedModels(role).some((model) => model.modelId === modelId),
+            );
+          }) ? (
+            <div className="kb2-error-panel" role="alert">
+              <WarningIcon boxSize={4} />
+              <div>
+                <strong>当前绑定模型不可用</strong>
+                <span>请选择真实模型目录中的替代模型；修改索引模型后将重建索引。</span>
+              </div>
+            </div>
+          ) : null}
           <ProductError error={modelsError} />
           {props.models.length === 0 ? (
             <div className="kb2-table-muted">模型目录暂不可用</div>
@@ -2409,49 +2612,35 @@ function DatasetInfoPanel(props: {
         ) : null}
         <div className="kb2-form-grid">
           <ProductField label="索引模型">
-            <ProductSelect
+            <ModelSelect
+              label="索引模型"
+              models={authorizedModels('embedding')}
               value={modelDraft.embedding ?? ''}
-              onChange={(event) =>
-                setModelDraft((current) => ({ ...current, embedding: event.target.value }))
+              onChange={(modelId) =>
+                setModelDraft((current) => ({ ...current, embedding: modelId }))
               }
-            >
-              <option value="">未设置</option>
-              {authorizedModels('embedding').map((model) => (
-                <option key={model.modelId} value={model.modelId}>
-                  {model.displayName}
-                </option>
-              ))}
-            </ProductSelect>
+              unsetLabel="未设置"
+            />
           </ProductField>
           <ProductField label="文本理解模型">
-            <ProductSelect
+            <ModelSelect
+              label="文本理解模型"
+              models={authorizedModels('llm')}
               value={modelDraft.llm ?? ''}
-              onChange={(event) =>
-                setModelDraft((current) => ({ ...current, llm: event.target.value }))
-              }
-            >
-              <option value="">未设置</option>
-              {authorizedModels('llm').map((model) => (
-                <option key={model.modelId} value={model.modelId}>
-                  {model.displayName}
-                </option>
-              ))}
-            </ProductSelect>
+              onChange={(modelId) => setModelDraft((current) => ({ ...current, llm: modelId }))}
+              unsetLabel="未设置"
+              twoColumn
+            />
           </ProductField>
           <ProductField label="图片理解模型">
-            <ProductSelect
+            <ModelSelect
+              label="图片理解模型"
+              models={authorizedModels('vlm')}
               value={modelDraft.vlm ?? ''}
-              onChange={(event) =>
-                setModelDraft((current) => ({ ...current, vlm: event.target.value }))
-              }
-            >
-              <option value="">未设置</option>
-              {authorizedModels('vlm').map((model) => (
-                <option key={model.modelId} value={model.modelId}>
-                  {model.displayName}
-                </option>
-              ))}
-            </ProductSelect>
+              onChange={(modelId) => setModelDraft((current) => ({ ...current, vlm: modelId }))}
+              unsetLabel="不设置"
+              twoColumn
+            />
           </ProductField>
         </div>
         <ProductError error={modelsError} />

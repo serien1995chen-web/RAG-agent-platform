@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { S5AiproxyCatalogAdapter } from '../../src/modules/knowledge/adapter/s5-aiproxy-catalog.adapter';
+import {
+  S5AiproxyCatalogAdapter,
+  S5MockModelCatalog,
+} from '../../src/modules/knowledge/adapter/s5-aiproxy-catalog.adapter';
 import type {
   S5HttpRequest,
   S5HttpResponse,
@@ -69,6 +72,44 @@ function model(index: number, type: ModelCatalogItem['type'] = 'llm'): ModelCata
 }
 
 describe('TEST-MODEL-001-BLOCK AIProxy catalog and model operations', () => {
+  it('exposes mock model settings as read-only instead of a validation failure', async () => {
+    const application = new S5ModelApplication(new S5MockModelCatalog());
+    const adminContext = {
+      ...context,
+      scopes: ['knowledge:read', 'knowledge:admin'],
+      isWorkspaceOwner: true,
+    };
+    const settings = await application.dispatch({
+      ...input('API-MODEL-SETTINGS-GET'),
+      context: adminContext,
+    });
+    expect(settings).toMatchObject({
+      status: 200,
+      data: {
+        source: 'mock',
+        version: 0,
+        defaults: { embedding: 'mock-embedding-1024', textLLM: 'mock-llm-general' },
+      },
+    });
+    await expect(
+      application.dispatch({
+        ...input('API-MODEL-SETTINGS-UPDATE', {
+          version: 0,
+          models: [],
+          defaults: { embedding: null, textLLM: null, imageLLM: null },
+        }),
+        context: adminContext,
+      }),
+    ).rejects.toMatchObject({
+      problem: {
+        error: {
+          code: 'KNOWLEDGE_UNSUPPORTED_CONTENT',
+          details: { reason: 'mock_mode_read_only' },
+        },
+      },
+    });
+  });
+
   it('sends Bearer and workspace headers and normalizes a sorted catalog', async () => {
     let captured: S5HttpRequest | undefined;
     const transport: S5HttpTransportPort = {

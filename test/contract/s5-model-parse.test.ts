@@ -132,10 +132,10 @@ describe('S5 model and parse frozen contract', () => {
       clientTypes.match(/export interface SchemaPropertyMap \{\n([\s\S]*?)\n\}/)?.[1] ?? '';
     const requiredMap =
       clientTypes.match(/export interface RequiredSchemaPropertyMap \{\n([\s\S]*?)\n\}/)?.[1] ?? '';
-    for (const schemaName of ['ModelList', 'ModelBindingList']) {
-      expect(propertyMap).toContain(`"${schemaName}": "items" | "pageInfo";`);
-      expect(requiredMap).toContain(`"${schemaName}": "items" | "pageInfo";`);
-    }
+    expect(propertyMap).toContain('"ModelList": "defaults" | "items" | "pageInfo" | "source";');
+    expect(requiredMap).toContain('"ModelList": "defaults" | "items" | "pageInfo" | "source";');
+    expect(propertyMap).toContain('"ModelBindingList": "items" | "pageInfo";');
+    expect(requiredMap).toContain('"ModelBindingList": "items" | "pageInfo";');
   });
 
   it('covers six model types and four embedding dimensions', async () => {
@@ -242,7 +242,7 @@ describe('S5 model and parse frozen contract', () => {
   });
 
   it('keeps S5 operation wiring separate from the S6 worker registry', () => {
-    expect(runtime.operations).toHaveLength(124);
+    expect(runtime.operations).toHaveLength(126);
     expect(deferred.operations).toHaveLength(0);
     const worker = readFileSync(
       join(root, 'projects', 'app', 'src', 'runtime', 'knowledge-worker.ts'),

@@ -90,7 +90,7 @@ export interface Source {
   aclSnapshotVersion?: number;
   ownershipMemberId?: string;
   effectivePermission?: PermissionLevel;
-  segmentCount?: number;
+  segmentCount: number;
   metadata?: Record<string, unknown>;
   tagValues?: SourceTagValue[];
   version: number;
@@ -188,8 +188,11 @@ export interface Job {
 export interface Model {
   modelId: string;
   displayName: string;
+  provider: string;
   type: 'llm' | 'embedding' | 'rerank' | 'vlm' | 'stt' | 'tts';
   capabilities: string[];
+  tags: string[];
+  dimension?: 768 | 1024 | 1536 | 3072 | null;
   limits?: {
     maxToken?: number;
     defaultToken?: number;
@@ -197,6 +200,25 @@ export interface Model {
     maxResponse?: number;
   };
   authorized: boolean;
+}
+
+export interface ModelDefaults {
+  embedding: string | null;
+  textLLM: string | null;
+  imageLLM: string | null;
+}
+
+export interface ModelCatalog {
+  items: Model[];
+  defaults: ModelDefaults;
+  source: 'database' | 'environment' | 'mock';
+}
+
+export interface ModelSettings {
+  version: number;
+  source: 'database' | 'environment' | 'mock';
+  models: Array<Omit<Model, 'authorized'> & { enabled: boolean }>;
+  defaults: ModelDefaults;
 }
 
 export interface ModelBinding {

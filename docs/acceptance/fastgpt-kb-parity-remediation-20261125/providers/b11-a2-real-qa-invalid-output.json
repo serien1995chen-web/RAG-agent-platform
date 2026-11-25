@@ -1,0 +1,16 @@
+{
+  "testId": "TEST-X-S11-PROVIDER-REAL",
+  "generatedAt": "2026-11-25T14:54:41.348Z",
+  "candidateSha": "UNFROZEN",
+  "status": "REAL_VERIFIED",
+  "endpointHostHash": "04b0afbac4bca387",
+  "modelId": "deepseek-v4.1-flash",
+  "providerCalls": 2,
+  "repairAttempts": 1,
+  "fallback": "chunk_split",
+  "qaCount": 1,
+  "usage": {
+    "inputTokens": 90,
+    "outputTokens": 77
+  }
+}

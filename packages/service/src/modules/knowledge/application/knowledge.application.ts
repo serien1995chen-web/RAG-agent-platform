@@ -225,8 +225,14 @@ export class KnowledgeApplication {
     const items = Array.isArray((models.data as { items?: unknown[] }).items)
       ? ((models.data as { items: Array<Record<string, unknown>> }).items ?? [])
       : [];
-    return (['embedding', 'llm'] as const).flatMap((modelType) => {
-      const model = items.find((item) => item.type === modelType && item.authorized === true);
+    const defaults = (models.data as { defaults?: Record<string, string | null> }).defaults ?? {};
+    const roles = [
+      { modelType: 'embedding' as const, modelId: defaults.embedding },
+      { modelType: 'llm' as const, modelId: defaults.textLLM },
+      { modelType: 'vlm' as const, modelId: defaults.imageLLM },
+    ];
+    return roles.flatMap(({ modelType, modelId: roleModelId }) => {
+      const model = items.find((item) => item.modelId === roleModelId && item.authorized === true);
       if (!model) return [];
       return [
         {
@@ -240,6 +246,63 @@ export class KnowledgeApplication {
         },
       ];
     });
+  }
+
+  private async createModelBindings(value: unknown, context: TenantContext) {
+    if (value === undefined) return this.defaultModelBindings(context);
+    if (!Array.isArray(value) || value.length > 3) {
+      throw createKnowledgeError({
+        code: 'KNOWLEDGE_VALIDATION_FAILED',
+        requestId: context.requestId,
+        traceId: context.traceId,
+        details: { field: 'modelBindings' },
+      });
+    }
+    const bindings = value.map((entry, index) => {
+      if (
+        typeof entry !== 'object' ||
+        entry === null ||
+        Array.isArray(entry) ||
+        typeof (entry as Record<string, unknown>).modelType !== 'string' ||
+        typeof (entry as Record<string, unknown>).modelId !== 'string'
+      ) {
+        throw createKnowledgeError({
+          code: 'KNOWLEDGE_VALIDATION_FAILED',
+          requestId: context.requestId,
+          traceId: context.traceId,
+          details: { field: `modelBindings.${index}` },
+        });
+      }
+      const item = entry as Record<string, unknown>;
+      return {
+        modelType: item.modelType as 'llm' | 'embedding' | 'rerank' | 'vlm' | 'stt' | 'tts',
+        modelId: item.modelId as string,
+        displayName: typeof item.displayName === 'string' ? item.displayName : String(item.modelId),
+        requiredCapabilities: Array.isArray(item.requiredCapabilities)
+          ? item.requiredCapabilities.map(String)
+          : [],
+        status: 'active' as const,
+      };
+    });
+    const types = new Set(bindings.map((binding) => binding.modelType));
+    if (types.size !== bindings.length) {
+      throw createKnowledgeError({
+        code: 'KNOWLEDGE_VALIDATION_FAILED',
+        requestId: context.requestId,
+        traceId: context.traceId,
+        details: { field: 'modelBindings', reason: 'model_type_must_be_unique' },
+      });
+    }
+    for (const binding of bindings) {
+      await this.s5Models!.dispatch({
+        operationId: 'API-MODEL-BINDING-VALIDATE',
+        params: {},
+        query: {},
+        body: binding,
+        context,
+      });
+    }
+    return bindings;
   }
 
   async dispatch(input: KnowledgeOperationInput): Promise<KnowledgeOperationResult> {
@@ -301,7 +364,9 @@ export class KnowledgeApplication {
     }
     if (
       input.operationId === 'API-MODEL-LIST' ||
-      input.operationId === 'API-MODEL-BINDING-VALIDATE'
+      input.operationId === 'API-MODEL-BINDING-VALIDATE' ||
+      input.operationId === 'API-MODEL-SETTINGS-GET' ||
+      input.operationId === 'API-MODEL-SETTINGS-UPDATE'
     ) {
       if (!this.s5Models) {
         throw createKnowledgeError({
@@ -369,7 +434,10 @@ export class KnowledgeApplication {
                 ? body.sourcePermissionEnabled
                 : true,
             autoSync: body.autoSync === true,
-            modelBindings: body.kind === 'space' ? await this.defaultModelBindings(context) : [],
+            modelBindings:
+              body.kind === 'space'
+                ? await this.createModelBindings(body.modelBindings, context)
+                : [],
           },
           context,
         );

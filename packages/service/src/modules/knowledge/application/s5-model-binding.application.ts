@@ -92,13 +92,12 @@ function parseUpdate(
   }
   const bindings = body.bindings.map((value, index) => parseBinding(value, context, index));
   const types = new Set(bindings.map((binding) => binding.modelType));
-  const ids = new Set(bindings.map((binding) => binding.modelId));
-  if (types.size !== bindings.length || ids.size !== bindings.length) {
+  if (types.size !== bindings.length) {
     throw createKnowledgeError({
       code: 'KNOWLEDGE_VALIDATION_FAILED',
       requestId: context.requestId,
       traceId: context.traceId,
-      details: { field: 'bindings', reason: 'model_type_and_id_must_be_unique' },
+      details: { field: 'bindings', reason: 'model_type_must_be_unique' },
     });
   }
   return { bindings, version: version as number };

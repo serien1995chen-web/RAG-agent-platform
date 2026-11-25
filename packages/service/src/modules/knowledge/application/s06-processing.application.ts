@@ -641,6 +641,8 @@ export class S06ProcessingApplication {
         });
       }
     } else {
+      const processingSettings = (job.inputSnapshot.chunkingConfigSnapshot ??
+        job.inputSnapshot.chunking) as ChunkingSettings;
       const processed = await this.input.processing.process({
         workspaceId: context.workspaceId,
         knowledgeSpaceId: source.knowledgeSpaceId,
@@ -649,17 +651,15 @@ export class S06ProcessingApplication {
         sourceVersion: artifact.sourceVersion,
         rawText: parsed.rawText,
         artifact,
-        settings: (job.inputSnapshot.chunkingConfigSnapshot ??
-          job.inputSnapshot.chunking) as ChunkingSettings,
+        settings: processingSettings,
+        ...(processingSettings.trainingType === 'qa' ? { qaFallbackPolicy: 'none' as const } : {}),
         context,
       });
       chunkSettingsHash = processed.evidence.chunkingConfigHash;
       qaPromptVersion = processed.evidence.qaPromptVersion ?? null;
       qaUsage = processed.evidence.qaUsage;
       qaAttempts = processed.evidence.qaAttempts;
-      const chunking = (job.inputSnapshot.chunkingConfigSnapshot ?? job.inputSnapshot.chunking) as
-        | ChunkingSettings
-        | undefined;
+      const chunking = processingSettings;
       const enhancementMetadata =
         processed.evidence.partial === true ? { enhancementPartial: true } : undefined;
       for (const chunk of processed.chunks) {

@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { ObjectIdSchema } from '../common/primitives';
+import { MAX_LOCAL_IMPORT_FILES } from './file-policy';
 
 export const IMPORT_KINDS = [
   'files',
@@ -203,7 +204,7 @@ export const ConnectorCredentialsSchema = z.discriminatedUnion('provider', [
 export const ImportFilesSchema = z
   .object({
     directoryId: ObjectIdSchema.nullable().optional(),
-    uploadIds: z.array(z.string()).min(1).max(1000),
+    uploadIds: z.array(z.string()).min(1).max(MAX_LOCAL_IMPORT_FILES),
     parseProvider: z.enum(PARSE_PROVIDERS).default('liteparse'),
     parseConfig: JsonObjectSchema.default({}),
     chunking: ChunkingSettingsSchema,
@@ -224,7 +225,7 @@ export const ImportImageDatasetSchema = z
   .object({
     name: z.string().trim().min(1).max(240),
     directoryId: ObjectIdSchema.nullable().optional(),
-    uploadIds: z.array(z.string()).min(1).max(5),
+    uploadIds: z.array(z.string()).min(1).max(MAX_LOCAL_IMPORT_FILES),
     chunking: ChunkingSettingsSchema.default({
       trainingType: 'imageParse',
       chunkSettingMode: 'auto',

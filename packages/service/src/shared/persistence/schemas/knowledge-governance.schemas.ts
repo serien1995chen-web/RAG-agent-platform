@@ -169,6 +169,74 @@ export const KnowledgeModelBindingSchema = new Schema(
   knowledgeSchemaOptions('knowledge_model_bindings'),
 );
 
+export interface KnowledgeModelSettingsDoc extends WorkspaceFields {
+  version: number;
+  models: Array<{
+    modelId: string;
+    displayName: string;
+    provider: string;
+    type: 'llm' | 'embedding' | 'rerank' | 'vlm' | 'stt' | 'tts';
+    capabilities: string[];
+    tags: string[];
+    enabled: boolean;
+    dimension: 768 | 1024 | 1536 | 3072 | null;
+    limits?: Record<string, number>;
+  }>;
+  defaults: {
+    embedding: string | null;
+    textLLM: string | null;
+    imageLLM: string | null;
+  };
+  updatedByMemberId: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export const KnowledgeModelSettingsSchema = new Schema(
+  {
+    ...knowledgeCommonFields,
+    version: { type: Number, required: true, default: 0 },
+    models: {
+      type: [
+        {
+          modelId: { type: String, required: true },
+          displayName: { type: String, required: true },
+          provider: { type: String, required: true },
+          type: {
+            type: String,
+            enum: ['llm', 'embedding', 'rerank', 'vlm', 'stt', 'tts'],
+            required: true,
+          },
+          capabilities: { type: [String], required: true, default: [] },
+          tags: { type: [String], required: true, default: [] },
+          enabled: { type: Boolean, required: true, default: true },
+          dimension: {
+            type: Number,
+            enum: [768, 1024, 1536, 3072, null],
+            default: null,
+          },
+          limits: { type: Schema.Types.Mixed, default: undefined },
+        },
+      ],
+      required: true,
+      default: [],
+    },
+    defaults: {
+      embedding: { type: String, default: null },
+      textLLM: { type: String, default: null },
+      imageLLM: { type: String, default: null },
+    },
+    updatedByMemberId: { type: String, required: true },
+  },
+  knowledgeSchemaOptions('knowledge_model_settings'),
+);
+
+defineKnowledgeIndex(KnowledgeModelSettingsSchema, {
+  name: 'ux_model_settings_workspace',
+  key: { workspaceId: 1 },
+  options: { unique: true },
+});
+
 defineKnowledgeIndex(KnowledgeModelBindingSchema, {
   name: 'ux_model_binding',
   key: { workspaceId: 1, knowledgeSpaceId: 1, modelType: 1 },

@@ -270,10 +270,10 @@ describe('L1-B06-ING-001 product upload flow', () => {
       mimeType: 'text/plain',
       buffer: Buffer.from('B06A e2e upload body ' + suffix, 'utf8'),
     });
-    await playwrightExpect(page.getByText('completed', { exact: true })).toBeVisible({
+    await playwrightExpect(page.getByText('上传完成', { exact: true })).toBeVisible({
       timeout: 60_000,
     });
-    await playwrightExpect(page.getByText(name, { exact: true })).toBeVisible();
+    await playwrightExpect(page.locator('.kb2-upload-row').filter({ hasText: name })).toBeVisible();
 
     await page.getByRole('button', { name: '下一步' }).click();
     await page.getByRole('button', { name: '下一步' }).click();
@@ -314,7 +314,7 @@ describe('L1-B06-ING-001 product upload flow', () => {
     await context.close();
   }, 240_000);
 
-  it('L1-B06-ING-001-N01 一成功一失败时失败行保留逐行原因且仅成功项可继续', async () => {
+  it('L1-B06-ING-001-N01 rejects unsupported local files before upload and continues with valid rows', async () => {
     const context = await browser.newContext({
       viewport: { width: 1200, height: 900 },
       locale: 'zh-CN',
@@ -338,25 +338,19 @@ describe('L1-B06-ING-001 product upload flow', () => {
       { name: goodName, mimeType: 'text/plain', buffer: Buffer.from('mixed body', 'utf8') },
       { name: badName, mimeType: 'application/octet-stream', buffer: Buffer.from('MZ', 'utf8') },
     ]);
-    await playwrightExpect(page.getByText(goodName, { exact: true })).toBeVisible({
+    await playwrightExpect(
+      page.locator('.kb2-upload-row').filter({ hasText: goodName }),
+    ).toBeVisible({
       timeout: 60_000,
     });
-    await playwrightExpect(page.getByText(badName, { exact: true })).toBeVisible({
-      timeout: 30_000,
-    });
-    const badRow = page.locator('.kb2-upload-row').filter({ hasText: badName });
-    await playwrightExpect(badRow.getByRole('button', { name: '重试' })).toBeVisible({
-      timeout: 60_000,
-    });
+    await playwrightExpect(page.getByText(`${badName}：文件类型不受支持`)).toBeVisible();
+    await playwrightExpect(page.locator('.kb2-upload-row')).toHaveCount(1);
+    await playwrightExpect.poll(() => uploadInitCount).toBe(1);
+    await playwrightExpect(
+      page.locator('.kb2-upload-row').getByText('上传完成', { exact: true }),
+    ).toBeVisible({ timeout: 60_000 });
     await shot(page, 'n01-mixed-upload.png');
-    const badRowText = await badRow.innerText().catch(() => '');
     const nextEnabledWithSuccess = await page.getByRole('button', { name: '下一步' }).isEnabled();
-    const initCountBeforeRetry = uploadInitCount;
-    await badRow.getByRole('button', { name: '重试' }).click();
-    await playwrightExpect
-      .poll(() => uploadInitCount, { timeout: 30_000 })
-      .toBe(initCountBeforeRetry + 1);
-    await playwrightExpect(badRow).toContainText(badName);
     await context.close();
 
     const onlyBad = await browser.newContext({
@@ -375,8 +369,9 @@ describe('L1-B06-ING-001 product upload flow', () => {
       },
     ]);
     await playwrightExpect(
-      onlyBadPage.locator('.kb2-upload-row').filter({ hasText: '.exe' }),
-    ).toBeVisible({ timeout: 30_000 });
+      onlyBadPage.getByText(`b06a-only-bad-${suffix}.exe：文件类型不受支持`),
+    ).toBeVisible();
+    await playwrightExpect(onlyBadPage.locator('.kb2-upload-row')).toHaveCount(0);
     await shot(onlyBadPage, 'n01-failed-only.png');
     const nextDisabledWhenAllFailed = await onlyBadPage
       .getByRole('button', { name: '下一步' })
@@ -384,13 +379,13 @@ describe('L1-B06-ING-001 product upload flow', () => {
     await onlyBad.close();
     expect(
       {
-        perRowReason: /不受支持|不支持|失败|无法|KNOWLEDGE_/i.test(badRowText),
+        perFileReason: true,
         nextEnabledWithSuccess,
         nextDisabledWhenAllFailed,
       },
-      'N01 evidence: per-row reason (KB-IMPORT-028), next gating (KB-IMPORT-029)',
+      'N01 evidence: pre-upload reason (KB-IMPORT-028), next gating (KB-IMPORT-029)',
     ).toEqual({
-      perRowReason: true,
+      perFileReason: true,
       nextEnabledWithSuccess: true,
       nextDisabledWhenAllFailed: true,
     });
@@ -441,7 +436,7 @@ describe('L1-B06-ING-001 product upload flow', () => {
     const survivingId = ((await survivingInit.json()) as { data: { uploadId: string } }).data
       .uploadId;
     const survivingRow = page.locator('.kb2-upload-row').filter({ hasText: survivingName });
-    await playwrightExpect(survivingRow.getByText('completed', { exact: true })).toBeVisible({
+    await playwrightExpect(survivingRow.getByText('上传完成', { exact: true })).toBeVisible({
       timeout: 60_000,
     });
 
@@ -485,7 +480,7 @@ describe('L1-B06-ING-001 product upload flow', () => {
     const init = await initPromise;
     const initPayload = (await init.json()) as { data: { uploadId: string } };
     const uploadId = initPayload.data.uploadId;
-    await playwrightExpect(page.getByText('completed', { exact: true })).toBeVisible({
+    await playwrightExpect(page.getByText('上传完成', { exact: true })).toBeVisible({
       timeout: 60_000,
     });
     const row = page.locator('.kb2-upload-row').filter({ hasText: name });

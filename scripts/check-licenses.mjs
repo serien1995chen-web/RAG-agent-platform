@@ -82,7 +82,7 @@ const EXPECTED_STAGE_COUNTS = new Map([
   ['S2', 13],
   ['S3', 0],
   ['S4', 24],
-  ['S5', 2],
+  ['S5', 4],
   ['S6', 6],
   ['S7', 21],
   ['S8', 1],
@@ -90,8 +90,19 @@ const EXPECTED_STAGE_COUNTS = new Map([
   ['S10', 6],
   ['S11', 0],
 ]);
-const CATALOG_ONLY_LATER_STAGE = new Set(['ajv', '@llamaindex/liteparse-wasm', '@types/turndown']);
-const APPROVED_S5_DIRECT_DEPENDENCIES = new Set(['@llamaindex/liteparse-wasm', '@types/turndown']);
+const CATALOG_ONLY_LATER_STAGE = new Set([
+  'ajv',
+  '@llamaindex/liteparse-wasm',
+  '@types/turndown',
+  'office-oxide-wasm',
+  'officeparser',
+]);
+const APPROVED_S5_DIRECT_DEPENDENCIES = new Set([
+  '@llamaindex/liteparse-wasm',
+  '@types/turndown',
+  'office-oxide-wasm',
+  'officeparser',
+]);
 const DEPENDENCY_STAGES = new Set([
   'S1',
   'S2',
@@ -111,7 +122,7 @@ const AUDIT_CATEGORIES = new Map([
   ['DECLARED_INSTALLED', 52],
   ['DECLARED_NOT_INSTALLED', 5],
   ['UNDECLARED_INSTALLED', 15],
-  ['UNDECLARED_NOT_INSTALLED', 92],
+  ['UNDECLARED_NOT_INSTALLED', 94],
 ]);
 const BASELINE_TRANSITIVE_ONLY = new Set([
   '@opentelemetry/api-logs',
@@ -306,7 +317,7 @@ function checkDependencyBaseline(repoRoot, catalog, manifests, options = {}) {
   if (!Array.isArray(ledger)) {
     return ['dependency ledger 必须是数组'];
   }
-  if (ledger.length !== 166) errors.push(`dependency ledger 应为 166 项，实际 ${ledger.length}`);
+  if (ledger.length !== 168) errors.push(`dependency ledger 应为 168 项，实际 ${ledger.length}`);
 
   const names = new Set();
   const byName = new Map();
@@ -333,8 +344,8 @@ function checkDependencyBaseline(repoRoot, catalog, manifests, options = {}) {
   }
 
   const designEntries = ledger.filter((entry) => DESIGN_DEPENDENCY_SOURCES.has(entry.source));
-  if (designEntries.length !== 164) {
-    errors.push(`设计直接依赖应为 164 项，实际 ${designEntries.length}`);
+  if (designEntries.length !== 166) {
+    errors.push(`设计直接依赖应为 166 项，实际 ${designEntries.length}`);
   }
   const stageCounts = new Map();
   for (const entry of designEntries) {
@@ -374,10 +385,10 @@ function checkDependencyBaseline(repoRoot, catalog, manifests, options = {}) {
       )
       .map((entry) => [entry.name, entry.version]),
   );
-  if (expectedCatalog.size !== 166) {
-    errors.push(`catalog 期望项应为 166，账本计算为 ${expectedCatalog.size}`);
+  if (expectedCatalog.size !== 168) {
+    errors.push(`catalog 期望项应为 168，账本计算为 ${expectedCatalog.size}`);
   }
-  if (catalog.size !== 166) errors.push(`catalog 应为 166 项，实际 ${catalog.size}`);
+  if (catalog.size !== 168) errors.push(`catalog 应为 168 项，实际 ${catalog.size}`);
   for (const [name, version] of expectedCatalog) {
     const actual = catalog.get(name);
     if (actual === undefined) errors.push(`catalog 缺少 ${name}@${version}`);
@@ -479,7 +490,7 @@ function checkDependencyAudit(repoRoot) {
     ),
   );
   if (!Array.isArray(audit)) return ['dependency audit 必须是数组'];
-  if (audit.length !== 166) errors.push(`dependency audit 应为 166 项，实际 ${audit.length}`);
+  if (audit.length !== 168) errors.push(`dependency audit 应为 168 项，实际 ${audit.length}`);
 
   const ledgerByName = new Map(ledger.map((entry) => [entry.name, entry]));
   const auditNames = new Set();
@@ -846,7 +857,7 @@ export async function main(argv = process.argv.slice(2)) {
       process.exit(1);
     }
     console.log(
-      `dependency gate 通过：166 项 ledger、166 项 audit、166 项 catalog、` +
+      `dependency gate 通过：168 项 ledger、168 项 audit、168 项 catalog、` +
         `${workspaceCount} 个 workspace 包。`,
     );
     return;

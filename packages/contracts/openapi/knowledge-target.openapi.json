@@ -4,7 +4,7 @@
   "info": {
     "title": "RAG-agent-platform Knowledge API",
     "version": "1.0.0",
-    "description": "Knowledge architecture baseline contract: 96 paths, 124 operations and 142 schemas.",
+    "description": "Knowledge architecture contract: 97 paths, 126 operations and 146 schemas.",
     "license": {
       "name": "Proprietary",
       "identifier": "LicenseRef-Proprietary"
@@ -20091,6 +20091,232 @@
           }
         }
       }
+    },
+    "/v1/knowledge/model-settings": {
+      "get": {
+        "operationId": "API-MODEL-SETTINGS-GET",
+        "summary": "读取工作区模型配置",
+        "tags": [
+          "模型"
+        ],
+        "parameters": [
+          {
+            "name": "X-Workspace-Id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "ws_acme_cn"
+          },
+          {
+            "name": "X-Request-Id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "example": "req_01JABCDEF123"
+          },
+          {
+            "name": "traceparent",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "example": "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01"
+          }
+        ],
+        "x-required-scope": "knowledge:admin",
+        "x-rate-limit": "60 QPS/workspace",
+        "x-timeout-ms": 15000,
+        "x-audit": false,
+        "x-downstream-allowed": true,
+        "responses": {
+          "200": {
+            "description": "模型配置",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "success",
+                    "data",
+                    "traceId",
+                    "requestId"
+                  ],
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "const": true
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/ModelSettings"
+                    },
+                    "traceId": {
+                      "type": "string"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem403"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem409"
+          },
+          "500": {
+            "$ref": "#/components/responses/Problem500"
+          },
+          "502": {
+            "$ref": "#/components/responses/Problem502"
+          },
+          "504": {
+            "$ref": "#/components/responses/Problem504"
+          }
+        },
+        "security": [
+          {
+            "JWTAuth": []
+          },
+          {
+            "APIKeyAuth": [
+              "knowledge:admin"
+            ]
+          }
+        ]
+      },
+      "put": {
+        "operationId": "API-MODEL-SETTINGS-UPDATE",
+        "summary": "保存工作区模型配置",
+        "tags": [
+          "模型"
+        ],
+        "parameters": [
+          {
+            "name": "X-Workspace-Id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "ws_acme_cn"
+          },
+          {
+            "name": "X-Request-Id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "example": "req_01JABCDEF123"
+          },
+          {
+            "name": "traceparent",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "example": "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01"
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 16,
+              "maxLength": 128
+            }
+          }
+        ],
+        "x-required-scope": "knowledge:admin",
+        "x-rate-limit": "30 QPS/workspace",
+        "x-timeout-ms": 15000,
+        "x-audit": true,
+        "x-downstream-allowed": false,
+        "responses": {
+          "200": {
+            "description": "模型配置",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "success",
+                    "data",
+                    "traceId",
+                    "requestId"
+                  ],
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "const": true
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/ModelSettings"
+                    },
+                    "traceId": {
+                      "type": "string"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem403"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem409"
+          },
+          "500": {
+            "$ref": "#/components/responses/Problem500"
+          }
+        },
+        "security": [
+          {
+            "JWTAuth": []
+          },
+          {
+            "APIKeyAuth": [
+              "knowledge:admin"
+            ]
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ModelSettingsUpdate"
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -21314,7 +21540,8 @@
           "sourceVersion",
           "searchEnabled",
           "permissionState",
-          "permissionRevision",
+    "permissionRevision",
+          "segmentCount",
           "version"
         ],
         "properties": {
@@ -21496,6 +21723,13 @@
               4
             ]
           },
+    "segmentCount": {
+      "type": "integer",
+      "minimum": 0,
+      "examples": [
+        20
+      ]
+    },
           "metadata": {
             "type": "object",
             "description": "Source kind-specific public metadata. Source detail responses expose only safe webpage provenance fields.",
@@ -23276,8 +23510,10 @@
         "required": [
           "modelId",
           "displayName",
+          "provider",
           "type",
           "capabilities",
+          "tags",
           "authorized"
         ],
         "properties": {
@@ -23346,6 +23582,15 @@
             "examples": [
               true
             ]
+          },
+          "provider": {
+            "type": "string"
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         }
       },
@@ -24657,7 +24902,9 @@
         "type": "object",
         "required": [
           "items",
-          "pageInfo"
+          "pageInfo",
+          "defaults",
+          "source"
         ],
         "properties": {
           "items": {
@@ -24668,6 +24915,17 @@
           },
           "pageInfo": {
             "$ref": "#/components/schemas/PageInfo"
+          },
+          "defaults": {
+            "$ref": "#/components/schemas/ModelDefaults"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "database",
+              "environment",
+              "mock"
+            ]
           }
         }
       },
@@ -25022,6 +25280,13 @@
           "autoSync": {
             "type": "boolean",
             "default": false
+          },
+          "modelBindings": {
+            "type": "array",
+            "maxItems": 3,
+            "items": {
+              "$ref": "#/components/schemas/ModelBinding"
+            }
           }
         }
       },
@@ -27129,7 +27394,7 @@
           "sizeBytes": {
             "type": "integer",
             "minimum": 1,
-            "maximum": 1048576000
+      "maximum": 52428800
           },
           "purpose": {
             "type": "string",
@@ -27734,6 +27999,203 @@
           }
         },
         "additionalProperties": false
+      },
+      "ModelDefaults": {
+        "type": "object",
+        "required": [
+          "embedding",
+          "textLLM",
+          "imageLLM"
+        ],
+        "properties": {
+          "embedding": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "textLLM": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "imageLLM": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      },
+      "ModelSetting": {
+        "type": "object",
+        "required": [
+          "modelId",
+          "displayName",
+          "provider",
+          "type",
+          "capabilities",
+          "tags",
+          "enabled",
+          "dimension"
+        ],
+        "properties": {
+          "modelId": {
+            "type": "string",
+            "examples": [
+              "embedding-bge-m3"
+            ]
+          },
+          "displayName": {
+            "type": "string",
+            "examples": [
+              "BGE-M3 Embedding"
+            ]
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "llm",
+              "embedding",
+              "rerank",
+              "vlm",
+              "stt",
+              "tts"
+            ],
+            "examples": [
+              "embedding"
+            ]
+          },
+          "capabilities": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "examples": [
+              [
+                "text",
+                "dimension:1024"
+              ]
+            ]
+          },
+          "limits": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "maxToken": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "defaultToken": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "maxContext": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "maxResponse": {
+                "type": "integer",
+                "minimum": 1
+              }
+            }
+          },
+          "provider": {
+            "type": "string"
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "dimension": {
+            "oneOf": [
+              {
+                "type": "integer",
+                "enum": [
+                  768,
+                  1024,
+                  1536,
+                  3072
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      },
+      "ModelSettings": {
+        "type": "object",
+        "required": [
+          "version",
+          "source",
+          "models",
+          "defaults"
+        ],
+        "properties": {
+          "version": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "database",
+              "environment"
+            ]
+          },
+          "models": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ModelSetting"
+            }
+          },
+          "defaults": {
+            "$ref": "#/components/schemas/ModelDefaults"
+          }
+        }
+      },
+      "ModelSettingsUpdate": {
+        "type": "object",
+        "required": [
+          "version",
+          "models",
+          "defaults"
+        ],
+        "properties": {
+          "version": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "models": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ModelSetting"
+            }
+          },
+          "defaults": {
+            "$ref": "#/components/schemas/ModelDefaults"
+          }
+        }
       }
     },
     "responses": {

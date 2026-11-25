@@ -178,7 +178,7 @@ async function openLocalParameters(
       buffer: Buffer.from(file.text, 'utf8'),
     })),
   );
-  await playwrightExpect(page.getByText('completed', { exact: true })).toHaveCount(2, {
+  await playwrightExpect(page.getByText('上传完成', { exact: true })).toHaveCount(2, {
     timeout: 30_000,
   });
   await page.getByRole('button', { name: '下一步', exact: true }).click();

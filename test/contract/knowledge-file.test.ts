@@ -35,16 +35,16 @@ const S2_OPERATIONS = [
 ];
 
 describe('FILE OpenAPI and runtime contract', () => {
-  it('keeps 96/124/142/8 and promotes exactly the 12 S2 operations', () => {
+  it('keeps 97/126/146/8 and promotes exactly the 12 S2 operations', () => {
     const operations = Object.values(openapi.paths).flatMap((path) =>
       Object.values(path)
         .map((operation) => operation.operationId)
         .filter((id): id is string => typeof id === 'string'),
     );
-    expect(Object.keys(openapi.paths)).toHaveLength(96);
-    expect(operations).toHaveLength(124);
-    expect(Object.keys(openapi.components.schemas)).toHaveLength(142);
-    expect(runtime.count).toBe(124);
+    expect(Object.keys(openapi.paths)).toHaveLength(97);
+    expect(operations).toHaveLength(126);
+    expect(Object.keys(openapi.components.schemas)).toHaveLength(146);
+    expect(runtime.count).toBe(126);
     expect(runtime.operations.map((operation) => operation.operationId)).toEqual(
       expect.arrayContaining(S2_OPERATIONS),
     );
@@ -57,11 +57,23 @@ describe('FILE OpenAPI and runtime contract', () => {
     };
     expect(uploadInit.required).toContain('knowledgeSpaceId');
     expect(uploadInit.properties.name?.maxLength).toBe(180);
-    expect(uploadInit.properties.sizeBytes?.maximum).toBe(1048576000);
+    expect(uploadInit.properties.sizeBytes?.maximum).toBe(52428800);
     const presign = openapi.components.schemas.PresignUploadParts as {
       properties: Record<string, Record<string, unknown>>;
     };
     expect(presign.properties.partNumbers?.maxItems).toBe(10000);
+  });
+
+  it('requires a stable Source segment count in list and detail responses', () => {
+    const source = openapi.components.schemas.Source as {
+      required: string[];
+      properties: Record<string, Record<string, unknown>>;
+    };
+    expect(source.required).toContain('segmentCount');
+    expect(source.properties.segmentCount).toMatchObject({
+      type: 'integer',
+      minimum: 0,
+    });
   });
 
   it('allows content ticket authentication and Range without X-Workspace-Id', () => {

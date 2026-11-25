@@ -154,7 +154,7 @@ describe('L1-B11-A2 PARSE-004 real AIProxy QA integration', () => {
     });
   }, 180_000);
 
-  it('L1-B11-A2-PARSE-004-F01R uses one real model call before raw fallback on invalid output', async () => {
+  it('L1-B11-A2-PARSE-004-F01R uses one repair call and never treats raw fallback as QA success', async () => {
     const provider = env();
     const transport = new CountingTransport();
     const adapter = new S5AiproxyHttpAdapter({
@@ -202,7 +202,7 @@ describe('L1-B11-A2 PARSE-004 real AIProxy QA integration', () => {
         {
           templateRegistry: createDefaultTemplateRegistry(),
           model,
-          retryOnInvalidSchema: false,
+          retryOnInvalidSchema: true,
           fallbackToChunkSplit: () => ({
             items: [
               {
@@ -214,24 +214,26 @@ describe('L1-B11-A2 PARSE-004 real AIProxy QA integration', () => {
           }),
         },
       );
-      expect(transport.calls).toBe(1);
+      expect(transport.calls).toBe(2);
       expect(result.fallback).toBe('chunk_split');
+      expect(result.items).toEqual([expect.objectContaining({ q: corpus.longParagraph!, a: '' })]);
       writeProviderEvidence('b11-a2-real-qa-invalid-output.json', {
         status: 'REAL_VERIFIED',
         endpointHostHash: safeHostHash(provider.baseUrl),
         modelId: provider.modelId,
         providerCalls: transport.calls,
+        repairAttempts: 1,
         fallback: result.fallback,
         qaCount: result.items.length,
         usage: result.usage,
       });
     } catch (error) {
       writeProviderEvidence('b11-a2-real-qa-invalid-output.json', {
-        status: transport.calls === 1 ? 'FAIL' : 'FAIL_DUPLICATE_MODEL_CALL',
+        status: transport.calls === 2 ? 'FAIL' : 'FAIL_PROVIDER_CALL_COUNT',
         endpointHostHash: safeHostHash(provider.baseUrl),
         modelId: provider.modelId,
         providerCalls: transport.calls,
-        expectedProviderCalls: 1,
+        expectedProviderCalls: 2,
         errorType: error instanceof Error ? error.name : typeof error,
       });
       throw error;

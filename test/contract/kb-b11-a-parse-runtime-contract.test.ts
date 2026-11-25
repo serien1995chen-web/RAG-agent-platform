@@ -24,8 +24,8 @@ describe('L1-B11-A PARSE runtime selection contract', () => {
       'utf8',
     );
     expect(processing).toMatch(/parseConfig/);
-    expect(runtime).toMatch(/input\.parseProvider[\s\S]{0,800}s5Ocr\.parse/);
-    const externalBranch = runtime.indexOf("if (parseProvider !== 'liteparse')");
+    expect(runtime).toMatch(/input\.parseProvider[\s\S]{0,1800}s5Ocr\.parse/);
+    const externalBranch = runtime.indexOf("if (parseProvider !== 'liteparse' || useDefaultOcr)");
     const localPdfBranch = runtime.indexOf("if (input.mimeType === 'application/pdf'");
     expect(externalBranch).toBeGreaterThanOrEqual(0);
     expect(localPdfBranch).toBeGreaterThan(externalBranch);

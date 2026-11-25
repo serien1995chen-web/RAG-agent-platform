@@ -1,6 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { MAX_KNOWLEDGE_FILE_BYTES } from '../../packages/contracts/src';
 import { createB06aEnv, errorCode, uploadBuffer, type B06aEnv } from '../fixtures/b06a/support';
 
 const fixtureRoot = resolve(import.meta.dirname, '..', 'fixtures', 's11', 'generated');
@@ -147,7 +148,7 @@ describe('TEST-X-SECURITY-UPLOAD upload entry', () => {
           knowledgeSpaceId: env.spaceId,
           name: 'huge.bin.txt',
           mimeType: 'text/plain',
-          sizeBytes: 1000 * 1024 * 1024 + 1,
+          sizeBytes: MAX_KNOWLEDGE_FILE_BYTES + 1,
         },
         env.context,
       )
@@ -159,12 +160,12 @@ describe('TEST-X-SECURITY-UPLOAD upload entry', () => {
         knowledgeSpaceId: env.spaceId,
         name: 'parts.txt',
         mimeType: 'text/plain',
-        sizeBytes: 1000 * 1024 * 1024,
+        sizeBytes: MAX_KNOWLEDGE_FILE_BYTES,
       },
       env.context,
     );
     expect(atLimit.mode).toBe('multipart');
-    expect(atLimit.partCount).toBe(125);
+    expect(atLimit.partCount).toBe(7);
     expect(atLimit.partCount).toBeLessThanOrEqual(10_000);
     await env.files.abort(atLimit.uploadId, atLimit.version, env.context);
 

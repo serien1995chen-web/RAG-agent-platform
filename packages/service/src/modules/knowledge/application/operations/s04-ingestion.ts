@@ -13,6 +13,7 @@ import {
   ImportTextSchema,
   ImportUrlPreviewSchema,
   ImportUrlSchema,
+  MAX_KNOWLEDGE_FILE_BYTES,
   createKnowledgeError,
 } from '@kb/contracts';
 import { chunkText, toChunkPolicy } from '@kb/chunk';
@@ -914,7 +915,7 @@ export class S04IngestionApplication {
         const bytes = await this.dependencies.content.readObjectBytes({
           ref: upload,
           knowledgeSpaceId: targetSpaceId,
-          maxBytes: 50 * 1024 * 1024,
+          maxBytes: MAX_KNOWLEDGE_FILE_BYTES,
           context: input.context,
         });
         const parsed = this.dependencies.templateParser.parse({
@@ -1018,7 +1019,7 @@ export class S04IngestionApplication {
         const bytes = await this.dependencies.content.readObjectBytes({
           ref: upload,
           knowledgeSpaceId: targetSpaceId,
-          maxBytes: 50 * 1024 * 1024,
+          maxBytes: MAX_KNOWLEDGE_FILE_BYTES,
           context: input.context,
         });
         const parsed = this.dependencies.templateParser.parse({

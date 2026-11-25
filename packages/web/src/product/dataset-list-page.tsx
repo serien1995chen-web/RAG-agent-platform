@@ -21,12 +21,13 @@ import {
   moveSpace,
   productApi,
   productSession,
-  updateModelBindings,
   updateSpace,
 } from './api';
 import type { BatchResult, KnowledgeSpace, ModelBinding, PermissionLevel } from './types';
 import { ProductAppShell } from './shell';
 import { CollaboratorManagerDialog } from './collaborator-manager';
+import { ModelSelect } from './model-selector';
+import { modelsForRole } from './model-candidates';
 import {
   ProductButton,
   ProductCheckbox,
@@ -154,6 +155,7 @@ export function DatasetListPage(props: { parentId: string }) {
   const [dingWorkspaceId, setDingWorkspaceId] = useState('');
   const [createBusy, setCreateBusy] = useState(false);
   const [createError, setCreateError] = useState<unknown>(null);
+  const [createNameInvalid, setCreateNameInvalid] = useState(false);
   const [apiUrlError, setApiUrlError] = useState('');
   const [editTarget, setEditTarget] = useState<KnowledgeSpace | null>(null);
   const [editName, setEditName] = useState('');
@@ -199,18 +201,13 @@ export function DatasetListPage(props: { parentId: string }) {
   });
   const modelsQuery = useQuery({
     queryKey: ['kb-product', 'models'],
-    queryFn: () => productApi.listModels(),
+    queryFn: () => productApi.listModelCatalog(),
     enabled: createOpen,
   });
-  const availableModels = (modelsQuery.data ?? []).filter((model) => model.authorized);
-  const embeddingModels = availableModels.filter((model) => model.type === 'embedding');
-  const llmModels = availableModels.filter(
-    (model) => model.type === 'llm' && model.capabilities.includes('chat'),
-  );
-  const vlmModels = availableModels.filter(
-    (model) =>
-      (model.type === 'vlm' || model.type === 'llm') && model.capabilities.includes('vision'),
-  );
+  const availableModels = (modelsQuery.data?.items ?? []).filter((model) => model.authorized);
+  const embeddingModels = modelsForRole(availableModels, 'embedding');
+  const llmModels = modelsForRole(availableModels, 'llm');
+  const vlmModels = modelsForRole(availableModels, 'vlm');
   const canCreate =
     sessionQuery.data?.isWorkspaceOwner === true ||
     sessionQuery.data?.scopes.includes('knowledge:write') === true;
@@ -283,10 +280,13 @@ export function DatasetListPage(props: { parentId: string }) {
 
   useEffect(() => {
     if (!createOpen || modelsQuery.isLoading) return;
-    setVectorModelId((current) => current || embeddingModels[0]?.modelId || '');
-    setAgentModelId((current) => current || llmModels[0]?.modelId || '');
-    setVlmModelId((current) => current || vlmModels[0]?.modelId || '');
-  }, [createOpen, embeddingModels, llmModels, modelsQuery.isLoading, vlmModels]);
+    const defaults = modelsQuery.data?.defaults;
+    setVectorModelId(
+      (current) => current || defaults?.embedding || embeddingModels[0]?.modelId || '',
+    );
+    setAgentModelId((current) => current || defaults?.textLLM || llmModels[0]?.modelId || '');
+    setVlmModelId((current) => current || defaults?.imageLLM || '');
+  }, [createOpen, embeddingModels, llmModels, modelsQuery.data, modelsQuery.isLoading, vlmModels]);
 
   useEffect(() => {
     if (!editTarget) return;
@@ -325,6 +325,7 @@ export function DatasetListPage(props: { parentId: string }) {
     setDingUserId('');
     setDingWorkspaceId('');
     setCreateError(null);
+    setCreateNameInvalid(false);
     setApiUrlError('');
     setThirdPartyMenuOpen(false);
     setCreateMenuOpen(false);
@@ -406,23 +407,14 @@ export function DatasetListPage(props: { parentId: string }) {
     });
   };
 
-  const persistCreateModelBindings = async (space: KnowledgeSpace) => {
-    const current = await productApi.getModelBindings(space.id);
-    const selected = selectedModelBindings();
-    const replacedTypes = new Set<ModelBinding['modelType']>(['embedding', 'llm', 'vlm']);
-    const next = [
-      ...current.items.filter((binding) => !replacedTypes.has(binding.modelType)),
-      ...selected,
-    ];
-    await updateModelBindings(space.id, next, space.version);
-  };
-
   const submitCreate = async (event: FormEvent) => {
     event.preventDefault();
+    if (createBusy) return;
     setApiUrlError('');
     const name = createName.trim();
     if (!name) {
-      setCreateError(new Error('请输入名称'));
+      setCreateError(null);
+      setCreateNameInvalid(true);
       createNameRef.current?.focus();
       return;
     }
@@ -464,15 +456,8 @@ export function DatasetListPage(props: { parentId: string }) {
         accessMode: 'workspace',
         sourceAclMode: 'inherited',
         sourcePermissionEnabled: true,
+        modelBindings: createType === 'folder' ? [] : selectedModelBindings(),
       });
-      if (createType !== 'folder') {
-        try {
-          await persistCreateModelBindings(created);
-        } catch (error) {
-          await deleteSpace(created).catch(() => undefined);
-          throw error;
-        }
-      }
       if (createType !== 'general' && createType !== 'folder') {
         const payload = connectorPayload();
         await connectConnector(created.id, payload.provider, {
@@ -1186,6 +1171,8 @@ export function DatasetListPage(props: { parentId: string }) {
 
       <ProductModal
         open={createOpen}
+        size="lg"
+        width="min(560px, calc(100vw - 24px))"
         title={`创建${createLabel(createType)}`}
         description={
           createType === 'folder'
@@ -1201,7 +1188,13 @@ export function DatasetListPage(props: { parentId: string }) {
             <ProductButton
               tone="primary"
               busy={createBusy}
-              disabled={createType !== 'folder' && modelsQuery.isLoading}
+              disabled={
+                createType !== 'folder' &&
+                (modelsQuery.isLoading ||
+                  Boolean(modelsQuery.error) ||
+                  embeddingModels.length === 0 ||
+                  llmModels.length === 0)
+              }
               onClick={() => {
                 const form = document.getElementById('kb2-create-form') as HTMLFormElement | null;
                 form?.requestSubmit();
@@ -1212,17 +1205,13 @@ export function DatasetListPage(props: { parentId: string }) {
           </>
         }
       >
-        <form
-          id="kb2-create-form"
-          className={createType === 'folder' ? 'kb2-form-stack' : 'kb2-form-grid'}
-          onSubmit={submitCreate}
-          noValidate
-        >
+        <form id="kb2-create-form" className="kb2-form-stack" onSubmit={submitCreate} noValidate>
           <ProductField label={createType === 'folder' ? '取个名字' : '名称'}>
             <ProductInput
               ref={createNameRef}
               value={createName}
               onChange={(event) => setCreateName(event.target.value)}
+              onInput={() => setCreateNameInvalid(false)}
               maxLength={createType === 'folder' ? 100 : 30}
               placeholder={
                 createType === 'folder'
@@ -1230,7 +1219,14 @@ export function DatasetListPage(props: { parentId: string }) {
                   : `给${createLabel(createType)}取一个名字`
               }
               required
+              aria-invalid={createNameInvalid}
+              aria-describedby={createNameInvalid ? 'kb2-create-name-error' : undefined}
             />
+            {createNameInvalid ? (
+              <span id="kb2-create-name-error" className="kb2-visually-hidden">
+                请输入名称
+              </span>
+            ) : null}
           </ProductField>
           {createType === 'folder' ? (
             <ProductField label="文件夹描述">
@@ -1244,61 +1240,34 @@ export function DatasetListPage(props: { parentId: string }) {
             </ProductField>
           ) : (
             <>
-              <ProductField label="说明">
-                <ProductInput
-                  value={createDescription}
-                  onChange={(event) => setCreateDescription(event.target.value)}
-                  maxLength={2000}
-                  placeholder="可选"
+              <ProductField label="索引模型" hint="用于构建知识库向量索引">
+                <ModelSelect
+                  label="索引模型"
+                  models={embeddingModels}
+                  value={vectorModelId}
+                  onChange={setVectorModelId}
+                  required
                 />
               </ProductField>
-              <ProductField label="索引模型" hint="用于构建知识库向量索引">
-                <ProductSelect
-                  aria-label="索引模型"
-                  value={vectorModelId}
-                  onChange={(event) => setVectorModelId(event.target.value)}
-                  required
-                >
-                  <option value="">
-                    {modelsQuery.isLoading ? '正在加载模型…' : '请选择索引模型'}
-                  </option>
-                  {embeddingModels.map((model) => (
-                    <option key={model.modelId} value={model.modelId}>
-                      {model.displayName}
-                    </option>
-                  ))}
-                </ProductSelect>
-              </ProductField>
               <ProductField label="文本理解模型" hint="用于文档理解、问答和索引增强">
-                <ProductSelect
-                  aria-label="文本理解模型"
+                <ModelSelect
+                  label="文本理解模型"
+                  models={llmModels}
                   value={agentModelId}
-                  onChange={(event) => setAgentModelId(event.target.value)}
+                  onChange={setAgentModelId}
                   required
-                >
-                  <option value="">
-                    {modelsQuery.isLoading ? '正在加载模型…' : '请选择文本理解模型'}
-                  </option>
-                  {llmModels.map((model) => (
-                    <option key={model.modelId} value={model.modelId}>
-                      {model.displayName}
-                    </option>
-                  ))}
-                </ProductSelect>
+                  twoColumn
+                />
               </ProductField>
               <ProductField label="图片理解模型" hint="可选；用于图片理解与描述">
-                <ProductSelect
-                  aria-label="图片理解模型"
+                <ModelSelect
+                  label="图片理解模型"
+                  models={vlmModels}
                   value={vlmModelId}
-                  onChange={(event) => setVlmModelId(event.target.value)}
-                >
-                  <option value="">不设置</option>
-                  {vlmModels.map((model) => (
-                    <option key={model.modelId} value={model.modelId}>
-                      {model.displayName}
-                    </option>
-                  ))}
-                </ProductSelect>
+                  onChange={setVlmModelId}
+                  unsetLabel="不设置"
+                  twoColumn
+                />
               </ProductField>
             </>
           )}
@@ -1336,6 +1305,30 @@ export function DatasetListPage(props: { parentId: string }) {
                 />
               </ProductField>
             </>
+          ) : null}
+          {createType !== 'folder' && modelsQuery.isLoading ? (
+            <div className="kb2-note" role="status">
+              正在加载模型…
+            </div>
+          ) : null}
+          {createType !== 'folder' && modelsQuery.error ? (
+            <>
+              <ProductError error={modelsQuery.error} onRetry={() => void modelsQuery.refetch()} />
+              {canCreate ? (
+                <a className="kb2-link-button" href="/settings/models">
+                  前往模型配置
+                </a>
+              ) : null}
+            </>
+          ) : null}
+          {createType !== 'folder' &&
+          !modelsQuery.isLoading &&
+          !modelsQuery.error &&
+          (embeddingModels.length === 0 || llmModels.length === 0) ? (
+            <div className="kb2-error-panel" role="alert">
+              当前工作区没有可用模型，请管理员检查模型目录和默认模型配置。
+              {canCreate ? <a href="/settings/models">前往模型配置</a> : null}
+            </div>
           ) : null}
           {createType === 'feishu' ? (
             <>

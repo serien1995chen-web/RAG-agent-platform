@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { createKnowledgeError } from '@kb/contracts';
-import type { ClientSession, Connection, Model, Types } from 'mongoose';
+import type { ClientSession, Connection, Model } from 'mongoose';
+import { Types } from 'mongoose';
 import { registerKnowledgeModels } from '../../../shared/persistence/schemas/knowledge-index';
 import type {
   KnowledgeDirectoryDoc,
@@ -96,6 +97,7 @@ function sourceDto(
   document: Plain<KnowledgeSourceDoc>,
   parentPath?: string[],
   includeMetadata = false,
+  segmentCount = 0,
 ) {
   return {
     id: String(document._id),
@@ -123,6 +125,7 @@ function sourceDto(
       value: entry.value,
     })),
     version: document.version,
+    segmentCount,
     ...(parentPath ? { parentPath } : {}),
     ...(includeMetadata ? { metadata: publicSourceMetadata(document.metadata) } : {}),
   };
@@ -1269,7 +1272,29 @@ export class KnowledgeCatalogRepository {
       .sort({ [sort.field]: sort.direction, _id: sort.direction })
       .limit(limit + 1)
       .lean()) as unknown as Plain<KnowledgeSourceDoc>[];
-    return this.page(docs, limit, sort, sourceDto);
+    const page = this.page(docs, limit, sort, sourceDto);
+    if (page.items.length === 0) return page;
+    const sourceIds = page.items.map((item) => item.id);
+    const grouped = (await this.segments
+      .aggregate<{ _id: Types.ObjectId; count: number }>([
+        {
+          $match: {
+            ...this.baseFilter(context),
+            sourceId: { $in: sourceIds.map((id) => new Types.ObjectId(id)) },
+            deletedAt: null,
+          },
+        },
+        { $group: { _id: '$sourceId', count: { $sum: 1 } } },
+      ])
+      .exec()) as Array<{ _id: Types.ObjectId; count: number }>;
+    const counts = new Map(grouped.map((entry) => [String(entry._id), entry.count]));
+    return {
+      ...page,
+      items: page.items.map((item) => ({
+        ...item,
+        segmentCount: counts.get(item.id) ?? 0,
+      })),
+    };
   }
 
   async createSource(spaceId: string, input: CreateSourceInput, context: TenantContext) {
@@ -1355,7 +1380,19 @@ export class KnowledgeCatalogRepository {
       })
       .lean()) as unknown as Plain<KnowledgeSourceDoc> | null;
     if (!doc) throw tenantError(context, 'KNOWLEDGE_NOT_FOUND');
-    return sourceDto(doc, undefined, true);
+    const grouped = (await this.segments
+      .aggregate<{ _id: Types.ObjectId; count: number }>([
+        {
+          $match: {
+            ...this.baseFilter(context),
+            sourceId: doc._id,
+            deletedAt: null,
+          },
+        },
+        { $group: { _id: '$sourceId', count: { $sum: 1 } } },
+      ])
+      .exec()) as Array<{ _id: Types.ObjectId; count: number }>;
+    return sourceDto(doc, undefined, true, grouped[0]?.count ?? 0);
   }
 
   async updateSource(sourceId: string, input: Record<string, unknown>, context: TenantContext) {

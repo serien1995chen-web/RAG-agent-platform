@@ -310,7 +310,7 @@ describe('L1-B11-A import settings UI', () => {
         mimeType: 'text/plain',
         buffer: Buffer.from('parse settings fixture', 'utf8'),
       });
-      await playwrightExpect(page.getByText('completed', { exact: true })).toBeVisible({
+      await playwrightExpect(page.getByText('上传完成', { exact: true })).toBeVisible({
         timeout: 30_000,
       });
       await page.getByRole('button', { name: '下一步' }).click();

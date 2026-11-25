@@ -26,8 +26,11 @@ const ModelLimitsSchema = z
 const CatalogItemSchema = z
   .object({
     id: z.string().min(1).max(256),
+    name: z.string().min(1).max(256).optional(),
     display_name: z.string().min(1).max(256).optional(),
     displayName: z.string().min(1).max(256).optional(),
+    provider: z.string().min(1).max(128).optional(),
+    tags: z.array(z.string().min(1).max(64)).optional(),
     type: z.enum(S5_MODEL_TYPES),
     capabilities: z.array(z.string().min(1).max(128)),
     dimension: z.number().int().optional(),
@@ -75,9 +78,11 @@ export function normalizeCatalog(
       }
       return {
         modelId: item.id,
-        displayName: item.displayName ?? item.display_name ?? item.id,
+        displayName: item.displayName ?? item.display_name ?? item.name ?? item.id,
+        provider: item.provider,
         type,
         capabilities: [...new Set(item.capabilities)].sort(),
+        tags: item.tags,
         dimension,
         ...(item.limits ? { limits: item.limits } : {}),
         authorized: true,

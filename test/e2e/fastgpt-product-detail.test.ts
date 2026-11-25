@@ -22,6 +22,7 @@ let rootSourceOneId = '';
 let rootSourceTwoId = '';
 let directorySourceId = '';
 let tagId = '';
+let secondTagId = '';
 
 async function api<T = Record<string, unknown>>(
   path: string,
@@ -101,6 +102,25 @@ async function seed() {
     options: ['support', 'sales'],
   });
   tagId = tag.id;
+  const secondTag = await api<{ id: string }>(`/v1/knowledge/spaces/${datasetId}/tags`, 'POST', {
+    key: `status_${suffix}`,
+    label: '状态',
+    tagType: 'array',
+    required: false,
+    options: [],
+  });
+  secondTagId = secondTag.id;
+  for (const [question, answer] of [
+    ['退款多久到账？', '退款通常会在五个工作日内到账。'],
+    ['如何申请退款？', '请在订单详情中提交退款申请。'],
+  ]) {
+    await api(`/v1/knowledge/sources/${rootSourceOneId}/segments`, 'POST', {
+      question,
+      answer,
+      searchEnabled: true,
+      metadata: {},
+    });
+  }
   const taggedSource = await api<{ version: number }>(
     `/v1/knowledge/sources/${rootSourceOneId}`,
     'GET',
@@ -112,12 +132,19 @@ async function seed() {
   const seededSources = await api<{
     items: Array<{
       id: string;
+      segmentCount?: number;
       tagValues?: Array<{ tagId: string; valueKey: string; value: unknown }>;
     }>;
   }>(`/v1/knowledge/spaces/${datasetId}/sources`, 'GET');
   expect(seededSources.items.find((source) => source.id === rootSourceOneId)?.tagValues).toEqual([
     { tagId, valueKey: 'support', value: ['support'] },
   ]);
+  expect(seededSources.items.find((source) => source.id === rootSourceOneId)?.segmentCount).toBe(2);
+  const sourceDetail = await api<{ segmentCount: number }>(
+    `/v1/knowledge/sources/${rootSourceOneId}`,
+    'GET',
+  );
+  expect(sourceDetail.segmentCount).toBe(2);
 }
 
 async function cleanup() {
@@ -131,6 +158,9 @@ async function cleanup() {
   }
   if (tagId) {
     await api(`/v1/knowledge/tags/${tagId}`, 'DELETE').catch(() => undefined);
+  }
+  if (secondTagId) {
+    await api(`/v1/knowledge/tags/${secondTagId}`, 'DELETE').catch(() => undefined);
   }
   if (datasetId) {
     const latest = await api<{ version: number; referenceRevision: number }>(
@@ -249,6 +279,56 @@ describe('FastGPT product module 2 detail and collection', () => {
     await playwrightExpect(page.locator('.kb2-modal')).toHaveCount(0);
 
     await page.getByRole('button', { name: `子目录网页 ${suffix} 的更多操作` }).click();
+    await page.getByRole('menuitem', { name: '标签设置' }).click();
+    const tagDialog = page.getByRole('dialog', { name: '标签设置' });
+    await playwrightExpect(tagDialog).toBeVisible();
+    const dialogBox = await tagDialog.boundingBox();
+    expect(dialogBox?.width ?? 0).toBeGreaterThan(700);
+    await playwrightExpect(tagDialog.locator('.kb2-tag-table__row')).toHaveCount(1);
+    await tagDialog.getByLabel('标签名称').selectOption(tagId);
+    await tagDialog.getByLabel('部门值').fill('support');
+    await tagDialog.getByRole('button', { name: '添加标签' }).click();
+    await playwrightExpect(tagDialog.locator('.kb2-tag-table__row')).toHaveCount(2);
+    await tagDialog.getByLabel('状态值').fill('important');
+    let injectConflict = true;
+    await page.route('**/v1/knowledge/sources/tag-assignments', async (route) => {
+      if (!injectConflict) {
+        await route.continue();
+        return;
+      }
+      injectConflict = false;
+      await route.fulfill({
+        status: 409,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          success: false,
+          error: {
+            code: 'KNOWLEDGE_CONFLICT',
+            message: 'stale source version',
+            retryable: true,
+            details: {},
+          },
+          traceId: `trace-${suffix}`,
+          requestId: `request-${suffix}`,
+        }),
+      });
+    });
+    await tagDialog.getByRole('button', { name: '保存', exact: true }).click();
+    await playwrightExpect(tagDialog.getByText(/数据已被其他操作更新/)).toBeVisible();
+    await tagDialog.getByRole('button', { name: '保存', exact: true }).click();
+    await playwrightExpect(tagDialog).toHaveCount(0);
+    await page.unroute('**/v1/knowledge/sources/tag-assignments');
+    const taggedAfterSave = await api<{
+      tagValues: Array<{ tagId: string; value: unknown }>;
+    }>(`/v1/knowledge/sources/${directorySourceId}`, 'GET');
+    expect(taggedAfterSave.tagValues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ tagId, value: ['support'] }),
+        expect.objectContaining({ tagId: secondTagId, value: ['important'] }),
+      ]),
+    );
+
+    await page.getByRole('button', { name: `子目录网页 ${suffix} 的更多操作` }).click();
     await page.getByRole('menuitem', { name: '权限' }).click();
     await playwrightExpect(page.getByRole('dialog', { name: '管理协作者' })).toBeVisible();
     await playwrightExpect(page.getByRole('button', { name: '成员' })).toBeVisible();
@@ -256,6 +336,10 @@ describe('FastGPT product module 2 detail and collection', () => {
     await page.getByRole('button', { name: '关闭弹窗' }).click();
     await playwrightExpect(page.locator('.kb2-modal')).toHaveCount(0);
 
+    await page.goto(
+      `${app.baseUrl}/dataset/detail?datasetId=${datasetId}&currentTab=collectionCard`,
+      { waitUntil: 'networkidle' },
+    );
     await page.getByRole('tab', { name: '数据集', exact: true }).click();
     await page.getByRole('button', { name: '批量管理' }).click();
     await page.getByRole('checkbox', { name: `选择 销售手册 ${suffix}` }).check();
@@ -267,7 +351,7 @@ describe('FastGPT product module 2 detail and collection', () => {
       /训练状态：/,
     );
 
-    for (const width of [1440, 1200, 900]) {
+    for (const width of [1200, 768, 360]) {
       await page.setViewportSize({ width, height: 900 });
       await page.waitForTimeout(100);
       const overflow = await page.evaluate(
@@ -281,7 +365,7 @@ describe('FastGPT product module 2 detail and collection', () => {
         (violation) => violation.impact === 'serious' || violation.impact === 'critical',
       ),
     ).toEqual([]);
-    expect(consoleErrors).toEqual([]);
+    expect(consoleErrors.filter((message) => !message.includes('409 (Conflict)'))).toEqual([]);
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.screenshot({
       path: join(resultDir, 'collection-1440.png'),

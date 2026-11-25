@@ -1,6 +1,7 @@
 'use client';
 
 import { AttachmentIcon, CheckIcon } from '@chakra-ui/icons';
+import { MAX_KNOWLEDGE_FILE_BYTES, MAX_LOCAL_IMPORT_FILES } from '@kb/contracts';
 import { useEffect, useRef, useState } from 'react';
 import { importBackup, importImageDataset, importTemplate, createSource } from './api';
 import type { Job } from './types';
@@ -250,7 +251,7 @@ export function StructuredImportDialog(props: {
       setError(new Error('仅支持 CSV 或 XLSX 文件'));
       return;
     }
-    if (next.size > 50 * 1024 * 1024) {
+    if (next.size > MAX_KNOWLEDGE_FILE_BYTES) {
       setFile(null);
       setError(new Error('单个文件不能超过 50 MB'));
       return;
@@ -359,9 +360,9 @@ export function ImageDatasetDialog(props: {
   const chooseFiles = (input: FileList | null) => {
     const next = Array.from(input ?? []);
     setError(null);
-    if (next.length > 5) {
+    if (next.length > MAX_LOCAL_IMPORT_FILES) {
       setFiles([]);
-      setError(new Error('单次最多上传 5 张图片'));
+      setError(new Error(`单次最多上传 ${MAX_LOCAL_IMPORT_FILES} 张图片`));
       return;
     }
     const unsupported = next.find(
@@ -372,7 +373,7 @@ export function ImageDatasetDialog(props: {
       setError(new Error('仅支持 JPG、JPEG 或 PNG 图片'));
       return;
     }
-    const oversized = next.find((file) => file.size > 50 * 1024 * 1024);
+    const oversized = next.find((file) => file.size > MAX_KNOWLEDGE_FILE_BYTES);
     if (oversized) {
       setFiles([]);
       setError(new Error('单张图片不能超过 50 MB'));

@@ -13,6 +13,7 @@ export default tseslint.config(
       '**/.turbo/**',
       '**/coverage/**',
       '**/artifacts/**',
+      'work/**',
       'pnpm-lock.yaml',
     ],
   },
