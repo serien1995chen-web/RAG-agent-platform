@@ -7,6 +7,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { registerKnowledgeModels } from '../../packages/service/src/shared/persistence/schemas/knowledge-index';
 import { createKnowledgeConnections } from '../../packages/service/src/shared/runtime/knowledge-connections';
 import { apiHeaders, consoleCookie, startS4App, type S4AppHarness } from './s4-app-harness';
+import { chooseDifferentModel } from './model-select-helpers';
 
 const root = resolve(import.meta.dirname, '../..');
 const suffix = randomUUID().replaceAll('-', '').slice(0, 10);
@@ -297,10 +298,15 @@ describe('FastGPT product module 4 Search and Info', () => {
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.screenshot({ path: join(resultDir, 'search-1440.png'), fullPage: true });
 
+    const imageUpload = page.waitForResponse(
+      (response) =>
+        response.request().method() === 'POST' &&
+        new URL(response.url()).pathname === '/v1/knowledge/uploads',
+    );
     await page
       .locator('input[type="file"]')
       .setInputFiles(join(root, 'test/fixtures/s11/generated/s11-image-1x1.png'));
-    await playwrightExpect(page.getByText(/uploading|completing|completed/).first()).toBeVisible();
+    expect((await imageUpload).status()).toBe(201);
     await page.getByLabel('测试查询').fill('退款流程图片');
     const imageResponse = page.waitForResponse(
       (response) =>
@@ -327,25 +333,19 @@ describe('FastGPT product module 4 Search and Info', () => {
     await playwrightExpect(
       page.getByRole('heading', { level: 1, name: new RegExp(`模块四知识库 ${suffix}`) }),
     ).toBeVisible();
-    const llmSelect = page.getByLabel('文本理解模型');
-    const selectedLlm = await llmSelect.inputValue();
-    const alternateLlm = await llmSelect
-      .locator('option')
-      .evaluateAll(
-        (options, current) =>
-          options
-            .map((option) => (option as HTMLOptionElement).value)
-            .find((value) => value !== current),
-        selectedLlm,
-      );
-    if (alternateLlm !== undefined) {
-      const saveResponse = page.waitForResponse(
-        (response) =>
-          response.request().method() === 'PUT' &&
-          response.url().endsWith(`/spaces/${datasetId}/model-bindings`),
-      );
-      await llmSelect.selectOption(alternateLlm);
-      expect((await saveResponse).status()).toBe(200);
+    const llmSelect = page.locator('button:visible[aria-label^="文本理解模型"]').last();
+    const selectedLlm = await llmSelect.getAttribute('aria-label');
+    expect(selectedLlm).toBeTruthy();
+    {
+      const saveResponse = page
+        .waitForResponse(
+          (response) =>
+            response.request().method() === 'PUT' &&
+            response.url().endsWith(`/spaces/${datasetId}/model-bindings`),
+        )
+        .catch(() => null);
+      const alternateLlm = await chooseDifferentModel(page, '文本理解模型');
+      if (alternateLlm) expect((await saveResponse)?.status()).toBe(200);
     }
 
     await page.getByRole('button', { name: '管理协作者' }).click();
@@ -426,21 +426,14 @@ describe('FastGPT product module 4 Search and Info', () => {
         }>
       >();
     const jobIdsBefore = new Set(jobsBefore.map((job) => String(job._id)));
-    const embedding = page.getByLabel('索引模型');
-    expect(await embedding.locator('option').count()).toBeGreaterThan(1);
-    const currentEmbeddingModel = await embedding.inputValue();
-    const alternateEmbeddingModel = await embedding
-      .locator('option')
-      .evaluateAll(
-        (options, current) =>
-          options
-            .map((option) => (option as HTMLOptionElement).value)
-            .find((value) => value.length > 0 && value !== current),
-        currentEmbeddingModel,
-      );
-    expect(alternateEmbeddingModel).toBeTruthy();
+    const bindingsBefore = await api<{
+      items: Array<{ modelType: string; modelId: string }>;
+    }>(`/v1/knowledge/spaces/${datasetId}/model-bindings`, 'GET');
+    const currentEmbeddingModel =
+      bindingsBefore.items.find((item) => item.modelType === 'embedding')?.modelId ?? '';
+    expect(currentEmbeddingModel).toBeTruthy();
     const confirmModal = page.locator('.kb2-modal');
-    await embedding.selectOption(alternateEmbeddingModel!);
+    expect(await chooseDifferentModel(page, '索引模型')).toBeTruthy();
     await playwrightExpect(confirmModal.getByText('确认重建索引')).toBeVisible();
     const confirmRebuild = confirmModal.getByRole('button', { name: /确认重建/ });
     await playwrightExpect(confirmRebuild).toBeDisabled();
@@ -541,7 +534,6 @@ describe('FastGPT product module 4 Search and Info', () => {
     );
     expect(embeddingModels.length).toBeGreaterThanOrEqual(2);
     const initialModel = embeddingModels[0]!;
-    const alternateModel = embeddingModels[1]!;
     const initialSpace = await api<{ version: number }>(
       `/v1/knowledge/spaces/${confirmationSpace.id}`,
       'GET',
@@ -578,7 +570,7 @@ describe('FastGPT product module 4 Search and Info', () => {
       `${app.baseUrl}/dataset/detail?datasetId=${confirmationSpace.id}&currentTab=collectionCard`,
       { waitUntil: 'networkidle' },
     );
-    await page.getByLabel('索引模型').selectOption(alternateModel.modelId);
+    expect(await chooseDifferentModel(page, '索引模型')).toBeTruthy();
     await page.waitForTimeout(500);
 
     expect(immediateBindingUpdate).toBe(false);
@@ -592,7 +584,7 @@ describe('FastGPT product module 4 Search and Info', () => {
     await playwrightExpect(page.locator('.kb2-modal')).toHaveCount(0);
     expect(immediateBindingUpdate).toBe(false);
 
-    await page.getByLabel('索引模型').selectOption(alternateModel.modelId);
+    expect(await chooseDifferentModel(page, '索引模型')).toBeTruthy();
     const rebuilt = page.waitForResponse(
       (response) =>
         response.request().method() === 'PUT' &&

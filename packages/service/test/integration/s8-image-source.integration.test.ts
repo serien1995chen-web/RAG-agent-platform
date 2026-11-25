@@ -256,7 +256,7 @@ describe('TEST-MULTI-001-BLOCK / TEST-TRAIN-001-BLOCK image source', () => {
     expect(parse).toBeNull();
   }, 60_000);
 
-  it('rejects cross-space uploads and more than ten images before any Source writes', async () => {
+  it('rejects more than five local files before any Source writes', async () => {
     const objectRefs = new KnowledgeObjectRefRepository(connection);
     const content = new KnowledgeIngestionContentAdapter({} as never);
     const ingestion = new S04IngestionApplication({
@@ -291,7 +291,7 @@ describe('TEST-MULTI-001-BLOCK / TEST-TRAIN-001-BLOCK image source', () => {
         context,
       }),
     ).rejects.toMatchObject({
-      problem: { error: { code: 'KNOWLEDGE_PAYLOAD_TOO_LARGE' } },
+      problem: { error: { code: 'KNOWLEDGE_VALIDATION_FAILED' } },
     });
     expect(await connection.models.KnowledgeSource.countDocuments({ workspaceId })).toBe(0);
   }, 60_000);

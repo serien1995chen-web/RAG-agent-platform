@@ -5,6 +5,7 @@ import AxeBuilder from '@axe-core/playwright';
 import { chromium, expect as playwrightExpect, type Browser, type Page } from '@playwright/test';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { apiHeaders, consoleCookie, startS4App, type S4AppHarness } from './s4-app-harness';
+import { chooseDifferentModel } from './model-select-helpers';
 
 const root = resolve(import.meta.dirname, '../..');
 const runId = 'b01-20261110-200118-257f501';
@@ -335,27 +336,22 @@ describe('B01 lifecycle desktop behavior', () => {
         waitUntil: 'networkidle',
       });
       await playwrightExpect(page.getByRole('complementary', { name: '知识库信息' })).toBeVisible();
-      const llmSelect = page.getByLabel('文本理解模型');
-      const currentLlm = await llmSelect.inputValue();
-      const alternateLlm = await llmSelect
-        .locator('option')
-        .evaluateAll(
-          (options, current) =>
-            options
-              .map((option) => (option as HTMLOptionElement).value)
-              .find((value) => value.length > 0 && value !== current),
-          currentLlm,
-        );
-      if (alternateLlm) {
-        const saved = page.waitForResponse(
-          (response) =>
-            response.request().method() === 'PUT' &&
-            response.url().endsWith(`/spaces/${id}/model-bindings`),
-        );
-        await llmSelect.selectOption(alternateLlm);
-        expect((await saved).status()).toBe(200);
+      const llmTrigger = page.locator('button:visible[aria-label^="文本理解模型"]').last();
+      const currentLlm = await llmTrigger.getAttribute('aria-label');
+      if (currentLlm) {
+        const saved = page
+          .waitForResponse(
+            (response) =>
+              response.request().method() === 'PUT' &&
+              response.url().endsWith(`/spaces/${id}/model-bindings`),
+          )
+          .catch(() => null);
+        const alternateLlm = await chooseDifferentModel(page, '文本理解模型');
+        if (alternateLlm) {
+          expect((await saved)?.status()).toBe(200);
+        }
       } else {
-        expect(currentLlm).not.toBe('');
+        expect(currentLlm).not.toBeNull();
         await playwrightExpect(page.locator('.kb2-modal')).toHaveCount(0);
       }
       await page.reload({ waitUntil: 'networkidle' });
