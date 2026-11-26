@@ -169,6 +169,29 @@ export function hasActiveSourceStatus(source: Source) {
   return ['queued', 'parsing', 'indexing', 'rebuilding'].includes(source.processingStatus);
 }
 
+export function canOpenTrainingState(source: Source) {
+  return ['queued', 'parsing', 'indexing', 'rebuilding', 'partial', 'failed'].includes(
+    source.processingStatus,
+  );
+}
+
+export function processingModelLabel(value: string | undefined) {
+  const labels: Record<string, string> = {
+    chunk: '通用文本',
+    qa: '问答对',
+    imageParse: '图片处理',
+    template: '模板',
+    backup: '备份',
+  };
+  return value ? (labels[value] ?? value) : '-';
+}
+
+export function formatSourceTime(value: string | undefined) {
+  if (!value) return '-';
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? '-' : date.toLocaleString('zh-CN');
+}
+
 export function segmentModeForSource(source?: Source) {
   if (source?.kind === 'image') return 'image' as const;
   return 'chunk' as const;

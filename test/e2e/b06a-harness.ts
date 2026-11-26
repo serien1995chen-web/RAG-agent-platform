@@ -44,6 +44,8 @@ function baseRuntimeEnv(input: {
   port: number;
   redisUrl?: string;
   mongoUri?: string;
+  externalModelMode?: 'mock' | 'real';
+  extraEnv?: NodeJS.ProcessEnv;
 }): NodeJS.ProcessEnv {
   return {
     ...process.env,
@@ -83,10 +85,11 @@ function baseRuntimeEnv(input: {
     KB_MOCK_SCOPES:
       input.scopes ?? 'knowledge:read,knowledge:write,knowledge:manage,knowledge:admin',
     KB_MOCK_WORKSPACE_OWNER: String(input.isWorkspaceOwner ?? true),
-    KB_EXTERNAL_MODEL_MODE: 'mock',
+    KB_EXTERNAL_MODEL_MODE: input.externalModelMode ?? 'mock',
     KB_EXTERNAL_OCR_MODE: 'mock',
     KB_EXTERNAL_CONNECTOR_MODE: 'mock',
     KB_LOG_LEVEL: 'error',
+    ...input.extraEnv,
   };
 }
 
@@ -129,6 +132,8 @@ export async function startB06aApp(input: {
   withWorker?: boolean;
   redisUrl?: string;
   mongoUri?: string;
+  externalModelMode?: 'mock' | 'real';
+  extraEnv?: NodeJS.ProcessEnv;
 }): Promise<B06aAppHarness> {
   const port = await freePort();
   const baseUrl = `http://127.0.0.1:${port}`;

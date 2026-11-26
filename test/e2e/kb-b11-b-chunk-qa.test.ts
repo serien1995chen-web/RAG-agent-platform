@@ -177,9 +177,9 @@ async function inspectImport(input: { name: string; trainingType: 'chunk' | 'qa'
     trainingType: input.trainingType,
     chunkSettingMode: 'custom',
     chunkTriggerType: 'minSize',
-    chunkTriggerMinSize: 1,
+    chunkTriggerMinSize: 100,
     chunkSplitMode: 'size',
-    chunkSize: 160,
+    chunkSize: input.trainingType === 'qa' ? 1_000 : 160,
   };
   const preview = (
     await api<{
@@ -382,13 +382,15 @@ describe('L1-B11-B-PARSE-003/004 product chain', () => {
         }
         await playwrightExpect(page.getByLabel('最大段落深度')).toHaveAttribute('max', '8');
         await page.getByRole('radio', { name: /问答对提取/ }).check();
-        await playwrightExpect(page.getByText('QA Prompt', { exact: true }).first()).toBeVisible();
         await playwrightExpect(
-          page.getByRole('button', { name: '自定义 Prompt', exact: true }),
+          page.getByText('QA 拆分引导词', { exact: true }).first(),
         ).toBeVisible();
-        await page.getByRole('button', { name: '自定义 Prompt', exact: true }).click();
         await playwrightExpect(
-          page.getByRole('dialog', { name: '自定义 QA Prompt' }).getByRole('textbox'),
+          page.getByRole('button', { name: '自定义提示词', exact: true }),
+        ).toBeVisible();
+        await page.getByRole('button', { name: '自定义提示词', exact: true }).click();
+        await playwrightExpect(
+          page.getByRole('dialog', { name: '自定义提示词' }).getByRole('textbox'),
         ).toBeVisible();
         await page.getByRole('button', { name: '完成', exact: true }).click();
         await page.waitForTimeout(400);

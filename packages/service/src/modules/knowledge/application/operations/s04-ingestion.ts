@@ -14,6 +14,7 @@ import {
   ImportUrlPreviewSchema,
   ImportUrlSchema,
   MAX_KNOWLEDGE_FILE_BYTES,
+  RetrainSourceSchema,
   createKnowledgeError,
 } from '@kb/contracts';
 import { chunkText, toChunkPolicy } from '@kb/chunk';
@@ -38,7 +39,7 @@ import type {
   FilePreviewParsePort,
 } from '../ingestion.ports';
 import type { ConnectorRepositoryPort } from '../ingestion.ports';
-import type { AccessPort, ObjectRefRepositoryPort } from '../ports';
+import type { AccessPort, CatalogPort, ObjectRefRepositoryPort } from '../ports';
 import type { KnowledgeOperationInput, KnowledgeOperationResult } from '../knowledge.application';
 import {
   assertNonEmptyText,
@@ -60,6 +61,7 @@ export interface S04IngestionDependencies {
   customApi: CustomApiClientPort;
   providers: Readonly<Record<CloudConnectorProvider, CloudProviderClientPort>>;
   access: AccessPort;
+  catalog?: Pick<CatalogPort, 'getSource'>;
   scopedAuth: ScopedAuthPort;
   quotaGate: QuotaGatePort;
   templateParser: ImportTemplateParserPort;
@@ -570,6 +572,233 @@ export class S04IngestionApplication {
 
   async dispatch(input: KnowledgeOperationInput): Promise<KnowledgeOperationResult> {
     switch (input.operationId) {
+      case 'API-SOURCE-RETRAIN': {
+        const sourceId = String(input.params.sourceId ?? '');
+        const body = parseBody(RetrainSourceSchema, input);
+        if (!this.dependencies.catalog || !this.dependencies.filePreview) {
+          throw createKnowledgeError({
+            code: 'KNOWLEDGE_INTERNAL_ERROR',
+            requestId: input.context.requestId,
+            traceId: input.context.traceId,
+            details: { reason: 'retrain_dependency_missing' },
+          });
+        }
+        const source = await this.dependencies.catalog.getSource(sourceId, input.context);
+        await this.dependencies.access.assertPermission('source', sourceId, 'write', input.context);
+        const kind = String(source.kind);
+        const metadata = (source.metadata ?? {}) as Record<string, unknown>;
+        const sourceMetadata = Object.fromEntries(
+          Object.entries(metadata).filter(
+            ([key]) =>
+              ![
+                'configurationHash',
+                'parseConfigSnapshot',
+                'chunkingConfigSnapshot',
+                'qaConfigSnapshot',
+                'rawTextLength',
+                'parsedAt',
+              ].includes(key),
+          ),
+        );
+        const blobRefIds = [
+          ...new Set(
+            [
+              ...(Array.isArray(metadata.imageBlobRefIds)
+                ? metadata.imageBlobRefIds.filter(
+                    (value): value is string => typeof value === 'string' && value.length > 0,
+                  )
+                : []),
+              ...(typeof source.blobRefId === 'string' ? [source.blobRefId] : []),
+            ].filter(Boolean),
+          ),
+        ];
+        if (blobRefIds.length === 0) {
+          throw createKnowledgeError({
+            code: 'KNOWLEDGE_UNSUPPORTED_CONTENT',
+            requestId: input.context.requestId,
+            traceId: input.context.traceId,
+            details: { sourceId, reason: 'retrain_source_object_missing' },
+          });
+        }
+        const previewDraft: ImportSourceDraft = {
+          id: sourceId,
+          kind: kind as ImportSourceDraft['kind'],
+          name: String(source.name ?? 'source'),
+          directoryId:
+            typeof source.directoryId === 'string' && source.directoryId
+              ? source.directoryId
+              : null,
+          blobRefId: blobRefIds[0]!,
+          blobRefIds,
+          externalId: typeof source.externalId === 'string' ? source.externalId : null,
+          connectorId: typeof source.connectorId === 'string' ? source.connectorId : null,
+          mimeType: String(source.mimeType ?? 'application/octet-stream'),
+          sizeBytes: Number(source.sizeBytes ?? 0),
+          contentHash: String(source.contentHash ?? ''),
+          parseProvider: (body.parseProvider ??
+            source.parseProvider ??
+            'liteparse') as ImportSourceDraft['parseProvider'],
+          metadata: sourceMetadata,
+        };
+        if (body.dryRun) {
+          if (kind === 'image') {
+            return {
+              status: 200,
+              data: {
+                kind: 'image',
+                sourceId,
+                name: previewDraft.name,
+                contentHash: previewDraft.contentHash,
+                images: blobRefIds.map((blobRefId, order) => ({ blobRefId, order })),
+                totalChunks: Number(source.segmentCount ?? 0),
+              },
+            };
+          }
+          const parsed = await this.dependencies.filePreview.parse(
+            { source: previewDraft, parseConfig: body.parseConfig },
+            input.context,
+          );
+          const chunks = chunkText({
+            text: parsed.rawText,
+            policy: toChunkPolicy(body.chunking),
+          }).chunks;
+          return {
+            status: 200,
+            data: {
+              kind: 'chunks',
+              sourceId,
+              name: previewDraft.name,
+              contentHash: parsed.contentHash ?? previewDraft.contentHash,
+              totalChunks: chunks.length,
+              chunks: chunks.slice(0, 10),
+              truncated: chunks.length > 10,
+            },
+          };
+        }
+
+        const materials: IngestionContentResult[] = [];
+        try {
+          for (const [index, blobRefId] of blobRefIds.entries()) {
+            const object = await this.dependencies.objectRefs.findObjectRef(
+              blobRefId,
+              input.context,
+            );
+            if (!object || object.state !== 'active') {
+              throw createKnowledgeError({
+                code: 'KNOWLEDGE_NOT_FOUND',
+                requestId: input.context.requestId,
+                traceId: input.context.traceId,
+                details: { sourceId, blobRefId },
+              });
+            }
+            const bytes = await this.dependencies.content.readObjectBytes({
+              ref: object,
+              knowledgeSpaceId: source.knowledgeSpaceId,
+              maxBytes: MAX_KNOWLEDGE_FILE_BYTES,
+              context: input.context,
+            });
+            materials.push(
+              await this.dependencies.content.materialize({
+                kind: kind as ImportSourceDraft['kind'],
+                name: previewDraft.name,
+                mimeType: object.mimeType,
+                bytes,
+                directoryId: previewDraft.directoryId,
+                parseProvider: previewDraft.parseProvider,
+                metadata: {
+                  ...sourceMetadata,
+                  ...(kind === 'image'
+                    ? { imageMimeType: object.mimeType, imageSizeBytes: object.sizeBytes }
+                    : {}),
+                  retrainImageOrder: index,
+                },
+                context: input.context,
+                knowledgeSpaceId: source.knowledgeSpaceId,
+                connectorId: previewDraft.connectorId,
+                externalId: previewDraft.externalId,
+              }),
+            );
+          }
+          const primary = materials[0]!;
+          const copiedBlobRefIds = materials.map((material) => material.source.blobRefId!);
+          primary.source.blobRefId = copiedBlobRefIds[0]!;
+          primary.source.blobRefIds = copiedBlobRefIds;
+          primary.source.additionalObjects = materials
+            .slice(1)
+            .map((material) => material.source.object)
+            .filter((object): object is NonNullable<typeof object> => Boolean(object));
+          primary.source.metadata = {
+            ...primary.source.metadata,
+            ...(kind === 'image' ? { imageBlobRefIds: copiedBlobRefIds } : {}),
+          };
+          primary.source.externalId = previewDraft.externalId;
+          primary.source.connectorId = previewDraft.connectorId;
+          primary.source.searchEnabled = Boolean(source.searchEnabled);
+          primary.source.tagValues = Array.isArray(source.tagValues)
+            ? source.tagValues.map((entry) => ({
+                tagId: String((entry as Record<string, unknown>).tagId),
+                valueKey: String((entry as Record<string, unknown>).valueKey),
+                value: (entry as Record<string, unknown>).value,
+              }))
+            : [];
+          primary.source.permissionState =
+            source.permissionState as ImportSourceDraft['permissionState'];
+          primary.source.permissionRevision = Number(source.permissionRevision ?? 0);
+          primary.source.aclSnapshotVersion = Number(source.aclSnapshotVersion ?? 1);
+          primary.source.ownershipMemberId =
+            typeof source.ownershipMemberId === 'string' ? source.ownershipMemberId : undefined;
+          const importKindBySourceKind = {
+            image: 'images',
+            text: 'text',
+            url: 'url',
+            template: 'template',
+            backup: 'backup',
+            api_library: 'api_library',
+            feishu: 'feishu',
+            yuque: 'yuque',
+            dingtalk: 'dingtalk',
+            file: 'files',
+          } as const;
+          const importKind = importKindBySourceKind[kind as keyof typeof importKindBySourceKind];
+          const result = await this.dependencies.imports.retrain?.(
+            {
+              sourceId,
+              expectedVersion: body.version,
+              command: commandOf({
+                operation: input,
+                knowledgeSpaceId: source.knowledgeSpaceId,
+                directoryId: previewDraft.directoryId,
+                importKind,
+                sources: [primary.source],
+                parseConfig: body.parseConfig,
+                chunking: body.chunking as Record<string, unknown>,
+                idempotencyKey: idempotencyKey(input),
+                requestHash: operationHash(input),
+              }),
+            },
+            input.context,
+          );
+          if (!result) {
+            throw createKnowledgeError({
+              code: 'KNOWLEDGE_INTERNAL_ERROR',
+              requestId: input.context.requestId,
+              traceId: input.context.traceId,
+              details: { reason: 'retrain_submission_port_missing' },
+            });
+          }
+          return {
+            status: 202,
+            data: {
+              sourceId: result.sourceIds[0],
+              previousSourceId: sourceId,
+              job: result.job,
+            },
+          };
+        } catch (error) {
+          await compensate(this.dependencies, materials, source.knowledgeSpaceId, input.context);
+          throw error;
+        }
+      }
       case 'API-IMPORT-FILES': {
         const body = parseBody(ImportFilesSchema, input);
         const targetSpaceId = spaceId(input);
@@ -1589,6 +1818,7 @@ export class S04IngestionApplication {
 
 export function isS04Operation(operationId: string): boolean {
   return new Set([
+    'API-SOURCE-RETRAIN',
     'API-IMPORT-FILES',
     'API-IMPORT-IMAGES',
     'API-IMPORT-TEXT',

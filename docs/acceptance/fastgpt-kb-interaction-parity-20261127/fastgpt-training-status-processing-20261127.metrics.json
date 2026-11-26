@@ -1,0 +1,20 @@
+{
+  "dialog": {
+    "borderRadius": "8px",
+    "fontSize": "16px",
+    "gap": "normal",
+    "height": 620,
+    "maxHeight": "1002.67px",
+    "maxWidth": "1333.8px",
+    "overflowY": "visible",
+    "padding": "0px",
+    "width": 712,
+    "x": 385,
+    "y": 64
+  },
+  "text": "训练状态训练状态异常 (0)内容解析中图片解析中索引向量化已就绪",
+  "viewport": {
+    "height": 1253,
+    "width": 1482
+  }
+}

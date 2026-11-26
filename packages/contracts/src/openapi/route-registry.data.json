@@ -1,9 +1,9 @@
 {
   "schemaVersion": 1,
   "counts": {
-    "paths": 97,
-    "operations": 126,
-    "schemas": 146,
+    "paths": 98,
+    "operations": 127,
+    "schemas": 149,
     "parameters": 8
   },
   "routes": [
@@ -1654,6 +1654,30 @@
       "capabilityIds": [
         "COL-001",
         "COL-002",
+        "COL-004"
+      ]
+    },
+    {
+      "operationId": "API-SOURCE-RETRAIN",
+      "method": "POST",
+      "path": "/v1/knowledge/sources/{sourceId}/retrain",
+      "group": "source",
+      "requestSchema": "RetrainSource",
+      "responseSchema": "RetrainPreview",
+      "scopes": [
+        "knowledge:write"
+      ],
+      "idempotent": true,
+      "rateLimit": "30 QPS/workspace",
+      "timeoutMs": 30000,
+      "audit": true,
+      "downstreamAllowed": false,
+      "runtime": true,
+      "stage": "BASE",
+      "targetSection": "9.2",
+      "accId": "ACC-CAP-COL-001",
+      "capabilityIds": [
+        "COL-001",
         "COL-004"
       ]
     },

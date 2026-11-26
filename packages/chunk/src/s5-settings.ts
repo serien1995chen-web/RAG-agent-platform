@@ -128,10 +128,10 @@ export function validateChunkingSettings(
     issues.push({ path: 'paragraphChunkAIMode', message: 'unsupported value' });
   }
   if (input.chunkTriggerMinSize !== undefined) {
-    integerInRange(input.chunkTriggerMinSize, 'chunkTriggerMinSize', 1, 100_000, issues);
+    integerInRange(input.chunkTriggerMinSize, 'chunkTriggerMinSize', 100, 100_000, issues);
   }
   if (input.paragraphChunkDeep !== undefined) {
-    integerInRange(input.paragraphChunkDeep, 'paragraphChunkDeep', 0, 8, issues);
+    integerInRange(input.paragraphChunkDeep, 'paragraphChunkDeep', 1, 8, issues);
   }
   if (input.paragraphChunkMinSize !== undefined) {
     integerInRange(input.paragraphChunkMinSize, 'paragraphChunkMinSize', 1, 100_000, issues);
@@ -194,13 +194,14 @@ export function validateChunkingSettings(
     });
   }
   if (
-    input.paragraphChunkAIMode !== undefined &&
-    input.paragraphChunkAIMode !== 'forbid' &&
-    input.trainingType !== 'chunk'
+    input.trainingType === 'qa' &&
+    input.chunkSettingMode === 'custom' &&
+    typeof input.chunkSize === 'number' &&
+    input.chunkSize < 1_000
   ) {
     issues.push({
-      path: 'paragraphChunkAIMode',
-      message: 'AI paragraph enhancement requires trainingType=chunk',
+      path: 'chunkSize',
+      message: 'QA chunkSize must be at least 1000',
     });
   }
   if (input.autoIndexes === true && input.trainingType !== 'chunk') {

@@ -199,11 +199,11 @@ describe('B05 DATA-004 and ING-002 product UI', () => {
     await page.getByRole('button', { name: '插入', exact: true }).click();
     const modal = page.locator('.kb2-modal');
     await playwrightExpect(modal.getByText('插入数据', { exact: true })).toBeVisible();
-    await playwrightExpect(modal.getByRole('tab', { name: '分块' })).toHaveAttribute(
+    await playwrightExpect(modal.getByRole('tab', { name: '常规模式' })).toHaveAttribute(
       'aria-selected',
       'true',
     );
-    await modal.getByRole('tab', { name: '问答对' }).click();
+    await modal.getByRole('tab', { name: 'QA 模式' }).click();
     await playwrightExpect(modal.getByText('答案', { exact: true })).toBeVisible();
     await evidence(page, 'data-empty-editor-failure-state', network);
     await playwrightExpect(modal.getByRole('button', { name: '插入', exact: true })).toBeDisabled();
@@ -235,12 +235,13 @@ describe('B05 DATA-004 and ING-002 product UI', () => {
     await page.getByRole('button', { name: '插入', exact: true }).click();
     const modal = page.locator('.kb2-modal');
     await evidence(page, 'data-presave-index-missing', network);
-    await playwrightExpect(modal.getByRole('button', { name: '新增索引' })).toBeVisible();
+    await modal.getByRole('button', { name: '+ 新增' }).click();
+    await playwrightExpect(modal.getByLabel('自定义索引')).toBeVisible();
     await playwrightExpect(modal.getByLabel('自定义索引')).toBeVisible();
     await modal.getByLabel('自定义索引').fill('B05 pre-save custom index');
-    await playwrightExpect(modal.getByRole('button', { name: '新增索引' })).toBeEnabled();
-    await modal.getByRole('button', { name: '新增索引' }).click();
-    await modal.getByLabel('分块内容').fill('B05 pre-save chunk content');
+    await playwrightExpect(modal.getByRole('button', { name: '新增', exact: true })).toBeEnabled();
+    await modal.getByRole('button', { name: '新增', exact: true }).click();
+    await modal.getByLabel('内容').fill('B05 pre-save chunk content');
     await modal.getByRole('button', { name: '插入', exact: true }).click();
     await playwrightExpect(page.getByText('数据已插入')).toBeVisible();
     await playwrightExpect(page.getByText('B05 pre-save custom index')).toBeVisible();
@@ -375,7 +376,7 @@ describe('B05 DATA-004 and ING-002 product UI', () => {
         response.request().method() === 'POST' &&
         response.url().endsWith(`/spaces/${datasetId}/imports/text`),
     );
-    await page.getByRole('button', { name: '确认导入' }).click();
+    await page.getByRole('button', { name: '确认上传' }).click();
     expect((await submitted).status()).toBe(202);
     await playwrightExpect(page.getByText('任务 ID')).toBeVisible();
     const source = await models.KnowledgeSource.findOne({

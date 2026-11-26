@@ -549,6 +549,16 @@ export class S06ProcessingApplication {
         details: { sourceId, reason: 'empty_raw_text' },
       });
     }
+    await this.input.store.updateSourcePresentation?.(
+      sourceId,
+      {
+        rawTextLength: parsed.rawText.length,
+        parseProvider: source.parseProvider,
+        parsedAt: new Date().toISOString(),
+      },
+      context,
+      Number(job.inputSnapshot.sourceVersion ?? source.sourceVersion),
+    );
     await this.input.jobs.setStep(
       {
         jobId: String(job._id),
@@ -628,6 +638,8 @@ export class S06ProcessingApplication {
     let qaUsage: { inputTokens: number; outputTokens: number } | undefined;
     let qaAttempts: number | undefined;
     let chunkSettingsHash: string | null = null;
+    const processingSettings = (job.inputSnapshot.chunkingConfigSnapshot ??
+      job.inputSnapshot.chunking) as ChunkingSettings;
     const contentHashOf = (content: string) =>
       `sha256:${createHash('sha256').update(content, 'utf8').digest('hex')}`;
     if (structured) {
@@ -641,8 +653,6 @@ export class S06ProcessingApplication {
         });
       }
     } else {
-      const processingSettings = (job.inputSnapshot.chunkingConfigSnapshot ??
-        job.inputSnapshot.chunking) as ChunkingSettings;
       const processed = await this.input.processing.process({
         workspaceId: context.workspaceId,
         knowledgeSpaceId: source.knowledgeSpaceId,
@@ -737,6 +747,8 @@ export class S06ProcessingApplication {
             sourceVersion: artifact.sourceVersion,
             rootJobId,
             parentJobId: String(job._id),
+            indexPrefixTitle: processingSettings?.indexPrefixTitle === true,
+            sourceName: source.name,
             structuredIndexes: structured?.rows[index]?.indexes ?? [],
           },
           rootJobId,
@@ -874,7 +886,13 @@ export class S06ProcessingApplication {
       });
     }
     const indexId = supplied?.indexId ?? existing?.indexId ?? 'default';
-    const text = supplied?.text ?? existing?.text ?? segment.content;
+    const baseText = supplied?.text ?? existing?.text ?? segment.content;
+    const sourceName =
+      typeof job.inputSnapshot.sourceName === 'string' ? job.inputSnapshot.sourceName.trim() : '';
+    const text =
+      job.inputSnapshot.indexPrefixTitle === true && sourceName
+        ? `# ${sourceName}\n${baseText}`
+        : baseText;
     const contentHash = createHash('sha256').update(text, 'utf8').digest('hex');
     const indexVersion = segment.version + 2;
     await this.assertPermissionSnapshot(job, context);
@@ -982,7 +1000,7 @@ export class S06ProcessingApplication {
       storageType: profile.storageType,
       vectorProfile: profile.tableName,
       vectorId: written.vectorIds[0]!,
-      text,
+      text: baseText,
       version: indexVersion,
     };
     const indexes = [

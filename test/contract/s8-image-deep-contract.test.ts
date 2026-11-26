@@ -32,12 +32,12 @@ describe('S8 contract and runtime closure', () => {
       expect(runtime.has(operationId), operationId).toBe(true);
       expect(deferred.has(operationId), operationId).toBe(false);
     }
-    expect(RUNTIME_ROUTE_REGISTRY).toHaveLength(126);
+    expect(RUNTIME_ROUTE_REGISTRY).toHaveLength(127);
     expect(DEFERRED_OPERATION_MANIFEST).toHaveLength(0);
     expect(TARGET_CONTRACT_COUNTS).toEqual({
-      paths: 97,
-      operations: 126,
-      schemas: 146,
+      paths: 98,
+      operations: 127,
+      schemas: 149,
       parameters: 8,
     });
   });

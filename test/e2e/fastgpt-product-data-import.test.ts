@@ -196,7 +196,7 @@ describe('FastGPT product module 3 Data and Import', () => {
       .locator('textarea')
       .first()
       .fill('退款多久到账？已更新\n\n退款通常会在五个工作日内到账。');
-    await page.getByRole('button', { name: '保存', exact: true }).click();
+    await page.getByRole('button', { name: '更新索引', exact: true }).click();
     await playwrightExpect(page.getByText(/已更新/).first()).toBeVisible();
 
     await page.getByRole('button', { name: '插入', exact: true }).click();
@@ -221,7 +221,8 @@ describe('FastGPT product module 3 Data and Import', () => {
     await page.getByRole('button', { name: '关闭', exact: true }).click();
     await page.getByRole('button', { name: '调整训练参数' }).click();
     await page.waitForURL(/currentTab=import.*source=reTraining/);
-    await playwrightExpect(page.getByText('重训练能力尚未实现')).toBeVisible();
+    await playwrightExpect(page.getByText('调整参数', { exact: true }).first()).toBeVisible();
+    await playwrightExpect(page.getByText('文件解析设置', { exact: true })).toBeVisible();
 
     await page.goto(
       `${app.baseUrl}/dataset/detail?datasetId=${datasetId}&currentTab=dataCard&collectionId=${sourceId}`,
@@ -288,7 +289,7 @@ describe('FastGPT product module 3 Data and Import', () => {
         response.request().method() === 'POST' &&
         response.url().endsWith(`/spaces/${datasetId}/imports/text`),
     );
-    await page.getByRole('button', { name: '确认导入' }).click();
+    await page.getByRole('button', { name: '确认上传' }).click();
     expect((await textImport).status()).toBe(202);
     await playwrightExpect(page.getByText('任务 ID')).toBeVisible();
     await playwrightExpect(page.getByText(/等待处理|处理中|已完成/).first()).toBeVisible();
@@ -332,9 +333,11 @@ describe('FastGPT product module 3 Data and Import', () => {
         response.request().method() === 'POST' &&
         response.url().endsWith(`/spaces/${datasetId}/imports/files`),
     );
-    await page.getByRole('button', { name: '确认导入' }).click();
+    await page.getByRole('button', { name: /开始上传/ }).click();
     expect((await fileImport).status()).toBe(202);
-    await playwrightExpect(page.getByText('任务 ID')).toBeVisible();
+    await page.waitForURL((url) => url.searchParams.get('currentTab') === 'collectionCard', {
+      timeout: 60_000,
+    });
 
     await context.close();
   });

@@ -28,10 +28,11 @@ import {
 import {
   segmentDisplayContent,
   segmentModeForSource,
+  processingModelLabel,
   sourceKindLabel,
   sourceStatusView,
 } from './dataset-detail-state';
-import type { BatchResult, KnowledgeSpace, Segment, SegmentHistory } from './types';
+import type { BatchResult, KnowledgeSpace, Segment, SegmentHistory, Source } from './types';
 import {
   ProductButton,
   ProductCheckbox,
@@ -80,6 +81,7 @@ export function DataWorkspace(props: {
   const [editorError, setEditorError] = useState<unknown>(null);
   const [newIndexText, setNewIndexText] = useState('');
   const [newIndexModelId, setNewIndexModelId] = useState('');
+  const [indexCreateOpen, setIndexCreateOpen] = useState(false);
   const [createIndexes, setCreateIndexes] = useState<
     Array<{ indexId: string; text: string; modelId: string }>
   >([]);
@@ -178,6 +180,10 @@ export function DataWorkspace(props: {
   const selectedSegments = segments.filter((segment) => selectedIds.includes(segment.id));
   const indexedCount = segments.filter((segment) => segment.indexStatus === 'indexed').length;
   const status = sourceStatusView(source?.processingStatus ?? '');
+  const canRetrain =
+    source?.effectivePermission === 'write' ||
+    source?.effectivePermission === 'manage' ||
+    source?.effectivePermission === 'owner';
   const history = historyQuery.data?.items ?? [];
   const failureJob = failureJobsQuery.data?.find(
     (job) => job.resourceType === 'segment' && job.resourceId === editingSegment?.id,
@@ -215,6 +221,7 @@ export function DataWorkspace(props: {
     setNewIndexModelId(embeddingModelId);
     setCreateIndexes([]);
     setIndexDrafts({});
+    setIndexCreateOpen(false);
     setEditorError(null);
     setIndexError(null);
     setFailureDetailOpen(false);
@@ -228,7 +235,7 @@ export function DataWorkspace(props: {
     }
     const display = segmentDisplayContent(segment);
     setEditingSegment(segment);
-    setEditorMode(source?.kind === 'image' ? 'image' : display.answer ? 'qa' : 'chunk');
+    setEditorMode(source?.kind === 'image' ? 'image' : 'chunk');
     setQuestion(display.question);
     setAnswer(display.answer);
     setSearchEnabled(segment.searchEnabled);
@@ -246,11 +253,13 @@ export function DataWorkspace(props: {
     setEditorError(null);
     try {
       if (editingSegment) {
-        await updateSegment(editingSegment, {
+        const updated = await updateSegment(editingSegment, {
           question: question,
           answer: editorMode === 'qa' ? answer : '',
           searchEnabled,
         });
+        await batchSegments('reindex', [updated]);
+        toast.success('数据与索引已更新');
       } else {
         await createSegment(props.sourceId, {
           question,
@@ -268,7 +277,7 @@ export function DataWorkspace(props: {
       await invalidate();
       setEditorOpen(false);
       setCreateIndexes([]);
-      toast.success(editingSegment ? '数据已更新' : '数据已插入');
+      if (!editingSegment) toast.success('数据已插入');
     } catch (caught) {
       setEditorError(caught);
     } finally {
@@ -448,7 +457,7 @@ export function DataWorkspace(props: {
             <StatusTag value={status.label} tone={status.tone} dot />
           </div>
         }
-        description={`${source ? sourceKindLabel(source.kind) : ''} · ${source?.id ?? props.sourceId}`}
+        description={source ? sourceKindLabel(source.kind) : ''}
         actions={
           <>
             <ProductButton onClick={props.onBack}>
@@ -465,10 +474,12 @@ export function DataWorkspace(props: {
               <DownloadIcon boxSize={3.5} />
               导出分块
             </ProductButton>
-            <ProductButton onClick={props.onRetrain}>
-              <RepeatIcon boxSize={3.5} />
-              调整训练参数
-            </ProductButton>
+            {canRetrain ? (
+              <ProductButton onClick={props.onRetrain}>
+                <RepeatIcon boxSize={3.5} />
+                调整训练参数
+              </ProductButton>
+            ) : null}
             <ProductButton tone="primary" onClick={openCreate}>
               <AddIcon boxSize={3.5} />
               插入
@@ -638,14 +649,70 @@ export function DataWorkspace(props: {
 
         <aside className="kb2-meta-panel" aria-label="数据元信息">
           <h2>元数据</h2>
-          <InfoRow label="Source ID" value={source?.id ?? props.sourceId} />
-          <InfoRow label="来源类型" value={source ? sourceKindLabel(source.kind) : '—'} />
-          <InfoRow label="名称" value={source?.name ?? '—'} />
-          <InfoRow label="文件大小" value={formatBytes(source?.sizeBytes)} />
-          <InfoRow label="Source 版本" value={String(source?.sourceVersion ?? '—')} />
-          <InfoRow label="更新时间" value="后端未提供" />
-          <InfoRow label="权限模式" value={source?.permissionState ?? '—'} />
-          <InfoRow label="权限版本" value={String(source?.permissionRevision ?? '—')} />
+          <InfoRow label="集合 ID" value={source?.id ?? props.sourceId} />
+          <InfoRow label="数据来源" value={source ? sourceMetadataSourceLabel(source.kind) : '-'} />
+          <InfoRow label="数据集名称" value={source?.name ?? '-'} />
+          {source?.kind !== 'image' ? (
+            <InfoRow label="来源大小" value={source ? formatBytes(source.sizeBytes) : '-'} />
+          ) : null}
+          <InfoRow label="创建时间" value={formatSourceMetadataTime(source?.createdAt)} />
+          <InfoRow label="更新时间" value={formatSourceMetadataTime(source?.updatedAt)} />
+          {source?.kind !== 'image' ? (
+            <>
+              <InfoRow
+                label="PDF增强解析"
+                value={formatBooleanMetadata(source?.parseConfig?.customPdfParse)}
+              />
+              <InfoRow
+                label="原文长度"
+                value={
+                  typeof source?.rawTextLength === 'number' ? String(source.rawTextLength) : '-'
+                }
+              />
+            </>
+          ) : null}
+          <InfoRow
+            label="处理模式"
+            value={source ? processingModelLabel(source.processingModel) : '-'}
+          />
+          {source?.kind !== 'image' ? (
+            <>
+              <InfoRow
+                label="将标题加入索引"
+                value={formatBooleanMetadata(source?.chunkSettings?.indexPrefixTitle)}
+              />
+              <InfoRow
+                label="图片索引"
+                value={formatBooleanMetadata(source?.chunkSettings?.imageIndex)}
+              />
+              <InfoRow
+                label="自动生成补充索引"
+                value={formatBooleanMetadata(source?.chunkSettings?.autoIndexes)}
+              />
+              <InfoRow
+                label="分块大小"
+                value={formatMetadataNumber(source?.chunkSettings?.chunkSize)}
+              />
+              <InfoRow
+                label="索引大小"
+                value={formatMetadataNumber(source?.chunkSettings?.indexSize)}
+              />
+            </>
+          ) : null}
+          <InfoRow
+            label="集合标签"
+            value={
+              source?.tagValues?.length
+                ? source.tagValues
+                    .map((tag) => {
+                      const label = tagById.get(tag.tagId)?.label ?? tag.tagId;
+                      return `${label}:${formatTagValue(tag.value)}`;
+                    })
+                    .join(', ')
+                : '-'
+            }
+            wrap
+          />
           {source?.kind === 'url' ? (
             <div className="kb2-info-group">
               <h3>网页来源</h3>
@@ -654,20 +721,6 @@ export function DataWorkspace(props: {
               <InfoRow label="抽取正文 hash" value={extractedContentHash ?? '—'} wrap />
             </div>
           ) : null}
-          <div className="kb2-info-group">
-            <h3>标签</h3>
-            {source?.tagValues?.length ? (
-              source.tagValues.map((tag) => (
-                <InfoRow
-                  key={`${tag.tagId}-${tag.valueKey}`}
-                  label={tagById.get(tag.tagId)?.label ?? tag.tagId}
-                  value={formatTagValue(tag.value)}
-                />
-              ))
-            ) : (
-              <span className="kb2-table-muted">未设置标签</span>
-            )}
-          </div>
           <div className="kb2-info-group">
             <h3>Source 权限</h3>
             <ProductButton size="sm" className="kb2-full-button" onClick={props.onBack}>
@@ -719,27 +772,10 @@ export function DataWorkspace(props: {
         open={editorOpen}
         title={editingSegment ? `编辑数据 #${editingSegment.order + 1}` : '插入数据'}
         description={source?.name}
-        size="xl"
+        width="800px"
+        height="620px"
+        bodyClassName="kb2-data-editor-modal-body"
         onClose={() => !editorBusy && setEditorOpen(false)}
-        footer={
-          <>
-            <ProductButton onClick={() => setEditorOpen(false)} disabled={editorBusy}>
-              取消
-            </ProductButton>
-            <ProductButton
-              tone="primary"
-              busy={editorBusy}
-              disabled={!canSubmitEditor}
-              onClick={() =>
-                (
-                  document.getElementById('kb2-segment-form') as HTMLFormElement | null
-                )?.requestSubmit()
-              }
-            >
-              {editingSegment ? '保存' : '插入'}
-            </ProductButton>
-          </>
-        }
       >
         <div className="kb2-data-editor">
           <form id="kb2-segment-form" className="kb2-data-editor__main" onSubmit={saveSegment}>
@@ -751,7 +787,7 @@ export function DataWorkspace(props: {
                   aria-selected={editorMode === 'chunk'}
                   onClick={() => setEditorMode('chunk')}
                 >
-                  分块
+                  常规模式
                 </button>
                 <button
                   type="button"
@@ -759,14 +795,14 @@ export function DataWorkspace(props: {
                   aria-selected={editorMode === 'qa'}
                   onClick={() => setEditorMode('qa')}
                 >
-                  问答对
+                  QA 模式
                 </button>
               </div>
             ) : null}
             {editingSegment?.imageBlobRefId ? (
               <SegmentImage blobId={editingSegment.imageBlobRefId} alt="数据图片" />
             ) : null}
-            <ProductField label={editorMode === 'qa' ? '问题' : '分块内容'}>
+            <ProductField label={editorMode === 'qa' ? '问题' : '内容'}>
               <ProductTextarea
                 value={question}
                 onChange={(event) => setQuestion(event.target.value)}
@@ -783,7 +819,7 @@ export function DataWorkspace(props: {
                 />
               </ProductField>
             ) : null}
-            <label className="kb2-checkbox-row">
+            <label className="kb2-checkbox-row kb2-checkbox-row--compact">
               <input
                 type="checkbox"
                 checked={searchEnabled}
@@ -793,7 +829,8 @@ export function DataWorkspace(props: {
             </label>
             <ProductError error={editorError} />
             {editingSegment ? (
-              <section className="kb2-history-panel" aria-labelledby="kb2-segment-history-title">
+              <details className="kb2-history-panel">
+                <summary>编辑历史 ({history.length})</summary>
                 <div className="kb2-history-panel__head">
                   <h3 id="kb2-segment-history-title">编辑历史</h3>
                   <span>{history.length} 条</span>
@@ -816,13 +853,30 @@ export function DataWorkspace(props: {
                     ))}
                   </div>
                 )}
-              </section>
+              </details>
             ) : null}
+            <div className="kb2-data-editor__actions">
+              <ProductButton
+                tone="primary"
+                busy={editorBusy}
+                disabled={!canSubmitEditor}
+                onClick={() =>
+                  (
+                    document.getElementById('kb2-segment-form') as HTMLFormElement | null
+                  )?.requestSubmit()
+                }
+              >
+                {editingSegment ? '更新索引' : '插入'}
+              </ProductButton>
+            </div>
           </form>
           <aside className="kb2-index-panel">
             <div className="kb2-index-panel__head">
-              <h3>索引 {editingSegment?.indexes.length ?? createIndexes.length}</h3>
+              <h3>数据索引({editingSegment?.indexes.length ?? createIndexes.length})</h3>
               <span>系统索引只读</span>
+              <ProductButton size="sm" onClick={() => setIndexCreateOpen((value) => !value)}>
+                + 新增
+              </ProductButton>
             </div>
             {editingSegment && ['error', 'rebuild_failed'].includes(editingSegment.indexStatus) ? (
               <section className="kb2-failure-panel" aria-labelledby="kb2-failure-title">
@@ -893,39 +947,41 @@ export function DataWorkspace(props: {
                   </div>
                 ))
               : null}
-            <div className="kb2-index-create">
-              <ProductField label="自定义索引">
-                <ProductTextarea
-                  value={newIndexText}
-                  onChange={(event) => setNewIndexText(event.target.value)}
-                  rows={3}
-                />
-              </ProductField>
-              <ProductField label="向量模型">
-                <ProductSelect
-                  value={newIndexModelId}
-                  onChange={(event) => setNewIndexModelId(event.target.value)}
+            {indexCreateOpen ? (
+              <div className="kb2-index-create">
+                <ProductField label="自定义索引">
+                  <ProductTextarea
+                    value={newIndexText}
+                    onChange={(event) => setNewIndexText(event.target.value)}
+                    rows={3}
+                  />
+                </ProductField>
+                <ProductField label="向量模型">
+                  <ProductSelect
+                    value={newIndexModelId}
+                    onChange={(event) => setNewIndexModelId(event.target.value)}
+                  >
+                    <option value="">选择模型</option>
+                    {models
+                      .filter((model) => model.type === 'embedding' && model.authorized)
+                      .map((model) => (
+                        <option key={model.modelId} value={model.modelId}>
+                          {model.displayName}
+                        </option>
+                      ))}
+                  </ProductSelect>
+                </ProductField>
+                <ProductButton
+                  size="sm"
+                  busy={indexBusy}
+                  disabled={!newIndexText.trim() || !newIndexModelId}
+                  onClick={() => (editingSegment ? void addIndex() : addCreateIndex())}
                 >
-                  <option value="">选择模型</option>
-                  {models
-                    .filter((model) => model.type === 'embedding' && model.authorized)
-                    .map((model) => (
-                      <option key={model.modelId} value={model.modelId}>
-                        {model.displayName}
-                      </option>
-                    ))}
-                </ProductSelect>
-              </ProductField>
-              <ProductButton
-                size="sm"
-                busy={indexBusy}
-                disabled={!newIndexText.trim() || !newIndexModelId}
-                onClick={() => (editingSegment ? void addIndex() : addCreateIndex())}
-              >
-                {editingSegment ? '添加索引' : '新增索引'}
-              </ProductButton>
-              <ProductError error={indexError} />
-            </div>
+                  新增
+                </ProductButton>
+                <ProductError error={indexError} />
+              </div>
+            ) : null}
           </aside>
         </div>
       </ProductModal>
@@ -1211,4 +1267,35 @@ function formatTagValue(value: unknown) {
   if (value === null || value === undefined) return '—';
   if (typeof value === 'object') return JSON.stringify(value);
   return String(value);
+}
+
+function sourceMetadataSourceLabel(kind: Source['kind']) {
+  const labels: Record<Source['kind'], string> = {
+    file: '本地文件',
+    text: '自定义文本',
+    url: '网页链接',
+    template: '模板导入',
+    backup: '备份导入',
+    api_library: 'API 文件库',
+    feishu: '飞书',
+    yuque: '语雀',
+    dingtalk: '钉钉',
+    image: '图片数据集',
+  };
+  return labels[kind] ?? '-';
+}
+
+function formatSourceMetadataTime(value: string | undefined) {
+  if (!value) return '-';
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? '-' : date.toLocaleString('zh-CN');
+}
+
+function formatBooleanMetadata(value: unknown) {
+  if (typeof value !== 'boolean') return '-';
+  return value ? '是' : '否';
+}
+
+function formatMetadataNumber(value: unknown) {
+  return typeof value === 'number' && Number.isFinite(value) ? String(value) : '-';
 }

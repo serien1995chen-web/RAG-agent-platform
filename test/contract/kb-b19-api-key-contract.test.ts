@@ -25,7 +25,7 @@ const expectedGroups = {
   system: 4,
   space: 9,
   directory: 6,
-  source: 10,
+  source: 11,
   segment: 11,
   tag: 7,
   access: 13,
@@ -130,17 +130,17 @@ function matrixRows() {
 }
 
 describe('L1-B19 API-001 contract and runtime coverage', () => {
-  it('L1-B19-API-001-Q01 全部 126 个 runtime operations 均完成合同与路由矩阵', () => {
+  it('L1-B19-API-001-Q01 全部 127 个 runtime operations 均完成合同与路由矩阵', () => {
     expect(artifacts.actualCounts).toEqual({
-      paths: 97,
-      operations: 126,
-      schemas: 146,
+      paths: 98,
+      operations: 127,
+      schemas: 149,
       parameters: 8,
     });
-    expect(RUNTIME_ROUTE_REGISTRY).toHaveLength(126);
+    expect(RUNTIME_ROUTE_REGISTRY).toHaveLength(127);
     expect(DEFERRED_OPERATION_MANIFEST).toHaveLength(0);
     const ids = RUNTIME_ROUTE_REGISTRY.map((route) => route.operationId);
-    expect(new Set(ids).size).toBe(126);
+    expect(new Set(ids).size).toBe(127);
 
     const groups = Object.fromEntries(
       Object.keys(expectedGroups).map((group) => [
@@ -149,7 +149,7 @@ describe('L1-B19 API-001 contract and runtime coverage', () => {
       ]),
     );
     expect(groups).toEqual({ ...expectedGroups, model: 6 });
-    expect(Object.values(groups).reduce((sum, count) => sum + count, 0)).toBe(126);
+    expect(Object.values(groups).reduce((sum, count) => sum + count, 0)).toBe(127);
 
     const documentOperations = new Map<string, { method: string; path: string }>();
     for (const [path, item] of Object.entries(document.paths)) {
@@ -161,7 +161,7 @@ describe('L1-B19 API-001 contract and runtime coverage', () => {
         }
       }
     }
-    expect(documentOperations.size).toBe(126);
+    expect(documentOperations.size).toBe(127);
     for (const route of RUNTIME_ROUTE_REGISTRY) {
       expect(documentOperations.get(route.operationId), route.operationId).toEqual({
         method: route.method,
@@ -173,8 +173,8 @@ describe('L1-B19 API-001 contract and runtime coverage', () => {
     }
 
     const rows = matrixRows();
-    expect(rows).toHaveLength(126);
-    expect(new Set(rows.map((row) => row.operationId)).size).toBe(126);
+    expect(rows).toHaveLength(127);
+    expect(new Set(rows.map((row) => row.operationId)).size).toBe(127);
     expect(rows.every((row) => row.deferred === false)).toBe(true);
     expect(
       rows.every(
@@ -224,7 +224,7 @@ describe('L1-B19 API-001 contract and runtime coverage', () => {
     expect(envelopeProblems).toEqual([]);
   });
 
-  it('L1-B19-API-001-N01 public route registry validation accepts the frozen 126-operation contract', () => {
+  it('L1-B19-API-001-N01 public route registry validation accepts the frozen 127-operation contract', () => {
     expect(validateRouteRegistry()).toEqual([]);
   });
 

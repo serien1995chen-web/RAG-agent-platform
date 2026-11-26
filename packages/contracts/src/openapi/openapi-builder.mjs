@@ -2,9 +2,9 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 export const TARGET_CONTRACT_COUNTS = Object.freeze({
-  paths: 97,
-  operations: 126,
-  schemas: 146,
+  paths: 98,
+  operations: 127,
+  schemas: 149,
   parameters: 8,
 });
 
@@ -40,6 +40,7 @@ export const RUNTIME_OPERATION_IDS = Object.freeze([
   'API-SOURCE-BATCH',
   'API-SOURCE-DELETE',
   'API-SOURCE-PREVIEW',
+  'API-SOURCE-RETRAIN',
   'API-SOURCE-DOWNLOAD',
   'API-SOURCE-ARCHIVE',
   'API-UPLOAD-INIT',

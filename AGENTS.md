@@ -46,8 +46,8 @@
 
 ## 合同与运行时
 
-1. 当前完整目标合同为 97 paths、126 operations、146 schemas。
-2. 当前 runtime registry 注册 126 个 operation。
+1. 当前完整目标合同为 98 paths、127 operations、149 schemas。
+2. 当前 runtime registry 注册 127 个 operation。
 3. deferred manifest 当前为 0；不得注册未登记 operation 或占位路由、
    不得用占位错误伪装、不得在 UI 显示为可用。
 4. 修改合同后必须执行 `pnpm openapi:generate`，再执行

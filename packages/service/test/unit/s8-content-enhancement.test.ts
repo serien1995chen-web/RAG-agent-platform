@@ -93,7 +93,7 @@ describe('TEST-PARSE-005-BLOCK paragraph, auto index and document images', () =>
     expect(generate.mock.calls[0]?.[0].settings.trainingType).toBe('qa');
     expect(result.qaItems).toEqual([
       expect.objectContaining({
-        q: expect.stringContaining('# Support policy'),
+        q: 'How long?',
         a: 'Five days.',
       }),
     ]);
@@ -181,6 +181,68 @@ describe('TEST-PARSE-005-BLOCK paragraph, auto index and document images', () =>
         expect.objectContaining({ code: 'image_asset_index_failed' }),
       ]),
     );
+  });
+
+  it('applies paragraph AI enhancement in QA mode before QA chunking', async () => {
+    const invoke = vi.fn(async () => ({
+      data: {
+        choices: [
+          {
+            message: {
+              content: JSON.stringify({
+                markdown: '# 退款政策\n\n## 处理时限\n\n退款将在五个工作日内处理。',
+              }),
+            },
+          },
+        ],
+      },
+      actualModelId: 'real-llm',
+      attempts: 1,
+      fallbackUsed: false,
+      degraded: false,
+      usage: { inputTokens: 12, outputTokens: 18, quantity: 30 },
+    }));
+    const enhancement = new S8ContentEnhancementApplication({
+      gateway: { invoke },
+      models: {
+        resolveLlm: async () => ({
+          modelId: 'real-llm',
+          displayName: 'Real LLM',
+          provider: 'aiproxy',
+          type: 'llm',
+          capabilities: ['chat'],
+          dimension: null,
+          authorized: true,
+        }),
+        resolveVlm: async () => {
+          throw new Error('not used');
+        },
+        resolveVisionEmbedding: async () => {
+          throw new Error('not used');
+        },
+      },
+    });
+    const result = await enhancement.enhanceParagraph({
+      workspaceId: context.workspaceId,
+      knowledgeSpaceId: '65f1e5b2a1c9d4b7e8f01234',
+      sourceId: '65f1e5b2a1c9d4b7e8f05678',
+      sourceVersion: 1,
+      rawText: '退款政策。退款将在五个工作日内处理。',
+      settings: {
+        trainingType: 'qa',
+        chunkSettingMode: 'custom',
+        chunkSplitMode: 'paragraph',
+        paragraphChunkAIMode: 'force',
+        chunkSize: 1_000,
+      },
+      context,
+    });
+    expect(invoke).toHaveBeenCalledTimes(1);
+    expect(result).toMatchObject({
+      applied: true,
+      markdown: expect.stringContaining('## 处理时限'),
+      usage: { inputTokens: 12, outputTokens: 18 },
+    });
   });
 
   it('returns 422 instead of partial when both vision model paths are unavailable', async () => {

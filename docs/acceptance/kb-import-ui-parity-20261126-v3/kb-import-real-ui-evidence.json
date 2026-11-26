@@ -1,0 +1,8 @@
+{
+  "testId": "TEST-X-S11-PROVIDER-REAL",
+  "generatedAt": "2026-11-26T14:31:56.856Z",
+  "candidateSha": "UNFROZEN",
+  "status": "REAL_VERIFIED",
+  "sourceStatus": "ready",
+  "segmentCount": 10
+}

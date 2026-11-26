@@ -52,13 +52,13 @@ const expected = [
 describe('S9 synonym contract', () => {
   it('TEST-SEARCH-003-BLOCK registers exactly eight existing operations', () => {
     expect(TARGET_CONTRACT_COUNTS).toEqual({
-      paths: 97,
-      operations: 126,
-      schemas: 146,
+      paths: 98,
+      operations: 127,
+      schemas: 149,
       parameters: 8,
     });
-    expect(FULL_ROUTE_REGISTRY).toHaveLength(126);
-    expect(RUNTIME_ROUTE_REGISTRY).toHaveLength(126);
+    expect(FULL_ROUTE_REGISTRY).toHaveLength(127);
+    expect(RUNTIME_ROUTE_REGISTRY).toHaveLength(127);
     expect(DEFERRED_OPERATION_MANIFEST).toHaveLength(0);
     const full = new Map(FULL_ROUTE_REGISTRY.map((route) => [route.operationId, route]));
     const runtime = new Set(RUNTIME_ROUTE_REGISTRY.map((route) => route.operationId));

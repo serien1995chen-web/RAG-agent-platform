@@ -52,6 +52,13 @@ export interface ImportSourceDraft {
   parseProvider: 'liteparse' | 'sangfor' | 'somark' | 'textin' | 'doc2x';
   metadata: Record<string, unknown>;
   object?: ImportObjectDraft;
+  additionalObjects?: ImportObjectDraft[];
+  tagValues?: Array<{ tagId: string; valueKey: string; value: unknown }>;
+  permissionState?: 'disabled' | 'inherited' | 'independent';
+  permissionRevision?: number;
+  aclSnapshotVersion?: number;
+  ownershipMemberId?: string;
+  searchEnabled?: boolean;
   replaceSourceId?: string;
   replaceSourceVersion?: number;
 }
@@ -88,6 +95,14 @@ export interface ImportSubmissionPort {
     context: TenantContext,
   ): Promise<ImportSubmissionResult | null>;
   submit(command: ImportSubmissionCommand, context: TenantContext): Promise<ImportSubmissionResult>;
+  retrain?(
+    input: {
+      sourceId: string;
+      expectedVersion: number;
+      command: ImportSubmissionCommand;
+    },
+    context: TenantContext,
+  ): Promise<ImportSubmissionResult>;
 }
 
 export interface FilePreviewParsePort {

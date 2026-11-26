@@ -77,8 +77,8 @@ describe('L1-B11-B-PARSE-003 settings and boundaries', () => {
       toChunkPolicy({
         trainingType: 'chunk',
         chunkSettingMode: 'custom',
-        chunkSize: 64,
-        chunkTriggerMinSize: 65,
+        chunkSize: 100,
+        chunkTriggerMinSize: 101,
       }),
     ).toThrow();
   });

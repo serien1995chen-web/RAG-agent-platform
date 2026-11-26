@@ -90,9 +90,11 @@ export {
   ImportUrlPreviewSchema,
   ImportUrlSchema,
   PARSE_PROVIDERS,
+  RetrainSourceSchema,
   credentialMetadataOf,
 } from './knowledge/ingestion-contract';
 export type { ImportUrlPreview } from './knowledge/ingestion-contract';
+export { DEFAULT_QA_PROMPT, MAX_QA_PER_CHUNK, QA_FIXED_TEMPLATE } from './knowledge/qa-defaults';
 export {
   DOCUMENT_ACCEPT,
   DOCUMENT_FILE_EXTENSIONS,

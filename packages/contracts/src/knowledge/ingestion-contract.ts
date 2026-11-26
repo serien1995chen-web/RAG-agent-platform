@@ -24,11 +24,11 @@ export const ChunkingSettingsSchema = z
   .object({
     trainingType: z.enum(['chunk', 'qa', 'imageParse', 'backup', 'template']),
     chunkTriggerType: z.enum(['minSize', 'forceChunk', 'maxSize']).optional(),
-    chunkTriggerMinSize: z.number().int().min(1).max(100_000).optional(),
+    chunkTriggerMinSize: z.number().int().min(100).max(100_000).optional(),
     chunkSettingMode: z.enum(['auto', 'custom', 'intelligent']),
     chunkSplitMode: z.enum(['paragraph', 'size', 'char']).optional(),
     paragraphChunkAIMode: z.enum(['auto', 'force', 'forbid']).optional(),
-    paragraphChunkDeep: z.number().int().min(0).max(8).optional(),
+    paragraphChunkDeep: z.number().int().min(1).max(8).optional(),
     paragraphChunkMinSize: z.number().int().min(1).max(100_000).optional(),
     chunkSize: z.number().int().min(64).max(100_000).optional(),
     chunkSplitter: z.string().max(1_000).optional(),
@@ -73,11 +73,12 @@ export const ChunkingSettingsSchema = z
       issue('chunkSplitMode', 'paragraph-only fields require paragraph mode');
     }
     if (
-      value.paragraphChunkAIMode !== undefined &&
-      value.paragraphChunkAIMode !== 'forbid' &&
-      value.trainingType !== 'chunk'
+      value.trainingType === 'qa' &&
+      value.chunkSettingMode === 'custom' &&
+      value.chunkSize !== undefined &&
+      value.chunkSize < 1_000
     ) {
-      issue('paragraphChunkAIMode', 'AI paragraph enhancement requires trainingType=chunk');
+      issue('chunkSize', 'QA chunkSize must be at least 1000');
     }
     if (value.autoIndexes === true && value.trainingType !== 'chunk') {
       issue('autoIndexes', 'requires trainingType=chunk');
@@ -220,6 +221,16 @@ export const ImportFilesSchema = z
       });
     }
   });
+
+export const RetrainSourceSchema = z
+  .object({
+    version: z.number().int().min(1),
+    dryRun: z.boolean().default(false),
+    parseProvider: z.enum(PARSE_PROVIDERS).optional(),
+    parseConfig: JsonObjectSchema.default({}),
+    chunking: ChunkingSettingsSchema,
+  })
+  .strict();
 
 export const ImportImageDatasetSchema = z
   .object({

@@ -66,6 +66,7 @@ export type OperationId =
   | 'API-PERMISSION-ENABLE'
   | 'API-PERMISSION-RESUME'
   | 'API-SOURCE-PREVIEW'
+  | 'API-SOURCE-RETRAIN'
   | 'API-SEGMENT-LIST'
   | 'API-SEGMENT-CREATE'
   | 'API-SOURCE-BATCH'
@@ -194,6 +195,7 @@ export type RuntimeOperationId =
   | 'API-PERMISSION-ENABLE'
   | 'API-PERMISSION-RESUME'
   | 'API-SOURCE-PREVIEW'
+  | 'API-SOURCE-RETRAIN'
   | 'API-SEGMENT-LIST'
   | 'API-SEGMENT-CREATE'
   | 'API-SOURCE-BATCH'
@@ -360,6 +362,9 @@ export type SchemaName =
   | 'Problem'
   | 'ReconcileCreate'
   | 'ReindexRequest'
+  | 'RetrainPreview'
+  | 'RetrainResult'
+  | 'RetrainSource'
   | 'SangforParseConfig'
   | 'SearchFilter'
   | 'SearchRequest'
@@ -508,6 +513,9 @@ export interface SchemaPropertyMap {
   "Problem": "error" | "requestId" | "success" | "traceId";
   "ReconcileCreate": "repair" | "scope";
   "ReindexRequest": "modelId" | "reason" | "version";
+  "RetrainPreview": never;
+  "RetrainResult": "job" | "previousSourceId" | "sourceId";
+  "RetrainSource": "chunking" | "dryRun" | "parseConfig" | "parseProvider" | "version";
   "SangforParseConfig": "allowedExtensions" | "chartAnalysis" | "credentialProfileId" | "fallbackProvider" | "imageAnalysis" | "imageHandling" | "keepAppendix" | "keepHeaderFooter" | "provider" | "timeoutMs";
   "SearchFilter": "conditions" | "createdAt" | "directoryIds" | "logic" | "sourceIds";
   "SearchRequest": "embeddingWeight" | "filters" | "knowledgeSpaceId" | "query" | "rerankCandidateNum" | "rerankWeight" | "searchMode" | "similarity" | "tokenBudget" | "usingRerank";
@@ -522,7 +530,7 @@ export interface SchemaPropertyMap {
   "SegmentList": "items" | "pageInfo";
   "SegmentUpdate": "answer" | "metadata" | "question" | "searchEnabled" | "version";
   "SomarkParseConfig": "credentialProfileId" | "fallbackProvider" | "imageHandling" | "provider" | "timeoutMs";
-  "Source": "blobRefId" | "connectorId" | "contentHash" | "directoryId" | "externalId" | "id" | "kind" | "knowledgeSpaceId" | "metadata" | "mimeType" | "name" | "parentPath" | "permissionRevision" | "permissionState" | "processingStatus" | "searchEnabled" | "segmentCount" | "sizeBytes" | "sourceVersion" | "version" | "workspaceId";
+  "Source": "blobRefId" | "chunkSettings" | "connectorId" | "contentHash" | "createdAt" | "directoryId" | "externalId" | "id" | "kind" | "knowledgeSpaceId" | "metadata" | "mimeType" | "name" | "parentPath" | "parseConfig" | "parseProvider" | "permissionRevision" | "permissionState" | "processingModel" | "processingStatus" | "qaConfig" | "rawTextLength" | "resolvedTags" | "searchEnabled" | "segmentCount" | "sizeBytes" | "sourceVersion" | "updatedAt" | "version" | "workspaceId";
   "SourceBatchAction": "action" | "ids" | "targetDirectoryId" | "versions";
   "SourceCreate": "directoryId" | "kind" | "metadata" | "name" | "searchEnabled";
   "SourceList": "items" | "pageInfo";
@@ -657,6 +665,9 @@ export interface RequiredSchemaPropertyMap {
   "Problem": "error" | "requestId" | "success" | "traceId";
   "ReconcileCreate": "scope";
   "ReindexRequest": "reason" | "version";
+  "RetrainPreview": never;
+  "RetrainResult": "job" | "previousSourceId" | "sourceId";
+  "RetrainSource": "chunking" | "version";
   "SangforParseConfig": "chartAnalysis" | "credentialProfileId" | "fallbackProvider" | "imageAnalysis" | "keepAppendix" | "keepHeaderFooter" | "provider";
   "SearchFilter": never;
   "SearchRequest": "knowledgeSpaceId" | "query" | "tokenBudget";
@@ -771,6 +782,7 @@ export interface RuntimeRouteMethodPathMap {
   'API-PERMISSION-ENABLE': 'POST /v1/knowledge/sources/{sourceId}/permissions/enable';
   'API-PERMISSION-RESUME': 'POST /v1/knowledge/sources/{sourceId}/permissions/resume-inherit';
   'API-SOURCE-PREVIEW': 'GET /v1/knowledge/sources/{sourceId}/preview';
+  'API-SOURCE-RETRAIN': 'POST /v1/knowledge/sources/{sourceId}/retrain';
   'API-SEGMENT-LIST': 'GET /v1/knowledge/sources/{sourceId}/segments';
   'API-SEGMENT-CREATE': 'POST /v1/knowledge/sources/{sourceId}/segments';
   'API-SOURCE-BATCH': 'POST /v1/knowledge/sources/batch-actions';

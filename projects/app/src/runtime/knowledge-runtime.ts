@@ -1077,6 +1077,7 @@ async function bootstrapRuntime(): Promise<TelemetryKnowledgeApiRuntime> {
     customApi: new CustomApiLibraryClient(),
     providers: connectorClients,
     access,
+    catalog,
     scopedAuth: new KnowledgeScopedAuthAdapter(access),
     quotaGate,
     filePreview: { parse: parsePreviewFile },

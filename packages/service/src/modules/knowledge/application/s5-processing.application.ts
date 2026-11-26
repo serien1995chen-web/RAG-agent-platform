@@ -247,13 +247,7 @@ export class S5ProcessingApplication {
             attempts: 0,
             diagnostics: [],
           };
-    const autoItems = input.settings.indexPrefixTitle
-      ? autoIndexes.items.map((item) => ({
-          ...item,
-          q: `# ${input.sourceName ?? 'Source'}\n${item.q}`,
-          a: item.a,
-        }))
-      : autoIndexes.items;
+    const autoItems = autoIndexes.items;
     const imageIndex = input.settings.imageIndex
       ? await this.enhancement?.indexAssets({
           sourceId: input.sourceId,

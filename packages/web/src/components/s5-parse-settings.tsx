@@ -490,7 +490,7 @@ export function S5ParseSettingsPanel(props: S5ParseSettingsPanelProps) {
           </FormLabel>
           <NumberInput
             min={1}
-            max={5}
+            max={8}
             value={settings.paragraphChunkDeep ?? 5}
             onChange={(_value, valueNumber) =>
               setField('paragraphChunkDeep', Number.isFinite(valueNumber) ? valueNumber : 5)
@@ -505,7 +505,7 @@ export function S5ParseSettingsPanel(props: S5ParseSettingsPanelProps) {
             {labels.chunkSize}
           </FormLabel>
           <NumberInput
-            min={64}
+            min={settings.trainingType === 'qa' ? 1_000 : 64}
             max={8_000}
             value={settings.chunkSize ?? 1_000}
             onChange={(_value, valueNumber) =>

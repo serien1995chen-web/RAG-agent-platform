@@ -283,7 +283,7 @@ describe('L1-B06-ING-001 product upload flow', () => {
         response.request().method() === 'POST' &&
         response.url().endsWith('/spaces/' + datasetId + '/imports/files'),
     );
-    await page.getByRole('button', { name: '确认导入' }).click();
+    await page.getByRole('button', { name: /开始上传/ }).click();
     const response = await responsePromise;
     expect(response.status()).toBe(202);
     const payload = (await response.json()) as { data: { jobId: string } };
@@ -306,7 +306,9 @@ describe('L1-B06-ING-001 product upload flow', () => {
     expect(created).toBeDefined();
     expect(['ready', 'partial']).toContain(created!.processingStatus);
 
-    await page.getByRole('button', { name: '返回 Collection' }).first().click();
+    await page.waitForURL((url) => url.searchParams.get('currentTab') === 'collectionCard', {
+      timeout: 60_000,
+    });
     await page.getByRole('tab', { name: '数据集' }).click();
     await page.reload({ waitUntil: 'networkidle' });
     await playwrightExpect(page.getByText(name, { exact: true })).toBeVisible({ timeout: 30_000 });

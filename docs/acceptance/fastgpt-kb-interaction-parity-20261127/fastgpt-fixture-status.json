@@ -1,0 +1,21 @@
+{
+  "capturedAt": "2026-11-26T16:26:11.536Z",
+  "cloud": "https://cloud.fastgpt.cn",
+  "accountPlanLimit": {
+    "newKnowledgeBaseCreated": false,
+    "message": "您的知识库数量已达上限，请升级套餐后继续使用。",
+    "retainedFixture": {
+      "name": "FastGPT导入验收-20261126-1930",
+      "datasetId": "6b0818470512508fd1f988d0"
+    }
+  },
+  "retainedData": {
+    "folderId": "6b08184f570c6767e93e81e5",
+    "textCollectionId": "6b08189e570c6767e93ea44b",
+    "textCollectionName": "heading-scroll-matrix-live.md",
+    "imageCollectionId": "6b085d2fd9a6761ecef70f96",
+    "imageCollectionName": "Codex图片元数据验收-20261127",
+    "imageStatusObserved": "图片解析中 → 已就绪",
+    "imageSource": "s11-image-1x1.png"
+  }
+}

@@ -575,6 +575,27 @@ describe('TEST-ING-001-BLOCK upload to Source', () => {
     expect(await counts()).toEqual(baseline);
   });
 
+  it('preserves Unicode upload names while keeping object keys storage-safe', async () => {
+    const originalName = `真实文件名-${suffix}.pdf`;
+    const session = await files.init(
+      {
+        knowledgeSpaceId: spaceId,
+        name: originalName,
+        mimeType: 'application/pdf',
+        sizeBytes: pdfBytes.byteLength,
+      },
+      context,
+    );
+    const ref = await repository.findObjectRef(session.uploadId, context);
+    expect(ref?.originalName).toBe(originalName);
+    expect(ref?.objectKey).toContain('.pdf');
+    expect(ref?.objectKey).not.toContain('真实文件名');
+    if (ref) {
+      createdObjects.add(ref.objectKey);
+      if (ref.finalObjectKey) createdObjects.add(ref.finalObjectKey);
+    }
+  });
+
   it('L1-B06-ING-001-A01 无写权限、跨租户和缺 TenantContext 全部 fail closed', async () => {
     const baseline = await counts();
     denySpaceWrite = true;

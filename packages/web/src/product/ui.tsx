@@ -240,6 +240,8 @@ export function ProductModal(props: {
   footer?: ReactNode;
   size?: 'sm' | 'md' | 'lg' | 'xl';
   width?: string;
+  height?: string;
+  bodyClassName?: string;
   finalFocusRef?: RefObject<HTMLButtonElement | null>;
 }) {
   return (
@@ -258,7 +260,25 @@ export function ProductModal(props: {
         className="kb2-modal"
         role="dialog"
         aria-modal="true"
-        style={props.width ? { width: props.width, maxWidth: props.width } : undefined}
+        aria-label={props.title}
+        style={
+          props.width || props.height
+            ? {
+                ...(props.width
+                  ? {
+                      width: `min(${props.width}, calc(100vw - 32px))`,
+                      maxWidth: `min(${props.width}, calc(100vw - 32px))`,
+                    }
+                  : {}),
+                ...(props.height
+                  ? {
+                      height: `min(${props.height}, calc(100vh - 32px))`,
+                      maxHeight: `min(${props.height}, calc(100vh - 32px))`,
+                    }
+                  : {}),
+              }
+            : undefined
+        }
       >
         <ModalHeader>
           <div>
@@ -269,7 +289,7 @@ export function ProductModal(props: {
             <CloseIcon boxSize={3.5} />
           </ProductIconButton>
         </ModalHeader>
-        <ModalBody>{props.children}</ModalBody>
+        <ModalBody className={props.bodyClassName}>{props.children}</ModalBody>
         {props.footer ? <ModalFooter>{props.footer}</ModalFooter> : null}
       </ModalContent>
     </Modal>

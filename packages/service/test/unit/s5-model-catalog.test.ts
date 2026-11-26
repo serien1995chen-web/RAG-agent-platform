@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 import {
   S5AiproxyCatalogAdapter,
   S5MockModelCatalog,
+  configuredModelLimits,
 } from '../../src/modules/knowledge/adapter/s5-aiproxy-catalog.adapter';
+import { mergeConfiguredModelLimits } from '../../src/modules/knowledge/adapter/s5-workspace-model-catalog.adapter';
 import type {
   S5HttpRequest,
   S5HttpResponse,
@@ -635,5 +637,53 @@ describe('TEST-MODEL-001-BLOCK AIProxy catalog and model operations', () => {
       expect.objectContaining({ modelId: 'llm-a' }),
     ]);
     expect(orderedIds).toHaveLength(1);
+  });
+
+  it('recovers model limits for workspace settings saved before limits were available', () => {
+    const limits = configuredModelLimits({
+      AIPROXY_MODEL_PROFILE_JSON: JSON.stringify({
+        models: [
+          {
+            id: 'qwen3.7-text-embedding',
+            type: 'embedding',
+            capabilities: ['text-embedding'],
+            dimension: 1024,
+            limits: { maxToken: 4_096, defaultToken: 512 },
+          },
+        ],
+      }),
+    });
+    expect(limits.get('qwen3.7-text-embedding')).toEqual({
+      maxToken: 4_096,
+      defaultToken: 512,
+    });
+    const merged = mergeConfiguredModelLimits(
+      [
+        {
+          modelId: 'qwen3.7-text-embedding',
+          displayName: 'Qwen',
+          provider: 'Qwen',
+          type: 'embedding',
+          capabilities: ['text-embedding'],
+          tags: [],
+          enabled: true,
+          dimension: 1024,
+        },
+      ],
+      {
+        AIPROXY_MODEL_PROFILE_JSON: JSON.stringify({
+          models: [
+            {
+              id: 'qwen3.7-text-embedding',
+              type: 'embedding',
+              capabilities: ['text-embedding'],
+              dimension: 1024,
+              limits: { maxToken: 4_096, defaultToken: 512 },
+            },
+          ],
+        }),
+      },
+    );
+    expect(merged[0]?.limits).toEqual({ maxToken: 4_096, defaultToken: 512 });
   });
 });

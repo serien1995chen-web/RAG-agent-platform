@@ -168,7 +168,7 @@ describe('B13B product Job control UI', () => {
       const errorEntry = page.getByRole('button', { name: /异常列表/ });
       await playwrightExpect(errorEntry).toBeVisible();
       await errorEntry.click();
-      await playwrightExpect(page.getByRole('dialog', { name: '训练与索引状态' })).toBeVisible();
+      await playwrightExpect(page.getByRole('dialog', { name: '训练异常列表' })).toBeVisible();
       await page.waitForTimeout(350);
       const accessibility = await new AxeBuilder({ page }).analyze();
       expect
@@ -220,9 +220,9 @@ describe('B13B product Job control UI', () => {
         waitUntil: 'networkidle',
       });
       await page
-        .getByRole('button', { name: `B13B running ${suffix} 的训练状态：内容解析中` })
+        .getByRole('button', { name: `查看 B13B running ${suffix} 的训练状态：内容解析中` })
         .click();
-      await playwrightExpect(page.getByRole('dialog', { name: '训练与索引状态' })).toBeVisible();
+      await playwrightExpect(page.getByRole('dialog', { name: '训练状态' })).toBeVisible();
       await playwrightExpect(page.getByRole('button', { name: '暂停' })).toBeVisible();
       await page.reload({ waitUntil: 'networkidle' });
       await playwrightExpect(page.getByText('内容解析中', { exact: true })).toBeVisible();

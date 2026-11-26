@@ -1,0 +1,127 @@
+{
+  "viewport": {
+    "width": 1200,
+    "height": 900
+  },
+  "document": {
+    "scrollY": 0,
+    "clientHeight": 900,
+    "scrollHeight": 900
+  },
+  "importPage": {
+    "x": 76,
+    "y": 16,
+    "width": 1108,
+    "height": 868,
+    "padding": "20px 36px",
+    "margin": "0px",
+    "gap": "normal",
+    "maxWidth": "none",
+    "borderRadius": "16px",
+    "fontSize": "14px",
+    "lineHeight": "21px",
+    "overflowY": "hidden"
+  },
+  "steps": {
+    "x": 180,
+    "y": 81,
+    "width": 900,
+    "height": 48,
+    "padding": "12px 18px",
+    "margin": "8px 67px 14px",
+    "gap": "normal",
+    "maxWidth": "900px",
+    "borderRadius": "8px",
+    "fontSize": "14px",
+    "lineHeight": "21px",
+    "overflowY": "visible"
+  },
+  "body": {
+    "x": 113,
+    "y": 143,
+    "width": 1034,
+    "height": 720,
+    "padding": "0px",
+    "margin": "0px",
+    "gap": "0px",
+    "maxWidth": "none",
+    "borderRadius": "0px",
+    "fontSize": "14px",
+    "lineHeight": "21px",
+    "overflowY": "visible"
+  },
+  "main": {
+    "x": 113,
+    "y": 143,
+    "width": 1034,
+    "height": 720,
+    "padding": "0px",
+    "margin": "0px",
+    "gap": "normal",
+    "maxWidth": "none",
+    "borderRadius": "0px",
+    "fontSize": "14px",
+    "lineHeight": "21px",
+    "overflowY": "hidden"
+  },
+  "settings": null,
+  "preview": null,
+  "previewFiles": null,
+  "previewChunks": null,
+  "previewScroll": null,
+  "confirmTable": {
+    "x": 113,
+    "y": 143,
+    "width": 1034,
+    "height": 112,
+    "padding": "0px",
+    "margin": "0px",
+    "gap": "normal",
+    "maxWidth": "none",
+    "borderRadius": "0px",
+    "fontSize": "14px",
+    "lineHeight": "21px",
+    "overflowY": "visible"
+  },
+  "confirmHeaders": [
+    {
+      "text": "来源名",
+      "width": 589,
+      "height": 48,
+      "padding": "14px 24px",
+      "background": "rgb(247, 248, 250)",
+      "borderRadius": "8px 0px 0px 8px"
+    },
+    {
+      "text": "状态",
+      "width": 259,
+      "height": 48,
+      "padding": "14px 24px",
+      "background": "rgb(247, 248, 250)",
+      "borderRadius": "0px"
+    },
+    {
+      "text": "操作",
+      "width": 186,
+      "height": 48,
+      "padding": "14px 24px",
+      "background": "rgb(247, 248, 250)",
+      "borderRadius": "0px 8px 8px 0px"
+    }
+  ],
+  "footer": {
+    "x": 113,
+    "y": 815,
+    "width": 1034,
+    "height": 48,
+    "padding": "14px 0px 0px",
+    "margin": "0px",
+    "gap": "12px",
+    "maxWidth": "none",
+    "borderRadius": "0px",
+    "fontSize": "14px",
+    "lineHeight": "21px",
+    "overflowY": "visible"
+  },
+  "headings": []
+}

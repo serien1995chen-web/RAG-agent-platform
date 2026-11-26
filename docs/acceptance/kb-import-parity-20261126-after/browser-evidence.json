@@ -1,0 +1,397 @@
+{
+  "observations": {
+    "targetDirectoryCount": 0,
+    "importHeadingCount": 0,
+    "importSubtitleCount": 0,
+    "exitVisible": true,
+    "exitAtTopLeft": true,
+    "stepOneBackButtonCount": 0,
+    "stepTwoBackAtTopLeft": true,
+    "stepTwoBackButtonCount": 1,
+    "autoIndexCheckboxVisible": true,
+    "autoIndexCheckboxEnabled": true,
+    "imageIndexCheckboxVisible": true,
+    "titleStillCheckedAfterAutoOff": true,
+    "qaAutoIndexCount": 0,
+    "qaImageIndexCount": 0,
+    "qaChunkTriggerCount": 0,
+    "qaChunkParameterCount": 1,
+    "previewMetrics": {
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "page": {
+        "scrollY": 0,
+        "scrollHeight": 900,
+        "clientHeight": 900
+      },
+      "importPage": {
+        "x": 76,
+        "y": 16,
+        "width": 1348,
+        "height": 868
+      },
+      "importMain": {
+        "x": 190,
+        "y": 147,
+        "width": 1120,
+        "height": 716
+      },
+      "importFooter": {
+        "x": 215,
+        "y": 794,
+        "width": 1070,
+        "height": 48
+      },
+      "preview": {
+        "x": 215,
+        "y": 184,
+        "width": 1070,
+        "height": 610
+      },
+      "chunkScroll": {
+        "clientHeight": 554,
+        "scrollHeight": 1969,
+        "clientWidth": 534,
+        "scrollWidth": 534,
+        "overflowY": "auto"
+      },
+      "headings": [
+        {
+          "tag": "h1",
+          "text": "FastGPT 导入验收一级标题",
+          "fontSize": "28px",
+          "fontWeight": "700",
+          "lineHeight": "42px"
+        },
+        {
+          "tag": "h2",
+          "text": "二级标题：预览滚动",
+          "fontSize": "24px",
+          "fontWeight": "700",
+          "lineHeight": "36px"
+        },
+        {
+          "tag": "h1",
+          "text": "FastGPT 导入验收一级标题",
+          "fontSize": "28px",
+          "fontWeight": "700",
+          "lineHeight": "42px"
+        },
+        {
+          "tag": "h2",
+          "text": "二级标题：预览滚动",
+          "fontSize": "24px",
+          "fontWeight": "700",
+          "lineHeight": "36px"
+        },
+        {
+          "tag": "h3",
+          "text": "三级标题：Markdown 层级",
+          "fontSize": "20px",
+          "fontWeight": "700",
+          "lineHeight": "30px"
+        },
+        {
+          "tag": "h1",
+          "text": "FastGPT 导入验收一级标题",
+          "fontSize": "28px",
+          "fontWeight": "700",
+          "lineHeight": "42px"
+        },
+        {
+          "tag": "h2",
+          "text": "二级标题：预览滚动",
+          "fontSize": "24px",
+          "fontWeight": "700",
+          "lineHeight": "36px"
+        },
+        {
+          "tag": "h3",
+          "text": "三级标题：Markdown 层级",
+          "fontSize": "20px",
+          "fontWeight": "700",
+          "lineHeight": "30px"
+        },
+        {
+          "tag": "h1",
+          "text": "FastGPT 导入验收一级标题",
+          "fontSize": "28px",
+          "fontWeight": "700",
+          "lineHeight": "42px"
+        },
+        {
+          "tag": "h2",
+          "text": "二级标题：预览滚动",
+          "fontSize": "24px",
+          "fontWeight": "700",
+          "lineHeight": "36px"
+        },
+        {
+          "tag": "h3",
+          "text": "三级标题：Markdown 层级",
+          "fontSize": "20px",
+          "fontWeight": "700",
+          "lineHeight": "30px"
+        }
+      ]
+    },
+    "next1440VisibleWithoutPageScroll": true,
+    "next1440AtRight": true,
+    "next1200VisibleWithoutPageScroll": true,
+    "preview811Metrics": {
+      "viewport": {
+        "width": 811,
+        "height": 1253
+      },
+      "page": {
+        "scrollY": 0,
+        "scrollHeight": 1253,
+        "clientHeight": 1253
+      },
+      "importPage": {
+        "x": 0,
+        "y": 50,
+        "width": 811,
+        "height": 1203
+      },
+      "importMain": {
+        "x": 16,
+        "y": 172,
+        "width": 779,
+        "height": 1065
+      },
+      "importFooter": {
+        "x": 41,
+        "y": 1168,
+        "width": 729,
+        "height": 48
+      },
+      "preview": {
+        "x": 41,
+        "y": 209,
+        "width": 729,
+        "height": 959
+      },
+      "chunkScroll": {
+        "clientHeight": 903,
+        "scrollHeight": 2530,
+        "clientWidth": 364,
+        "scrollWidth": 364,
+        "overflowY": "auto"
+      },
+      "headings": [
+        {
+          "tag": "h1",
+          "text": "FastGPT 导入验收一级标题",
+          "fontSize": "28px",
+          "fontWeight": "700",
+          "lineHeight": "42px"
+        },
+        {
+          "tag": "h2",
+          "text": "二级标题：预览滚动",
+          "fontSize": "24px",
+          "fontWeight": "700",
+          "lineHeight": "36px"
+        },
+        {
+          "tag": "h1",
+          "text": "FastGPT 导入验收一级标题",
+          "fontSize": "28px",
+          "fontWeight": "700",
+          "lineHeight": "42px"
+        },
+        {
+          "tag": "h2",
+          "text": "二级标题：预览滚动",
+          "fontSize": "24px",
+          "fontWeight": "700",
+          "lineHeight": "36px"
+        },
+        {
+          "tag": "h3",
+          "text": "三级标题：Markdown 层级",
+          "fontSize": "20px",
+          "fontWeight": "700",
+          "lineHeight": "30px"
+        },
+        {
+          "tag": "h1",
+          "text": "FastGPT 导入验收一级标题",
+          "fontSize": "28px",
+          "fontWeight": "700",
+          "lineHeight": "42px"
+        },
+        {
+          "tag": "h2",
+          "text": "二级标题：预览滚动",
+          "fontSize": "24px",
+          "fontWeight": "700",
+          "lineHeight": "36px"
+        },
+        {
+          "tag": "h3",
+          "text": "三级标题：Markdown 层级",
+          "fontSize": "20px",
+          "fontWeight": "700",
+          "lineHeight": "30px"
+        },
+        {
+          "tag": "h1",
+          "text": "FastGPT 导入验收一级标题",
+          "fontSize": "28px",
+          "fontWeight": "700",
+          "lineHeight": "42px"
+        },
+        {
+          "tag": "h2",
+          "text": "二级标题：预览滚动",
+          "fontSize": "24px",
+          "fontWeight": "700",
+          "lineHeight": "36px"
+        },
+        {
+          "tag": "h3",
+          "text": "三级标题：Markdown 层级",
+          "fontSize": "20px",
+          "fontWeight": "700",
+          "lineHeight": "30px"
+        }
+      ]
+    },
+    "next811VisibleWithoutPageScroll": true,
+    "preview811Columns": 2,
+    "confirmUploadLabelCount": 1,
+    "confirmSourceHeaderCount": 1,
+    "confirmStatusHeaderCount": 1,
+    "startUploadButtonCount": 1,
+    "confirmTableCount": 1,
+    "confirmWaitingCount": 1
+  },
+  "network": [
+    {
+      "direction": "request",
+      "method": "GET",
+      "path": "/v1/knowledge/models",
+      "postData": null
+    },
+    {
+      "direction": "request",
+      "method": "GET",
+      "path": "/v1/knowledge/spaces/6b082453b5b57c5a79e31d20/model-bindings",
+      "postData": null
+    },
+    {
+      "direction": "request",
+      "method": "GET",
+      "path": "/v1/knowledge/spaces/6b082453b5b57c5a79e31d20",
+      "postData": null
+    },
+    {
+      "direction": "request",
+      "method": "GET",
+      "path": "/v1/knowledge/spaces/6b082453b5b57c5a79e31d20/directories",
+      "postData": null
+    },
+    {
+      "direction": "request",
+      "method": "GET",
+      "path": "/v1/knowledge/spaces/6b082453b5b57c5a79e31d20/sources",
+      "postData": null
+    },
+    {
+      "direction": "request",
+      "method": "GET",
+      "path": "/v1/knowledge/spaces/6b082453b5b57c5a79e31d20/tags",
+      "postData": null
+    },
+    {
+      "direction": "request",
+      "method": "GET",
+      "path": "/v1/knowledge/jobs",
+      "postData": null
+    },
+    {
+      "direction": "response",
+      "status": 200,
+      "path": "/v1/knowledge/models"
+    },
+    {
+      "direction": "response",
+      "status": 200,
+      "path": "/v1/knowledge/spaces/6b082453b5b57c5a79e31d20/sources"
+    },
+    {
+      "direction": "response",
+      "status": 200,
+      "path": "/v1/knowledge/spaces/6b082453b5b57c5a79e31d20/model-bindings"
+    },
+    {
+      "direction": "response",
+      "status": 200,
+      "path": "/v1/knowledge/spaces/6b082453b5b57c5a79e31d20/directories"
+    },
+    {
+      "direction": "response",
+      "status": 200,
+      "path": "/v1/knowledge/spaces/6b082453b5b57c5a79e31d20/tags"
+    },
+    {
+      "direction": "response",
+      "status": 200,
+      "path": "/v1/knowledge/spaces/6b082453b5b57c5a79e31d20"
+    },
+    {
+      "direction": "response",
+      "status": 200,
+      "path": "/v1/knowledge/jobs"
+    },
+    {
+      "direction": "request",
+      "method": "POST",
+      "path": "/v1/knowledge/uploads",
+      "postData": "{\"knowledgeSpaceId\":\"6b082453b5b57c5a79e31d20\",\"name\":\"heading-scroll-matrix-54944ca17f.md\",\"mimeType\":\"text/markdown\",\"sizeBytes\":2617,\"purpose\":\"source\"}"
+    },
+    {
+      "direction": "response",
+      "status": 201,
+      "path": "/v1/knowledge/uploads"
+    },
+    {
+      "direction": "request",
+      "method": "POST",
+      "path": "/v1/knowledge/uploads/11e095cb71b1187f12160bc7/presign",
+      "postData": "{\"partNumbers\":[1]}"
+    },
+    {
+      "direction": "response",
+      "status": 200,
+      "path": "/v1/knowledge/uploads/11e095cb71b1187f12160bc7/presign"
+    },
+    {
+      "direction": "request",
+      "method": "POST",
+      "path": "/v1/knowledge/uploads/11e095cb71b1187f12160bc7/complete",
+      "postData": "{\"parts\":[{\"partNumber\":1,\"etag\":\"cf0d9e3d5c2500a6d36d9488985f6949\"}]}"
+    },
+    {
+      "direction": "response",
+      "status": 200,
+      "path": "/v1/knowledge/uploads/11e095cb71b1187f12160bc7/complete"
+    },
+    {
+      "direction": "request",
+      "method": "POST",
+      "path": "/v1/knowledge/spaces/6b082453b5b57c5a79e31d20/imports/files",
+      "postData": "{\"uploadIds\":[\"11e095cb71b1187f12160bc7\"],\"directoryId\":\"6b082453b5b57c5a79e31d30\",\"parseProvider\":\"liteparse\",\"parseConfig\":{\"customPdfParse\":true},\"chunking\":{\"trainingType\":\"chunk\",\"chunkSettingMode\":\"auto\",\"chunkSplitMode\":\"paragraph\",\"autoIndexes\":false,\"imageIndex\":false,\"indexPrefixTitle\":true,\"paragraphChunkAIMode\":\"forbid\",\"paragraphChunkDeep\":5,\"paragraphChunkMinSize\":100},\"dryRun\":true}"
+    },
+    {
+      "direction": "response",
+      "status": 200,
+      "path": "/v1/knowledge/spaces/6b082453b5b57c5a79e31d20/imports/files"
+    }
+  ],
+  "consoleErrors": []
+}

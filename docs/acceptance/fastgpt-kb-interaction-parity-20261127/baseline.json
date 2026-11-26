@@ -1,0 +1,15 @@
+{
+  "capturedAt": "2026-11-26T18:38:22.390Z",
+  "branch": "codex/kb-import-parity-audit-20261126",
+  "head": "c1b752032de802e52ef789e994114edf4d4639a6",
+  "workspaceId": "ws_kb_detail_parity_8E56ED16FA",
+  "memberId": "mem_kb_detail_parity_8E56ED16FA",
+  "spaceId": "6b087c9efb01528707502fcb",
+  "fixturePath": "/home/serien/RAG-agent-platform/test/fixtures/kb-import-heading-scroll-matrix.md",
+  "fixtureSha256": "e8aad832c344966a6f8cf2451aa1f5821911066b381fab7c89c45990b75ec803",
+  "fileName": "真实文件名-8E56ED16FA.md",
+  "imageName": "真实图片文件名-8E56ED16FA.png",
+  "failureName": "受控失败文件-8E56ED16FA.md",
+  "appBaseUrl": "http://127.0.0.1:38863",
+  "note": "Isolated audit fixtures are intentionally retained for later verification."
+}

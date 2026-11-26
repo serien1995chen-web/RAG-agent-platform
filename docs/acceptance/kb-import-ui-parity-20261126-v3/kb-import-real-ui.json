@@ -1,0 +1,30 @@
+{
+  "status": "REAL_VERIFIED",
+  "source": {
+    "id": "9082552b9259d40796d4c2dd",
+    "workspaceId": "ws_kb_import_real_1210f6bc26",
+    "knowledgeSpaceId": "6b0842c6a334b0785a2e4206",
+    "directoryId": null,
+    "kind": "file",
+    "name": "kb-import-real-1210f6bc26.md",
+    "externalId": null,
+    "connectorId": null,
+    "blobRefId": "565c724c39e6cdd7c0631a9a",
+    "mimeType": "text/markdown",
+    "sizeBytes": 159,
+    "contentHash": "4e5005e134f460b22f442b1f60aabf7d6d698d14d7d43c4155ff0587d6bd37e3",
+    "processingStatus": "ready",
+    "sourceVersion": 1,
+    "searchEnabled": true,
+    "permissionState": "inherited",
+    "permissionRevision": 0,
+    "aclSnapshotVersion": 1,
+    "ownershipMemberId": "mem_kb_import_real_1210f6bc26",
+    "tagValues": [],
+    "version": 14,
+    "segmentCount": 10,
+    "effectivePermission": "owner"
+  },
+  "segmentCount": 10,
+  "qaSegmentCount": 10
+}

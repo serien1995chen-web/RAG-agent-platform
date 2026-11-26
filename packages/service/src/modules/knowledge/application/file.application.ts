@@ -127,10 +127,16 @@ function normalizeMime(value: string): string {
   return value.split(';')[0]?.trim().toLowerCase() ?? '';
 }
 
-function safeName(value: string): string {
+function displayName(value: string): string {
   const base = value.replaceAll('\\', '/').split('/').pop() ?? '';
   const withoutControls = [...base].filter((character) => character.charCodeAt(0) >= 32).join('');
-  const normalized = withoutControls.replace(/[^A-Za-z0-9._-]/g, '_').replace(/^\.+/, '');
+  return (withoutControls.trim() || 'upload').slice(0, 240);
+}
+
+function safeName(value: string): string {
+  const normalized = displayName(value)
+    .replace(/[^A-Za-z0-9._-]/g, '_')
+    .replace(/^\.+/, '');
   return (normalized || 'upload').slice(0, 180);
 }
 
@@ -343,10 +349,11 @@ export class FileApplication {
   }
 
   async init(input: UploadInitInput, context: TenantContext): Promise<UploadSessionView> {
-    const name = safeName(input.name);
+    const originalName = displayName(input.name);
+    const storageName = safeName(originalName);
     const mimeType = normalizeMime(input.mimeType);
     const purpose = input.purpose ?? 'source';
-    validateNameAndMime(name, mimeType, context);
+    validateNameAndMime(originalName, mimeType, context);
     if (purpose !== 'source' && purpose !== 'image') {
       throw validationError(context, 'purpose', 'must_be_source_or_image');
     }
@@ -366,7 +373,7 @@ export class FileApplication {
       context,
       input.knowledgeSpaceId,
       uploadId,
-      name,
+      storageName,
     );
     const storage = storageContext(context, input.knowledgeSpaceId);
     await this.objectStore.ensureBucket(this.objectStore.bucket, storage);
@@ -385,7 +392,7 @@ export class FileApplication {
         finalObjectKey: finalKey,
         mimeType,
         sizeBytes: input.sizeBytes,
-        originalName: name,
+        originalName,
         purpose,
         mode,
         partSizeBytes: UPLOAD_PART_SIZE_BYTES,

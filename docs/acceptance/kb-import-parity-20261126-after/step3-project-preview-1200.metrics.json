@@ -1,0 +1,121 @@
+{
+  "viewport": {
+    "width": 1200,
+    "height": 900
+  },
+  "page": {
+    "scrollY": 0,
+    "scrollHeight": 900,
+    "clientHeight": 900
+  },
+  "importPage": {
+    "x": 76,
+    "y": 16,
+    "width": 1108,
+    "height": 868
+  },
+  "importMain": {
+    "x": 101,
+    "y": 147,
+    "width": 1058,
+    "height": 716
+  },
+  "importFooter": {
+    "x": 126,
+    "y": 794,
+    "width": 1008,
+    "height": 48
+  },
+  "preview": {
+    "x": 126,
+    "y": 184,
+    "width": 1008,
+    "height": 610
+  },
+  "chunkScroll": {
+    "clientHeight": 554,
+    "scrollHeight": 1969,
+    "clientWidth": 503,
+    "scrollWidth": 503,
+    "overflowY": "auto"
+  },
+  "headings": [
+    {
+      "tag": "h1",
+      "text": "FastGPT 导入验收一级标题",
+      "fontSize": "28px",
+      "fontWeight": "700",
+      "lineHeight": "42px"
+    },
+    {
+      "tag": "h2",
+      "text": "二级标题：预览滚动",
+      "fontSize": "24px",
+      "fontWeight": "700",
+      "lineHeight": "36px"
+    },
+    {
+      "tag": "h1",
+      "text": "FastGPT 导入验收一级标题",
+      "fontSize": "28px",
+      "fontWeight": "700",
+      "lineHeight": "42px"
+    },
+    {
+      "tag": "h2",
+      "text": "二级标题：预览滚动",
+      "fontSize": "24px",
+      "fontWeight": "700",
+      "lineHeight": "36px"
+    },
+    {
+      "tag": "h3",
+      "text": "三级标题：Markdown 层级",
+      "fontSize": "20px",
+      "fontWeight": "700",
+      "lineHeight": "30px"
+    },
+    {
+      "tag": "h1",
+      "text": "FastGPT 导入验收一级标题",
+      "fontSize": "28px",
+      "fontWeight": "700",
+      "lineHeight": "42px"
+    },
+    {
+      "tag": "h2",
+      "text": "二级标题：预览滚动",
+      "fontSize": "24px",
+      "fontWeight": "700",
+      "lineHeight": "36px"
+    },
+    {
+      "tag": "h3",
+      "text": "三级标题：Markdown 层级",
+      "fontSize": "20px",
+      "fontWeight": "700",
+      "lineHeight": "30px"
+    },
+    {
+      "tag": "h1",
+      "text": "FastGPT 导入验收一级标题",
+      "fontSize": "28px",
+      "fontWeight": "700",
+      "lineHeight": "42px"
+    },
+    {
+      "tag": "h2",
+      "text": "二级标题：预览滚动",
+      "fontSize": "24px",
+      "fontWeight": "700",
+      "lineHeight": "36px"
+    },
+    {
+      "tag": "h3",
+      "text": "三级标题：Markdown 层级",
+      "fontSize": "20px",
+      "fontWeight": "700",
+      "lineHeight": "30px"
+    }
+  ]
+}

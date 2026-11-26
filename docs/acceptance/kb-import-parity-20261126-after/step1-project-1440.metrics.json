@@ -1,0 +1,32 @@
+{
+  "viewport": {
+    "width": 1440,
+    "height": 900
+  },
+  "page": {
+    "scrollY": 0,
+    "scrollHeight": 900,
+    "clientHeight": 900
+  },
+  "importPage": {
+    "x": 76,
+    "y": 16,
+    "width": 1348,
+    "height": 868
+  },
+  "importMain": {
+    "x": 190,
+    "y": 147,
+    "width": 1120,
+    "height": 716
+  },
+  "importFooter": {
+    "x": 215,
+    "y": 794,
+    "width": 1070,
+    "height": 48
+  },
+  "preview": null,
+  "chunkScroll": null,
+  "headings": []
+}

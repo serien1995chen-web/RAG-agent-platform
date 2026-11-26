@@ -23,13 +23,13 @@ describe('TEST-PARSE-003-BLOCK deterministic chunk settings', () => {
       trainingType: 'qa',
       chunkSettingMode: 'custom',
       chunkSplitMode: 'char',
-      chunkSize: 512,
+      chunkSize: 1024,
       chunkSplitter: '\\n---\\n\n\\nSECTION\\n',
     });
     expect(custom).toMatchObject({
       mode: 'custom',
       lengthUnit: 'char',
-      chunkSize: 512,
+      chunkSize: 1024,
       overlapRatio: 0,
       forceSplit: true,
       maxChunks: 50_000,
@@ -40,7 +40,7 @@ describe('TEST-PARSE-003-BLOCK deterministic chunk settings', () => {
       chunkSettingMode: 'custom',
       chunkSplitMode: 'paragraph',
       chunkSize: 300,
-      paragraphChunkDeep: 0,
+      paragraphChunkDeep: 1,
     });
     expect(paragraph.mode).toBe('paragraph');
     expect(paragraph.paragraphDeep).toBe(1);
@@ -98,8 +98,8 @@ describe('TEST-PARSE-003-BLOCK deterministic chunk settings', () => {
       trainingType: 'chunk' as const,
       chunkSettingMode: 'custom' as const,
       chunkSplitMode: 'size' as const,
-      chunkSize: 80,
-      chunkTriggerMinSize: 10,
+      chunkSize: 100,
+      chunkTriggerMinSize: 100,
     };
     const policy = toChunkPolicy(settings);
     const text = 'S5 deterministic text. '.repeat(30);

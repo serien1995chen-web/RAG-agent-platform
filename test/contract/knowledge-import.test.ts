@@ -34,8 +34,17 @@ const IMPORT_OPERATIONS = [
 ];
 
 describe('S4 import contract', () => {
+  it('exposes real source retraining preview and submit contracts', () => {
+    const operation = openapi.paths['/v1/knowledge/sources/{sourceId}/retrain']?.post;
+    expect(operation?.operationId).toBe('API-SOURCE-RETRAIN');
+    expect(openapi.components.schemas.RetrainSource).toBeDefined();
+    expect(openapi.components.schemas.RetrainPreview).toBeDefined();
+    expect(openapi.components.schemas.RetrainResult).toBeDefined();
+    expect(runtime.operations.map((entry) => entry.operationId)).toContain('API-SOURCE-RETRAIN');
+  });
+
   it('keeps exactly the eleven import operations in the W2 runtime', () => {
-    expect(runtime.count).toBe(126);
+    expect(runtime.count).toBe(127);
     expect(deferred.count).toBe(0);
     const runtimeIds = new Set(runtime.operations.map((entry) => entry.operationId));
     const deferredIds = new Set(deferred.operations.map((entry) => entry.operationId));
@@ -149,7 +158,7 @@ describe('S4 import contract', () => {
       };
       responses: Record<string, unknown>;
     };
-    expect(Object.keys(openapi.paths)).toHaveLength(97);
+    expect(Object.keys(openapi.paths)).toHaveLength(98);
     expect(urlPath.responses).toHaveProperty('200');
     expect(urlPath.responses).toHaveProperty('202');
     expect(urlPath.requestBody.content['application/json'].schema.$ref).toBe(

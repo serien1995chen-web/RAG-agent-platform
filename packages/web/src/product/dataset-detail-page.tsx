@@ -52,14 +52,17 @@ import {
   updateTag,
 } from './api';
 import {
+  canOpenTrainingState,
   directoryPath,
   descendantDirectoryIds,
   filterSourceRows,
   formatTagValueKey,
+  formatSourceTime,
   hasActiveSourceStatus,
+  jobStageLabel,
   latestJobsByResource,
   normalizeDetailTab,
-  sourceKindLabel,
+  processingModelLabel,
   sourceStatusView,
   tagValuesForSource,
   type DetailTab,
@@ -225,6 +228,7 @@ export function DatasetDetailPage(props: {
   const [editDatasetBusy, setEditDatasetBusy] = useState(false);
   const [editDatasetError, setEditDatasetError] = useState<unknown>(null);
   const [trainingSource, setTrainingSource] = useState<Source | null>(null);
+  const [trainingErrorOpen, setTrainingErrorOpen] = useState(false);
 
   const spaceQuery = useQuery({
     queryKey: ['kb-product', 'space', datasetId],
@@ -1002,23 +1006,14 @@ export function DatasetDetailPage(props: {
                     <ProductButton
                       size="sm"
                       tone="danger"
-                      onClick={() => {
-                        const first = sources.find(
-                          (source) => latestJobs.get(source.id)?.status === 'failed',
-                        );
-                        if (first) setTrainingSource(first);
-                      }}
+                      onClick={() => setTrainingErrorOpen(true)}
                     >
                       <WarningIcon boxSize={3.5} />
-                      异常列表 {failedJobs.length}
+                      训练异常列表
                     </ProductButton>
                   ) : null}
                   <ProductButton size="sm" onClick={() => setTagManagerOpen(true)}>
                     标签管理
-                  </ProductButton>
-                  <ProductButton size="sm" onClick={() => openDirectory()}>
-                    <AddIcon boxSize={3.5} />
-                    新建目录
                   </ProductButton>
                   <div className="kb2-new-wrap">
                     <ProductButton
@@ -1201,12 +1196,14 @@ export function DatasetDetailPage(props: {
                           />
                         </th>
                         <th>名称</th>
-                        <th>标签</th>
-                        <th>类型</th>
+                        <th>处理模式</th>
                         <th>数据量</th>
+                        <th>创建/更新时间</th>
                         <th>状态</th>
                         <th>启用</th>
-                        <th aria-label="操作" />
+                        <th aria-label="操作">
+                          <span className="kb2-sr-only">操作</span>
+                        </th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1237,11 +1234,9 @@ export function DatasetDetailPage(props: {
                               </button>
                             </td>
                             <td>—</td>
-                            <td>文件夹</td>
                             <td>—</td>
-                            <td>
-                              <StatusTag value="目录" tone="neutral" />
-                            </td>
+                            <td>—</td>
+                            <td>—</td>
                             <td>—</td>
                             <td>
                               {canWrite ? (
@@ -1318,7 +1313,6 @@ export function DatasetDetailPage(props: {
                       })}
                       {currentSources.map((source) => {
                         const status = sourceStatusView(source.processingStatus);
-                        const sourceTags = tagValuesForSource(source, tags);
                         const canRead = permissionRank(source.effectivePermission) >= 10;
                         const canWrite = permissionRank(source.effectivePermission) >= 20;
                         const canManage = permissionRank(source.effectivePermission) >= 30;
@@ -1356,37 +1350,28 @@ export function DatasetDetailPage(props: {
                                 <ProductTypeIcon kind={productTypeOf(source.kind).kind} />
                                 <span>
                                   <strong title={source.name}>{source.name}</strong>
-                                  <small className="kb2-inline-code">{source.id}</small>
                                 </span>
                               </button>
                             </td>
-                            <td>
-                              <div className="kb2-tag-list">
-                                {sourceTags.length > 0 ? (
-                                  sourceTags.slice(0, 2).map((tag) => (
-                                    <span key={`${tag.id}-${tag.value}`} className="kb2-mini-tag">
-                                      {tag.label}:{tag.value}
-                                    </span>
-                                  ))
-                                ) : (
-                                  <span className="kb2-table-muted">未设置</span>
-                                )}
-                                {sourceTags.length > 2 ? (
-                                  <span className="kb2-mini-tag">+{sourceTags.length - 2}</span>
-                                ) : null}
-                              </div>
-                            </td>
-                            <td>{sourceKindLabel(source.kind)}</td>
+                            <td>{processingModelLabel(source.processingModel)}</td>
                             <td>{source.segmentCount ?? 0}</td>
+                            <td className="kb2-collection-time">
+                              <span>{formatSourceTime(source.createdAt)}</span>
+                              <small>{formatSourceTime(source.updatedAt)}</small>
+                            </td>
                             <td>
-                              <button
-                                type="button"
-                                className="kb2-status-button"
-                                onClick={() => setTrainingSource(source)}
-                                aria-label={`${source.name} 的训练状态：${status.label}`}
-                              >
+                              {canOpenTrainingState(source) ? (
+                                <button
+                                  type="button"
+                                  className="kb2-status-button"
+                                  onClick={() => setTrainingSource(source)}
+                                  aria-label={`查看 ${source.name} 的训练状态：${status.label}`}
+                                >
+                                  <StatusTag value={status.label} tone={status.tone} dot />
+                                </button>
+                              ) : (
                                 <StatusTag value={status.label} tone={status.tone} dot />
-                              </button>
+                              )}
                             </td>
                             <td>
                               <label className="kb2-switch">
@@ -2180,6 +2165,17 @@ export function DatasetDetailPage(props: {
         isAdmin={space?.effectivePermission === 'owner' || space?.effectivePermission === 'manage'}
         onClose={() => setTrainingSource(null)}
         onRetried={() => void invalidateCollection()}
+      />
+      <TrainingErrorDialog
+        open={trainingErrorOpen}
+        sources={sources}
+        jobs={failedJobs}
+        onClose={() => setTrainingErrorOpen(false)}
+        onRefresh={() => void invalidateCollection()}
+        onOpenSource={(source) => {
+          setTrainingErrorOpen(false);
+          setTrainingSource(source);
+        }}
       />
     </ProductAppShell>
   );
@@ -3707,6 +3703,183 @@ function ResourcePermissionDialog(props: {
   );
 }
 
+function TrainingErrorDialog(props: {
+  open: boolean;
+  sources: Source[];
+  jobs: Job[];
+  onClose: () => void;
+  onRefresh: () => void;
+  onOpenSource: (source: Source) => void;
+}) {
+  const toast = useProductToast();
+  const [busyJobId, setBusyJobId] = useState<string | null>(null);
+  const [error, setError] = useState<unknown>(null);
+  const sourceById = new Map(props.sources.map((source) => [source.id, source]));
+  const groups = Array.from(
+    props.jobs.reduce((result, job) => {
+      const current = result.get(job.resourceId) ?? [];
+      current.push(job);
+      result.set(job.resourceId, current);
+      return result;
+    }, new Map<string, Job[]>()),
+  );
+  const retry = async (job: Job) => {
+    setBusyJobId(job.jobId);
+    setError(null);
+    try {
+      await controlJob('retry', job);
+      props.onRefresh();
+      toast.success('已提交重试');
+    } catch (caught) {
+      setError(caught);
+    } finally {
+      setBusyJobId(null);
+    }
+  };
+  const retryAll = async () => {
+    setBusyJobId('all');
+    setError(null);
+    try {
+      for (const job of props.jobs) {
+        await controlJob('retry', job);
+      }
+      props.onRefresh();
+      toast.success('已提交全部重试');
+    } catch (caught) {
+      setError(caught);
+    } finally {
+      setBusyJobId(null);
+    }
+  };
+  const removeSource = async (source: Source) => {
+    setError(null);
+    try {
+      await deleteSource(source);
+      props.onRefresh();
+      toast.success('文件已删除');
+    } catch (caught) {
+      setError(caught);
+    }
+  };
+  return (
+    <ProductModal
+      open={props.open}
+      title="训练异常列表"
+      description="按来源查看失败任务和可执行操作"
+      width="800px"
+      onClose={props.onClose}
+      footer={
+        <>
+          <ProductButton onClick={props.onClose}>关闭</ProductButton>
+          {props.jobs.length > 0 ? (
+            <ProductButton
+              tone="primary"
+              busy={busyJobId === 'all'}
+              onClick={() => void retryAll()}
+            >
+              重试全部
+            </ProductButton>
+          ) : null}
+        </>
+      }
+    >
+      <ProductError error={error} />
+      {groups.length === 0 ? (
+        <ProductEmpty title="暂无训练异常" description="当前知识库中的训练任务均未报告异常。" />
+      ) : (
+        <div className="kb2-training-error-groups">
+          {groups.map(([sourceId, jobs], groupIndex) => {
+            const source = sourceById.get(sourceId);
+            const sourceWritable = source && permissionRank(source.effectivePermission) >= 20;
+            return (
+              <section key={sourceId} className="kb2-training-error-group">
+                <header>
+                  <strong>
+                    {groupIndex + 1}. {source?.name ?? '已删除来源'}
+                  </strong>
+                  {source && sourceWritable ? (
+                    <ProductButton size="sm" onClick={() => props.onOpenSource(source)}>
+                      编辑
+                    </ProductButton>
+                  ) : null}
+                  {source && permissionRank(source.effectivePermission) >= 40 ? (
+                    <ProductButton
+                      size="sm"
+                      tone="danger"
+                      onClick={() => void removeSource(source)}
+                    >
+                      删除
+                    </ProductButton>
+                  ) : null}
+                </header>
+                <div className="kb2-training-error-table" role="table">
+                  {jobs.map((job) => (
+                    <div key={job.jobId} className="kb2-training-error-table__row" role="row">
+                      <span role="cell">{jobStageLabel(String(job.progress.stage))}</span>
+                      <strong role="cell">{job.error?.code ?? '训练任务失败'}</strong>
+                      <span role="cell">
+                        <ProductButton
+                          size="sm"
+                          busy={busyJobId === job.jobId}
+                          disabled={!sourceWritable}
+                          onClick={() => void retry(job)}
+                        >
+                          重试
+                        </ProductButton>
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            );
+          })}
+        </div>
+      )}
+    </ProductModal>
+  );
+}
+
+function trainingStageItems(source: Source, job?: Job) {
+  const settings = source.chunkSettings ?? {};
+  const labels = [
+    source.kind === 'image' ? '图片解析' : '内容解析',
+    ...(settings.trainingType === 'qa' ? ['问答生成'] : []),
+    ...(settings.imageIndex === true ? ['图片索引'] : []),
+    ...(settings.autoIndexes === true ? ['补充索引'] : []),
+    '向量化',
+    '已就绪',
+  ];
+  const failedStage = job?.error
+    ? job.kind === 'parse'
+      ? labels[0]
+      : job.kind === 'qa'
+        ? '问答生成'
+        : job.kind === 'caption'
+          ? '图片解析'
+          : job.kind === 'index'
+            ? '向量化'
+            : null
+    : null;
+  const activeLabel =
+    source.processingStatus === 'parsing'
+      ? labels[0]
+      : source.processingStatus === 'indexing'
+        ? '向量化'
+        : source.processingStatus === 'rebuilding'
+          ? '向量化'
+          : source.processingStatus === 'queued'
+            ? labels[0]
+            : source.processingStatus === 'failed'
+              ? failedStage
+              : null;
+  const activeIndex = activeLabel ? Math.max(0, labels.indexOf(activeLabel)) : -1;
+  return labels.map((label, index) => ({
+    label,
+    active: label === activeLabel,
+    done: activeIndex >= 0 && index < activeIndex,
+  }));
+}
+
 function TrainingDialog(props: {
   source: Source | null;
   job?: Job;
@@ -3722,6 +3895,7 @@ function TrainingDialog(props: {
   const [editing, setEditing] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [sourceName, setSourceName] = useState('');
+  const [tab, setTab] = useState<'states' | 'errors'>('states');
   const sourceJobs = props.source
     ? props.jobs.filter(
         (job) =>
@@ -3813,8 +3987,10 @@ function TrainingDialog(props: {
     <>
       <ProductModal
         open={Boolean(props.source)}
-        title="训练与索引状态"
+        title="训练状态"
         description={props.source?.name}
+        width="712px"
+        height="620px"
         onClose={() => !busy && props.onClose()}
         footer={
           props.job ? (
@@ -3836,88 +4012,98 @@ function TrainingDialog(props: {
         <ProductError error={error} />
         {props.source ? (
           <div className="kb2-training-view">
-            <div className="kb2-training-summary">
-              <StatusTag
-                value={sourceStatusView(props.source.processingStatus).label}
-                tone={sourceStatusView(props.source.processingStatus).tone}
-                dot
-              />
-              <span>Source 版本 {props.source.sourceVersion}</span>
+            <div className="kb2-segment-tabs" role="tablist" aria-label="训练状态视图">
+              <button
+                type="button"
+                role="tab"
+                aria-selected={tab === 'states'}
+                onClick={() => setTab('states')}
+              >
+                训练状态
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={tab === 'errors'}
+                onClick={() => setTab('errors')}
+              >
+                异常({failedJobs.length})
+              </button>
             </div>
-            {props.job ? (
-              <>
-                <InfoLine label="任务类型" value={props.job.kind} />
-                <InfoLine label="任务状态" value={props.job.status} />
-                <InfoLine label="当前阶段" value={props.job.progress.stage} />
-                <InfoLine
-                  label="进度"
-                  value={`${props.job.progress.completed}/${props.job.progress.total} · ${props.job.progress.percent}%`}
-                />
-                <div className="kb2-progress-track">
-                  <span
-                    style={{ width: `${Math.max(0, Math.min(100, props.job.progress.percent))}%` }}
-                  />
+            {tab === 'states' ? (
+              <div className="kb2-training-steps">
+                {trainingStageItems(props.source, props.job).map((item) => {
+                  const current = props.source?.processingStatus;
+                  const ready = current === 'ready';
+                  const failed = current === 'failed' && item.active;
+                  return (
+                    <div
+                      key={item.label}
+                      className={`kb2-training-step${item.active ? ' is-active' : ''}${ready || item.done ? ' is-done' : ''}${failed ? ' is-failed' : ''}`}
+                    >
+                      <span className="kb2-training-step__dot" aria-hidden="true">
+                        {ready || item.done ? <CheckIcon boxSize={3} /> : null}
+                      </span>
+                      <div>
+                        <strong>{item.label}</strong>
+                        <span>
+                          {failed
+                            ? (props.job?.error?.code ?? '训练异常')
+                            : item.active
+                              ? jobStageLabel(String(props.job?.progress.stage ?? current ?? ''))
+                              : ready || item.done
+                                ? '已完成'
+                                : '等待处理'}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <section className="kb2-training-errors" aria-label="分组训练异常">
+                <div className="kb2-training-errors__header">
+                  <div>
+                    <h3>{props.source.name}</h3>
+                    <p>
+                      {failedJobs.length > 0 ? `${failedJobs.length} 条待处理异常` : '暂无任务异常'}
+                    </p>
+                  </div>
+                  {failedJobs.length > 0 ? (
+                    <ProductButton busy={busy} onClick={() => void retryAll()}>
+                      重试全部
+                    </ProductButton>
+                  ) : null}
                 </div>
-                {props.job.error ? (
-                  <div className="kb2-error-panel">
-                    <WarningIcon boxSize={4} />
+                {failedJobs.map((job) => (
+                  <div className="kb2-training-error-row" key={job.jobId}>
                     <div>
-                      <strong>{props.job.error.code ?? '任务失败'}</strong>
-                      <span>错误详情由后端任务记录提供，请根据任务 ID 排查。</span>
+                      <strong>{job.error?.code ?? '任务失败'}</strong>
+                      <span>{jobStageLabel(String(job.progress.stage))}</span>
+                    </div>
+                    <div className="kb2-training-error-row__actions">
+                      <ProductButton
+                        busy={busyAction === `retry:${job.jobId}`}
+                        onClick={() => void runControl('retry', job)}
+                      >
+                        重试
+                      </ProductButton>
+                      <ProductButton
+                        onClick={() => {
+                          setSourceName(props.source?.name ?? '');
+                          setEditing(true);
+                        }}
+                      >
+                        编辑
+                      </ProductButton>
+                      <ProductButton tone="danger" onClick={() => setDeleting(true)}>
+                        删除
+                      </ProductButton>
                     </div>
                   </div>
-                ) : null}
-                <div className="kb2-note">任务 ID：{props.job.jobId}</div>
-              </>
-            ) : (
-              <div className="kb2-note">
-                后端没有返回该 Source 的任务记录，当前只展示 Source 状态。
-              </div>
+                ))}
+              </section>
             )}
-            <section className="kb2-training-errors" aria-label="分组训练异常">
-              <div className="kb2-training-errors__header">
-                <div>
-                  <h3>{props.source.name}</h3>
-                  <p>
-                    {failedJobs.length > 0 ? `${failedJobs.length} 条待处理异常` : '暂无任务异常'}
-                  </p>
-                </div>
-                {failedJobs.length > 0 ? (
-                  <ProductButton busy={busy} onClick={() => void retryAll()}>
-                    重试全部
-                  </ProductButton>
-                ) : null}
-              </div>
-              {failedJobs.map((job) => (
-                <div className="kb2-training-error-row" key={job.jobId}>
-                  <div>
-                    <strong>{job.error?.code ?? '任务失败'}</strong>
-                    <span>
-                      {job.kind} · {job.jobId}
-                    </span>
-                  </div>
-                  <div className="kb2-training-error-row__actions">
-                    <ProductButton
-                      busy={busyAction === `retry:${job.jobId}`}
-                      onClick={() => void runControl('retry', job)}
-                    >
-                      重试 {job.kind}
-                    </ProductButton>
-                    <ProductButton
-                      onClick={() => {
-                        setSourceName(props.source?.name ?? '');
-                        setEditing(true);
-                      }}
-                    >
-                      编辑 {props.source?.name ?? ''}
-                    </ProductButton>
-                    <ProductButton tone="danger" onClick={() => setDeleting(true)}>
-                      删除 {props.source?.name ?? ''}
-                    </ProductButton>
-                  </div>
-                </div>
-              ))}
-            </section>
           </div>
         ) : null}
       </ProductModal>

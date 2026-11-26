@@ -347,9 +347,10 @@ describe('FastGPT product module 2 detail and collection', () => {
     await page.getByLabel('确认文本').fill(`销售手册 ${suffix}`);
     await page.getByRole('button', { name: '确认删除' }).click();
     await playwrightExpect(page.getByText(`销售手册 ${suffix}`, { exact: true })).toHaveCount(0);
-    await playwrightExpect(page.locator('.kb2-status-button').first()).toHaveAccessibleName(
-      /训练状态：/,
-    );
+    const statusButtons = page.locator('.kb2-status-button');
+    for (let index = 0; index < (await statusButtons.count()); index += 1) {
+      await playwrightExpect(statusButtons.nth(index)).toHaveAccessibleName(/训练状态：/);
+    }
 
     for (const width of [1200, 768, 360]) {
       await page.setViewportSize({ width, height: 900 });

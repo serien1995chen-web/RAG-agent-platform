@@ -1,0 +1,37 @@
+{
+  "headers": [
+    "名称",
+    "处理模式",
+    "数据量",
+    "创建/更新时间",
+    "状态",
+    "启用",
+    "",
+    "名称",
+    "处理模式",
+    "数据量",
+    "创建/更新时间",
+    "状态",
+    "启用",
+    ""
+  ],
+  "main": null,
+  "pageText": "门户 工作台 知识库 账号 根目录 FastGPT导入验收-20261126-1930 数据集 搜索测试 文件(1) 标签 全部 标签管理 新建/导入 名称 处理模式 数据量 创建/更新时间 状态 启用 目标目录继承验收-20261126 - - 2026-11-26 19:30 2026-11-26 19:30 已就绪 FastGPT导入验收-20261126-1930 通用知识库 这个知识库还没有介绍~ 知识库 ID 6b0818470512508fd1f988d0 索引模型 阿里-emb4 文本理解模型 deepseek-v4.1-flash 图片理解模型 deepseek-v4.1-flash 定时同步 协作者 wechat-o5Ljw6tYHTDsfyHLRzUwHtDdtG5g /dataset/detail?datasetId=6b0818470512508fd1f988d0",
+  "table": {
+    "borderRadius": "0px",
+    "fontSize": "14px",
+    "gap": "normal",
+    "height": 48,
+    "maxWidth": "none",
+    "overflowY": "visible",
+    "padding": "0px",
+    "width": 1074,
+    "x": 92,
+    "y": 137
+  },
+  "url": "https://cloud.fastgpt.cn/dataset/detail?datasetId=6b0818470512508fd1f988d0",
+  "viewport": {
+    "height": 1253,
+    "width": 1482
+  }
+}

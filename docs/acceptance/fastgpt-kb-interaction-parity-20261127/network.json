@@ -1,0 +1,332 @@
+[
+  {
+    "method": "GET",
+    "path": "/v1/knowledge/models",
+    "status": 200,
+    "requestBody": null
+  },
+  {
+    "method": "GET",
+    "path": "/v1/knowledge/spaces/6b087c9efb01528707502fcb/directories",
+    "status": 200,
+    "requestBody": null
+  },
+  {
+    "method": "GET",
+    "path": "/v1/knowledge/spaces/6b087c9efb01528707502fcb",
+    "status": 200,
+    "requestBody": null
+  },
+  {
+    "method": "GET",
+    "path": "/v1/knowledge/spaces/6b087c9efb01528707502fcb/tags",
+    "status": 200,
+    "requestBody": null
+  },
+  {
+    "method": "GET",
+    "path": "/v1/knowledge/spaces/6b087c9efb01528707502fcb/model-bindings",
+    "status": 200,
+    "requestBody": null
+  },
+  {
+    "method": "GET",
+    "path": "/v1/knowledge/spaces/6b087c9efb01528707502fcb/sources",
+    "status": 200,
+    "requestBody": null
+  },
+  {
+    "method": "GET",
+    "path": "/v1/knowledge/jobs",
+    "status": 200,
+    "requestBody": null
+  },
+  {
+    "method": "POST",
+    "path": "/v1/knowledge/uploads",
+    "status": 201,
+    "requestBody": "{\"knowledgeSpaceId\":\"6b087c9efb01528707502fcb\",\"name\":\"真实文件名-8E56ED16FA.md\",\"mimeType\":\"text/markdown\",\"sizeBytes\":2617,\"purpose\":\"source\"}"
+  },
+  {
+    "method": "POST",
+    "path": "/v1/knowledge/uploads/b29a1d19773fdc505f177f70/presign",
+    "status": 200,
+    "requestBody": "{\"partNumbers\":[1]}"
+  },
+  {
+    "method": "POST",
+    "path": "/v1/knowledge/uploads/b29a1d19773fdc505f177f70/complete",
+    "status": 200,
+    "requestBody": "{\"parts\":[{\"partNumber\":1,\"etag\":\"cf0d9e3d5c2500a6d36d9488985f6949\"}]}"
+  },
+  {
+    "method": "POST",
+    "path": "/v1/knowledge/spaces/6b087c9efb01528707502fcb/imports/files",
+    "status": 200,
+    "requestBody": "{\"uploadIds\":[\"b29a1d19773fdc505f177f70\"],\"directoryId\":null,\"parseProvider\":\"liteparse\",\"parseConfig\":{\"customPdfParse\":true},\"chunking\":{\"trainingType\":\"chunk\",\"chunkSettingMode\":\"auto\",\"chunkSplitMode\":\"paragraph\",\"autoIndexes\":false,\"imageIndex\":false,\"indexPrefixTitle\":false,\"paragraphChunkAIMode\":\"forbid\",\"paragraphChunkDeep\":5,\"paragraphChunkMinSize\":100},\"dryRun\":true}"
+  },
+  {
+    "method": "POST",
+    "path": "/v1/knowledge/spaces/6b087c9efb01528707502fcb/imports/files",
+    "status": 202,
+    "requestBody": "{\"uploadIds\":[\"b29a1d19773fdc505f177f70\"],\"directoryId\":null,\"parseProvider\":\"liteparse\",\"parseConfig\":{\"customPdfParse\":true},\"chunking\":{\"trainingType\":\"chunk\",\"chunkSettingMode\":\"auto\",\"chunkSplitMode\":\"paragraph\",\"autoIndexes\":false,\"imageIndex\":false,\"indexPrefixTitle\":false,\"paragraphChunkAIMode\":\"forbid\",\"paragraphChunkDeep\":5,\"paragraphChunkMinSize\":100}}"
+  },
+  {
+    "method": "GET",
+    "path": "/v1/knowledge/jobs",
+    "status": 200,
+    "requestBody": null
+  },
+  {
+    "method": "GET",
+    "path": "/v1/knowledge/spaces/6b087c9efb01528707502fcb/sources",
+    "status": 200,
+    "requestBody": null
+  },
+  {
+    "method": "GET",
+    "path": "/v1/knowledge/spaces/6b087c9efb01528707502fcb",
+    "status": 200,
+    "requestBody": null
+  },
+  {
+    "method": "GET",
+    "path": "/v1/knowledge/spaces/6b087c9efb01528707502fcb/directories",
+    "status": 200,
+    "requestBody": null
+  },
+  {
+    "method": "GET",
+    "path": "/v1/knowledge/spaces/6b087c9efb01528707502fcb/tags",
+    "status": 200,
+    "requestBody": null
+  },
+  {
+    "method": "GET",
+    "path": "/v1/knowledge/jobs",
+    "status": 200,
+    "requestBody": null
+  },
+  {
+    "method": "GET",
+    "path": "/v1/knowledge/spaces/6b087c9efb01528707502fcb/sources",
+    "status": 200,
+    "requestBody": null
+  },
+  {
+    "method": "GET",
+    "path": "/v1/knowledge/models",
+    "status": 200,
+    "requestBody": null
+  },
+  {
+    "method": "GET",
+    "path": "/v1/knowledge/spaces/6b087c9efb01528707502fcb/tags",
+    "status": 200,
+    "requestBody": null
+  },
+  {
+    "method": "GET",
+    "path": "/v1/knowledge/spaces/6b087c9efb01528707502fcb",
+    "status": 200,
+    "requestBody": null
+  },
+  {
+    "method": "GET",
+    "path": "/v1/knowledge/spaces/6b087c9efb01528707502fcb/directories",
+    "status": 200,
+    "requestBody": null
+  },
+  {
+    "method": "GET",
+    "path": "/v1/knowledge/spaces/6b087c9efb01528707502fcb/model-bindings",
+    "status": 200,
+    "requestBody": null
+  },
+  {
+    "method": "GET",
+    "path": "/v1/knowledge/jobs",
+    "status": 200,
+    "requestBody": null
+  },
+  {
+    "method": "GET",
+    "path": "/v1/knowledge/spaces/6b087c9efb01528707502fcb/sources",
+    "status": 200,
+    "requestBody": null
+  },
+  {
+    "method": "GET",
+    "path": "/v1/knowledge/spaces/6b087c9efb01528707502fcb",
+    "status": 200,
+    "requestBody": null
+  },
+  {
+    "method": "GET",
+    "path": "/v1/knowledge/spaces/6b087c9efb01528707502fcb/directories",
+    "status": 200,
+    "requestBody": null
+  },
+  {
+    "method": "GET",
+    "path": "/v1/knowledge/spaces/6b087c9efb01528707502fcb/tags",
+    "status": 200,
+    "requestBody": null
+  },
+  {
+    "method": "GET",
+    "path": "/v1/knowledge/sources/bad5a1d9f5d4a968e2af8f96",
+    "status": 200,
+    "requestBody": null
+  },
+  {
+    "method": "GET",
+    "path": "/v1/knowledge/sources/bad5a1d9f5d4a968e2af8f96/segments",
+    "status": 200,
+    "requestBody": null
+  },
+  {
+    "method": "GET",
+    "path": "/v1/knowledge/models",
+    "status": 200,
+    "requestBody": null
+  },
+  {
+    "method": "GET",
+    "path": "/v1/knowledge/spaces/6b087c9efb01528707502fcb/sources",
+    "status": 200,
+    "requestBody": null
+  },
+  {
+    "method": "GET",
+    "path": "/v1/knowledge/jobs",
+    "status": 200,
+    "requestBody": null
+  },
+  {
+    "method": "GET",
+    "path": "/v1/knowledge/spaces/6b087c9efb01528707502fcb/model-bindings",
+    "status": 200,
+    "requestBody": null
+  },
+  {
+    "method": "GET",
+    "path": "/v1/knowledge/segments/6b087ca154dfe9bbe71d155d/history",
+    "status": 200,
+    "requestBody": null
+  },
+  {
+    "method": "POST",
+    "path": "/v1/knowledge/sources/bad5a1d9f5d4a968e2af8f96/retrain",
+    "status": 200,
+    "requestBody": "{\"version\":9,\"dryRun\":true,\"parseProvider\":\"liteparse\",\"parseConfig\":{\"customPdfParse\":true},\"chunking\":{\"trainingType\":\"chunk\",\"chunkSettingMode\":\"auto\",\"chunkSplitMode\":\"paragraph\",\"autoIndexes\":false,\"imageIndex\":false,\"indexPrefixTitle\":false,\"paragraphChunkAIMode\":\"forbid\",\"paragraphChunkDeep\":5,\"paragraphChunkMinSize\":100}}"
+  },
+  {
+    "method": "POST",
+    "path": "/v1/knowledge/sources/bad5a1d9f5d4a968e2af8f96/retrain",
+    "status": 202,
+    "requestBody": "{\"version\":9,\"dryRun\":false,\"parseProvider\":\"liteparse\",\"parseConfig\":{\"customPdfParse\":true},\"chunking\":{\"trainingType\":\"chunk\",\"chunkSettingMode\":\"auto\",\"chunkSplitMode\":\"paragraph\",\"autoIndexes\":false,\"imageIndex\":false,\"indexPrefixTitle\":false,\"paragraphChunkAIMode\":\"forbid\",\"paragraphChunkDeep\":5,\"paragraphChunkMinSize\":100}}"
+  },
+  {
+    "method": "GET",
+    "path": "/v1/knowledge/spaces/6b087c9efb01528707502fcb",
+    "status": 200,
+    "requestBody": null
+  },
+  {
+    "method": "GET",
+    "path": "/v1/knowledge/spaces/6b087c9efb01528707502fcb/tags",
+    "status": 200,
+    "requestBody": null
+  },
+  {
+    "method": "GET",
+    "path": "/v1/knowledge/spaces/6b087c9efb01528707502fcb/directories",
+    "status": 200,
+    "requestBody": null
+  },
+  {
+    "method": "GET",
+    "path": "/v1/knowledge/jobs",
+    "status": 200,
+    "requestBody": null
+  },
+  {
+    "method": "GET",
+    "path": "/v1/knowledge/jobs/6b087ca6fb015287075030dd",
+    "status": 200,
+    "requestBody": null
+  },
+  {
+    "method": "GET",
+    "path": "/v1/knowledge/spaces/6b087c9efb01528707502fcb/sources",
+    "status": 200,
+    "requestBody": null
+  },
+  {
+    "method": "GET",
+    "path": "/v1/knowledge/jobs",
+    "status": 200,
+    "requestBody": null
+  },
+  {
+    "method": "GET",
+    "path": "/v1/knowledge/spaces/6b087c9efb01528707502fcb/sources",
+    "status": 200,
+    "requestBody": null
+  },
+  {
+    "method": "GET",
+    "path": "/v1/knowledge/spaces/6b087c9efb01528707502fcb",
+    "status": 200,
+    "requestBody": null
+  },
+  {
+    "method": "GET",
+    "path": "/v1/knowledge/spaces/6b087c9efb01528707502fcb/tags",
+    "status": 200,
+    "requestBody": null
+  },
+  {
+    "method": "GET",
+    "path": "/v1/knowledge/spaces/6b087c9efb01528707502fcb/directories",
+    "status": 200,
+    "requestBody": null
+  },
+  {
+    "method": "GET",
+    "path": "/v1/knowledge/sources/6b087c9efb01528707502fed",
+    "status": 200,
+    "requestBody": null
+  },
+  {
+    "method": "GET",
+    "path": "/v1/knowledge/sources/6b087c9efb01528707502fed/segments",
+    "status": 200,
+    "requestBody": null
+  },
+  {
+    "method": "GET",
+    "path": "/v1/knowledge/models",
+    "status": 200,
+    "requestBody": null
+  },
+  {
+    "method": "GET",
+    "path": "/v1/knowledge/spaces/6b087c9efb01528707502fcb/model-bindings",
+    "status": 200,
+    "requestBody": null
+  },
+  {
+    "method": "GET",
+    "path": "/v1/knowledge/spaces/6b087c9efb01528707502fcb/sources",
+    "status": 200,
+    "requestBody": null
+  },
+  {
+    "method": "GET",
+    "path": "/v1/knowledge/jobs",
+    "status": 200,
+    "requestBody": null
+  }
+]

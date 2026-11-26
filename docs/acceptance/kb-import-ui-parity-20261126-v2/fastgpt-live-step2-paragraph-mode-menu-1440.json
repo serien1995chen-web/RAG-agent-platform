@@ -1,0 +1,16 @@
+{
+  "options": [
+    {
+      "label": "自动",
+      "description": "当文本内容不含 Markdown 标题时，启用模型识别。"
+    },
+    {
+      "label": "禁用",
+      "description": "强制禁用模型自动识别段落"
+    },
+    {
+      "label": "强制处理",
+      "description": "强制使用模型自动识别段落，并忽略原文本的段落（如有）"
+    }
+  ]
+}

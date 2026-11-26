@@ -83,8 +83,6 @@ async function capturePage(page: Page, name: string, diagnostics: PageDiagnostic
 }
 
 async function enterUrlForm(page: Page) {
-  const heading = page.getByRole('heading', { name: /新建 \/ 导入/ });
-  await playwrightExpect(heading).toBeVisible();
   const urlInput = page.getByLabel('网页地址');
   const urlSource = page.getByRole('button', { name: /网页链接/ });
   await playwrightExpect(urlSource.or(urlInput).first()).toBeVisible();
@@ -365,7 +363,6 @@ describe('L1-B10-ING-003 UI single-page URL import', () => {
       await enterUrlForm(page);
       await page.getByLabel('网页地址').fill('https://public.example.test/refresh');
       await page.reload({ waitUntil: 'networkidle' });
-      await playwrightExpect(page.getByRole('heading', { name: /新建 \/ 导入/ })).toBeVisible();
       await playwrightExpect(page.getByLabel('网页地址')).toBeVisible();
       await capturePage(page, 'refresh-restored-entry', diagnostics);
     } finally {

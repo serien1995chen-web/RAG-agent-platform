@@ -80,6 +80,18 @@ function modelProfile(env: Readonly<Record<string, string | undefined>>) {
   return { models: profile, defaults: parsed.data.defaults };
 }
 
+export function configuredModelLimits(
+  env: Readonly<Record<string, string | undefined>>,
+): ReadonlyMap<string, NonNullable<ModelCatalogItem['limits']>> {
+  const profile = modelProfile(env);
+  if (!profile) return new Map();
+  return new Map(
+    [...profile.models.entries()].flatMap(([modelId, model]) =>
+      model.limits ? [[modelId, model.limits] as const] : [],
+    ),
+  );
+}
+
 function mergeCatalogWithProfile(
   payload: unknown,
   profile: ReadonlyMap<string, ModelProfileEntry>,
