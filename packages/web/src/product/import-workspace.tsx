@@ -14,11 +14,21 @@ import {
 } from '@chakra-ui/icons';
 import { Spinner } from '@chakra-ui/react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from 'react';
 import {
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+  type Dispatch,
+  type SetStateAction,
+} from 'react';
+import {
+  DEFAULT_QA_PROMPT,
   DOCUMENT_ACCEPT,
   MAX_KNOWLEDGE_FILE_BYTES,
   MAX_LOCAL_IMPORT_FILES,
+  QA_FIXED_TEMPLATE,
   isDocumentFileExtension,
 } from '@kb/contracts';
 import { S7MarkdownRenderer } from '../components/s7-markdown-renderer';
@@ -36,6 +46,7 @@ import {
   previewImportFile,
   previewImportTemplate,
   previewImportText,
+  retrainSource,
   ProductBatchError,
   productApi,
   productErrorView,
@@ -48,15 +59,17 @@ import {
   ProductField,
   ProductIconButton,
   ProductInput,
+  ProductMenu,
+  ProductMenuItem,
   ProductModal,
   ProductPage,
-  ProductPageHeader,
   ProductSelect,
   ProductTextarea,
   ProductTypeIcon,
   StatusTag,
+  useProductToast,
 } from './ui';
-import type { CatalogItem, Directory, Job, ProviderCatalogItem } from './types';
+import type { CatalogItem, Job, ProviderCatalogItem, RetrainPreview, Source } from './types';
 import { knowledgeMultipartUpload, type KnowledgeFileUploadState } from '../client/file-upload';
 import { modelsForRole } from './model-candidates';
 
@@ -84,6 +97,8 @@ interface ImportedUpload {
   progress: number;
   phase: KnowledgeFileUploadState['phase'];
   error: unknown;
+  createStatus: 'waiting' | 'creating' | 'finish' | 'error';
+  createError: unknown;
 }
 
 function formatFileSize(bytes: number): string {
@@ -185,7 +200,7 @@ const IMPORT_OPTIONS: Array<{
   },
 ];
 
-const STEP_LABELS = ['选择来源', '参数设置', '数据预览', '确认导入'] as const;
+const STEP_LABELS = ['选择来源', '参数设置', '数据预览', '确认上传'] as const;
 const DIRECT_SELECTION_KINDS: ImportKind[] = ['local', 'text', 'url'];
 
 export function ImportWorkspace(props: {
@@ -201,10 +216,11 @@ export function ImportWorkspace(props: {
   onJobStarted?: (jobId: string) => void;
 }) {
   const queryClient = useQueryClient();
+  const toast = useProductToast();
   const initialKind = normalizeImportKind(props.initialSource);
   const [kind, setKind] = useState<ImportKind>(initialKind);
-  const [step, setStep] = useState(props.initialJobId ? 3 : initialKind === 'retraining' ? 1 : 0);
-  const [directoryId, setDirectoryId] = useState(props.initialDirectoryId ?? '');
+  const [step, setStep] = useState(props.initialJobId ? 3 : 0);
+  const directoryId = props.initialDirectoryId ?? '';
   const [parseProvider, setParseProvider] = useState('liteparse');
   const [customPdfParse, setCustomPdfParse] = useState(true);
   const [credentialProfileId, setCredentialProfileId] = useState('');
@@ -237,12 +253,13 @@ export function ImportWorkspace(props: {
   const [autoIndexes, setAutoIndexes] = useState(false);
   const [imageIndex, setImageIndex] = useState(false);
   const [indexPrefixTitle, setIndexPrefixTitle] = useState(false);
-  const [qaPrompt, setQaPrompt] = useState('');
+  const [qaPrompt, setQaPrompt] = useState(DEFAULT_QA_PROMPT);
   const [uploaded, setUploaded] = useState<ImportedUpload[]>([]);
   const [uploadSelectionError, setUploadSelectionError] = useState('');
   const [uploading, setUploading] = useState(false);
   const uploadControllers = useRef(new Map<string, AbortController>());
   const uploadFilesByRow = useRef(new Map<string, File>());
+  const retrainPrefilledSourceId = useRef('');
   const [textName, setTextName] = useState('');
   const [textBody, setTextBody] = useState('');
   const [urlText, setUrlText] = useState('');
@@ -262,6 +279,7 @@ export function ImportWorkspace(props: {
   const [error, setError] = useState<unknown>(null);
   const [jobId, setJobId] = useState(props.initialJobId ?? '');
   const [submitError, setSubmitError] = useState<unknown>(null);
+  const [retrainSubmitted, setRetrainSubmitted] = useState(false);
   const [localPreviewUploadId, setLocalPreviewUploadId] = useState<string | null>(null);
   const [showLegacyProcessingSettings] = useState(false);
   const textNameRef = useRef<HTMLInputElement>(null);
@@ -269,10 +287,6 @@ export function ImportWorkspace(props: {
   const urlTextRef = useRef<HTMLTextAreaElement>(null);
   const localPreviewScrollRef = useRef<HTMLDivElement>(null);
 
-  const directoriesQuery = useQuery<Directory[]>({
-    queryKey: ['kb-product', 'import-directories', props.spaceId],
-    queryFn: () => productApi.listDirectories(props.spaceId),
-  });
   const modelsQuery = useQuery({
     queryKey: ['kb-product', 'models'],
     queryFn: () => productApi.listModels(),
@@ -291,6 +305,11 @@ export function ImportWorkspace(props: {
         : false,
     refetchIntervalInBackground: false,
   });
+  const retrainingSourceQuery = useQuery<Source>({
+    queryKey: ['kb-product', 'source', props.collectionId],
+    queryFn: () => productApi.getSource(props.collectionId!),
+    enabled: initialKind === 'retraining' && Boolean(props.collectionId) && !retrainSubmitted,
+  });
   const chunking = useMemo(
     () => ({
       trainingType,
@@ -301,14 +320,18 @@ export function ImportWorkspace(props: {
       indexPrefixTitle,
       ...(chunkSettingMode === 'custom'
         ? {
-            chunkTriggerType,
-            chunkTriggerMinSize: Number(chunkTriggerMinSize) || 1,
+            ...(trainingType === 'chunk'
+              ? {
+                  chunkTriggerType,
+                  chunkTriggerMinSize: Number(chunkTriggerMinSize) || 1000,
+                }
+              : {}),
             chunkSize: Number(chunkSize) || 1000,
             overlap: Number(overlap) || 0,
             indexSize: Number(indexSize) || 1000,
           }
         : {}),
-      ...(chunkSplitMode === 'paragraph' && trainingType === 'chunk'
+      ...(chunkSplitMode === 'paragraph'
         ? {
             paragraphChunkAIMode,
             paragraphChunkDeep: Number(paragraphChunkDeep) || 5,
@@ -339,6 +362,70 @@ export function ImportWorkspace(props: {
       trainingType,
     ],
   );
+  const retrainingSource = retrainingSourceQuery.data;
+  useEffect(() => {
+    if (!retrainingSource || retrainPrefilledSourceId.current === retrainingSource.id) {
+      return;
+    }
+    retrainPrefilledSourceId.current = retrainingSource.id;
+    const settings = retrainingSource.chunkSettings ?? {};
+    const config = retrainingSource.parseConfig ?? {};
+    if (typeof settings.trainingType === 'string') {
+      setTrainingType(
+        settings.trainingType === 'qa'
+          ? 'qa'
+          : settings.trainingType === 'imageParse'
+            ? 'imageParse'
+            : 'chunk',
+      );
+    }
+    if (settings.chunkSettingMode === 'custom' || settings.chunkSettingMode === 'auto') {
+      setChunkSettingMode(settings.chunkSettingMode);
+    }
+    if (typeof settings.chunkSplitMode === 'string') {
+      setChunkSplitMode(settings.chunkSplitMode as 'paragraph' | 'size' | 'char');
+    }
+    if (typeof settings.paragraphChunkAIMode === 'string') {
+      setParagraphChunkAIMode(settings.paragraphChunkAIMode as 'auto' | 'force' | 'forbid');
+    }
+    const numberField = (key: string, fallback: string) => {
+      const value = settings[key];
+      return typeof value === 'number' ? String(value) : fallback;
+    };
+    setParagraphChunkDeep(numberField('paragraphChunkDeep', '5'));
+    setParagraphChunkMinSize(numberField('paragraphChunkMinSize', '100'));
+    setChunkTriggerMinSize(numberField('chunkTriggerMinSize', '1000'));
+    setChunkSize(numberField('chunkSize', '1000'));
+    setIndexSize(numberField('indexSize', '512'));
+    setOverlap(numberField('overlap', '100'));
+    setChunkSplitter(typeof settings.chunkSplitter === 'string' ? settings.chunkSplitter : '');
+    setAutoIndexes(settings.autoIndexes === true);
+    setImageIndex(settings.imageIndex === true);
+    setIndexPrefixTitle(settings.indexPrefixTitle === true);
+    setQaPrompt(typeof settings.qaPrompt === 'string' ? settings.qaPrompt : DEFAULT_QA_PROMPT);
+    setParseProvider(retrainingSource.parseProvider || 'liteparse');
+    setCustomPdfParse(config.customPdfParse !== false);
+    if (typeof config.credentialProfileId === 'string') {
+      setCredentialProfileId(config.credentialProfileId);
+    }
+    if (config.fallbackProvider === 'none' || config.fallbackProvider === 'liteparse') {
+      setFallbackProvider(config.fallbackProvider);
+    }
+    if (
+      config.imageHandling === 'upload_to_storage' ||
+      config.imageHandling === 'keep_url' ||
+      config.imageHandling === 'drop'
+    ) {
+      setImageHandling(config.imageHandling);
+    }
+    if (typeof config.parseTimeoutMs === 'number' || typeof config.timeoutMs === 'number') {
+      setParseTimeoutMs(
+        String(
+          typeof config.parseTimeoutMs === 'number' ? config.parseTimeoutMs : config.timeoutMs,
+        ),
+      );
+    }
+  }, [retrainingSource]);
   const indexCapabilities = useMemo(() => {
     const models = modelsQuery.data ?? [];
     const hasAutoIndexModel = modelsForRole(models, 'llm').length > 0;
@@ -351,10 +438,10 @@ export function ImportWorkspace(props: {
     );
     return {
       autoIndexes: trainingType === 'chunk' && hasAutoIndexModel,
-      indexPrefixTitle: hasAutoIndexModel,
+      indexPrefixTitle: true,
       imageIndex: trainingType === 'chunk' && hasVlmModel && hasImageEmbeddingModel,
     };
-  }, [autoIndexes, modelsQuery.data, trainingType]);
+  }, [modelsQuery.data, trainingType]);
 
   const boundModel = useMemo(
     () => (type: 'llm' | 'embedding') => {
@@ -398,7 +485,8 @@ export function ImportWorkspace(props: {
     setChunkSize((current) => {
       const parsed = Number(current);
       if (!Number.isFinite(parsed)) return '1000';
-      return String(Math.min(Math.max(parsed, 64), modelLimits.maxChunkSize));
+      const minChunkSize = trainingType === 'qa' ? 1_000 : 64;
+      return String(Math.min(Math.max(parsed, minChunkSize), modelLimits.maxChunkSize));
     });
   }, [
     bindingsQuery.isLoading,
@@ -406,19 +494,14 @@ export function ImportWorkspace(props: {
     modelLimits.defaultIndexSize,
     modelLimits.maxChunkSize,
     modelsQuery.isLoading,
+    trainingType,
   ]);
 
   useEffect(() => {
     if (modelsQuery.isLoading) return;
     if (!indexCapabilities.autoIndexes) setAutoIndexes(false);
-    if (!indexCapabilities.indexPrefixTitle) setIndexPrefixTitle(false);
     if (!indexCapabilities.imageIndex) setImageIndex(false);
-  }, [
-    indexCapabilities.autoIndexes,
-    indexCapabilities.imageIndex,
-    indexCapabilities.indexPrefixTitle,
-    modelsQuery.isLoading,
-  ]);
+  }, [indexCapabilities.autoIndexes, indexCapabilities.imageIndex, modelsQuery.isLoading]);
   const parseConfig = useMemo<Record<string, unknown>>(() => {
     if (parseProvider === 'liteparse') return { customPdfParse };
     const common = {
@@ -462,6 +545,30 @@ export function ImportWorkspace(props: {
     textinParseMode,
     textinRemoveWatermark,
   ]);
+  const retrainPreviewQuery = useQuery<RetrainPreview>({
+    queryKey: [
+      'kb-product',
+      'retrain-preview',
+      props.collectionId,
+      retrainingSource?.version,
+      parseProvider,
+      parseConfig,
+      chunking,
+    ],
+    queryFn: () =>
+      retrainSource(props.collectionId!, {
+        version: retrainingSource!.version,
+        dryRun: true,
+        parseProvider,
+        parseConfig,
+        chunking,
+      }) as Promise<RetrainPreview>,
+    enabled:
+      step === 1 &&
+      kind === 'retraining' &&
+      Boolean(retrainingSource) &&
+      retrainingSource?.processingStatus !== 'deleting',
+  });
   const normalizedSelector = selector.trim() || 'body';
   const urlPreviewSignature = JSON.stringify({ selector: normalizedSelector, chunking });
   const invalidateUrlPreviews = () => {
@@ -535,6 +642,13 @@ export function ImportWorkspace(props: {
   const completedUploads = uploaded.filter(
     (item) => item.phase === 'completed' && Boolean(item.id),
   );
+  const localCreatingCount = completedUploads.filter(
+    (item) => item.createStatus === 'creating',
+  ).length;
+  const localFinishedCount = completedUploads.filter(
+    (item) => item.createStatus === 'finish',
+  ).length;
+  const localRetryCount = completedUploads.length - localFinishedCount;
   const previewQuery = useQuery({
     queryKey: [
       'kb-product',
@@ -577,15 +691,35 @@ export function ImportWorkspace(props: {
   useEffect(() => {
     localPreviewScrollRef.current?.scrollTo({ top: 0, left: 0 });
   }, [localPreviewUploadId]);
-  const activeOption = IMPORT_OPTIONS.find((option) => option.kind === kind)!;
   const directSelection = DIRECT_SELECTION_KINDS.includes(kind);
-  const showFormStep = directSelection ? step <= 1 : step === 1;
+  const isPreviewStep = kind === 'retraining' ? step === 1 : step === 2;
+  const isConfirmStep = kind === 'retraining' ? step === 2 : step === 3;
+  const showFormStep =
+    kind === 'retraining' ? step === 0 : directSelection ? step <= 1 : step === 1;
+  const showUploadRows =
+    step === 0 || (step === 1 && ['image', 'template', 'backup'].includes(kind));
+  const stepBodyClass =
+    kind === 'retraining'
+      ? step === 0
+        ? 'is-settings'
+        : step === 1
+          ? 'is-preview'
+          : 'is-confirm'
+      : step === 1
+        ? 'is-settings'
+        : step === 2
+          ? 'is-preview'
+          : step === 3
+            ? 'is-confirm'
+            : 'is-source';
   const stepLabels =
-    kind === 'url'
-      ? (['输入链接', '参数设置', '数据预览', '确认导入'] as const)
-      : directSelection
-        ? (['选择文件', '参数设置', '数据预览', '确认导入'] as const)
-        : STEP_LABELS;
+    kind === 'retraining'
+      ? (['调整参数', '数据预览', '确认上传'] as const)
+      : kind === 'url'
+        ? (['输入链接', '参数设置', '数据预览', '确认上传'] as const)
+        : directSelection
+          ? (['选择文件', '参数设置', '数据预览', '确认上传'] as const)
+          : STEP_LABELS;
   const structuredPreviewQuery = useQuery({
     queryKey: [
       'kb-product',
@@ -618,7 +752,9 @@ export function ImportWorkspace(props: {
     (kind === 'url' && urlEntries.length > 0) ||
     (kind === 'api' && apiSelected.length > 0) ||
     (['feishu', 'yuque', 'dingtalk'].includes(kind) && connectorSelected.length > 0) ||
-    kind === 'retraining';
+    (kind === 'retraining' &&
+      Boolean(retrainingSource) &&
+      retrainingSource?.processingStatus !== 'deleting');
 
   const chooseKind = (next: ImportKind) => {
     setKind(next);
@@ -750,6 +886,8 @@ export function ImportWorkspace(props: {
         progress: 0,
         phase: 'initializing' as const,
         error: null,
+        createStatus: 'waiting' as const,
+        createError: null,
       })),
     ]);
     for (const row of rows) {
@@ -763,7 +901,15 @@ export function ImportWorkspace(props: {
     setUploaded((current) =>
       current.map((row) =>
         row.rowId === item.rowId
-          ? { ...row, id: '', progress: 0, phase: 'initializing', error: null }
+          ? {
+              ...row,
+              id: '',
+              progress: 0,
+              phase: 'initializing',
+              error: null,
+              createStatus: 'waiting',
+              createError: null,
+            }
           : row,
       ),
     );
@@ -891,6 +1037,56 @@ export function ImportWorkspace(props: {
     }
   };
 
+  const submitLocalFiles = async () => {
+    setSubmitError(null);
+    const pending = completedUploads.filter(
+      (item) => item.createStatus !== 'finish' && item.createStatus !== 'creating',
+    );
+    if (pending.length === 0) return;
+
+    let failed = false;
+    for (const item of pending) {
+      setUploaded((current) =>
+        current.map((row) =>
+          row.rowId === item.rowId ? { ...row, createStatus: 'creating', createError: null } : row,
+        ),
+      );
+      try {
+        await importFiles(props.spaceId, {
+          uploadIds: [item.id],
+          directoryId: directoryId || null,
+          parseProvider,
+          parseConfig,
+          chunking,
+        });
+        setUploaded((current) =>
+          current.map((row) =>
+            row.rowId === item.rowId ? { ...row, createStatus: 'finish', createError: null } : row,
+          ),
+        );
+      } catch (caught) {
+        failed = true;
+        setSubmitError(caught);
+        setUploaded((current) =>
+          current.map((row) =>
+            row.rowId === item.rowId ? { ...row, createStatus: 'error', createError: caught } : row,
+          ),
+        );
+        break;
+      }
+    }
+
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ['kb-product', 'sources', props.spaceId] }),
+      queryClient.invalidateQueries({ queryKey: ['kb-product', 'jobs', props.spaceId] }),
+    ]);
+    if (!failed && completedUploads.length > 0) {
+      props.onImported();
+      toast.success('导入成功，请等待训练');
+      props.onExit();
+    }
+  };
+
   const submit = async () => {
     setBusy(true);
     setSubmitError(null);
@@ -899,8 +1095,40 @@ export function ImportWorkspace(props: {
         await submitUrls();
         return;
       }
+      if (kind === 'retraining') {
+        if (!retrainingSource) {
+          throw new Error('当前 Source 尚未加载完成。');
+        }
+        await queryClient.cancelQueries({
+          queryKey: ['kb-product', 'source', retrainingSource.id],
+        });
+        setRetrainSubmitted(true);
+        const result = (await retrainSource(retrainingSource.id, {
+          version: retrainingSource.version,
+          dryRun: false,
+          parseProvider,
+          parseConfig,
+          chunking,
+        })) as { sourceId: string; previousSourceId: string; job: Job };
+        setJobId(result.job.jobId);
+        props.onImported();
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: ['kb-product', 'sources', props.spaceId] }),
+          queryClient.invalidateQueries({ queryKey: ['kb-product', 'jobs'] }),
+        ]);
+        queryClient.removeQueries({
+          queryKey: ['kb-product', 'source', retrainingSource.id],
+        });
+        toast.success('重训练任务已提交');
+        props.onExit();
+        return;
+      }
+      if (kind === 'local') {
+        await submitLocalFiles();
+        return;
+      }
       let job: Job;
-      if (kind === 'local' || kind === 'image') {
+      if (kind === 'image') {
         job = await importFiles(props.spaceId, {
           uploadIds: completedUploads.map((item) => item.id),
           directoryId: directoryId || null,
@@ -940,7 +1168,7 @@ export function ImportWorkspace(props: {
           directoryId: directoryId || null,
         });
       } else {
-        throw new Error('当前后端没有重训练接口，能力尚未实现。');
+        throw new Error('当前来源类型不支持导入提交。');
       }
       setJobId(job.jobId);
       setStep(3);
@@ -1034,24 +1262,28 @@ export function ImportWorkspace(props: {
     collectionId: props.collectionId,
   });
   const previewReady =
-    step !== 2 ||
-    (kind === 'text'
-      ? !previewQuery.isLoading &&
-        !previewQuery.error &&
-        Boolean(previewQuery.data && previewQuery.data.totalChunks > 0)
-      : kind === 'template' || kind === 'backup'
-        ? !structuredPreviewQuery.isLoading &&
-          !structuredPreviewQuery.error &&
-          Boolean(structuredPreviewQuery.data)
-        : kind === 'url'
-          ? urlEntries.length > 0 &&
-            urlEntries.every(
-              (entry) =>
-                entry.phase === 'ready' &&
-                Boolean(entry.preview) &&
-                entry.previewSignature === urlPreviewSignature,
-            )
-          : true);
+    kind === 'retraining'
+      ? !retrainPreviewQuery.isLoading &&
+        !retrainPreviewQuery.error &&
+        Boolean(retrainPreviewQuery.data)
+      : step !== 2 ||
+        (kind === 'text'
+          ? !previewQuery.isLoading &&
+            !previewQuery.error &&
+            Boolean(previewQuery.data && previewQuery.data.totalChunks > 0)
+          : kind === 'template' || kind === 'backup'
+            ? !structuredPreviewQuery.isLoading &&
+              !structuredPreviewQuery.error &&
+              Boolean(structuredPreviewQuery.data)
+            : kind === 'url'
+              ? urlEntries.length > 0 &&
+                urlEntries.every(
+                  (entry) =>
+                    entry.phase === 'ready' &&
+                    Boolean(entry.preview) &&
+                    entry.previewSignature === urlPreviewSignature,
+                )
+              : true);
 
   const advanceStep = () => {
     if (step === 0 && kind === 'text') {
@@ -1068,21 +1300,26 @@ export function ImportWorkspace(props: {
       urlTextRef.current?.focus();
       return;
     }
-    setStep((value) => Math.min(3, value + 1));
+    setStep((value) => Math.min(kind === 'retraining' ? 2 : 3, value + 1));
   };
 
   return (
     <ProductPage className="kb2-import-page">
-      <ProductPageHeader
-        title="新建 / 导入"
-        description={`导入到 ${props.datasetName}`}
-        actions={
-          <ProductButton onClick={props.onExit}>
-            <ChevronLeftIcon boxSize={3.5} />
-            返回 Collection
-          </ProductButton>
-        }
-      />
+      <div className="kb2-import-nav">
+        <ProductButton
+          disabled={busy && step === 3}
+          onClick={() => {
+            if (jobId || step === 0) {
+              props.onExit();
+              return;
+            }
+            setStep((value) => value - 1);
+          }}
+        >
+          <ChevronLeftIcon boxSize={3.5} />
+          {jobId ? '返回知识库' : step === 0 ? '退出' : '上一步'}
+        </ProductButton>
+      </div>
       <div className="kb2-import-steps" aria-label="导入步骤">
         {stepLabels.map((label, index) => (
           <div
@@ -1095,34 +1332,14 @@ export function ImportWorkspace(props: {
           </div>
         ))}
       </div>
-      <ProductError error={error} />
+      <ProductError
+        error={error ?? retrainingSourceQuery.error}
+        onRetry={() => void retrainingSourceQuery.refetch()}
+      />
 
-      <div className="kb2-import-context">
-        <div className="kb2-import-context__source">
-          <ProductTypeIcon kind={activeOption.kind === 'api' ? 'api' : 'general'} />
-          <span>
-            <strong>{activeOption.title}</strong>
-            <small>{props.datasetName}</small>
-          </span>
-        </div>
-        <ProductField label="目标目录">
-          <ProductSelect
-            value={directoryId}
-            onChange={(event) => setDirectoryId(event.target.value)}
-          >
-            <option value="">知识库根目录</option>
-            {(directoriesQuery.data ?? []).map((directory) => (
-              <option key={directory.id} value={directory.id}>
-                {directory.name}
-              </option>
-            ))}
-          </ProductSelect>
-        </ProductField>
-      </div>
-
-      <div className="kb2-import-body is-centered">
+      <div className={`kb2-import-body ${stepBodyClass}`}>
         <main className="kb2-import-main">
-          {step === 0 && !directSelection ? (
+          {step === 0 && !directSelection && kind !== 'retraining' ? (
             <div className="kb2-import-source-grid" role="group" aria-label="导入来源">
               {IMPORT_OPTIONS.map((option) => {
                 const Icon = option.icon;
@@ -1207,7 +1424,7 @@ export function ImportWorkspace(props: {
                 </div>
               ) : null}
 
-              {uploaded.length > 0 ? (
+              {showUploadRows && uploaded.length > 0 ? (
                 <div className="kb2-upload-list">
                   {uploaded.map((item) => {
                     const errorView = item.error ? productErrorView(item.error) : null;
@@ -1415,10 +1632,12 @@ export function ImportWorkspace(props: {
                 </div>
               ) : null}
 
-              {step === 1 &&
-              (kind === 'local' || kind === 'image' || kind === 'text' || kind === 'url') ? (
+              {(kind === 'retraining' && step === 0) ||
+              (step === 1 &&
+                (kind === 'local' || kind === 'image' || kind === 'text' || kind === 'url')) ? (
                 <ProcessingSettings
                   kind={kind}
+                  sourceKind={retrainingSource?.kind}
                   customPdfParse={customPdfParse}
                   setCustomPdfParse={setCustomPdfParse}
                   trainingType={trainingType}
@@ -1580,7 +1799,9 @@ export function ImportWorkspace(props: {
                       >
                         <option value="chunk">分段</option>
                         <option value="qa">问答对</option>
-                        {kind === 'image' ? <option value="imageParse">图片解析</option> : null}
+                        {kind === 'image' || retrainingSource?.kind === 'image' ? (
+                          <option value="imageParse">图片解析</option>
+                        ) : null}
                       </ProductSelect>
                     </ProductField>
                     <ProductField label="切分方式">
@@ -1721,34 +1942,35 @@ export function ImportWorkspace(props: {
                       />
                     </ProductField>
                     <div className="kb2-index-enhancements">
-                      <div className="kb2-index-enhancement">
-                        <label className="kb2-checkbox-row">
-                          <input
-                            type="checkbox"
-                            aria-label="自动生成补充索引"
-                            aria-describedby={
-                              indexCapabilities.autoIndexes ? undefined : 'index-auto-unavailable'
-                            }
-                            checked={autoIndexes}
-                            disabled={!indexCapabilities.autoIndexes}
-                            onChange={(event) => {
-                              setAutoIndexes(event.target.checked);
-                              if (!event.target.checked) setIndexPrefixTitle(false);
-                              invalidateUrlPreviews();
-                            }}
-                          />
-                          <span>自动生成补充索引</span>
-                        </label>
-                        {!indexCapabilities.autoIndexes ? (
-                          <small id="index-auto-unavailable">
-                            {trainingType !== 'chunk'
-                              ? '分段训练时可用。'
-                              : modelsQuery.isLoading
-                                ? '正在检查模型能力。'
-                                : '没有已授权的文本模型，暂时无法启用。'}
-                          </small>
-                        ) : null}
-                      </div>
+                      {trainingType === 'chunk' ? (
+                        <div className="kb2-index-enhancement">
+                          <label className="kb2-checkbox-row">
+                            <input
+                              type="checkbox"
+                              aria-label="自动生成补充索引"
+                              aria-describedby={
+                                indexCapabilities.autoIndexes ? undefined : 'index-auto-unavailable'
+                              }
+                              checked={autoIndexes}
+                              disabled={!indexCapabilities.autoIndexes}
+                              onChange={(event) => {
+                                setAutoIndexes(event.target.checked);
+                                invalidateUrlPreviews();
+                              }}
+                            />
+                            <span>自动生成补充索引</span>
+                          </label>
+                          {!indexCapabilities.autoIndexes ? (
+                            <small id="index-auto-unavailable">
+                              {trainingType !== 'chunk'
+                                ? '分段训练时可用。'
+                                : modelsQuery.isLoading
+                                  ? '正在检查模型能力。'
+                                  : '没有已授权的文本模型，暂时无法启用。'}
+                            </small>
+                          ) : null}
+                        </div>
+                      ) : null}
                       <div className="kb2-index-enhancement">
                         <label className="kb2-checkbox-row">
                           <input
@@ -1769,76 +1991,134 @@ export function ImportWorkspace(props: {
                           <span>标题加入索引</span>
                         </label>
                         {!indexCapabilities.indexPrefixTitle ? (
-                          <small id="index-title-unavailable">
-                            {autoIndexes && indexCapabilities.autoIndexes
-                              ? '补充索引当前不可用，标题增强已清除。'
-                              : '启用自动生成补充索引后可用。'}
-                          </small>
+                          <small id="index-title-unavailable">标题增强当前不可用。</small>
                         ) : null}
                       </div>
-                      <div className="kb2-index-enhancement">
-                        <label className="kb2-checkbox-row">
-                          <input
-                            type="checkbox"
-                            aria-label="图片自动索引"
-                            aria-describedby={
-                              indexCapabilities.imageIndex ? undefined : 'index-image-unavailable'
-                            }
-                            checked={imageIndex}
-                            disabled={!indexCapabilities.imageIndex}
-                            onChange={(event) => {
-                              setImageIndex(event.target.checked);
-                              invalidateUrlPreviews();
-                            }}
-                          />
-                          <span>图片自动索引</span>
-                        </label>
-                        {!indexCapabilities.imageIndex ? (
-                          <small id="index-image-unavailable">
-                            {trainingType !== 'chunk'
-                              ? '分段训练时可用。'
-                              : modelsQuery.isLoading
-                                ? '正在检查视觉模型能力。'
-                                : '需要已授权的 VLM 和视觉或 Caption Embedding 模型。'}
-                          </small>
-                        ) : null}
-                      </div>
+                      {trainingType === 'chunk' ? (
+                        <div className="kb2-index-enhancement">
+                          <label className="kb2-checkbox-row">
+                            <input
+                              type="checkbox"
+                              aria-label="图片自动索引"
+                              aria-describedby={
+                                indexCapabilities.imageIndex ? undefined : 'index-image-unavailable'
+                              }
+                              checked={imageIndex}
+                              disabled={!indexCapabilities.imageIndex}
+                              onChange={(event) => {
+                                setImageIndex(event.target.checked);
+                                invalidateUrlPreviews();
+                              }}
+                            />
+                            <span>图片自动索引</span>
+                          </label>
+                          {!indexCapabilities.imageIndex ? (
+                            <small id="index-image-unavailable">
+                              {trainingType !== 'chunk'
+                                ? '分段训练时可用。'
+                                : modelsQuery.isLoading
+                                  ? '正在检查视觉模型能力。'
+                                  : '需要已授权的 VLM 和视觉或 Caption Embedding 模型。'}
+                            </small>
+                          ) : null}
+                        </div>
+                      ) : null}
                     </div>
                   </div>
                 </div>
               ) : null}
-
-              {kind === 'retraining' ? (
-                <ProductEmpty
-                  title="重训练能力尚未实现"
-                  description="当前后端没有导入前的重训练预览或参数更新接口。页面保留完整入口，不会伪造重训练任务。"
-                />
-              ) : null}
             </div>
           ) : null}
 
-          {step === 2 ? (
+          {isPreviewStep ? (
             <div className="kb2-import-preview">
-              <div className="kb2-import-preview__header">
-                <CheckIcon boxSize={5} />
-                <div>
-                  <h3>{preview.title}</h3>
-                  <p>{preview.description}</p>
-                </div>
-              </div>
-              <div className="kb2-info-group">
-                {preview.rows.map((row) => (
-                  <InfoRow key={row.label} label={row.label} value={row.value} />
-                ))}
-              </div>
-              {kind === 'retraining' ? (
-                <div className="kb2-error-panel" role="alert">
-                  <WarningIcon boxSize={4} />
+              {kind !== 'local' ? (
+                <div className="kb2-import-preview__header">
+                  <CheckIcon boxSize={5} />
                   <div>
-                    <strong>后端能力未实现</strong>
-                    <span>未提交任何重训练请求。</span>
+                    <h3>{preview.title}</h3>
+                    <p>{preview.description}</p>
                   </div>
                 </div>
+              ) : null}
+              {kind !== 'local' && kind !== 'image' ? (
+                <div className="kb2-info-group">
+                  {preview.rows.map((row) => (
+                    <InfoRow key={row.label} label={row.label} value={row.value} />
+                  ))}
+                </div>
+              ) : null}
+              {kind === 'retraining' ? (
+                <section className="kb2-local-file-preview" aria-label="重训练数据预览">
+                  <div className="kb2-local-file-list">
+                    <header>
+                      <strong>文件列表</strong>
+                      <small>1 个来源</small>
+                    </header>
+                    <div role="listbox" aria-label="当前来源">
+                      <button
+                        type="button"
+                        role="option"
+                        aria-selected="true"
+                        className="kb2-local-file-row is-selected"
+                      >
+                        <AttachmentIcon boxSize={4} />
+                        <span>{retrainingSource?.name ?? '当前来源'}</span>
+                      </button>
+                    </div>
+                  </div>
+                  <div className="kb2-local-chunk-preview">
+                    <header>
+                      <strong>分块预览</strong>
+                      <small>
+                        {retrainPreviewQuery.data
+                          ? retrainPreviewQuery.data.kind === 'chunks'
+                            ? `共 ${retrainPreviewQuery.data.totalChunks} 个分块，最多展示 ${retrainPreviewQuery.data.chunks.length} 个`
+                            : `图片 ${retrainPreviewQuery.data.images.length} 张`
+                          : '正在加载'}
+                      </small>
+                    </header>
+                    <ProductError
+                      error={retrainingSourceQuery.error ?? retrainPreviewQuery.error}
+                      onRetry={() => void retrainPreviewQuery.refetch()}
+                    />
+                    <div className="kb2-local-chunk-scroll">
+                      {retrainPreviewQuery.isLoading ? (
+                        <div className="kb2-center-state" role="status">
+                          <Spinner size="sm" /> 正在按新参数生成真实预览…
+                        </div>
+                      ) : retrainPreviewQuery.data?.kind === 'chunks' ? (
+                        retrainPreviewQuery.data.totalChunks === 0 ? (
+                          <ProductEmpty title="没有生成分块" description="请返回调整参数后重试。" />
+                        ) : (
+                          <div className="kb2-chunk-preview-list">
+                            {retrainPreviewQuery.data.chunks.map((chunk) => (
+                              <article className="kb2-chunk-preview" key={chunk.index}>
+                                <span>#{chunk.index + 1}</span>
+                                <S7MarkdownRenderer className="kb2-chunk-markdown">
+                                  {chunk.text}
+                                </S7MarkdownRenderer>
+                              </article>
+                            ))}
+                          </div>
+                        )
+                      ) : retrainPreviewQuery.data?.kind === 'image' ? (
+                        <div className="kb2-info-group">
+                          <InfoRow
+                            label="图片数量"
+                            value={String(retrainPreviewQuery.data.images.length)}
+                          />
+                          <InfoRow
+                            label="内容哈希"
+                            value={retrainPreviewQuery.data.contentHash || '-'}
+                          />
+                        </div>
+                      ) : (
+                        <div className="kb2-note">暂无可展示的预览数据。</div>
+                      )}
+                    </div>
+                  </div>
+                </section>
               ) : kind === 'local' || kind === 'image' ? (
                 <section className="kb2-local-file-preview" aria-label="本地文件分块预览">
                   <div className="kb2-local-file-list">
@@ -1903,7 +2183,9 @@ export function ImportWorkspace(props: {
                             {localFilePreviewQuery.data.chunks.map((chunk) => (
                               <article className="kb2-chunk-preview" key={chunk.index}>
                                 <span>#{chunk.index + 1}</span>
-                                <S7MarkdownRenderer>{chunk.text}</S7MarkdownRenderer>
+                                <S7MarkdownRenderer className="kb2-chunk-markdown">
+                                  {chunk.text}
+                                </S7MarkdownRenderer>
                               </article>
                             ))}
                           </div>
@@ -1936,7 +2218,9 @@ export function ImportWorkspace(props: {
                         {previewQuery.data.chunks.map((chunk) => (
                           <article className="kb2-chunk-preview" key={chunk.index}>
                             <span>#{chunk.index + 1}</span>
-                            <S7MarkdownRenderer>{chunk.text}</S7MarkdownRenderer>
+                            <S7MarkdownRenderer className="kb2-chunk-markdown">
+                              {chunk.text}
+                            </S7MarkdownRenderer>
                           </article>
                         ))}
                       </div>
@@ -2022,7 +2306,9 @@ export function ImportWorkspace(props: {
                                     key={`${entry.id}:${index}`}
                                   >
                                     <span>#{index + 1}</span>
-                                    <S7MarkdownRenderer>{chunk.q}</S7MarkdownRenderer>
+                                    <S7MarkdownRenderer className="kb2-chunk-markdown">
+                                      {chunk.q}
+                                    </S7MarkdownRenderer>
                                   </article>
                                 ))}
                               </div>
@@ -2112,7 +2398,7 @@ export function ImportWorkspace(props: {
             </div>
           ) : null}
 
-          {step === 3 ? (
+          {isConfirmStep ? (
             <div className="kb2-import-result">
               {jobId ? (
                 <div className="kb2-note" role="status">
@@ -2157,7 +2443,29 @@ export function ImportWorkspace(props: {
                   ))}
                 </section>
               ) : null}
-              {!jobId ? (
+              {(kind === 'local' || kind === 'retraining') && !jobId ? (
+                <LocalUploadConfirmation
+                  items={
+                    kind === 'retraining' && retrainingSource
+                      ? [
+                          {
+                            rowId: retrainingSource.id,
+                            id: retrainingSource.id,
+                            name: retrainingSource.name,
+                            sizeBytes: retrainingSource.sizeBytes ?? 0,
+                            progress: 100,
+                            phase: 'completed',
+                            error: null,
+                            createStatus: 'waiting',
+                            createError: null,
+                          },
+                        ]
+                      : completedUploads
+                  }
+                  busy={busy}
+                  onRemove={removeUpload}
+                />
+              ) : !jobId ? (
                 <>
                   <ProductEmpty
                     title={
@@ -2211,7 +2519,7 @@ export function ImportWorkspace(props: {
                               ? '继续上传'
                               : kind === 'url'
                                 ? '开始上传'
-                                : '确认导入'}
+                                : '确认上传'}
                         </ProductButton>
                       </div>
                     }
@@ -2234,14 +2542,7 @@ export function ImportWorkspace(props: {
               )}
             </div>
           ) : null}
-
           <footer className="kb2-import-footer">
-            <ProductButton
-              disabled={step === 0 || Boolean(jobId)}
-              onClick={() => setStep((value) => value - 1)}
-            >
-              上一步
-            </ProductButton>
             {step === 1 && (kind === 'api' || isConnectorKind(kind)) ? (
               <ProductButton
                 tone="primary"
@@ -2252,11 +2553,21 @@ export function ImportWorkspace(props: {
                 提交导入
               </ProductButton>
             ) : null}
-            {step < 3 ? (
+            {kind === 'retraining' && step === 2 ? (
+              <ProductButton
+                tone="primary"
+                busy={busy}
+                disabled={!retrainingSource || !previewReady}
+                onClick={() => void submit()}
+              >
+                确认上传
+              </ProductButton>
+            ) : step < 3 ? (
               <ProductButton
                 tone="primary"
                 disabled={
                   (step === 0 && directSelection && kind === 'local' && !uploadsReady) ||
+                  (kind === 'retraining' && step === 0 && !uploadsReady) ||
                   (step === 1 && !uploadsReady) ||
                   (step === 2 && !previewReady)
                 }
@@ -2264,6 +2575,20 @@ export function ImportWorkspace(props: {
               >
                 下一步
                 <ChevronRightIcon boxSize={3.5} />
+              </ProductButton>
+            ) : kind === 'local' && !jobId ? (
+              <ProductButton
+                tone="primary"
+                busy={busy}
+                disabled={!uploadsReady || localCreatingCount > 0}
+                onClick={() => void submit()}
+              >
+                {completedUploads.length > 0 ? `共 ${completedUploads.length} 个文件 | ` : ''}
+                {localCreatingCount > 0
+                  ? '创建中'
+                  : localFinishedCount > 0 && localRetryCount > 0
+                    ? '继续上传'
+                    : '开始上传'}
               </ProductButton>
             ) : jobId ? (
               <ProductButton tone="primary" onClick={props.onExit}>
@@ -2277,8 +2602,164 @@ export function ImportWorkspace(props: {
   );
 }
 
+function LocalUploadConfirmation(props: {
+  items: ImportedUpload[];
+  busy: boolean;
+  onRemove: (rowId: string) => void;
+}) {
+  return (
+    <section className="kb2-import-upload-confirmation" aria-label="确认上传来源">
+      <div className="kb2-table-wrap">
+        <table className="kb2-table">
+          <thead>
+            <tr>
+              <th>来源名</th>
+              <th>状态</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            {props.items.map((item) => {
+              const createError =
+                item.createError === null ? null : productErrorView(item.createError);
+              const status =
+                item.createStatus === 'finish'
+                  ? { label: '完成', tone: 'success' as const }
+                  : item.createStatus === 'creating'
+                    ? { label: '创建中', tone: 'info' as const }
+                    : item.createStatus === 'error'
+                      ? { label: '错误', tone: 'danger' as const }
+                      : { label: '等待中', tone: 'neutral' as const };
+              return (
+                <tr key={item.rowId}>
+                  <td>
+                    <span className="kb2-import-upload-confirmation__name">
+                      <AttachmentIcon boxSize={4} />
+                      <span>{item.name}</span>
+                    </span>
+                  </td>
+                  <td>
+                    <StatusTag value={status.label} tone={status.tone} />
+                    {createError ? (
+                      <small
+                        className="kb2-import-upload-confirmation__error"
+                        title={createError.message}
+                      >
+                        {createError.message}
+                      </small>
+                    ) : null}
+                  </td>
+                  <td>
+                    <ProductIconButton
+                      label={`移除 ${item.name}`}
+                      tone="danger"
+                      disabled={
+                        props.busy ||
+                        item.createStatus === 'creating' ||
+                        item.createStatus === 'finish'
+                      }
+                      onClick={() => props.onRemove(item.rowId)}
+                    >
+                      <CloseIcon boxSize={3} />
+                    </ProductIconButton>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
+const PARAGRAPH_AI_OPTIONS = [
+  {
+    value: 'auto',
+    label: '自动',
+    description: '当文本内容不含 Markdown 标题时，启用模型识别。',
+  },
+  {
+    value: 'forbid',
+    label: '禁用',
+    description: '强制禁用模型自动识别段落',
+  },
+  {
+    value: 'force',
+    label: '强制处理',
+    description: '强制使用模型自动识别段落，并忽略原文本的段落（如有）',
+  },
+] as const;
+
+const DELIMITER_OPTIONS = [
+  { value: '', label: '不设置' },
+  { value: '\\n', label: '1 个换行符' },
+  { value: '\\n\\n', label: '2 个换行符' },
+  { value: '.|。', label: '句号' },
+  { value: '!|！', label: '感叹号' },
+  { value: '?|？', label: '问号' },
+  { value: ';|；', label: '分号' },
+  { value: '=====', label: '=====' },
+] as const;
+
+function ParagraphAIModeSelect(props: {
+  value: 'auto' | 'force' | 'forbid';
+  onChange: (value: 'auto' | 'force' | 'forbid') => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const labelId = useId();
+  const descriptionId = useId();
+  const selected =
+    PARAGRAPH_AI_OPTIONS.find((option) => option.value === props.value) ?? PARAGRAPH_AI_OPTIONS[1];
+
+  return (
+    <div className="kb2-settings-field">
+      <span className="kb2-field__label" id={labelId}>
+        模型识别段落
+      </span>
+      <button
+        ref={triggerRef}
+        type="button"
+        className="kb2-input kb2-description-trigger"
+        aria-label={`模型识别段落，当前${selected.label}`}
+        aria-describedby={descriptionId}
+        aria-expanded={open}
+        onClick={() => setOpen((value) => !value)}
+      >
+        <span>{selected.label}</span>
+        <span aria-hidden="true">⌄</span>
+      </button>
+      <small className="kb2-field__hint" id={descriptionId}>
+        {selected.description}
+      </small>
+      <ProductMenu
+        open={open}
+        onClose={() => setOpen(false)}
+        triggerElement={triggerRef.current}
+        align="left"
+        initialFocus="first"
+      >
+        {PARAGRAPH_AI_OPTIONS.map((option) => (
+          <ProductMenuItem
+            key={option.value}
+            hint={option.description}
+            onClick={() => {
+              props.onChange(option.value);
+              setOpen(false);
+            }}
+          >
+            {option.label}
+          </ProductMenuItem>
+        ))}
+      </ProductMenu>
+    </div>
+  );
+}
+
 function ProcessingSettings(props: {
   kind: ImportKind;
+  sourceKind?: Source['kind'];
   customPdfParse: boolean;
   setCustomPdfParse: Dispatch<SetStateAction<boolean>>;
   trainingType: 'chunk' | 'qa' | 'imageParse';
@@ -2319,10 +2800,23 @@ function ProcessingSettings(props: {
   setQaPrompt: Dispatch<SetStateAction<string>>;
   onInvalidate: () => void;
 }) {
-  const showFileParsing = props.kind === 'local' || props.kind === 'image';
+  const effectiveKind = props.sourceKind ?? props.kind;
+  const showFileParsing =
+    props.kind === 'local' ||
+    props.kind === 'image' ||
+    (props.kind === 'retraining' && effectiveKind !== 'template' && effectiveKind !== 'backup');
   const isChunk = props.trainingType === 'chunk';
+  const showSupplementalIndexes = isChunk || effectiveKind === 'image';
   const showChunkParameters = isChunk || props.trainingType === 'qa';
   const [qaPromptOpen, setQaPromptOpen] = useState(false);
+  const minChunkSize = props.trainingType === 'qa' ? 1_000 : 64;
+  const [delimiterSelection, setDelimiterSelection] = useState(() =>
+    DELIMITER_OPTIONS.some((option) => option.value === props.chunkSplitter)
+      ? props.chunkSplitter
+      : props.chunkSplitter.trim()
+        ? 'custom'
+        : '',
+  );
   return (
     <div className="kb2-import-settings">
       {showFileParsing ? (
@@ -2428,8 +2922,9 @@ function ProcessingSettings(props: {
                   <ProductInput
                     aria-label="分块条件值"
                     type="number"
-                    min={1}
+                    min={100}
                     max={100_000}
+                    step={100}
                     value={props.chunkTriggerMinSize}
                     onChange={(event) => {
                       props.setChunkTriggerMinSize(event.target.value);
@@ -2441,7 +2936,7 @@ function ProcessingSettings(props: {
             </div>
           ) : null}
 
-          {showChunkParameters || props.kind === 'image' ? (
+          {showChunkParameters || effectiveKind === 'image' ? (
             <div className="kb2-setting-block">
               <div className="kb2-setting-label">索引增强</div>
               <div className="kb2-index-enhancements">
@@ -2457,31 +2952,34 @@ function ProcessingSettings(props: {
                   />
                   <span>将标题加入索引</span>
                 </label>
-                <label className="kb2-checkbox-row">
-                  <input
-                    type="checkbox"
-                    checked={props.autoIndexes}
-                    disabled={!props.indexCapabilities.autoIndexes}
-                    onChange={(event) => {
-                      props.setAutoIndexes(event.target.checked);
-                      if (!event.target.checked) props.setIndexPrefixTitle(false);
-                      props.onInvalidate();
-                    }}
-                  />
-                  <span>自动生成补充索引</span>
-                </label>
-                <label className="kb2-checkbox-row">
-                  <input
-                    type="checkbox"
-                    checked={props.imageIndex}
-                    disabled={!props.indexCapabilities.imageIndex}
-                    onChange={(event) => {
-                      props.setImageIndex(event.target.checked);
-                      props.onInvalidate();
-                    }}
-                  />
-                  <span>图片自动索引</span>
-                </label>
+                {showSupplementalIndexes ? (
+                  <>
+                    <label className="kb2-checkbox-row">
+                      <input
+                        type="checkbox"
+                        checked={props.autoIndexes}
+                        disabled={!props.indexCapabilities.autoIndexes}
+                        onChange={(event) => {
+                          props.setAutoIndexes(event.target.checked);
+                          props.onInvalidate();
+                        }}
+                      />
+                      <span>自动生成补充索引</span>
+                    </label>
+                    <label className="kb2-checkbox-row">
+                      <input
+                        type="checkbox"
+                        checked={props.imageIndex}
+                        disabled={!props.indexCapabilities.imageIndex}
+                        onChange={(event) => {
+                          props.setImageIndex(event.target.checked);
+                          props.onInvalidate();
+                        }}
+                      />
+                      <span>图片自动索引</span>
+                    </label>
+                  </>
+                ) : null}
               </div>
             </div>
           ) : null}
@@ -2563,26 +3061,19 @@ function ProcessingSettings(props: {
 
                   {props.chunkSplitMode === 'paragraph' ? (
                     <div className="kb2-custom-fields">
-                      <ProductField label="模型识别段落">
-                        <ProductSelect
-                          value={props.paragraphChunkAIMode}
-                          onChange={(event) => {
-                            props.setParagraphChunkAIMode(
-                              event.target.value as 'auto' | 'force' | 'forbid',
-                            );
-                            props.onInvalidate();
-                          }}
-                        >
-                          <option value="forbid">禁用</option>
-                          <option value="auto">自动</option>
-                          <option value="force">强制</option>
-                        </ProductSelect>
-                      </ProductField>
-                      <ProductField label="最大段落深度">
+                      <ParagraphAIModeSelect
+                        value={props.paragraphChunkAIMode}
+                        onChange={(value) => {
+                          props.setParagraphChunkAIMode(value);
+                          props.onInvalidate();
+                        }}
+                      />
+                      <ProductField label="最大段落深度" hint="范围：1~8，步进 1">
                         <ProductInput
                           type="number"
                           min={1}
                           max={8}
+                          step={1}
                           value={props.paragraphChunkDeep}
                           onChange={(event) => {
                             props.setParagraphChunkDeep(event.target.value);
@@ -2590,11 +3081,15 @@ function ProcessingSettings(props: {
                           }}
                         />
                       </ProductField>
-                      <ProductField label="最大分块大小">
+                      <ProductField
+                        label="最大分块大小"
+                        hint={`范围：${minChunkSize}~${props.maxChunkSize}，步进 100`}
+                      >
                         <ProductInput
                           type="number"
-                          min={64}
+                          min={minChunkSize}
                           max={props.maxChunkSize}
+                          step={100}
                           value={props.chunkSize}
                           onChange={(event) => {
                             props.setChunkSize(event.target.value);
@@ -2607,11 +3102,15 @@ function ProcessingSettings(props: {
 
                   {props.chunkSplitMode === 'size' ? (
                     <div className="kb2-custom-fields">
-                      <ProductField label="分块大小">
+                      <ProductField
+                        label="分块大小"
+                        hint={`范围：${minChunkSize}~${props.maxChunkSize}，步进 100`}
+                      >
                         <ProductInput
                           type="number"
-                          min={64}
+                          min={minChunkSize}
                           max={props.maxChunkSize}
+                          step={100}
                           value={props.chunkSize}
                           onChange={(event) => {
                             props.setChunkSize(event.target.value);
@@ -2624,16 +3123,49 @@ function ProcessingSettings(props: {
 
                   {props.chunkSplitMode === 'char' ? (
                     <div className="kb2-custom-fields">
-                      <ProductField label="自定义分隔符">
-                        <ProductTextarea
-                          value={props.chunkSplitter}
-                          placeholder="每行一个正则分隔符"
-                          maxLength={1000}
-                          onChange={(event) => {
-                            props.setChunkSplitter(event.target.value);
-                            props.onInvalidate();
-                          }}
-                        />
+                      <ProductField
+                        label="分隔符"
+                        hint="选择预设分隔符；仅“自定义”需要输入正则表达式"
+                      >
+                        <div className="kb2-delimiter-controls">
+                          <ProductSelect
+                            aria-label="分隔符"
+                            value={delimiterSelection}
+                            onChange={(event) => {
+                              const value = event.target.value;
+                              setDelimiterSelection(value);
+                              if (value !== 'custom') {
+                                props.setChunkSplitter(value);
+                              } else if (
+                                DELIMITER_OPTIONS.some(
+                                  (option) => option.value === props.chunkSplitter,
+                                )
+                              ) {
+                                props.setChunkSplitter('');
+                              }
+                              props.onInvalidate();
+                            }}
+                          >
+                            {DELIMITER_OPTIONS.map((option) => (
+                              <option key={option.label} value={option.value}>
+                                {option.label}
+                              </option>
+                            ))}
+                            <option value="custom">自定义</option>
+                          </ProductSelect>
+                          {delimiterSelection === 'custom' ? (
+                            <ProductInput
+                              aria-label="自定义分隔符"
+                              value={props.chunkSplitter}
+                              placeholder="\\n;======;==SPLIT=="
+                              maxLength={1000}
+                              onChange={(event) => {
+                                props.setChunkSplitter(event.target.value);
+                                props.onInvalidate();
+                              }}
+                            />
+                          ) : null}
+                        </div>
                       </ProductField>
                     </div>
                   ) : null}
@@ -2662,13 +3194,15 @@ function ProcessingSettings(props: {
 
           {props.trainingType === 'qa' && props.chunkSettingMode === 'custom' ? (
             <div className="kb2-setting-block">
-              <div className="kb2-setting-label">QA Prompt</div>
-              <div className="kb2-prompt-preview">
-                {props.qaPrompt || '使用系统默认 QA Prompt，根据原文生成结构化问答对。'}
+              <div className="kb2-setting-label">QA 拆分引导词</div>
+              <div className="kb2-prompt-preview" tabIndex={0}>
+                <div className="kb2-prompt-preview__text">{props.qaPrompt}</div>
+                <div className="kb2-prompt-preview__mask">
+                  <ProductButton tone="primary" size="sm" onClick={() => setQaPromptOpen(true)}>
+                    自定义提示词
+                  </ProductButton>
+                </div>
               </div>
-              <ProductButton size="sm" onClick={() => setQaPromptOpen(true)}>
-                自定义 Prompt
-              </ProductButton>
               <div className="kb2-note" role="status" aria-label="QA 状态说明">
                 QA 成功会写入问答 Segment；无效输出最多自动修复一次，仍无效时任务明确失败。
               </div>
@@ -2678,36 +3212,39 @@ function ProcessingSettings(props: {
       </details>
       <ProductModal
         open={qaPromptOpen}
-        title="自定义 QA Prompt"
-        description="留空时使用系统默认 Prompt。"
-        onClose={() => setQaPromptOpen(false)}
+        title="自定义提示词"
+        onClose={() => {
+          props.setQaPrompt(props.qaPrompt.trim() || DEFAULT_QA_PROMPT);
+          setQaPromptOpen(false);
+        }}
+        width="600px"
         footer={
-          <>
-            <ProductButton
-              onClick={() => {
-                props.setQaPrompt('');
-                props.onInvalidate();
-                setQaPromptOpen(false);
-              }}
-            >
-              恢复默认
-            </ProductButton>
-            <ProductButton tone="primary" onClick={() => setQaPromptOpen(false)}>
-              完成
-            </ProductButton>
-          </>
+          <ProductButton
+            tone="primary"
+            onClick={() => {
+              props.setQaPrompt(props.qaPrompt.trim() || DEFAULT_QA_PROMPT);
+              props.onInvalidate();
+              setQaPromptOpen(false);
+            }}
+          >
+            完成
+          </ProductButton>
         }
       >
-        <ProductTextarea
-          value={props.qaPrompt}
-          maxLength={20000}
-          rows={12}
-          placeholder="留空时使用系统 QA Prompt"
-          onChange={(event) => {
-            props.setQaPrompt(event.target.value);
-            props.onInvalidate();
-          }}
-        />
+        <div className="kb2-prompt-editor">
+          <ProductTextarea
+            aria-label="QA 拆分引导词"
+            value={props.qaPrompt}
+            maxLength={20000}
+            rows={8}
+            placeholder="留空后点击完成将恢复默认引导词"
+            onChange={(event) => props.setQaPrompt(event.target.value)}
+          />
+          <div className="kb2-prompt-fixed">
+            <strong>固定响应格式</strong>
+            <pre>{QA_FIXED_TEMPLATE}</pre>
+          </div>
+        </div>
       </ProductModal>
     </div>
   );
@@ -3111,8 +3648,8 @@ function previewSummary(input: {
   if (input.kind === 'retraining') {
     return {
       title: '重训练',
-      description: input.collectionId ?? '',
-      rows: [{ label: 'Source ID', value: input.collectionId ?? '未提供' }],
+      description: '按当前来源重新生成数据与索引',
+      rows: [],
     };
   }
   return {

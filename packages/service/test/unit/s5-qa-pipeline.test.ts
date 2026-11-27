@@ -122,12 +122,12 @@ describe('TEST-PARSE-004-BLOCK QA model pipeline', () => {
 
   it('keeps chunk hash format and reports over-limit diagnostics', async () => {
     const content = Array.from(
-      { length: 6 },
+      { length: 51 },
       (_, index) => `Q${index + 1}: 问题${index + 1}\nA${index + 1}: 答案${index + 1}`,
     ).join('\n');
     const { result } = request(content);
     const value = await result;
-    expect(value.items).toHaveLength(5);
+    expect(value.items).toHaveLength(50);
     expect(value.items.every((item) => item.sourceChunkHash === 'sha256:chunk')).toBe(true);
     expect(value.diagnostics).toContainEqual(
       expect.objectContaining({ code: 'qa_over_limit', count: 1 }),

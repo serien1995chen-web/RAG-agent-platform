@@ -26,6 +26,8 @@ import type {
   ModelBinding,
   ModelSettings,
   PageResult,
+  RetrainPreview,
+  RetrainResult,
   SearchResponse,
   Segment,
   SegmentHistory,
@@ -969,6 +971,32 @@ export function previewImportFile(
         parseConfig: input.parseConfig ?? {},
         chunking: input.chunking,
         dryRun: true,
+      },
+    },
+  );
+}
+
+export function retrainSource(
+  sourceId: string,
+  input: {
+    version: number;
+    dryRun: boolean;
+    parseProvider?: string;
+    parseConfig?: Record<string, unknown>;
+    chunking: Record<string, unknown>;
+  },
+) {
+  return knowledgeRequest<RetrainPreview | RetrainResult>(
+    `/v1/knowledge/sources/${encodeURIComponent(sourceId)}/retrain`,
+    {
+      method: 'POST',
+      idempotencyKey: key(),
+      body: {
+        version: input.version,
+        dryRun: input.dryRun,
+        ...(input.parseProvider ? { parseProvider: input.parseProvider } : {}),
+        parseConfig: input.parseConfig ?? {},
+        chunking: input.chunking,
       },
     },
   );

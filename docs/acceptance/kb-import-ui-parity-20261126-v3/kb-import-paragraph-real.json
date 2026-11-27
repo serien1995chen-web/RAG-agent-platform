@@ -1,0 +1,16 @@
+{
+  "testId": "TEST-X-S11-PROVIDER-REAL",
+  "generatedAt": "2026-11-26T14:23:16.585Z",
+  "candidateSha": "UNFROZEN",
+  "status": "REAL_VERIFIED",
+  "endpointHostHash": "04b0afbac4bca387",
+  "modelId": "deepseek-v4.1-flash",
+  "sourceSha256": "4e5005e134f460b22f442b1f60aabf7d6d698d14d7d43c4155ff0587d6bd37e3",
+  "applied": true,
+  "providerCalls": 1,
+  "usage": {
+    "inputTokens": 87,
+    "outputTokens": 250,
+    "quantity": 337
+  }
+}

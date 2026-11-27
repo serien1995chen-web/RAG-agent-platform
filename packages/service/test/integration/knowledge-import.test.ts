@@ -442,6 +442,127 @@ afterAll(async () => {
 });
 
 describe('TEST-ING-001-BLOCK C1 import submission', () => {
+  it('retrains every Source kind by creating a replacement and preserving display metadata', async () => {
+    const kinds = [
+      'file',
+      'text',
+      'url',
+      'template',
+      'backup',
+      'api_library',
+      'feishu',
+      'yuque',
+      'dingtalk',
+      'image',
+    ] as const;
+    for (const kind of kinds) {
+      const sourceId = id();
+      const tagId = new mongoose.Types.ObjectId();
+      await connection.models.KnowledgeSource.create({
+        _id: new mongoose.Types.ObjectId(sourceId),
+        workspaceId,
+        knowledgeSpaceId: new mongoose.Types.ObjectId(spaceId),
+        version: 1,
+        deletedAt: null,
+        createdByMemberId: context.memberId,
+        updatedByMemberId: context.memberId,
+        directoryId: null,
+        kind,
+        name: `中文来源-${kind}`,
+        externalId: `external-${kind}`,
+        connectorId: null,
+        blobRefId: null,
+        mimeType: 'text/plain',
+        sizeBytes: 4,
+        contentHash: 'hash',
+        parseProvider: 'liteparse',
+        processingStatus: 'ready',
+        sourceVersion: 1,
+        searchEnabled: true,
+        permissionState: 'independent',
+        permissionRevision: 2,
+        aclSnapshotVersion: 3,
+        ownershipMemberId: context.memberId,
+        metadata: { chunkingConfigSnapshot: { trainingType: 'chunk' } },
+        tagValues: [{ tagId, valueKey: 'cn', value: '中文标签' }],
+      });
+      await connection.models.KnowledgeResourcePermission.create({
+        workspaceId,
+        knowledgeSpaceId: new mongoose.Types.ObjectId(spaceId),
+        version: 1,
+        deletedAt: null,
+        createdByMemberId: context.memberId,
+        updatedByMemberId: context.memberId,
+        resourceType: 'source',
+        resourceId: new mongoose.Types.ObjectId(sourceId),
+        principalType: 'member',
+        principalId: context.memberId,
+        permission: 'owner',
+        inheritMode: 'override',
+        snapshotVersion: 3,
+      });
+      const nextSourceId = id();
+      const nextObjectId = id();
+      const base = command({ key: `retrain-${kind}-${suffix}` });
+      const result = await repository.retrain(
+        {
+          sourceId,
+          expectedVersion: 1,
+          command: {
+            ...base,
+            importKind: kind === 'image' ? 'images' : kind === 'file' ? 'files' : kind,
+            sourceDrafts: [
+              {
+                id: nextSourceId,
+                kind,
+                name: `中文来源-${kind}`,
+                directoryId: null,
+                blobRefId: nextObjectId,
+                externalId: `external-${kind}`,
+                connectorId: null,
+                mimeType: 'text/plain',
+                sizeBytes: 4,
+                contentHash: 'hash',
+                parseProvider: 'liteparse',
+                metadata: { importedFrom: 'retrain-test' },
+                object: {
+                  id: nextObjectId,
+                  provider: 'minio',
+                  bucket: 'kb-test',
+                  objectKey: `retrain/${nextObjectId}`,
+                  mimeType: 'text/plain',
+                  sizeBytes: 4,
+                  etag: 'etag',
+                  sha256: 'hash',
+                },
+              },
+            ],
+          },
+        },
+        context,
+      );
+      expect(result.sourceIds, kind).toEqual([nextSourceId]);
+      const previous = await connection.models.KnowledgeSource.findById(sourceId).lean();
+      const replacement = await connection.models.KnowledgeSource.findById(nextSourceId).lean();
+      expect(previous?.deletedAt, kind).toBeTruthy();
+      expect(replacement, kind).toMatchObject({
+        kind,
+        name: `中文来源-${kind}`,
+        searchEnabled: true,
+        permissionState: 'independent',
+        permissionRevision: 2,
+        aclSnapshotVersion: 3,
+      });
+      expect(String(replacement?.tagValues[0]?.tagId), kind).toBe(String(tagId));
+      const copiedPermission = await connection.models.KnowledgeResourcePermission.findOne({
+        workspaceId,
+        resourceType: 'source',
+        resourceId: new mongoose.Types.ObjectId(nextSourceId),
+      }).lean();
+      expect(copiedPermission?.principalId, kind).toBe(context.memberId);
+    }
+  });
+
   it('writes one parent Job, N Sources, Audit and one pending Outbox in one transaction', async () => {
     const submission = await repository.submit(command({ sourceCount: 3 }), context);
     expect(submission.status).toBe('queued');

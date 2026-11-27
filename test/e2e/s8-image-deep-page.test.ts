@@ -257,7 +257,8 @@ describe('S8 real app image and deep search routes', () => {
           `${app.baseUrl}/dataset/detail?datasetId=${spaceId}&currentTab=import&source=image`,
           { waitUntil: 'networkidle' },
         );
-        await playwrightExpect(page.getByText('新建 / 导入', { exact: true })).toBeVisible();
+        await playwrightExpect(page.getByText('新建 / 导入', { exact: true })).toHaveCount(0);
+        await playwrightExpect(page.getByRole('button', { name: '退出' })).toBeVisible();
         await playwrightExpect(
           page.getByRole('button', { name: /图片集合/ }).first(),
         ).toBeVisible();

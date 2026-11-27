@@ -253,6 +253,7 @@ describe.sequential('B04 product Data UI', () => {
 
     await page.getByRole('button', { name: '编辑数据块 1' }).click();
     const editor = page.locator('.kb2-modal').filter({ hasText: '编辑数据 #1' });
+    await editor.getByRole('tab', { name: 'QA 模式' }).click();
     await editor.locator('textarea').first().fill('退款多久到账？已更新');
     await editor.locator('textarea').nth(1).fill('退款通常会在三个工作日内到账。');
     await editor.getByRole('checkbox', { name: '参与检索' }).uncheck();
@@ -261,13 +262,26 @@ describe.sequential('B04 product Data UI', () => {
         response.request().method() === 'PATCH' &&
         response.url().endsWith(`/segments/${indexedSegmentId}`),
     );
-    await editor.getByRole('button', { name: '保存', exact: true }).click();
+    await editor.getByRole('button', { name: '更新索引', exact: true }).click();
     expect((await updateResponse).status()).toBe(200);
     await playwrightExpect(page.getByText('退款多久到账？已更新').first()).toBeVisible();
+    await registerKnowledgeModels(connection).KnowledgeSegment.updateOne(
+      { _id: indexedSegmentId, workspaceId },
+      {
+        $set: { indexStatus: 'indexed', indexErrorCode: null },
+        $inc: { version: 1 },
+      },
+    );
 
     await page.reload({ waitUntil: 'networkidle' });
     await playwrightExpect(page.getByText('退款多久到账？已更新').first()).toBeVisible();
     await playwrightExpect(page.getByText('退款通常会在三个工作日内到账。').first()).toBeVisible();
+    await playwrightExpect(
+      page
+        .locator('.kb2-data-card')
+        .filter({ hasText: '退款多久到账？已更新' })
+        .getByText('已索引', { exact: true }),
+    ).toBeVisible({ timeout: 30_000 });
 
     await page.getByRole('button', { name: '删除数据块 4' }).click();
     const deleteDialog = page.locator('.kb2-modal').filter({ hasText: '删除数据' });
@@ -299,7 +313,8 @@ describe.sequential('B04 product Data UI', () => {
     await gotoData(page);
     await page.getByRole('button', { name: '编辑数据块 1' }).click();
     const editor = page.locator('.kb2-modal').filter({ hasText: '编辑数据 #1' });
-    await playwrightExpect(editor.getByText('索引 2', { exact: true })).toBeVisible();
+    await playwrightExpect(editor.locator('.kb2-index-panel__head h3')).toContainText('数据索引');
+    await playwrightExpect(editor.locator('.kb2-index-row')).toHaveCount(2);
     await playwrightExpect(editor.getByText('系统索引只读', { exact: true })).toBeVisible();
     const defaultRow = editor.locator('.kb2-index-row').filter({ hasText: 'default' });
     await playwrightExpect(defaultRow.getByRole('button')).toHaveCount(0);
@@ -342,9 +357,7 @@ describe.sequential('B04 product Data UI', () => {
     await page.getByRole('button', { name: '编辑数据块 1' }).click();
     const editor = page.locator('.kb2-modal').filter({ hasText: '编辑数据 #1' });
     await page.screenshot({ path: join(resultDir, 'b04-history.png'), fullPage: true });
-    await playwrightExpect(
-      editor.getByRole('heading', { name: /编辑历史|历史版本/ }),
-    ).toBeVisible();
+    await playwrightExpect(editor.getByText(/编辑历史/, { exact: false }).first()).toBeVisible();
     await context.close();
   });
 

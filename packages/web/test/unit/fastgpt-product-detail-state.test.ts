@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
+  canOpenTrainingState,
   directoryPath,
   descendantDirectoryIds,
   filterSourceRows,
   formatTagValueKey,
   latestJobsByResource,
   normalizeDetailTab,
+  processingModelLabel,
   sourceStatusView,
   tagValuesForSource,
 } from '../../src/product/dataset-detail-state';
@@ -137,6 +139,16 @@ describe('FastGPT product detail module', () => {
     expect(sourceStatusView('ready')).toEqual({ label: '已就绪', tone: 'success' });
     expect(sourceStatusView('indexing')).toEqual({ label: '索引中', tone: 'purple' });
     expect(sourceStatusView('failed')).toEqual({ label: '训练异常', tone: 'danger' });
+  });
+
+  it('keeps ready training states read-only and exposes source processing labels', () => {
+    expect(canOpenTrainingState(source('ready', '已就绪'))).toBe(false);
+    expect(canOpenTrainingState(source('failed', '异常', { processingStatus: 'failed' }))).toBe(
+      true,
+    );
+    expect(processingModelLabel('chunk')).toBe('通用文本');
+    expect(processingModelLabel('qa')).toBe('问答对');
+    expect(processingModelLabel('imageParse')).toBe('图片处理');
   });
 
   it('L1-B02-COL-003-UI01 四类标签显示与筛选状态保持可读并正确映射异步 Source 状态', () => {

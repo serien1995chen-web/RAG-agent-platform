@@ -93,7 +93,45 @@ export interface Source {
   segmentCount: number;
   metadata?: Record<string, unknown>;
   tagValues?: SourceTagValue[];
+  resolvedTags?: SourceTagValue[];
+  createdAt: string;
+  updatedAt: string;
+  parseProvider: string;
+  processingModel: string;
+  parseConfig: Record<string, unknown>;
+  chunkSettings: Record<string, unknown>;
+  qaConfig: Record<string, unknown>;
+  rawTextLength: number | null;
   version: number;
+}
+
+export type RetrainPreview =
+  | {
+      kind: 'chunks';
+      sourceId: string;
+      name: string;
+      contentHash: string;
+      totalChunks: number;
+      chunks: Array<{
+        index: number;
+        text: string;
+        contentHash: string;
+      }>;
+      truncated: boolean;
+    }
+  | {
+      kind: 'image';
+      sourceId: string;
+      name: string;
+      contentHash: string;
+      images: Array<{ blobRefId: string; order: number }>;
+      totalChunks: number;
+    };
+
+export interface RetrainResult {
+  sourceId: string;
+  previousSourceId: string;
+  job: Job;
 }
 
 export interface SegmentIndex {

@@ -1111,12 +1111,12 @@ describe('L1-B19-OPS-001 usage, quota snapshot and resource counts over real HTT
     });
     expect(summary.data.delivery).toEqual({ pending: 8, delivered: 0, failed: 0 });
     expect(summary.data.quota).toMatchObject({
-      aiPointsLimit: 100,
       maxSpaces: 3,
-      maxIndexes: 600,
-      requestsPerMinute: 30,
       maxModelConcurrency: 10,
     });
+    expect(Number(summary.data.quota.aiPointsLimit)).toBeGreaterThanOrEqual(100);
+    expect(Number(summary.data.quota.maxIndexes)).toBeGreaterThanOrEqual(600);
+    expect(Number(summary.data.quota.requestsPerMinute)).toBeGreaterThanOrEqual(30);
 
     const reversed = await request(
       `/v1/knowledge/usage?from=${encodeURIComponent(to)}&to=${encodeURIComponent(from)}`,

@@ -241,6 +241,146 @@ function coalesceSmall(
   return result.map((chunk) => chunk.text);
 }
 
+interface MarkdownParagraphBlock {
+  kind: 'text' | 'code';
+  text: string;
+}
+
+interface MarkdownParagraphGroup {
+  headingPath: string[];
+  blocks: MarkdownParagraphBlock[];
+}
+
+/**
+ * Paragraph mode keeps Markdown heading boundaries visible in the stored chunks.
+ * A heading path is repeated when a section is split, so every chunk remains
+ * independently understandable without changing the source text.
+ */
+function parseMarkdownParagraphGroups(
+  text: string,
+  paragraphDeep: number,
+): MarkdownParagraphGroup[] | null {
+  const lines = text.split('\n');
+  const groups: MarkdownParagraphGroup[] = [];
+  let headingPath: string[] = [];
+  let current: MarkdownParagraphGroup | null = null;
+  let textLines: string[] = [];
+  let hasHeading = false;
+
+  const ensureCurrent = (): MarkdownParagraphGroup => {
+    current ??= { headingPath: [...headingPath], blocks: [] };
+    return current;
+  };
+  const flushText = (): void => {
+    const value = textLines.join('\n').trim();
+    textLines = [];
+    if (value) ensureCurrent().blocks.push({ kind: 'text', text: value });
+  };
+  const flushGroup = (): void => {
+    flushText();
+    if (current?.blocks.length) groups.push(current);
+    current = null;
+  };
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index]!;
+    const heading = /^(#{1,6})\s+.+$/.exec(line);
+    if (heading) {
+      hasHeading = true;
+      flushGroup();
+      const level = heading[1]!.length;
+      if (level <= paragraphDeep) {
+        headingPath = headingPath.slice(0, level - 1);
+        headingPath[level - 1] = line.trim();
+      } else {
+        textLines.push(line);
+      }
+      continue;
+    }
+
+    const fence = /^(```|~~~)/.exec(line.trim());
+    if (fence) {
+      flushGroup();
+      const codeLines = [line];
+      index += 1;
+      while (index < lines.length) {
+        const codeLine = lines[index]!;
+        codeLines.push(codeLine);
+        index += 1;
+        if (codeLine.trim().startsWith(fence[1]!)) break;
+      }
+      index -= 1;
+      ensureCurrent().blocks.push({ kind: 'code', text: codeLines.join('\n') });
+      flushGroup();
+      continue;
+    }
+    textLines.push(line);
+  }
+  flushGroup();
+  return hasHeading ? groups : null;
+}
+
+function renderMarkdownParagraphGroup(group: MarkdownParagraphGroup): string {
+  const prefix = group.headingPath.join('\n');
+  const body = group.blocks
+    .map((block) => block.text)
+    .join('\n\n')
+    .trim();
+  return [prefix, body].filter(Boolean).join('\n');
+}
+
+function splitMarkdownParagraphGroup(
+  group: MarkdownParagraphGroup,
+  policy: ChunkPolicy,
+  counter: Counter,
+): string[] {
+  const rendered = renderMarkdownParagraphGroup(group);
+  if (counter.length(rendered) <= policy.chunkSize) return [rendered];
+
+  const prefix = group.headingPath.join('\n');
+  const prefixLength = prefix ? counter.length(prefix) + 1 : 0;
+  const bodyBudget = Math.max(1, policy.chunkSize - prefixLength);
+  const units = group.blocks.flatMap((block) =>
+    block.kind === 'code' ? [block.text] : block.text.split(/\n{2,}/).filter(Boolean),
+  );
+  const chunks: string[] = [];
+  let body = '';
+
+  const push = (): void => {
+    const value = body.trim();
+    body = '';
+    if (!value) return;
+    const chunk = [prefix, value].filter(Boolean).join('\n');
+    if (counter.length(chunk) <= policy.chunkSize) {
+      chunks.push(chunk);
+      return;
+    }
+    const bodyPieces = counter.split(value, bodyBudget);
+    const budgetedPrefixes = bodyPieces.map((piece) => [prefix, piece].filter(Boolean).join('\n'));
+    chunks.push(...budgetedPrefixes);
+  };
+
+  for (const unit of units) {
+    const candidate = body ? `${body}\n\n${unit}` : unit;
+    if (counter.length(candidate) <= bodyBudget) {
+      body = candidate;
+      continue;
+    }
+    push();
+    if (counter.length(unit) <= bodyBudget) {
+      body = unit;
+      continue;
+    }
+    const pieces = counter.split(unit, bodyBudget);
+    for (const piece of pieces.slice(0, -1)) {
+      chunks.push([prefix, piece].filter(Boolean).join('\n'));
+    }
+    body = pieces.at(-1) ?? '';
+  }
+  push();
+  return chunks;
+}
+
 export function chunkText(input: { text: string; policy: ChunkPolicy }): ChunkOutput {
   const policy = input.policy;
   validatePolicy(policy);
@@ -248,6 +388,26 @@ export function chunkText(input: { text: string; policy: ChunkPolicy }): ChunkOu
   if (normalized.trim().length === 0) return { chunks: [] };
 
   const counter = createCounter(policy.lengthUnit);
+  if ((policy.mode === 'auto' || policy.mode === 'paragraph') && policy.customRegs.length === 0) {
+    const groups = parseMarkdownParagraphGroups(normalized, policy.paragraphDeep);
+    if (groups) {
+      const chunks = groups.flatMap((group) => splitMarkdownParagraphGroup(group, policy, counter));
+      if (chunks.length > policy.maxChunks) {
+        throw chunkLimitError({
+          maxChunks: policy.maxChunks,
+          actual: chunks.length,
+          chunkSize: policy.chunkSize,
+        });
+      }
+      return {
+        chunks: chunks.map((text, index) => ({
+          index,
+          text,
+          contentHash: contentHashOfChunk(text),
+        })),
+      };
+    }
+  }
   const segments = buildSegments(normalized, {
     customRegs: policy.customRegs,
     paragraphDeep: policy.paragraphDeep,

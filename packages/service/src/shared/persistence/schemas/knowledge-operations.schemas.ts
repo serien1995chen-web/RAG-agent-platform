@@ -301,7 +301,7 @@ export const KnowledgeObjectRefSchema = new Schema(
         ],
         default: [],
       },
-      originalName: { type: String, required: true, maxlength: 180 },
+      originalName: { type: String, required: true, maxlength: 240 },
       completedAt: { type: Date, default: null },
       abortedAt: { type: Date, default: null },
     },

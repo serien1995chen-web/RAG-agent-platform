@@ -3,7 +3,12 @@
  * 输出解析失败必须回退 chunk_split 并记录指标，不得伪造 QA。
  */
 import { createHash } from 'node:crypto';
-import { KnowledgeApiError, createKnowledgeError, type KnowledgeErrorCode } from '@kb/contracts';
+import {
+  KnowledgeApiError,
+  MAX_QA_PER_CHUNK,
+  createKnowledgeError,
+  type KnowledgeErrorCode,
+} from '@kb/contracts';
 import { dedupeQaItems } from './dedup';
 import { buildQaDedupKey, normalizeQaText } from './dedup';
 import { buildQaPrompt, resolvePrompt, type QaTemplateRegistryPort } from './prompt';
@@ -26,6 +31,7 @@ export type {
 export {
   DEFAULT_QA_PROMPT,
   DEFAULT_QA_PROMPT_HASH,
+  QA_FIXED_TEMPLATE,
   DEFAULT_TEMPLATE_ID,
   DEFAULT_TEMPLATE_LOCALE,
   DEFAULT_TEMPLATE_VERSION,
@@ -33,6 +39,7 @@ export {
   createDefaultTemplateRegistry,
   resolvePrompt,
 } from './prompt';
+export { MAX_QA_PER_CHUNK };
 export type { QaTemplate, QaTemplateRegistryPort } from './prompt';
 export { parseQaOutput, parseQaPairs } from './parser';
 export { dedupeQaItems, limitChunkCount } from './dedup';

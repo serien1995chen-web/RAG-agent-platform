@@ -1,0 +1,80 @@
+{
+  "url": "http://127.0.0.1:38863/dataset/detail?datasetId=6b087c9efb01528707502fcb&currentTab=dataCard&collectionId=6b087c9efb01528707502fed",
+  "viewport": {
+    "width": 1440,
+    "height": 900
+  },
+  "document": {
+    "scrollWidth": 1440,
+    "clientWidth": 1440,
+    "scrollHeight": 900,
+    "clientHeight": 900
+  },
+  "layout": {
+    "main": {
+      "x": 64,
+      "y": 0,
+      "width": 1376,
+      "height": 900,
+      "padding": "16px 16px 16px 12px",
+      "gap": "normal",
+      "borderRadius": "0px",
+      "fontSize": "14px",
+      "lineHeight": "21px",
+      "maxWidth": "none",
+      "maxHeight": "none",
+      "overflowX": "visible",
+      "overflowY": "visible"
+    },
+    "detailLayout": null,
+    "detailPanel": null,
+    "collectionTable": null,
+    "dataLayout": {
+      "x": 101,
+      "y": 145,
+      "width": 1298,
+      "height": 620,
+      "padding": "0px",
+      "gap": "8px",
+      "borderRadius": "0px",
+      "fontSize": "14px",
+      "lineHeight": "21px",
+      "maxWidth": "none",
+      "maxHeight": "none",
+      "overflowX": "visible",
+      "overflowY": "visible"
+    },
+    "metadataPanel": {
+      "x": 1079,
+      "y": 145,
+      "width": 320,
+      "height": 369,
+      "padding": "24px",
+      "gap": "9px",
+      "borderRadius": "8px",
+      "fontSize": "14px",
+      "lineHeight": "21px",
+      "maxWidth": "none",
+      "maxHeight": "none",
+      "overflowX": "visible",
+      "overflowY": "visible"
+    },
+    "dataEditor": null,
+    "modal": null,
+    "importPage": null,
+    "importSteps": null,
+    "importBody": null,
+    "importMain": null
+  },
+  "headers": [],
+  "buttons": [
+    "知识库交互一致性验收-8E56ED16FA",
+    "返回",
+    "导出分块",
+    "调整训练参数",
+    "插入",
+    "批量管理",
+    "返回 Collection 管理权限"
+  ],
+  "text": "跳到主要内容 知 知识库 知识库 KB 知识库交互一致性验收-8E56ED16FA 真实图片文件名-8E56ED16FA.png 未开始 图片集合 返回 导出分块 调整训练参数 插入 0 条数据 0 条已索引 批量管理 这个集合还没有数据 通过“插入”或 Import 添加数据。 元数据 集合 ID 6b087c9efb01528707502fed 数据来源 图片数据集 数据集名称 真实图片文件名-8E56ED16FA.png 创建时间 2026/11/27 02:38:22 更新时间 2026/11/27 02:38:22 处理模式 图片处理 集合标签 - Source 权限 返回 Collection 管理权限"
+}

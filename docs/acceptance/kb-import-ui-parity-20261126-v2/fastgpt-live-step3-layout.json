@@ -1,0 +1,82 @@
+{
+  "buttons": [
+    {
+      "disabled": false,
+      "height": 36,
+      "text": "上一步",
+      "width": 97,
+      "x": 8,
+      "y": 55
+    },
+    {
+      "disabled": false,
+      "height": 36,
+      "text": "下一步",
+      "width": 74,
+      "x": 729,
+      "y": 1159
+    }
+  ],
+  "headings": [
+    {
+      "fontSize": "28px",
+      "fontWeight": "700",
+      "lineHeight": "42px",
+      "tag": "h1"
+    },
+    {
+      "fontSize": "24px",
+      "fontWeight": "700",
+      "lineHeight": "36px",
+      "tag": "h2"
+    },
+    {
+      "fontSize": "28px",
+      "fontWeight": "700",
+      "lineHeight": "42px",
+      "tag": "h1"
+    },
+    {
+      "fontSize": "24px",
+      "fontWeight": "700",
+      "lineHeight": "36px",
+      "tag": "h2"
+    },
+    {
+      "fontSize": "20px",
+      "fontWeight": "700",
+      "lineHeight": "30px",
+      "tag": "h3"
+    },
+    {
+      "fontSize": "28px",
+      "fontWeight": "700",
+      "lineHeight": "42px",
+      "tag": "h1"
+    }
+  ],
+  "page": {
+    "clientHeight": 1253,
+    "scrollHeight": 1253,
+    "scrollY": 0
+  },
+  "scrollables": [
+    {
+      "clientHeight": 930,
+      "cls": "css-19qjxv0",
+      "height": 930,
+      "overflowY": "auto",
+      "scrollHeight": 1890,
+      "tag": "div",
+      "text": "FastGPT 导入验收一级标题\n二级标题：预览滚动\n第 1 段：这是用于验收分",
+      "width": 397,
+      "x": 406,
+      "y": 221
+    }
+  ],
+  "targetDirectoryCount": 0,
+  "viewport": {
+    "height": 1253,
+    "width": 811
+  }
+}

@@ -9,7 +9,7 @@ import type {
   ModelSettingItem,
   ModelSettingsView,
 } from '../application/s5-model-ports';
-import { S5AiproxyCatalogAdapter } from './s5-aiproxy-catalog.adapter';
+import { S5AiproxyCatalogAdapter, configuredModelLimits } from './s5-aiproxy-catalog.adapter';
 import type { S5HttpTransportPort } from './s5-aiproxy-http.adapter';
 import type { S5AiproxyConfig } from '../../../shared/config/s5-aiproxy-config';
 
@@ -90,6 +90,19 @@ function toSettingItem(item: ModelCatalogItem): ModelSettingItem {
   };
 }
 
+export function mergeConfiguredModelLimits(
+  models: readonly ModelSettingItem[],
+  env: Readonly<Record<string, string | undefined>>,
+): ModelSettingItem[] {
+  const configured = configuredModelLimits(env);
+  if (configured.size === 0) return [...models];
+  return models.map((model) => {
+    if (model.limits && Object.keys(model.limits).length > 0) return model;
+    const limits = configured.get(model.modelId);
+    return limits ? { ...model, limits } : model;
+  });
+}
+
 /** Adds workspace persistence and runtime refresh around the stateless AIProxy catalog adapter. */
 export class S5WorkspaceModelCatalogAdapter implements ModelCatalogPort {
   private readonly settingsModel: ReturnType<
@@ -129,7 +142,10 @@ export class S5WorkspaceModelCatalogAdapter implements ModelCatalogPort {
       .findOne({ workspaceId: input.workspaceId })
       .lean<{ models: ModelSettingItem[]; defaults: ModelDefaults }>();
     return settings
-      ? this.databaseCatalog(settings.models, settings.defaults).listModels(input)
+      ? this.databaseCatalog(
+          mergeConfiguredModelLimits(settings.models, this.input.env),
+          settings.defaults,
+        ).listModels(input)
       : this.environmentCatalog().listModels(input);
   }
 
@@ -158,7 +174,7 @@ export class S5WorkspaceModelCatalogAdapter implements ModelCatalogPort {
       return {
         version: settings.version,
         source: 'database',
-        models: settings.models,
+        models: mergeConfiguredModelLimits(settings.models, this.input.env),
         defaults: settings.defaults,
       };
     }

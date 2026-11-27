@@ -127,7 +127,7 @@ describe('TEST-PARSE-003/004-BLOCK S5 processing application', () => {
       sourceVersion: 1,
       rawText: 'First paragraph.\n\nSecond paragraph.',
       artifact,
-      settings: { ...baseSettings, trainingType: 'qa', chunkSize: 64 },
+      settings: { ...baseSettings, trainingType: 'qa', chunkSize: 1_000 },
       context,
     });
     expect(qa.calls.length).toBe(result.chunks.length);
@@ -149,7 +149,7 @@ describe('TEST-PARSE-003/004-BLOCK S5 processing application', () => {
       sourceVersion: 1,
       rawText: '   ',
       artifact,
-      settings: { ...baseSettings, trainingType: 'qa' },
+      settings: { ...baseSettings, trainingType: 'qa', chunkSize: 1_000 },
       context,
     });
     expect(result.chunks).toEqual([]);
@@ -186,7 +186,7 @@ describe('TEST-PARSE-003/004-BLOCK S5 processing application', () => {
         sourceVersion: 1,
         rawText: 'text',
         artifact,
-        settings: { ...baseSettings, trainingType: 'qa' },
+        settings: { ...baseSettings, trainingType: 'qa', chunkSize: 1_000 },
         qaFallbackPolicy: 'none',
         context,
       }),

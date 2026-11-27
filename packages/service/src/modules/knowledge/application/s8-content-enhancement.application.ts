@@ -62,11 +62,7 @@ export class S8ContentEnhancementApplication {
     context: TenantContext;
   }): Promise<S8ParagraphEnhancementResult> {
     const mode = input.settings.paragraphChunkAIMode ?? 'forbid';
-    if (
-      mode === 'forbid' ||
-      input.settings.chunkSplitMode !== 'paragraph' ||
-      input.settings.trainingType !== 'chunk'
-    ) {
+    if (mode === 'forbid' || input.settings.chunkSplitMode !== 'paragraph') {
       return {
         markdown: input.rawText,
         applied: false,

@@ -7,6 +7,7 @@
       "type": "embedding",
       "capabilities": ["text-embedding", "caption-embedding", "dimension:1024"],
       "dimension": 1024,
+      "limits": { "maxToken": 4096, "defaultToken": 512 },
       "tags": ["多模态"]
     },
     {
@@ -16,6 +17,7 @@
       "type": "embedding",
       "capabilities": ["text-embedding", "dimension:1024"],
       "dimension": 1024,
+      "limits": { "maxToken": 4096, "defaultToken": 512 },
       "tags": []
     },
     {

@@ -12,6 +12,7 @@ import {
 import { registerKnowledgeModels } from '../../../shared/persistence/schemas/knowledge-index';
 import type {
   KnowledgeDirectoryDoc,
+  KnowledgeSegmentDoc,
   KnowledgeSourceDoc,
   KnowledgeSpaceDoc,
 } from '../../../shared/persistence/schemas/knowledge-catalog.schemas';
@@ -21,6 +22,7 @@ import type {
   KnowledgeConnectorDoc,
 } from '../../../shared/persistence/schemas/knowledge-connector.schemas';
 import type { KnowledgeObjectRefDoc } from '../../../shared/persistence/schemas/knowledge-operations.schemas';
+import type { KnowledgeResourcePermissionDoc } from '../../../shared/persistence/schemas/knowledge-access.schemas';
 import type { TenantContext } from '../../../shared/persistence/knowledge/tenant';
 import type {
   ImportSourceDraft,
@@ -96,8 +98,10 @@ export class KnowledgeImportRepository implements ImportSubmissionPort {
   private readonly spaces: Model<KnowledgeSpaceDoc>;
   private readonly directories: Model<KnowledgeDirectoryDoc>;
   private readonly sources: Model<KnowledgeSourceDoc>;
+  private readonly segments: Model<KnowledgeSegmentDoc>;
   private readonly jobs: Model<KnowledgeJobDoc>;
   private readonly objects: Model<KnowledgeObjectRefDoc>;
+  private readonly permissions: Model<KnowledgeResourcePermissionDoc>;
   private readonly connectors: Model<KnowledgeConnectorDoc>;
   private readonly cursors: Model<KnowledgeConnectorCursorDoc>;
   private readonly audit: KnowledgeAuditRepository;
@@ -110,8 +114,10 @@ export class KnowledgeImportRepository implements ImportSubmissionPort {
     this.spaces = models.KnowledgeSpace as Model<KnowledgeSpaceDoc>;
     this.directories = models.KnowledgeDirectory as Model<KnowledgeDirectoryDoc>;
     this.sources = models.KnowledgeSource as Model<KnowledgeSourceDoc>;
+    this.segments = models.KnowledgeSegment as Model<KnowledgeSegmentDoc>;
     this.jobs = models.KnowledgeJob as Model<KnowledgeJobDoc>;
     this.objects = models.KnowledgeObjectRef as Model<KnowledgeObjectRefDoc>;
+    this.permissions = models.KnowledgeResourcePermission as Model<KnowledgeResourcePermissionDoc>;
     this.connectors = models.KnowledgeConnector as Model<KnowledgeConnectorDoc>;
     this.cursors = models.KnowledgeConnectorCursor as Model<KnowledgeConnectorCursorDoc>;
     this.audit = new KnowledgeAuditRepository(connection);
@@ -228,10 +234,8 @@ export class KnowledgeImportRepository implements ImportSubmissionPort {
       parseProvider: draft.parseProvider,
       processingStatus: 'queued',
       sourceVersion: 1,
-      searchEnabled: true,
-      permissionState: space.sourcePermissionEnabled ? 'inherited' : 'disabled',
-      permissionRevision: space.permissionRevision,
-      ownershipMemberId: context.memberId,
+      searchEnabled: draft.searchEnabled ?? true,
+      ownershipMemberId: draft.ownershipMemberId ?? context.memberId,
       metadata: {
         ...draft.metadata,
         importKind: command.importKind,
@@ -240,7 +244,14 @@ export class KnowledgeImportRepository implements ImportSubmissionPort {
         chunkingConfigSnapshot: command.chunkingConfigSnapshot,
         qaConfigSnapshot: command.qaConfigSnapshot,
       },
-      tagValues: [],
+      permissionState:
+        draft.permissionState ?? (space.sourcePermissionEnabled ? 'inherited' : 'disabled'),
+      permissionRevision: draft.permissionRevision ?? space.permissionRevision,
+      aclSnapshotVersion: draft.aclSnapshotVersion ?? 1,
+      tagValues: (draft.tagValues ?? []).map((entry) => ({
+        ...entry,
+        tagId: objectIdOf(entry.tagId, context, 'tagId'),
+      })),
     };
   }
 
@@ -271,46 +282,45 @@ export class KnowledgeImportRepository implements ImportSubmissionPort {
         { session },
       );
     }
-    await this.objects.create(
-      [
-        {
-          _id: objectIdOfDraft(draft.object.id, context, 'objectId'),
-          workspaceId: requireWorkspaceId(context),
-          knowledgeSpaceId: spaceId,
-          version: 1,
-          deletedAt: null,
-          createdByMemberId: context.memberId,
-          updatedByMemberId: context.memberId,
-          provider: draft.object.provider,
-          bucket: draft.object.bucket,
-          objectKey: draft.object.objectKey,
-          purpose: draft.kind === 'image' ? 'image' : 'source',
-          sourceId: objectIdOfDraft(draft.id, context, 'sourceId'),
-          mimeType: draft.object.mimeType,
-          sizeBytes: draft.object.sizeBytes,
-          etag: draft.object.etag,
-          sha256: draft.object.sha256,
-          state: 'active',
-          expiresAt: null,
-          upload: {
-            mode: 'single',
-            status: 'completed',
-            providerUploadId: null,
-            pendingObjectKey: null,
-            finalObjectKey: draft.object.objectKey,
-            finalizedAt: new Date(),
-            pendingUrlExpiresAt: null,
-            partSizeBytes: draft.object.sizeBytes,
-            partCount: 1,
-            parts: [],
-            originalName: draft.name,
-            completedAt: new Date(),
-            abortedAt: null,
-          },
-        },
-      ],
-      { session },
-    );
+    const created: Array<Record<string, unknown>> = [
+      draft.object,
+      ...(draft.additionalObjects ?? []),
+    ].map((object) => ({
+      _id: objectIdOfDraft(object.id, context, 'objectId'),
+      workspaceId: requireWorkspaceId(context),
+      knowledgeSpaceId: spaceId,
+      version: 1,
+      deletedAt: null,
+      createdByMemberId: context.memberId,
+      updatedByMemberId: context.memberId,
+      provider: object.provider,
+      bucket: object.bucket,
+      objectKey: object.objectKey,
+      purpose: draft.kind === 'image' ? 'image' : 'source',
+      sourceId: objectIdOfDraft(draft.id, context, 'sourceId'),
+      mimeType: object.mimeType,
+      sizeBytes: object.sizeBytes,
+      etag: object.etag,
+      sha256: object.sha256,
+      state: 'active',
+      expiresAt: null,
+      upload: {
+        mode: 'single',
+        status: 'completed',
+        providerUploadId: null,
+        pendingObjectKey: null,
+        finalObjectKey: object.objectKey,
+        finalizedAt: new Date(),
+        pendingUrlExpiresAt: null,
+        partSizeBytes: object.sizeBytes,
+        partCount: 1,
+        parts: [],
+        originalName: draft.name,
+        completedAt: new Date(),
+        abortedAt: null,
+      },
+    }));
+    await this.objects.create(created, { session });
   }
 
   private async bindExistingObject(
@@ -761,6 +771,300 @@ export class KnowledgeImportRepository implements ImportSubmissionPort {
         changeSetHash: input.changeSetHash,
         replayed: false,
         obsoleteObjectKeys,
+      };
+    });
+  }
+
+  async retrain(
+    input: {
+      sourceId: string;
+      expectedVersion: number;
+      command: ImportSubmissionCommand;
+    },
+    context: TenantContext,
+  ): Promise<ImportSubmissionResult> {
+    requireWorkspaceId(context);
+    const replay = await this.existingJob(input.command, context);
+    if (replay) return this.replay(replay, input.command.requestHash, context);
+    const draft = input.command.sourceDrafts[0];
+    if (!draft || input.command.sourceDrafts.length !== 1) {
+      throw tenantError(context, 'KNOWLEDGE_VALIDATION_FAILED', {
+        field: 'sourceDrafts',
+        reason: 'retrain_requires_one_source',
+      });
+    }
+
+    return withMongoTransaction(this.connection, async (session) => {
+      const duplicate = await this.existingJob(input.command, context, session);
+      if (duplicate) return this.replay(duplicate, input.command.requestHash, context);
+      const { space } = await this.validateTarget(input.command, context, session);
+      const sourceObjectId = objectIdOfDraft(input.sourceId, context, 'sourceId');
+      const previous = await this.sources
+        .findOne({
+          workspaceId: context.workspaceId,
+          knowledgeSpaceId: space._id,
+          _id: sourceObjectId,
+          deletedAt: null,
+        })
+        .session(session)
+        .lean<Plain<KnowledgeSourceDoc>>();
+      if (!previous) throw tenantError(context, 'KNOWLEDGE_NOT_FOUND');
+      if (previous.version !== input.expectedVersion) {
+        throw tenantError(context, 'KNOWLEDGE_CONFLICT', {
+          reason: 'version_conflict',
+          sourceId: input.sourceId,
+          expectedVersion: input.expectedVersion,
+          actualVersion: previous.version,
+        });
+      }
+
+      const previousPermissions = await this.permissions
+        .find({
+          workspaceId: context.workspaceId,
+          resourceType: 'source',
+          resourceId: previous._id,
+          deletedAt: null,
+        })
+        .session(session)
+        .lean<Array<Plain<KnowledgeResourcePermissionDoc>>>();
+
+      draft.directoryId = previous.directoryId ? String(previous.directoryId) : null;
+      draft.searchEnabled = previous.searchEnabled;
+      draft.tagValues = previous.tagValues.map((entry) => ({
+        tagId: String(entry.tagId),
+        valueKey: entry.valueKey,
+        value: entry.value,
+      }));
+      draft.permissionState = previous.permissionState;
+      draft.permissionRevision = previous.permissionRevision;
+      draft.aclSnapshotVersion = previous.aclSnapshotVersion ?? 1;
+      draft.ownershipMemberId = previous.ownershipMemberId;
+
+      const now = new Date();
+      const deleted = await this.sources.findOneAndUpdate(
+        {
+          _id: previous._id,
+          workspaceId: context.workspaceId,
+          version: previous.version,
+          deletedAt: null,
+        },
+        {
+          $set: {
+            deletedAt: now,
+            processingStatus: 'deleting',
+            updatedByMemberId: context.memberId,
+          },
+          $inc: { version: 1 },
+        },
+        { new: true, session },
+      );
+      if (!deleted) throw tenantError(context, 'KNOWLEDGE_CONFLICT');
+      await this.objects.updateMany(
+        {
+          workspaceId: context.workspaceId,
+          knowledgeSpaceId: space._id,
+          sourceId: previous._id,
+          state: 'active',
+          deletedAt: null,
+        },
+        {
+          $set: { sourceId: null, state: 'deleting', updatedByMemberId: context.memberId },
+          $inc: { version: 1 },
+        },
+        { session },
+      );
+      await this.segments.updateMany(
+        {
+          workspaceId: context.workspaceId,
+          knowledgeSpaceId: space._id,
+          sourceId: previous._id,
+          deletedAt: null,
+        },
+        {
+          $set: { deletedAt: now, updatedByMemberId: context.memberId },
+          $inc: { version: 1 },
+        },
+        { session },
+      );
+
+      await this.sources.create([this.sourceDocument(draft, input.command, space, context)], {
+        session,
+        ordered: true,
+      });
+      await this.createObjectRef(draft, space._id, session, context);
+      if (previousPermissions.length > 0) {
+        await this.permissions.insertMany(
+          previousPermissions.map((entry) => ({
+            workspaceId: context.workspaceId,
+            knowledgeSpaceId: space._id,
+            version: 1,
+            deletedAt: null,
+            createdByMemberId: context.memberId,
+            updatedByMemberId: context.memberId,
+            resourceType: 'source',
+            resourceId: objectIdOfDraft(draft.id, context, 'sourceId'),
+            principalType: entry.principalType,
+            principalId: entry.principalId,
+            permission: entry.permission,
+            inheritMode: entry.inheritMode,
+            snapshotVersion: entry.snapshotVersion,
+          })),
+          { session, ordered: true },
+        );
+      }
+
+      const jobId = new Types.ObjectId();
+      const [job] = await this.jobs.create(
+        [
+          {
+            _id: jobId,
+            workspaceId: context.workspaceId,
+            knowledgeSpaceId: space._id,
+            version: 1,
+            deletedAt: null,
+            createdByMemberId: context.memberId,
+            updatedByMemberId: context.memberId,
+            kind: 'import',
+            resourceType: 'space',
+            resourceId: String(space._id),
+            status: 'queued',
+            priority: 5,
+            idempotencyKey: input.command.idempotencyKey,
+            inputSnapshot: {
+              sourceIds: [objectIdOfDraft(draft.id, context, 'sourceId')],
+              sourceVersions: { [draft.id]: 1 },
+              configurationHash: input.command.configurationHash,
+              requestHash: input.command.requestHash,
+              importKind: input.command.importKind,
+              directoryId: input.command.directoryId,
+              parseConfigSnapshot: input.command.parseConfigSnapshot,
+              chunkingConfigSnapshot: input.command.chunkingConfigSnapshot,
+              qaConfigSnapshot: input.command.qaConfigSnapshot,
+              dryRun: false,
+              conflictStrategy: 'fail',
+              retrainedFrom: input.sourceId,
+            },
+            progress: { stage: 'queued', completed: 0, total: 1, percent: 0 },
+            attempts: 0,
+            maxAttempts: 3,
+            attemptEpoch: 0,
+            fencingToken: 'unassigned',
+            leaseOwner: null,
+            leaseExpiresAt: null,
+            heartbeatAt: null,
+            availableAt: now,
+            cancelRequestedAt: null,
+            pausedAt: null,
+            error: null,
+            result: null,
+            expiresAt: new Date(now.getTime() + 30 * 86_400_000),
+          },
+        ],
+        { session, ordered: true },
+      );
+      if (!job) throw tenantError(context);
+      await createKnowledgeOutboxEvent(
+        this.connection,
+        {
+          workspaceId: context.workspaceId,
+          knowledgeSpaceId: String(space._id),
+          eventType: 'import.submit',
+          aggregateType: 'job',
+          aggregateId: String(job._id),
+          queue: 'knowledge-import',
+          payload: {
+            parentJobId: String(job._id),
+            eventKey: `${job._id}:import`,
+            sourceIds: [draft.id],
+          },
+        },
+        context,
+        session,
+      );
+
+      const deleteJobId = new Types.ObjectId();
+      await this.jobs.create(
+        [
+          {
+            _id: deleteJobId,
+            workspaceId: context.workspaceId,
+            knowledgeSpaceId: space._id,
+            version: 1,
+            deletedAt: null,
+            createdByMemberId: context.memberId,
+            updatedByMemberId: context.memberId,
+            kind: 'delete',
+            resourceType: 'source',
+            resourceId: input.sourceId,
+            status: 'queued',
+            priority: 0,
+            idempotencyKey: `retrain-delete:${input.sourceId}:${previous.version}`,
+            inputSnapshot: {
+              sourceId: input.sourceId,
+              version: previous.version,
+              replacementSourceId: draft.id,
+            },
+            progress: { stage: 'queued', completed: 0, total: 1, percent: 0 },
+            attempts: 0,
+            maxAttempts: 5,
+            attemptEpoch: 0,
+            fencingToken: 'unassigned',
+            leaseOwner: null,
+            leaseExpiresAt: null,
+            heartbeatAt: null,
+            availableAt: now,
+            cancelRequestedAt: null,
+            pausedAt: null,
+            error: null,
+            result: null,
+            expiresAt: new Date(now.getTime() + 180 * 86_400_000),
+          },
+        ],
+        { session, ordered: true },
+      );
+      await createKnowledgeOutboxEvent(
+        this.connection,
+        {
+          workspaceId: context.workspaceId,
+          knowledgeSpaceId: String(space._id),
+          eventType: 'source.delete',
+          aggregateType: 'source',
+          aggregateId: input.sourceId,
+          queue: 'knowledge-delete',
+          payload: {
+            sourceId: input.sourceId,
+            jobId: String(deleteJobId),
+            replacementSourceId: draft.id,
+          },
+        },
+        context,
+        session,
+      );
+      await this.audit.append(
+        {
+          knowledgeSpaceId: String(space._id),
+          action: 'source.retrain',
+          resourceType: 'source',
+          resourceId: draft.id,
+          outcome: 'succeeded',
+          safeDiff: {
+            previousSourceId: input.sourceId,
+            previousVersion: previous.version,
+            jobId: String(job._id),
+          },
+        },
+        context,
+        session,
+      );
+      await this.hooks.beforeOutbox?.();
+      await this.hooks.beforeCommit?.();
+      return {
+        parentJobId: String(job._id),
+        sourceIds: [draft.id],
+        status: 'queued',
+        version: job.version,
+        replayed: false,
+        job: jobView(job.toObject() as Plain<KnowledgeJobDoc>),
       };
     });
   }

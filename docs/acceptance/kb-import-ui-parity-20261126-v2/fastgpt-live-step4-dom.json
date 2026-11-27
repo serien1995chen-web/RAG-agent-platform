@@ -1,0 +1,30 @@
+{
+  "buttons": [
+    {
+      "disabled": false,
+      "height": 36,
+      "text": "上一步",
+      "width": 97,
+      "x": 8,
+      "y": 55
+    },
+    {
+      "disabled": false,
+      "height": 36,
+      "text": "共 1 个文件 | 开始上传",
+      "width": 169,
+      "x": 634,
+      "y": 1159
+    }
+  ],
+  "columnheaders": [
+    "来源名",
+    "状态",
+    "操作",
+    "来源名",
+    "状态",
+    "操作"
+  ],
+  "tables": 2,
+  "text": "数据集\n搜索测试\n配置\n上一步\n选择文件\n参数设置\n数据预览\n4\n确认上传\n来源名\t状态\t操作\nheading-scroll-matrix-live.md\n\t等待中\t\n共 1 个文件 | 开始上传\n门户\n工作台\n知识库\n账号\n\nFastGPT导入验收-20261126-1930"
+}

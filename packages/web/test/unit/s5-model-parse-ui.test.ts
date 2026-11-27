@@ -149,7 +149,7 @@ describe('ACC-UI-01..07 S5 independent UI state', () => {
       parseChunkingSettingsDraft({
         trainingType: 'qa',
         chunkSettingMode: 'custom',
-        chunkSize: 512,
+        chunkSize: 1024,
         chunkSplitMode: 'char',
         qaPrompt: 'Use concise answers.',
       }).success,

@@ -1,0 +1,50 @@
+{
+  "bodyText": "门户 工作台 知识库 账号 退出 1 调整参数 2 数据预览 3 确认上传 文件解析设置 PDF增强解析 1积分/页 数据处理方式设置 处理方式 分块存储 问答对提取 分块条件 原文长度大于 索引增强 将标题加入索引 自动生成补充索引 图片自动索引 分块处理参数 默认 使用系统默认的参数和规则 自定义 自定义设置数据处理规则 下一步 FastGPT导入验收-20261126-1930",
+  "stepGroups": [
+    {
+      "borderRadius": "0px",
+      "fontSize": "16px",
+      "gap": "normal",
+      "height": 21,
+      "maxWidth": "none",
+      "overflowY": "visible",
+      "padding": "0px",
+      "width": 56,
+      "x": 351,
+      "y": 98
+    },
+    {
+      "borderRadius": "0px",
+      "fontSize": "16px",
+      "gap": "normal",
+      "height": 21,
+      "maxWidth": "none",
+      "overflowY": "visible",
+      "padding": "0px",
+      "width": 56,
+      "x": 757,
+      "y": 98
+    },
+    {
+      "borderRadius": "0px",
+      "fontSize": "16px",
+      "gap": "normal",
+      "height": 21,
+      "maxWidth": "none",
+      "overflowY": "visible",
+      "padding": "0px",
+      "width": 56,
+      "x": 1163,
+      "y": 98
+    }
+  ],
+  "steps": [
+    "调整参数",
+    "数据预览",
+    "确认上传"
+  ],
+  "viewport": {
+    "height": 1253,
+    "width": 1482
+  }
+}

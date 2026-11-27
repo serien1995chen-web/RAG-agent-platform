@@ -1,0 +1,75 @@
+{
+  "dialog": {
+    "borderRadius": "10px",
+    "fontSize": "16px",
+    "gap": "normal",
+    "height": 620,
+    "lineHeight": "24px",
+    "margin": "316.667px 341px",
+    "maxHeight": "1205.33px",
+    "maxWidth": "800px",
+    "overflowY": "hidden",
+    "padding": "0px",
+    "width": 800,
+    "x": 341,
+    "y": 317
+  },
+  "scrollable": [
+    {
+      "borderRadius": "6px",
+      "clientHeight": 381,
+      "fontSize": "14px",
+      "gap": "normal",
+      "height": 382,
+      "lineHeight": "19.25px",
+      "margin": "0px",
+      "maxHeight": "none",
+      "maxWidth": "none",
+      "overflowY": "auto",
+      "padding": "8px 12px",
+      "scrollHeight": 613,
+      "width": 352,
+      "x": 373,
+      "y": 483
+    },
+    {
+      "borderRadius": "0px",
+      "clientHeight": 422,
+      "fontSize": "14px",
+      "gap": "normal",
+      "height": 422,
+      "lineHeight": "20px",
+      "margin": "0px",
+      "maxHeight": "none",
+      "maxWidth": "none",
+      "overflowY": "auto",
+      "padding": "0px",
+      "scrollHeight": 705,
+      "width": 352,
+      "x": 757,
+      "y": 483
+    }
+  ],
+  "text": "heading-scroll-matrix-live.md常规模式QA 模式*内容更新索引数据索引(1)新增默认索引# heading-scroll-matrix-live.md # FastGPT 导入验收一级标题 ## 二级标题：预览滚动 第 1 段：这是用于验收分块滚动、标题层级和固定操作区的人工合成文本。退款流程、引用依据和检索条件均不包含真实业务数据。 第 2 段：知识库导入应保持稳定的页面高度，让文件列表与分块预览在各自区域内滚动，而不是把整张导入页面不断拉长。 第 3 段：当标题、列表、表格和代码块同时出现时，Markdown 渲染结果需要维持清晰的视觉层级。 第 4 段：分块预览用于帮助用户确认参数设置是否符合预期，因此操作按钮应始终处于可发现的位置。 第 5 段：用户不应该为了点击下一步而先滚动整页，也不应该因为预览区域无限扩张而失去当前上下文。 第 6 段：本段继续提供足够长度以触发真实分块，并检查滚动容器是否具有明确的高度边界。 第 7 段：验收数据只用于结构、布局和状态测试，不描述任何真实客户或生产环境信息。 第 8 段：参数切换后应重新生成预览，避免用户看到旧参数产生的分块结果。",
+  "textareas": [
+    {
+      "borderRadius": "6px",
+      "fontSize": "14px",
+      "gap": "normal",
+      "height": 382,
+      "lineHeight": "19.25px",
+      "margin": "0px",
+      "maxHeight": "none",
+      "maxWidth": "none",
+      "overflowY": "auto",
+      "padding": "8px 12px",
+      "width": 352,
+      "x": 373,
+      "y": 483
+    }
+  ],
+  "viewport": {
+    "height": 1253,
+    "width": 1482
+  }
+}

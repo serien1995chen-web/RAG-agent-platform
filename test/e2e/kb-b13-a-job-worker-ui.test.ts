@@ -413,7 +413,7 @@ describe('B13-A Job API and UI', () => {
           response.request().method() === 'POST' &&
           response.url().endsWith(`/spaces/${spaceId}/imports/text`),
       );
-      await page.getByRole('button', { name: '确认导入' }).click();
+      await page.getByRole('button', { name: '确认上传' }).click();
       expect((await submitted).status()).toBe(202);
       await playwrightExpect(page.getByText('任务 ID')).toBeVisible();
       await playwrightExpect(page.getByText('等待处理').first()).toBeVisible();

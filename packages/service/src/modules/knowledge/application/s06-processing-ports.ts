@@ -282,6 +282,12 @@ export interface S6ProcessingStorePort {
     context: TenantContext,
     sourceVersion?: number,
   ): Promise<void>;
+  updateSourcePresentation?(
+    sourceId: string,
+    patch: Record<string, unknown>,
+    context: TenantContext,
+    sourceVersion?: number,
+  ): Promise<void>;
   upsertParsedSegments(
     input: {
       source: S6SourceRecord;

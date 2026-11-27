@@ -77,7 +77,7 @@ const settings: ChunkingSettings = {
   chunkSettingMode: 'custom',
   chunkSplitMode: 'size',
   chunkSize: 192,
-  chunkTriggerMinSize: 1,
+  chunkTriggerMinSize: 100,
 };
 
 describe('L1-B11-B PARSE-003/004 preview and final handoff', () => {
@@ -112,7 +112,7 @@ describe('L1-B11-B PARSE-003/004 preview and final handoff', () => {
       sourceVersion: 1,
       rawText: corpus.mixedMarkdown!,
       artifact,
-      settings: { ...settings, trainingType: 'qa' },
+      settings: { ...settings, trainingType: 'qa', chunkSize: 1_000 },
       context,
     });
     expect(qa.calls).toBe(result.chunks.length);

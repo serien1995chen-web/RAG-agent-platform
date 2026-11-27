@@ -35,16 +35,16 @@ const S2_OPERATIONS = [
 ];
 
 describe('FILE OpenAPI and runtime contract', () => {
-  it('keeps 97/126/146/8 and promotes exactly the 12 S2 operations', () => {
+  it('keeps 98/127/149/8 and promotes exactly the 12 S2 operations', () => {
     const operations = Object.values(openapi.paths).flatMap((path) =>
       Object.values(path)
         .map((operation) => operation.operationId)
         .filter((id): id is string => typeof id === 'string'),
     );
-    expect(Object.keys(openapi.paths)).toHaveLength(97);
-    expect(operations).toHaveLength(126);
-    expect(Object.keys(openapi.components.schemas)).toHaveLength(146);
-    expect(runtime.count).toBe(126);
+    expect(Object.keys(openapi.paths)).toHaveLength(98);
+    expect(operations).toHaveLength(127);
+    expect(Object.keys(openapi.components.schemas)).toHaveLength(149);
+    expect(runtime.count).toBe(127);
     expect(runtime.operations.map((operation) => operation.operationId)).toEqual(
       expect.arrayContaining(S2_OPERATIONS),
     );

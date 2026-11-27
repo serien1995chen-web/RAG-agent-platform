@@ -38,8 +38,8 @@ describe('TEST-QA-SCHEMA-001 QA output schema', () => {
     expect(items[0]?.q).toBe('问题');
   });
 
-  it('registers the self-authored default template hash', () => {
-    expect(DEFAULT_QA_PROMPT).toContain('问答对');
+  it('registers the FastGPT-compatible default template hash', () => {
+    expect(DEFAULT_QA_PROMPT).toContain('最多提出 50 个问题');
     expect(DEFAULT_QA_PROMPT_HASH).toMatch(/^sha256:[0-9a-f]{64}$/);
   });
 });

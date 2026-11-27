@@ -20,10 +20,10 @@ export const s5ChunkingSettingsFormSchema = z
     trainingType: z.enum(['chunk', 'qa', 'imageParse', 'backup', 'template']),
     chunkSettingMode: z.enum(['auto', 'custom', 'intelligent']),
     chunkTriggerType: z.enum(['minSize', 'forceChunk', 'maxSize']).optional(),
-    chunkTriggerMinSize: z.number().int().min(1).max(8_000).optional(),
+    chunkTriggerMinSize: z.number().int().min(100).max(8_000).optional(),
     chunkSplitMode: z.enum(['paragraph', 'size', 'char']).optional(),
     paragraphChunkAIMode: z.enum(['auto', 'force', 'forbid']).optional(),
-    paragraphChunkDeep: z.number().int().min(0).max(5).optional(),
+    paragraphChunkDeep: z.number().int().min(1).max(8).optional(),
     paragraphChunkMinSize: z.number().int().min(1).max(8_000).optional(),
     chunkSize: z.number().int().min(64).max(8_000).optional(),
     chunkSplitter: z.string().max(1_000).optional(),
@@ -89,14 +89,15 @@ export const s5ChunkingSettingsFormSchema = z
       });
     }
     if (
-      value.paragraphChunkAIMode !== undefined &&
-      value.paragraphChunkAIMode !== 'forbid' &&
-      value.trainingType !== 'chunk'
+      value.trainingType === 'qa' &&
+      value.chunkSettingMode === 'custom' &&
+      value.chunkSize !== undefined &&
+      value.chunkSize < 1_000
     ) {
       context.addIssue({
         code: 'custom',
-        path: ['paragraphChunkAIMode'],
-        message: 'validation.chunkModeRequired',
+        path: ['chunkSize'],
+        message: 'validation.minLength',
       });
     }
     if (value.qaPrompt !== undefined && value.trainingType !== 'qa') {

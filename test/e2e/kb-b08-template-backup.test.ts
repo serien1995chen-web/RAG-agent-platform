@@ -583,7 +583,7 @@ describe('TEST-ING-004-BLOCK and TEST-ING-005-BLOCK with the real Worker', () =>
         response.request().method() === 'POST' &&
         response.url().endsWith(`/spaces/${spaceId}/imports/backup`),
     );
-    await page.getByRole('button', { name: '确认导入' }).click();
+    await page.getByRole('button', { name: '确认上传' }).click();
     expect((await submitted).status()).toBe(202);
     await playwrightExpect(page.getByText('已完成', { exact: true }).first()).toBeVisible({
       timeout: 30_000,

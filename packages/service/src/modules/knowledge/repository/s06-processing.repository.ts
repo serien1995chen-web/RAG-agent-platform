@@ -158,6 +158,29 @@ export class S6ProcessingRepository implements S6ProcessingStorePort {
     );
   }
 
+  async updateSourcePresentation(
+    sourceId: string,
+    patch: Record<string, unknown>,
+    context: TenantContext,
+    sourceVersion?: number,
+  ) {
+    const metadataPatch = Object.fromEntries(
+      Object.entries(patch).map(([key, value]) => [`metadata.${key}`, value]),
+    );
+    await this.sources.updateOne(
+      {
+        _id: sourceId,
+        workspaceId: requireWorkspaceId(context),
+        ...(sourceVersion !== undefined ? { sourceVersion } : {}),
+        deletedAt: null,
+      },
+      {
+        $set: { ...metadataPatch, updatedByMemberId: context.memberId },
+        $inc: { version: 1 },
+      },
+    );
+  }
+
   async upsertParsedSegments(
     input: {
       source: S6SourceRecord;

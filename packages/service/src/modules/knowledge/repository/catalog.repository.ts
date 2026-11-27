@@ -93,6 +93,60 @@ function publicSourceMetadata(metadata: Record<string, unknown>) {
   return result;
 }
 
+const PUBLIC_PARSE_CONFIG_KEYS = [
+  'customPdfParse',
+  'mode',
+  'keepHeaderFooter',
+  'keepAppendix',
+  'imageAnalysis',
+  'chartAnalysis',
+  'fallbackProvider',
+  'imageHandling',
+  'parseTimeoutMs',
+  'textinParseMode',
+  'textinRemoveWatermark',
+  'pollIntervalMs',
+  'credentialProfileId',
+] as const;
+
+const PUBLIC_CHUNK_SETTING_KEYS = [
+  'trainingType',
+  'chunkTriggerType',
+  'chunkTriggerMinSize',
+  'chunkSettingMode',
+  'chunkSplitMode',
+  'paragraphChunkAIMode',
+  'paragraphChunkDeep',
+  'paragraphChunkMinSize',
+  'chunkSize',
+  'chunkSplitter',
+  'overlap',
+  'indexSize',
+  'dataEnhanceCollectionName',
+  'imageIndex',
+  'autoIndexes',
+  'indexPrefixTitle',
+  'qaPrompt',
+] as const;
+
+function pickPublicFields(value: unknown, keys: readonly string[]): Record<string, unknown> | null {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return null;
+  const source = value as Record<string, unknown>;
+  const result = Object.fromEntries(
+    keys.filter((key) => source[key] !== undefined).map((key) => [key, source[key]]),
+  );
+  return Object.keys(result).length > 0 ? result : null;
+}
+
+function processingModelOf(document: Plain<KnowledgeSourceDoc>) {
+  const chunking = pickPublicFields(document.metadata?.chunkingConfigSnapshot, ['trainingType']);
+  if (typeof chunking?.trainingType === 'string') return chunking.trainingType;
+  if (document.kind === 'image') return 'imageParse';
+  if (document.kind === 'template') return 'template';
+  if (document.kind === 'backup') return 'backup';
+  return 'chunk';
+}
+
 function sourceDto(
   document: Plain<KnowledgeSourceDoc>,
   parentPath?: string[],
@@ -126,6 +180,23 @@ function sourceDto(
     })),
     version: document.version,
     segmentCount,
+    createdAt: document.createdAt.toISOString(),
+    updatedAt: document.updatedAt.toISOString(),
+    parseProvider: document.parseProvider,
+    processingModel: processingModelOf(document),
+    parseConfig:
+      pickPublicFields(document.metadata?.parseConfigSnapshot, PUBLIC_PARSE_CONFIG_KEYS) ?? {},
+    chunkSettings:
+      pickPublicFields(document.metadata?.chunkingConfigSnapshot, PUBLIC_CHUNK_SETTING_KEYS) ?? {},
+    qaConfig:
+      pickPublicFields(document.metadata?.qaConfigSnapshot, ['promptVersion', 'temperature']) ?? {},
+    rawTextLength:
+      typeof document.metadata?.rawTextLength === 'number' ? document.metadata.rawTextLength : null,
+    resolvedTags: document.tagValues.map((entry) => ({
+      tagId: String(entry.tagId),
+      valueKey: entry.valueKey,
+      value: entry.value,
+    })),
     ...(parentPath ? { parentPath } : {}),
     ...(includeMetadata ? { metadata: publicSourceMetadata(document.metadata) } : {}),
   };

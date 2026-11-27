@@ -1,0 +1,103 @@
+{
+  "url": "http://127.0.0.1:38863/dataset/detail?datasetId=6b087c9efb01528707502fcb&currentTab=import&collectionId=bad5a1d9f5d4a968e2af8f96&source=reTraining",
+  "viewport": {
+    "width": 1440,
+    "height": 900
+  },
+  "document": {
+    "scrollWidth": 1440,
+    "clientWidth": 1440,
+    "scrollHeight": 900,
+    "clientHeight": 900
+  },
+  "layout": {
+    "main": {
+      "x": 64,
+      "y": 0,
+      "width": 1376,
+      "height": 900,
+      "padding": "16px 16px 16px 12px",
+      "gap": "normal",
+      "borderRadius": "0px",
+      "fontSize": "14px",
+      "lineHeight": "21px",
+      "maxWidth": "none",
+      "maxHeight": "none",
+      "overflowX": "visible",
+      "overflowY": "visible"
+    },
+    "detailLayout": null,
+    "detailPanel": null,
+    "collectionTable": null,
+    "dataLayout": null,
+    "metadataPanel": null,
+    "dataEditor": null,
+    "modal": null,
+    "importPage": {
+      "x": 76,
+      "y": 16,
+      "width": 1348,
+      "height": 868,
+      "padding": "20px 36px",
+      "gap": "normal",
+      "borderRadius": "16px",
+      "fontSize": "14px",
+      "lineHeight": "21px",
+      "maxWidth": "none",
+      "maxHeight": "none",
+      "overflowX": "hidden",
+      "overflowY": "hidden"
+    },
+    "importSteps": {
+      "x": 300,
+      "y": 81,
+      "width": 900,
+      "height": 48,
+      "padding": "12px 18px",
+      "gap": "normal",
+      "borderRadius": "8px",
+      "fontSize": "14px",
+      "lineHeight": "21px",
+      "maxWidth": "900px",
+      "maxHeight": "none",
+      "overflowX": "visible",
+      "overflowY": "visible"
+    },
+    "importBody": {
+      "x": 430,
+      "y": 143,
+      "width": 640,
+      "height": 720,
+      "padding": "0px",
+      "gap": "0px",
+      "borderRadius": "0px",
+      "fontSize": "14px",
+      "lineHeight": "21px",
+      "maxWidth": "640px",
+      "maxHeight": "none",
+      "overflowX": "visible",
+      "overflowY": "visible"
+    },
+    "importMain": {
+      "x": 430,
+      "y": 143,
+      "width": 640,
+      "height": 720,
+      "padding": "0px",
+      "gap": "normal",
+      "borderRadius": "0px",
+      "fontSize": "14px",
+      "lineHeight": "21px",
+      "maxWidth": "none",
+      "maxHeight": "none",
+      "overflowX": "hidden",
+      "overflowY": "hidden"
+    }
+  },
+  "headers": [],
+  "buttons": [
+    "退出",
+    "下一步"
+  ],
+  "text": "跳到主要内容 知 知识库 知识库 KB 退出 1 调整参数 2 数据预览 3 确认上传 文件解析设置 ⌄ PDF 增强解析 提升复杂 PDF 中表格、扫描页和版面内容的解析效果。 数据处理方式设置 ⌄ 处理方式 分块存储 按规则切分原文并建立索引 问答对提取 由文本模型从原文生成问答对 分块条件 原文长度大于 原文长度小于 强制分块 索引增强 将标题加入索引 自动生成补充索引 图片自动索引 分块处理参数 默认 使用系统默认的参数和规则 自定义 自定义设置数据处理规则 下一步 知识库详情"
+}

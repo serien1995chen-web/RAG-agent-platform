@@ -1,0 +1,102 @@
+{
+  "viewport": {
+    "width": 1440,
+    "height": 900
+  },
+  "document": {
+    "scrollY": 0,
+    "clientHeight": 900,
+    "scrollHeight": 900
+  },
+  "importPage": {
+    "x": 76,
+    "y": 16,
+    "width": 1348,
+    "height": 868,
+    "padding": "20px 36px",
+    "margin": "0px",
+    "gap": "normal",
+    "maxWidth": "none",
+    "borderRadius": "16px",
+    "fontSize": "14px",
+    "lineHeight": "21px",
+    "overflowY": "hidden"
+  },
+  "steps": {
+    "x": 300,
+    "y": 81,
+    "width": 900,
+    "height": 48,
+    "padding": "12px 18px",
+    "margin": "8px 187px 14px",
+    "gap": "normal",
+    "maxWidth": "900px",
+    "borderRadius": "8px",
+    "fontSize": "14px",
+    "lineHeight": "21px",
+    "overflowY": "visible"
+  },
+  "body": {
+    "x": 430,
+    "y": 143,
+    "width": 640,
+    "height": 720,
+    "padding": "0px",
+    "margin": "0px 317px",
+    "gap": "0px",
+    "maxWidth": "640px",
+    "borderRadius": "0px",
+    "fontSize": "14px",
+    "lineHeight": "21px",
+    "overflowY": "visible"
+  },
+  "main": {
+    "x": 430,
+    "y": 143,
+    "width": 640,
+    "height": 720,
+    "padding": "0px",
+    "margin": "0px",
+    "gap": "normal",
+    "maxWidth": "none",
+    "borderRadius": "0px",
+    "fontSize": "14px",
+    "lineHeight": "21px",
+    "overflowY": "hidden"
+  },
+  "settings": {
+    "x": 430,
+    "y": 143,
+    "width": 640,
+    "height": 1034,
+    "padding": "15px 0px 0px",
+    "margin": "0px",
+    "gap": "normal",
+    "maxWidth": "none",
+    "borderRadius": "0px",
+    "fontSize": "14px",
+    "lineHeight": "21px",
+    "overflowY": "visible"
+  },
+  "preview": null,
+  "previewFiles": null,
+  "previewChunks": null,
+  "previewScroll": null,
+  "confirmTable": null,
+  "confirmHeaders": [],
+  "footer": {
+    "x": 430,
+    "y": 815,
+    "width": 640,
+    "height": 48,
+    "padding": "14px 0px 0px",
+    "margin": "0px",
+    "gap": "12px",
+    "maxWidth": "none",
+    "borderRadius": "0px",
+    "fontSize": "14px",
+    "lineHeight": "21px",
+    "overflowY": "visible"
+  },
+  "headings": []
+}

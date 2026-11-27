@@ -2,6 +2,7 @@ import {
   createDefaultTemplateRegistry,
   dedupeQaItems,
   generateQa,
+  MAX_QA_PER_CHUNK,
   type QaModelPort,
   type QaResultItem,
 } from '@kb/qa';
@@ -139,7 +140,7 @@ export class S5QaPipelineAdapter implements S5QaPipelinePort {
           llmModel: selected.llmModelId,
           embeddingModel: selected.embeddingModelId ?? 'unused',
         },
-        limits: { maxQaPerChunk: 5, maxChunkCount: 50_000 },
+        limits: { maxQaPerChunk: MAX_QA_PER_CHUNK, maxChunkCount: 50_000 },
       },
       {
         templateRegistry: this.templates,
@@ -171,6 +172,6 @@ export class S5QaPipelineAdapter implements S5QaPipelinePort {
   }
 
   dedupe(items: readonly QaResultItem[]): QaResultItem[] {
-    return dedupeQaItems(items, 5).items;
+    return dedupeQaItems(items, MAX_QA_PER_CHUNK).items;
   }
 }
