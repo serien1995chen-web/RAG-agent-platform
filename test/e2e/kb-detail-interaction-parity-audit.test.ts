@@ -19,7 +19,7 @@ const imageName = `真实图片文件名-${suffix}.png`;
 const failureName = `受控失败文件-${suffix}.md`;
 const evidenceDir =
   process.env.KB_AUDIT_EVIDENCE_DIR ??
-  '/mnt/c/Users/Administrator/Desktop/FastGPT知识库交互与业务一致性验收证据-20261127';
+  join(root, 'test-results', 'kb-detail-interaction-parity-20261127');
 
 const FILE_METADATA_LABELS = [
   '集合 ID',
